@@ -1776,14 +1776,17 @@ impl Imap {
         context
             .set_config_internal(Config::ConfiguredInboxFolder, Some("INBOX"))
             .await?;
+        for (config, name) in folder_configs {
+            context.set_config_internal(config, Some(&name)).await?;
+        }
         if let Some(mvbox_folder) = mvbox_folder {
             info!(context, "Setting MVBOX FOLDER TO {}", &mvbox_folder);
             context
                 .set_config_internal(Config::ConfiguredMvboxFolder, Some(mvbox_folder))
                 .await?;
-        }
-        for (config, name) in folder_configs {
-            context.set_config_internal(config, Some(&name)).await?;
+        } else if create_mvbox && context.config_exists(Config::MvboxMove).await? {
+            warn!(context, "Will retry configuring MVBOX on reconnect.");
+            return Ok(());
         }
         context
             .sql
