@@ -482,7 +482,10 @@ impl Imap {
                 false => session.is_chatmail(),
                 true => context.get_config_bool(Config::IsChatmail).await?,
             };
-            let create_mvbox = !is_chatmail || context.get_config_bool(Config::MvboxMove).await?;
+            let create_mvbox = context
+                .get_config_bool_opt(Config::MvboxMove)
+                .await?
+                .unwrap_or(!is_chatmail);
             self.configure_folders(context, &mut session, create_mvbox)
                 .await?;
         }
@@ -1784,7 +1787,7 @@ impl Imap {
             context
                 .set_config_internal(Config::ConfiguredMvboxFolder, Some(mvbox_folder))
                 .await?;
-        } else if create_mvbox && context.config_exists(Config::MvboxMove).await? {
+        } else if context.get_config_bool_opt(Config::MvboxMove).await? == Some(true) {
             warn!(context, "Will retry configuring MVBOX on reconnect.");
             return Ok(());
         }
@@ -1997,7 +2000,7 @@ async fn needs_move_to_mvbox(
             }
         }
     }
-    if !context.get_config_bool(Config::MvboxMove).await? {
+    if !context.should_move_to_mvbox().await? {
         return Ok(false);
     }
 
