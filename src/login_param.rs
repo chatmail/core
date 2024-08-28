@@ -888,6 +888,22 @@ impl ConfiguredLoginParam {
             | ConfiguredCertificateChecks::AcceptInvalidCertificates2 => false,
         }
     }
+
+    /// Returns true if strict TLS checks are disabled
+    /// and configuration is not for a known provider
+    /// with broken TLS setup.
+    pub fn strict_tls_manually_disabled(&self) -> bool {
+        match self.certificate_checks {
+            ConfiguredCertificateChecks::OldAutomatic => {
+                // Old "Automatic" configuration defaults to no strict TLS.
+                // User should upgrade configuration.
+                self.provider.is_none()
+            }
+            ConfiguredCertificateChecks::Automatic | ConfiguredCertificateChecks::Strict => false,
+            ConfiguredCertificateChecks::AcceptInvalidCertificates
+            | ConfiguredCertificateChecks::AcceptInvalidCertificates2 => true,
+        }
+    }
 }
 
 #[cfg(test)]

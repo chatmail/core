@@ -439,6 +439,10 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Scan to join channel %1$s"))]
     SecureJoinBrodcastQRDescription = 201,
+
+    /// "Security" title for connectivity view section.
+    #[strum(props(fallback = "Security"))]
+    Security = 202,
 }
 
 impl StockMessage {
@@ -1322,6 +1326,11 @@ pub(crate) async fn backup_transfer_qr(context: &Context) -> Result<String> {
 
 pub(crate) async fn backup_transfer_msg_body(context: &Context) -> String {
     translated(context, StockMessage::BackupTransferMsgBody).await
+}
+
+/// Stock string: `Security`.
+pub(crate) async fn security(context: &Context) -> String {
+    translated(context, StockMessage::Security).await
 }
 
 impl Context {

@@ -8,6 +8,7 @@ use humansize::{BINARY, format_size};
 use crate::events::EventType;
 use crate::imap::{FolderMeaning, scan_folders::get_watched_folder_configs};
 use crate::log::info;
+use crate::login_param::ConfiguredLoginParam;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
 use crate::{context::Context, log::LogExt};
@@ -529,6 +530,36 @@ impl Context {
             ret += &format!("<li>{not_connected}</li>");
         }
         ret += "</ul>";
+
+        // =============================================================================================
+        // Add e.g.
+        //                              Security
+        //                                TLS Certificate Checks: enabled
+        // =============================================================================================
+
+        if let Some(configured_login_param) = ConfiguredLoginParam::load(self).await? {
+            let security = stock_str::security(self).await;
+            ret += &format!("<h3>{security}</h3><ul>");
+
+            ret += "<li>";
+            if configured_login_param.strict_tls() {
+                // GREEN: strict TLS checks are enabled.
+                ret += &format!(
+                    "<span class=\"green dot\"></span> <b>TLS Certificate Checks:</b> enabled"
+                );
+            } else if configured_login_param.strict_tls_manually_disabled() {
+                // RED: TLS checks are manually disabled.
+                ret += &format!(
+                    "<span class=\"red dot\"></span> <b>TLS Certificate Checks:</b> disabled"
+                );
+            } else {
+                // YELLOW: TLS checks are automatically disabled.
+                ret += &format!(
+                    "<span class=\"yellow dot\"></span> <b>TLS Certificate Checks:</b> disabled"
+                );
+            }
+            ret += "</li></ul>";
+        }
 
         // =============================================================================================
 
