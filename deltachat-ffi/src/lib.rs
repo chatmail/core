@@ -29,7 +29,7 @@ use deltachat::context::{Context, ContextBuilder};
 use deltachat::ephemeral::Timer as EphemeralTimer;
 use deltachat::imex::BackupProvider;
 use deltachat::key::preconfigure_keypair;
-use deltachat::message::MsgId;
+use deltachat::message::{MessageState, MsgId};
 use deltachat::qr_code_generator::{create_qr_svg, generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::stock_str::StockMessage;
 use deltachat::webxdc::StatusUpdateSerial;
@@ -3426,7 +3426,11 @@ pub unsafe extern "C" fn dc_msg_get_state(msg: *mut dc_msg_t) -> libc::c_int {
         return 0;
     }
     let ffi_msg = &*msg;
-    ffi_msg.message.get_state() as libc::c_int
+    let state = match ffi_msg.message.get_state() {
+        MessageState::OutRcvd => MessageState::OutDelivered,
+        s => s,
+    };
+    state as libc::c_int
 }
 
 #[no_mangle]

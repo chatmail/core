@@ -1447,6 +1447,9 @@ pub enum MessageState {
     /// the OutFailed state if we get such a hint from the server.
     OutDelivered = 26,
 
+    /// Received outgoing message sent by another MUA or device.
+    OutRcvd = 27,
+
     /// Outgoing message read by the recipient (two checkmarks; this
     /// requires goodwill on the receiver's side). Not used in the db for new messages.
     OutMdnRcvd = 28,
@@ -1467,6 +1470,7 @@ impl std::fmt::Display for MessageState {
                 Self::OutPending => "Pending",
                 Self::OutFailed => "Failed",
                 Self::OutDelivered => "Delivered",
+                Self::OutRcvd => "Other MUA",
                 Self::OutMdnRcvd => "Read",
             }
         )
@@ -1479,7 +1483,9 @@ impl MessageState {
         use MessageState::*;
         matches!(
             self,
-            OutPreparing | OutPending | OutDelivered | OutMdnRcvd // OutMdnRcvd can still fail because it could be a group message and only some recipients failed.
+            // OutMdnRcvd can still fail because it could be a group message and only some
+            // recipients failed.
+            OutPreparing | OutPending | OutDelivered | OutRcvd | OutMdnRcvd
         )
     }
 
@@ -1488,13 +1494,13 @@ impl MessageState {
         use MessageState::*;
         matches!(
             self,
-            OutPreparing | OutDraft | OutPending | OutFailed | OutDelivered | OutMdnRcvd
+            OutPreparing | OutDraft | OutPending | OutFailed | OutDelivered | OutRcvd | OutMdnRcvd
         )
     }
 
     /// Returns adjusted message state if the message has MDNs.
     pub(crate) fn with_mdns(self, has_mdns: bool) -> Self {
-        if self == MessageState::OutDelivered && has_mdns {
+        if has_mdns && self >= MessageState::OutDelivered {
             return MessageState::OutMdnRcvd;
         }
         self

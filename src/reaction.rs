@@ -477,7 +477,7 @@ Can we chat at 1pm pacific, today?"
         )
         .await?;
         let msg = alice.get_last_msg().await;
-        assert_eq!(msg.state, MessageState::OutDelivered);
+        assert_eq!(msg.state, MessageState::OutRcvd);
         let reactions = get_msg_reactions(&alice, msg.id).await?;
         let contacts = reactions.contacts();
         assert_eq!(contacts.len(), 0);
