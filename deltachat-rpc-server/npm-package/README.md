@@ -25,7 +25,7 @@ async function main() {
 main()
 ```
 
-For a more complete example refer to https://github.com/deltachat-bot/echo/pull/69/files (TODO change link when pr is merged).
+For a more complete example refer to https://github.com/deltachat-bot/echo/tree/master/nodejs_stdio_jsonrpc.
 
 ## How to use on an unsupported platform
 
