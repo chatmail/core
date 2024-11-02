@@ -29,9 +29,35 @@ For a more complete example refer to https://github.com/deltachat-bot/echo/tree/
 
 ## How to use on an unsupported platform
 
-<!-- todo instructions, will uses an env var for pointing to `deltachat-rpc-server` binary -->
+You need to have rust installed to compile deltachat core for your platform and cpu architecture.
+<https://rustup.rs/> is the recommended way to install rust.
+Also your system probably needs more than 4gb ram to compile core, alternatively your could try to build the debug build, that might take less ram to build.
 
-<!-- todo copy parts from https://github.com/deltachat/deltachat-desktop/blob/7045c6f549e4b9d5caa0709d5bd314bbd9fd53db/docs/UPDATE_CORE.md -->
+1. clone the core repo, right next to your project folder: `git clone git@github.com:deltachat/deltachat-core-rust.git`
+2. go into your core checkout and run `git pull` and `git checkout <version>` to point it to the correct version (needs to be the same version the `@deltachat/jsonrpc-client` package has)
+3. run `cargo build --release --package deltachat-rpc-server --bin deltachat-rpc-server`
+
+Then you have 2 options:
+
+### point to deltachat-rpc-server via direct path:
+
+```sh
+# start your app with the DELTA_CHAT_RPC_SERVER env var
+DELTA_CHAT_RPC_SERVER="../deltachat-core-rust/target/release/deltachat-rpc-server" node myapp.js
+```
+
+### install deltachat-rpc-server in your $PATH:
+
+```sh
+# use this to install to ~/.cargo/bin
+cargo install --release --package deltachat-rpc-server --bin deltachat-rpc-server
+# or manually move deltachat-core-rust/target/release/deltachat-rpc-server
+# to a location that is included in your $PATH Environment variable.
+```
+
+```js
+startDeltaChat("data-dir", { takeVersionFromPATH: true });
+```
 
 ## How does it work when you install it
 
