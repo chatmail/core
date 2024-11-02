@@ -18,11 +18,11 @@ import { startDeltaChat } from "@deltachat/stdio-rpc-server";
 import { C } from "@deltachat/jsonrpc-client";
 
 async function main() {
-    const dc = await startDeltaChat("deltachat-data");
-    console.log(await dc.rpc.getSystemInfo());
-    dc.close()
+  const dc = await startDeltaChat("deltachat-data");
+  console.log(await dc.rpc.getSystemInfo());
+  dc.close();
 }
-main()
+main();
 ```
 
 For a more complete example refer to https://github.com/deltachat-bot/echo/tree/master/nodejs_stdio_jsonrpc.
@@ -46,7 +46,7 @@ references:
 When you import this package it searches for the rpc server in the following locations and order:
 
 1. `DELTA_CHAT_RPC_SERVER` environment variable
-2. use the PATH when `{takeVersionFromPATH: true}` is supplied in the options. 
+2. use the PATH when `{takeVersionFromPATH: true}` is supplied in the options.
 3. prebuilds in npm packages
 
 so by default it uses the prebuilds.
