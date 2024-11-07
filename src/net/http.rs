@@ -76,11 +76,13 @@ where
                 let proxy_stream = proxy_config
                     .connect(context, host, port, load_cache)
                     .await?;
-                let tls_stream = wrap_rustls(host, "", proxy_stream).await?;
+                let tls_stream =
+                    wrap_rustls(host, port, "", proxy_stream, &context.tls_session_store).await?;
                 Box::new(tls_stream)
             } else {
                 let tcp_stream = crate::net::connect_tcp(context, host, port, load_cache).await?;
-                let tls_stream = wrap_rustls(host, "", tcp_stream).await?;
+                let tls_stream =
+                    wrap_rustls(host, port, "", tcp_stream, &context.tls_session_store).await?;
                 Box::new(tls_stream)
             }
         }
