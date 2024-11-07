@@ -30,6 +30,7 @@ use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
+use crate::net::tls::TlsSessionStore;
 use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
@@ -297,6 +298,9 @@ pub struct InnerContext {
     /// True if account has subscribed to push notifications via IMAP.
     pub(crate) push_subscribed: AtomicBool,
 
+    /// TLS session resumption cache.
+    pub(crate) tls_session_store: TlsSessionStore,
+
     /// Iroh for realtime peer channels.
     pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
 
@@ -475,6 +479,7 @@ impl Context {
             debug_logging: std::sync::RwLock::new(None),
             push_subscriber,
             push_subscribed: AtomicBool::new(false),
+            tls_session_store: TlsSessionStore::new(),
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
             connectivities: parking_lot::Mutex::new(Vec::new()),
