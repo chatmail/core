@@ -19,13 +19,13 @@ use crate::net::{
 use crate::oauth2::get_oauth2_access_token;
 use crate::tools::time;
 
-/// Converts port number to ALPN list.
-fn alpn(port: u16) -> &'static [&'static str] {
+/// Converts port number to ALPN.
+fn alpn(port: u16) -> &'static str {
     if port == 465 {
         // Do not request ALPN on standard port.
-        &[]
+        ""
     } else {
-        &["smtp"]
+        "smtp"
     }
 }
 
@@ -249,7 +249,7 @@ async fn connect_starttls_proxy(
     skip_smtp_greeting(&mut buffered_stream).await?;
     let transport = new_smtp_transport(buffered_stream).await?;
     let tcp_stream = transport.starttls().await?.into_inner();
-    let tls_stream = wrap_tls(strict_tls, hostname, &[], tcp_stream)
+    let tls_stream = wrap_tls(strict_tls, hostname, "", tcp_stream)
         .await
         .context("STARTTLS upgrade failed")?;
     let buffered_stream = BufStream::new(tls_stream);
@@ -294,7 +294,7 @@ async fn connect_starttls(
     skip_smtp_greeting(&mut buffered_stream).await?;
     let transport = new_smtp_transport(buffered_stream).await?;
     let tcp_stream = transport.starttls().await?.into_inner();
-    let tls_stream = wrap_tls(strict_tls, host, &[], tcp_stream)
+    let tls_stream = wrap_tls(strict_tls, host, "", tcp_stream)
         .await
         .context("STARTTLS upgrade failed")?;
 

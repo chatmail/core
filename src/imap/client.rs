@@ -37,12 +37,12 @@ impl DerefMut for Client {
 }
 
 /// Converts port number to ALPN list.
-fn alpn(port: u16) -> &'static [&'static str] {
+fn alpn(port: u16) -> &'static str {
     if port == 993 {
         // Do not request ALPN on standard port.
-        &[]
+        ""
     } else {
-        &["imap"]
+        "imap"
     }
 }
 
@@ -262,7 +262,7 @@ impl Client {
         let buffered_tcp_stream = client.into_inner();
         let tcp_stream = buffered_tcp_stream.into_inner();
 
-        let tls_stream = wrap_tls(strict_tls, host, &[], tcp_stream)
+        let tls_stream = wrap_tls(strict_tls, host, "", tcp_stream)
             .await
             .context("STARTTLS upgrade failed")?;
         let buffered_stream = BufWriter::new(tls_stream);
@@ -334,7 +334,7 @@ impl Client {
         let buffered_proxy_stream = client.into_inner();
         let proxy_stream = buffered_proxy_stream.into_inner();
 
-        let tls_stream = wrap_tls(strict_tls, hostname, &[], proxy_stream)
+        let tls_stream = wrap_tls(strict_tls, hostname, "", proxy_stream)
             .await
             .context("STARTTLS upgrade failed")?;
         let buffered_stream = BufWriter::new(tls_stream);
