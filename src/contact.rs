@@ -3239,13 +3239,7 @@ Until the false-positive is fixed:
             "bob@example.net sent a message from another device."
         );
 
-        let msg = tcm
-            .send_recv(
-                alice,
-                bob,
-                "[This message is not encrypted. See 'Info' for more details]",
-            )
-            .await;
+        let msg = tcm.send_recv(alice, bob, "Unencrypted").await;
         assert_eq!(msg.get_showpadlock(), false);
 
         Ok(())
