@@ -1954,6 +1954,12 @@ async fn add_parts(
         .await?;
     }
 
+    // Empty `better_msg` is returned from `apply_group_changes()` when a group member
+    // addition/removal message has no effect.
+    if better_msg == Some(String::new()) && is_partial_download.is_none() {
+        chat_id = DC_CHAT_ID_TRASH;
+    }
+
     if let Some(node_addr) = mime_parser.get_header(HeaderDef::IrohNodeAddr) {
         match mime_parser.get_header(HeaderDef::InReplyTo) {
             Some(in_reply_to) => match rfc724_mid_exists(context, in_reply_to).await? {
