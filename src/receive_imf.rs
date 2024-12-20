@@ -1014,6 +1014,9 @@ pub(crate) async fn receive_imf_inner(
             chat_id.emit_msg_event(context, *msg_id, mime_parser.incoming && fresh);
         }
     }
+    if !chat_id.is_trash() && received_msg.state == MessageState::InSeen {
+        context.emit_event(EventType::MsgsNoticed(chat_id));
+    }
     context.new_msgs_notify.notify_one();
 
     mime_parser
@@ -1751,10 +1754,12 @@ async fn add_parts(
 
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
-    } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
+    } else if seen || is_mdn
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
+    } else if chat_id_blocked == Blocked::Yes || group_changes.silent {
+        MessageState::InNoticed
     } else {
         MessageState::InFresh
     };

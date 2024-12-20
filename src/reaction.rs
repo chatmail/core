@@ -525,6 +525,7 @@ Content-Disposition: reaction\n\
         assert_eq!(bob_reaction.as_str(), "👍");
 
         // Alice receives reaction to her message from Bob with a footer.
+        alice.evtracker.clear_events();
         receive_imf(
             &alice,
             "To: alice@example.org\n\
@@ -546,7 +547,11 @@ Here's my footer -- bob@example.net"
             false,
         )
         .await?;
-
+        let ev = alice
+            .evtracker
+            .get_matching_opt(&alice, |e| matches!(e, EventType::MsgsNoticed { .. }))
+            .await;
+        assert!(ev.is_none());
         let reactions = get_msg_reactions(&alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "😀1");
 
@@ -590,6 +595,32 @@ Content-Disposition: reaction\n\
         let reactions = get_msg_reactions(&alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
 
+        // Alice receives a seen reaction to her message from Bob. If a reaction is seen, that's a
+        // result of an explicit user action and also means that the user has noticed notifications
+        // for earlier messages.
+        alice.evtracker.clear_events();
+        let seen = true;
+        receive_imf(
+            &alice,
+            "To: alice@example.org\n\
+From: bob@example.net\n\
+Date: Today, 29 February 2021 00:00:10 -800\n\
+Message-ID: 56792@example.net\n\
+In-Reply-To: 12345@example.org\n\
+Subject: Meeting\n\
+Mime-Version: 1.0 (1.0)\n\
+Content-Type: text/plain; charset=utf-8\n\
+Content-Disposition: reaction\n\
+\n\
+\u{1F44D}"
+                .as_bytes(),
+            seen,
+        )
+        .await?;
+        let _ev = alice
+            .evtracker
+            .get_matching(|e| matches!(e, EventType::MsgsNoticed { .. }))
+            .await;
         Ok(())
     }
 

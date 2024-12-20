@@ -272,6 +272,31 @@ async fn test_adhoc_groups_merge() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_msgs_noticed_on_seen_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let seen = true;
+    let rcvd_msg = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <3333@example.net>\n\
+        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+        \n\
+        This is a seen message.\n",
+        seen,
+    )
+    .await?
+    .unwrap();
+    let ev = alice
+        .evtracker
+        .get_matching(|e| matches!(e, EventType::MsgsNoticed { .. }))
+        .await;
+    assert_eq!(ev, EventType::MsgsNoticed(rcvd_msg.chat_id));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdn_and_alias() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
@@ -2684,6 +2709,35 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
     let ab_contact = alice.add_or_lookup_contact(bob).await;
     assert!(ab_contact.is_bot());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_msgs_noticed_on_seen_mdn() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let received_msg = tcm.send_recv_accept(alice, bob, "hi").await;
+
+    let mdn_mimefactory = crate::mimefactory::MimeFactory::from_mdn(
+        bob,
+        received_msg.from_id,
+        received_msg.rfc724_mid,
+        vec![],
+    )
+    .await?;
+    let rendered_mdn = mdn_mimefactory.render(bob).await?;
+    let mdn_body = rendered_mdn.message;
+
+    let seen = true;
+    alice.evtracker.clear_events();
+    receive_imf(alice, mdn_body.as_bytes(), seen).await?;
+    let ev = alice
+        .evtracker
+        .get_matching_opt(alice, |e| matches!(e, EventType::MsgsNoticed { .. }))
+        .await;
+    assert!(ev.is_none());
     Ok(())
 }
 

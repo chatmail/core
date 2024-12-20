@@ -747,7 +747,7 @@ async fn test_leave_group() -> Result<()> {
 
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 1);
 
-    assert_eq!(rcvd_leave_msg.state, MessageState::InSeen);
+    assert_eq!(rcvd_leave_msg.state, MessageState::InNoticed);
 
     alice.emit_event(EventType::Test);
     alice
