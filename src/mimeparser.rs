@@ -246,6 +246,7 @@ impl MimeMessage {
         MimeMessage::merge_headers(
             context,
             &mut headers,
+            &mut headers_removed,
             &mut recipients,
             &mut past_members,
             &mut from,
@@ -273,6 +274,7 @@ impl MimeMessage {
                     MimeMessage::merge_headers(
                         context,
                         &mut headers,
+                        &mut headers_removed,
                         &mut recipients,
                         &mut past_members,
                         &mut from,
@@ -446,26 +448,11 @@ impl MimeMessage {
         });
         if let (Ok(mail), true) = (mail, is_encrypted) {
             if !signatures.is_empty() {
-                // Remove unsigned opportunistically protected headers from messages considered
-                // Autocrypt-encrypted / displayed with padlock.
-                // For "Subject" see <https://github.com/deltachat/deltachat-core-rust/issues/1790>.
-                for h in [
-                    HeaderDef::Subject,
-                    HeaderDef::ChatGroupId,
-                    HeaderDef::ChatGroupName,
-                    HeaderDef::ChatGroupNameChanged,
-                    HeaderDef::ChatGroupNameTimestamp,
-                    HeaderDef::ChatGroupAvatar,
-                    HeaderDef::ChatGroupMemberRemoved,
-                    HeaderDef::ChatGroupMemberAdded,
-                    HeaderDef::ChatGroupMemberTimestamps,
-                    HeaderDef::ChatGroupPastMembers,
-                    HeaderDef::ChatDelete,
-                    HeaderDef::ChatEdit,
-                    HeaderDef::ChatUserAvatar,
-                ] {
-                    remove_header(&mut headers, h.get_headername(), &mut headers_removed);
-                }
+                // Unsigned "Subject" mustn't be prepended to messages shown as encrypted
+                // (<https://github.com/deltachat/deltachat-core-rust/issues/1790>).
+                // Other headers are removed by `MimeMessage::merge_headers()` except for "List-ID".
+                remove_header(&mut headers, "subject", &mut headers_removed);
+                remove_header(&mut headers, "list-id", &mut headers_removed);
             }
 
             // let known protected headers from the decrypted
@@ -478,6 +465,7 @@ impl MimeMessage {
             MimeMessage::merge_headers(
                 context,
                 &mut headers,
+                &mut headers_removed,
                 &mut recipients,
                 &mut past_members,
                 &mut inner_from,
@@ -1558,6 +1546,7 @@ impl MimeMessage {
     fn merge_headers(
         context: &Context,
         headers: &mut HashMap<String, String>,
+        headers_removed: &mut HashSet<String>,
         recipients: &mut Vec<SingleInfo>,
         past_members: &mut Vec<SingleInfo>,
         from: &mut Option<SingleInfo>,
@@ -1565,6 +1554,12 @@ impl MimeMessage {
         chat_disposition_notification_to: &mut Option<SingleInfo>,
         fields: &[mailparse::MailHeader<'_>],
     ) {
+        headers.retain(|k, _| {
+            !is_protected(k) || {
+                headers_removed.insert(k.to_string());
+                false
+            }
+        });
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
@@ -2003,6 +1998,32 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
     } else {
         bail!("could not parse message_id: {}", ids);
     }
+}
+
+/// Returns whether the outer header value must be ignored if the message contains a signed (and
+/// optionally encrypted) part.
+///
+/// NB: There are known cases when Subject and List-ID only appear in the outer headers of
+/// signed-only messages. Such messages are shown as unencrypted anyway.
+fn is_protected(key: &str) -> bool {
+    key.starts_with("chat-")
+        || matches!(
+            key,
+            "return-path"
+                | "auto-submitted"
+                | "autocrypt-setup-message"
+                | "date"
+                | "from"
+                | "sender"
+                | "reply-to"
+                | "to"
+                | "cc"
+                | "bcc"
+                | "message-id"
+                | "in-reply-to"
+                | "references"
+                | "secure-join"
+        )
 }
 
 /// Returns if the header is hidden and must be ignored in the IMF section.
