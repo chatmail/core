@@ -36,7 +36,7 @@ use tokio::{fs::File, io::BufReader};
 
 use crate::chat::{self, Chat};
 use crate::constants::Chattype;
-use crate::contact::{self, ContactId};
+use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
@@ -57,6 +57,7 @@ const WEBXDC_API_VERSION: u32 = 1;
 /// Suffix used to recognize webxdc files.
 pub const WEBXDC_SUFFIX: &str = "xdc";
 const WEBXDC_DEFAULT_ICON: &str = "__webxdc__/default-icon.png";
+const WEBXDC_AVATAR_VIRTUAL_DIR: &str = "__webxdc__/avatar/";
 
 /// Text shown to classic e-mail users in the visible e-mail body.
 const BODY_DESCR: &str = "Webxdc Status Update";
@@ -890,6 +891,28 @@ impl Message {
             name
         };
 
+        // Virtual directory for accessing avatars
+        if name.starts_with(WEBXDC_AVATAR_VIRTUAL_DIR) {
+            let memberlist = self.get_internal_webxdc_memberlist(context).await?;
+            let user_id = name
+                .strip_prefix(WEBXDC_AVATAR_VIRTUAL_DIR)
+                .context("invalid avatar user id")?
+                .strip_suffix(".jpg")
+                .context("invalid avatar user id")?;
+            if let Some((contact, _)) = memberlist
+                .iter()
+                .find(|(_, member_user_id)| member_user_id == user_id)
+            {
+                if let Some(profile_image_path) = contact.get_profile_image(context).await? {
+                    return Ok(tokio::fs::read(profile_image_path).await?);
+                } else {
+                    bail!("contact has no profile image")
+                }
+            } else {
+                bail!("user_id not found in group member list")
+            }
+        }
+
         let mut archive = self.get_webxdc_archive(context).await?;
 
         if name == "index.html"
@@ -990,9 +1013,12 @@ impl Message {
         Ok(self.get_webxdc_user_id(fingerprint))
     }
 
-    /// Returns webxdc memberlist, each member is a tuple (private user id, display_name)
-    /// Only includes members that have a known public key in the database and does not include self contact.
-    pub async fn get_webxdc_memberlist(&self, context: &Context) -> Result<Vec<(String, String)>> {
+    /// This is the internal memberlist, as it contains the contact_id it should never be shared with the webxdc app
+    /// used by the function serving the virtual avatar directory use `get_webxdc_memberlist` instead.
+    async fn get_internal_webxdc_memberlist(
+        &self,
+        context: &Context,
+    ) -> Result<Vec<(Contact, String)>> {
         // We could do the following to increase privacy:
         // - remove displayname (not that big of a deal in reality)
         // - only show people in the list that send an status update before in the group (would decrease usefulness, but would still bring enough benefit, if only as internal function to match avatars)
@@ -1001,13 +1027,27 @@ impl Message {
         for contact_id in contacts {
             let contact = contact::Contact::get_by_id(context, contact_id).await?;
             if let Some(fingerprint) = contact.fingerprint() {
-                // TODO: think about whether we want to expose the nickname the user set for the contact here or just the name the contact set themselves?
-                // The former could be interpreted as privacy risk
-                // A. a webxdc could leak nicknames you set for users in the group,
-                // B. while the second could be seen as less useful/convenient for users "why are the contacts called differently in the webxdc"
-                let display_name = contact.get_display_name_without_email();
-                memberlist.push((self.get_webxdc_user_id(&fingerprint.hex()), display_name));
+                memberlist.push((contact, self.get_webxdc_user_id(&fingerprint.hex())));
             }
+        }
+        Ok(memberlist)
+    }
+
+    /// Returns webxdc memberlist, each member is a tuple (hashed user id/addr, display_name)
+    /// Only includes members that have a known public key in the database and does not include self contact.
+    pub async fn get_webxdc_memberlist(&self, context: &Context) -> Result<Vec<(String, String)>> {
+        // We could do the following to increase privacy:
+        // - remove displayname (not that big of a deal in reality)
+        // - only show people in the list that send an status update before in the group (would decrease usefulness, but would still bring enough benefit, if only as internal function to match avatars)
+        let members = self.get_internal_webxdc_memberlist(context).await?;
+        let mut memberlist = Vec::with_capacity(members.len());
+        for (contact, member_id) in members {
+            // TODO: think about whether we want to expose the nickname the user set for the contact here or just the name the contact set themselves?
+            // The former could be interpreted as privacy risk
+            // A. a webxdc could leak nicknames you set for users in the group,
+            // B. while the second could be seen as less useful/convenient for users "why are the contacts called differently in the webxdc"
+            let display_name = contact.get_display_name_without_email();
+            memberlist.push((member_id, display_name));
         }
         Ok(memberlist)
     }
