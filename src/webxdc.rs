@@ -36,7 +36,7 @@ use tokio::{fs::File, io::BufReader};
 
 use crate::chat::{self, Chat};
 use crate::constants::Chattype;
-use crate::contact::ContactId;
+use crate::contact::{self, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
@@ -979,11 +979,37 @@ impl Message {
         })
     }
 
+    fn get_webxdc_user_id(&self, pub_key_fingerprint_hex: &str) -> String {
+        let data = format!("{}-{}", pub_key_fingerprint_hex, self.rfc724_mid);
+        let hash = Sha256::digest(data.as_bytes());
+        format!("{:x}", hash)
+    }
+
     async fn get_webxdc_self_addr(&self, context: &Context) -> Result<String> {
         let fingerprint = self_fingerprint(context).await?;
-        let data = format!("{}-{}", fingerprint, self.rfc724_mid);
-        let hash = Sha256::digest(data.as_bytes());
-        Ok(format!("{hash:x}"))
+        Ok(self.get_webxdc_user_id(fingerprint))
+    }
+
+    /// Returns webxdc memberlist, each member is a tuple (private user id, display_name)
+    /// Only includes members that have a known public key in the database and does not include self contact.
+    pub async fn get_webxdc_memberlist(&self, context: &Context) -> Result<Vec<(String, String)>> {
+        // We could do the following to increase privacy:
+        // - remove displayname (not that big of a deal in reality)
+        // - only show people in the list that send an status update before in the group (would decrease usefulness, but would still bring enough benefit, if only as internal function to match avatars)
+        let contacts = chat::get_chat_contacts(context, self.get_chat_id()).await?;
+        let mut memberlist = Vec::with_capacity(contacts.len());
+        for contact_id in contacts {
+            let contact = contact::Contact::get_by_id(context, contact_id).await?;
+            if let Some(fingerprint) = contact.fingerprint() {
+                // TODO: think about whether we want to expose the nickname the user set for the contact here or just the name the contact set themselves?
+                // The former could be interpreted as privacy risk
+                // A. a webxdc could leak nicknames you set for users in the group,
+                // B. while the second could be seen as less useful/convenient for users "why are the contacts called differently in the webxdc"
+                let display_name = contact.get_display_name_without_email();
+                memberlist.push((self.get_webxdc_user_id(&fingerprint.hex()), display_name));
+            }
+        }
+        Ok(memberlist)
     }
 
     /// Get link attached to an info message.

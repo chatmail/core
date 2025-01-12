@@ -2256,6 +2256,20 @@ impl CommandApi {
         WebxdcMessageInfo::get_for_message(&ctx, MsgId::new(instance_msg_id)).await
     }
 
+    /// Returns webxdc memberlist, each member is a tuple (private user id, display_name)
+    /// Only includes members that have a known public key in the database
+    async fn get_webxdc_memberlist(
+        &self,
+        account_id: u32,
+        instance_msg_id: u32,
+    ) -> Result<Vec<(String, String)>> {
+        let ctx = self.get_context(account_id).await?;
+        Message::load_from_db(&ctx, MsgId::new(instance_msg_id))
+            .await?
+            .get_webxdc_memberlist(&ctx)
+            .await
+    }
+
     /// Get href from a WebxdcInfoMessage which might include a hash holding
     /// information about a specific position or state in a webxdc app (optional)
     async fn get_webxdc_href(&self, account_id: u32, info_msg_id: u32) -> Result<Option<String>> {

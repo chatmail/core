@@ -1600,6 +1600,18 @@ WHERE addr=?
         &self.addr
     }
 
+    /// Get display name. This is the name as defined by the contact himself,
+    /// modified by the user or, if both are unset, an empty string.
+    pub fn get_display_name_without_email(&self) -> String {
+        if !self.name.is_empty() {
+            return self.name.clone();
+        }
+        if !self.authname.is_empty() {
+            return self.authname.clone();
+        }
+        String::new()
+    }
+
     /// Get a summary of name and address.
     ///
     /// The returned string is either "Name (email@domain.com)" or just
