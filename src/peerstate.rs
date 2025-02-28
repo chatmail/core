@@ -1,19 +1,14 @@
 //! # [Autocrypt Peer State](https://autocrypt.org/level1.html#peer-state-management) module.
 
-use std::mem;
-
 use anyhow::{Context as _, Error, Result};
-use deltachat_contact_tools::{addr_cmp, ContactAddress};
+use deltachat_contact_tools::addr_cmp;
 use num_traits::FromPrimitive;
 
 use crate::aheader::{Aheader, EncryptPreference};
-use crate::chat::{self, Chat};
+use crate::chat;
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::Chattype;
-use crate::contact::{Contact, Origin};
 use crate::context::Context;
-use crate::events::EventType;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::message::Message;
 use crate::mimeparser::SystemMessage;
@@ -638,16 +633,6 @@ impl Peerstate {
             PeerstateChange::FingerprintChange => {
                 stock_str::contact_setup_changed(context, &self.addr).await
             }
-            PeerstateChange::Aeap(new_addr) => {
-                let old_contact = Contact::get_by_id(context, contact_id).await?;
-                stock_str::aeap_addr_changed(
-                    context,
-                    old_contact.get_display_name(),
-                    &self.addr,
-                    new_addr,
-                )
-                .await
-            }
         };
         for (chat_id, msg_id) in chats.iter() {
             let timestamp_sort = if let Some(msg_id) = msg_id {
@@ -656,66 +641,6 @@ impl Peerstate {
             } else {
                 chat_id.created_timestamp(context).await?
             };
-
-            if let PeerstateChange::Aeap(new_addr) = &change {
-                let chat = Chat::load_from_db(context, *chat_id).await?;
-
-                if chat.typ == Chattype::Group && !chat.is_protected() {
-                    // Don't add an info_msg to the group, in order not to make the user think
-                    // that the address was automatically replaced in the group.
-                    continue;
-                }
-
-                // For security reasons, for now, we only do the AEAP transition if the fingerprint
-                // is verified (that's what from_verified_fingerprint_or_addr() does).
-                // In order to not have inconsistent group membership state, we then only do the
-                // transition in verified groups and in broadcast lists.
-                if (chat.typ == Chattype::Group && chat.is_protected())
-                    || chat.typ == Chattype::Broadcast
-                {
-                    match ContactAddress::new(new_addr) {
-                        Ok(new_addr) => {
-                            let (new_contact_id, _) = Contact::add_or_lookup(
-                                context,
-                                "",
-                                &new_addr,
-                                Origin::IncomingUnknownFrom,
-                            )
-                            .await?;
-                            context
-                                .sql
-                                .transaction(|transaction| {
-                                    transaction.execute(
-                                        "UPDATE chats_contacts
-                                         SET remove_timestamp=MAX(add_timestamp+1, ?)
-                                         WHERE chat_id=? AND contact_id=?",
-                                        (timestamp, chat_id, contact_id),
-                                    )?;
-                                    transaction.execute(
-                                        "INSERT INTO chats_contacts
-                                         (chat_id, contact_id, add_timestamp)
-                                         VALUES (?1, ?2, ?3)
-                                         ON CONFLICT (chat_id, contact_id)
-                                         DO UPDATE SET add_timestamp=MAX(remove_timestamp, ?3)",
-                                        (chat_id, new_contact_id, timestamp),
-                                    )?;
-                                    Ok(())
-                                })
-                                .await?;
-
-                            context.emit_event(EventType::ChatModified(*chat_id));
-                        }
-                        Err(err) => {
-                            warn!(
-                                context,
-                                "New address {:?} is not valid, not doing AEAP: {:#}.",
-                                new_addr,
-                                err
-                            )
-                        }
-                    }
-                }
-            }
 
             chat::add_info_msg_with_cmd(
                 context,
@@ -751,105 +676,6 @@ impl Peerstate {
     }
 }
 
-/// Do an AEAP transition, if necessary.
-/// AEAP stands for "Automatic Email Address Porting."
-///
-/// In `drafts/aeap_mvp.md` there is a "big picture" overview over AEAP.
-pub(crate) async fn maybe_do_aeap_transition(
-    context: &Context,
-    mime_parser: &mut crate::mimeparser::MimeMessage,
-) -> Result<()> {
-    let Some(peerstate) = &mime_parser.peerstate else {
-        return Ok(());
-    };
-
-    // If the from addr is different from the peerstate address we know,
-    // we may want to do an AEAP transition.
-    if !addr_cmp(&peerstate.addr, &mime_parser.from.addr) {
-        // Check if it's a chat message; we do this to avoid
-        // some accidental transitions if someone writes from multiple
-        // addresses with an MUA.
-        if !mime_parser.has_chat_version() {
-            info!(
-                context,
-                "Not doing AEAP from {} to {} because the message is not a chat message.",
-                &peerstate.addr,
-                &mime_parser.from.addr
-            );
-            return Ok(());
-        }
-
-        // Check if the message is encrypted and signed correctly. If it's not encrypted, it's
-        // probably from a new contact sharing the same key.
-        if mime_parser.signatures.is_empty() {
-            info!(
-                context,
-                "Not doing AEAP from {} to {} because the message is not encrypted and signed.",
-                &peerstate.addr,
-                &mime_parser.from.addr
-            );
-            return Ok(());
-        }
-
-        // Check if the From: address was also in the signed part of the email.
-        // Without this check, an attacker could replay a message from Alice
-        // to Bob. Then Bob's device would do an AEAP transition from Alice's
-        // to the attacker's address, allowing for easier phishing.
-        if !mime_parser.from_is_signed {
-            info!(
-                context,
-                "Not doing AEAP from {} to {} because From: is not signed.",
-                &peerstate.addr,
-                &mime_parser.from.addr
-            );
-            return Ok(());
-        }
-
-        // DC avoids sending messages with the same timestamp, that's why messages
-        // with equal timestamps are ignored here unlike in `Peerstate::apply_header()`.
-        if mime_parser.timestamp_sent <= peerstate.last_seen {
-            info!(
-                context,
-                "Not doing AEAP from {} to {} because {} < {}.",
-                &peerstate.addr,
-                &mime_parser.from.addr,
-                mime_parser.timestamp_sent,
-                peerstate.last_seen
-            );
-            return Ok(());
-        }
-
-        info!(
-            context,
-            "Doing AEAP transition from {} to {}.", &peerstate.addr, &mime_parser.from.addr
-        );
-
-        let peerstate = mime_parser.peerstate.as_mut().context("no peerstate??")?;
-        // Add info messages to chats with this (verified) contact
-        //
-        peerstate
-            .handle_setup_change(
-                context,
-                mime_parser.timestamp_sent,
-                PeerstateChange::Aeap(mime_parser.from.addr.clone()),
-            )
-            .await?;
-
-        let old_addr = mem::take(&mut peerstate.addr);
-        peerstate.addr.clone_from(&mime_parser.from.addr);
-        let header = mime_parser.autocrypt_header.as_ref().context(
-            "Internal error: Tried to do an AEAP transition without an autocrypt header??",
-        )?;
-        peerstate.apply_header(context, header, mime_parser.timestamp_sent);
-
-        peerstate
-            .save_to_db_ex(&context.sql, Some(&old_addr))
-            .await?;
-    }
-
-    Ok(())
-}
-
 /// Type of the peerstate change.
 ///
 /// Changes to the peerstate are notified to the user via a message
@@ -858,9 +684,6 @@ enum PeerstateChange {
     /// The contact's public key fingerprint changed, likely because
     /// the contact uses a new device and didn't transfer their key.
     FingerprintChange,
-    /// The contact changed their address to the given new address
-    /// (Automatic Email Address Porting).
-    Aeap(String),
 }
 
 #[cfg(test)]
