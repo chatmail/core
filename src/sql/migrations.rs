@@ -19,8 +19,7 @@ const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
 const TABLES: &str = include_str!("./tables.sql");
 
-pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool, bool, bool)> {
-    let mut recalc_fingerprints = false;
+pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool, bool)> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
 
@@ -158,7 +157,6 @@ CREATE INDEX acpeerstates_index4 ON acpeerstates (gossip_key_fingerprint);"#,
             34,
         )
         .await?;
-        recalc_fingerprints = true;
     }
     if dbversion < 39 {
         sql.execute_migration(
@@ -1224,6 +1222,39 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 132)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+             CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
+
+             CREATE TABLE public_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fingerprint TEXT NOT NULL UNIQUE, -- Upper-case fingerprint of the key.
+                public_key BLOB NOT NULL -- Binary key, not ASCII-armored
+             ) STRICT;
+             CREATE INDEX public_key_index ON public_keys (fingerprint);
+
+             INSERT INTO public_keys (fingerprint, public_key)
+             SELECT public_key_fingerprint, public_key FROM acpeerstates;
+             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+             SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates;
+             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+             SELECT verified_key_fingerprint, verified_key FROM acpeerstates;
+             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+             SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
+
+             CREATE TABLE pgp_contacts_addr (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               contact_id INTEGER NOT NULL UNIQUE, -- ID of a PGP-contact.
+               addr TEXT NOT NULL -- Email address.
+             ) STRICT;
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
@@ -1238,12 +1269,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok((
-        recalc_fingerprints,
-        update_icons,
-        disable_server_delete,
-        recode_avatar,
-    ))
+    Ok((update_icons, disable_server_delete, recode_avatar))
 }
 
 impl Sql {

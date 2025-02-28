@@ -3636,7 +3636,6 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
-    assert!(received_msg.from_is_signed);
 
     let peerstate = Peerstate::from_addr(&t, "alice@example.org")
         .await?
@@ -3691,7 +3690,6 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let t = &TestContext::new_bob().await;
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let received_msg = receive_imf(t, raw, false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
     let msg = t.get_last_msg().await;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
@@ -3710,7 +3708,6 @@ async fn test_wrong_from_name_and_no_valid_signatures() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let raw = String::from_utf8(raw.to_vec())?.replace("From: Alice", "From: A");
     let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
     let msg = t.get_last_msg().await;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
@@ -3751,7 +3748,6 @@ async fn test_thunderbird_unsigned() -> Result<()> {
     // Alice receives an unsigned message from Bob.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
     let received_msg = receive_imf(&alice, raw, false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
 
     let msg = alice.get_last_msg().await;
     assert!(!msg.get_showpadlock());

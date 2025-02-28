@@ -133,7 +133,7 @@ async fn test_is_self_addr() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_add_or_lookup() {
     // add some contacts, this also tests add_address_book()
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let book = concat!(
         "  Name one  \n one@eins.org \n",
         "Name two\ntwo@deux.net\n",
@@ -247,7 +247,7 @@ async fn test_add_or_lookup() {
     // check SELF
     let contact = Contact::get_by_id(&t, ContactId::SELF).await.unwrap();
     assert_eq!(contact.get_name(), stock_str::self_msg(&t).await);
-    assert_eq!(contact.get_addr(), ""); // we're not configured
+    assert_eq!(contact.get_addr(), "alice@example.org");
     assert!(!contact.is_blocked());
 }
 
@@ -1063,8 +1063,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
-    alice.recv_msg(&sent_msg).await;
-    let bob_id = Contact::create(alice, "Some Bob", &bob_addr).await?;
+    let bob_id = alice.recv_msg(&sent_msg).await.from_id;
     let key_base64 = Peerstate::from_addr(alice, &bob_addr)
         .await?
         .unwrap()
@@ -1150,8 +1149,10 @@ async fn test_make_n_import_vcard() -> Result<()> {
     Ok(())
 }
 
+/// Tests importing a vCard with the same email address,
+/// but a new key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_import_vcard_updates_only_key() -> Result<()> {
+async fn test_import_vcard_key_change() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let bob = &TestContext::new_bob().await;
     let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
@@ -1171,7 +1172,7 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
 
     let bob = &TestContext::new().await;
     bob.configure_addr(bob_addr).await;
-    bob.set_config(Config::Displayname, Some("Not Bob")).await?;
+    bob.set_config(Config::Displayname, Some("New Bob")).await?;
     let avatar_path = bob.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
@@ -1179,10 +1180,14 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
         .await?;
     SystemTime::shift(Duration::from_secs(1));
     let vcard1 = make_vcard(bob, &[ContactId::SELF]).await?;
-    assert_eq!(import_vcard(alice, &vcard1).await?, vec![alice_bob_id]);
+    let alice_bob_id1 = import_vcard(alice, &vcard1).await?[0];
+    assert_ne!(alice_bob_id1, alice_bob_id);
     let alice_bob_contact = Contact::get_by_id(alice, alice_bob_id).await?;
     assert_eq!(alice_bob_contact.get_authname(), "Bob");
     assert_eq!(alice_bob_contact.get_profile_image(alice).await?, None);
+    let alice_bob_contact1 = Contact::get_by_id(alice, alice_bob_id1).await?;
+    assert_eq!(alice_bob_contact1.get_authname(), "New Bob");
+    assert!(alice_bob_contact1.get_profile_image(alice).await?.is_some());
     let msg = alice.get_last_msg_in(chat_id).await;
     assert!(msg.is_info());
     assert_eq!(
@@ -1211,9 +1216,27 @@ async fn test_self_is_verified() -> Result<()> {
     assert_eq!(contact.is_verified(&alice).await?, true);
     assert!(contact.is_profile_verified(&alice).await?);
     assert!(contact.get_verifier_id(&alice).await?.is_none());
+    assert!(contact.is_pgp_contact());
 
     let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
     assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
+
+    Ok(())
+}
+
+/// Tests that importing a vCard with a key creates a PGP-contact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_vcard_creates_pgp_contact() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let vcard = make_vcard(bob, &[ContactId::SELF]).await?;
+    let contact_ids = import_vcard(alice, &vcard).await?;
+    assert_eq!(contact_ids.len(), 1);
+    let contact_id = contact_ids.first().unwrap();
+    let contact = Contact::get_by_id(alice, *contact_id).await?;
+    assert!(contact.is_pgp_contact());
 
     Ok(())
 }
