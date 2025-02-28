@@ -212,7 +212,7 @@ async fn test_decode_smtp() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_ideltachat_link() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
 
     let qr = check_qr(
         &ctx.ctx,
@@ -233,7 +233,7 @@ async fn test_decode_ideltachat_link() -> Result<()> {
 // see issue https://github.com/deltachat/deltachat-core-rust/issues/1969 for more info
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_tolerance_for_issue_1969() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
 
     let qr = check_qr(
         &ctx.ctx,
@@ -246,7 +246,7 @@ async fn test_decode_openpgp_tolerance_for_issue_1969() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_group() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
     let qr = check_qr(
         &ctx.ctx,
         "OPENPGP4FPR:79252762C34C5096AF57958F4FC3D21A81B0F0A7#a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
@@ -264,7 +264,7 @@ async fn test_decode_openpgp_group() -> Result<()> {
     }
 
     // Test it again with lowercased "openpgp4fpr:" uri scheme
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
     let qr = check_qr(
         &ctx.ctx,
         "openpgp4fpr:79252762C34C5096AF57958F4FC3D21A81B0F0A7#a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
@@ -304,7 +304,7 @@ async fn test_decode_openpgp_invalid_token() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_secure_join() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
 
     let qr = check_qr(
         &ctx.ctx,
@@ -333,7 +333,7 @@ async fn test_decode_openpgp_secure_join() -> Result<()> {
     }
 
     // Regression test
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
     let qr = check_qr(
         &ctx.ctx,
         "openpgp4fpr:79252762C34C5096AF57958F4FC3D21A81B0F0A7#a=cli%40deltachat.de&n=&i=TbnwJ6lSvD5&s=0ejvbdFSQxB"

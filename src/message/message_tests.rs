@@ -106,7 +106,7 @@ async fn test_create_webrtc_instance_noroom() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_width_height() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
 
     // test that get_width() and get_height() are returning some dimensions for images;
     // (as the device-chat contains a welcome-images, we check that)

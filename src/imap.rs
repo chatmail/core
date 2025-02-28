@@ -1886,7 +1886,7 @@ async fn should_move_out_of_spam(
         };
         // No chat found.
         let (from_id, blocked_contact, _origin) =
-            match from_field_to_contact_id(context, &from, true)
+            match from_field_to_contact_id(context, &from, None, true)
                 .await
                 .context("from_field_to_contact_id")?
             {
@@ -2244,7 +2244,7 @@ pub(crate) async fn prefetch_should_download(
         None => return Ok(false),
     };
     let (_from_id, blocked_contact, origin) =
-        match from_field_to_contact_id(context, &from, true).await? {
+        match from_field_to_contact_id(context, &from, None, true).await? {
             Some(res) => res,
             None => return Ok(false),
         };

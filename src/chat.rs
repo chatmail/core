@@ -2319,7 +2319,11 @@ impl Chat {
                         return Ok(None);
                     }
                     let contact = Contact::get_by_id(context, contact_id).await?;
-                    r = Some(SyncId::ContactAddr(contact.get_addr().to_string()));
+                    if let Some(fingerprint) = contact.fingerprint() {
+                        r = Some(SyncId::ContactFingerprint(fingerprint.to_string()));
+                    } else {
+                        r = Some(SyncId::ContactAddr(contact.get_addr().to_string()));
+                    }
                 }
                 Ok(r)
             }
@@ -4847,7 +4851,12 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
 /// A cross-device chat id used for synchronisation.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) enum SyncId {
+    // E-mail address of the contact.
     ContactAddr(String),
+
+    // OpenPGP fingerprint of the contact.
+    ContactFingerprint(String),
+
     Grpid(String),
     /// "Message-ID"-s, from oldest to latest. Used for ad-hoc groups.
     Msgids(Vec<String>),
@@ -4895,6 +4904,29 @@ impl Context {
                 }
                 // Use `Request` so that even if the program crashes, the user doesn't have to look
                 // into the blocked contacts.
+                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
+                    .await?
+                    .id
+            }
+            SyncId::ContactFingerprint(fingerprint) => {
+                let name = "";
+                let addr = "";
+                let (contact_id, _) =
+                    Contact::add_or_lookup_ex(self, name, addr, fingerprint, Origin::Hidden)
+                        .await?;
+                match action {
+                    SyncAction::Rename(to) => {
+                        contact_id.set_name_ex(self, Nosync, to).await?;
+                        return Ok(());
+                    }
+                    SyncAction::Block => {
+                        return contact::set_blocked(self, Nosync, contact_id, true).await
+                    }
+                    SyncAction::Unblock => {
+                        return contact::set_blocked(self, Nosync, contact_id, false).await
+                    }
+                    _ => (),
+                }
                 ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
                     .await?
                     .id
