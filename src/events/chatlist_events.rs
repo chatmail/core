@@ -247,8 +247,7 @@ mod test_chatlist_events {
 
         bob.evtracker.clear_events();
         // set name
-        let addr = alice_on_bob.get_addr();
-        Contact::create(&bob, "Alice2", addr).await?;
+        alice_on_bob.id.set_name(&bob, "Alice2").await?;
         assert!(bob.add_or_lookup_contact(&alice).await.get_display_name() == "Alice2");
 
         wait_for_chatlist_all_items(&bob).await;

@@ -22,7 +22,6 @@ use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::stock_str;
 use crate::tools::{delete_file, time, SystemTime};
 
@@ -202,35 +201,12 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        let (recalc_fingerprints, update_icons, disable_server_delete, recode_avatar) =
-            migrations::run(context, self)
-                .await
-                .context("failed to run migrations")?;
+        let (update_icons, disable_server_delete, recode_avatar) = migrations::run(context, self)
+            .await
+            .context("failed to run migrations")?;
 
         // (2) updates that require high-level objects
         // the structure is complete now and all objects are usable
-
-        if recalc_fingerprints {
-            info!(context, "[migration] recalc fingerprints");
-            let addrs = self
-                .query_map(
-                    "SELECT addr FROM acpeerstates;",
-                    (),
-                    |row| row.get::<_, String>(0),
-                    |addrs| {
-                        addrs
-                            .collect::<std::result::Result<Vec<_>, _>>()
-                            .map_err(Into::into)
-                    },
-                )
-                .await?;
-            for addr in &addrs {
-                if let Some(ref mut peerstate) = Peerstate::from_addr(context, addr).await? {
-                    peerstate.recalc_fingerprint();
-                    peerstate.save_to_db(self).await?;
-                }
-            }
-        }
 
         if update_icons {
             update_saved_messages_icon(context).await?;

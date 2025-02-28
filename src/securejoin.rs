@@ -412,6 +412,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 .await?
                 .get_addr()
                 .to_owned();
+
             let backward_verified = true;
             let fingerprint_found = mark_peer_as_verified(
                 context,
