@@ -24,6 +24,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
+use crate::key::Fingerprint;
 use crate::log::LogExt;
 use crate::message::{
     self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
@@ -325,8 +326,11 @@ pub(crate) async fn receive_imf_inner(
     // For example, GitHub sends messages from `notifications@github.com`,
     // but uses display name of the user whose action generated the notification
     // as the display name.
+    let fingerprint = mime_parser.signatures.iter().next();
     let (from_id, _from_id_blocked, incoming_origin) =
-        match from_field_to_contact_id(context, &mime_parser.from, prevent_rename).await? {
+        match from_field_to_contact_id(context, &mime_parser.from, fingerprint, prevent_rename)
+            .await?
+        {
             Some(contact_id_res) => contact_id_res,
             None => {
                 warn!(
@@ -667,8 +671,10 @@ pub(crate) async fn receive_imf_inner(
 pub async fn from_field_to_contact_id(
     context: &Context,
     from: &SingleInfo,
+    fingerprint: Option<&Fingerprint>,
     prevent_rename: bool,
 ) -> Result<Option<(ContactId, bool, Origin)>> {
+    let fingerprint = fingerprint.as_ref().map(|fp| fp.hex()).unwrap_or_default();
     let display_name = if prevent_rename {
         Some("")
     } else {
@@ -685,10 +691,11 @@ pub async fn from_field_to_contact_id(
         }
     };
 
-    let (from_id, _) = Contact::add_or_lookup(
+    let (from_id, _) = Contact::add_or_lookup_ex(
         context,
         display_name.unwrap_or_default(),
         &from_addr,
+        &fingerprint,
         Origin::IncomingUnknownFrom,
     )
     .await?;

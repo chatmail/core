@@ -28,7 +28,7 @@ use crate::config::Config;
 use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF, DC_GCL_VERIFIED_ONLY};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::{load_self_public_key, DcKey, SignedPublicKey};
+use crate::key::{load_self_public_key, load_self_public_key_opt, DcKey, SignedPublicKey};
 use crate::log::LogExt;
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
@@ -329,15 +329,6 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
     // mustn't use `Origin::AddressBook` here because the vCard may be created not by us, also we
     // want `contact.authname` to be saved as the authname and not a locally given name.
     let origin = Origin::CreateChat;
-    let (id, modified) =
-        match Contact::add_or_lookup(context, &contact.authname, &addr, origin).await {
-            Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
-            Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
-            Ok(val) => val,
-        };
-    if modified != Modifier::None {
-        context.emit_event(EventType::ContactsChanged(Some(id)));
-    }
     let key = contact.key.as_ref().and_then(|k| {
         SignedPublicKey::from_base64(k)
             .with_context(|| {
@@ -349,6 +340,23 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             .log_err(context)
             .ok()
     });
+    let fingerprint = key.as_ref().map(|k| k.dc_fingerprint().hex());
+    let (id, modified) = match Contact::add_or_lookup_ex(
+        context,
+        &contact.authname,
+        &addr,
+        &fingerprint.unwrap_or_default(),
+        origin,
+    )
+    .await
+    {
+        Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
+        Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
+        Ok(val) => val,
+    };
+    if modified != Modifier::None {
+        context.emit_event(EventType::ContactsChanged(Some(id)));
+    }
     if let Some(public_key) = key {
         let timestamp = contact
             .timestamp
@@ -455,6 +463,9 @@ pub struct Contact {
 
     /// E-Mail-Address of the contact. It is recommended to use `Contact::get_addr` to access this field.
     addr: String,
+
+    /// OpenPGP fingerprint.
+    fingerprint: Option<String>,
 
     /// Blocked state. Use contact_is_blocked to access this field.
     pub blocked: bool,
@@ -605,7 +616,7 @@ impl Contact {
             .sql
             .query_row_optional(
                 "SELECT c.name, c.addr, c.origin, c.blocked, c.last_seen,
-                c.authname, c.param, c.status, c.is_bot
+                c.authname, c.param, c.status, c.is_bot, c.fingerprint
                FROM contacts c
               WHERE c.id=?;",
                 (contact_id,),
@@ -619,11 +630,14 @@ impl Contact {
                     let param: String = row.get(6)?;
                     let status: Option<String> = row.get(7)?;
                     let is_bot: bool = row.get(8)?;
+                    let fingerprint: Option<String> =
+                        Some(row.get(9)?).filter(|s: &String| !s.is_empty());
                     let contact = Self {
                         id: contact_id,
                         name,
                         authname,
                         addr,
+                        fingerprint,
                         blocked: blocked.unwrap_or_default(),
                         last_seen,
                         origin,
@@ -646,6 +660,9 @@ impl Contact {
                     .get_config(Config::ConfiguredAddr)
                     .await?
                     .unwrap_or_default();
+                if let Some(public_key) = load_self_public_key_opt(context).await? {
+                    contact.fingerprint = Some(public_key.dc_fingerprint().hex());
+                }
                 contact.status = context
                     .get_config(Config::Selfstatus)
                     .await?
@@ -818,6 +835,15 @@ impl Contact {
         Ok(id)
     }
 
+    pub(crate) async fn add_or_lookup(
+        context: &Context,
+        name: &str,
+        addr: &ContactAddress,
+        origin: Origin,
+    ) -> Result<(ContactId, Modifier)> {
+        Self::add_or_lookup_ex(context, name, addr, "", origin).await
+    }
+
     /// Lookup a contact and create it if it does not exist yet.
     /// The contact is identified by the email-address, a name and an "origin" can be given.
     ///
@@ -843,10 +869,11 @@ impl Contact {
     ///   Depending on the origin, both, "row_name" and "row_authname" are updated from "name".
     ///
     /// Returns the contact_id and a `Modifier` value indicating if a modification occurred.
-    pub(crate) async fn add_or_lookup(
+    pub(crate) async fn add_or_lookup_ex(
         context: &Context,
         name: &str,
         addr: &ContactAddress,
+        fingerprint: &str,
         mut origin: Origin,
     ) -> Result<(ContactId, Modifier)> {
         let mut sth_modified = Modifier::None;
@@ -893,8 +920,10 @@ impl Contact {
                 let row = transaction
                     .query_row(
                         "SELECT id, name, addr, origin, authname
-                 FROM contacts WHERE addr=? COLLATE NOCASE",
-                        (addr,),
+                         FROM contacts
+                         WHERE addr=? COLLATE NOCASE
+                         AND fingerprint=?",
+                        (addr, fingerprint),
                         |row| {
                             let row_id: u32 = row.get(0)?;
                             let row_name: String = row.get(1)?;
@@ -962,11 +991,12 @@ impl Contact {
                     let update_authname = !manual;
 
                     transaction.execute(
-                        "INSERT INTO contacts (name, addr, origin, authname)
-                         VALUES (?, ?, ?, ?);",
+                        "INSERT INTO contacts (name, addr, fingerprint, origin, authname)
+                         VALUES (?, ?, ?, ?, ?);",
                         (
                             if update_name { &name } else { "" },
                             &addr,
+                            fingerprint,
                             origin,
                             if update_authname { &name } else { "" },
                         ),
@@ -974,7 +1004,14 @@ impl Contact {
 
                     sth_modified = Modifier::Created;
                     row_id = u32::try_from(transaction.last_insert_rowid())?;
-                    info!(context, "Added contact id={row_id} addr={addr}.");
+                    if fingerprint.is_empty() {
+                        info!(context, "Added contact id={row_id} addr={addr}.");
+                    } else {
+                        info!(
+                            context,
+                            "Added contact id={row_id} fpr={fingerprint} addr={addr}."
+                        );
+                    }
                 }
                 Ok(row_id)
             })
@@ -1361,6 +1398,12 @@ impl Contact {
     /// Get email address. The email address is always set for a contact.
     pub fn get_addr(&self) -> &str {
         &self.addr
+    }
+
+    /// Returns true if the contact is a PGP-contact.
+    /// Otherwise it is an email contact.
+    pub fn is_pgp_contact(&self) -> bool {
+        self.fingerprint.is_some()
     }
 
     /// Get name authorized by the contact.

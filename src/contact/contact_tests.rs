@@ -133,7 +133,7 @@ async fn test_is_self_addr() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_add_or_lookup() {
     // add some contacts, this also tests add_address_book()
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let book = concat!(
         "  Name one  \n one@eins.org \n",
         "Name two\ntwo@deux.net\n",
@@ -247,7 +247,7 @@ async fn test_add_or_lookup() {
     // check SELF
     let contact = Contact::get_by_id(&t, ContactId::SELF).await.unwrap();
     assert_eq!(contact.get_name(), stock_str::self_msg(&t).await);
-    assert_eq!(contact.get_addr(), ""); // we're not configured
+    assert_eq!(contact.get_addr(), "alice@example.org");
     assert!(!contact.is_blocked());
 }
 
@@ -1268,9 +1268,27 @@ async fn test_self_is_verified() -> Result<()> {
     assert_eq!(contact.is_verified(&alice).await?, true);
     assert!(contact.is_profile_verified(&alice).await?);
     assert!(contact.get_verifier_id(&alice).await?.is_none());
+    assert!(contact.is_pgp_contact());
 
     let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
     assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
+
+    Ok(())
+}
+
+/// Tests that importing a vCard with a key creates a PGP-contact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_vcard_creates_pgp_contact() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let vcard = make_vcard(bob, &[ContactId::SELF]).await?;
+    let contact_ids = import_vcard(alice, &vcard).await?;
+    assert_eq!(contact_ids.len(), 1);
+    let contact_id = contact_ids.first().unwrap();
+    let contact = Contact::get_by_id(alice, *contact_id).await?;
+    assert!(contact.is_pgp_contact());
 
     Ok(())
 }

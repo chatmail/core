@@ -42,7 +42,7 @@ async fn test_chat_info() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft_no_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat = t.get_self_chat().await;
     let draft = chat.id.get_draft(&t).await.unwrap();
     assert!(draft.is_none());
@@ -59,14 +59,14 @@ async fn test_get_draft_special_chat_id() {
 async fn test_get_draft_no_chat() {
     // This is a weird case, maybe this should be an error but we
     // do not get this info from the database currently.
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let draft = ChatId::new(42).get_draft(&t).await.unwrap();
     assert!(draft.is_none());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat_id = &t.get_self_chat().await.id;
     let mut msg = Message::new_text("hello".to_string());
 
@@ -953,7 +953,7 @@ async fn test_delete_device_chat() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_device_chat_cannot_sent() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     t.update_device_chats().await.unwrap();
     let device_chat_id = ChatId::get_for_contact(&t, ContactId::DEVICE)
         .await
@@ -1000,7 +1000,7 @@ async fn chatlist_len(ctx: &Context, listflags: usize) -> usize {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive() {
     // create two chats
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let mut msg = Message::new_text("foo".to_string());
     let msg_id = add_device_msg(&t, None, Some(&mut msg)).await.unwrap();
     let chat_id1 = message::Message::load_from_db(&t, msg_id)
@@ -1298,7 +1298,7 @@ async fn get_chats_from_chat_list(ctx: &Context, listflags: usize) -> Vec<ChatId
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pinned() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
 
     // create 3 chats, wait 1 second in between to get a reliable order (we order by time)
     let mut msg = Message::new_text("foo".to_string());
