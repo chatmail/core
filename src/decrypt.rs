@@ -143,19 +143,6 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
     }
 }
 
-/// Returns public keyring for `peerstate`.
-pub(crate) fn keyring_from_peerstate(peerstate: Option<&Peerstate>) -> Vec<SignedPublicKey> {
-    let mut public_keyring_for_validate = Vec::new();
-    if let Some(peerstate) = peerstate {
-        if let Some(key) = &peerstate.public_key {
-            public_keyring_for_validate.push(key.clone());
-        } else if let Some(key) = &peerstate.gossip_key {
-            public_keyring_for_validate.push(key.clone());
-        }
-    }
-    public_keyring_for_validate
-}
-
 /// Applies Autocrypt header to Autocrypt peer state and saves it into the database.
 ///
 /// If we already know this fingerprint from another contact's peerstate, return that
