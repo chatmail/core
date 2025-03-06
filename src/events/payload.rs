@@ -376,6 +376,30 @@ pub enum EventType {
     /// This event is emitted from the account whose property changed.
     AccountsItemChanged,
 
+    /// Incoming call.
+    IncomingCall {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+    },
+
+    /// Incoming call accepted.
+    IncomingCallAccepted {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+    },
+
+    /// Outgoing call accepted.
+    OutgoingCallAccepted {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+    },
+
+    /// Call ended.
+    CallEnded {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+    },
+
     /// Event for using in tests, e.g. as a fence between normally generated events.
     #[cfg(test)]
     Test,
