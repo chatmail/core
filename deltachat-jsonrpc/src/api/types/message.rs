@@ -436,6 +436,11 @@ pub enum SystemMessageType {
 
     /// This message contains a users iroh node address.
     IrohNodeAddr,
+
+    OutgoingCall,
+    IncomingCall,
+    CallAccepted,
+    CallEnded,
 }
 
 impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
@@ -461,6 +466,10 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::IrohNodeAddr => SystemMessageType::IrohNodeAddr,
             SystemMessage::SecurejoinWait => SystemMessageType::SecurejoinWait,
             SystemMessage::SecurejoinWaitTimeout => SystemMessageType::SecurejoinWaitTimeout,
+            SystemMessage::OutgoingCall => SystemMessageType::OutgoingCall,
+            SystemMessage::IncomingCall => SystemMessageType::IncomingCall,
+            SystemMessage::CallAccepted => SystemMessageType::CallAccepted,
+            SystemMessage::CallEnded => SystemMessageType::CallEnded,
         }
     }
 }
