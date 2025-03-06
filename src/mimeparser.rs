@@ -216,6 +216,22 @@ pub enum SystemMessage {
 
     /// "Messages are end-to-end encrypted."
     ChatE2ee = 50,
+
+    /// This system message represents an outgoing call.
+    /// This message is visible to the user as an "info" message.
+    OutgoingCall = 60,
+
+    /// This system message represents an incoming call.
+    /// This message is visible to the user as an "info" message.
+    IncomingCall = 65,
+
+    /// Message indicating that a call was accepted.
+    /// While the 1:1 call may be established elsewhere,
+    /// the message is still needed for a multidevice setup, so that other devices stop ringing.
+    CallAccepted = 66,
+
+    /// Message indicating that a call was ended.
+    CallEnded = 67,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -676,6 +692,16 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::ChatProtectionDisabled;
             } else if value == "group-avatar-changed" {
                 self.is_system_message = SystemMessage::GroupImageChanged;
+            } else if value == "call" {
+                self.is_system_message = if self.incoming {
+                    SystemMessage::IncomingCall
+                } else {
+                    SystemMessage::OutgoingCall
+                };
+            } else if value == "call-accepted" {
+                self.is_system_message = SystemMessage::CallAccepted;
+            } else if value == "call-ended" {
+                self.is_system_message = SystemMessage::CallEnded;
             }
         } else if self.get_header(HeaderDef::ChatGroupMemberRemoved).is_some() {
             self.is_system_message = SystemMessage::MemberRemovedFromGroup;

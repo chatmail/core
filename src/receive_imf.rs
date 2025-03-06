@@ -1012,6 +1012,13 @@ pub(crate) async fn receive_imf_inner(
     }
     context.new_msgs_notify.notify_one();
 
+    if mime_parser.is_system_message == SystemMessage::IncomingCall
+        || mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        context.handle_call_msg(&mime_parser, insert_msg_id).await?;
+    }
+
     mime_parser
         .handle_reports(context, from_id, &mime_parser.parts)
         .await;
