@@ -624,7 +624,12 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if received_msg.hidden {
+    if mime_parser.is_system_message == SystemMessage::IncomingCall
+        || mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        context.handle_call_msg(&mime_parser, insert_msg_id).await?;
+    } else if received_msg.hidden {
         // No need to emit an event about the changed message
     } else if let Some(replace_chat_id) = replace_chat_id {
         context.emit_msgs_changed_without_msg_id(replace_chat_id);
@@ -635,13 +640,6 @@ pub(crate) async fn receive_imf_inner(
         }
     }
     context.new_msgs_notify.notify_one();
-
-    if mime_parser.is_system_message == SystemMessage::IncomingCall
-        || mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
-    {
-        context.handle_call_msg(&mime_parser, insert_msg_id).await?;
-    }
 
     mime_parser
         .handle_reports(context, from_id, &mime_parser.parts)
