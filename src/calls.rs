@@ -111,6 +111,7 @@ impl Context {
         match mime_message.is_system_message {
             SystemMessage::IncomingCall => {
                 let call = self.load_call_by_root_id(call_or_child_id).await?;
+                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 if call.incoming {
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
@@ -119,6 +120,7 @@ impl Context {
             }
             SystemMessage::CallAccepted => {
                 let call = self.load_call_by_child_id(call_or_child_id).await?;
+                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 if call.incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
                         msg_id: call.msg.id,
@@ -131,6 +133,7 @@ impl Context {
             }
             SystemMessage::CallEnded => {
                 let call = self.load_call_by_child_id(call_or_child_id).await?;
+                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 self.emit_event(EventType::CallEnded {
                     msg_id: call.msg.id,
                 });
