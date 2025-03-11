@@ -258,8 +258,6 @@ pub struct InnerContext {
     /// IMAP METADATA.
     pub(crate) metadata: RwLock<Option<ServerMetadata>>,
 
-    pub(crate) last_full_folder_scan: Mutex<Option<tools::Time>>,
-
     /// ID for this `Context` in the current process.
     ///
     /// This allows for multiple `Context`s open in a single process where each context can
@@ -468,7 +466,6 @@ impl Context {
             server_id: RwLock::new(None),
             metadata: RwLock::new(None),
             creation_time: tools::Time::now(),
-            last_full_folder_scan: Mutex::new(None),
             last_error: parking_lot::RwLock::new("".to_string()),
             migration_error: parking_lot::RwLock::new(None),
             debug_logging: std::sync::RwLock::new(None),

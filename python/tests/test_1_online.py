@@ -308,7 +308,7 @@ def test_move_works(acfactory):
 
 
 def test_move_avoids_loop(acfactory):
-    """Test that the message is only moved once.
+    """Test that the message is only moved from INBOX to DeltaChat.
 
     This is to avoid busy loop if moved message reappears in the Inbox
     or some scanned folder later.
@@ -319,6 +319,14 @@ def test_move_avoids_loop(acfactory):
     ac1 = acfactory.new_online_configuring_account()
     ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
     acfactory.bring_accounts_online()
+
+    # Create INBOX.DeltaChat folder and make sure
+    # it is detected by full folder scan.
+    ac2.direct_imap.create_folder("INBOX.DeltaChat")
+    ac2.stop_io()
+    ac2.start_io()
+    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
+
     ac1_chat = acfactory.get_accepted_chat(ac1, ac2)
     ac1_chat.send_text("Message 1")
 
@@ -326,19 +334,27 @@ def test_move_avoids_loop(acfactory):
     ac2_msg1 = ac2._evtracker.wait_next_incoming_message()
     assert ac2_msg1.text == "Message 1"
 
-    # Move the message to the INBOX again.
+    # Move the message to the INBOX.DeltaChat again.
+    # We assume that test server uses "." as the delimiter.
     ac2.direct_imap.select_folder("DeltaChat")
-    ac2.direct_imap.conn.move(["*"], "INBOX")
+    ac2.direct_imap.conn.move(["*"], "INBOX.DeltaChat")
 
     ac1_chat.send_text("Message 2")
     ac2_msg2 = ac2._evtracker.wait_next_incoming_message()
     assert ac2_msg2.text == "Message 2"
 
-    # Check that Message 1 is still in the INBOX folder
+    # Stop and start I/O to trigger folder scan.
+    ac2.stop_io()
+    ac2.start_io()
+    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
+
+    # Check that Message 1 is still in the INBOX.DeltaChat folder
     # and Message 2 is in the DeltaChat folder.
     ac2.direct_imap.select_folder("INBOX")
-    assert len(ac2.direct_imap.get_all_messages()) == 1
+    assert len(ac2.direct_imap.get_all_messages()) == 0
     ac2.direct_imap.select_folder("DeltaChat")
+    assert len(ac2.direct_imap.get_all_messages()) == 1
+    ac2.direct_imap.select_folder("INBOX.DeltaChat")
     assert len(ac2.direct_imap.get_all_messages()) == 1
 
 
@@ -450,14 +466,19 @@ def test_resend_message(acfactory, lp):
     lp.sec("ac2: receive message")
     msg_in = ac2._evtracker.wait_next_incoming_message()
     assert msg_in.text == "message"
-    chat2 = msg_in.chat
-    chat2_msg_cnt = len(chat2.get_messages())
 
     lp.sec("ac1: resend message")
     ac1.resend_messages([msg_in])
 
-    lp.sec("ac2: check that message is deleted")
-    ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
+    lp.sec("ac1: send another message")
+    chat1.send_text("another message")
+
+    lp.sec("ac2: receive another message")
+    msg_in = ac2._evtracker.wait_next_incoming_message()
+    assert msg_in.text == "another message"
+    chat2 = msg_in.chat
+    chat2_msg_cnt = len(chat2.get_messages())
+
     assert len(chat2.get_messages()) == chat2_msg_cnt
 
 
@@ -1757,10 +1778,10 @@ def test_group_quote(acfactory, lp):
             "xyz",
         ),  # Test that emails aren't found in a random folder
         (
-            "Spam",
+            "xyz",
             True,
-            "DeltaChat",
-        ),  # ...emails are moved from the spam folder to "DeltaChat"
+            "xyz",
+        ),  # ...emails are found in a random folder and downloaded without moving
         (
             "Spam",
             False,

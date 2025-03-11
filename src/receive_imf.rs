@@ -17,7 +17,7 @@ use regex::Regex;
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, remove_from_chat_contacts_table};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
-use crate::contact::{Contact, ContactId, Origin, mark_contact_id_as_verified};
+use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
 use crate::download::DownloadState;
@@ -45,7 +45,6 @@ use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{self, buf_compress, remove_subject_prefix};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
-use crate::{contact, imap};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
 ///
@@ -154,8 +153,8 @@ pub async fn receive_imf(
     seen: bool,
 ) -> Result<Option<ReceivedMsg>> {
     let mail = mailparse::parse_mail(imf_raw).context("can't parse mail")?;
-    let rfc724_mid =
-        imap::prefetch_get_message_id(&mail.headers).unwrap_or_else(imap::create_message_id);
+    let rfc724_mid = crate::imap::prefetch_get_message_id(&mail.headers)
+        .unwrap_or_else(crate::imap::create_message_id);
     if let Some(download_limit) = context.download_limit().await? {
         let download_limit: usize = download_limit.try_into()?;
         if imf_raw.len() > download_limit {
@@ -189,9 +188,6 @@ pub(crate) async fn receive_imf_from_inbox(
 ) -> Result<Option<ReceivedMsg>> {
     receive_imf_inner(
         context,
-        "INBOX",
-        0,
-        0,
         rfc724_mid,
         imf_raw,
         seen,
@@ -493,12 +489,8 @@ async fn get_to_and_past_contact_ids(
 ///
 /// If `partial` is set, it contains the full message size in bytes and an optional error text for
 /// the partially downloaded message.
-#[expect(clippy::too_many_arguments)]
 pub(crate) async fn receive_imf_inner(
     context: &Context,
-    folder: &str,
-    uidvalidity: u32,
-    uid: u32,
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
@@ -553,7 +545,7 @@ pub(crate) async fn receive_imf_inner(
     // check, if the mail is already in our database.
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
-    if let Some((old_msg_id, _)) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+    if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
             .await?
@@ -570,27 +562,8 @@ pub(crate) async fn receive_imf_inner(
     } else {
         replace_msg_id = if rfc724_mid_orig == rfc724_mid {
             None
-        } else if let Some((old_msg_id, old_ts_sent)) =
-            message::rfc724_mid_exists(context, rfc724_mid_orig).await?
-        {
-            if imap::is_dup_msg(
-                mime_parser.has_chat_version(),
-                mime_parser.timestamp_sent,
-                old_ts_sent,
-            ) {
-                info!(context, "Deleting duplicate message {rfc724_mid_orig}.");
-                let target = context.get_delete_msgs_target().await?;
-                context
-                    .sql
-                    .execute(
-                        "UPDATE imap SET target=? WHERE folder=? AND uidvalidity=? AND uid=?",
-                        (target, folder, uidvalidity, uid),
-                    )
-                    .await?;
-            }
-            Some(old_msg_id)
         } else {
-            None
+            message::rfc724_mid_exists(context, rfc724_mid_orig).await?
         };
         replace_chat_id = None;
     }
@@ -1906,7 +1879,7 @@ async fn add_parts(
     if let Some(node_addr) = mime_parser.get_header(HeaderDef::IrohNodeAddr) {
         match mime_parser.get_header(HeaderDef::InReplyTo) {
             Some(in_reply_to) => match rfc724_mid_exists(context, in_reply_to).await? {
-                Some((instance_id, _ts_sent)) => {
+                Some(instance_id) => {
                     if let Err(err) =
                         add_gossip_peer_from_header(context, instance_id, node_addr).await
                     {
@@ -2220,7 +2193,7 @@ async fn handle_edit_delete(
     from_id: ContactId,
 ) -> Result<()> {
     if let Some(rfc724_mid) = mime_parser.get_header(HeaderDef::ChatEdit) {
-        if let Some((original_msg_id, _)) = rfc724_mid_exists(context, rfc724_mid).await? {
+        if let Some(original_msg_id) = rfc724_mid_exists(context, rfc724_mid).await? {
             if let Some(mut original_msg) =
                 Message::load_from_db_optional(context, original_msg_id).await?
             {
@@ -2261,9 +2234,7 @@ async fn handle_edit_delete(
 
                 let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
                 for rfc724_mid in rfc724_mid_vec {
-                    if let Some((msg_id, _)) =
-                        message::rfc724_mid_exists(context, rfc724_mid).await?
-                    {
+                    if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
                         if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
                             if msg.from_id == from_id {
                                 message::delete_msg_locally(context, &msg).await?;
@@ -3626,7 +3597,7 @@ async fn get_previous_message(
 ) -> Result<Option<Message>> {
     if let Some(field) = mime_parser.get_header(HeaderDef::References) {
         if let Some(rfc724mid) = parse_message_ids(field).last() {
-            if let Some((msg_id, _)) = rfc724_mid_exists(context, rfc724mid).await? {
+            if let Some(msg_id) = rfc724_mid_exists(context, rfc724mid).await? {
                 return Message::load_from_db_optional(context, msg_id).await;
             }
         }

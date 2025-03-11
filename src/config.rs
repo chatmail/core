@@ -737,9 +737,6 @@ impl Context {
             stats::pre_sending_config_change(self, old_value, new_value).await?;
         }
         self.set_config_internal(key, value).await?;
-        if key == Config::SentboxWatch {
-            self.last_full_folder_scan.lock().await.take();
-        }
         if key == Config::StatsSending {
             stats::maybe_send_stats(self).await?;
         }
