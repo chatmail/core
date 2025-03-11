@@ -872,6 +872,14 @@ impl MimeFactory {
                 } else {
                     unprotected_headers.push(header.clone());
                 }
+            } else if is_encrypted && header_name == "date" {
+                protected_headers.push(header.clone());
+                unprotected_headers.push((
+                    "Date",
+                    mail_builder::headers::HeaderType::Raw(
+                        "Thu, 01 Jan 1970 00:00:00 +0000".into(),
+                    ),
+                ));
             } else if is_encrypted {
                 protected_headers.push(header.clone());
 
@@ -882,8 +890,7 @@ impl MimeFactory {
                             mail_builder::headers::raw::Raw::new("[...]").into(),
                         ));
                     }
-                    "date"
-                    | "in-reply-to"
+                    "in-reply-to"
                     | "references"
                     | "auto-submitted"
                     | "chat-version"
