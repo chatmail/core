@@ -620,70 +620,37 @@ impl Imap {
 
             // Determine the target folder where the message should be moved to.
             //
-            // If we have seen the message on the IMAP server before, do not move it.
+            // We only move the messages from the INBOX and Spam folders.
             // This is required to avoid infinite MOVE loop on IMAP servers
             // that alias `DeltaChat` folder to other names.
             // For example, some Dovecot servers alias `DeltaChat` folder to `INBOX.DeltaChat`.
-            // In this case Delta Chat configured with `DeltaChat` as the destination folder
-            // would detect messages in the `INBOX.DeltaChat` folder
-            // and try to move them to the `DeltaChat` folder.
-            // Such move to the same folder results in the messages
-            // getting a new UID, so the messages will be detected as new
+            // In this case moving from `INBOX.DeltaChat` to `DeltaChat`
+            // results in the messages getting a new UID,
+            // so the messages will be detected as new
             // in the `INBOX.DeltaChat` folder again.
-            let _target;
-            let target = if let Some(message_id) = &message_id {
-                let msg_info =
-                    message::rfc724_mid_exists_ex(context, message_id, "deleted=1").await?;
-                let delete = if let Some((_, _, true)) = msg_info {
-                    info!(context, "Deleting locally deleted message {message_id}.");
-                    true
-                } else if let Some((_, ts_sent_old, _)) = msg_info {
-                    let is_chat_msg = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-                    let ts_sent = headers
-                        .get_header_value(HeaderDef::Date)
-                        .and_then(|v| mailparse::dateparse(&v).ok())
-                        .unwrap_or_default();
-                    let is_dup = is_dup_msg(is_chat_msg, ts_sent, ts_sent_old);
-                    if is_dup {
-                        info!(context, "Deleting duplicate message {message_id}.");
-                    }
-                    is_dup
-                } else {
-                    false
-                };
-                if delete {
-                    &delete_target
-                } else if context
-                    .sql
-                    .exists(
-                        "SELECT COUNT (*) FROM imap WHERE rfc724_mid=?",
-                        (message_id,),
-                    )
+            let delete = if let Some(message_id) = &message_id {
+                message::rfc724_mid_exists_ex(context, message_id, "deleted=1")
                     .await?
-                {
-                    info!(
-                        context,
-                        "Not moving the message {} that we have seen before.", &message_id
-                    );
-                    folder
-                } else {
-                    _target = target_folder(context, folder, folder_meaning, &headers).await?;
-                    &_target
-                }
+                    .is_some_and(|(_msg_id, deleted)| deleted)
             } else {
-                // Do not move the messages without Message-ID.
-                // We cannot reliably determine if we have seen them before,
-                // so it is safer not to move them.
-                warn!(
-                    context,
-                    "Not moving the message that does not have a Message-ID."
-                );
-                folder
+                false
             };
 
             // Generate a fake Message-ID to identify the message in the database
             // if the message has no real Message-ID.
             let message_id = message_id.unwrap_or_else(create_message_id);
+
+            if delete {
+                info!(context, "Deleting locally deleted message {message_id}.");
+            }
+
+            let _target;
+            let target = if delete {
+                &delete_target
+            } else {
+                _target = target_folder(context, folder, folder_meaning, &headers).await?;
+                &_target
+            };
 
             context
                 .sql
@@ -768,7 +735,6 @@ impl Imap {
                         .fetch_many_msgs(
                             context,
                             folder,
-                            uid_validity,
                             uids_fetch_in_batch.split_off(0),
                             &uid_message_ids,
                             fetch_partially,
@@ -1383,12 +1349,10 @@ impl Session {
     ///
     /// If the message is incorrect or there is a failure to write a message to the database,
     /// it is skipped and the error is logged.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) async fn fetch_many_msgs(
         &mut self,
         context: &Context,
         folder: &str,
-        uidvalidity: u32,
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
         fetch_partially: bool,
@@ -1514,9 +1478,6 @@ impl Session {
                 );
                 let res = receive_imf_inner(
                     context,
-                    folder,
-                    uidvalidity,
-                    request_uid,
                     rfc724_mid,
                     body,
                     is_seen,
@@ -1530,9 +1491,6 @@ impl Session {
                     }
                     receive_imf_inner(
                         context,
-                        folder,
-                        uidvalidity,
-                        request_uid,
                         rfc724_mid,
                         body,
                         is_seen,
@@ -2112,7 +2070,9 @@ pub async fn target_folder_cfg(
 
     if folder_meaning == FolderMeaning::Spam {
         spam_target_folder_cfg(context, headers).await
-    } else if needs_move_to_mvbox(context, headers).await? {
+    } else if folder_meaning == FolderMeaning::Inbox
+        && needs_move_to_mvbox(context, headers).await?
+    {
         Ok(Some(Config::ConfiguredMvboxFolder))
     } else {
         Ok(None)
@@ -2260,7 +2220,9 @@ fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
     ];
     let lower = folder_name.to_lowercase();
 
-    if SENT_NAMES.iter().any(|s| s.to_lowercase() == lower) {
+    if lower == "inbox" {
+        FolderMeaning::Inbox
+    } else if SENT_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Sent
     } else if SPAM_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Spam
@@ -2414,15 +2376,6 @@ pub(crate) async fn prefetch_should_download(
 
     let should_download = (show && !blocked_contact) || maybe_ndn;
     Ok(should_download)
-}
-
-/// Returns whether a message is a duplicate (resent message).
-pub(crate) fn is_dup_msg(is_chat_msg: bool, ts_sent: i64, ts_sent_old: i64) -> bool {
-    // If the existing message has timestamp_sent == 0, that means we don't know its actual sent
-    // timestamp, so don't delete the new message. E.g. outgoing messages have zero timestamp_sent
-    // because they are stored to the db before sending. Also consider as duplicates only messages
-    // with greater timestamp to avoid deleting both messages in a multi-device setting.
-    is_chat_msg && ts_sent_old != 0 && ts_sent > ts_sent_old
 }
 
 /// Marks messages in `msgs` table as seen, searching for them by UID.

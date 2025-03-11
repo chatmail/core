@@ -278,7 +278,7 @@ pub(crate) async fn set_msg_reaction(
     reaction: Reaction,
     is_incoming_fresh: bool,
 ) -> Result<()> {
-    if let Some((msg_id, _)) = rfc724_mid_exists(context, in_reply_to).await? {
+    if let Some(msg_id) = rfc724_mid_exists(context, in_reply_to).await? {
         set_msg_id_reaction(context, msg_id, chat_id, contact_id, timestamp, &reaction).await?;
 
         if is_incoming_fresh

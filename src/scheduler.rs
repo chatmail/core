@@ -618,7 +618,7 @@ async fn fetch_idle(
             .await
             .context("delete_expired_imap_messages")?;
     } else if folder_config == Config::ConfiguredInboxFolder {
-        ctx.last_full_folder_scan.lock().await.take();
+        session.last_full_folder_scan.lock().await.take();
     }
 
     // Scan additional folders only after finishing fetching the watched folder.
