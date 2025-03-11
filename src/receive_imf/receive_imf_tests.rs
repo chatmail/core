@@ -1759,7 +1759,7 @@ async fn check_alias_reply(from_dc: bool, chat_request: bool, group_request: boo
         .await
         .unwrap();
 
-    let (msg_id, _) = rfc724_mid_exists(&claire, "non-dc-1@example.org")
+    let msg_id = rfc724_mid_exists(&claire, "non-dc-1@example.org")
         .await
         .unwrap()
         .unwrap();
