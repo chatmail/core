@@ -37,7 +37,6 @@ pub struct CallInfo {
 
     /// Was an incoming call accepted on this device?
     /// On other devices, this is never set and for outgoing calls, this is never set.
-    /// Internally, this is written to Param::Arg.
     pub accepted: bool,
 
     /// Info message referring to the call.
@@ -234,7 +233,7 @@ impl Context {
 
         Ok(CallInfo {
             incoming: call.get_info_type() == SystemMessage::IncomingCall,
-            accepted: call.param.get_int(Param::Arg) == Some(1),
+            accepted: call.is_call_accepted()?,
             msg: call,
         })
     }
@@ -242,9 +241,21 @@ impl Context {
 
 impl Message {
     async fn mark_call_as_accepted(&mut self, context: &Context) -> Result<()> {
+        ensure!(
+            self.get_info_type() == SystemMessage::IncomingCall
+                || self.get_info_type() == SystemMessage::OutgoingCall
+        );
         self.param.set_int(Param::Arg, 1);
         self.update_param(context).await?;
         Ok(())
+    }
+
+    fn is_call_accepted(&self) -> Result<bool> {
+        ensure!(
+            self.get_info_type() == SystemMessage::IncomingCall
+                || self.get_info_type() == SystemMessage::OutgoingCall
+        );
+        Ok(self.param.get_int(Param::Arg) == Some(1))
     }
 }
 
@@ -501,6 +512,22 @@ mod tests {
         };
         assert!(call_info.is_stale_call());
         assert_eq!(call_info.remaining_ring_seconds(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_mark_call_as_accepted() -> Result<()> {
+        let (alice, _alice2, alice_call, _bob, _bob2, _bob_call, _bob2_call) = setup_call().await?;
+        assert!(!alice_call.is_call_accepted()?);
+
+        let mut alice_call = Message::load_from_db(&alice, alice_call.id).await?;
+        assert!(!alice_call.is_call_accepted()?);
+        alice_call.mark_call_as_accepted(&alice).await?;
+        assert!(alice_call.is_call_accepted()?);
+
+        let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
+        assert!(alice_call.is_call_accepted()?);
 
         Ok(())
     }
