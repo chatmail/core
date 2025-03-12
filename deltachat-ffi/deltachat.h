@@ -1221,12 +1221,15 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * who will get informed by an #DC_EVENT_INCOMING_CALL event and rings.
  *
  * Possible actions during ringing:
+ * - caller cancels the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED.
  * - callee accepts using dc_accept_incoming_call(), caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED,
  *   callee's devices receive #DC_EVENT_INCOMING_CALL_ACCEPTED, call starts
  * - callee rejects using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED,
- *   callee's other devices receive #DC_EVENT_CALL_ENDED, done.
- * - caller cancels the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED, done.
- * - after 1 minute without action, caller and callee receive #DC_EVENT_CALL_ENDED
+ *   callee's other devices receive #DC_EVENT_CALL_ENDED.
+ * - callee is already in a call. in this case,
+ *   UI may decide to show a notification instead of ringing.
+ *   otherwise, this is same as timeout.
+ * - timeout: after 1 minute without action, caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
  *   in case caller got offline without being able to send cancellation message.
  *
@@ -1238,6 +1241,9 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * possible status messages are added and updated as usual, including the known events.
  * In the UI, the sorted chatlist is used as an overview about calls as well as messages.
  * To place a call with a contact that has no chat yet, use dc_create_chat_by_contact_id() first.
+ *
+ * UI will usually allow only one call at the same time,
+ * this has to be tracked by UI across profile, the core does not track this.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -6717,14 +6723,20 @@ void dc_event_unref(dc_event_t* event);
 
 /**
  * Incoming call.
- * UI will usually start ringing.
+ * UI will usually start ringing,
+ * or show a notification if there is already a call in some profile.
+ *
+ * Together with this event,
+ * an info-message is added to the corresponding chat.
+ * The info-message, however, is _not_ additionally notified using #DC_EVENT_INCOMING_MSG,
+ * if needed, this has to be done by the UI explicitly.
  *
  * If user takes action, dc_accept_incoming_call() or dc_end_call() should be called.
  *
  * Otherwise, ringing should end on #DC_EVENT_CALL_ENDED
  * or #DC_EVENT_INCOMING_CALL_ACCEPTED
  *
- * @param data1 (int) msg_id
+ * @param data1 (int) msg_id ID of the info-message referring to the call,
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 
