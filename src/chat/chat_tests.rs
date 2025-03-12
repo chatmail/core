@@ -790,15 +790,6 @@ async fn test_self_talk() -> Result<()> {
     assert!(msg.get_showpadlock());
 
     let sent_msg = t.pop_sent_msg().await;
-    let payload = sent_msg.payload();
-    // Make sure the `To` field contains the address and not
-    // "undisclosed recipients".
-    // Otherwise Delta Chat core <1.153.0 assigns the message
-    // to the trash chat.
-    assert_eq!(
-        payload.match_indices("To: <alice@example.org>\r\n").count(),
-        1
-    );
 
     let t2 = TestContext::new_alice().await;
     t2.recv_msg(&sent_msg).await;
