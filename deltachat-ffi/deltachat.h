@@ -6731,16 +6731,25 @@ void dc_event_unref(dc_event_t* event);
 /**
  * The callee accepted an incoming call on another another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
+ *
+ * The event is sent unconditionally when the corresponding message is received.
+ * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 
 /**
  * A call placed using dc_place_outgoing_call() was accepted by the callee using dc_accept_incoming_call().
+ *
+ * The event is sent unconditionally when the corresponding message is received.
+ * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  */
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
 
 /**
  * An incoming or outgoing call was ended using dc_end_call().
+ *
+ * The event is sent unconditionally when the corresponding message is received.
+ * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  */
 #define DC_EVENT_CALL_ENDED                               2580
 
