@@ -49,14 +49,8 @@ impl CallInfo {
     }
 
     fn remaining_ring_seconds(&self) -> i64 {
-        let mut remaining_seconds = self.msg.timestamp_sent + RINGING_SECONDS - time();
-        if remaining_seconds < 0 {
-            remaining_seconds = 0;
-        }
-        if remaining_seconds > RINGING_SECONDS {
-            remaining_seconds = RINGING_SECONDS;
-        }
-        return remaining_seconds;
+        let remaining_seconds = self.msg.timestamp_sent + RINGING_SECONDS - time();
+        remaining_seconds.clamp(0, RINGING_SECONDS)
     }
 }
 
