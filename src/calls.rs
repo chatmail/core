@@ -135,8 +135,19 @@ impl Context {
         Ok(())
     }
 
-    async fn emit_end_call_if_unaccepted(wait: u64) {
+    async fn emit_end_call_if_unaccepted(
+        context: Context,
+        wait: u64,
+        call_id: MsgId,
+    ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
+        let call = context.load_call_by_root_id(call_id).await?;
+        if !call.accepted {
+            context.emit_event(EventType::CallEnded {
+                msg_id: call.msg.id,
+            });
+        }
+        Ok(())
     }
 
     pub(crate) async fn handle_call_msg(
@@ -153,7 +164,11 @@ impl Context {
                         msg_id: call.msg.id,
                     });
                     let wait = call.remaining_ring_seconds();
-                    task::spawn(Context::emit_end_call_if_unaccepted(wait.try_into()?));
+                    task::spawn(Context::emit_end_call_if_unaccepted(
+                        self.clone(),
+                        wait.try_into()?,
+                        call.msg.id,
+                    ));
                 }
             }
             SystemMessage::CallAccepted => {
