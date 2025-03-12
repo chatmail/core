@@ -12,10 +12,22 @@ use crate::message::{rfc724_mid_exists, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
+use crate::tools::time;
 use anyhow::{anyhow, ensure, Result};
 
+/// How long callee's or caller's phone ring.
+///
+/// For the callee, this is to prevent endless ringing
+/// in case the initial "call" is received, but then the caller went offline.
+/// Moreover, this prevents outdated calls to ring
+/// in case the initial "call" message arrives delayed.
+///
+/// For the caller, this means they should also not wait longer,
+/// as the callee won't start the call afterwards.
+const RINGING_SECONDS: i64 = 60;
+
 /// Information about the status of a call.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CallInfo {
     /// Incoming our outgoing call?
     pub incoming: bool,
@@ -27,6 +39,12 @@ pub struct CallInfo {
 
     /// Info message referring to the call.
     pub msg: Message,
+}
+
+impl CallInfo {
+    fn is_stale_call(&self) -> bool {
+        time() > self.msg.timestamp_sent + RINGING_SECONDS
+    }
 }
 
 impl Context {
@@ -112,7 +130,7 @@ impl Context {
             SystemMessage::IncomingCall => {
                 let call = self.load_call_by_root_id(call_or_child_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
-                if call.incoming {
+                if call.incoming && !call.is_stale_call() {
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
                     });
@@ -396,6 +414,31 @@ mod tests {
         bob2.evtracker
             .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
             .await;
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_is_stale_call() -> Result<()> {
+        // a call started now is not stale
+        let call_info = CallInfo {
+            msg: Message {
+                timestamp_sent: time(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(!call_info.is_stale_call());
+
+        // a call started one hour ago is clearly stale
+        let call_info = CallInfo {
+            msg: Message {
+                timestamp_sent: time() - 3600,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(call_info.is_stale_call());
 
         Ok(())
     }
