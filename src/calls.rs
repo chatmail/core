@@ -87,10 +87,7 @@ impl Context {
             chat.id.accept(self).await?;
         }
 
-        // mark call as "accepted" (this is just Param::Arg atm)
-        let mut msg = call.msg.clone();
-        msg.param.set_int(Param::Arg, 1);
-        msg.update_param(self).await?;
+        call.msg.clone().mark_call_as_accepted(self).await?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -231,6 +228,14 @@ impl Context {
             accepted: call.param.get_int(Param::Arg) == Some(1),
             msg: call,
         })
+    }
+}
+
+impl Message {
+    async fn mark_call_as_accepted(&mut self, context: &Context) -> Result<()> {
+        self.param.set_int(Param::Arg, 1);
+        self.update_param(context).await?;
+        Ok(())
     }
 }
 
