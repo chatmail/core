@@ -750,8 +750,6 @@ async fn test_remove_member_bcc() -> Result<()> {
 
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
-    let charlie_contact = Contact::get_by_id(alice, charlie_id).await?;
-    let charlie_addr = charlie_contact.get_addr();
 
     let alice_chat_id = create_group(alice, "foo").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
@@ -770,11 +768,11 @@ async fn test_remove_member_bcc() -> Result<()> {
     for to_addr in to.iter() {
         match to_addr {
             mailparse::MailAddr::Single(info) => {
-                // Addresses should be of existing members (Alice and Bob) and not Charlie.
-                assert_ne!(info.addr, charlie_addr);
+                panic!("Single addresses are not expected here: {info:?}");
             }
-            mailparse::MailAddr::Group(_) => {
-                panic!("Group addresses are not expected here");
+            mailparse::MailAddr::Group(info) => {
+                assert_eq!(info.group_name, "hidden-recipients");
+                assert_eq!(info.addrs, []);
             }
         }
     }
