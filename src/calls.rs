@@ -14,6 +14,9 @@ use crate::param::Param;
 use crate::sync::SyncData;
 use crate::tools::time;
 use anyhow::{anyhow, ensure, Result};
+use std::time::Duration;
+use tokio::task;
+use tokio::time::sleep;
 
 /// How long callee's or caller's phone ring.
 ///
@@ -43,7 +46,18 @@ pub struct CallInfo {
 
 impl CallInfo {
     fn is_stale_call(&self) -> bool {
-        time() > self.msg.timestamp_sent + RINGING_SECONDS
+        self.remaining_ring_seconds() <= 0
+    }
+
+    fn remaining_ring_seconds(&self) -> i64 {
+        let mut remaining_seconds = self.msg.timestamp_sent + RINGING_SECONDS - time();
+        if remaining_seconds < 0 {
+            remaining_seconds = 0;
+        }
+        if remaining_seconds > RINGING_SECONDS {
+            remaining_seconds = RINGING_SECONDS;
+        }
+        return remaining_seconds;
     }
 }
 
@@ -121,6 +135,10 @@ impl Context {
         Ok(())
     }
 
+    async fn emit_end_call_if_unaccepted(wait: u64) {
+        sleep(Duration::from_secs(wait)).await;
+    }
+
     pub(crate) async fn handle_call_msg(
         &self,
         mime_message: &MimeMessage,
@@ -134,6 +152,8 @@ impl Context {
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
                     });
+                    let wait = call.remaining_ring_seconds();
+                    task::spawn(Context::emit_end_call_if_unaccepted(wait.try_into()?));
                 }
             }
             SystemMessage::CallAccepted => {
@@ -429,6 +449,18 @@ mod tests {
             ..Default::default()
         };
         assert!(!call_info.is_stale_call());
+        assert_eq!(call_info.remaining_ring_seconds(), RINGING_SECONDS);
+
+        // call started 5 seconds ago, this is not stale as well
+        let call_info = CallInfo {
+            msg: Message {
+                timestamp_sent: time() - 5,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert!(!call_info.is_stale_call());
+        assert_eq!(call_info.remaining_ring_seconds(), RINGING_SECONDS - 5);
 
         // a call started one hour ago is clearly stale
         let call_info = CallInfo {
@@ -439,6 +471,7 @@ mod tests {
             ..Default::default()
         };
         assert!(call_info.is_stale_call());
+        assert_eq!(call_info.remaining_ring_seconds(), 0);
 
         Ok(())
     }
