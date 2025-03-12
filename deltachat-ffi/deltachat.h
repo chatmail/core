@@ -1233,8 +1233,8 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * - callee rejects using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED,
  *   callee's other devices receive #DC_EVENT_CALL_ENDED, done.
  * - caller cancels the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED, done.
- * - after 2 minutes, caller and callee both should end the call.
- *   this is to prevent endless ringing of callee
+ * - after 1 minute without action, caller and callee receive #DC_EVENT_CALL_ENDED
+ *   to prevent endless ringing of callee
  *   in case caller got offline without being able to send cancellation message.
  *
  * Actions during the call:
