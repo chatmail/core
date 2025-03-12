@@ -67,14 +67,22 @@ impl Context {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
 
-        let mut msg = Message {
+        let mut call = Message {
             viewtype: Viewtype::Text,
             text: "Calling...".into(),
             ..Default::default()
         };
-        msg.param.set_cmd(SystemMessage::OutgoingCall);
-        msg.id = send_msg(self, chat_id, &mut msg).await?;
-        Ok(msg.id)
+        call.param.set_cmd(SystemMessage::OutgoingCall);
+        call.id = send_msg(self, chat_id, &mut call).await?;
+
+        let wait = RINGING_SECONDS;
+        task::spawn(Context::emit_end_call_if_unaccepted(
+            self.clone(),
+            wait.try_into()?,
+            call.id,
+        ));
+
+        Ok(call.id)
     }
 
     /// Accept an incoming call.
@@ -176,6 +184,7 @@ impl Context {
                         msg_id: call.msg.id,
                     });
                 } else {
+                    call.msg.clone().mark_call_as_accepted(self).await?;
                     self.emit_event(EventType::OutgoingCallAccepted {
                         msg_id: call.msg.id,
                     });
