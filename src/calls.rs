@@ -8,7 +8,7 @@ use crate::chat::{send_msg, Chat, ChatId};
 use crate::constants::Chattype;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::message::{rfc724_mid_exists, Message, MsgId, Viewtype};
+use crate::message::{self, rfc724_mid_exists, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
@@ -51,6 +51,17 @@ impl CallInfo {
     fn remaining_ring_seconds(&self) -> i64 {
         let remaining_seconds = self.msg.timestamp_sent + RINGING_SECONDS - time();
         remaining_seconds.clamp(0, RINGING_SECONDS)
+    }
+
+    async fn update_text(&self, context: &Context, text: &str) -> Result<()> {
+        context
+            .sql
+            .execute(
+                "UPDATE msgs SET txt=?, txt_normalized=? WHERE id=?;",
+                (text, message::normalize_text(text), self.msg.id),
+            )
+            .await?;
+        Ok(())
     }
 }
 
@@ -158,6 +169,7 @@ impl Context {
                 let call = self.load_call_by_root_id(call_or_child_id).await?;
                 if call.incoming {
                     if call.is_stale_call() {
+                        call.update_text(self, "Missed call").await?;
                         self.emit_incoming_msg(call.msg.chat_id, call_or_child_id);
                     } else {
                         self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
@@ -528,6 +540,19 @@ mod tests {
 
         let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
         assert!(alice_call.is_call_accepted()?);
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_udpate_call_text() -> Result<()> {
+        let (alice, _alice2, alice_call, _bob, _bob2, _bob_call, _bob2_call) = setup_call().await?;
+
+        let call_info = alice.load_call_by_root_id(alice_call.id).await?;
+        call_info.update_text(&alice, "foo bar").await?;
+
+        let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
+        assert_eq!(alice_call.get_text(), "foo bar");
 
         Ok(())
     }
