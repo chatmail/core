@@ -156,17 +156,23 @@ impl Context {
         match mime_message.is_system_message {
             SystemMessage::IncomingCall => {
                 let call = self.load_call_by_root_id(call_or_child_id).await?;
-                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
-                if call.incoming && !call.is_stale_call() {
-                    self.emit_event(EventType::IncomingCall {
-                        msg_id: call.msg.id,
-                    });
-                    let wait = call.remaining_ring_seconds();
-                    task::spawn(Context::emit_end_call_if_unaccepted(
-                        self.clone(),
-                        wait.try_into()?,
-                        call.msg.id,
-                    ));
+                if call.incoming {
+                    if call.is_stale_call() {
+                        self.emit_incoming_msg(call.msg.chat_id, call_or_child_id);
+                    } else {
+                        self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
+                        self.emit_event(EventType::IncomingCall {
+                            msg_id: call.msg.id,
+                        });
+                        let wait = call.remaining_ring_seconds();
+                        task::spawn(Context::emit_end_call_if_unaccepted(
+                            self.clone(),
+                            wait.try_into()?,
+                            call.msg.id,
+                        ));
+                    }
+                } else {
+                    self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 }
             }
             SystemMessage::CallAccepted => {
