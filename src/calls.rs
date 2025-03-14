@@ -13,7 +13,7 @@ use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
 use crate::tools::time;
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{ensure, Result};
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -188,7 +188,7 @@ impl Context {
                 }
             }
             SystemMessage::CallAccepted => {
-                let call = self.load_call_by_child_id(call_or_child_id).await?;
+                let call = self.load_call_by_root_id(call_or_child_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 if call.incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
@@ -202,7 +202,7 @@ impl Context {
                 }
             }
             SystemMessage::CallEnded => {
-                let call = self.load_call_by_child_id(call_or_child_id).await?;
+                let call = self.load_call_by_root_id(call_or_child_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                 self.emit_event(EventType::CallEnded {
                     msg_id: call.msg.id,
@@ -226,15 +226,6 @@ impl Context {
     async fn load_call_by_root_id(&self, call_id: MsgId) -> Result<CallInfo> {
         let call = Message::load_from_db(self, call_id).await?;
         self.load_call_by_message(call)
-    }
-
-    async fn load_call_by_child_id(&self, child_id: MsgId) -> Result<CallInfo> {
-        let child = Message::load_from_db(self, child_id).await?;
-        if let Some(call) = child.parent(self).await? {
-            self.load_call_by_message(call)
-        } else {
-            Err(anyhow!("Call parent missing"))
-        }
     }
 
     fn load_call_by_message(&self, call: Message) -> Result<CallInfo> {
