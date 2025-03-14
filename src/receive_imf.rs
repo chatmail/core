@@ -1000,10 +1000,7 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if mime_parser.is_system_message == SystemMessage::IncomingCall
-        || mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
-    {
+    if mime_parser.is_system_message == SystemMessage::IncomingCall {
         context.handle_call_msg(&mime_parser, insert_msg_id).await?;
     } else if received_msg.hidden {
         // No need to emit an event about the changed message
@@ -2002,6 +1999,22 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
+
+    if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
+            if let Some(call) =
+                message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
+            {
+                context.handle_call_msg(mime_parser, call.get_id()).await?;
+            } else {
+                warn!(context, "Call: Cannot load parent.")
+            }
+        } else {
+            warn!(context, "Call: Not a reply.")
+        }
+    }
 
     let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);
     let mut parts = mime_parser.parts.iter().peekable();
