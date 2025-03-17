@@ -3206,6 +3206,7 @@ async fn get_parent_message(
     if let Some(field) = references {
         mids.append(&mut parse_message_ids(field));
     }
+    info!(context, "mids: {mids:?}");
     message::get_by_rfc724_mids(context, &mids).await
 }
 
