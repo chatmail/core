@@ -5090,7 +5090,7 @@ async fn test_references() -> Result<()> {
     alice.set_config_bool(Config::BccSelf, true).await?;
 
     let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
-    let _sent = alice
+    alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
 

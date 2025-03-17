@@ -2008,8 +2008,6 @@ impl Chat {
         let mut to_id = 0;
         let mut location_id = 0;
 
-        let new_rfc724_mid = create_outgoing_rfc724_mid();
-
         if self.typ == Chattype::Single {
             if let Some(id) = context
                 .sql
@@ -2106,7 +2104,7 @@ impl Chat {
             if references_vec.is_empty() {
                 // As a fallback, use our Message-ID,
                 // same as in the case of top-level message.
-                new_references = new_rfc724_mid.clone();
+                new_references = msg.rfc724_mid.clone();
             } else {
                 new_references = references_vec.join(" ");
             }
@@ -2116,7 +2114,7 @@ impl Chat {
             // This allows us to identify replies to our message even if
             // email server such as Outlook changes `Message-ID:` header.
             // MUAs usually keep the first Message-ID in `References:` header unchanged.
-            new_references = new_rfc724_mid.clone();
+            new_references = msg.rfc724_mid.clone();
         }
 
         // add independent location to database
@@ -2184,7 +2182,6 @@ impl Chat {
 
         msg.chat_id = self.id;
         msg.from_id = ContactId::SELF;
-        msg.rfc724_mid = new_rfc724_mid;
         msg.timestamp_sort = timestamp;
 
         // add message to the database
@@ -4353,6 +4350,8 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         let new_msg_id = chat
             .prepare_msg_raw(context, &mut msg, None, curr_timestamp)
             .await?;
+
+        msg.rfc724_mid = create_outgoing_rfc724_mid();
         curr_timestamp += 1;
         if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             context.scheduler.interrupt_smtp().await;
