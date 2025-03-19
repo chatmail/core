@@ -2043,6 +2043,7 @@ async fn test_forward_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
+    let fiona = tcm.fiona().await;
 
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
@@ -2050,12 +2051,12 @@ async fn test_forward_group() -> Result<()> {
     // Alice creates a group with Bob.
     let alice_group_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    let bob_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "Claire", "claire@example.net").await?;
+    let bob_id = alice.create_contact_id(&bob).await;
+    let fiona_id = alice.create_contact_id(&fiona).await;
     add_contact_to_chat(&alice, alice_group_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_group_chat_id, claire_id).await?;
+    add_contact_to_chat(&alice, alice_group_chat_id, fiona_id).await?;
     let sent_group_msg = alice
-        .send_text(alice_group_chat_id, "Hi Bob and Claire")
+        .send_text(alice_group_chat_id, "Hi Bob and Fiona")
         .await;
     let bob_group_chat_id = bob.recv_msg(&sent_group_msg).await.chat_id;
 
