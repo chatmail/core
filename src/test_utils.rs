@@ -784,17 +784,35 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
+     /// Returns 1:1 [`Chat`] with another account PGP-contact.
+     /// Panics if the chat does not exist.
+     ///
+     /// This first creates a contact, but does not import the key,
+     /// so may create a PGP-contact with a fingerprint
+     /// but without the key.
+     pub async fn get_pgp_chat(&self, other: &TestContext) -> Chat {
+         let contact = self.add_or_lookup_pgp_contact(other).await;
+ 
+         let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact.id)
+             .await
+             .unwrap()
+             .map(|chat_id_blocked| chat_id_blocked.id)
+             .expect(
+                 "There is no chat with this contact. \
+                 Hint: Use create_chat() instead of get_pgp_chat() if this is expected.",
+             );
+ 
+         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
+     }
+ 
     /// Creates or returns an existing 1:1 [`Chat`] with another account.
     ///
     /// This first creates a contact by exporting a vCard from the `other`
     /// and importing it into `self`,
     /// then creates a 1:1 chat with this contact.
     pub async fn create_chat(&self, other: &TestContext) -> Chat {
-        let vcard = make_vcard(other, &[ContactId::SELF]).await.unwrap();
-        let contact_ids = import_vcard(self, &vcard).await.unwrap();
-        assert_eq!(contact_ids.len(), 1);
-        let contact_id = contact_ids.first().unwrap();
-        let chat_id = ChatId::create_for_contact(self, *contact_id).await.unwrap();
+        let contact_id = self.add_or_lookup_contact_id(other).await;
+        let chat_id = ChatId::create_for_contact(self, contact_id).await.unwrap();
         Chat::load_from_db(self, chat_id).await.unwrap()
     }
 
