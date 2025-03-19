@@ -300,7 +300,8 @@ async fn test_member_add_remove() -> Result<()> {
     let bob = tcm.bob().await;
 
     // Create contact for Bob on the Alice side with name "robert".
-    let alice_bob_contact_id = Contact::create(&alice, "robert", "bob@example.net").await?;
+    let alice_bob_contact_id = alice.create_contact_id(&bob).await;
+    alice_bob_contact_id.set_name(&alice, "robert").await?;
 
     // Set Bob authname to "Bob" and send it to Alice.
     bob.set_config(Config::Displayname, Some("Bob")).await?;
