@@ -707,11 +707,8 @@ impl TestContext {
 
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
     pub async fn add_or_lookup_contact(&self, other: &TestContext) -> Contact {
-        let vcard = make_vcard(other, &[ContactId::SELF]).await.unwrap();
-        let contact_ids = import_vcard(self, &vcard).await.unwrap();
-        assert_eq!(contact_ids.len(), 1);
-        let contact_id = contact_ids.first().unwrap();
-        Contact::get_by_id(&self.ctx, *contact_id).await.unwrap()
+        let contact_id = self.create_contact_id(other).await;
+        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
     }
 
     /// Returns 1:1 [`Chat`] with another account. Panics if it doesn't exist.
@@ -734,17 +731,25 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
+    /// Creates a contact for another account.
+    ///
+    /// This exports a vCard from the `other`
+    /// and imports it into `self`.
+    pub async fn create_contact_id(&self, other: &TestContext) -> ContactId {
+        let vcard = make_vcard(other, &[ContactId::SELF]).await.unwrap();
+        let contact_ids = import_vcard(self, &vcard).await.unwrap();
+        assert_eq!(contact_ids.len(), 1);
+        *contact_ids.first().unwrap()
+    }
+
     /// Creates or returns an existing 1:1 [`Chat`] with another account.
     ///
     /// This first creates a contact by exporting a vCard from the `other`
     /// and importing it into `self`,
     /// then creates a 1:1 chat with this contact.
     pub async fn create_chat(&self, other: &TestContext) -> Chat {
-        let vcard = make_vcard(other, &[ContactId::SELF]).await.unwrap();
-        let contact_ids = import_vcard(self, &vcard).await.unwrap();
-        assert_eq!(contact_ids.len(), 1);
-        let contact_id = contact_ids.first().unwrap();
-        let chat_id = ChatId::create_for_contact(self, *contact_id).await.unwrap();
+        let contact_id = self.create_contact_id(other).await;
+        let chat_id = ChatId::create_for_contact(self, contact_id).await.unwrap();
         Chat::load_from_db(self, chat_id).await.unwrap()
     }
 
