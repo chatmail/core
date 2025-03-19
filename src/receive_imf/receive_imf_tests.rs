@@ -3449,8 +3449,7 @@ async fn test_send_as_bot() -> Result<()> {
     let alice = &tcm.alice().await;
     alice.set_config(Config::Bot, Some("1")).await.unwrap();
     let bob = &tcm.bob().await;
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
-    let alice_bob_id = Contact::create(alice, "", &bob_addr).await?;
+    let alice_bob_id = alice.create_contact_id(bob).await;
     let bob_chat_id = tcm.send_recv_accept(alice, bob, "hi").await.chat_id;
     let alice_chat_id = ChatId::lookup_by_contact(alice, alice_bob_id)
         .await?
