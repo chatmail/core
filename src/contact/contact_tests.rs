@@ -1063,8 +1063,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
-    alice.recv_msg(&sent_msg).await;
-    let bob_id = Contact::create(alice, "Some Bob", &bob_addr).await?;
+    let bob_id = alice.recv_msg(&sent_msg).await.from_id;
     let key_base64 = Peerstate::from_addr(alice, &bob_addr)
         .await?
         .unwrap()
