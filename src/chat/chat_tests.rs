@@ -681,7 +681,7 @@ async fn test_leave_group() -> Result<()> {
 
     // Create group chat with Bob.
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
-    let bob_contact = Contact::create(&alice, "", "bob@example.net").await?;
+    let bob_contact = alice.create_contact_id(&bob).await;
     add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
 
     // Alice sends first message to group.
