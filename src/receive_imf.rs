@@ -3259,5 +3259,46 @@ async fn add_or_lookup_contacts_by_address_list(
     Ok(contact_ids)
 }
 
+/// Looks up PGP-contacts by email addresses.
+///
+/// This is used as a fallback when email addresses are available,
+/// but not the fingerprints, e.g. when core 1.157.3
+/// client sends the `To` and `Chat-Group-Past-Members` header
+/// but not the corresponding fingerprint list.
+///
+/// Lookup is restricted to the chat ID.
+///
+/// If contact cannot be found, `None` is returned.
+/// This ensures that the length of the result vector
+/// is the same as the number of addresses in the header
+/// and it is possible to find corresponding
+/// `Chat-Group-Member-Timestamps` items.
+async fn lookup_pgp_contacts_by_address_list(
+    context: &Context,
+    address_list: &[SingleInfo],
+    chat_id: ChatId,
+) -> Result<Vec<Option<ContactId>>> {
+    let mut contact_ids = Vec::new();
+    for info in address_list {
+        let addr = &info.addr;
+
+        let contact_id = context.sql.query_row_optional(
+            "SELECT id FROM contacts
+             WHERE contacts.addr=?
+             AND EXISTS (SELECT 1 FROM chats_contacts
+                         WHERE contact_id=contacts.id
+                         AND chat_id=?)",
+            (addr, chat_id),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                Ok(contact_id)
+            },
+        ).await?;
+        contact_ids.push(contact_id);
+    }
+    debug_assert_eq!(address_list.len(), contact_ids.len());
+    Ok(contact_ids)
+}
+
 #[cfg(test)]
 mod receive_imf_tests;
