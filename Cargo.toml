@@ -64,6 +64,8 @@ hyper-util = "0.1.11"
 image = { version = "0.25.6", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
 iroh-gossip = { version = "0.33", default-features = false, features = ["net"] }
 iroh = { version = "0.33", default-features = false }
+iroh-gossip = { version = "0.34", default-features = false, features = ["net"] }
+iroh = { version = "0.34", default-features = false }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
 mail-builder = { version = "0.4.2", default-features = false }
