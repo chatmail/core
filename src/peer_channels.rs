@@ -253,6 +253,7 @@ impl Context {
         };
 
         let endpoint = Endpoint::builder()
+            .tls_x509() // For compatibility with iroh <0.34.0
             .secret_key(secret_key)
             .alpns(vec![GOSSIP_ALPN.to_vec()])
             .relay_mode(relay_mode)
