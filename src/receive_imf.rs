@@ -353,18 +353,38 @@ pub(crate) async fn receive_imf_inner(
         },
     )
     .await?;
-    let past_ids = add_or_lookup_contacts_by_address_list(
-        context,
-        &mime_parser.past_members,
-        if !mime_parser.incoming {
-            Origin::OutgoingTo
-        } else if incoming_origin.is_known() {
-            Origin::IncomingTo
+
+    let chat_id = if let Some(grpid) = mime_parser.get_chat_group_id() {
+        if let Some((chat_id, _protected, _blocked)) =
+            chat::get_chat_id_by_grpid(context, &grpid).await?
+        {
+            Some(chat_id)
         } else {
-            Origin::IncomingUnknownTo
-        },
-    )
-    .await?;
+            None
+        }
+    } else {
+        None
+    };
+
+    let past_ids: Vec<Option<ContactId>> = if let Some(chat_id) = chat_id {
+        lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id).await?
+    } else {
+        add_or_lookup_contacts_by_address_list(
+            context,
+            &mime_parser.past_members,
+            if !mime_parser.incoming {
+                Origin::OutgoingTo
+            } else if incoming_origin.is_known() {
+                Origin::IncomingTo
+            } else {
+                Origin::IncomingUnknownTo
+            },
+        )
+        .await?
+        .into_iter()
+        .map(|contact_id| Some(contact_id))
+        .collect()
+    };
 
     update_verified_keys(context, &mut mime_parser, from_id).await?;
 
@@ -719,7 +739,7 @@ async fn add_parts(
     mime_parser: &mut MimeMessage,
     imf_raw: &[u8],
     to_ids: &[ContactId],
-    past_ids: &[ContactId],
+    past_ids: &[Option<ContactId>],
     rfc724_mid: &str,
     from_id: ContactId,
     seen: bool,
@@ -2139,7 +2159,7 @@ async fn create_group(
     create_blocked: Blocked,
     from_id: ContactId,
     to_ids: &[ContactId],
-    past_ids: &[ContactId],
+    past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
     grpid: &str,
 ) -> Result<Option<(ChatId, Blocked)>> {
@@ -2274,7 +2294,7 @@ async fn update_chats_contacts_timestamps(
     chat_id: ChatId,
     ignored_id: Option<ContactId>,
     to_ids: &[ContactId],
-    past_ids: &[ContactId],
+    past_ids: &[Option<ContactId>],
     chat_group_member_timestamps: &[i64],
 ) -> Result<bool> {
     let expected_timestamps_count = to_ids.len() + past_ids.len();
@@ -2367,7 +2387,7 @@ async fn apply_group_changes(
     chat_id: ChatId,
     from_id: ContactId,
     to_ids: &[ContactId],
-    past_ids: &[ContactId],
+    past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
 ) -> Result<GroupChangesInfo> {
     if chat_id.is_special() {
@@ -3282,18 +3302,21 @@ async fn lookup_pgp_contacts_by_address_list(
     for info in address_list {
         let addr = &info.addr;
 
-        let contact_id = context.sql.query_row_optional(
-            "SELECT id FROM contacts
+        let contact_id = context
+            .sql
+            .query_row_optional(
+                "SELECT id FROM contacts
              WHERE contacts.addr=?
              AND EXISTS (SELECT 1 FROM chats_contacts
                          WHERE contact_id=contacts.id
                          AND chat_id=?)",
-            (addr, chat_id),
-            |row| {
-                let contact_id: ContactId = row.get(0)?;
-                Ok(contact_id)
-            },
-        ).await?;
+                (addr, chat_id),
+                |row| {
+                    let contact_id: ContactId = row.get(0)?;
+                    Ok(contact_id)
+                },
+            )
+            .await?;
         contact_ids.push(contact_id);
     }
     debug_assert_eq!(address_list.len(), contact_ids.len());
