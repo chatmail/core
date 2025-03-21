@@ -1001,7 +1001,11 @@ impl TestContext {
             "device-talk".to_string()
         } else if sel_chat.get_type() == Chattype::Single && !members.is_empty() {
             let contact = Contact::get_by_id(self, members[0]).await.unwrap();
-            contact.get_addr().to_string()
+            if contact.is_pgp_contact() {
+                format!("PGP {}", contact.get_addr())
+            } else {
+                contact.get_addr().to_string()
+            }
         } else if sel_chat.get_type() == Chattype::Mailinglist && !members.is_empty() {
             "mailinglist".to_string()
         } else {
