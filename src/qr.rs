@@ -464,10 +464,15 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
-        let (contact_id, _) =
-            Contact::add_or_lookup(context, &name, &addr, Origin::UnhandledSecurejoinQrScan)
-                .await
-                .with_context(|| format!("failed to add or lookup contact for address {addr:?}"))?;
+        let (contact_id, _) = Contact::add_or_lookup_ex(
+            context,
+            &name,
+            &addr,
+            &fingerprint.hex(),
+            Origin::UnhandledSecurejoinQrScan,
+        )
+        .await
+        .with_context(|| format!("failed to add or lookup contact for address {addr:?}"))?;
 
         if let (Some(grpid), Some(grpname)) = (grpid, grpname) {
             if context
