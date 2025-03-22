@@ -102,7 +102,16 @@ impl ContactId {
     /// for this contact will switch to the
     /// contact's authorized name.
     pub async fn set_name(self, context: &Context, name: &str) -> Result<()> {
-        let addr = context
+        self.set_name_ex(context, Sync, name).await
+    }
+
+    pub(crate) async fn set_name_ex(
+        self,
+        context: &Context,
+        sync: sync::Sync,
+        name: &str,
+    ) -> Result<()> {
+        let row = context
             .sql
             .transaction(|transaction| {
                 let is_changed = transaction.execute(
@@ -111,30 +120,44 @@ impl ContactId {
                 )? > 0;
                 if is_changed {
                     update_chat_names(context, transaction, self)?;
-                    let addr = transaction.query_row(
-                        "SELECT addr FROM contacts WHERE id=?",
+                    let (addr, fingerprint) = transaction.query_row(
+                        "SELECT addr, fingerprint FROM contacts WHERE id=?",
                         (self,),
                         |row| {
                             let addr: String = row.get(0)?;
-                            Ok(addr)
+                            let fingerprint: String = row.get(1)?;
+                            Ok((addr, fingerprint))
                         },
                     )?;
-                    Ok(Some(addr))
+                    Ok(Some((addr, fingerprint)))
                 } else {
                     Ok(None)
                 }
             })
             .await?;
 
-        if let Some(addr) = addr {
-            chat::sync(
-                context,
-                chat::SyncId::ContactAddr(addr.to_string()),
-                chat::SyncAction::Rename(name.to_string()),
-            )
-            .await
-            .log_err(context)
-            .ok();
+        if sync.into() {
+            if let Some((addr, fingerprint)) = row {
+                if fingerprint.is_empty() {
+                    chat::sync(
+                        context,
+                        chat::SyncId::ContactAddr(addr),
+                        chat::SyncAction::Rename(name.to_string()),
+                    )
+                    .await
+                    .log_err(context)
+                    .ok();
+                } else {
+                    chat::sync(
+                        context,
+                        chat::SyncId::ContactFingerprint(fingerprint),
+                        chat::SyncAction::Rename(name.to_string()),
+                    )
+                    .await
+                    .log_err(context)
+                    .ok();
+                }
+            }
         }
         Ok(())
     }
@@ -872,7 +895,7 @@ impl Contact {
     pub(crate) async fn add_or_lookup_ex(
         context: &Context,
         name: &str,
-        addr: &ContactAddress,
+        addr: &str,
         fingerprint: &str,
         mut origin: Origin,
     ) -> Result<(ContactId, Modifier)> {
@@ -947,7 +970,7 @@ impl Contact {
                             || row_authname.is_empty());
 
                     row_id = id;
-                    if origin >= row_origin && addr.as_ref() != row_addr {
+                    if origin >= row_origin && addr != row_addr {
                         update_addr = true;
                     }
                     if update_name || update_authname || update_addr || origin > row_origin {
@@ -1404,6 +1427,13 @@ impl Contact {
     /// Otherwise it is an email contact.
     pub fn is_pgp_contact(&self) -> bool {
         self.fingerprint.is_some()
+    }
+
+    /// Returns OpenPGP fingerprint of a contact.
+    ///
+    /// `None` for e-mail contacts.
+    pub fn fingerprint(&self) -> Option<&str> {
+        self.fingerprint.as_deref()
     }
 
     /// Get name authorized by the contact.
