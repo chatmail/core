@@ -102,7 +102,7 @@ impl ContactId {
     /// for this contact will switch to the
     /// contact's authorized name.
     pub async fn set_name(self, context: &Context, name: &str) -> Result<()> {
-        context
+        let addr = context
             .sql
             .transaction(|transaction| {
                 let is_changed = transaction.execute(
@@ -111,10 +111,31 @@ impl ContactId {
                 )? > 0;
                 if is_changed {
                     update_chat_names(context, transaction, self)?;
+                    let addr = transaction.query_row(
+                        "SELECT addr FROM contacts WHERE id=?",
+                        (self,),
+                        |row| {
+                            let addr: String = row.get(0)?;
+                            Ok(addr)
+                        },
+                    )?;
+                    Ok(Some(addr))
+                } else {
+                    Ok(None)
                 }
-                Ok(())
             })
             .await?;
+
+        if let Some(addr) = addr {
+            chat::sync(
+                context,
+                chat::SyncId::ContactAddr(addr.to_string()),
+                chat::SyncAction::Rename(name.to_string()),
+            )
+            .await
+            .log_err(context)
+            .ok();
+        }
         Ok(())
     }
 

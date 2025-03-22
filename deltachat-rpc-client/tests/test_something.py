@@ -730,3 +730,20 @@ def test_no_old_msg_is_fresh(acfactory):
     assert ev.chat_id == first_msg.get_snapshot().chat_id
     assert ac1.create_chat(ac2).get_fresh_message_count() == 0
     assert len(list(ac1.get_fresh_messages())) == 0
+
+
+def test_rename_synchronization(acfactory):
+    """Test synchronization of contact renaming."""
+    alice, bob = acfactory.get_online_accounts(2)
+    alice2 = alice.clone()
+    alice2.bring_online()
+
+    bob.set_config("displayname", "Bob")
+    bob.create_chat(alice).send_text("Hello!")
+    alice_msg = alice.wait_for_incoming_msg().get_snapshot()
+    alice2_msg = alice2.wait_for_incoming_msg().get_snapshot()
+
+    assert alice2_msg.sender.get_snapshot().display_name == "Bob"
+    alice_msg.sender.set_name("Bobby")
+    alice2.wait_for_event(EventType.CONTACTS_CHANGED)
+    assert alice2_msg.sender.get_snapshot().display_name == "Bobby"
