@@ -3176,7 +3176,7 @@ async fn test_sync_muted() -> Result<()> {
     alice1.create_chat(&bob).await;
 
     assert_eq!(
-        alice1.get_chat(&bob).await.mute_duration,
+        alice1.get_pgp_chat(&bob).await.mute_duration,
         MuteDuration::NotMuted
     );
     let mute_durations = [
@@ -3194,7 +3194,7 @@ async fn test_sync_muted() -> Result<()> {
             ),
             _ => m,
         };
-        assert_eq!(alice1.get_chat(&bob).await.mute_duration, m);
+        assert_eq!(alice1.get_pgp_chat(&bob).await.mute_duration, m);
     }
     Ok(())
 }
