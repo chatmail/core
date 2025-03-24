@@ -1406,16 +1406,16 @@ impl Contact {
         &self.addr
     }
 
-    /// Get a summary of authorized name and address.
+    /// Get authorized name or address.
     ///
     /// The returned string is either "Name (email@domain.com)" or just
     /// "email@domain.com" if the name is unset.
     ///
     /// This string is suitable for sending over email
     /// as it does not leak the locally set name.
-    pub fn get_authname_n_addr(&self) -> String {
+    pub(crate) fn get_authname_or_addr(&self) -> String {
         if !self.authname.is_empty() {
-            format!("{} ({})", self.authname, self.addr)
+            (&self.authname).into()
         } else {
             (&self.addr).into()
         }

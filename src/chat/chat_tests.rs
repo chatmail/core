@@ -331,11 +331,12 @@ async fn test_member_add_remove() -> Result<()> {
     // Alice adds Bob to the chat.
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
+
     // Locally set name "robert" should not leak.
     assert!(!sent.payload.contains("robert"));
     assert_eq!(
         sent.load_from_db().await.get_text(),
-        "You added member robert (bob@example.net)."
+        "You added member robert."
     );
 
     // Alice removes Bob from the chat.
@@ -344,7 +345,7 @@ async fn test_member_add_remove() -> Result<()> {
     assert!(!sent.payload.contains("robert"));
     assert_eq!(
         sent.load_from_db().await.get_text(),
-        "You removed member robert (bob@example.net)."
+        "You removed member robert."
     );
 
     // Alice leaves the chat.
@@ -412,7 +413,7 @@ async fn test_parallel_member_remove() -> Result<()> {
     // Test that remove message is rewritten.
     assert_eq!(
         bob_received_remove_msg.get_text(),
-        "Member Me (bob@example.net) removed by alice@example.org."
+        "Member Me removed by alice@example.org."
     );
 
     Ok(())

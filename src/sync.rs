@@ -743,10 +743,7 @@ mod tests {
         let fiona = &tcm.fiona().await;
         tcm.exec_securejoin_qr(fiona, alice2, &qr).await;
         let msg = fiona.get_last_msg().await;
-        assert_eq!(
-            msg.text,
-            "Member Me (fiona@example.net) added by alice@example.org."
-        );
+        assert_eq!(msg.text, "Member Me added by alice@example.org.");
         Ok(())
     }
 }
