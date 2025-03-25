@@ -582,7 +582,18 @@ impl ChatId {
             ProtectionStatus::Unprotected => SystemMessage::ChatProtectionDisabled,
             ProtectionStatus::ProtectionBroken => SystemMessage::ChatProtectionDisabled,
         };
-        add_info_msg_with_cmd(context, self, &text, cmd, timestamp_sort, None, None, None).await?;
+        add_info_msg_with_cmd(
+            context,
+            self,
+            &text,
+            cmd,
+            timestamp_sort,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
 
         Ok(())
     }
@@ -1789,6 +1800,7 @@ impl Chat {
             // never sorted below the protection message if the SecureJoin finishes in parallel.
             ts_sort,
             Some(now),
+            None,
             None,
             None,
         )
@@ -3942,6 +3954,8 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
+        msg.param
+            .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
         send_msg(context, chat_id, &mut msg).await?;
 
         sync = Nosync;
@@ -4139,6 +4153,8 @@ pub async fn remove_contact_from_chat(
                     }
                     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
                     msg.param.set(Param::Arg, contact.get_addr().to_lowercase());
+                    msg.param
+                        .set(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
                     let res = send_msg(context, chat_id, &mut msg).await;
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4737,13 +4753,17 @@ pub(crate) async fn add_info_msg_with_cmd(
     timestamp_sent_rcvd: Option<i64>,
     parent: Option<&Message>,
     from_id: Option<ContactId>,
+    added_removed_id: Option<ContactId>,
 ) -> Result<MsgId> {
     let rfc724_mid = create_outgoing_rfc724_mid();
     let ephemeral_timer = chat_id.get_ephemeral_timer(context).await?;
 
     let mut param = Params::new();
     if cmd != SystemMessage::Unknown {
-        param.set_cmd(cmd)
+        param.set_cmd(cmd);
+    }
+    if let Some(contact_id) = added_removed_id {
+        param.set_int(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
     }
 
     let row_id =
@@ -4788,6 +4808,7 @@ pub(crate) async fn add_info_msg(
         text,
         SystemMessage::Unknown,
         timestamp,
+        None,
         None,
         None,
         None,

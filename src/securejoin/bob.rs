@@ -126,6 +126,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                     Some(ts_start),
                     None,
                     None,
+                    None,
                 )
                 .await?;
                 chat_id.spawn_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT);

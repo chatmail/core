@@ -1,6 +1,7 @@
 use super::*;
 use crate::chatlist::get_archived_cnt;
 use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
+use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{has_backup, imex, ImexMode};
 use crate::message::{delete_msgs, MessengerMessage};
@@ -522,6 +523,14 @@ async fn test_modify_chat_multi_device() -> Result<()> {
     assert!(a2_msg.is_system_message());
     assert_eq!(a1_msg.get_info_type(), SystemMessage::GroupNameChanged);
     assert_eq!(a2_msg.get_info_type(), SystemMessage::GroupNameChanged);
+    assert_eq!(
+        a1_msg.get_info_contact_id(&a1).await?,
+        Some(ContactId::SELF)
+    );
+    assert_eq!(
+        a2_msg.get_info_contact_id(&a2).await?,
+        Some(ContactId::SELF)
+    );
     assert_eq!(Chat::load_from_db(&a1, a1_chat_id).await?.name, "bar");
     assert_eq!(Chat::load_from_db(&a2, a2_chat_id).await?.name, "bar");
 
@@ -1572,6 +1581,7 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         "foo bar info",
         SystemMessage::EphemeralTimerChanged,
         10000,
+        None,
         None,
         None,
         None,
@@ -3329,6 +3339,128 @@ async fn test_do_not_overwrite_draft() -> Result<()> {
     self_chat.set_draft(&alice, Some(&mut msg)).await.unwrap();
     let draft2 = self_chat.get_draft(&alice).await?.unwrap();
     assert_eq!(draft1.timestamp_sort, draft2.timestamp_sort);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_info_contact_id() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    async fn pop_recv_and_check(
+        alice: &TestContext,
+        alice2: &TestContext,
+        bob: &TestContext,
+        expected_type: SystemMessage,
+        expected_alice_id: ContactId,
+        expected_bob_id: ContactId,
+    ) -> Result<()> {
+        let sent_msg = alice.pop_sent_msg().await;
+        let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(
+            msg.get_info_contact_id(alice).await?,
+            Some(expected_alice_id)
+        );
+
+        let msg = alice2.recv_msg(&sent_msg).await;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(
+            msg.get_info_contact_id(alice2).await?,
+            Some(expected_alice_id)
+        );
+
+        let msg = bob.recv_msg(&sent_msg).await;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(msg.get_info_contact_id(bob).await?, Some(expected_bob_id));
+
+        Ok(())
+    }
+
+    // Alice creates group, Bob receives group
+    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "play").await?;
+    let alice_bob_id = Contact::create(alice, "Bob", "bob@example.net").await?;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
+    let sent_msg1 = alice.send_text(alice_chat_id, "moin").await;
+
+    let msg = bob.recv_msg(&sent_msg1).await;
+    let bob_alice_id = msg.from_id;
+    assert!(!bob_alice_id.is_special());
+
+    // Alice does group changes, Bob receives them
+    set_chat_name(&alice, alice_chat_id, "games").await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::GroupNameChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    let file = alice.dir.path().join("avatar.png");
+    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
+    tokio::fs::write(&file, bytes).await?;
+    set_chat_profile_image(&alice, alice_chat_id, file.to_str().unwrap()).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::GroupImageChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    alice_chat_id
+        .set_ephemeral_timer(alice, Timer::Enabled { duration: 60 })
+        .await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::EphemeralTimerChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    let fiona_id = Contact::create(alice, "Fiona", "fiona@example.net").await?; // contexts are in sync, fiona_id is same everywhere
+    add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::MemberAddedToGroup,
+        fiona_id,
+        fiona_id,
+    )
+    .await?;
+
+    remove_contact_from_chat(alice, alice_chat_id, fiona_id).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::MemberRemovedFromGroup,
+        fiona_id,
+        fiona_id,
+    )
+    .await?;
+
+    // When fiona_id is deleted, get_info_contact_id() returns None.
+    // We raw deletion in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
+    alice
+        .sql
+        .execute("DELETE FROM contacts WHERE id=?", (fiona_id,))
+        .await?;
+    let msg = alice.get_last_msg().await;
+    assert_eq!(msg.get_info_type(), SystemMessage::MemberRemovedFromGroup);
+    assert!(msg.get_info_contact_id(alice).await?.is_none());
 
     Ok(())
 }
