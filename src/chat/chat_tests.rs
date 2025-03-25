@@ -2934,9 +2934,9 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     assert_eq!(alice1_contacts.len(), 1);
     let a1b_contact_id = alice1_contacts[0];
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
-    assert_eq!(a1b_contact.get_addr(), "bob@example.net");
+    assert_eq!(a1b_contact.get_addr(), "");
     assert_eq!(a1b_contact.origin, Origin::CreateChat);
-    let a1b_chat = alice1.get_chat(bob).await;
+    let a1b_chat = alice1.get_pgp_chat(bob).await;
     assert_eq!(a1b_chat.blocked, Blocked::Not);
     let chats = Chatlist::try_load(alice1, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
