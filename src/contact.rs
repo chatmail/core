@@ -911,6 +911,13 @@ impl Contact {
             return Ok((ContactId::SELF, sth_modified));
         }
 
+        if !fingerprint.is_empty() {
+            let fingerprint_self = load_self_public_key(context).await?.dc_fingerprint().hex();
+            if fingerprint == fingerprint_self {
+                return Ok((ContactId::SELF, sth_modified));
+            }
+        }
+
         let mut name = sanitize_name(name);
         if origin <= Origin::OutgoingTo {
             // The user may accidentally have written to a "noreply" address with another MUA:
