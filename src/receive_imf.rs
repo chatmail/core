@@ -1451,13 +1451,13 @@ async fn add_parts(
             None => better_msg = Some(m),
             Some(_) => {
                 if !m.is_empty() {
-                    group_changes.extra_msgs.push((m, is_system_message))
+                    group_changes.extra_msgs.push((m, is_system_message, None))
                 }
             }
         }
     }
 
-    for (group_changes_msg, cmd) in group_changes.extra_msgs {
+    for (group_changes_msg, cmd, added_removed_id) in group_changes.extra_msgs {
         chat::add_info_msg_with_cmd(
             context,
             chat_id,
@@ -1467,6 +1467,7 @@ async fn add_parts(
             None,
             None,
             None,
+            added_removed_id,
         )
         .await?;
     }
@@ -2345,7 +2346,7 @@ struct GroupChangesInfo {
     /// If true, the user should not be notified about the group change.
     silent: bool,
     /// A list of additional group changes messages that should be shown in the chat.
-    extra_msgs: Vec<(String, SystemMessage)>,
+    extra_msgs: Vec<(String, SystemMessage, Option<ContactId>)>,
 }
 
 /// Apply group member list, name, avatar and protection status changes from the MIME message.
@@ -2673,7 +2674,7 @@ async fn group_changes_msgs(
     added_ids: &HashSet<ContactId>,
     removed_ids: &HashSet<ContactId>,
     chat_id: ChatId,
-) -> Result<Vec<(String, SystemMessage)>> {
+) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
     let mut group_changes_msgs = Vec::new();
     if !added_ids.is_empty() {
         warn!(
@@ -2694,6 +2695,7 @@ async fn group_changes_msgs(
             stock_str::msg_add_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberAddedToGroup,
+            Some(contact.id),
         ));
     }
     for contact_id in removed_ids {
@@ -2702,6 +2704,7 @@ async fn group_changes_msgs(
             stock_str::msg_del_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberRemovedFromGroup,
+            Some(contact.id),
         ));
     }
 

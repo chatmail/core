@@ -215,6 +215,9 @@ pub enum Param {
 
     /// For messages: Message text was edited.
     IsEdited = b'L',
+
+    /// For info messages: Contact ID in added or removed to a group.
+    ContactAddedRemoved = b'5',
 }
 
 /// An object for handling key=value parameter lists.

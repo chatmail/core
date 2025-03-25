@@ -4483,12 +4483,21 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * UIs can display e.g. an icon based upon the type.
  *
  * Currently, the following types are defined:
+ * - DC_INFO_GROUP_NAME_CHANGED (2) - "Group name changd from OLD to BY by CONTACT"
+ * - DC_INFO_GROUP_IMAGE_CHANGED (3) - "Group image changd by CONTACT"
+ * - DC_INFO_MEMBER_ADDED_TO_GROUP (4) - "Member CONTACT added by OTHER_CONTACT"
+ * - DC_INFO_MEMBER_REMOVED_FROM_GROUP (5) - "Member CONTACT removed by OTHER_CONTACT"
+ * - DC_INFO_EPHEMERAL_TIMER_CHANGED (10) - "Disappearing messages CHANGED_TO by CONTACT"
  * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is now protected"
  * - DC_INFO_PROTECTION_DISABLED (12) - Info-message for "Chat is no longer protected"
  * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message for "Provider requires end-to-end encryption which is not setup yet",
  *   the UI should change the corresponding string using #DC_STR_INVALID_UNENCRYPTED_MAIL
  *   and also offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
+ *
+ * For the messages that refer to a CONTACT,
+ * dc_msg_get_info_contact_id() returns the contact ID.
+ * The UI should open the contact's profile when tapping the info message.
  *
  * Even when you display an icon,
  * you should still display the text of the informational message using dc_msg_get_text()
@@ -4500,6 +4509,19 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  *     or that the message is not an info-message.
  */
 int             dc_msg_get_info_type          (const dc_msg_t* msg);
+
+
+/**
+ * Return the contact ID of the profile to open when tapping the info message.
+ *
+ * No need to check additionally for dc_msg_get_info_type(),
+ * unless you e.g. want to show the info message in another style.
+ *
+ * @memberof dc_msg_t
+ * @param msg The message object.
+ * @return The contact ID that the info message refers to, if any. Otherwise 0.
+ */
+uint_32_t       dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 
 
 // DC_INFO* uses the same values as SystemMessage in rust-land
