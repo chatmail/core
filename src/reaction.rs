@@ -736,7 +736,7 @@ Here's my footer -- bob@example.net"
         let bob = tcm.bob().await;
         alice.set_config(Config::Displayname, Some("ALICE")).await?;
         bob.set_config(Config::Displayname, Some("BOB")).await?;
-        let alice_bob_id = alice.add_or_lookup_contact_id(&bob).await;
+        let alice_bob_id = alice.create_contact_id(&bob).await;
 
         // Alice sends message to Bob
         let alice_chat = alice.create_chat(&bob).await;
