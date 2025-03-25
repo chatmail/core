@@ -731,8 +731,9 @@ Here's my footer -- bob@example.net"
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_reaction_summary() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
         alice.set_config(Config::Displayname, Some("ALICE")).await?;
         bob.set_config(Config::Displayname, Some("BOB")).await?;
         let alice_bob_id = alice.add_or_lookup_contact_id(&bob).await;

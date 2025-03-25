@@ -1050,8 +1050,9 @@ async fn test_sync_create() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_make_n_import_vcard() -> Result<()> {
-    let alice = &TestContext::new_alice().await;
-    let bob = &TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     bob.set_config(Config::Displayname, Some("Bob")).await?;
     let avatar_path = bob.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");

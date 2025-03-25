@@ -674,8 +674,9 @@ async fn test_modify_chat_lost() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_group() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
 
     // Create group chat with Bob.
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
@@ -2039,8 +2040,9 @@ async fn test_forward_quote() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_group() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
 
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
@@ -2903,12 +2905,13 @@ async fn test_sync_blocked() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_accept_before_first_msg() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let ba_chat = bob.create_chat(alice0).await;
     let sent_msg = bob.send_text(ba_chat.id, "hi").await;
@@ -2922,7 +2925,7 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     a0b_chat_id.accept(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::CreateChat);
-    assert_eq!(alice0.get_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice0.get_chat(bob).await.blocked, Blocked::Not);
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
@@ -2931,7 +2934,7 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.get_addr(), "bob@example.net");
     assert_eq!(a1b_contact.origin, Origin::CreateChat);
-    let a1b_chat = alice1.get_chat(&bob).await;
+    let a1b_chat = alice1.get_chat(bob).await;
     assert_eq!(a1b_chat.blocked, Blocked::Not);
     let chats = Chatlist::try_load(alice1, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
@@ -3067,8 +3070,9 @@ async fn test_sync_adhoc_grp() -> Result<()> {
 /// - That sync messages don't unarchive the self-chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_visibility() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
@@ -3120,8 +3124,9 @@ async fn test_sync_device_messages_visibility() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_muted() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
@@ -3155,8 +3160,9 @@ async fn test_sync_muted() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_broadcast() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }

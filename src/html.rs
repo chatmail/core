@@ -285,7 +285,7 @@ mod tests {
     use crate::contact::ContactId;
     use crate::message::{MessengerMessage, Viewtype};
     use crate::receive_imf::receive_imf;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::{TestContext, TestContextManager};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_htmlparse_plain_unspecified() {
@@ -442,24 +442,25 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_html_forwarding() {
         // alice receives a non-delta html-message
-        let alice = TestContext::new_alice().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(&alice, raw, false).await.unwrap();
+        receive_imf(alice, raw, false).await.unwrap();
         let msg = alice.get_last_msg_in(chat.get_id()).await;
         assert_ne!(msg.get_from_id(), ContactId::SELF);
         assert_eq!(msg.is_dc_message, MessengerMessage::No);
         assert!(!msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(&alice).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
         assert!(html.contains("this is <b>html</b>"));
 
         // alice: create chat with bob and forward received html-message there
         let chat = alice.create_chat_with_contact("", "bob@example.net").await;
-        forward_msgs(&alice, &[msg.get_id()], chat.get_id())
+        forward_msgs(alice, &[msg.get_id()], chat.get_id())
             .await
             .unwrap();
         let msg = alice.get_last_msg_in(chat.get_id()).await;
@@ -468,11 +469,11 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         assert!(msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(&alice).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
         assert!(html.contains("this is <b>html</b>"));
 
         // bob: check that bob also got the html-part of the forwarded message
-        let bob = TestContext::new_bob().await;
+        let bob = &tcm.bob().await;
         let chat = bob.create_chat_with_contact("", "alice@example.org").await;
         let msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
         assert_eq!(chat.id, msg.chat_id);
@@ -481,7 +482,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         assert!(msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(&bob).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(bob).await.unwrap().unwrap();
         assert!(html.contains("this is <b>html</b>"));
     }
 
@@ -519,10 +520,11 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_html_forwarding_encrypted() {
+        let mut tcm = TestContextManager::new();
         // Alice receives a non-delta html-message
         // (`ShowEmails=AcceptedContacts` lets Alice actually receive non-delta messages for known
         // contacts, the contact is marked as known by creating a chat using `chat_with_contact()`)
-        let alice = TestContext::new_alice().await;
+        let alice = &tcm.alice().await;
         alice
             .set_config(Config::ShowEmails, Some("1"))
             .await
@@ -531,19 +533,19 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
         let raw = include_bytes!("../test-data/message/text_alt_plain_html.eml");
-        receive_imf(&alice, raw, false).await.unwrap();
+        receive_imf(alice, raw, false).await.unwrap();
         let msg = alice.get_last_msg_in(chat.get_id()).await;
 
         // forward the message to saved-messages,
         // this will encrypt the message as new_alice() has set up keys
         let chat = alice.get_self_chat().await;
-        forward_msgs(&alice, &[msg.get_id()], chat.get_id())
+        forward_msgs(alice, &[msg.get_id()], chat.get_id())
             .await
             .unwrap();
         let msg = alice.pop_sent_msg().await;
 
         // receive the message on another device
-        let alice = TestContext::new_alice().await;
+        let alice = &tcm.alice().await;
         alice
             .set_config(Config::ShowEmails, Some("0"))
             .await
@@ -556,38 +558,39 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         assert!(msg.is_forwarded());
         assert!(msg.get_text().contains("this is plain"));
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(&alice).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
         assert!(html.contains("this is <b>html</b>"));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_set_html() {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
 
         // alice sends a message with html-part to bob
-        let chat_id = alice.create_chat(&bob).await.id;
+        let chat_id = alice.create_chat(bob).await.id;
         let mut msg = Message::new_text("plain text".to_string());
         msg.set_html(Some("<b>html</b> text".to_string()));
         assert!(msg.mime_modified);
-        chat::send_msg(&alice, chat_id, &mut msg).await.unwrap();
+        chat::send_msg(alice, chat_id, &mut msg).await.unwrap();
 
         // check the message is written correctly to alice's db
         let msg = alice.get_last_msg_in(chat_id).await;
         assert_eq!(msg.get_text(), "plain text");
         assert!(!msg.is_forwarded());
         assert!(msg.mime_modified);
-        let html = msg.get_id().get_html(&alice).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
         assert!(html.contains("<b>html</b> text"));
 
         // let bob receive the message
-        let chat_id = bob.create_chat(&alice).await.id;
+        let chat_id = bob.create_chat(alice).await.id;
         let msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
         assert_eq!(msg.chat_id, chat_id);
         assert_eq!(msg.get_text(), "plain text");
         assert!(!msg.is_forwarded());
         assert!(msg.mime_modified);
-        let html = msg.get_id().get_html(&bob).await.unwrap().unwrap();
+        let html = msg.get_id().get_html(bob).await.unwrap().unwrap();
         assert!(html.contains("<b>html</b> text"));
     }
 
