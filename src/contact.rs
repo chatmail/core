@@ -901,7 +901,10 @@ impl Contact {
     ) -> Result<(ContactId, Modifier)> {
         let mut sth_modified = Modifier::None;
 
-        ensure!(!addr.is_empty(), "Can not add_or_lookup empty address");
+        ensure!(
+            !addr.is_empty() || !fingerprint.is_empty(),
+            "Can not add_or_lookup empty address"
+        );
         ensure!(origin != Origin::Unknown, "Missing valid origin");
 
         if context.is_self_addr(addr).await? {
@@ -944,9 +947,9 @@ impl Contact {
                     .query_row(
                         "SELECT id, name, addr, origin, authname
                          FROM contacts
-                         WHERE addr=? COLLATE NOCASE
-                         AND fingerprint=?",
-                        (addr, fingerprint),
+                         WHERE (?1<>'' AND fingerprint=?1)
+                         OR (?1='' AND addr=?2 COLLATE NOCASE)",
+                        (fingerprint, addr),
                         |row| {
                             let row_id: u32 = row.get(0)?;
                             let row_name: String = row.get(1)?;
