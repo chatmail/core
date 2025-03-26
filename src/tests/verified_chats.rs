@@ -1027,7 +1027,7 @@ async fn assert_verified(this: &TestContext, other: &TestContext, protected: Pro
         assert_eq!(contact.is_verified(this).await.unwrap(), true);
     }
 
-    let chat = this.get_chat(other).await;
+    let chat = this.get_pgp_chat(other).await;
     let (expect_protected, expect_broken) = match protected {
         ProtectionStatus::Unprotected => (false, false),
         ProtectionStatus::Protected => (true, false),
