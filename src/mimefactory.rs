@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use base64::Engine as _;
 use chrono::TimeZone;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -1357,6 +1357,27 @@ impl MimeFactory {
                             .await?,
                     )?)
                     .into(),
+                ));
+            }
+            SystemMessage::OutgoingCall => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call").into(),
+                ));
+            }
+            SystemMessage::IncomingCall => {
+                return Err(anyhow!("Unexpected incoming call rendering."));
+            }
+            SystemMessage::CallAccepted => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-accepted").into(),
+                ));
+            }
+            SystemMessage::CallEnded => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-ended").into(),
                 ));
             }
             _ => {}
