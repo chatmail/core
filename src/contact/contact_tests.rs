@@ -1149,8 +1149,10 @@ async fn test_make_n_import_vcard() -> Result<()> {
     Ok(())
 }
 
+/// Tests importing a vCard with the same email address,
+/// but a new key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_import_vcard_updates_only_key() -> Result<()> {
+async fn test_import_vcard_key_change() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let bob = &TestContext::new_bob().await;
     let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
@@ -1170,7 +1172,7 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
 
     let bob = &TestContext::new().await;
     bob.configure_addr(bob_addr).await;
-    bob.set_config(Config::Displayname, Some("Not Bob")).await?;
+    bob.set_config(Config::Displayname, Some("New Bob")).await?;
     let avatar_path = bob.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
@@ -1178,10 +1180,14 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
         .await?;
     SystemTime::shift(Duration::from_secs(1));
     let vcard1 = make_vcard(bob, &[ContactId::SELF]).await?;
-    assert_eq!(import_vcard(alice, &vcard1).await?, vec![alice_bob_id]);
+    let alice_bob_id1 = import_vcard(alice, &vcard1).await?[0];
+    assert_ne!(alice_bob_id1, alice_bob_id);
     let alice_bob_contact = Contact::get_by_id(alice, alice_bob_id).await?;
     assert_eq!(alice_bob_contact.get_authname(), "Bob");
     assert_eq!(alice_bob_contact.get_profile_image(alice).await?, None);
+    let alice_bob_contact1 = Contact::get_by_id(alice, alice_bob_id1).await?;
+    assert_eq!(alice_bob_contact1.get_authname(), "New Bob");
+    assert!(alice_bob_contact1.get_profile_image(alice).await?.is_some());
     let msg = alice.get_last_msg_in(chat_id).await;
     assert!(msg.is_info());
     assert_eq!(
