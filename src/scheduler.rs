@@ -19,12 +19,12 @@ use crate::download::{download_msg, DownloadState};
 use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
 use crate::imap::{session::Session, FolderMeaning, Imap};
-use crate::location;
 use crate::log::LogExt;
-use crate::message::MsgId;
+use crate::message::{Message, MsgId};
 use crate::smtp::{send_smtp_messages, Smtp};
 use crate::sql;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
+use crate::{chat, location};
 
 pub(crate) mod connectivity;
 
@@ -514,8 +514,18 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
                     warn!(ctx, "Can't set Config::FetchedExistingMsgs: {:#}", err);
                 }
 
-                if let Err(err) = imap.fetch_existing_msgs(ctx, &mut session).await {
-                    warn!(ctx, "Failed to fetch existing messages: {:#}", err);
+                match imap.fetch_existing_msgs(ctx, &mut session).await {
+                    Err(err) => {
+                        warn!(ctx, "Failed to fetch existing messages: {:#}", err);
+                    }
+                    Ok(count) => {
+                        let mut msg = Message::new_text(format!(
+                            "Added {} contacts from outgoing chats",
+                            count
+                        ));
+
+                        chat::add_device_msg(ctx, None, Some(&mut msg)).await?;
+                    }
                 }
             }
         }
