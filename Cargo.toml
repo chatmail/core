@@ -31,6 +31,9 @@ opt-level = "z"
 codegen-units = 1
 strip = true
 
+[patch.crates-io]
+netwatch = { git = "https://github.com/link2xt/net-tools.git", branch = "link2xt/no-netlink-error" }
+
 [dependencies]
 deltachat_derive = { path = "./deltachat_derive" }
 deltachat-time = { path = "./deltachat-time" }
