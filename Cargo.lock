@@ -3617,8 +3617,7 @@ dependencies = [
 [[package]]
 name = "netwatch"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7879c2cfdf30d92f2be89efa3169b3d78107e3ab7f7b9a37157782569314e1"
+source = "git+https://github.com/n0-computer/net-tools.git?branch=main#b8eb4ea8d2d682b0de3bd2c559ff232b6d6d633f"
 dependencies = [
  "atomic-waker",
  "bytes",
