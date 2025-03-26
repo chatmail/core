@@ -124,7 +124,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Alice should have a hidden protected chat with Fiona
     {
-        let chat = alice.get_chat(&fiona).await;
+        let chat = alice.get_pgp_chat(&fiona).await;
         assert!(chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
@@ -134,7 +134,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Fiona should have a hidden protected chat with Alice
     {
-        let chat = fiona.get_chat(&alice).await;
+        let chat = fiona.get_pgp_chat(&alice).await;
         assert!(chat.is_protected());
 
         let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
