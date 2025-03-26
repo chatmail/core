@@ -3556,8 +3556,7 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
-    let alice_bob_contact_id = Contact::create(alice, "Bob", &bob_addr).await?;
+    let alice_bob_contact_id = alice.create_contact_id(bob).await;
 
     let charlie_addr = "charlie@example.com";
     let alice_charlie_contact_id = Contact::create(alice, "Charlie", charlie_addr).await?;
