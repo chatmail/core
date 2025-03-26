@@ -772,7 +772,7 @@ impl TestContext {
             .map(|chat_id_blocked| chat_id_blocked.id)
             .expect(
                 "There is no chat with this contact. \
-                Hint: Use create_chat() instead of get_chat() if this is expected.",
+                Hint: Use create_chat() instead of get_pgp_chat() if this is expected.",
             );
 
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
