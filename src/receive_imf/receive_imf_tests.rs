@@ -3321,7 +3321,7 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
         time(),
         group_id,
         &[
-            bob.add_or_lookup_contact(&alice1).await.id,
+            bob.create_contact_id(&alice1).await,
             Contact::create(&bob, "", "charlie@example.org").await?,
         ],
     )
