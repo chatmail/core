@@ -313,8 +313,12 @@ the messenger MUST set the header `Chat-Edit`
 with value set to the message-id of the message to edit
 and the body to the new message text.
 
-Receiving messengers MUST look up the message-id, replace the text
-and MAY indicate the edit in the UI.
+The body MAY be prefixed by a quote
+and the emoji "✏️" directly before the new text.
+Both MUST be skipped by the recipient.
+
+Receiving messengers MUST look up the message-id from `Chat-Edit`,
+replace the text and MAY indicate the edit in the UI.
 
 The new message text MUST NOT be empty.
 It is not possible to edit images or other attachments, including HTML messages.
@@ -336,10 +340,14 @@ The typo from the message above can be fixed by the following message:
     To: rcpt@domain
     Chat-Version: 1.0
     Chat-Edit: 00001@domain
+    In-Reply-To: 00001@domain
     Message-ID: 00002@domain
     Content-Type: text/plain
 
-    Hello world!
+    On 2025-03-27, sender@domain wrote:
+    > Hello wordl!
+
+    ✏️Hello world!
 
 
 # Request deletion
