@@ -417,7 +417,7 @@ impl Default for MessengerMessage {
 /// An object representing a single message in memory.
 /// The message object is not updated.
 /// If you want an update, you have to recreate the object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Message {
     /// Message ID.
     pub(crate) id: MsgId,
@@ -464,37 +464,6 @@ pub struct Message {
     pub(crate) location_id: u32,
     pub(crate) error: Option<String>,
     pub(crate) param: Params,
-}
-
-impl Default for Message {
-    fn default() -> Self {
-        Self {
-            id: Default::default(),
-            from_id: Default::default(),
-            to_id: Default::default(),
-            chat_id: Default::default(),
-            viewtype: Default::default(),
-            state: Default::default(),
-            download_state: Default::default(),
-            hidden: Default::default(),
-            timestamp_sort: Default::default(),
-            timestamp_sent: Default::default(),
-            timestamp_rcvd: Default::default(),
-            ephemeral_timer: Default::default(),
-            ephemeral_timestamp: Default::default(),
-            text: Default::default(),
-            subject: Default::default(),
-            rfc724_mid: create_outgoing_rfc724_mid(),
-            in_reply_to: Default::default(),
-            is_dc_message: Default::default(),
-            original_msg_id: Default::default(),
-            mime_modified: Default::default(),
-            chat_blocked: Default::default(),
-            location_id: Default::default(),
-            error: Default::default(),
-            param: Default::default(),
-        }
-    }
 }
 
 impl Message {

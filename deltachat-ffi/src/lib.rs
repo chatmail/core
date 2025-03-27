@@ -37,6 +37,7 @@ use deltachat::*;
 use deltachat::{accounts::Accounts, log::LogExt};
 use deltachat_jsonrpc::api::CommandApi;
 use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
+use message::Viewtype;
 use num_traits::{FromPrimitive, ToPrimitive};
 use rand::Rng;
 use tokio::runtime::Runtime;
@@ -2076,7 +2077,7 @@ pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> 
                         ctx,
                         "dc_get_msg called with special msg_id={msg_id}, returning empty msg"
                     );
-                    message::Message::default()
+                    message::Message::new(Viewtype::default())
                 } else {
                     warn!(ctx, "dc_get_msg could not retrieve msg_id {msg_id}: {e:#}");
                     return ptr::null_mut();
