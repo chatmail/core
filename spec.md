@@ -18,6 +18,8 @@ to implement typical messenger functions.
     - [Add and remove members](#add-and-remove-members)
     - [Change group name](#change-group-name)
     - [Set group image](#set-group-image)
+- [Request editing](#request-editing)
+- [Request deletion](#request-deletion)
 - [Set profile image](#set-profile-image)
 - [Locations](#locations)
     - [User locations](#user-locations)
@@ -304,7 +306,7 @@ To save data, it is RECOMMENDED
 to add a `Chat-Group-Avatar` only on image changes.
 
 
-# Send request to edit message's text
+# Request editing
 
 To request recipients to edit the text of an already sent message,
 the messenger MUST set the header `Chat-Edit`
@@ -340,7 +342,7 @@ The typo from the message above can be fixed by the following message:
     Hello world!
 
 
-# Send request to delete messages
+# Request deletion
 
 To request recipient to delete a message,
 the messenger MUST set the header `Chat-Delete`
