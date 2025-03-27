@@ -1,10 +1,10 @@
-# chat-mail specification
+# Chatmail Specification
 
-Version: 0.35.0
+Version: 0.36.0
 Status:  In-progress 
 Format:  [Semantic Line Breaks](https://sembr.org/)
 
-This document roughly describes how chat-mail 
+This document roughly describes how chatmail 
 apps use the standard e-mail system 
 to implement typical messenger functions.
 
@@ -447,7 +447,7 @@ eg. forwarded from a normal MUA.
 
     <?xml version="1.0" encoding="UTF-8"?>
     <kml xmlns="http://www.opengis.net/kml/2.2">
-      <Document addr="ndh@deltachat.de">
+      <Document addr="foo@domain">
         <Placemark>
           <Timestamp><when>2020-01-11T20:40:19Z</when></Timestamp>
           <Point><coordinates accuracy="1.2">1.234,5.678</coordinates></Point>
@@ -614,4 +614,4 @@ We define the effective date of a message
 as the sending time of the message as indicated by its Date header,
 or the time of first receipt if that date is in the future or unavailable.
 
-Copyright © 2017-2021 Delta Chat contributors.
+Copyright © Chatmail contributors.
