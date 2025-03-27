@@ -458,7 +458,9 @@ impl Config {
             rx.await?;
             Ok(())
         });
-        locked_rx.await?;
+        if locked_rx.await.is_err() {
+            bail!("Delta Chat is already running. To use Delta Chat, you must first close the existing Delta Chat process, or restart your device. (accounts.lock file is already locked)");
+        };
         Ok(Some(lock_task))
     }
 
@@ -478,9 +480,7 @@ impl Config {
             };
             return Ok(cfg);
         }
-        let Ok(lock_task) = Self::create_lock_task(dir.to_path_buf()).await else {
-            bail!("Delta Chat is already running. To use Delta Chat, you must first close the existing Delta Chat process, or restart your device.\n\n(accounts.lock file is already locked)");
-        };
+        let lock_task = Self::create_lock_task(dir.to_path_buf()).await?;
         let cfg = Self {
             file,
             inner,
