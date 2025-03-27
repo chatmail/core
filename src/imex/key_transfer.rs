@@ -32,10 +32,7 @@ pub async fn initiate_key_transfer(context: &Context) -> Result<String> {
     )?;
 
     let chat_id = ChatId::create_for_contact(context, ContactId::SELF).await?;
-    let mut msg = Message {
-        viewtype: Viewtype::File,
-        ..Default::default()
-    };
+    let mut msg = Message::new(Viewtype::File);
     msg.param.set(Param::File, setup_file_blob.as_name());
     msg.param
         .set(Param::Filename, "autocrypt-setup-message.html");
