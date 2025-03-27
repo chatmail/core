@@ -42,7 +42,7 @@ async fn test_chat_info() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft_no_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat = t.get_self_chat().await;
     let draft = chat.id.get_draft(&t).await.unwrap();
     assert!(draft.is_none());
@@ -59,14 +59,14 @@ async fn test_get_draft_special_chat_id() {
 async fn test_get_draft_no_chat() {
     // This is a weird case, maybe this should be an error but we
     // do not get this info from the database currently.
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let draft = ChatId::new(42).get_draft(&t).await.unwrap();
     assert!(draft.is_none());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat_id = &t.get_self_chat().await.id;
     let mut msg = Message::new_text("hello".to_string());
 
@@ -300,7 +300,8 @@ async fn test_member_add_remove() -> Result<()> {
     let bob = tcm.bob().await;
 
     // Create contact for Bob on the Alice side with name "robert".
-    let alice_bob_contact_id = Contact::create(&alice, "robert", "bob@example.net").await?;
+    let alice_bob_contact_id = alice.create_contact_id(&bob).await;
+    alice_bob_contact_id.set_name(&alice, "robert").await?;
 
     // Set Bob authname to "Bob" and send it to Alice.
     bob.set_config(Config::Displayname, Some("Bob")).await?;
@@ -680,7 +681,7 @@ async fn test_leave_group() -> Result<()> {
 
     // Create group chat with Bob.
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
-    let bob_contact = Contact::create(&alice, "", "bob@example.net").await?;
+    let bob_contact = alice.create_contact_id(&bob).await;
     add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
 
     // Alice sends first message to group.
@@ -953,7 +954,7 @@ async fn test_delete_device_chat() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_device_chat_cannot_sent() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     t.update_device_chats().await.unwrap();
     let device_chat_id = ChatId::get_for_contact(&t, ContactId::DEVICE)
         .await
@@ -1000,7 +1001,7 @@ async fn chatlist_len(ctx: &Context, listflags: usize) -> usize {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive() {
     // create two chats
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let mut msg = Message::new_text("foo".to_string());
     let msg_id = add_device_msg(&t, None, Some(&mut msg)).await.unwrap();
     let chat_id1 = message::Message::load_from_db(&t, msg_id)
@@ -1298,7 +1299,7 @@ async fn get_chats_from_chat_list(ctx: &Context, listflags: usize) -> Vec<ChatId
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pinned() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
 
     // create 3 chats, wait 1 second in between to get a reliable order (we order by time)
     let mut msg = Message::new_text("foo".to_string());
@@ -2043,6 +2044,7 @@ async fn test_forward_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
+    let fiona = tcm.fiona().await;
 
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
@@ -2050,12 +2052,12 @@ async fn test_forward_group() -> Result<()> {
     // Alice creates a group with Bob.
     let alice_group_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    let bob_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "Claire", "claire@example.net").await?;
+    let bob_id = alice.create_contact_id(&bob).await;
+    let fiona_id = alice.create_contact_id(&fiona).await;
     add_contact_to_chat(&alice, alice_group_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_group_chat_id, claire_id).await?;
+    add_contact_to_chat(&alice, alice_group_chat_id, fiona_id).await?;
     let sent_group_msg = alice
-        .send_text(alice_group_chat_id, "Hi Bob and Claire")
+        .send_text(alice_group_chat_id, "Hi Bob and Fiona")
         .await;
     let bob_group_chat_id = bob.recv_msg(&sent_group_msg).await.chat_id;
 
@@ -2932,9 +2934,9 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     assert_eq!(alice1_contacts.len(), 1);
     let a1b_contact_id = alice1_contacts[0];
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
-    assert_eq!(a1b_contact.get_addr(), "bob@example.net");
+    assert_eq!(a1b_contact.get_addr(), "");
     assert_eq!(a1b_contact.origin, Origin::CreateChat);
-    let a1b_chat = alice1.get_chat(bob).await;
+    let a1b_chat = alice1.get_pgp_chat(bob).await;
     assert_eq!(a1b_chat.blocked, Blocked::Not);
     let chats = Chatlist::try_load(alice1, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
@@ -3135,7 +3137,7 @@ async fn test_sync_muted() -> Result<()> {
     alice1.create_chat(&bob).await;
 
     assert_eq!(
-        alice1.get_chat(&bob).await.mute_duration,
+        alice1.get_pgp_chat(&bob).await.mute_duration,
         MuteDuration::NotMuted
     );
     let mute_durations = [
@@ -3153,7 +3155,7 @@ async fn test_sync_muted() -> Result<()> {
             ),
             _ => m,
         };
-        assert_eq!(alice1.get_chat(&bob).await.mute_duration, m);
+        assert_eq!(alice1.get_pgp_chat(&bob).await.mute_duration, m);
     }
     Ok(())
 }
@@ -3554,8 +3556,7 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
-    let alice_bob_contact_id = Contact::create(alice, "Bob", &bob_addr).await?;
+    let alice_bob_contact_id = alice.create_contact_id(bob).await;
 
     let charlie_addr = "charlie@example.com";
     let alice_charlie_contact_id = Contact::create(alice, "Charlie", charlie_addr).await?;

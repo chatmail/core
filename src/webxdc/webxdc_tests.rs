@@ -1747,7 +1747,7 @@ async fn helper_send_receive_status_update(
 async fn test_webxdc_reject_updates_from_non_groupmembers() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
-    let contact_bob = Contact::create(&alice, "Bob", "bob@example.net").await?;
+    let contact_bob = alice.create_contact_id(&bob).await;
     let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
     add_contact_to_chat(&alice, chat_id, contact_bob).await?;
     let instance = send_webxdc_instance(&alice, chat_id).await?;

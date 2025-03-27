@@ -3321,7 +3321,7 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
         time(),
         group_id,
         &[
-            bob.add_or_lookup_contact(&alice1).await.id,
+            bob.create_contact_id(&alice1).await,
             Contact::create(&bob, "", "charlie@example.org").await?,
         ],
     )
@@ -3449,8 +3449,7 @@ async fn test_send_as_bot() -> Result<()> {
     let alice = &tcm.alice().await;
     alice.set_config(Config::Bot, Some("1")).await.unwrap();
     let bob = &tcm.bob().await;
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
-    let alice_bob_id = Contact::create(alice, "", &bob_addr).await?;
+    let alice_bob_id = alice.create_contact_id(bob).await;
     let bob_chat_id = tcm.send_recv_accept(alice, bob, "hi").await.chat_id;
     let alice_chat_id = ChatId::lookup_by_contact(alice, alice_bob_id)
         .await?
@@ -3677,7 +3676,6 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
-    assert!(received_msg.from_is_signed);
 
     let peerstate = Peerstate::from_addr(&t, "alice@example.org")
         .await?
@@ -3732,7 +3730,6 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let t = &TestContext::new_bob().await;
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let received_msg = receive_imf(t, raw, false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
     let msg = t.get_last_msg().await;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
@@ -3751,7 +3748,6 @@ async fn test_wrong_from_name_and_no_valid_signatures() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let raw = String::from_utf8(raw.to_vec())?.replace("From: Alice", "From: A");
     let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
     let msg = t.get_last_msg().await;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
@@ -3792,7 +3788,6 @@ async fn test_thunderbird_unsigned() -> Result<()> {
     // Alice receives an unsigned message from Bob.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
     let received_msg = receive_imf(&alice, raw, false).await?.unwrap();
-    assert!(!received_msg.from_is_signed);
 
     let msg = alice.get_last_msg().await;
     assert!(!msg.get_showpadlock());
