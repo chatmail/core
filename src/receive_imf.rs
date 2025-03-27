@@ -66,11 +66,6 @@ pub struct ReceivedMsg {
 
     /// Whether IMAP messages should be immediately deleted.
     pub needs_delete_job: bool,
-
-    /// Whether the From address was repeated in the signed part
-    /// (and we know that the signer intended to send from this address).
-    #[cfg(test)]
-    pub(crate) from_is_signed: bool,
 }
 
 /// Emulates reception of a message from the network.
@@ -200,26 +195,10 @@ pub(crate) async fn receive_imf_inner(
                 sort_timestamp: 0,
                 msg_ids,
                 needs_delete_job: false,
-                #[cfg(test)]
-                from_is_signed: false,
             }));
         }
         Ok(mime_parser) => mime_parser,
     };
-
-    crate::peerstate::maybe_do_aeap_transition(context, &mut mime_parser).await?;
-    if let Some(peerstate) = &mime_parser.peerstate {
-        peerstate
-            .handle_fingerprint_change(context, mime_parser.timestamp_sent)
-            .await?;
-        // When peerstate is set to Mutual, it's saved immediately to not lose that fact in case
-        // of an error. Otherwise we don't save peerstate until get here to reduce the number of
-        // calls to save_to_db() and not to degrade encryption if a mail wasn't parsed
-        // successfully.
-        if peerstate.prefer_encrypt != EncryptPreference::Mutual {
-            peerstate.save_to_db(&context.sql).await?;
-        }
-    }
 
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
@@ -417,8 +396,6 @@ pub(crate) async fn receive_imf_inner(
                     sort_timestamp: mime_parser.timestamp_sent,
                     msg_ids: vec![msg_id],
                     needs_delete_job: res == securejoin::HandshakeMessage::Done,
-                    #[cfg(test)]
-                    from_is_signed: mime_parser.from_is_signed,
                 });
             }
             securejoin::HandshakeMessage::Propagate => {
@@ -1788,8 +1765,6 @@ RETURNING id
         sort_timestamp,
         msg_ids: created_db_entries,
         needs_delete_job,
-        #[cfg(test)]
-        from_is_signed: mime_parser.from_is_signed,
     })
 }
 
