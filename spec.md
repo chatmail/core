@@ -304,6 +304,76 @@ To save data, it is RECOMMENDED
 to add a `Chat-Group-Avatar` only on image changes.
 
 
+# Send request to edit message's text
+
+To request recipients to edit the text of an already sent message,
+the messenger MUST set the header `Chat-Edit`
+with value set to the message-id of the message to edit
+and the body to the new message text.
+
+Receiving messengers MUST look up the message-id, replace the text
+and MAY indicate the edit in the UI.
+
+The new message text MUST NOT be empty.
+It is not possible to edit images or other attachments,
+however, they can be deleted for everyone.
+
+Example:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Message-ID: 00001@domain
+    Content-Type: text/plain
+
+    Hello wordl!
+
+The typo from the message above can be fixed by the following message:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Chat-Edit: 00001@domain
+    Message-ID: 00002@domain
+    Content-Type: text/plain
+
+    Hello world!
+
+
+# Send request to delete messages
+
+To request recipient to delete a message,
+the messenger MUST set the header `Chat-Delete`
+with the value set to the message-id of the message to delete.
+
+Receiving messengers MUST look up the message-id, delete the corresponding message
+and MAY indicating the deletion in the UI.
+
+The sender MUST set the body to any, non-empty text.
+The receiver MUST ignore the body.
+
+Example:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Message-ID: 00003@domain
+    Content-Type: text/plain
+
+    reminder for my pin: 1234
+
+The message above can be requested for deletion by the following message:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Chat-Delete: 00003@domain
+    Message-ID: 00004@domain
+    Content-Type: text/plain
+
+    foo
+
+
 # Set profile image
 
 A user MAY have a profile-image that MAY be distributed to their contacts.
