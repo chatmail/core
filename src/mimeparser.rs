@@ -68,16 +68,12 @@ pub(crate) struct MimeMessage {
     /// `From:` address.
     pub from: SingleInfo,
 
-    /// Whether the From address was repeated in the signed part
-    /// (and we know that the signer intended to send from this address)
-    pub from_is_signed: bool,
     /// Whether the message is incoming or outgoing (self-sent).
     pub incoming: bool,
     /// The List-Post address is only set for mailing lists. Users can send
     /// messages to this address to post them to the list.
     pub list_post: Option<String>,
     pub chat_disposition_notification_to: Option<SingleInfo>,
-    pub autocrypt_header: Option<Aheader>,
     pub peerstate: Option<Peerstate>,
     pub decrypting_failed: bool,
 
@@ -319,7 +315,6 @@ impl MimeMessage {
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
         let mut gossiped_keys = Default::default();
-        let mut from_is_signed = false;
         hop_info += "\n\n";
         hop_info += &dkim_results.to_string();
 
@@ -502,7 +497,6 @@ impl MimeMessage {
                     bail!("From header is forged");
                 }
                 from = inner_from;
-                from_is_signed = !signatures.is_empty();
             }
         }
         if signatures.is_empty() {
@@ -534,10 +528,8 @@ impl MimeMessage {
             past_members,
             list_post,
             from,
-            from_is_signed,
             incoming,
             chat_disposition_notification_to,
-            autocrypt_header,
             peerstate,
             decrypting_failed: mail.is_err(),
 
