@@ -18,16 +18,16 @@ use crate::tools::SystemTime;
 use crate::{e2ee, message};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_classical() {
-    check_verified_oneonone_chat(true).await;
+async fn test_verified_oneonone_chat_not_broken_by_classical() {
+    check_verified_oneonone_chat_protection_not_broken(true).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_device_change() {
-    check_verified_oneonone_chat(false).await;
+async fn test_verified_oneonone_chat_not_broken_by_device_change() {
+    check_verified_oneonone_chat_protection_not_broken(false).await;
 }
 
-async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
+async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_email: bool) {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -57,7 +57,7 @@ async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
         // Bob's contact is still verified, but the chat isn't marked as protected anymore
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     } else {
         tcm.section("Bob sets up another Delta Chat device");
         let bob2 = TestContext::new().await;
@@ -69,7 +69,7 @@ async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
             .await;
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), false);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     }
 
     tcm.section("Bob sends another message from DC");
