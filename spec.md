@@ -317,8 +317,8 @@ Receiving messengers MUST look up the message-id, replace the text
 and MAY indicate the edit in the UI.
 
 The new message text MUST NOT be empty.
-It is not possible to edit images or other attachments,
-however, they can be deleted for everyone.
+It is not possible to edit images or other attachments, including HTML messages.
+However, they can be deleted for everyone.
 
 Example:
 
