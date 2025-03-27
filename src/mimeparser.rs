@@ -22,8 +22,7 @@ use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{
-    get_autocrypt_peerstate, get_encrypted_mime, keyring_from_peerstate, try_decrypt,
-    validate_detached_signature,
+    get_autocrypt_peerstate, get_encrypted_mime, try_decrypt, validate_detached_signature,
 };
 use crate::dehtml::dehtml;
 use crate::events::EventType;
@@ -400,9 +399,14 @@ impl MimeMessage {
         )
         .await?;
 
-        let public_keyring = match peerstate.is_none() && !incoming {
-            true => key::load_self_public_keyring(context).await?,
-            false => keyring_from_peerstate(peerstate.as_ref()),
+        let public_keyring = if incoming {
+            if let Some(autocrypt_header) = autocrypt_header {
+                vec![autocrypt_header.public_key]
+            } else {
+                vec![]
+            }
+        } else {
+            key::load_self_public_keyring(context).await?
         };
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
