@@ -2005,6 +2005,10 @@ impl Chat {
         let mut to_id = 0;
         let mut location_id = 0;
 
+        if msg.rfc724_mid.is_empty() {
+            msg.rfc724_mid = create_outgoing_rfc724_mid();
+        }
+
         if self.typ == Chattype::Single {
             if let Some(id) = context
                 .sql
@@ -3843,7 +3847,7 @@ pub(crate) async fn add_contact_to_chat_ex(
 ) -> Result<bool> {
     ensure!(!chat_id.is_special(), "can not add member to special chats");
     let contact = Contact::get_by_id(context, contact_id).await?;
-    let mut msg = Message::default();
+    let mut msg = Message::new(Viewtype::default());
 
     chat_id.reset_gossiped_timestamp(context).await?;
 
@@ -4074,7 +4078,7 @@ pub async fn remove_contact_from_chat(
         "Cannot remove special contact"
     );
 
-    let mut msg = Message::default();
+    let mut msg = Message::new(Viewtype::default());
 
     let chat = Chat::load_from_db(context, chat_id).await?;
     if chat.typ == Chattype::Group || chat.typ == Chattype::Broadcast {
@@ -4181,7 +4185,7 @@ async fn rename_ex(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
     let chat = Chat::load_from_db(context, chat_id).await?;
-    let mut msg = Message::default();
+    let mut msg = Message::new(Viewtype::default());
 
     if chat.typ == Chattype::Group
         || chat.typ == Chattype::Mailinglist
