@@ -54,34 +54,28 @@ impl EncryptHelper {
         peerstates: &[(Option<Peerstate>, String)],
     ) -> Result<bool> {
         let is_chatmail = context.is_chatmail().await?;
-        let mut prefer_encrypt_count = 1;
-        for (peerstate, addr) in peerstates {
-            match peerstate {
-                Some(peerstate) => {
-                    if match peerstate.prefer_encrypt {
-                        EncryptPreference::Reset => is_chatmail,
-                        EncryptPreference::NoPreference | EncryptPreference::Mutual => true,
-                    } {
-                        prefer_encrypt_count += 1;
-                    }
+        let missing_peerstate_addr = peerstates.iter().find_map(|(peerstate, addr)| {
+            if let Some(peerstate) = peerstate {
+                if !is_chatmail
+                    && !e2ee_guaranteed
+                    && peerstate.prefer_encrypt == EncryptPreference::Reset
+                {
+                    Some(addr)
+                } else {
+                    None
                 }
-                None => {
-                    let msg = format!("Peerstate for {addr:?} missing, cannot encrypt");
-                    if e2ee_guaranteed {
-                        return Err(format_err!("{msg}"));
-                    } else {
-                        info!(context, "{msg}.");
-                        return Ok(false);
-                    }
-                }
+            } else {
+                Some(addr)
+            }
+        });
+        if let Some(addr) = missing_peerstate_addr {
+            if e2ee_guaranteed {
+                return Err(format_err!(
+                    "Peerstate for {addr:?} missing, cannot encrypt"
+                ));
             }
         }
-
-        // Count number of recipients, including self.
-        // This does not depend on whether we send a copy to self or not.
-        let recipients_count = peerstates.len() + 1;
-
-        Ok(e2ee_guaranteed || 2 * prefer_encrypt_count > recipients_count)
+        Ok(missing_peerstate_addr.is_none())
     }
 
     /// Tries to encrypt the passed in `mail`.
