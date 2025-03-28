@@ -432,7 +432,6 @@ async fn get_configured_param(
             .collect(),
         smtp_user: param.smtp.user.clone(),
         smtp_password,
-        proxy_config: ProxyConfig::load(ctx).await?,
         provider,
         certificate_checks: match param.certificate_checks {
             EnteredCertificateChecks::Automatic => ConfiguredCertificateChecks::Automatic,
@@ -454,7 +453,8 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
     let update_device_chats_handle = task::spawn(async move { ctx2.update_device_chats().await });
 
     let configured_param = get_configured_param(ctx, param).await?;
-    let strict_tls = configured_param.strict_tls();
+    let proxy_config = ProxyConfig::load(ctx).await?;
+    let strict_tls = configured_param.strict_tls(proxy_config.is_some());
 
     progress!(ctx, 550);
 
@@ -464,15 +464,15 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
     let smtp_param = configured_param.smtp.clone();
     let smtp_password = configured_param.smtp_password.clone();
     let smtp_addr = configured_param.addr.clone();
-    let proxy_config = configured_param.proxy_config.clone();
 
+    let proxy_config2 = proxy_config.clone();
     let smtp_config_task = task::spawn(async move {
         let mut smtp = Smtp::new();
         smtp.connect(
             &context_smtp,
             &smtp_param,
             &smtp_password,
-            &proxy_config,
+            &proxy_config2,
             &smtp_addr,
             strict_tls,
             configured_param.oauth2,
@@ -490,7 +490,7 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
     let mut imap = Imap::new(
         configured_param.imap.clone(),
         configured_param.imap_password.clone(),
-        configured_param.proxy_config.clone(),
+        proxy_config,
         &configured_param.addr,
         strict_tls,
         configured_param.oauth2,

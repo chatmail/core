@@ -441,9 +441,6 @@ pub(crate) struct ConfiguredLoginParam {
 
     pub smtp_password: String,
 
-    /// Proxy configuration.
-    pub proxy_config: Option<ProxyConfig>,
-
     pub provider: Option<&'static Provider>,
 
     /// TLS options: whether to allow invalid certificates and/or
@@ -742,8 +739,6 @@ impl ConfiguredLoginParam {
             }];
         }
 
-        let proxy_config = ProxyConfig::load(context).await?;
-
         Ok(Some(ConfiguredLoginParam {
             addr,
             imap,
@@ -754,7 +749,6 @@ impl ConfiguredLoginParam {
             smtp_password: send_pw,
             certificate_checks,
             provider,
-            proxy_config,
             oauth2,
         }))
     }
@@ -837,11 +831,11 @@ impl ConfiguredLoginParam {
         Ok(())
     }
 
-    pub(crate) fn strict_tls(&self) -> bool {
+    pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> bool {
         let provider_strict_tls = self.provider.map(|provider| provider.opt.strict_tls);
         match self.certificate_checks {
             ConfiguredCertificateChecks::OldAutomatic => {
-                provider_strict_tls.unwrap_or(self.proxy_config.is_some())
+                provider_strict_tls.unwrap_or(connected_through_proxy)
             }
             ConfiguredCertificateChecks::Automatic => provider_strict_tls.unwrap_or(true),
             ConfiguredCertificateChecks::Strict => true,
@@ -962,8 +956,6 @@ mod tests {
             }],
             smtp_user: "".to_string(),
             smtp_password: "bar".to_string(),
-            // proxy_config is not saved by `save_to_database`, using default value
-            proxy_config: None,
             provider: None,
             certificate_checks: ConfiguredCertificateChecks::Strict,
             oauth2: false,
@@ -1066,7 +1058,6 @@ mod tests {
             ],
             smtp_user: "alice@posteo.de".to_string(),
             smtp_password: "foobarbaz".to_string(),
-            proxy_config: None,
             provider: get_provider_by_id("posteo"),
             certificate_checks: ConfiguredCertificateChecks::Strict,
             oauth2: false,

@@ -90,13 +90,14 @@ impl Smtp {
         let lp = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
+        let proxy_config = ProxyConfig::load(context).await?;
         self.connect(
             context,
             &lp.smtp,
             &lp.smtp_password,
-            &lp.proxy_config,
+            &proxy_config,
             &lp.addr,
-            lp.strict_tls(),
+            lp.strict_tls(proxy_config.is_some()),
             lp.oauth2,
         )
         .await
