@@ -424,26 +424,9 @@ impl MimeMessage {
         });
         if let (Ok(mail), true) = (mail, encrypted) {
             if !signatures.is_empty() {
-                // Remove unsigned opportunistically protected headers from messages considered
-                // Autocrypt-encrypted / displayed with padlock.
                 // For "Subject" see <https://github.com/deltachat/deltachat-core-rust/issues/1790>.
-                for h in [
-                    HeaderDef::Subject,
-                    HeaderDef::ChatGroupId,
-                    HeaderDef::ChatGroupName,
-                    HeaderDef::ChatGroupNameChanged,
-                    HeaderDef::ChatGroupNameTimestamp,
-                    HeaderDef::ChatGroupAvatar,
-                    HeaderDef::ChatGroupMemberRemoved,
-                    HeaderDef::ChatGroupMemberAdded,
-                    HeaderDef::ChatGroupMemberTimestamps,
-                    HeaderDef::ChatGroupPastMembers,
-                    HeaderDef::ChatDelete,
-                    HeaderDef::ChatEdit,
-                    HeaderDef::ChatUserAvatar,
-                ] {
-                    headers.remove(h.get_headername());
-                }
+                // Other headers are removed by `MimeMessage::merge_headers()`.
+                headers.remove("subject");
             }
 
             // let known protected headers from the decrypted
@@ -1551,12 +1534,15 @@ impl MimeMessage {
         chat_disposition_notification_to: &mut Option<SingleInfo>,
         fields: &[mailparse::MailHeader<'_>],
     ) {
+        // Keep Subject so that it's displayed for signed-only messages. They are shown w/o a
+        // padlock anyway.
+        headers.retain(|k, _| !is_protected(k) || k == "subject");
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
-            if !headers.contains_key(&key) || // key already exists, only overwrite known types (protected headers)
-                    is_known(&key) || key.starts_with("chat-")
-            {
+            // Don't overwrite unprotected headers, but overwrite protected ones because DKIM
+            // signature applies to the last headers.
+            if !headers.contains_key(&key) || is_protected(&key) {
                 if key == HeaderDef::ChatDispositionNotificationTo.get_headername() {
                     match addrparse_header(field) {
                         Ok(addrlist) => {
@@ -1971,23 +1957,26 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
 
 /// Returns true if the header overwrites outer header
 /// when it comes from protected headers.
-fn is_known(key: &str) -> bool {
-    matches!(
-        key,
-        "return-path"
-            | "date"
-            | "from"
-            | "sender"
-            | "reply-to"
-            | "to"
-            | "cc"
-            | "bcc"
-            | "message-id"
-            | "in-reply-to"
-            | "references"
-            | "subject"
-            | "secure-join"
-    )
+fn is_protected(key: &str) -> bool {
+    key.starts_with("chat-")
+        || matches!(
+            key,
+            "return-path"
+                | "auto-submitted"
+                | "autocrypt-setup-message"
+                | "date"
+                | "from"
+                | "sender"
+                | "reply-to"
+                | "to"
+                | "cc"
+                | "bcc"
+                | "message-id"
+                | "in-reply-to"
+                | "references"
+                | "subject"
+                | "secure-join"
+        )
 }
 
 /// Returns if the header is hidden and must be ignored in the IMF section.
