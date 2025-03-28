@@ -1471,6 +1471,12 @@ async fn add_parts(
         .await?;
     }
 
+    // Empty `better_msg` is returned from `apply_group_changes()` when a group member
+    // addition/removal message has no effect.
+    if better_msg == Some(String::new()) && is_partial_download.is_none() {
+        chat_id = DC_CHAT_ID_TRASH;
+    }
+
     if let Some(node_addr) = mime_parser.get_header(HeaderDef::IrohNodeAddr) {
         chat_id = DC_CHAT_ID_TRASH;
         match mime_parser.get_header(HeaderDef::InReplyTo) {
@@ -1541,9 +1547,6 @@ async fn add_parts(
 
         let mut txt_raw = "".to_string();
         let (msg, typ): (&str, Viewtype) = if let Some(better_msg) = &better_msg {
-            if better_msg.is_empty() && is_partial_download.is_none() {
-                chat_id = DC_CHAT_ID_TRASH;
-            }
             (better_msg, Viewtype::Text)
         } else {
             (&part.msg, part.typ)
