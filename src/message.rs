@@ -16,7 +16,7 @@ use crate::chat::{send_msg, Chat, ChatId, ChatIdBlocked, ChatVisibility};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
-    Blocked, Chattype, VideochatType, DC_CHAT_ID_TRASH, DC_DESIRED_TEXT_LEN, DC_MSG_ID_LAST_SPECIAL,
+    Blocked, Chattype, VideochatType, DC_CHAT_ID_TRASH, DC_MSG_ID_LAST_SPECIAL,
 };
 use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
@@ -35,7 +35,7 @@ use crate::summary::Summary;
 use crate::sync::SyncData;
 use crate::tools::{
     buf_compress, buf_decompress, get_filebytes, get_filemeta, gm2local_offset, read_file,
-    sanitize_filename, time, timestamp_to_str, truncate,
+    sanitize_filename, time, timestamp_to_str,
 };
 
 /// Message ID, including reserved IDs.
@@ -174,15 +174,6 @@ impl MsgId {
         self.0
     }
 
-    /// Returns raw text of a message, used for message info
-    pub async fn rawtext(self, context: &Context) -> Result<String> {
-        Ok(context
-            .sql
-            .query_get_value("SELECT txt_raw FROM msgs WHERE id=?", (self,))
-            .await?
-            .unwrap_or_default())
-    }
-
     /// Returns server foldernames and UIDs of a message, used for message info
     pub async fn get_info_server_urls(
         context: &Context,
@@ -219,11 +210,8 @@ impl MsgId {
     /// Returns detailed message information in a multi-line text form.
     pub async fn get_info(self, context: &Context) -> Result<String> {
         let msg = Message::load_from_db(context, self).await?;
-        let rawtxt: String = self.rawtext(context).await?;
 
         let mut ret = String::new();
-
-        let rawtxt = truncate(rawtxt.trim(), DC_DESIRED_TEXT_LEN);
 
         let fts = timestamp_to_str(msg.get_timestamp());
         ret += &format!("Sent: {fts}");
@@ -334,9 +322,6 @@ impl MsgId {
         let duration = msg.param.get_int(Param::Duration).unwrap_or_default();
         if duration != 0 {
             ret += &format!("Duration: {duration} ms\n",);
-        }
-        if !rawtxt.is_empty() {
-            ret += &format!("\n{rawtxt}\n");
         }
         if !msg.rfc724_mid.is_empty() {
             ret += &format!("\nMessage-ID: {}", msg.rfc724_mid);

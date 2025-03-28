@@ -4415,7 +4415,7 @@ pub(crate) async fn save_copy_in_self_talk(
         bail!("message already saved.");
     }
 
-    let copy_fields = "from_id, to_id, timestamp_sent, timestamp_rcvd, type, txt, txt_raw, \
+    let copy_fields = "from_id, to_id, timestamp_sent, timestamp_rcvd, type, txt, \
                              mime_modified, mime_headers, mime_compressed, mime_in_reply_to, subject, msgrmsg";
     let row_id = context
         .sql

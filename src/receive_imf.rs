@@ -1539,7 +1539,6 @@ async fn add_parts(
             }
         }
 
-        let mut txt_raw = "".to_string();
         let (msg, typ): (&str, Viewtype) = if let Some(better_msg) = &better_msg {
             if better_msg.is_empty() && is_partial_download.is_none() {
                 chat_id = DC_CHAT_ID_TRASH;
@@ -1553,11 +1552,6 @@ async fn add_parts(
 
         save_mime_modified |= mime_parser.is_mime_modified && !part_is_empty && !hidden;
         let save_mime_modified = save_mime_modified && parts.peek().is_none();
-
-        if part.typ == Viewtype::Text {
-            let msg_raw = part.msg_raw.as_ref().cloned().unwrap_or_default();
-            txt_raw = format!("{subject}\n\n{msg_raw}");
-        }
 
         let ephemeral_timestamp = if in_fresh {
             0
@@ -1585,7 +1579,7 @@ INSERT INTO msgs
     rfc724_mid, chat_id,
     from_id, to_id, timestamp, timestamp_sent, 
     timestamp_rcvd, type, state, msgrmsg, 
-    txt, txt_normalized, subject, txt_raw, param, hidden,
+    txt, txt_normalized, subject, param, hidden,
     bytes, mime_headers, mime_compressed, mime_in_reply_to,
     mime_references, mime_modified, error, ephemeral_timer,
     ephemeral_timestamp, download_state, hop_info
@@ -1594,7 +1588,7 @@ INSERT INTO msgs
     ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?,
-    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?,
     ?, ?, ?, ?, ?, 1,
     ?, ?, ?, ?,
     ?, ?, ?, ?
@@ -1604,7 +1598,7 @@ SET rfc724_mid=excluded.rfc724_mid, chat_id=excluded.chat_id,
     from_id=excluded.from_id, to_id=excluded.to_id, timestamp_sent=excluded.timestamp_sent,
     type=excluded.type, state=max(state,excluded.state), msgrmsg=excluded.msgrmsg,
     txt=excluded.txt, txt_normalized=excluded.txt_normalized, subject=excluded.subject,
-    txt_raw=excluded.txt_raw, param=excluded.param,
+    param=excluded.param,
     hidden=excluded.hidden,bytes=excluded.bytes, mime_headers=excluded.mime_headers,
     mime_compressed=excluded.mime_compressed, mime_in_reply_to=excluded.mime_in_reply_to,
     mime_references=excluded.mime_references, mime_modified=excluded.mime_modified, error=excluded.error, ephemeral_timer=excluded.ephemeral_timer,
@@ -1626,8 +1620,6 @@ RETURNING id
                     if trash || hidden { "" } else { msg },
                     if trash || hidden { None } else { message::normalize_text(msg) },
                     if trash || hidden { "" } else { &subject },
-                    // txt_raw might contain invalid utf8
-                    if trash || hidden { "" } else { &txt_raw },
                     if trash {
                         "".to_string()
                     } else {

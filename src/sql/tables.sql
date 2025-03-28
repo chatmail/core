@@ -66,7 +66,7 @@ CREATE TABLE msgs (
     msgrmsg INTEGER DEFAULT 1,
     bytes INTEGER DEFAULT 0,
     txt TEXT DEFAULT '',
-    txt_raw TEXT DEFAULT '',
+    txt_raw TEXT DEFAULT '', -- deprecated 2025-03-29
     param TEXT DEFAULT '',
     starred INTEGER DEFAULT 0,
     timestamp_sent INTEGER DEFAULT 0,

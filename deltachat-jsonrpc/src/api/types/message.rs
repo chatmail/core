@@ -673,7 +673,6 @@ pub struct MessageReadReceipt {
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageInfo {
-    rawtext: String,
     ephemeral_timer: EphemeralTimer,
     /// When message is ephemeral this contains the timestamp of the message expiry
     ephemeral_timestamp: Option<i64>,
@@ -686,7 +685,6 @@ pub struct MessageInfo {
 impl MessageInfo {
     pub async fn from_msg_id(context: &Context, msg_id: MsgId) -> Result<Self> {
         let message = Message::load_from_db(context, msg_id).await?;
-        let rawtext = msg_id.rawtext(context).await?;
         let ephemeral_timer = message.get_ephemeral_timer().into();
         let ephemeral_timestamp = match message.get_ephemeral_timer() {
             deltachat::ephemeral::Timer::Disabled => None,
@@ -699,7 +697,6 @@ impl MessageInfo {
         let hop_info = msg_id.hop_info(context).await?;
 
         Ok(Self {
-            rawtext,
             ephemeral_timer,
             ephemeral_timestamp,
             error: message.error(),

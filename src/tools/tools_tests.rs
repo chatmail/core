@@ -43,8 +43,6 @@ async fn test_parse_receive_headers_integration() {
     let raw = include_bytes!("../../test-data/message/mail_with_cc.txt");
     let expected = r"State: Fresh
 
-hi
-
 Message-ID: 2dfdbde7@example.org
 
 Hop: From: localhost; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:22 +0000
@@ -55,13 +53,6 @@ DKIM Results: Passed=true";
 
     let raw = include_bytes!("../../test-data/message/encrypted_with_received_headers.eml");
     let expected = "State: Fresh, Encrypted
-
-Re: Message from alice@example.org
-
-hi back\r\n\
-\r\n\
--- \r\n\
-Sent with my Delta Chat Messenger: https://delta.chat
 
 Message-ID: Mr.adQpEwndXLH.LPDdlFVJ7wG@example.net
 
