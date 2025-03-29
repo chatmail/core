@@ -278,12 +278,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-mutex"
-version = "1.4.0"
+name = "async-lock"
+version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479db852db25d9dbf6204e6cb6253698f175c15726470f78af0d918e99d6156e"
+checksum = "ff6e472cdea888a4bd64f342f09b3f50e1886d32afe8df3d663c01140b811b18"
 dependencies = [
- "event-listener 2.5.3",
+ "event-listener 5.4.0",
+ "event-listener-strategy",
+ "pin-project-lite",
 ]
 
 [[package]]
@@ -7291,13 +7293,13 @@ dependencies = [
 
 [[package]]
 name = "yerpc"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4755f069230677a7a8d94164a521d30007c15e3be0eb4c15aa39065b9df25c8"
+checksum = "0a3c86bc22116513ae8b72b96da2f4fc9de66110000864456d1bd5244c15de68"
 dependencies = [
  "anyhow",
  "async-channel 1.9.0",
- "async-mutex",
+ "async-lock",
  "async-trait",
  "futures",
  "futures-util",
@@ -7311,9 +7313,9 @@ dependencies = [
 
 [[package]]
 name = "yerpc_derive"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6b34f611dd6df1730f7b78a2773723523125328e0f984a011e4da3be1f5516a"
+checksum = "4d8560d021437420316370db865e44c000bf86380b47cf05e49be9d652042bf5"
 dependencies = [
  "convert_case",
  "darling",
