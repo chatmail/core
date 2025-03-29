@@ -1,10 +1,10 @@
-# chat-mail specification
+# Chatmail Specification
 
-Version: 0.35.0
+Version: 0.36.0
 Status:  In-progress 
 Format:  [Semantic Line Breaks](https://sembr.org/)
 
-This document roughly describes how chat-mail 
+This document roughly describes how chatmail 
 apps use the standard e-mail system 
 to implement typical messenger functions.
 
@@ -18,6 +18,8 @@ to implement typical messenger functions.
     - [Add and remove members](#add-and-remove-members)
     - [Change group name](#change-group-name)
     - [Set group image](#set-group-image)
+- [Request editing](#request-editing)
+- [Request deletion](#request-deletion)
 - [Set profile image](#set-profile-image)
 - [Locations](#locations)
     - [User locations](#user-locations)
@@ -304,6 +306,84 @@ To save data, it is RECOMMENDED
 to add a `Chat-Group-Avatar` only on image changes.
 
 
+# Request editing
+
+To request recipients to edit the text of an already sent message,
+the messenger MUST set the header `Chat-Edit`
+with value set to the message-id of the message to edit
+and the body to the new message text.
+
+The body MAY be prefixed by a quote
+and the emoji "✏️" directly before the new text.
+Both MUST be skipped by the recipient.
+
+Receiving messengers MUST look up the message-id from `Chat-Edit`,
+replace the text and MAY indicate the edit in the UI.
+
+The new message text MUST NOT be empty.
+It is not possible to edit images or other attachments, including HTML messages.
+However, they can be deleted for everyone.
+
+Example:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Message-ID: 00001@domain
+    Content-Type: text/plain
+
+    Hello wordl!
+
+The typo from the message above can be fixed by the following message:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Chat-Edit: 00001@domain
+    In-Reply-To: 00001@domain
+    Message-ID: 00002@domain
+    Content-Type: text/plain
+
+    On 2025-03-27, sender@domain wrote:
+    > Hello wordl!
+
+    ✏️Hello world!
+
+
+# Request deletion
+
+To request recipient to delete a message,
+the messenger MUST set the header `Chat-Delete`
+with the value set to the message-id of the message to delete.
+
+Receiving messengers MUST look up the message-id, delete the corresponding message
+and MAY indicating the deletion in the UI.
+
+The sender MUST set the body to any, non-empty text.
+The receiver MUST ignore the body.
+
+Example:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Message-ID: 00003@domain
+    Content-Type: text/plain
+
+    reminder for my pin: 1234
+
+The message above can be requested for deletion by the following message:
+
+    From: sender@domain
+    To: rcpt@domain
+    Chat-Version: 1.0
+    Chat-Delete: 00003@domain
+    Message-ID: 00004@domain
+    Content-Type: text/plain
+
+    foo
+
+
 # Set profile image
 
 A user MAY have a profile-image that MAY be distributed to their contacts.
@@ -375,7 +455,7 @@ eg. forwarded from a normal MUA.
 
     <?xml version="1.0" encoding="UTF-8"?>
     <kml xmlns="http://www.opengis.net/kml/2.2">
-      <Document addr="ndh@deltachat.de">
+      <Document addr="foo@domain">
         <Placemark>
           <Timestamp><when>2020-01-11T20:40:19Z</when></Timestamp>
           <Point><coordinates accuracy="1.2">1.234,5.678</coordinates></Point>
@@ -542,4 +622,4 @@ We define the effective date of a message
 as the sending time of the message as indicated by its Date header,
 or the time of first receipt if that date is in the future or unavailable.
 
-Copyright © 2017-2021 Delta Chat contributors.
+Copyright © Chatmail contributors.
