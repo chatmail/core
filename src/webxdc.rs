@@ -21,6 +21,7 @@ mod maps_integration;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{anyhow, bail, ensure, format_err, Context as _, Result};
 
@@ -113,7 +114,7 @@ pub struct WebxdcInfo {
 
     /// Milliseconds to wait before calling `sendUpdate()` again since the last call.
     /// Should be exposed to `window.sendUpdateInterval` in JS land.
-    pub send_update_interval: usize,
+    pub send_update_interval_ms: usize,
 
     /// Maximum number of bytes accepted for a serialized update object.
     /// Should be exposed to `window.sendUpdateMaxSize` in JS land.
@@ -955,7 +956,16 @@ impl Message {
             request_integration,
             internet_access,
             self_addr,
-            send_update_interval: context.ratelimit.read().await.update_interval(),
+            send_update_interval_ms: context
+                .ratelimit
+                .read()
+                .await
+                .min_send_interval()
+                // Round the value up so that it's not 0 at least.
+                .checked_add(Duration::from_micros(999))
+                .context("Overflow occurred")?
+                .as_millis()
+                .try_into()?,
             send_update_max_size: RECOMMENDED_FILE_SIZE as usize,
         })
     }
