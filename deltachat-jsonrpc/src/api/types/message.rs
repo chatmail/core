@@ -737,3 +737,38 @@ impl From<deltachat::ephemeral::Timer> for EphemeralTimer {
         }
     }
 }
+
+#[derive(Deserialize, TypeDef, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LateFilingMediaSize {
+    // The new width and height to store in the message object. None if you don't want to change the dimensions.
+    pub wh: Option<(u32, u32)>,
+    // The new duration to store in the message object. None if you don't want to change it.
+    pub duration: Option<u32>,
+}
+
+impl LateFilingMediaSize {
+    pub async fn apply_to_message(
+        &self,
+        context: &Context,
+        message_id: MsgId,
+    ) -> anyhow::Result<()> {
+        let mut message = deltachat::message::Message::load_from_db(context, message_id).await?;
+        let (width, height) = match self.wh {
+            Some((w, h)) => (
+                w.to_i32().context("conversion to i32 failed")?,
+                h.to_i32().context("conversion to i32 failed")?,
+            ),
+            None => (0, 0),
+        };
+        let duration = self
+            .duration
+            .unwrap_or(0)
+            .to_i32()
+            .context("conversion to i32 failed")?;
+        message
+            .latefiling_mediasize(context, width, height, duration)
+            .await?;
+        Ok(())
+    }
+}

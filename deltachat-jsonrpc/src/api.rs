@@ -51,7 +51,7 @@ use types::chat::FullChat;
 use types::contact::{ContactObject, VcardContact};
 use types::events::Event;
 use types::http::HttpResponse;
-use types::message::{MessageData, MessageObject, MessageReadReceipt};
+use types::message::{LateFilingMediaSize, MessageData, MessageObject, MessageReadReceipt};
 use types::provider_info::ProviderInfo;
 use types::reactions::JSONRPCReactions;
 use types::webxdc::WebxdcMessageInfo;
@@ -1344,6 +1344,31 @@ impl CommandApi {
     async fn download_full_message(&self, account_id: u32, message_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         MsgId::new(message_id).download_full(&ctx).await
+    }
+
+    /// Late filing information to a message.
+    /// Changes the message width, height or duration, and stores it into the database.
+    ///
+    /// Sometimes, the core cannot find out the width, the height or the duration
+    /// of an image, an audio or a video.
+    ///
+    /// If, in these cases, the frontend can provide the information, it can save
+    /// them together with the message object for later usage.
+    ///
+    /// This function should only be used if `Message.dimensions_width`, `Message.dimensions_height` or `Message.duration`
+    /// do not provide the expected values.
+    ///
+    /// To get the stored values later, use `Message.dimensions_width`, `Message.dimensions_height` or `Message.duration`.
+    async fn late_file_message_mediasize(
+        &self,
+        account_id: u32,
+        message_id: u32,
+        new_size: LateFilingMediaSize,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        new_size
+            .apply_to_message(&ctx, MsgId::new(message_id))
+            .await
     }
 
     /// Search messages containing the given query string.
