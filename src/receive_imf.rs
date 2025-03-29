@@ -2669,12 +2669,10 @@ async fn apply_group_changes(
     }
     Ok(GroupChangesInfo {
         better_msg,
-        added_removed_id: if let Some(added_id) = added_id {
-            Some(added_id)
-        } else if let Some(removed_id) = removed_id {
-            Some(removed_id)
+        added_removed_id: if added_id.is_some() {
+            added_id
         } else {
-            None
+            removed_id
         },
         silent,
         extra_msgs: group_changes_msgs,
