@@ -4210,26 +4210,19 @@ async fn test_dont_recreate_contacts_on_add_remove() -> Result<()> {
 async fn test_delayed_removal_is_ignored() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
+    let fiona = TestContext::new_fiona().await;
     let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    let alice_fiona = Contact::create(&alice, "fiona", "fiona@example.net").await?;
+    let alice_bob = alice.add_or_lookup_contact_id(&bob).await;
+    let alice_fiona = alice.add_or_lookup_contact_id(&fiona).await;
     // create chat with three members
-    add_to_chat_contacts_table(
-        &alice,
-        time(),
-        chat_id,
-        &[
-            Contact::create(&alice, "bob", "bob@example.net").await?,
-            alice_fiona,
-        ],
-    )
-    .await?;
+    add_to_chat_contacts_table(&alice, time(), chat_id, &[alice_bob, alice_fiona]).await?;
 
     send_text_msg(&alice, chat_id, "populate".to_string()).await?;
     let bob_chat_id = bob.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
     bob_chat_id.accept(&bob).await?;
 
     // Bob removes Fiona.
-    let bob_contact_fiona = Contact::create(&bob, "fiona", "fiona@example.net").await?;
+    let bob_contact_fiona = bob.add_or_lookup_contact_id(&fiona).await;
     remove_contact_from_chat(&bob, bob_chat_id, bob_contact_fiona).await?;
     let remove_msg = bob.pop_sent_msg().await;
 
@@ -4580,7 +4573,7 @@ async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
     add_contact_to_chat(
         &alice,
         alice_chat_id,
-        Contact::create(&alice, "bob", &bob.get_config(Config::Addr).await?.unwrap()).await?,
+        alice.add_or_lookup_contact_id(&bob).await,
     )
     .await?;
     send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
@@ -4590,12 +4583,7 @@ async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
     add_contact_to_chat(
         &alice,
         alice_chat_id,
-        Contact::create(
-            &alice,
-            "fiona",
-            &fiona.get_config(Config::Addr).await?.unwrap(),
-        )
-        .await?,
+        alice.add_or_lookup_contact_id(&fiona).await,
     )
     .await?;
     let fiona_chat_id = fiona.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
@@ -4607,12 +4595,7 @@ async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
     // Bob missed the message adding fiona, but mustn't recreate the member list.
     assert_eq!(get_chat_contacts(&bob, bob_chat_id).await?.len(), 2);
     assert!(is_contact_in_chat(&bob, bob_chat_id, ContactId::SELF).await?);
-    let bob_alice_contact = Contact::create(
-        &bob,
-        "alice",
-        &alice.get_config(Config::Addr).await?.unwrap(),
-    )
-    .await?;
+    let bob_alice_contact = bob.add_or_lookup_contact_id(&alice).await;
     assert!(is_contact_in_chat(&bob, bob_chat_id, bob_alice_contact).await?);
     Ok(())
 }
@@ -5041,8 +5024,9 @@ async fn test_unarchive_on_member_removal() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let bob_id = Contact::create(alice, "", "bob@example.net").await?;
-    let fiona_id = Contact::create(alice, "", "fiona@example.net").await?;
+    let fiona = &tcm.fiona().await;
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
     let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foos").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
