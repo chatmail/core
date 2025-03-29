@@ -3391,7 +3391,7 @@ async fn test_info_contact_id() -> Result<()> {
     assert!(!bob_alice_id.is_special());
 
     // Alice does group changes, Bob receives them
-    set_chat_name(&alice, alice_chat_id, "games").await?;
+    set_chat_name(alice, alice_chat_id, "games").await?;
     pop_recv_and_check(
         alice,
         alice2,
@@ -3405,7 +3405,7 @@ async fn test_info_contact_id() -> Result<()> {
     let file = alice.dir.path().join("avatar.png");
     let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&file, bytes).await?;
-    set_chat_profile_image(&alice, alice_chat_id, file.to_str().unwrap()).await?;
+    set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
     pop_recv_and_check(
         alice,
         alice2,
