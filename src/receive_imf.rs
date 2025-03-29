@@ -1451,13 +1451,13 @@ async fn add_parts(
             None => better_msg = Some(m),
             Some(_) => {
                 if !m.is_empty() {
-                    group_changes.extra_msgs.push((m, is_system_message))
+                    group_changes.extra_msgs.push((m, is_system_message, None))
                 }
             }
         }
     }
 
-    for (group_changes_msg, cmd) in group_changes.extra_msgs {
+    for (group_changes_msg, cmd, added_removed_id) in group_changes.extra_msgs {
         chat::add_info_msg_with_cmd(
             context,
             chat_id,
@@ -1467,6 +1467,7 @@ async fn add_parts(
             None,
             None,
             None,
+            added_removed_id,
         )
         .await?;
     }
@@ -1549,6 +1550,10 @@ async fn add_parts(
         };
         let part_is_empty =
             typ == Viewtype::Text && msg.is_empty() && part.param.get(Param::Quote).is_none();
+
+        if let Some(contact_id) = group_changes.added_removed_id {
+            param.set_int(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
+        }
 
         save_mime_modified |= mime_parser.is_mime_modified && !part_is_empty && !hidden;
         let save_mime_modified = save_mime_modified && parts.peek().is_none();
@@ -2334,10 +2339,12 @@ struct GroupChangesInfo {
     /// Optional: A better message that should replace the original system message.
     /// If this is an empty string, the original system message should be trashed.
     better_msg: Option<String>,
+    /// Added/removed contact `better_msg` refers to,
+    added_removed_id: Option<ContactId>,
     /// If true, the user should not be notified about the group change.
     silent: bool,
     /// A list of additional group changes messages that should be shown in the chat.
-    extra_msgs: Vec<(String, SystemMessage)>,
+    extra_msgs: Vec<(String, SystemMessage, Option<ContactId>)>,
 }
 
 /// Apply group member list, name, avatar and protection status changes from the MIME message.
@@ -2654,6 +2661,11 @@ async fn apply_group_changes(
     }
     Ok(GroupChangesInfo {
         better_msg,
+        added_removed_id: if added_id.is_some() {
+            added_id
+        } else {
+            removed_id
+        },
         silent,
         extra_msgs: group_changes_msgs,
     })
@@ -2665,7 +2677,7 @@ async fn group_changes_msgs(
     added_ids: &HashSet<ContactId>,
     removed_ids: &HashSet<ContactId>,
     chat_id: ChatId,
-) -> Result<Vec<(String, SystemMessage)>> {
+) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
     let mut group_changes_msgs = Vec::new();
     if !added_ids.is_empty() {
         warn!(
@@ -2686,6 +2698,7 @@ async fn group_changes_msgs(
             stock_str::msg_add_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberAddedToGroup,
+            Some(contact.id),
         ));
     }
     for contact_id in removed_ids {
@@ -2694,6 +2707,7 @@ async fn group_changes_msgs(
             stock_str::msg_del_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberRemovedFromGroup,
+            Some(contact.id),
         ));
     }
 

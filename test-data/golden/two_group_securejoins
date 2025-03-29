@@ -5,5 +5,5 @@ Msg#11: info (Contact#Contact#Info): alice@example.org invited you to join this 
 Waiting for the device of alice@example.org to reply… [NOTICED][INFO]
 Msg#13: info (Contact#Contact#Info): alice@example.org replied, waiting for being added to the group… [NOTICED][INFO]
 Msg#17: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
-Msg#18🔒:  (Contact#Contact#10): Member Me (fiona@example.net) added by alice@example.org. [FRESH][INFO]
+Msg#18🔒:  (Contact#Contact#10): Member Me added by alice@example.org. [FRESH][INFO]
 --------------------------------------------------------------------------------
