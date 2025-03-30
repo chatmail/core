@@ -158,7 +158,7 @@ fn create_setup_code(_context: &Context) -> String {
     ret
 }
 
-async fn decrypt_setup_file<T: std::io::Read + std::io::Seek>(
+async fn decrypt_setup_file<T: std::io::Read + std::fmt::Debug + std::io::BufRead>(
     passphrase: &str,
     file: T,
 ) -> Result<String> {

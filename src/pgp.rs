@@ -1,8 +1,7 @@
 //! OpenPGP helper module using [rPGP facilities](https://github.com/rpgp/rpgp).
 
 use std::collections::{BTreeMap, HashSet};
-use std::io;
-use std::io::Cursor;
+use std::io::{BufRead, Cursor};
 
 use anyhow::{bail, Context as _, Result};
 use deltachat_contact_tools::EmailAddress;
@@ -14,8 +13,11 @@ use pgp::composed::{
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::types::{CompressionAlgorithm, PublicKeyTrait, SignatureBytes, StringToKey};
-use rand::{thread_rng, CryptoRng, Rng};
+use pgp::types::{
+    CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, SignatureBytes, StringToKey,
+};
+use pgp::TheRing;
+use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -29,7 +31,7 @@ pub const HEADER_SETUPCODE: &str = "passphrase-begin";
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
 
 /// Preferred cryptographic hash.
-const HASH_ALGORITHM: HashAlgorithm = HashAlgorithm::SHA2_256;
+const HASH_ALGORITHM: HashAlgorithm = HashAlgorithm::Sha256;
 
 /// A wrapper for rPGP public key types
 #[derive(Debug)]
@@ -38,7 +40,7 @@ enum SignedPublicKeyOrSubkey<'a> {
     Subkey(&'a SignedPublicSubKey),
 }
 
-impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
+impl KeyDetails for SignedPublicKeyOrSubkey<'_> {
     fn version(&self) -> pgp::types::KeyVersion {
         match self {
             Self::Key(k) => k.version(),
@@ -66,7 +68,9 @@ impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
             Self::Subkey(k) => k.algorithm(),
         }
     }
+}
 
+impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
     fn created_at(&self) -> &chrono::DateTime<chrono::Utc> {
         match self {
             Self::Key(k) => k.created_at(),
@@ -90,25 +94,6 @@ impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
         match self {
             Self::Key(k) => k.verify_signature(hash, data, sig),
             Self::Subkey(k) => k.verify_signature(hash, data, sig),
-        }
-    }
-
-    fn encrypt<R: Rng + CryptoRng>(
-        &self,
-        rng: R,
-        plain: &[u8],
-        typ: pgp::types::EskType,
-    ) -> pgp::errors::Result<pgp::types::PkeskBytes> {
-        match self {
-            Self::Key(k) => k.encrypt(rng, plain, typ),
-            Self::Subkey(k) => k.encrypt(rng, plain, typ),
-        }
-    }
-
-    fn serialize_for_hashing(&self, writer: &mut impl io::Write) -> pgp::errors::Result<()> {
-        match self {
-            Self::Key(k) => k.serialize_for_hashing(writer),
-            Self::Subkey(k) => k.serialize_for_hashing(writer),
         }
     }
 
@@ -197,11 +182,10 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
             SymmetricKeyAlgorithm::AES128,
         ])
         .preferred_hash_algorithms(smallvec![
-            HashAlgorithm::SHA2_256,
-            HashAlgorithm::SHA2_384,
-            HashAlgorithm::SHA2_512,
-            HashAlgorithm::SHA2_224,
-            HashAlgorithm::SHA1,
+            HashAlgorithm::Sha256,
+            HashAlgorithm::Sha384,
+            HashAlgorithm::Sha512,
+            HashAlgorithm::Sha224,
         ])
         .preferred_compression_algorithms(smallvec![
             CompressionAlgorithm::ZLIB,
@@ -222,7 +206,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
     let secret_key = key_params
         .generate(&mut rng)
         .context("failed to generate the key")?
-        .sign(&mut rng, || "".into())
+        .sign(&mut rng, &Password::empty())
         .context("failed to sign secret key")?;
     secret_key
         .verify()
@@ -328,11 +312,18 @@ pub fn pk_decrypt(
     private_keys_for_decryption: &[SignedSecretKey],
 ) -> Result<pgp::composed::Message> {
     let cursor = Cursor::new(ctext);
-    let (msg, _headers) = Message::from_armor_single(cursor)?;
+    let (msg, _headers) = Message::from_armor(cursor)?;
 
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
 
-    let (msg, _key_ids) = msg.decrypt(|| "".into(), &skeys[..])?;
+    let ring = TheRing {
+        secret_keys: skeys,
+        key_passwords: vec![],
+        message_password: vec![],
+        session_keys: vec![],
+        allow_legacy: false,
+    };
+    let (msg, _key_ids) = msg.decrypt_the_ring(ring, true)?;
 
     // get_content() will decompress the message if needed,
     // but this avoids decompressing it again to check signatures
@@ -404,15 +395,15 @@ pub async fn symm_encrypt(passphrase: &str, plain: &[u8]) -> Result<String> {
 }
 
 /// Symmetric decryption.
-pub async fn symm_decrypt<T: std::io::Read + std::io::Seek>(
+pub async fn symm_decrypt<'a, T: BufRead + std::fmt::Debug + 'a>(
     passphrase: &str,
     ctext: T,
 ) -> Result<Vec<u8>> {
-    let (enc_msg, _) = Message::from_armor_single(ctext)?;
+    let (enc_msg, _) = Message::from_armor(ctext)?;
 
     let passphrase = passphrase.to_string();
     tokio::task::spawn_blocking(move || {
-        let msg = enc_msg.decrypt_with_password(|| passphrase)?;
+        let msg = enc_msg.decrypt_with_password(&Password::empty())?;
 
         match msg.get_content()? {
             Some(content) => Ok(content),

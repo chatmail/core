@@ -1080,7 +1080,7 @@ impl Context {
         res += &format!("db_size_bytes {}\n", db_size);
 
         let secret_key = &load_self_secret_key(self).await?.primary_key;
-        let key_created = secret_key.created_at().timestamp();
+        let key_created = secret_key.public_key().created_at().timestamp();
         res += &format!("key_created {}\n", key_created);
 
         // how many of the chats active in the last months are:

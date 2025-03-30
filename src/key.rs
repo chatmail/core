@@ -10,7 +10,7 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{PublicKeyTrait, SecretKeyTrait};
+use pgp::types::{Password, PublicKeyTrait};
 use rand::thread_rng;
 use tokio::runtime::Handle;
 
@@ -78,7 +78,7 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
         let bytes = data.as_bytes();
         let res = Self::from_armor_single(Cursor::new(bytes));
         let (key, headers) = match res {
-            Err(pgp::errors::Error::NoMatchingPacket) => match Self::is_private() {
+            Err(pgp::errors::Error::NoMatchingPacket { .. }) => match Self::is_private() {
                 true => bail!("No private key packet found"),
                 false => bail!("No public key packet found"),
             },
@@ -124,7 +124,7 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
 
     /// The fingerprint for the key.
     fn dc_fingerprint(&self) -> Fingerprint {
-        PublicKeyTrait::fingerprint(self).into()
+        <dyn PublicKeyTrait>::fingerprint(self).into()
     }
 
     fn is_private() -> bool;
@@ -262,9 +262,14 @@ pub(crate) trait DcSecretKey {
 impl DcSecretKey for SignedSecretKey {
     fn split_public_key(&self) -> Result<SignedPublicKey> {
         self.verify()?;
-        let unsigned_pubkey = SecretKeyTrait::public_key(self);
+        let unsigned_pubkey = self.public_key();
         let mut rng = thread_rng();
-        let signed_pubkey = unsigned_pubkey.sign(&mut rng, self, || "".into())?;
+        let signed_pubkey = unsigned_pubkey.sign(
+            &mut rng,
+            &self.primary_key,
+            &*self.primary_key.public_key(),
+            &Password::empty(),
+        )?;
         Ok(signed_pubkey)
     }
 }

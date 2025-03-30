@@ -46,7 +46,7 @@ async-native-tls = { version = "0.5", default-features = false, features = ["run
 async-smtp = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
-brotli = { version = "7", default-features=false, features = ["std"] }
+brotli = { version = "7", default-features = false, features = ["std"] }
 bytes = "1"
 chrono = { workspace = true, features = ["alloc", "clock", "std"] }
 data-encoding = "2.7.0"
@@ -61,7 +61,7 @@ http-body-util = "0.1.2"
 humansize = "2"
 hyper = "1"
 hyper-util = "0.1.10"
-image = { version = "0.25.5", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
+image = { version = "0.25.5", default-features = false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
 iroh-gossip = { version = "0.33", default-features = false, features = ["net"] }
 iroh = { version = "0.33", default-features = false }
 kamadak-exif = "0.6.1"
@@ -75,7 +75,7 @@ num-traits = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = "0.12"
 percent-encoding = "2.3"
-pgp = { version = "0.15.0", default-features = false }
+pgp = { git = "https://github.com/rpgp/rpgp.git" }
 pin-project = "1"
 qrcodegen = "1.7.0"
 quick-xml = "0.37"
@@ -125,16 +125,16 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [workspace]
 members = [
-  "deltachat-ffi",
-  "deltachat_derive",
-  "deltachat-jsonrpc",
-  "deltachat-rpc-server",
-  "deltachat-ratelimit",
-  "deltachat-repl",
-  "deltachat-time",
-  "format-flowed",
-  "deltachat-contact-tools",
-  "fuzz",
+    "deltachat-ffi",
+    "deltachat_derive",
+    "deltachat-jsonrpc",
+    "deltachat-rpc-server",
+    "deltachat-ratelimit",
+    "deltachat-repl",
+    "deltachat-time",
+    "format-flowed",
+    "deltachat-contact-tools",
+    "fuzz",
 ]
 
 [[bench]]
@@ -203,7 +203,7 @@ yerpc = "0.6.2"
 default = ["vendored"]
 internals = []
 vendored = [
-  "rusqlite/bundled-sqlcipher-vendored-openssl"
+    "rusqlite/bundled-sqlcipher-vendored-openssl"
 ]
 
 [lints.rust]

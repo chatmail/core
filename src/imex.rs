@@ -4,7 +4,6 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
-use ::pgp::types::PublicKeyTrait;
 use anyhow::{bail, ensure, format_err, Context as _, Result};
 use futures::TryStreamExt;
 use futures_lite::FutureExt;
@@ -32,6 +31,7 @@ use crate::tools::{
 mod key_transfer;
 mod transfer;
 
+use ::pgp::types::KeyDetails;
 pub use key_transfer::{continue_key_transfer, initiate_key_transfer};
 pub use transfer::{get_backup, BackupProvider};
 
@@ -173,7 +173,11 @@ async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
     };
     key::store_self_keypair(context, &keypair).await?;
 
-    info!(context, "stored self key: {:?}", keypair.secret.key_id());
+    info!(
+        context,
+        "stored self key: {:?}",
+        keypair.secret.public_key().key_id()
+    );
     Ok(())
 }
 
