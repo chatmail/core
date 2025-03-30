@@ -4,18 +4,21 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, Cursor};
 
 use anyhow::{Context as _, Result};
+use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    Deserializable, KeyType as PgpKeyType, Message, MessageBuilder, SecretKeyParamsBuilder,
-    SignedPublicKey, SignedPublicSubKey, SignedSecretKey, StandaloneSignature, SubkeyParamsBuilder,
-    TheRing,
+    ArmorOptions, Deserializable, KeyType as PgpKeyType, Message, MessageBuilder,
+    SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
+    StandaloneSignature, SubkeyParamsBuilder, TheRing,
 };
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
+use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
-    CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, SignatureBytes, StringToKey,
+    CompressionAlgorithm, KeyDetails, KeyVersion, Password, PublicKeyTrait, SecretKeyTrait,
+    SignatureBytes, StringToKey,
 };
 use rand::thread_rng;
 use tokio::runtime::Handle;
@@ -280,21 +283,49 @@ pub async fn pk_encrypt(
         .await?
 }
 
-/// Signs `plain` text using `private_key_for_signing`.
+/// Produces a detached signature for `plain` text using `private_key_for_signing`.
 pub fn pk_calc_signature(
     plain: Vec<u8>,
     private_key_for_signing: &SignedSecretKey,
 ) -> Result<String> {
-    let mut rng = thread_rng();
-    let signature = MessageBuilder::from_bytes("", plain)
-        .sign(
-            &**private_key_for_signing,
-            Password::empty(),
-            HASH_ALGORITHM,
-        )
-        .to_armored_string(&mut rng, Default::default())?;
+    let rng = thread_rng();
 
-    Ok(signature)
+    let mut config = match private_key_for_signing.version() {
+        KeyVersion::V4 => SignatureConfig::v4(
+            SignatureType::Binary,
+            private_key_for_signing.algorithm(),
+            private_key_for_signing.hash_alg(),
+        ),
+        KeyVersion::V6 => SignatureConfig::v6(
+            rng,
+            SignatureType::Binary,
+            private_key_for_signing.algorithm(),
+            private_key_for_signing.hash_alg(),
+        )?,
+        v => anyhow::bail!("unsupported key version {:?}", v),
+    };
+
+    config.hashed_subpackets = vec![
+        Subpacket::regular(SubpacketData::IssuerFingerprint(
+            private_key_for_signing.fingerprint(),
+        ))?,
+        Subpacket::critical(SubpacketData::SignatureCreationTime(
+            chrono::Utc::now().trunc_subsecs(0),
+        ))?,
+    ];
+    config.unhashed_subpackets = vec![Subpacket::regular(SubpacketData::Issuer(
+        private_key_for_signing.key_id(),
+    ))?];
+
+    let signature = config.sign(
+        &private_key_for_signing.primary_key,
+        &Password::empty(),
+        plain.as_slice(),
+    )?;
+
+    let sig = StandaloneSignature::new(signature);
+
+    Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
 /// Decrypts the message with keys from the private key keyring.
