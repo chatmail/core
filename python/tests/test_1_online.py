@@ -1346,7 +1346,7 @@ def test_qr_email_capitalization(acfactory, lp):
     lp.sec("ac1 joins a verified group via a QR code")
     ac1_chat = ac1.qr_join_chat(qr)
     msg = ac1._evtracker.wait_next_incoming_message()
-    assert msg.text == "Member Me ({}) added by {}.".format(ac1.get_config("addr"), ac3.get_config("addr"))
+    assert msg.text == "Member Me added by {}.".format(ac3.get_config("addr"))
     assert len(ac1_chat.get_contacts()) == 2
 
     lp.sec("ac2 joins a verified group via a QR code")
