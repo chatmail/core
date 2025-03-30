@@ -1921,7 +1921,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d852cb9b869c2a9b3df2f71a3074817f01e1844f839a144f5fcef059a4eb5d"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3190,7 +3190,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4212,7 +4212,7 @@ dependencies = [
 [[package]]
 name = "pgp"
 version = "0.15.0"
-source = "git+https://github.com/rpgp/rpgp.git?branch=fix-send#b0f7b83c144b9104c12ed08e807baaad2ce44533"
+source = "git+https://github.com/rpgp/rpgp.git?branch=main#5fec11432f4339fdb975bba0d780ddcb1c41a304"
 dependencies = [
  "aead",
  "aes",
@@ -5216,7 +5216,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.9.3",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5283,7 +5283,7 @@ dependencies = [
  "security-framework 3.2.0",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -5641,9 +5641,9 @@ dependencies = [
 
 [[package]]
 name = "shadowsocks"
-version = "1.23.0"
+version = "1.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddafa3f54e58a651af9b5ce3170895aa2c970dc9a746bd22b197d2a6cd1b3635"
+checksum = "1678a9acd37add020f89bfe05d45b9b8a6e8ad5d09f54ac2af3e0dcf0557b481"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -5659,7 +5659,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project",
- "rand 0.9.0",
+ "rand 0.8.5",
  "sendfd",
  "serde",
  "serde_json",
@@ -5677,9 +5677,9 @@ dependencies = [
 
 [[package]]
 name = "shadowsocks-crypto"
-version = "0.6.1"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bda401a0ad32c82981d8862f2795713618de9bbf9768f03c17d9d145c6d805df"
+checksum = "bc77ecb3a97509d22751b76665894fcffad2d10df8758f4e3f20c92ccde6bf4f"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5689,7 +5689,7 @@ dependencies = [
  "chacha20poly1305",
  "hkdf",
  "md-5",
- "rand 0.9.0",
+ "rand 0.8.5",
  "ring-compat",
  "sha1",
 ]
@@ -6062,7 +6062,7 @@ dependencies = [
  "getrandom 0.3.2",
  "once_cell",
  "rustix 1.0.3",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
