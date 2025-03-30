@@ -247,13 +247,11 @@ fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<SignedPublicKeyOrSu
 /// Encrypts `plain` text using `public_keys_for_encryption`
 /// and signs it using `private_key_for_signing`.
 pub async fn pk_encrypt(
-    plain: &[u8],
+    plain: Vec<u8>,
     public_keys_for_encryption: Vec<SignedPublicKey>,
     private_key_for_signing: Option<SignedSecretKey>,
     compress: bool,
 ) -> Result<String> {
-    let data = plain.to_vec();
-
     Handle::current()
         .spawn_blocking(move || {
             let mut rng = thread_rng();
@@ -263,7 +261,7 @@ pub async fn pk_encrypt(
                 .filter_map(select_pk_for_encryption);
 
             let mut msg =
-                MessageBuilder::from_bytes("", data).seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+                MessageBuilder::from_bytes("", plain).seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
             for pkey in pkeys {
                 msg = msg.encrypt_to_key(&mut rng, &pkey)?;
             }
@@ -373,12 +371,11 @@ pub fn pk_validate(
 }
 
 /// Symmetric encryption.
-pub async fn symm_encrypt(passphrase: &str, plain: &[u8]) -> Result<String> {
-    let data = plain.to_vec();
+pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
-        let lit_msg = MessageBuilder::from_bytes("", data);
+        let lit_msg = MessageBuilder::from_bytes("", plain);
 
         let mut rng = thread_rng();
         let s2k = StringToKey::new_default(&mut rng);
@@ -508,7 +505,7 @@ mod tests {
                 let compress = true;
 
                 pk_encrypt(
-                    CLEARTEXT,
+                    CLEARTEXT.to_vec(),
                     keyring,
                     Some(KEYS.alice_secret.clone()),
                     compress,
@@ -526,7 +523,7 @@ mod tests {
                 let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
                 let compress = true;
 
-                pk_encrypt(CLEARTEXT, keyring, None, compress)
+                pk_encrypt(CLEARTEXT.to_vec(), keyring, None, compress)
                     .await
                     .unwrap()
             })
