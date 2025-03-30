@@ -89,7 +89,7 @@ def test_qr_securejoin(acfactory, protect):
     assert alice_contact_bob_snapshot.is_verified
 
     snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
-    assert snapshot.text == "Member Me ({}) added by {}.".format(bob.get_config("addr"), alice.get_config("addr"))
+    assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
     assert snapshot.chat.get_basic_snapshot().is_protected == protect
 
     # Test that Bob verified Alice's profile.
@@ -563,7 +563,7 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
 
     # ac1 waits for member added message and creates a QR code.
     snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
-    assert snapshot.text == "Member Me ({}) added by {}.".format(ac1.get_config("addr"), ac3.get_config("addr"))
+    assert snapshot.text == "Member Me added by {}.".format(ac3.get_config("addr"))
     ac1_qr_code = snapshot.chat.get_qr_code()
 
     # ac2 verifies ac1
@@ -646,7 +646,7 @@ def test_withdraw_securejoin_qr(acfactory):
     alice.clear_all_events()
 
     snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
-    assert snapshot.text == "Member Me ({}) added by {}.".format(bob.get_config("addr"), alice.get_config("addr"))
+    assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
     assert snapshot.chat.get_basic_snapshot().is_protected
     bob_chat.leave()
 
