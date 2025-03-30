@@ -1277,9 +1277,16 @@ impl Contact {
             .map(|k| k.dc_fingerprint().to_string())
             .unwrap_or_default();
         if addr < peerstate.addr {
-            cat_fingerprint(&mut ret, &addr, &fingerprint_self, "");
             cat_fingerprint(
                 &mut ret,
+                &stock_str::self_msg(context).await,
+                &addr,
+                &fingerprint_self,
+                "",
+            );
+            cat_fingerprint(
+                &mut ret,
+                contact.get_display_name(),
                 &peerstate.addr,
                 &fingerprint_other_verified,
                 &fingerprint_other_unverified,
@@ -1287,11 +1294,18 @@ impl Contact {
         } else {
             cat_fingerprint(
                 &mut ret,
+                contact.get_display_name(),
                 &peerstate.addr,
                 &fingerprint_other_verified,
                 &fingerprint_other_unverified,
             );
-            cat_fingerprint(&mut ret, &addr, &fingerprint_self, "");
+            cat_fingerprint(
+                &mut ret,
+                &stock_str::self_msg(context).await,
+                &addr,
+                &fingerprint_self,
+                "",
+            );
         }
 
         Ok(ret)
@@ -1848,12 +1862,14 @@ pub(crate) async fn update_last_seen(
 
 fn cat_fingerprint(
     ret: &mut String,
+    name: &str,
     addr: &str,
     fingerprint_verified: &str,
     fingerprint_unverified: &str,
 ) {
     *ret += &format!(
-        "\n\n{}:\n{}",
+        "\n\n{} ({}):\n{}",
+        name,
         addr,
         if !fingerprint_verified.is_empty() {
             fingerprint_verified
@@ -1865,7 +1881,7 @@ fn cat_fingerprint(
         && !fingerprint_unverified.is_empty()
         && fingerprint_verified != fingerprint_unverified
     {
-        *ret += &format!("\n\n{addr} (alternative):\n{fingerprint_unverified}");
+        *ret += &format!("\n\n{name} (alternative):\n{fingerprint_unverified}");
     }
 }
 
