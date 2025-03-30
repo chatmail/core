@@ -155,7 +155,7 @@ impl EncryptHelper {
         let mut buffer = Vec::new();
         let cursor = Cursor::new(&mut buffer);
         mail.clone().write_part(cursor).ok();
-        let signature = pgp::pk_calc_signature(&buffer, &sign_key)?;
+        let signature = pgp::pk_calc_signature(buffer, &sign_key)?;
         Ok(signature)
     }
 }

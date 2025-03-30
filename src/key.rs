@@ -10,7 +10,7 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{Password, PublicKeyTrait};
+use pgp::types::{KeyDetails, Password};
 use rand::thread_rng;
 use tokio::runtime::Handle;
 
@@ -24,7 +24,7 @@ use crate::tools::{self, time_elapsed};
 /// This trait is implemented for rPGP's [SignedPublicKey] and
 /// [SignedSecretKey] types and makes working with them a little
 /// easier in the deltachat world.
-pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
+pub(crate) trait DcKey: Serialize + Deserializable + Clone {
     /// Create a key from some bytes.
     fn from_slice(bytes: &[u8]) -> Result<Self> {
         let res = <Self as Deserializable>::from_bytes(Cursor::new(bytes));
@@ -123,9 +123,7 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
     fn to_asc(&self, header: Option<(&str, &str)>) -> String;
 
     /// The fingerprint for the key.
-    fn dc_fingerprint(&self) -> Fingerprint {
-        <dyn PublicKeyTrait>::fingerprint(self).into()
-    }
+    fn dc_fingerprint(&self) -> Fingerprint;
 
     fn is_private() -> bool;
 }
@@ -230,6 +228,10 @@ impl DcKey for SignedPublicKey {
     fn is_private() -> bool {
         false
     }
+
+    fn dc_fingerprint(&self) -> Fingerprint {
+        (&*self).fingerprint().into()
+    }
 }
 
 impl DcKey for SignedSecretKey {
@@ -248,6 +250,10 @@ impl DcKey for SignedSecretKey {
 
     fn is_private() -> bool {
         true
+    }
+
+    fn dc_fingerprint(&self) -> Fingerprint {
+        (&*self).fingerprint().into()
     }
 }
 

@@ -10,8 +10,8 @@ use std::time::Duration;
 
 use anyhow::{bail, ensure, Context as _, Result};
 use async_channel::{self as channel, Receiver, Sender};
+use pgp::composed::SignedPublicKey;
 use pgp::types::PublicKeyTrait;
-use pgp::SignedPublicKey;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 

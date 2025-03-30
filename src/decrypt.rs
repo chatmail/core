@@ -18,7 +18,7 @@ use crate::pgp;
 pub fn try_decrypt<'a>(
     mail: &'a ParsedMail<'a>,
     private_keyring: &'a [SignedSecretKey],
-) -> Result<Option<::pgp::composed::Message<'a>>> {
+) -> Result<Option<::pgp::composed::Message<'static>>> {
     let Some(encrypted_data_part) = get_encrypted_mime(mail) else {
         return Ok(None);
     };

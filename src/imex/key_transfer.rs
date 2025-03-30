@@ -1,4 +1,6 @@
 //! # Key transfer via Autocrypt Setup Message.
+use std::io::BufReader;
+
 use rand::{thread_rng, Rng};
 
 use anyhow::{bail, ensure, Result};
@@ -74,7 +76,7 @@ pub async fn continue_key_transfer(
     if let Some(filename) = msg.get_file(context) {
         let file = open_file_std(context, filename)?;
         let sc = normalize_setup_code(setup_code);
-        let armored_key = decrypt_setup_file(&sc, file).await?;
+        let armored_key = decrypt_setup_file(&sc, BufReader::new(file)).await?;
         set_self_key(context, &armored_key).await?;
         context.set_config_bool(Config::BccSelf, true).await?;
 
