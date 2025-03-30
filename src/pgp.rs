@@ -321,18 +321,22 @@ pub fn pk_decrypt(
     let (msg, _headers) = Message::from_armor(cursor)?;
 
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
+    let empty_pw = Password::empty();
 
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![],
-        message_password: vec![],
+        message_password: vec![&empty_pw],
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, _key_ids) = msg.decrypt_the_ring(ring, true)?;
+    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
+    anyhow::ensure!(
+        !ring_result.secret_keys.is_empty(),
+        "decryption failed, no matching secret keys"
+    );
 
-    // get_content() will decompress the message if needed,
-    // but this avoids decompressing it again to check signatures
+    // remove one layer of compression
     let msg = msg.decompress()?;
 
     Ok(msg)

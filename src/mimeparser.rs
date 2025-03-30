@@ -10,11 +10,8 @@ use anyhow::{bail, Context as _, Result};
 use deltachat_contact_tools::{addr_cmp, addr_normalize, sanitize_bidi_characters};
 use deltachat_derive::{FromSql, ToSql};
 use format_flowed::unformat_flowed;
-use mailparse::{
-    addrparse_header, DispositionType, MailHeader, MailHeaderMap, ParsedMail, SingleInfo,
-};
+use mailparse::{addrparse_header, DispositionType, MailHeader, MailHeaderMap, SingleInfo};
 use mime::Mime;
-use pgp::composed::SignedSecretKey;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::authres::handle_authres;
@@ -330,19 +327,31 @@ impl MimeMessage {
 
         let mut aheader_value: Option<String> = mail.headers.get_header_value(HeaderDef::Autocrypt);
 
-        // Decrypted signed OpenPGP message.
-        // Memory location for a possible decrypted message.
-        let mail_raw;
-        let (decrypted_msg, mail, is_encrypted) =
-            match decrypt_decompress(context, &mail, &private_keyring) {
-                Ok((mail_r, decrypted_msg, is_encrypted)) => {
-                    mail_raw = mail_r;
+        let mail_raw; // Memory location for a possible decrypted message.
+        let decrypted_msg; // Decrypted signed OpenPGP message.
+
+        let (mail, is_encrypted) =
+            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
+                Ok(Some(mut msg)) => {
+                    mail_raw = msg.as_data_vec().unwrap_or_default();
+
                     let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
+                    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
+                        info!(
+                            context,
+                            "decrypted message mime-body:\n{}",
+                            String::from_utf8_lossy(&mail_raw),
+                        );
+                    }
+
+                    decrypted_msg = Some(msg);
+
                     timestamp_sent = Self::get_timestamp_sent(
                         &decrypted_mail.headers,
                         timestamp_sent,
                         timestamp_rcvd,
                     );
+
                     if let Some(protected_aheader_value) = decrypted_mail
                         .headers
                         .get_header_value(HeaderDef::Autocrypt)
@@ -350,11 +359,18 @@ impl MimeMessage {
                         aheader_value = Some(protected_aheader_value);
                     }
 
-                    (decrypted_msg, Ok(decrypted_mail), is_encrypted)
+                    (Ok(decrypted_mail), true)
+                }
+                Ok(None) => {
+                    mail_raw = Vec::new();
+                    decrypted_msg = None;
+                    (Ok(mail), false)
                 }
                 Err(err) => {
                     mail_raw = Vec::new();
-                    (None, Err(err), false)
+                    decrypted_msg = None;
+                    warn!(context, "decryption failed: {:#}", err);
+                    (Err(err), false)
                 }
             };
 
@@ -1906,38 +1922,6 @@ async fn update_gossip_peerstates(
     }
 
     Ok(gossiped_keys)
-}
-
-fn decrypt_decompress<'a>(
-    context: &Context,
-    mail: &'a ParsedMail<'_>,
-    private_keyring: &'a [SignedSecretKey],
-) -> Result<(Vec<u8>, Option<pgp::composed::Message<'static>>, bool)> {
-    let message = tokio::task::block_in_place(|| try_decrypt(mail, private_keyring));
-    let message = match message {
-        Ok(message) => message,
-        Err(err) => {
-            warn!(context, "decryption failed: {:#}", err);
-            return Err(err);
-        }
-    };
-
-    match message {
-        Some(msg) => {
-            let mut msg = msg.decompress()?;
-            let mail_raw = msg.as_data_vec().unwrap_or_default();
-
-            if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-                info!(
-                    context,
-                    "decrypted message mime-body:\n{}",
-                    String::from_utf8_lossy(&mail_raw),
-                );
-            }
-            Ok((mail_raw, Some(msg), true))
-        }
-        None => Ok((Vec::new(), None, false)),
-    }
 }
 
 /// Message Disposition Notification (RFC 8098)
