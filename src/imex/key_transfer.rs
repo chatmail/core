@@ -160,7 +160,7 @@ fn create_setup_code(_context: &Context) -> String {
     ret
 }
 
-async fn decrypt_setup_file<T: std::io::Read + std::fmt::Debug + std::io::BufRead>(
+async fn decrypt_setup_file<T: std::fmt::Debug + std::io::BufRead + Send + 'static>(
     passphrase: &str,
     file: T,
 ) -> Result<String> {
@@ -267,11 +267,10 @@ mod tests {
 
         assert!(!base64.is_empty());
 
-        let setup_file = S_EM_SETUPFILE.to_string();
-        let decrypted =
-            decrypt_setup_file(S_EM_SETUPCODE, std::io::Cursor::new(setup_file.as_bytes()))
-                .await
-                .unwrap();
+        let setup_file = S_EM_SETUPFILE;
+        let decrypted = decrypt_setup_file(S_EM_SETUPCODE, setup_file.as_bytes())
+            .await
+            .unwrap();
 
         let (typ, headers, _base64) = split_armored_data(decrypted.as_bytes()).unwrap();
 
@@ -287,14 +286,13 @@ mod tests {
     /// "Implementations MUST NOT use plaintext in Symmetrically Encrypted Data packets".
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_decrypt_plaintext_autocrypt_setup_message() {
-        let setup_file = S_PLAINTEXT_SETUPFILE.to_string();
+        let setup_file = S_PLAINTEXT_SETUPFILE;
         let incorrect_setupcode = "0000-0000-0000-0000-0000-0000-0000-0000-0000";
-        assert!(decrypt_setup_file(
-            incorrect_setupcode,
-            std::io::Cursor::new(setup_file.as_bytes()),
-        )
-        .await
-        .is_err());
+        assert!(
+            decrypt_setup_file(incorrect_setupcode, setup_file.as_bytes(),)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

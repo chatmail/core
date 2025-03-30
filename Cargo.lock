@@ -4212,7 +4212,7 @@ dependencies = [
 [[package]]
 name = "pgp"
 version = "0.15.0"
-source = "git+https://github.com/rpgp/rpgp.git#f8e5c3b1142faf79edc2a1f5bf4bf4fb6c4d287d"
+source = "git+https://github.com/rpgp/rpgp.git?branch=fix-send#b0f7b83c144b9104c12ed08e807baaad2ce44533"
 dependencies = [
  "aead",
  "aes",

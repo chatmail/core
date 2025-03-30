@@ -75,7 +75,7 @@ num-traits = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = "0.12"
 percent-encoding = "2.3"
-pgp = { git = "https://github.com/rpgp/rpgp.git" }
+pgp = { git = "https://github.com/rpgp/rpgp.git", branch = "fix-send" }
 pin-project = "1"
 qrcodegen = "1.7.0"
 quick-xml = "0.37"

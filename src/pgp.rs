@@ -252,10 +252,12 @@ pub async fn pk_encrypt(
     private_key_for_signing: Option<SignedSecretKey>,
     compress: bool,
 ) -> Result<String> {
-    let lit_msg = MessageBuilder::from_bytes("", plain);
+    let data = plain.to_vec();
 
     Handle::current()
         .spawn_blocking(move || {
+            let lit_msg = MessageBuilder::from_bytes("", data);
+
             let pkeys: Vec<SignedPublicKeyOrSubkey> = public_keys_for_encryption
                 .iter()
                 .filter_map(select_pk_for_encryption)
@@ -378,10 +380,12 @@ pub fn pk_validate(
 
 /// Symmetric encryption.
 pub async fn symm_encrypt(passphrase: &str, plain: &[u8]) -> Result<String> {
-    let lit_msg = MessageBuilder::from_bytes("", plain);
+    let data = plain.to_vec();
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
+        let lit_msg = MessageBuilder::from_bytes("", data);
+
         let mut rng = thread_rng();
         let s2k = StringToKey::new_default(&mut rng);
         let msg = lit_msg
@@ -396,15 +400,16 @@ pub async fn symm_encrypt(passphrase: &str, plain: &[u8]) -> Result<String> {
 }
 
 /// Symmetric decryption.
-pub async fn symm_decrypt<'a, T: BufRead + std::fmt::Debug + 'a>(
+pub async fn symm_decrypt<T: BufRead + std::fmt::Debug + 'static + Send>(
     passphrase: &str,
     ctext: T,
 ) -> Result<Vec<u8>> {
-    let (enc_msg, _) = Message::from_armor(ctext)?;
-
     let passphrase = passphrase.to_string();
     tokio::task::spawn_blocking(move || {
-        let msg = enc_msg.decrypt_with_password(&Password::empty())?;
+        let (enc_msg, _) = Message::from_armor(ctext)?;
+        let password = Password::from(passphrase);
+
+        let msg = enc_msg.decrypt_with_password(&password)?;
         let res = msg.decompress()?.as_data_vec()?;
         Ok(res)
     })

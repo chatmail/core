@@ -1912,7 +1912,7 @@ fn decrypt_decompress<'a>(
     context: &Context,
     mail: &'a ParsedMail<'_>,
     private_keyring: &'a [SignedSecretKey],
-) -> Result<(Vec<u8>, Option<pgp::composed::Message<'a>>, bool)> {
+) -> Result<(Vec<u8>, Option<pgp::composed::Message<'static>>, bool)> {
     let message = tokio::task::block_in_place(|| try_decrypt(mail, private_keyring));
     let message = match message {
         Ok(message) => message,
