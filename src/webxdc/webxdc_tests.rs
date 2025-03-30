@@ -1791,6 +1791,37 @@ async fn test_webxdc_delete_event() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_delete() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foo").await?;
+    send_webxdc_instance(alice, chat_id).await?;
+
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "bar").await?;
+    let instance = send_webxdc_instance(alice, chat_id).await?;
+    alice.send_text(chat_id, "wtf").await;
+
+    chat_id.delete(alice).await?;
+    let EventType::WebxdcInstanceDeleted { msg_id } = alice
+        .evtracker
+        .get_matching(|evt| matches!(evt, EventType::WebxdcInstanceDeleted { .. }))
+        .await
+    else {
+        unreachable!();
+    };
+    assert_eq!(msg_id, instance.id);
+    assert!(alice
+        .evtracker
+        .get_matching_opt(alice, |evt| matches!(
+            evt,
+            EventType::WebxdcInstanceDeleted { .. }
+        ))
+        .await
+        .is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn change_logging_webxdc() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let chat_id = ChatId::create_for_contact(&alice, ContactId::SELF).await?;

@@ -801,9 +801,14 @@ impl ChatId {
             Sync => chat.get_sync_id(context).await?,
         };
 
-        context
+        let webxdc_ids = context
             .sql
             .transaction(|transaction| {
+                let mut stmt = transaction.prepare("SELECT id FROM msgs WHERE chat_id=? AND type=?")?;
+                let mut webxdc_ids = Vec::new();
+                for id in stmt.query_map((self, Viewtype::Webxdc), |row| row.get(0))? {
+                    webxdc_ids.push(id?);
+                }
                 transaction.execute(
                     "UPDATE imap SET target=? WHERE rfc724_mid IN (SELECT rfc724_mid FROM msgs WHERE chat_id=?)",
                     (delete_msgs_target, self,),
@@ -819,10 +824,13 @@ impl ChatId {
                 transaction.execute("DELETE FROM msgs WHERE chat_id=?", (self,))?;
                 transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (self,))?;
                 transaction.execute("DELETE FROM chats WHERE id=?", (self,))?;
-                Ok(())
+                Ok(webxdc_ids)
             })
             .await?;
 
+        for msg_id in webxdc_ids {
+            context.emit_event(EventType::WebxdcInstanceDeleted { msg_id });
+        }
         context.emit_event(EventType::ChatDeleted { chat_id: self });
         context.emit_msgs_changed_without_ids();
 
