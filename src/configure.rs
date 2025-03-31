@@ -35,7 +35,7 @@ use crate::login_param::{
 };
 use crate::message::Message;
 use crate::oauth2::get_oauth2_addr;
-use crate::provider::{Protocol, Socket, UsernamePattern};
+use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
 use crate::qr::set_account_from_qr;
 use crate::smtp::Smtp;
 use crate::sync::Sync::*;
@@ -209,20 +209,20 @@ impl Context {
         info!(self, "Configure ...");
 
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        let configured_param = configure(self, param).await?;
+        let provider = configure(self, param).await?;
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
-        on_configure_completed(self, configured_param, old_addr).await?;
+        on_configure_completed(self, provider, old_addr).await?;
         Ok(())
     }
 }
 
 async fn on_configure_completed(
     context: &Context,
-    param: ConfiguredLoginParam,
+    provider: Option<&'static Provider>,
     old_addr: Option<String>,
 ) -> Result<()> {
-    if let Some(provider) = param.provider {
+    if let Some(provider) = provider {
         if let Some(config_defaults) = provider.config_defaults {
             for def in config_defaults {
                 if !context.config_exists(def.key).await? {
@@ -458,7 +458,7 @@ async fn get_configured_param(
     Ok(configured_login_param)
 }
 
-async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<ConfiguredLoginParam> {
+async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'static Provider>> {
     progress!(ctx, 1);
 
     let ctx2 = ctx.clone();
@@ -568,7 +568,11 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
         }
     }
 
-    configured_param.save_as_configured_params(ctx).await?;
+    let provider = configured_param.provider;
+    configured_param
+        .save_to_transports_table(ctx, param)
+        .await?;
+
     ctx.set_config_internal(Config::ConfiguredTimestamp, Some(&time().to_string()))
         .await?;
 
@@ -584,7 +588,7 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
     ctx.sql.set_raw_config_bool("configured", true).await?;
     ctx.emit_event(EventType::AccountsItemChanged);
 
-    Ok(configured_param)
+    Ok(provider)
 }
 
 /// Retrieve available autoconfigurations.
