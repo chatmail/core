@@ -2082,6 +2082,7 @@ async fn test_forward_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
+    let charlie = tcm.charlie().await;
 
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
@@ -2089,12 +2090,12 @@ async fn test_forward_group() -> Result<()> {
     // Alice creates a group with Bob.
     let alice_group_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    let bob_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "Claire", "claire@example.net").await?;
+    let bob_id = alice.add_or_lookup_contact_id(&bob).await;
+    let charlie_id = alice.add_or_lookup_contact_id(&charlie).await;
     add_contact_to_chat(&alice, alice_group_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_group_chat_id, claire_id).await?;
+    add_contact_to_chat(&alice, alice_group_chat_id, charlie_id).await?;
     let sent_group_msg = alice
-        .send_text(alice_group_chat_id, "Hi Bob and Claire")
+        .send_text(alice_group_chat_id, "Hi Bob and Charlie")
         .await;
     let bob_group_chat_id = bob.recv_msg(&sent_group_msg).await.chat_id;
 
@@ -2377,19 +2378,15 @@ async fn test_resend_own_message() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_foreign_message_fails() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
-    add_contact_to_chat(
-        &alice,
-        alice_grp,
-        Contact::create(&alice, "", "bob@example.net").await?,
-    )
-    .await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_grp = create_group_chat(alice, ProtectionStatus::Unprotected, "grp").await?;
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
     let sent1 = alice.send_text(alice_grp, "alice->bob").await;
 
-    let bob = TestContext::new_bob().await;
     let msg = bob.recv_msg(&sent1).await;
-    assert!(resend_msgs(&bob, &[msg.id]).await.is_err());
+    assert!(resend_msgs(bob, &[msg.id]).await.is_err());
 
     Ok(())
 }
@@ -2433,24 +2430,23 @@ async fn test_resend_opportunistically_encryption() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_info_message_fails() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
-    add_contact_to_chat(
-        &alice,
-        alice_grp,
-        Contact::create(&alice, "", "bob@example.net").await?,
-    )
-    .await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_grp = create_group_chat(alice, ProtectionStatus::Unprotected, "grp").await?;
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
     alice.send_text(alice_grp, "alice->bob").await;
 
     add_contact_to_chat(
-        &alice,
+        alice,
         alice_grp,
-        Contact::create(&alice, "", "claire@example.org").await?,
+        alice.add_or_lookup_contact_id(charlie).await,
     )
     .await?;
     let sent2 = alice.pop_sent_msg().await;
-    assert!(resend_msgs(&alice, &[sent2.sender_msg_id]).await.is_err());
+    assert!(resend_msgs(alice, &[sent2.sender_msg_id]).await.is_err());
 
     Ok(())
 }

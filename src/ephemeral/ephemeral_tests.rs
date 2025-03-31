@@ -5,7 +5,6 @@ use crate::chat::{
 };
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_ARCHIVED_LINK;
-use crate::contact::Contact;
 use crate::download::DownloadState;
 use crate::location;
 use crate::message::markseen_msgs;
@@ -791,7 +790,7 @@ async fn test_ephemeral_timer_non_member() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_bob_contact_id = Contact::create(alice, "Bob", "bob@example.net").await?;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
     let alice_chat_id =
         create_group_chat(alice, ProtectionStatus::Unprotected, "Group name").await?;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;

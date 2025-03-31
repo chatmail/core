@@ -715,7 +715,7 @@ async fn test_unknown_sender() -> Result<()> {
 
     let sent = bob.send_text(bob_chat_id, "Hi hi!").await;
 
-    let alice_bob_contact_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(&bob).await;
     remove_contact_from_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     alice.pop_sent_msg().await;
 
