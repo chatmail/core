@@ -89,6 +89,22 @@ impl TestContextManager {
             .await
     }
 
+    pub async fn dom(&mut self) -> TestContext {
+        TestContext::builder()
+            .configure_dom()
+            .with_log_sink(self.log_sink.clone())
+            .build()
+            .await
+    }
+
+    pub async fn elena(&mut self) -> TestContext {
+        TestContext::builder()
+            .configure_elena()
+            .with_log_sink(self.log_sink.clone())
+            .build()
+            .await
+    }
+
     pub async fn fiona(&mut self) -> TestContext {
         TestContext::builder()
             .configure_fiona()
@@ -249,9 +265,23 @@ impl TestContextBuilder {
 
     /// Configures as charlie@example.net with fixed secret key.
     ///
-    /// This is a shortcut for `.with_key_pair(fiona_keypair())`.
+    /// This is a shortcut for `.with_key_pair(charlie_keypair())`.
     pub fn configure_charlie(self) -> Self {
         self.with_key_pair(charlie_keypair())
+    }
+
+    /// Configures as dom@example.net with fixed secret key.
+    ///
+    /// This is a shortcut for `.with_key_pair(dom_keypair())`.
+    pub fn configure_dom(self) -> Self {
+        self.with_key_pair(dom_keypair())
+    }
+
+    /// Configures as elena@example.net with fixed secret key.
+    ///
+    /// This is a shortcut for `.with_key_pair(elena_keypair())`.
+    pub fn configure_elena(self) -> Self {
+        self.with_key_pair(elena_keypair())
     }
 
     /// Configures as fiona@example.net with fixed secret key.
@@ -1145,6 +1175,32 @@ pub fn charlie_keypair() -> KeyPair {
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
             .unwrap()
             .0;
+    KeyPair { public, secret }
+}
+
+/// Load a pre-generated keypair for dom@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn dom_keypair() -> KeyPair {
+    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/dom-public.asc"))
+        .unwrap()
+        .0;
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
+        .unwrap()
+        .0;
+    KeyPair { public, secret }
+}
+
+/// Load a pre-generated keypair for elena@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn elena_keypair() -> KeyPair {
+    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/elena-public.asc"))
+        .unwrap()
+        .0;
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
+        .unwrap()
+        .0;
     KeyPair { public, secret }
 }
 
