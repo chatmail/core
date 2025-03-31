@@ -130,8 +130,7 @@ pub(crate) enum CantSendReason {
     /// Not a member of the chat.
     NotAMember,
 
-    /// Temporary state for 1:1 chats while SecureJoin is in progress, after a timeout sending
-    /// messages (incl. unencrypted if we don't yet know the contact's pubkey) is allowed.
+    /// Temporary state for 1:1 chats while SecureJoin is in progress.
     SecurejoinWait,
 }
 
@@ -1727,13 +1726,13 @@ impl Chat {
             return Ok(Some(reason));
         }
         let reason = SecurejoinWait;
-        if !skip_fn(&reason)
-            && self
+        if !skip_fn(&reason) {
+            let (can_write, _) = self
                 .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
-                .await?
-                > 0
-        {
-            return Ok(Some(reason));
+                .await?;
+            if !can_write {
+                return Ok(Some(reason));
+            }
         }
         Ok(None)
     }
@@ -1745,28 +1744,32 @@ impl Chat {
         Ok(self.why_cant_send(context).await?.is_none())
     }
 
-    /// Returns the remaining timeout for the 1:1 chat in-progress SecureJoin.
+    /// Returns if the chat can be sent to
+    /// and the remaining timeout for the 1:1 chat in-progress SecureJoin.
     ///
-    /// If the timeout has expired, notifies the user that sending messages is possible. See also
-    /// [`CantSendReason::SecurejoinWait`].
+    /// If the timeout has expired, adds an info message with additional information;
+    /// the chat still cannot be sent to in this case. See also [`CantSendReason::SecurejoinWait`].
     pub(crate) async fn check_securejoin_wait(
         &self,
         context: &Context,
         timeout: u64,
-    ) -> Result<u64> {
+    ) -> Result<(bool, u64)> {
         if self.typ != Chattype::Single || self.protected != ProtectionStatus::Unprotected {
-            return Ok(0);
+            return Ok((true, 0));
         }
-        let (mut param0, mut param1) = (Params::new(), Params::new());
-        param0.set_cmd(SystemMessage::SecurejoinWait);
-        param1.set_cmd(SystemMessage::SecurejoinWaitTimeout);
-        let (param0, param1) = (param0.to_string(), param1.to_string());
+
+        // chat is single and unprotected:
+        // get last info message of type SecurejoinWait or SecurejoinWaitTimeout
+        let (mut param_wait, mut param_timeout) = (Params::new(), Params::new());
+        param_wait.set_cmd(SystemMessage::SecurejoinWait);
+        param_timeout.set_cmd(SystemMessage::SecurejoinWaitTimeout);
+        let (param_wait, param_timeout) = (param_wait.to_string(), param_timeout.to_string());
         let Some((param, ts_sort, ts_start)) = context
             .sql
             .query_row_optional(
                 "SELECT param, timestamp, timestamp_sent FROM msgs WHERE id=\
                  (SELECT MAX(id) FROM msgs WHERE chat_id=? AND param IN (?, ?))",
-                (self.id, &param0, &param1),
+                (self.id, &param_wait, &param_timeout),
                 |row| {
                     let param: String = row.get(0)?;
                     let ts_sort: i64 = row.get(1)?;
@@ -1776,11 +1779,13 @@ impl Chat {
             )
             .await?
         else {
-            return Ok(0);
+            return Ok((true, 0));
         };
-        if param == param1 {
-            return Ok(0);
+
+        if param == param_timeout {
+            return Ok((false, 0));
         }
+
         let now = time();
         // Don't await SecureJoin if the clock was set back.
         if ts_start <= now {
@@ -1788,13 +1793,14 @@ impl Chat {
                 .saturating_add(timeout.try_into()?)
                 .saturating_sub(now);
             if timeout > 0 {
-                return Ok(timeout as u64);
+                return Ok((false, timeout as u64));
             }
         }
+
         add_info_msg_with_cmd(
             context,
             self.id,
-            &stock_str::securejoin_wait_timeout(context).await,
+            &stock_str::securejoin_takes_longer(context).await,
             SystemMessage::SecurejoinWaitTimeout,
             // Use the sort timestamp of the "please wait" message, this way the added message is
             // never sorted below the protection message if the SecureJoin finishes in parallel.
@@ -1805,8 +1811,8 @@ impl Chat {
             None,
         )
         .await?;
-        context.emit_event(EventType::ChatModified(self.id));
-        Ok(0)
+
+        Ok((false, 0))
     }
 
     /// Checks if the user is part of a chat
@@ -2611,7 +2617,7 @@ pub(crate) async fn resume_securejoin_wait(context: &Context) -> Result<()> {
 
     for chat_id in chat_ids {
         let chat = Chat::load_from_db(context, chat_id).await?;
-        let timeout = chat
+        let (_, timeout) = chat
             .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
             .await?;
         if timeout > 0 {

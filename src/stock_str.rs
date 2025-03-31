@@ -438,9 +438,9 @@ pub enum StockMessage {
     SecurejoinWait = 190,
 
     #[strum(props(
-        fallback = "Could not yet establish guaranteed end-to-end encryption, but you may already send a message."
+        fallback = "This takes longer than expected, maybe devices are offline…\n\nHowever, the process continues in background, you can do something else 🕺"
     ))]
-    SecurejoinWaitTimeout = 191,
+    SecurejoinTakesLonger = 192,
 }
 
 impl StockMessage {
@@ -833,8 +833,8 @@ pub(crate) async fn securejoin_wait(context: &Context) -> String {
 }
 
 /// Stock string: `Could not yet establish guaranteed end-to-end encryption, but you may already send a message.`.
-pub(crate) async fn securejoin_wait_timeout(context: &Context) -> String {
-    translated(context, StockMessage::SecurejoinWaitTimeout).await
+pub(crate) async fn securejoin_takes_longer(context: &Context) -> String {
+    translated(context, StockMessage::SecurejoinTakesLonger).await
 }
 
 /// Stock string: `Scan to chat with %1$s`.

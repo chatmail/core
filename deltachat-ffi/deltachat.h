@@ -7569,8 +7569,13 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Could not yet establish guaranteed end-to-end encryption, but you may already send a message."
 ///
-/// Used as info message.
+/// @deprecated 2025-03
 #define DC_STR_SECUREJOIN_WAIT_TIMEOUT 191
+
+/// "This takes longer than expected, maybe devices are offline…\n\nHowever, the process continues in background, you can do something else"
+///
+/// Used as info message.
+#define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
 /// "Contact". Deprecated, currently unused.
 #define DC_STR_CONTACT 200
