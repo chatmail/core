@@ -2339,7 +2339,7 @@ struct GroupChangesInfo {
     /// Optional: A better message that should replace the original system message.
     /// If this is an empty string, the original system message should be trashed.
     better_msg: Option<String>,
-    /// Added/removed contact `better_msg` refers to,
+    /// Added/removed contact `better_msg` refers to.
     added_removed_id: Option<ContactId>,
     /// If true, the user should not be notified about the group change.
     silent: bool,
