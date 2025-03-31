@@ -1171,7 +1171,7 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
         .await?;
     }
 
-    inc_and_check(&mut migration_version, 131)?;
+    inc_and_check(&mut migration_version, 130)?;
     if dbversion < migration_version {
         let entered_param = EnteredLoginParam::load(context).await?;
         let configured_param = ConfiguredLoginParam::load_legacy(context).await?;
@@ -1182,14 +1182,15 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
                     "CREATE TABLE transports (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         addr TEXT NOT NULL,
-                        entered_param TEXT NOT NULL
-                        configured_param TEXT NOT NULL
-                        )", // TODO could be UNIQUE(addr)
+                        entered_param TEXT NOT NULL,
+                        configured_param TEXT NOT NULL,
+                        UNIQUE(addr)
+                        )",
                     (),
                 )?;
                 if let Some(configured_param) = configured_param {
                     transaction.execute(
-                        "INSERT INTO transports (addr, entered_params, configured_params)
+                        "INSERT INTO transports (addr, entered_param, configured_param)
                         VALUES (?, ?, ?)",
                         (
                             configured_param.addr.clone(),
