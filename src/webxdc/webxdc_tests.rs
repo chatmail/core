@@ -2214,5 +2214,6 @@ async fn test_self_addr_consistency() -> Result<()> {
     let sent = alice.send_msg(alice_chat, &mut instance).await;
     let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
     assert_eq!(db_msg.get_webxdc_self_addr(alice).await?, self_addr);
+    assert_eq!(alice_chat.get_msg_cnt(alice).await?, 1);
     Ok(())
 }
