@@ -713,12 +713,11 @@ def test_get_http_response(acfactory):
 
 def test_configured_imap_certificate_checks(acfactory):
     alice = acfactory.new_configured_account()
-    configured_certificate_checks = alice.get_config("configured_imap_certificate_checks")
 
     # Certificate checks should be configured (not None)
-    assert configured_certificate_checks
+    assert "cert_automatic" in alice.get_info().used_account_settings
 
-    # 0 is the value old Delta Chat core versions used
+    # "old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)
     # and configuration failed to use strict TLS checks
     # so it switched strict TLS checks off.
@@ -729,7 +728,7 @@ def test_configured_imap_certificate_checks(acfactory):
     #
     # Core 1.142.4, 1.142.5 and 1.142.6 saved this value due to bug.
     # This test is a regression test to prevent this happening again.
-    assert configured_certificate_checks != "0"
+    assert "cert_old_automatic" not in alice.get_info().used_account_settings
 
 
 def test_no_old_msg_is_fresh(acfactory):
