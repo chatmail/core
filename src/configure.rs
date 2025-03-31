@@ -181,9 +181,21 @@ impl Context {
     /// Use [Self::add_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
     pub async fn list_transports(&self) -> Result<Vec<EnteredLoginParam>> {
-        let param = EnteredLoginParam::load(self).await?;
+        let transports = self
+            .sql
+            .query_map(
+                "SELECT entered_param FROM transports",
+                (),
+                |row| row.get::<_, String>(0),
+                |rows| {
+                    rows.flatten()
+                        .map(|s| Ok(serde_json::from_str(&s)?))
+                        .collect::<Result<Vec<EnteredLoginParam>>>()
+                },
+            )
+            .await?;
 
-        Ok(vec![param])
+        Ok(transports)
     }
 
     /// Removes the transport with the specified email address
