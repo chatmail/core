@@ -861,6 +861,26 @@ impl ConfiguredLoginParam {
         Ok(())
     }
 
+    pub(crate) async fn save_to_transports_table(
+        self,
+        context: &Context,
+        entered_param: &EnteredLoginParam,
+    ) -> Result<()> {
+        context
+            .sql
+            .execute(
+                "INSERT INTO transports (addr, entered_params, configured_params)
+                VALUES (?, ?, ?)",
+                (
+                    self.addr.clone(),
+                    serde_json::to_string(entered_param)?,
+                    self.into_json()?,
+                ),
+            )
+            .await?;
+        Ok(())
+    }
+
     pub(crate) fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
         let imap;
