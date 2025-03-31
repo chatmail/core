@@ -1408,9 +1408,6 @@ impl Contact {
 
     /// Get authorized name or address.
     ///
-    /// The returned string is either "Name (email@domain.com)" or just
-    /// "email@domain.com" if the name is unset.
-    ///
     /// This string is suitable for sending over email
     /// as it does not leak the locally set name.
     pub(crate) fn get_authname_or_addr(&self) -> String {
