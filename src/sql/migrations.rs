@@ -5,9 +5,11 @@ use deltachat_contact_tools::EmailAddress;
 use rusqlite::OptionalExtension;
 
 use crate::config::Config;
+use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
 use crate::context::Context;
 use crate::imap;
+use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_by_domain;
 use crate::sql::Sql;
@@ -1169,6 +1171,41 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 131)?;
+    if dbversion < migration_version {
+        let entered_param = EnteredLoginParam::load(context).await?;
+        let configured_param = ConfiguredLoginParam::load(context).await?;
+
+        sql.execute_migration_closure(
+            |transaction| {
+                transaction.execute(
+                    "CREATE TABLE transports (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        addr TEXT NOT NULL,
+                        entered_param TEXT NOT NULL
+                        configured_param TEXT NOT NULL
+                        )",
+                    (),
+                )?;
+                if let Some(configured_param) = configured_param {
+                    transaction.execute(
+                        "INSERT INTO transports (addr, entered_params, configured_params)
+                        VALUES (?, ?, ?)",
+                        (
+                            configured_param.addr.clone(),
+                            serde_json::to_string(&entered_param)?,
+                            configured_param.into_json()?,
+                        ),
+                    )?;
+                }
+
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
@@ -1213,6 +1250,21 @@ impl Sql {
     }
 
     async fn execute_migration(&self, query: &str, version: i32) -> Result<()> {
+        self.execute_migration_closure(
+            |transaction| {
+                transaction.execute_batch(query)?;
+                Ok(())
+            },
+            version,
+        )
+        .await
+    }
+
+    async fn execute_migration_closure(
+        &self,
+        migration: impl Send + FnOnce(&mut rusqlite::Transaction) -> Result<()>,
+        version: i32,
+    ) -> Result<()> {
         self.transaction(move |transaction| {
             let curr_version: String = transaction.query_row(
                 "SELECT IFNULL(value, ?) FROM config WHERE keyname=?;",
@@ -1222,7 +1274,7 @@ impl Sql {
             let curr_version: i32 = curr_version.parse()?;
             ensure!(curr_version < version, "Db version must be increased");
             Self::set_db_version_trans(transaction, version)?;
-            transaction.execute_batch(query)?;
+            migration(transaction)?;
 
             Ok(())
         })
