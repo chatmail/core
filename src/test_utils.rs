@@ -1193,6 +1193,32 @@ pub fn elena_keypair() -> KeyPair {
     KeyPair { public, secret }
 }
 
+/// Load a pre-generated keypair for dom@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn dom_keypair() -> KeyPair {
+    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/dom-public.asc"))
+        .unwrap()
+        .0;
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
+        .unwrap()
+        .0;
+    KeyPair { public, secret }
+}
+
+/// Load a pre-generated keypair for elena@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn elena_keypair() -> KeyPair {
+    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/elena-public.asc"))
+        .unwrap()
+        .0;
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
+        .unwrap()
+        .0;
+    KeyPair { public, secret }
+}
+
 /// Load a pre-generated keypair for fiona@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
