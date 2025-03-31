@@ -92,7 +92,7 @@ serde_urlencoded = "0.7.1"
 serde = { workspace = true, features = ["derive"] }
 sha-1 = "0.10"
 sha2 = "0.10"
-shadowsocks = { version = "=1.22.0", default-features = false, features = ["aead-cipher", "aead-cipher-2022"] }
+shadowsocks = { version = "1.22.0", default-features = false, features = ["aead-cipher", "aead-cipher-2022"] }
 smallvec = "1.14.0"
 strum = "0.27"
 strum_macros = "0.27"
