@@ -26,6 +26,7 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
+use crate::configure::EnteredLoginParam;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::constants::DC_GCL_NO_SPECIALS;
 use crate::constants::{Blocked, Chattype};
@@ -34,6 +35,7 @@ use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey};
+use crate::login_param::ConfiguredLoginParam;
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::peerstate::Peerstate;
@@ -449,14 +451,14 @@ impl TestContext {
     /// used the fingerprint will be different every time.
     pub async fn configure_addr(&self, addr: &str) {
         self.ctx.set_config(Config::Addr, Some(addr)).await.unwrap();
-        self.ctx
-            .set_config(Config::ConfiguredAddr, Some(addr))
-            .await
-            .unwrap();
-        self.ctx
-            .set_config(Config::Configured, Some("1"))
-            .await
-            .unwrap();
+        ConfiguredLoginParam::from_json(&format!(
+            r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
+        ))
+        .unwrap()
+        .save_to_transports_table(&self, &EnteredLoginParam::default())
+        .await
+        .unwrap();
+
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
         }
