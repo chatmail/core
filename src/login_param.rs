@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::configure::server_params::{expand_param_vector, ServerParams};
-use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_NORMAL, DC_LP_AUTH_OAUTH2};
+use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
 use crate::net::load_connection_timestamp;
 pub use crate::net::proxy::ProxyConfig;
@@ -517,6 +517,26 @@ impl ConfiguredLoginParam {
     ///
     /// Returns `None` if account is not configured.
     pub(crate) async fn load(context: &Context) -> Result<Option<Self>> {
+        let json = context
+            .sql
+            .query_row_optional(
+                // TODO instead of selecting the last transport, select the primary one
+                "SELECT configured_param FROM transports ORDER BY id DESC LIMIT 1",
+                (),
+                |row| {
+                    let json: String = row.get(0)?;
+                    Ok(json)
+                },
+            )
+            .await?;
+        if let Some(json) = json {
+            Ok(Some(Self::from_json(&json)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub(crate) async fn load_legacy(context: &Context) -> Result<Option<Self>> {
         if !context.get_config_bool(Config::Configured).await? {
             return Ok(None);
         }
@@ -783,84 +803,6 @@ impl ConfiguredLoginParam {
         }))
     }
 
-    /// Save this loginparam to the database.
-    pub(crate) async fn save_as_configured_params(&self, context: &Context) -> Result<()> {
-        context.set_primary_self_addr(&self.addr).await?;
-
-        context
-            .set_config(
-                Config::ConfiguredImapServers,
-                Some(&serde_json::to_string(&self.imap)?),
-            )
-            .await?;
-        context
-            .set_config(
-                Config::ConfiguredSmtpServers,
-                Some(&serde_json::to_string(&self.smtp)?),
-            )
-            .await?;
-
-        context
-            .set_config(Config::ConfiguredMailUser, Some(&self.imap_user))
-            .await?;
-        context
-            .set_config(Config::ConfiguredMailPw, Some(&self.imap_password))
-            .await?;
-
-        context
-            .set_config(Config::ConfiguredSendUser, Some(&self.smtp_user))
-            .await?;
-        context
-            .set_config(Config::ConfiguredSendPw, Some(&self.smtp_password))
-            .await?;
-
-        context
-            .set_config_u32(
-                Config::ConfiguredImapCertificateChecks,
-                self.certificate_checks as u32,
-            )
-            .await?;
-        context
-            .set_config_u32(
-                Config::ConfiguredSmtpCertificateChecks,
-                self.certificate_checks as u32,
-            )
-            .await?;
-
-        // Remove legacy settings.
-        context
-            .set_config(Config::ConfiguredMailServer, None)
-            .await?;
-        context.set_config(Config::ConfiguredMailPort, None).await?;
-        context
-            .set_config(Config::ConfiguredMailSecurity, None)
-            .await?;
-        context
-            .set_config(Config::ConfiguredSendServer, None)
-            .await?;
-        context.set_config(Config::ConfiguredSendPort, None).await?;
-        context
-            .set_config(Config::ConfiguredSendSecurity, None)
-            .await?;
-
-        let server_flags = match self.oauth2 {
-            true => DC_LP_AUTH_OAUTH2,
-            false => DC_LP_AUTH_NORMAL,
-        };
-        context
-            .set_config_u32(Config::ConfiguredServerFlags, server_flags as u32)
-            .await?;
-
-        context
-            .set_config(
-                Config::ConfiguredProvider,
-                self.provider.map(|provider| provider.id),
-            )
-            .await?;
-
-        Ok(())
-    }
-
     pub(crate) async fn save_to_transports_table(
         self,
         context: &Context,
@@ -881,7 +823,7 @@ impl ConfiguredLoginParam {
         Ok(())
     }
 
-    pub(crate) fn from_json(json: &str) -> Result<Self> {
+    fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
         let imap;
         let smtp;
@@ -1121,7 +1063,10 @@ mod tests {
             oauth2: false,
         };
 
-        param.save_as_configured_params(&t).await?;
+        param
+            .clone()
+            .save_to_transports_table(&t, &EnteredLoginParam::default())
+            .await?;
         assert_eq!(
             t.get_config(Config::ConfiguredImapServers).await?.unwrap(),
             r#"[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}]"#
