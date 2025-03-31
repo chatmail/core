@@ -517,7 +517,9 @@ impl ConfiguredLoginParam {
     ///
     /// Returns `None` if account is not configured.
     pub(crate) async fn load(context: &Context) -> Result<Option<Self>> {
-        let self_addr = context.get_primary_self_addr().await?;
+        let Some(self_addr) = context.get_config(Config::ConfiguredAddr).await? else {
+            return Ok(None);
+        };
 
         let json: Option<String> = context
             .sql
@@ -1076,19 +1078,28 @@ mod tests {
             .clone()
             .save_to_transports_table(&t, &EnteredLoginParam::default())
             .await?;
+        let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#;
         assert_eq!(
             t.sql
                 .query_get_value::<String>("SELECT configured_param FROM transports", ())
                 .await?
                 .unwrap(),
-            r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#
+            expected_param
         );
         assert_eq!(t.is_configured().await?, true);
         let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(param, loaded);
 
-        // Test that we don't panic on unknown ConfiguredImapCertificateChecks values.
+        // Legacy ConfiguredImapCertificateChecks config is ignored
         t.set_config(Config::ConfiguredImapCertificateChecks, Some("999"))
+            .await?;
+        assert!(ConfiguredLoginParam::load(&t).await.is_ok());
+
+        // Test that we don't panic on unknown ConfiguredImapCertificateChecks values.
+        let wrong_param = expected_param.replace("Strict", "Stricct");
+        assert_ne!(expected_param, wrong_param);
+        t.sql
+            .execute("UPDATE transports SET configured_param=?", (wrong_param,))
             .await?;
         assert!(ConfiguredLoginParam::load(&t).await.is_err());
 
@@ -1180,7 +1191,7 @@ mod tests {
             oauth2: false,
         };
 
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
         assert_eq!(loaded, param);
 
         Ok(())
@@ -1215,7 +1226,7 @@ mod tests {
         t.set_config(Config::ConfiguredServerFlags, Some("0"))
             .await?;
 
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
         assert_eq!(loaded.provider, Some(*provider));
         assert_eq!(loaded.imap.is_empty(), false);
         assert_eq!(loaded.smtp.is_empty(), false);
