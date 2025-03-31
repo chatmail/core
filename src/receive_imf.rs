@@ -1552,7 +1552,7 @@ async fn add_parts(
             typ == Viewtype::Text && msg.is_empty() && part.param.get(Param::Quote).is_none();
 
         if let Some(contact_id) = group_changes.added_removed_id {
-            param.set_int(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
+            param.set(Param::ContactAddedRemoved, contact_id.to_u32().to_string());
         }
 
         save_mime_modified |= mime_parser.is_mime_modified && !part_is_empty && !hidden;
