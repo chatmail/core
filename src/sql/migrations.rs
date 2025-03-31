@@ -1174,7 +1174,7 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
     inc_and_check(&mut migration_version, 131)?;
     if dbversion < migration_version {
         let entered_param = EnteredLoginParam::load(context).await?;
-        let configured_param = ConfiguredLoginParam::load(context).await?;
+        let configured_param = ConfiguredLoginParam::load_legacy(context).await?;
 
         sql.execute_migration_closure(
             |transaction| {
@@ -1184,7 +1184,7 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
                         addr TEXT NOT NULL,
                         entered_param TEXT NOT NULL
                         configured_param TEXT NOT NULL
-                        )",
+                        )", // TODO could be UNIQUE(addr)
                     (),
                 )?;
                 if let Some(configured_param) = configured_param {
