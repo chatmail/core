@@ -1199,14 +1199,15 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
                     "CREATE TABLE transports (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         addr TEXT NOT NULL,
-                        entered_param TEXT NOT NULL
-                        configured_param TEXT NOT NULL
-                        )", // TODO could be UNIQUE(addr)
+                        entered_param TEXT NOT NULL,
+                        configured_param TEXT NOT NULL,
+                        UNIQUE(addr)
+                        )",
                     (),
                 )?;
                 if let Some(configured_param) = configured_param {
                     transaction.execute(
-                        "INSERT INTO transports (addr, entered_params, configured_params)
+                        "INSERT INTO transports (addr, entered_param, configured_param)
                         VALUES (?, ?, ?)",
                         (
                             configured_param.addr.clone(),

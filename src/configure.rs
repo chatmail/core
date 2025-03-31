@@ -63,7 +63,7 @@ macro_rules! progress {
 impl Context {
     /// Checks if the context is already configured.
     pub async fn is_configured(&self) -> Result<bool> {
-        self.sql.get_raw_config_bool("configured").await
+        self.sql.exists("SELECT COUNT(*) FROM transports", ()).await
     }
 
     /// Configures this account with the currently provided parameters.
