@@ -14,14 +14,26 @@ use crate::context::Context;
 use crate::net::load_connection_timestamp;
 pub use crate::net::proxy::ProxyConfig;
 pub use crate::provider::Socket;
-use crate::provider::{Protocol, Provider, UsernamePattern};
+use crate::provider::{get_provider_by_id, Protocol, Provider, UsernamePattern};
 use crate::sql::Sql;
 use crate::tools::ToOption;
 
 /// User-entered setting for certificate checks.
 ///
 /// Should be saved into `imap_certificate_checks` before running configuration.
-#[derive(Copy, Clone, Debug, Default, Display, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    Display,
+    FromPrimitive,
+    ToPrimitive,
+    PartialEq,
+    Eq,
+    Serialize,
+    Deserialize,
+)]
 #[repr(u32)]
 #[strum(serialize_all = "snake_case")]
 pub enum EnteredCertificateChecks {
@@ -44,7 +56,9 @@ pub enum EnteredCertificateChecks {
 }
 
 /// Values saved into `imap_certificate_checks`.
-#[derive(Copy, Clone, Debug, Display, FromPrimitive, ToPrimitive, PartialEq, Eq)]
+#[derive(
+    Copy, Clone, Debug, Display, FromPrimitive, ToPrimitive, PartialEq, Eq, Serialize, Deserialize,
+)]
 #[repr(u32)]
 #[strum(serialize_all = "snake_case")]
 pub(crate) enum ConfiguredCertificateChecks {
@@ -81,7 +95,7 @@ pub(crate) enum ConfiguredCertificateChecks {
 }
 
 /// Login parameters for a single server, either IMAP or SMTP
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnteredServerLoginParam {
     /// Server hostname or IP address.
     pub server: String,
@@ -104,7 +118,7 @@ pub struct EnteredServerLoginParam {
 }
 
 /// Login parameters entered by the user.
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnteredLoginParam {
     /// Email address.
     pub addr: String,
@@ -448,6 +462,22 @@ pub(crate) struct ConfiguredLoginParam {
     pub certificate_checks: ConfiguredCertificateChecks,
 
     /// If true, login via OAUTH2 (not recommended anymore)
+    pub oauth2: bool,
+}
+
+/// The representation of ConfiguredLoginParam in the database,
+/// saved as Json.
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct ConfiguredLoginParamJson {
+    pub addr: String,
+    pub imap: Vec<ConfiguredServerLoginParam>,
+    pub imap_user: String,
+    pub imap_password: String,
+    pub smtp: Vec<ConfiguredServerLoginParam>,
+    pub smtp_user: String,
+    pub smtp_password: String,
+    pub provider_id: Option<String>,
+    pub certificate_checks: ConfiguredCertificateChecks,
     pub oauth2: bool,
 }
 
@@ -829,6 +859,116 @@ impl ConfiguredLoginParam {
             .await?;
 
         Ok(())
+    }
+
+    pub(crate) fn from_json(json: &str) -> Result<Self> {
+        let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
+        let imap;
+        let smtp;
+        let provider_option;
+
+        if let Some(provider) = json
+            .provider_id
+            .and_then(|id| get_provider_by_id(&id))
+            .filter(|p| !p.server.is_empty())
+        {
+            // Load servers from provider, rather than the servers saved in the database
+            provider_option = Some(provider);
+
+            let parsed_addr = EmailAddress::new(&json.addr).context("Bad email-address")?;
+            let addr_localpart = parsed_addr.local;
+            imap = provider
+                .server
+                .iter()
+                .filter_map(|server| {
+                    if server.protocol != Protocol::Imap {
+                        return None;
+                    }
+
+                    let Ok(security) = server.socket.try_into() else {
+                        return None;
+                    };
+
+                    Some(ConfiguredServerLoginParam {
+                        connection: ConnectionCandidate {
+                            host: server.hostname.to_string(),
+                            port: server.port,
+                            security,
+                        },
+                        user: if !json.imap_user.is_empty() {
+                            json.imap_user.clone()
+                        } else {
+                            match server.username_pattern {
+                                UsernamePattern::Email => json.addr.to_string(),
+                                UsernamePattern::Emaillocalpart => addr_localpart.clone(),
+                            }
+                        },
+                    })
+                })
+                .collect();
+            smtp = provider
+                .server
+                .iter()
+                .filter_map(|server| {
+                    if server.protocol != Protocol::Smtp {
+                        return None;
+                    }
+
+                    let Ok(security) = server.socket.try_into() else {
+                        return None;
+                    };
+
+                    Some(ConfiguredServerLoginParam {
+                        connection: ConnectionCandidate {
+                            host: server.hostname.to_string(),
+                            port: server.port,
+                            security,
+                        },
+                        user: if !json.smtp_user.is_empty() {
+                            json.smtp_user.clone()
+                        } else {
+                            match server.username_pattern {
+                                UsernamePattern::Email => json.addr.to_string(),
+                                UsernamePattern::Emaillocalpart => addr_localpart.clone(),
+                            }
+                        },
+                    })
+                })
+                .collect();
+        } else {
+            provider_option = None;
+            imap = json.imap;
+            smtp = json.smtp;
+        }
+
+        Ok(ConfiguredLoginParam {
+            addr: json.addr,
+            imap,
+            imap_user: json.imap_user,
+            imap_password: json.imap_password,
+            smtp,
+            smtp_user: json.smtp_user,
+            smtp_password: json.smtp_password,
+            provider: provider_option,
+            certificate_checks: json.certificate_checks,
+            oauth2: json.oauth2,
+        })
+    }
+
+    pub(crate) fn into_json(self) -> Result<String> {
+        let json = ConfiguredLoginParamJson {
+            addr: self.addr,
+            imap: self.imap,
+            imap_user: self.imap_user,
+            imap_password: self.imap_password,
+            smtp: self.smtp,
+            smtp_user: self.smtp_user,
+            smtp_password: self.smtp_password,
+            provider_id: self.provider.map(|p| p.id.to_string()),
+            certificate_checks: self.certificate_checks,
+            oauth2: self.oauth2,
+        };
+        Ok(serde_json::to_string(&json)?)
     }
 
     pub(crate) fn strict_tls(&self, connected_through_proxy: bool) -> bool {
