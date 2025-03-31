@@ -3429,7 +3429,7 @@ async fn test_info_contact_id() -> Result<()> {
     )
     .await?;
 
-    let fiona_id = Contact::create(alice, "Fiona", "fiona@example.net").await?; // contexts are in sync, fiona_id is same everywhere
+    let fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await; // contexts are in sync, fiona_id is same everywhere
     add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
     pop_recv_and_check(
         alice,
