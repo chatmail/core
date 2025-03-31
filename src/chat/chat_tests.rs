@@ -3381,9 +3381,9 @@ async fn test_info_contact_id() -> Result<()> {
     }
 
     // Alice creates group, Bob receives group
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "play").await?;
-    let alice_bob_id = Contact::create(alice, "Bob", "bob@example.net").await?;
-    add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
+    let alice_chat_id = alice
+        .create_group_with_members(ProtectionStatus::Unprotected, "play", &[bob])
+        .await;
     let sent_msg1 = alice.send_text(alice_chat_id, "moin").await;
 
     let msg = bob.recv_msg(&sent_msg1).await;
