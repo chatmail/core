@@ -3453,7 +3453,7 @@ async fn test_info_contact_id() -> Result<()> {
     .await?;
 
     // When fiona_id is deleted, get_info_contact_id() returns None.
-    // We raw deletion in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
+    // We raw delete in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
     alice
         .sql
         .execute("DELETE FROM contacts WHERE id=?", (fiona_id,))
