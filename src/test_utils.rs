@@ -33,7 +33,7 @@ use crate::contact::{import_vcard, make_vcard, Contact, ContactId, Modifier, Ori
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, DcKey};
+use crate::key::{self, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::peerstate::Peerstate;
@@ -1141,12 +1141,10 @@ impl SentMessage<'_> {
 ///
 /// The keypair was created using the crate::key::tests::gen_key test.
 pub fn alice_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/alice-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1154,12 +1152,10 @@ pub fn alice_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn bob_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/bob-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1167,14 +1163,11 @@ pub fn bob_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn charlie_keypair() -> KeyPair {
-    let public =
-        key::SignedPublicKey::from_asc(include_str!("../test-data/key/charlie-public.asc"))
-            .unwrap()
-            .0;
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
             .unwrap()
             .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1182,12 +1175,10 @@ pub fn charlie_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn dom_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/dom-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1195,12 +1186,10 @@ pub fn dom_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn elena_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/elena-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1208,12 +1197,10 @@ pub fn elena_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn fiona_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/fiona-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
