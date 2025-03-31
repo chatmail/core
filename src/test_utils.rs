@@ -455,7 +455,7 @@ impl TestContext {
             r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
         ))
         .unwrap()
-        .save_to_transports_table(&self, &EnteredLoginParam::default())
+        .save_to_transports_table(self, &EnteredLoginParam::default())
         .await
         .unwrap();
 
