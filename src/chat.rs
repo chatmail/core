@@ -4763,7 +4763,7 @@ pub(crate) async fn add_info_msg_with_cmd(
         param.set_cmd(cmd);
     }
     if let Some(contact_id) = added_removed_id {
-        param.set_int(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
+        param.set(Param::ContactAddedRemoved, contact_id.to_u32().to_string());
     }
 
     let row_id =
