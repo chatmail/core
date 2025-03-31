@@ -3402,7 +3402,7 @@ async fn test_info_contact_id() -> Result<()> {
     )
     .await?;
 
-    let file = alice.dir.path().join("avatar.png");
+    let file = alice.get_blobdir().join("avatar.png");
     let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&file, bytes).await?;
     set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
