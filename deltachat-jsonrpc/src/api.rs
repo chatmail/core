@@ -39,6 +39,7 @@ use deltachat::{imex, info};
 use sanitize_filename::is_sanitized;
 use tokio::fs;
 use tokio::sync::{watch, Mutex, RwLock};
+use types::basic_message::{BasicMessageLoadResult, BasicMessageObject};
 use types::login_param::EnteredLoginParam;
 use walkdir::WalkDir;
 use yerpc::rpc;
@@ -1258,6 +1259,48 @@ impl CommandApi {
                         error: "Message does not exist".to_string(),
                     },
                     Err(error) => MessageLoadResult::LoadingError {
+                        error: format!("{error:#}"),
+                    },
+                },
+            );
+        }
+        Ok(messages)
+    }
+
+    async fn basic_get_message(&self, account_id: u32, msg_id: u32) -> Result<BasicMessageObject> {
+        let ctx = self.get_context(account_id).await?;
+        let msg_id = MsgId::new(msg_id);
+        let message_object = BasicMessageObject::from_msg_id(&ctx, msg_id)
+            .await
+            .with_context(|| format!("Failed to load message {msg_id} for account {account_id}"))?
+            .with_context(|| format!("Message {msg_id} does not exist for account {account_id}"))?;
+        Ok(message_object)
+    }
+
+    /// get multiple messages in one call (but only basic properties)
+    /// 
+    /// This is for optimized performance, the result of [get_messages] is more complete, but is more expensive.
+    /// 
+    /// if loading one message fails the error is stored in the result object in it's place.
+    /// 
+    /// this is the batch variant of [basic_get_message]
+    async fn basic_get_messages(
+        &self,
+        account_id: u32,
+        message_ids: Vec<u32>,
+    ) -> Result<HashMap<u32, BasicMessageLoadResult>> {
+        let ctx = self.get_context(account_id).await?;
+        let mut messages: HashMap<u32, BasicMessageLoadResult> = HashMap::new();
+        for message_id in message_ids {
+            let message_result = BasicMessageObject::from_msg_id(&ctx, MsgId::new(message_id)).await;
+            messages.insert(
+                message_id,
+                match message_result {
+                    Ok(Some(message)) => BasicMessageLoadResult::Message(message),
+                    Ok(None) => BasicMessageLoadResult::LoadingError {
+                        error: "Message does not exist".to_string(),
+                    },
+                    Err(error) => BasicMessageLoadResult::LoadingError {
                         error: format!("{error:#}"),
                     },
                 },

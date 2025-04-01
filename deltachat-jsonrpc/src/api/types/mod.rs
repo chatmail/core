@@ -1,4 +1,5 @@
 pub mod account;
+pub mod basic_message;
 pub mod chat;
 pub mod chat_list;
 pub mod contact;
