@@ -860,7 +860,7 @@ def test_send_first_message_as_long_unicode_with_cr(acfactory, lp):
         " wrapped using format=flowed and unwrapped on the receiver"
     )
     msg_out = chat.send_text(text1)
-    assert not msg_out.is_encrypted()
+    assert msg_out.is_encrypted()
 
     lp.sec("wait for ac2 to receive multi-line non-unicode message")
     msg_in = ac2._evtracker.wait_next_incoming_message()
@@ -869,7 +869,7 @@ def test_send_first_message_as_long_unicode_with_cr(acfactory, lp):
     lp.sec("sending multi-line unicode text message from ac1 to ac2")
     text2 = "äalis\nthis is ßßÄ"
     msg_out = chat.send_text(text2)
-    assert not msg_out.is_encrypted()
+    assert msg_out.is_encrypted()
 
     lp.sec("wait for ac2 to receive multi-line unicode message")
     msg_in = ac2._evtracker.wait_next_incoming_message()

@@ -280,6 +280,12 @@ class Account:
         :param name: (optional) display name for this contact
         :returns: :class:`deltachat.contact.Contact` instance.
         """
+        if isinstance(obj, Account):
+            if not obj.is_configured():
+                raise ValueError("Can only add configured accounts as contacts")
+            assert name is None
+            vcard = obj.get_self_contact().make_vcard()
+            return self.import_vcard(vcard)[0]
         (name, addr) = self.get_contact_addr_and_name(obj, name)
         name_c = as_dc_charpointer(name)
         addr_c = as_dc_charpointer(addr)
