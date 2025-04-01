@@ -2295,6 +2295,29 @@ async fn test_forward_from_saved_to_saved() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_encrypted_to_unencrypted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let txt = "This should be encrypted";
+    let sent = alice.send_text(alice.create_chat(bob).await.id, txt).await;
+    let msg = bob.recv_msg(&sent).await;
+    assert_eq!(msg.text, txt);
+    assert!(msg.get_showpadlock());
+
+    let unencrypted_chat = bob.create_email_chat(charlie).await;
+    forward_msgs(bob, &[msg.id], unencrypted_chat.id).await?;
+    let msg2 = bob.get_last_msg().await;
+    assert_eq!(msg2.text, txt);
+    assert_ne!(msg.id, msg2.id);
+    assert!(!msg2.get_showpadlock());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_save_from_saved_to_saved_failing() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
