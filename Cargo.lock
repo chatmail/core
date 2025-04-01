@@ -5488,9 +5488,9 @@ dependencies = [
 
 [[package]]
 name = "shadowsocks"
-version = "1.22.0"
+version = "1.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1678a9acd37add020f89bfe05d45b9b8a6e8ad5d09f54ac2af3e0dcf0557b481"
+checksum = "ddafa3f54e58a651af9b5ce3170895aa2c970dc9a746bd22b197d2a6cd1b3635"
 dependencies = [
  "aes",
  "base64 0.22.1",
@@ -5506,7 +5506,7 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project",
- "rand 0.8.5",
+ "rand 0.9.0",
  "sendfd",
  "serde",
  "serde_json",
@@ -5524,9 +5524,9 @@ dependencies = [
 
 [[package]]
 name = "shadowsocks-crypto"
-version = "0.5.8"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc77ecb3a97509d22751b76665894fcffad2d10df8758f4e3f20c92ccde6bf4f"
+checksum = "bda401a0ad32c82981d8862f2795713618de9bbf9768f03c17d9d145c6d805df"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -5536,7 +5536,7 @@ dependencies = [
  "chacha20poly1305",
  "hkdf",
  "md-5",
- "rand 0.8.5",
+ "rand 0.9.0",
  "ring-compat",
  "sha1",
 ]
