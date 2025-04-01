@@ -390,6 +390,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "backon"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "970d91570c01a8a5959b36ad7dd1c30642df24b6b3068710066f6809f7033bb7"
+dependencies = [
+ "fastrand",
+ "gloo-timers",
+ "tokio",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,7 +1311,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "image",
- "iroh",
+ "iroh 0.34.0",
  "iroh-gossip",
  "kamadak-exif",
  "libc",
@@ -2273,6 +2284,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
 
 [[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2905,19 +2928,78 @@ dependencies = [
  "http 1.1.0",
  "igd-next",
  "instant",
- "iroh-base",
- "iroh-metrics",
- "iroh-net-report",
+ "iroh-base 0.33.0",
+ "iroh-metrics 0.31.0",
+ "iroh-net-report 0.33.0",
  "iroh-quinn",
  "iroh-quinn-proto",
  "iroh-quinn-udp",
- "iroh-relay",
+ "iroh-relay 0.33.0",
  "n0-future",
  "netdev",
- "netwatch",
+ "netwatch 0.3.0",
  "pin-project",
  "pkarr",
- "portmapper",
+ "portmapper 0.3.1",
+ "rand 0.8.5",
+ "rcgen",
+ "reqwest",
+ "ring",
+ "rustls",
+ "rustls-webpki",
+ "serde",
+ "smallvec",
+ "strum 0.26.2",
+ "stun-rs",
+ "thiserror 2.0.11",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tracing",
+ "url",
+ "wasm-bindgen-futures",
+ "webpki-roots",
+ "x509-parser",
+ "z32",
+]
+
+[[package]]
+name = "iroh"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b7224d4eeec6c8b5b1a9b2347a4dff3588834a7fb17233044bff3e90e7b293d"
+dependencies = [
+ "aead",
+ "anyhow",
+ "atomic-waker",
+ "backon",
+ "bytes",
+ "cfg_aliases",
+ "concurrent-queue",
+ "crypto_box",
+ "data-encoding",
+ "der",
+ "derive_more",
+ "ed25519-dalek",
+ "futures-util",
+ "hickory-resolver",
+ "http 1.1.0",
+ "igd-next",
+ "instant",
+ "iroh-base 0.34.0",
+ "iroh-metrics 0.32.0",
+ "iroh-net-report 0.34.0",
+ "iroh-quinn",
+ "iroh-quinn-proto",
+ "iroh-quinn-udp",
+ "iroh-relay 0.34.0",
+ "n0-future",
+ "netdev",
+ "netwatch 0.4.0",
+ "pin-project",
+ "pkarr",
+ "portmapper 0.4.1",
  "rand 0.8.5",
  "rcgen",
  "reqwest",
@@ -2959,6 +3041,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "iroh-base"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "02bf2374c0f1d01cde6e60de7505e42a604acda1a1bb3f7be19806e466055517"
+dependencies = [
+ "curve25519-dalek",
+ "data-encoding",
+ "derive_more",
+ "ed25519-dalek",
+ "rand_core 0.6.4",
+ "serde",
+ "thiserror 2.0.11",
+ "url",
+]
+
+[[package]]
 name = "iroh-blake3"
 version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2987,9 +3085,9 @@ dependencies = [
  "futures-util",
  "hex",
  "indexmap",
- "iroh",
+ "iroh 0.33.0",
  "iroh-blake3",
- "iroh-metrics",
+ "iroh-metrics 0.31.0",
  "n0-future",
  "postcard",
  "rand 0.8.5",
@@ -3016,6 +3114,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "iroh-metrics"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0f7cd1ffe3b152a5f4f4c1880e01e07d96001f20e02cc143cb7842987c616b3"
+dependencies = [
+ "erased_set",
+ "serde",
+ "struct_iterable",
+ "thiserror 2.0.11",
+ "tracing",
+]
+
+[[package]]
 name = "iroh-net-report"
 version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3026,13 +3137,42 @@ dependencies = [
  "cfg_aliases",
  "derive_more",
  "hickory-resolver",
- "iroh-base",
- "iroh-metrics",
+ "iroh-base 0.33.0",
+ "iroh-metrics 0.31.0",
  "iroh-quinn",
- "iroh-relay",
+ "iroh-relay 0.33.0",
  "n0-future",
- "netwatch",
- "portmapper",
+ "netwatch 0.3.0",
+ "portmapper 0.3.1",
+ "rand 0.8.5",
+ "reqwest",
+ "rustls",
+ "surge-ping",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "iroh-net-report"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63407d73331e8e38980be7e39b1db8e173fc28545b3ea0c48c9a718f95877b8e"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cfg_aliases",
+ "derive_more",
+ "hickory-resolver",
+ "iroh-base 0.34.0",
+ "iroh-metrics 0.32.0",
+ "iroh-quinn",
+ "iroh-relay 0.34.0",
+ "n0-future",
+ "netwatch 0.4.0",
+ "portmapper 0.4.1",
  "rand 0.8.5",
  "reqwest",
  "rustls",
@@ -3115,8 +3255,52 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
- "iroh-base",
- "iroh-metrics",
+ "iroh-base 0.33.0",
+ "iroh-metrics 0.31.0",
+ "iroh-quinn",
+ "iroh-quinn-proto",
+ "lru",
+ "n0-future",
+ "num_enum",
+ "pin-project",
+ "pkarr",
+ "postcard",
+ "rand 0.8.5",
+ "reqwest",
+ "rustls",
+ "rustls-webpki",
+ "serde",
+ "strum 0.26.2",
+ "stun-rs",
+ "thiserror 2.0.11",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite-wasm",
+ "tokio-util",
+ "tracing",
+ "url",
+ "webpki-roots",
+ "z32",
+]
+
+[[package]]
+name = "iroh-relay"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21d282c04a71a83a90b8fe6872ba30ae341853255aa908375a3e6181f7215d7b"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "cfg_aliases",
+ "data-encoding",
+ "derive_more",
+ "hickory-resolver",
+ "http 1.1.0",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "iroh-base 0.34.0",
+ "iroh-metrics 0.32.0",
  "iroh-quinn",
  "iroh-quinn-proto",
  "lru",
@@ -3635,6 +3819,39 @@ dependencies = [
  "tokio-util",
  "tracing",
  "windows 0.58.0",
+ "wmi",
+]
+
+[[package]]
+name = "netwatch"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b7879c2cfdf30d92f2be89efa3169b3d78107e3ab7f7b9a37157782569314e1"
+dependencies = [
+ "atomic-waker",
+ "bytes",
+ "cfg_aliases",
+ "derive_more",
+ "iroh-quinn-udp",
+ "js-sys",
+ "libc",
+ "n0-future",
+ "netdev",
+ "netlink-packet-core",
+ "netlink-packet-route 0.19.0",
+ "netlink-sys",
+ "rtnetlink 0.13.1",
+ "rtnetlink 0.14.1",
+ "serde",
+ "socket2",
+ "thiserror 2.0.11",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "web-sys",
+ "windows 0.59.0",
+ "windows-result 0.3.0",
  "wmi",
 ]
 
@@ -4375,9 +4592,37 @@ dependencies = [
  "futures-lite",
  "futures-util",
  "igd-next",
- "iroh-metrics",
+ "iroh-metrics 0.31.0",
  "libc",
- "netwatch",
+ "netwatch 0.3.0",
+ "num_enum",
+ "rand 0.8.5",
+ "serde",
+ "smallvec",
+ "socket2",
+ "thiserror 2.0.11",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "portmapper"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "247dcb75747c53cc433d6d8963a064187eec4a676ba13ea33143f1c9100e754f"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "derive_more",
+ "futures-lite",
+ "futures-util",
+ "igd-next",
+ "iroh-metrics 0.32.0",
+ "libc",
+ "netwatch 0.4.0",
  "num_enum",
  "rand 0.8.5",
  "serde",
