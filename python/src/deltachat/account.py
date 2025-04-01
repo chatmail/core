@@ -368,6 +368,11 @@ class Account:
         dc_array = ffi.gc(lib.dc_get_contacts(self._dc_context, flags, query_c), lib.dc_array_unref)
         return list(iter_array(dc_array, lambda x: Contact(self, x)))
 
+    def import_vcard(self, vcard):
+        """Import a vCard and return an array of contacts."""
+        dc_array = ffi.gc(lib.dc_import_vcard(self._dc_context, as_dc_charpointer(vcard)), lib.dc_array_unref)
+        return list(iter_array(dc_array, lambda x: Contact(self, x)))
+
     def get_fresh_messages(self) -> Generator[Message, None, None]:
         """yield all fresh messages from all chats."""
         dc_array = ffi.gc(lib.dc_get_fresh_msgs(self._dc_context), lib.dc_array_unref)
