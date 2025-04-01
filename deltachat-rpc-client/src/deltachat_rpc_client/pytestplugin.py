@@ -79,7 +79,7 @@ class ACFactory:
     ) -> Message:
         if not from_account:
             from_account = (self.get_online_accounts(1))[0]
-        to_contact = from_account.create_contact(to_account.get_config("addr"))
+        to_contact = from_account.create_contact(to_account)
         if group:
             to_chat = from_account.create_group(group)
             to_chat.add_contact(to_contact)
