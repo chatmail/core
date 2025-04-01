@@ -141,7 +141,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
         "vc-auth-required"
     );
-    let bob_chat = bob.get_chat(&alice).await;
+    let bob_chat = bob.get_pgp_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), false);
     assert_eq!(
         bob_chat.why_cant_send(&bob).await.unwrap(),
@@ -154,7 +154,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Step 4: Bob receives vc-auth-required, sends vc-request-with-auth
     bob.recv_msg_trash(&sent).await;
-    let bob_chat = bob.get_chat(&alice).await;
+    let bob_chat = bob.get_pgp_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
 
     // Check Bob emitted the JoinerProgress event.
@@ -227,13 +227,9 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     }
 
     // Alice should not yet have Bob verified
-    let contact_bob_id = Contact::lookup_id_by_addr(&alice.ctx, "bob@example.net", Origin::Unknown)
-        .await
-        .expect("Error looking up contact")
-        .expect("Contact not found");
-    let contact_bob = Contact::get_by_id(&alice.ctx, contact_bob_id)
-        .await
-        .unwrap();
+    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
+    let contact_bob_id = contact_bob.id;
+    assert_eq!(contact_bob.is_pgp_contact(), true);
     assert_eq!(contact_bob.is_verified(&alice.ctx).await.unwrap(), false);
     assert_eq!(contact_bob.get_authname(), "");
 
@@ -252,7 +248,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_bob.is_bot(), false);
 
     // exactly one one-to-one chat should be visible for both now
-    // (check this before calling alice.get_chat() explicitly below)
+    // (check this before calling alice.get_pgp_chat() explicitly below)
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
             .await
@@ -267,7 +263,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Alice got the verified message in her 1:1 chat.
     {
-        let chat = alice.get_chat(&bob).await;
+        let chat = alice.get_pgp_chat(&bob).await;
         let msg = get_chat_msg(&alice, chat.get_id(), 0, 1).await;
         assert!(msg.is_info());
         let expected_text = chat_protection_enabled(&alice).await;
@@ -614,7 +610,7 @@ async fn test_secure_join() -> Result<()> {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
 
-        let chat = alice.get_chat(&bob).await;
+        let chat = alice.get_pgp_chat(&bob).await;
         assert_eq!(
             chat.blocked,
             Blocked::Yes,
@@ -643,7 +639,7 @@ async fn test_secure_join() -> Result<()> {
     {
         // Bob has Alice verified, message shows up in the group chat.
         assert_eq!(contact_alice.is_verified(&bob.ctx).await?, true);
-        let chat = bob.get_chat(&alice).await;
+        let chat = bob.get_pgp_chat(&alice).await;
         assert_eq!(
             chat.blocked,
             Blocked::Yes,
