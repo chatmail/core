@@ -109,7 +109,7 @@ toml = "0.8"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webpki-roots = "0.26.8"
-blake3 = "1.6.1"
+blake3 = "1.8.0"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
