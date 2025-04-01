@@ -62,7 +62,7 @@ humansize = "2"
 hyper = "1"
 hyper-util = "0.1.10"
 image = { version = "0.25.5", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
-iroh-gossip = { version = "0.33", default-features = false, features = ["net"] }
+iroh-gossip = { version = "0.34", default-features = false, features = ["net"] }
 iroh = { version = "0.33", default-features = false }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
