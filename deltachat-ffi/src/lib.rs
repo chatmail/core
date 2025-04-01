@@ -2171,6 +2171,48 @@ pub unsafe extern "C" fn dc_add_address_book(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dc_make_vcard(
+    context: *mut dc_context_t,
+    contact_id: u32,
+) -> *mut libc::c_char {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_make_vcard()");
+        return ptr::null_mut();
+    }
+    let ctx = &*context;
+    let contact_id = ContactId::new(contact_id);
+
+    block_on(contact::make_vcard(ctx, &[contact_id]))
+        .unwrap_or_log_default(ctx, "dc_make_vcard failed")
+        .strdup()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_import_vcard(
+    context: *mut dc_context_t,
+    vcard: *const libc::c_char,
+) -> *mut dc_array::dc_array_t {
+    if context.is_null() || vcard.is_null() {
+        eprintln!("ignoring careless call to dc_import_vcard()");
+        return ptr::null_mut();
+    }
+    let ctx = &*context;
+
+    match block_on(contact::import_vcard(ctx, &to_string_lossy(vcard)))
+        .context("dc_import_vcard failed")
+        .log_err(ctx)
+    {
+        Ok(contact_ids) => Box::into_raw(Box::new(dc_array_t::from(
+            contact_ids
+                .iter()
+                .map(|id| id.to_u32())
+                .collect::<Vec<u32>>(),
+        ))),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dc_get_contacts(
     context: *mut dc_context_t,
     flags: u32,
