@@ -1193,7 +1193,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         let entered_param = EnteredLoginParam::load(context).await?;
         let configured_param = ConfiguredLoginParam::load_legacy(context).await?;
 
-        sql.execute_migration_closure(
+        sql.execute_migration_transaction(
             |transaction| {
                 transaction.execute(
                     "CREATE TABLE transports (
@@ -1268,7 +1268,7 @@ impl Sql {
     }
 
     async fn execute_migration(&self, query: &str, version: i32) -> Result<()> {
-        self.execute_migration_closure(
+        self.execute_migration_transaction(
             |transaction| {
                 transaction.execute_batch(query)?;
                 Ok(())
@@ -1278,7 +1278,7 @@ impl Sql {
         .await
     }
 
-    async fn execute_migration_closure(
+    async fn execute_migration_transaction(
         &self,
         migration: impl Send + FnOnce(&mut rusqlite::Transaction) -> Result<()>,
         version: i32,
