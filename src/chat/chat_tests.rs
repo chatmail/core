@@ -3853,6 +3853,7 @@ async fn test_send_edit_request() -> Result<()> {
     bob.recv_msg_opt(&sent2).await;
     let test = Message::load_from_db(bob, bob_msg.id).await?;
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert!(test.is_edited());
 
     // alice has another device, and sees the correction also there
     let alice2 = tcm.alice().await;
@@ -3862,6 +3863,12 @@ async fn test_send_edit_request() -> Result<()> {
     alice2.recv_msg_opt(&sent2).await;
     let test = Message::load_from_db(&alice2, alice2_msg.id).await?;
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert!(test.is_edited());
+
+    // Alice forwards the edited message, the new message shouldn't have the "edited" mark.
+    forward_msgs(&alice2, &[test.id], test.chat_id).await?;
+    let forwarded = alice2.get_last_msg().await;
+    assert!(!forwarded.is_edited());
 
     Ok(())
 }
