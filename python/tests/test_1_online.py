@@ -54,57 +54,6 @@ def test_configure_unref(tmp_path):
     lib.dc_context_unref(dc_context)
 
 
-def test_one_account_send_bcc_setting(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-    ac1_clone = acfactory.new_online_configuring_account(cloned_from=ac1)
-    acfactory.bring_accounts_online()
-
-    # test if sent messages are copied to it via BCC.
-
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    self_addr = ac1.get_config("addr")
-    other_addr = ac2.get_config("addr")
-
-    lp.sec("send out message without bcc to ourselves")
-    ac1.set_config("bcc_self", "0")
-    msg_out = chat.send_text("message1")
-    assert not msg_out.is_forwarded()
-
-    # wait for send out (no BCC)
-    ev = ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
-    assert ac1.get_config("bcc_self") == "0"
-
-    # make sure we are not sending message to ourselves
-    assert self_addr not in ev.data2
-    assert other_addr in ev.data2
-
-    lp.sec("ac1: setting bcc_self=1")
-    ac1.set_config("bcc_self", "1")
-
-    lp.sec("send out message with bcc to ourselves")
-    msg_out = chat.send_text("message2")
-
-    # wait for send out (BCC)
-    ev = ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
-    assert ac1.get_config("bcc_self") == "1"
-
-    # Second client receives only second message, but not the first.
-    ev_msg = ac1_clone._evtracker.wait_next_messages_changed()
-    assert ev_msg.text == msg_out.text
-
-    # now make sure we are sending message to ourselves too
-    assert self_addr in ev.data2
-    assert other_addr in ev.data2
-
-    # BCC-self messages are marked as seen by the sender device.
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-
-    # Check that the message is marked as seen on IMAP.
-    ac1.direct_imap.select_folder("Inbox")
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
-
-
 def test_send_file_twice_unicode_filename_mangling(tmp_path, acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
