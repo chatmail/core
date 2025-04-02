@@ -220,7 +220,6 @@ impl Session {
                 vec![uid],
                 &uid_message_ids,
                 false,
-                false,
             )
             .await?;
         if last_uid.is_none() {
@@ -369,7 +368,6 @@ mod tests {
             header.as_bytes(),
             false,
             Some(100000),
-            false,
         )
         .await?;
         let msg = t.get_last_msg().await;
@@ -385,7 +383,6 @@ mod tests {
             format!("{header}\n\n100k text...").as_bytes(),
             false,
             None,
-            false,
         )
         .await?;
         let msg = t.get_last_msg().await;
@@ -420,7 +417,6 @@ mod tests {
                     Content-Type: text/plain",
             false,
             Some(100000),
-            false,
         )
         .await?;
         assert_eq!(
@@ -457,7 +453,6 @@ mod tests {
             sent2.payload().as_bytes(),
             false,
             Some(sent2.payload().len() as u32),
-            false,
         )
         .await?;
         let msg = bob.get_last_msg().await;
@@ -473,7 +468,6 @@ mod tests {
             sent2.payload().as_bytes(),
             false,
             None,
-            false,
         )
         .await?;
         assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 0);
@@ -517,15 +511,7 @@ mod tests {
             ";
 
         // not downloading the mdn results in an placeholder
-        receive_imf_from_inbox(
-            &bob,
-            "bar@example.org",
-            raw,
-            false,
-            Some(raw.len() as u32),
-            false,
-        )
-        .await?;
+        receive_imf_from_inbox(&bob, "bar@example.org", raw, false, Some(raw.len() as u32)).await?;
         let msg = bob.get_last_msg().await;
         let chat_id = msg.chat_id;
         assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 1);
@@ -533,7 +519,7 @@ mod tests {
 
         // downloading the mdn afterwards expands to nothing and deletes the placeholder directly
         // (usually mdn are too small for not being downloaded directly)
-        receive_imf_from_inbox(&bob, "bar@example.org", raw, false, None, false).await?;
+        receive_imf_from_inbox(&bob, "bar@example.org", raw, false, None).await?;
         assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 0);
         assert!(Message::load_from_db_optional(&bob, msg.id)
             .await?

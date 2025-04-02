@@ -98,12 +98,11 @@ pub async fn receive_imf(
                 head.as_bytes(),
                 seen,
                 Some(imf_raw.len().try_into()?),
-                false,
             )
             .await;
         }
     }
-    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen, None, false).await
+    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen, None).await
 }
 
 /// Emulates reception of a message from "INBOX".
@@ -116,7 +115,6 @@ pub(crate) async fn receive_imf_from_inbox(
     imf_raw: &[u8],
     seen: bool,
     is_partial_download: Option<u32>,
-    fetching_existing_messages: bool,
 ) -> Result<Option<ReceivedMsg>> {
     receive_imf_inner(
         context,
@@ -127,7 +125,6 @@ pub(crate) async fn receive_imf_from_inbox(
         imf_raw,
         seen,
         is_partial_download,
-        fetching_existing_messages,
     )
     .await
 }
@@ -171,7 +168,6 @@ pub(crate) async fn receive_imf_inner(
     imf_raw: &[u8],
     seen: bool,
     is_partial_download: Option<u32>,
-    fetching_existing_messages: bool,
 ) -> Result<Option<ReceivedMsg>> {
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
@@ -444,7 +440,6 @@ pub(crate) async fn receive_imf_inner(
             seen,
             is_partial_download,
             replace_msg_id,
-            fetching_existing_messages,
             prevent_rename,
             verified_encryption,
         )
@@ -718,13 +713,10 @@ async fn add_parts(
     seen: bool,
     is_partial_download: Option<u32>,
     mut replace_msg_id: Option<MsgId>,
-    fetching_existing_messages: bool,
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
-    // Bots handle existing messages the same way as new ones.
-    let fetching_existing_messages = fetching_existing_messages && !is_bot;
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
@@ -1043,11 +1035,7 @@ async fn add_parts(
             }
         }
 
-        state = if seen
-            || fetching_existing_messages
-            || is_mdn
-            || chat_id_blocked == Blocked::Yes
-            || group_changes.silent
+        state = if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
         // No check for `hidden` because only reactions are such and they should be `InFresh`.
         {
             MessageState::InSeen
@@ -1114,7 +1102,7 @@ async fn add_parts(
             }
         }
 
-        if mime_parser.decrypting_failed && !fetching_existing_messages {
+        if mime_parser.decrypting_failed {
             if chat_id.is_none() {
                 chat_id = Some(DC_CHAT_ID_TRASH);
             } else {
@@ -1238,12 +1226,6 @@ async fn add_parts(
                 chat.id.unblock_ex(context, Nosync).await?;
             }
         }
-    }
-
-    if fetching_existing_messages && mime_parser.decrypting_failed {
-        chat_id = Some(DC_CHAT_ID_TRASH);
-        // We are only gathering old messages on first start. We do not want to add loads of non-decryptable messages to the chats.
-        info!(context, "Existing non-decipherable message (TRASH).");
     }
 
     if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
@@ -1508,7 +1490,7 @@ async fn add_parts(
     while let Some(part) = parts.next() {
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
-            let is_incoming_fresh = mime_parser.incoming && !seen && !fetching_existing_messages;
+            let is_incoming_fresh = mime_parser.incoming && !seen;
             set_msg_reaction(
                 context,
                 mime_in_reply_to,

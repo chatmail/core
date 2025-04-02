@@ -3467,46 +3467,6 @@ async fn test_send_as_bot() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_bot_recv_existing_msg() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let bob = &tcm.bob().await;
-    bob.set_config(Config::Bot, Some("1")).await.unwrap();
-    bob.set_config(Config::FetchExistingMsgs, Some("1"))
-        .await
-        .unwrap();
-    let fetching_existing_messages = true;
-    let msg = receive_imf_from_inbox(
-        bob,
-        "first@example.org",
-        b"From: Alice <alice@example.org>\n\
-          To: Bob <bob@example.net>\n\
-          Chat-Version: 1.0\n\
-          Message-ID: <first@example.org>\n\
-          Date: Sun, 14 Nov 2021 00:10:00 +0000\n\
-          Content-Type: text/plain\n\
-          \n\
-          hello\n",
-        false,
-        None,
-        fetching_existing_messages,
-    )
-    .await?
-    .unwrap();
-    let msg = Message::load_from_db(bob, msg.msg_ids[0]).await?;
-    assert_eq!(msg.state, MessageState::InFresh);
-    let event = bob
-        .evtracker
-        .get_matching(|ev| matches!(ev, EventType::IncomingMsg { .. }))
-        .await;
-    let EventType::IncomingMsg { chat_id, msg_id } = event else {
-        unreachable!();
-    };
-    assert_eq!(chat_id, msg.chat_id);
-    assert_eq!(msg_id, msg.id);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_wrong_date_in_imf_section() {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -4812,7 +4772,6 @@ Content-Type: text/plain
 Chat-Group-Member-Added: charlie@example.com",
         false,
         Some(100000),
-        false,
     )
     .await?
     .context("no received message")?;
@@ -4850,7 +4809,6 @@ Content-Type: text/plain
 Chat-Group-Member-Added: charlie@example.com",
         false,
         None,
-        false,
     )
     .await?
     .context("no received message")?;
