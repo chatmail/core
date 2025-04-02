@@ -64,6 +64,10 @@ class Message:
     def get_webxdc_status_updates(self, last_known_serial: int = 0) -> list:
         return json.loads(self._rpc.get_webxdc_status_updates(self.account.id, self.id, last_known_serial))
 
+    def get_info(self) -> str:
+        """Return message info."""
+        return self._rpc.get_message_info(self.account.id, self.id)
+
     def get_webxdc_info(self) -> dict:
         return self._rpc.get_webxdc_info(self.account.id, self.id)
 
