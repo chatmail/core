@@ -1348,8 +1348,7 @@ pub(crate) async fn backup_transfer_qr(context: &Context) -> Result<String> {
     let name = if let Some(name) = context.get_config(Config::Displayname).await? {
         name
     } else {
-        let contact = Contact::get_by_id(context, ContactId::SELF).await?;
-        contact.get_addr().to_string()
+        context.get_primary_self_addr().await?
     };
     Ok(translated(context, StockMessage::BackupTransferQr)
         .await
