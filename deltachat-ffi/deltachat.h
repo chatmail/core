@@ -7572,7 +7572,7 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated 2025-03
 #define DC_STR_SECUREJOIN_WAIT_TIMEOUT 191
 
-/// "This takes longer than expected, maybe devices are offline…\n\nHowever, the process continues in background, you can do something else"
+/// "That seems to take longer, maybe the contact or you are offline. However, the process continues in background, you can do something else…"
 ///
 /// Used as info message.
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
