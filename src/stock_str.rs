@@ -1340,7 +1340,7 @@ pub(crate) async fn new_group_send_first_message(context: &Context) -> String {
 
 /// Text to put in the [`Qr::Backup2`] rendered SVG image.
 ///
-/// The default is "Scan to set up second device for <account name>".
+/// The default is "Scan to set up second device for NAME".
 /// The account name (or address as fallback) are looked up from the context.
 ///
 /// [`Qr::Backup2`]: crate::qr::Qr::Backup2
