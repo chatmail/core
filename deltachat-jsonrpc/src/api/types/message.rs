@@ -70,6 +70,9 @@ pub struct MessageObject {
     /// when is_info is true this describes what type of system message it is
     system_message_type: SystemMessageType,
 
+    /// if is_info is set, this refers to the contact profile that should be opened when the info message is tapped.
+    info_contact_id: Option<u32>,
+
     duration: i32,
     dimensions_height: i32,
     dimensions_width: i32,
@@ -228,6 +231,10 @@ impl MessageObject {
             is_forwarded: message.is_forwarded(),
             is_bot: message.is_bot(),
             system_message_type: message.get_info_type().into(),
+            info_contact_id: message
+                .get_info_contact_id(context)
+                .await?
+                .map(|id| id.to_u32()),
 
             duration: message.get_duration(),
             dimensions_height: message.get_height(),
