@@ -95,6 +95,7 @@ impl BackupProvider {
     pub async fn prepare(context: &Context) -> Result<Self> {
         let relay_mode = RelayMode::Disabled;
         let endpoint = Endpoint::builder()
+            .tls_x509() // For compatibility with iroh <0.34.0
             .alpns(vec![BACKUP_ALPN.to_vec()])
             .relay_mode(relay_mode)
             .bind()
@@ -301,7 +302,11 @@ pub async fn get_backup2(
 ) -> Result<()> {
     let relay_mode = RelayMode::Disabled;
 
-    let endpoint = Endpoint::builder().relay_mode(relay_mode).bind().await?;
+    let endpoint = Endpoint::builder()
+        .tls_x509() // For compatibility with iroh <0.34.0
+        .relay_mode(relay_mode)
+        .bind()
+        .await?;
 
     let conn = endpoint.connect(node_addr, BACKUP_ALPN).await?;
     let (mut send_stream, mut recv_stream) = conn.open_bi().await?;
