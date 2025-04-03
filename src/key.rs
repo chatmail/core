@@ -456,15 +456,13 @@ impl std::str::FromStr for Fingerprint {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use once_cell::sync::Lazy;
+    use std::sync::{Arc, LazyLock};
 
     use super::*;
     use crate::config::Config;
     use crate::test_utils::{alice_keypair, TestContext};
 
-    static KEYPAIR: Lazy<KeyPair> = Lazy::new(alice_keypair);
+    static KEYPAIR: LazyLock<KeyPair> = LazyLock::new(alice_keypair);
 
     #[test]
     fn test_from_armored_string() {

@@ -1312,7 +1312,6 @@ dependencies = [
  "num-derive",
  "num-traits",
  "num_cpus",
- "once_cell",
  "parking_lot",
  "percent-encoding",
  "pgp",
@@ -1362,7 +1361,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "chrono",
- "once_cell",
  "regex",
  "rusqlite",
 ]
@@ -1455,7 +1453,6 @@ dependencies = [
  "human-panic",
  "libc",
  "num-traits",
- "once_cell",
  "rand 0.8.5",
  "serde_json",
  "thiserror 2.0.11",

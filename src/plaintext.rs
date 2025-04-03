@@ -1,6 +1,6 @@
 //! Handle plain text together with some attributes.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::simplify::remove_message_footer;
 
@@ -25,10 +25,10 @@ impl PlainText {
     /// Convert plain text to HTML.
     /// The function handles quotes, links, fixed and floating text paragraphs.
     pub fn to_html(&self) -> String {
-        static LINKIFY_MAIL_RE: Lazy<regex::Regex> =
-            Lazy::new(|| regex::Regex::new(r"\b([\w.\-+]+@[\w.\-]+)\b").unwrap());
+        static LINKIFY_MAIL_RE: LazyLock<regex::Regex> =
+            LazyLock::new(|| regex::Regex::new(r"\b([\w.\-+]+@[\w.\-]+)\b").unwrap());
 
-        static LINKIFY_URL_RE: Lazy<regex::Regex> = Lazy::new(|| {
+        static LINKIFY_URL_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
             regex::Regex::new(r"\b((http|https|ftp|ftps):[\w.,:;$/@!?&%\-~=#+]+)").unwrap()
         });
 

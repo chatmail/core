@@ -424,7 +424,7 @@ pub async fn symm_decrypt<T: std::io::Read + std::io::Seek>(
 
 #[cfg(test)]
 mod tests {
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
     use tokio::sync::OnceCell;
 
     use super::*;
@@ -502,7 +502,7 @@ mod tests {
     static CLEARTEXT: &[u8] = b"This is a test";
 
     /// Initialised [TestKeys] for tests.
-    static KEYS: Lazy<TestKeys> = Lazy::new(TestKeys::new);
+    static KEYS: LazyLock<TestKeys> = LazyLock::new(TestKeys::new);
 
     static CTEXT_SIGNED: OnceCell<String> = OnceCell::const_new();
     static CTEXT_UNSIGNED: OnceCell<String> = OnceCell::const_new();

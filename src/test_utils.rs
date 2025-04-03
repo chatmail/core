@@ -6,14 +6,13 @@ use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
-use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use rand::Rng;
 use tempfile::{tempdir, TempDir};
@@ -47,8 +46,8 @@ use crate::tools::time;
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
 
 /// Map of context IDs to names for [`TestContext`]s.
-static CONTEXT_NAMES: Lazy<std::sync::RwLock<BTreeMap<u32, String>>> =
-    Lazy::new(|| std::sync::RwLock::new(BTreeMap::new()));
+static CONTEXT_NAMES: LazyLock<std::sync::RwLock<BTreeMap<u32, String>>> =
+    LazyLock::new(|| std::sync::RwLock::new(BTreeMap::new()));
 
 /// Manage multiple [`TestContext`]s in one place.
 ///

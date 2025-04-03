@@ -18,7 +18,7 @@ use std::future::Future;
 use std::ops::Deref;
 use std::ptr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
@@ -38,7 +38,6 @@ use deltachat::{accounts::Accounts, log::LogExt};
 use deltachat_jsonrpc::api::CommandApi;
 use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
 use num_traits::{FromPrimitive, ToPrimitive};
-use once_cell::sync::Lazy;
 use rand::Rng;
 use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
@@ -68,7 +67,8 @@ const DC_GCM_INFO_ONLY: u32 = 0x02;
 /// Struct representing the deltachat context.
 pub type dc_context_t = Context;
 
-static RT: Lazy<Runtime> = Lazy::new(|| Runtime::new().expect("unable to create tokio runtime"));
+static RT: LazyLock<Runtime> =
+    LazyLock::new(|| Runtime::new().expect("unable to create tokio runtime"));
 
 fn block_on<T>(fut: T) -> T::Output
 where

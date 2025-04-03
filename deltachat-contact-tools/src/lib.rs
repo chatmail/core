@@ -29,12 +29,12 @@
 
 use std::fmt;
 use std::ops::Deref;
+use std::sync::LazyLock;
 
 use anyhow::bail;
 use anyhow::Context as _;
 use anyhow::Result;
 use chrono::{DateTime, NaiveDateTime};
-use once_cell::sync::Lazy;
 use regex::Regex;
 
 #[derive(Debug)]
@@ -155,7 +155,8 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
     }
 
     // Remove line folding, see https://datatracker.ietf.org/doc/html/rfc6350#section-3.2
-    static NEWLINE_AND_SPACE_OR_TAB: Lazy<Regex> = Lazy::new(|| Regex::new("\r?\n[\t ]").unwrap());
+    static NEWLINE_AND_SPACE_OR_TAB: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new("\r?\n[\t ]").unwrap());
     let unfolded_lines = NEWLINE_AND_SPACE_OR_TAB.replace_all(vcard, "");
 
     let mut lines = unfolded_lines.lines().peekable();
@@ -276,7 +277,8 @@ impl rusqlite::types::ToSql for ContactAddress {
 /// - Removes special characters from the name, see [`sanitize_name()`]
 /// - Removes the name if it is equal to the address by setting it to ""
 pub fn sanitize_name_and_addr(name: &str, addr: &str) -> (String, String) {
-    static ADDR_WITH_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new("(.*)<(.*)>").unwrap());
+    static ADDR_WITH_NAME_REGEX: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new("(.*)<(.*)>").unwrap());
     let (name, addr) = if let Some(captures) = ADDR_WITH_NAME_REGEX.captures(addr.as_ref()) {
         (
             if name.is_empty() {

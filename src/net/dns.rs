@@ -44,13 +44,13 @@ use anyhow::{Context as _, Result};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
+use std::sync::LazyLock;
 use tokio::net::lookup_host;
 use tokio::time::timeout;
 
 use super::load_connection_timestamp;
 use crate::context::Context;
 use crate::tools::time;
-use once_cell::sync::Lazy;
 
 /// Inserts entry into DNS cache
 /// or updates existing one with a new timestamp.
@@ -90,8 +90,8 @@ pub(crate) async fn prune_dns_cache(context: &Context) -> Result<()> {
 /// <https://docs.rs/tokio/1.40.0/tokio/sync/struct.Mutex.html#which-kind-of-mutex-should-you-use>
 /// and
 /// <https://stackoverflow.com/questions/63712823/why-do-i-get-a-deadlock-when-using-tokio-with-a-stdsyncmutex>.
-static LOOKUP_HOST_CACHE: Lazy<parking_lot::RwLock<HashMap<String, Vec<IpAddr>>>> =
-    Lazy::new(Default::default);
+static LOOKUP_HOST_CACHE: LazyLock<parking_lot::RwLock<HashMap<String, Vec<IpAddr>>>> =
+    LazyLock::new(Default::default);
 
 /// Wrapper for `lookup_host` that returns IP addresses.
 async fn lookup_ips(host: impl tokio::net::ToSocketAddrs) -> Result<impl Iterator<Item = IpAddr>> {
@@ -229,7 +229,7 @@ pub(crate) async fn update_connect_timestamp(
 ///
 /// See <https://support.delta.chat/t/no-dns-resolution-result/2778> and
 /// <https://github.com/deltachat/deltachat-core-rust/issues/4920> for reasons.
-static DNS_PRELOAD: Lazy<HashMap<&'static str, Vec<IpAddr>>> = Lazy::new(|| {
+static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new(|| {
     HashMap::from([
         (
             "mail.sangham.net",

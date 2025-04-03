@@ -1,7 +1,7 @@
 //! # Chat list module.
 
 use anyhow::{ensure, Context as _, Result};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::chat::{update_special_chat_names, Chat, ChatId, ChatVisibility};
 use crate::constants::{
@@ -17,8 +17,8 @@ use crate::summary::Summary;
 use crate::tools::IsNoneOrEmpty;
 
 /// Regex to find out if a query should filter by unread messages.
-pub static IS_UNREAD_FILTER: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"\bis:unread\b").unwrap());
+pub static IS_UNREAD_FILTER: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bis:unread\b").unwrap());
 
 /// An object representing a single chatlist in memory.
 ///

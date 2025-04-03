@@ -3,8 +3,8 @@
 //! A module to remove HTML tags from the email text
 
 use std::io::BufRead;
+use std::sync::LazyLock;
 
-use once_cell::sync::Lazy;
 use quick_xml::{
     events::{BytesEnd, BytesStart, BytesText},
     Reader,
@@ -176,7 +176,8 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
 }
 
 fn dehtml_text_cb(event: &BytesText, dehtml: &mut Dehtml) {
-    static LINE_RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"(\r?\n)+").unwrap());
+    static LINE_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(\r?\n)+").unwrap());
 
     if dehtml.get_add_text() == AddText::YesPreserveLineEnds
         || dehtml.get_add_text() == AddText::YesRemoveLineEnds

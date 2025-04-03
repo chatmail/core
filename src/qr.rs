@@ -2,11 +2,11 @@
 
 mod dclogin_scheme;
 use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
 use anyhow::{anyhow, bail, ensure, Context as _, Result};
 pub use dclogin_scheme::LoginOptions;
 use deltachat_contact_tools::{addr_normalize, may_be_valid_addr, ContactAddress};
-use once_cell::sync::Lazy;
 use percent_encoding::{percent_decode_str, percent_encode, NON_ALPHANUMERIC};
 use serde::Deserialize;
 
@@ -915,10 +915,10 @@ async fn decode_matmsg(context: &Context, qr: &str) -> Result<Qr> {
     Qr::from_address(context, name, &addr, None).await
 }
 
-static VCARD_NAME_RE: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"(?m)^N:([^;]*);([^;\n]*)").unwrap());
-static VCARD_EMAIL_RE: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"(?m)^EMAIL([^:\n]*):([^;\n]*)").unwrap());
+static VCARD_NAME_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^N:([^;]*);([^;\n]*)").unwrap());
+static VCARD_EMAIL_RE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"(?m)^EMAIL([^:\n]*):([^;\n]*)").unwrap());
 
 /// Extract address for the vcard scheme.
 ///

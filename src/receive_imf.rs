@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::iter;
+use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result};
 use data_encoding::BASE32_NOPAD;
@@ -9,7 +10,6 @@ use deltachat_contact_tools::{addr_cmp, may_be_valid_addr, sanitize_single_line,
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
-use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::aheader::EncryptPreference;
@@ -2714,7 +2714,7 @@ async fn group_changes_msgs(
     Ok(group_changes_msgs)
 }
 
-static LIST_ID_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(.+)<(.+)>$").unwrap());
+static LIST_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.+)<(.+)>$").unwrap());
 
 fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
     Ok(match LIST_ID_REGEX.captures(list_id_header) {
@@ -2822,8 +2822,8 @@ fn compute_mailinglist_name(
     // (as that part is much more visible, we assume, that names is shorter and comes more to the point,
     // than the sometimes longer part from ListId)
     let subject = mime_parser.get_subject().unwrap_or_default();
-    static SUBJECT: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^.{0,5}\[(.+?)\](\s*\[.+\])?").unwrap()); // remove square brackets around first name
+    static SUBJECT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^.{0,5}\[(.+?)\](\s*\[.+\])?").unwrap()); // remove square brackets around first name
     if let Some(cap) = SUBJECT.captures(&subject) {
         name = cap[1].to_string() + cap.get(2).map_or("", |m| m.as_str());
     }
@@ -2850,8 +2850,8 @@ fn compute_mailinglist_name(
     // but strip some known, long hash prefixes
     if name.is_empty() {
         // 51231231231231231231231232869f58.xing.com -> xing.com
-        static PREFIX_32_CHARS_HEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"([0-9a-fA-F]{32})\.(.{6,})").unwrap());
+        static PREFIX_32_CHARS_HEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"([0-9a-fA-F]{32})\.(.{6,})").unwrap());
         if let Some(cap) = PREFIX_32_CHARS_HEX
             .captures(listid)
             .and_then(|caps| caps.get(2))
