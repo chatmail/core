@@ -2007,7 +2007,7 @@ async fn test_sticker_forward() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_forward() -> Result<()> {
+async fn test_forward_basic() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
     let alice_chat = alice.create_chat(&bob).await;
@@ -2020,9 +2020,11 @@ async fn test_forward() -> Result<()> {
     forward_msgs(&bob, &[msg.id], bob_chat.get_id()).await?;
 
     let forwarded_msg = bob.pop_sent_msg().await;
+    assert_eq!(bob_chat.id.get_msg_cnt(&bob).await?, 2);
     let msg = alice.recv_msg(&forwarded_msg).await;
     assert_eq!(msg.get_text(), "Hi Bob");
     assert!(msg.is_forwarded());
+    let forwarded_msg = bob.pop_sent_msg().await;
     Ok(())
 }
 
