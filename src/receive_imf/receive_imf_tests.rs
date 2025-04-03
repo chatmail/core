@@ -5433,6 +5433,29 @@ async fn test_rename_chat_on_missing_message() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rename_chat_after_creating_invite() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    for populate_before_securejoin in [false, true] {
+        let alice_chat_id = create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+
+        SystemTime::shift(Duration::from_secs(60));
+        chat::set_chat_name(alice, alice_chat_id, "Renamed").await?;
+        if populate_before_securejoin {
+            send_text_msg(alice, alice_chat_id, "populate".to_string()).await?;
+            alice.pop_sent_msg().await;
+        }
+
+        let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+        assert_eq!(bob_chat.get_name(), "Renamed");
+    }
+    Ok(())
+}
+
 /// Tests that creating a group
 /// is preferred over assigning message to existing
 /// chat based on `In-Reply-To` and `References`.

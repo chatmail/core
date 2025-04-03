@@ -2063,7 +2063,9 @@ impl Chat {
             && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
         {
             msg.param.set_int(Param::AttachGroupImage, 1);
-            self.param.remove(Param::Unpromoted);
+            self.param
+                .remove(Param::Unpromoted)
+                .set_i64(Param::GroupNameTimestamp, timestamp);
             self.update_param(context).await?;
             // TODO: Remove this compat code needed because Core <= v1.143:
             // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also
@@ -3917,7 +3919,9 @@ pub(crate) async fn add_contact_to_chat_ex(
 
     let sync_qr_code_tokens;
     if from_handshake && chat.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
-        chat.param.remove(Param::Unpromoted);
+        chat.param
+            .remove(Param::Unpromoted)
+            .set_i64(Param::GroupNameTimestamp, smeared_time(context));
         chat.update_param(context).await?;
         sync_qr_code_tokens = true;
     } else {

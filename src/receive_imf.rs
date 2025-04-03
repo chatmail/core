@@ -2450,16 +2450,16 @@ async fn apply_group_changes(
             .filter(|grpname| grpname.len() < 200)
         {
             let grpname = &sanitize_single_line(grpname);
-            let old_name = &sanitize_single_line(old_name);
 
             let chat_group_name_timestamp =
                 chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
             let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
             // To provide group name consistency, compare names if timestamps are equal.
-            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, old_name)
+            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
                 && chat_id
                     .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
                     .await?
+                && grpname != &chat.name
             {
                 info!(context, "Updating grpname for chat {chat_id}.");
                 context
@@ -2472,6 +2472,7 @@ async fn apply_group_changes(
                 .get_header(HeaderDef::ChatGroupNameChanged)
                 .is_some()
             {
+                let old_name = &sanitize_single_line(old_name);
                 better_msg.get_or_insert(
                     stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
                 );
