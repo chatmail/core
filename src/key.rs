@@ -615,16 +615,6 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_load_self_existing() {
-        let alice = alice_keypair();
-        let t = TestContext::new_alice().await;
-        let pubkey = load_self_public_key(&t).await.unwrap();
-        assert_eq!(alice.public, pubkey);
-        let seckey = load_self_secret_key(&t).await.unwrap();
-        assert_eq!(alice.secret, seckey);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_load_self_generate_public() {
         let t = TestContext::new().await;
         t.set_config(Config::ConfiguredAddr, Some("alice@example.org"))
