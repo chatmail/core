@@ -904,12 +904,6 @@ impl Context {
 
         res.insert("secondary_addrs", secondary_addrs);
         res.insert(
-            "fetch_existing_msgs",
-            self.get_config_int(Config::FetchExistingMsgs)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "fetched_existing_msgs",
             self.get_config_bool(Config::FetchedExistingMsgs)
                 .await?

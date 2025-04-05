@@ -1,4 +1,3 @@
-use std::cmp;
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 
@@ -7,7 +6,6 @@ use async_imap::types::Mailbox;
 use async_imap::Session as ImapSession;
 use futures::TryStreamExt;
 
-use crate::constants::DC_FETCH_EXISTING_MSGS_COUNT;
 use crate::imap::capabilities::Capabilities;
 use crate::net::session::SessionStream;
 
@@ -138,35 +136,6 @@ impl Session {
                 if msg_uid >= uid_next {
                     msgs.insert((msg.internal_date(), msg_uid), msg);
                 }
-            }
-        }
-
-        Ok(msgs.into_iter().map(|((_, uid), msg)| (uid, msg)).collect())
-    }
-
-    /// Like prefetch(), but not for new messages but existing ones (the DC_FETCH_EXISTING_MSGS_COUNT newest messages)
-    pub(crate) async fn prefetch_existing_msgs(
-        &mut self,
-    ) -> Result<Vec<(u32, async_imap::types::Fetch)>> {
-        let exists: i64 = {
-            let mailbox = self.selected_mailbox.as_ref().context("no mailbox")?;
-            mailbox.exists.into()
-        };
-
-        // Fetch last DC_FETCH_EXISTING_MSGS_COUNT (100) messages.
-        // Sequence numbers are sequential. If there are 1000 messages in the inbox,
-        // we can fetch the sequence numbers 900-1000 and get the last 100 messages.
-        let first = cmp::max(1, exists - DC_FETCH_EXISTING_MSGS_COUNT + 1);
-        let set = format!("{first}:{exists}");
-        let mut list = self
-            .fetch(&set, PREFETCH_FLAGS)
-            .await
-            .context("IMAP Could not fetch")?;
-
-        let mut msgs = BTreeMap::new();
-        while let Some(msg) = list.try_next().await? {
-            if let Some(msg_uid) = msg.uid {
-                msgs.insert((msg.internal_date(), msg_uid), msg);
             }
         }
 

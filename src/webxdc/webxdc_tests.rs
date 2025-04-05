@@ -339,7 +339,6 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
         sent1.payload().as_bytes(),
         false,
         Some(70790),
-        false,
     )
     .await?;
     let bob_instance = bob.get_last_msg().await;
@@ -354,7 +353,6 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
         sent1.payload().as_bytes(),
         false,
         None,
-        false,
     )
     .await?
     .unwrap();

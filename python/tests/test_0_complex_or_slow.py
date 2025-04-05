@@ -1,7 +1,6 @@
 import sys
 import time
 
-import pytest
 import deltachat as dc
 
 
@@ -196,118 +195,6 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     assert msg.is_encrypted()
 
 
-@pytest.mark.parametrize("mvbox_move", [False, True])
-def test_fetch_existing(acfactory, lp, mvbox_move):
-    """Delta Chat reads the recipients from old emails sent by the user and adds them as contacts.
-    This way, we can already offer them some email addresses they can write to.
-
-    Also, the newest existing emails from each folder are fetched during onboarding.
-
-    Additionally tests that bcc_self messages moved to the mvbox/sentbox are marked as read."""
-
-    def assert_folders_configured(ac):
-        """There was a bug that scan_folders() set the configured folders to None under some circumstances.
-        So, check that they are still configured:"""
-        assert ac.get_config("configured_sentbox_folder") == "Sent"
-        if mvbox_move:
-            assert ac.get_config("configured_mvbox_folder")
-
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.wait_configured(ac1)
-    ac1.direct_imap.create_folder("Sent")
-    ac1.set_config("sentbox_watch", "1")
-
-    # We need to reconfigure to find the new "Sent" folder.
-    # `scan_folders()`, which runs automatically shortly after `start_io()` is invoked,
-    # would also find the "Sent" folder, but it would be too late:
-    # The sentbox thread, started by `start_io()`, would have seen that there is no
-    # ConfiguredSentboxFolder and do nothing.
-    acfactory._acsetup.start_configure(ac1)
-    acfactory.bring_accounts_online()
-    assert_folders_configured(ac1)
-
-    lp.sec("send out message with bcc to ourselves")
-    ac1.set_config("bcc_self", "1")
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    chat.send_text("message text")
-
-    lp.sec("wait until the bcc_self message arrives in correct folder and is marked seen")
-    if mvbox_move:
-        ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
-    else:
-        ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-    assert_folders_configured(ac1)
-
-    lp.sec("create a cloned ac1 and fetch contact history during configure")
-    ac1_clone = acfactory.new_online_configuring_account(cloned_from=ac1)
-    ac1_clone.set_config("fetch_existing_msgs", "1")
-    acfactory.wait_configured(ac1_clone)
-    ac1_clone.start_io()
-    assert_folders_configured(ac1_clone)
-
-    lp.sec("check that ac2 contact was fetched during configure")
-    ac1_clone._evtracker.get_matching("DC_EVENT_CONTACTS_CHANGED")
-    ac2_addr = ac2.get_config("addr")
-    assert any(c.addr == ac2_addr for c in ac1_clone.get_contacts())
-    assert_folders_configured(ac1_clone)
-
-    lp.sec("check that messages changed events arrive for the correct message")
-    msg = ac1_clone._evtracker.wait_next_messages_changed()
-    assert msg.text == "message text"
-    assert_folders_configured(ac1)
-    assert_folders_configured(ac1_clone)
-
-
-def test_fetch_existing_msgs_group_and_single(acfactory, lp):
-    """There was a bug concerning fetch-existing-msgs:
-
-    A sent a message to you, adding you to a group. This created a contact request.
-    You wrote a message to A, creating a chat.
-    ...but the group stayed blocked.
-    So, after fetch-existing-msgs you have one contact request and one chat with the same person.
-
-    See https://github.com/deltachat/deltachat-core-rust/issues/2097"""
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-
-    acfactory.bring_accounts_online()
-
-    lp.sec("receive a message")
-    ac2.create_group_chat("group name", contacts=[ac1]).send_text("incoming, unencrypted group message")
-    ac1._evtracker.wait_next_incoming_message()
-
-    lp.sec("send out message with bcc to ourselves")
-    ac1.set_config("bcc_self", "1")
-    ac1_ac2_chat = ac1.create_chat(ac2)
-    ac1_ac2_chat.send_text("outgoing, encrypted direct message, creating a chat")
-
-    # wait until the bcc_self message arrives
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-
-    lp.sec("Clone online account and let it fetch the existing messages")
-    ac1_clone = acfactory.new_online_configuring_account(cloned_from=ac1)
-    ac1_clone.set_config("fetch_existing_msgs", "1")
-    acfactory.wait_configured(ac1_clone)
-
-    ac1_clone.start_io()
-    ac1_clone._evtracker.wait_idle_inbox_ready()
-
-    chats = ac1_clone.get_chats()
-    assert len(chats) == 4  # two newly created chats + self-chat + device-chat
-    group_chat = [c for c in chats if c.get_name() == "group name"][0]
-    assert group_chat.is_group()
-    (private_chat,) = [c for c in chats if c.get_name() == ac1_ac2_chat.get_name()]
-    assert not private_chat.is_group()
-
-    group_messages = group_chat.get_messages()
-    assert len(group_messages) == 1
-    assert group_messages[0].text == "incoming, unencrypted group message"
-    private_messages = private_chat.get_messages()
-    # We can't decrypt the message in this chat, so the chat is empty:
-    assert len(private_messages) == 0
-
-
 def test_undecipherable_group(acfactory, lp):
     """Test how group messages that cannot be decrypted are
     handled.
@@ -442,63 +329,6 @@ def test_ephemeral_timer(acfactory, lp):
     assert system_message2.ephemeral_timer is None
     assert "Ephemeral timer: " not in system_message2.get_message_info()
     assert chat1.get_ephemeral_timer() == 0
-
-
-def test_multidevice_sync_seen(acfactory, lp):
-    """Test that message marked as seen on one device is marked as seen on another."""
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-    ac1_clone = acfactory.new_online_configuring_account(cloned_from=ac1)
-    acfactory.bring_accounts_online()
-
-    ac1.set_config("bcc_self", "1")
-    ac1_clone.set_config("bcc_self", "1")
-
-    ac1_chat = ac1.create_chat(ac2)
-    ac1_clone_chat = ac1_clone.create_chat(ac2)
-    ac2_chat = ac2.create_chat(ac1)
-
-    lp.sec("Send a message from ac2 to ac1 and check that it's 'fresh'")
-    ac2_chat.send_text("Hi")
-    ac1_message = ac1._evtracker.wait_next_incoming_message()
-    ac1_clone_message = ac1_clone._evtracker.wait_next_incoming_message()
-    assert ac1_chat.count_fresh_messages() == 1
-    assert ac1_clone_chat.count_fresh_messages() == 1
-    assert ac1_message.is_in_fresh
-    assert ac1_clone_message.is_in_fresh
-
-    lp.sec("ac1 marks message as seen on the first device")
-    ac1.mark_seen_messages([ac1_message])
-    assert ac1_message.is_in_seen
-
-    lp.sec("ac1 clone detects that message is marked as seen")
-    ev = ac1_clone._evtracker.get_matching("DC_EVENT_MSGS_NOTICED")
-    assert ev.data1 == ac1_clone_chat.id
-    assert ac1_clone_message.is_in_seen
-
-    lp.sec("Send an ephemeral message from ac2 to ac1")
-    ac2_chat.set_ephemeral_timer(60)
-    ac1._evtracker.get_matching("DC_EVENT_CHAT_EPHEMERAL_TIMER_MODIFIED")
-    ac1._evtracker.wait_next_incoming_message()
-    ac1_clone._evtracker.get_matching("DC_EVENT_CHAT_EPHEMERAL_TIMER_MODIFIED")
-    ac1_clone._evtracker.wait_next_incoming_message()
-
-    ac2_chat.send_text("Foobar")
-    ac1_message = ac1._evtracker.wait_next_incoming_message()
-    ac1_clone_message = ac1_clone._evtracker.wait_next_incoming_message()
-    assert "Ephemeral timer: 60\n" in ac1_message.get_message_info()
-    assert "Expires: " not in ac1_clone_message.get_message_info()
-    assert "Ephemeral timer: 60\n" in ac1_message.get_message_info()
-    assert "Expires: " not in ac1_clone_message.get_message_info()
-
-    ac1.mark_seen_messages([ac1_message])
-    assert ac1_message.is_in_seen
-    assert "Expires: " in ac1_message.get_message_info()
-    ev = ac1_clone._evtracker.get_matching("DC_EVENT_MSGS_NOTICED")
-    assert ev.data1 == ac1_clone_chat.id
-    assert ac1_clone_message.is_in_seen
-    # Test that the timer is started on the second device after synchronizing the seen status.
-    assert "Expires: " in ac1_clone_message.get_message_info()
 
 
 def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):

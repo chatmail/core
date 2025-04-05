@@ -507,7 +507,7 @@ impl Imap {
         }
 
         let msgs_fetched = self
-            .fetch_new_messages(context, session, watch_folder, folder_meaning, false)
+            .fetch_new_messages(context, session, watch_folder, folder_meaning)
             .await
             .context("fetch_new_messages")?;
         if msgs_fetched && context.get_config_delete_device_after().await?.is_some() {
@@ -535,7 +535,6 @@ impl Imap {
         session: &mut Session,
         folder: &str,
         folder_meaning: FolderMeaning,
-        fetch_existing_msgs: bool,
     ) -> Result<bool> {
         if should_ignore_folder(context, folder, folder_meaning).await? {
             info!(context, "Not fetching from {folder:?}.");
@@ -552,7 +551,7 @@ impl Imap {
             return Ok(false);
         }
 
-        if !session.new_mail && !fetch_existing_msgs {
+        if !session.new_mail {
             info!(context, "No new emails in folder {folder:?}.");
             return Ok(false);
         }
@@ -561,14 +560,7 @@ impl Imap {
         let uid_validity = get_uidvalidity(context, folder).await?;
         let old_uid_next = get_uid_next(context, folder).await?;
 
-        let msgs = if fetch_existing_msgs {
-            session
-                .prefetch_existing_msgs()
-                .await
-                .context("prefetch_existing_msgs")?
-        } else {
-            session.prefetch(old_uid_next).await.context("prefetch")?
-        };
+        let msgs = session.prefetch(old_uid_next).await.context("prefetch")?;
         let read_cnt = msgs.len();
 
         let download_limit = context.download_limit().await?;
@@ -721,7 +713,6 @@ impl Imap {
                         uids_fetch_in_batch.split_off(0),
                         &uid_message_ids,
                         fetch_partially,
-                        fetch_existing_msgs,
                     )
                     .await
                     .context("fetch_many_msgs")?;
@@ -785,28 +776,6 @@ impl Imap {
         add_all_recipients_as_contacts(context, session, Config::ConfiguredInboxFolder)
             .await
             .context("failed to get recipients from the inbox")?;
-
-        if context.get_config_bool(Config::FetchExistingMsgs).await? {
-            for meaning in [
-                FolderMeaning::Mvbox,
-                FolderMeaning::Inbox,
-                FolderMeaning::Sent,
-            ] {
-                let config = match meaning.to_config() {
-                    Some(c) => c,
-                    None => continue,
-                };
-                if let Some(folder) = context.get_config(config).await? {
-                    info!(
-                        context,
-                        "Fetching existing messages from folder {folder:?}."
-                    );
-                    self.fetch_new_messages(context, session, &folder, meaning, true)
-                        .await
-                        .context("could not fetch existing messages")?;
-                }
-            }
-        }
 
         info!(context, "Done fetching existing messages.");
         Ok(())
@@ -1334,7 +1303,6 @@ impl Session {
     /// Returns the last UID fetched successfully and the info about each downloaded message.
     /// If the message is incorrect or there is a failure to write a message to the database,
     /// it is skipped and the error is logged.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) async fn fetch_many_msgs(
         &mut self,
         context: &Context,
@@ -1343,7 +1311,6 @@ impl Session {
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
         fetch_partially: bool,
-        fetching_existing_messages: bool,
     ) -> Result<(Option<u32>, Vec<ReceivedMsg>)> {
         let mut last_uid = None;
         let mut received_msgs = Vec::new();
@@ -1477,7 +1444,6 @@ impl Session {
                     body,
                     is_seen,
                     partial,
-                    fetching_existing_messages,
                 )
                 .await
                 {

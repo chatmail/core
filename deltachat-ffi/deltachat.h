@@ -2163,6 +2163,29 @@ int             dc_add_address_book          (dc_context_t* context, const char*
 
 
 /**
+ * Make a vCard.
+ *
+ * @memberof dc_context_t
+ * @param context The context object.
+ * @param contact_id The ID of the contact to make the vCard of.
+ * @return vCard, must be released using dc_str_unref() after usage.
+ */
+char*           dc_make_vcard                (dc_context_t* context, uint32_t contact_id);
+
+
+/**
+ * Import a vCard.
+ *
+ * @memberof dc_context_t
+ * @param context The context object.
+ * @param vcard vCard contents.
+ * @return Returns the IDs of the contacts in the order they appear in the vCard.
+ *         Must be dc_array_unref()'d after usage.
+ */
+dc_array_t*     dc_import_vcard              (dc_context_t* context, const char* vcard);
+
+
+/**
  * Returns known and unblocked contacts.
  *
  * To get information about a single contact, see dc_get_contact().
