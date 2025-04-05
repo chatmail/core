@@ -900,7 +900,6 @@ Here's my footer -- bob@example.net"
             msg_header.as_bytes(),
             false,
             Some(100000),
-            false,
         )
         .await?
         .unwrap();
@@ -931,7 +930,6 @@ Here's my footer -- bob@example.net"
             msg_full.as_bytes(),
             false,
             None,
-            false,
         )
         .await?;
 
