@@ -764,7 +764,7 @@ async fn add_parts(
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
-    let allow_creation;
+    let mut allow_creation = !is_mdn && (is_dc_message == MessengerMessage::No || !is_reaction);
     if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
         && !context.get_config_bool(Config::IsChatmail).await?
@@ -778,10 +778,8 @@ async fn add_parts(
                 allow_creation = false;
             }
             ShowEmails::AcceptedContacts => allow_creation = false,
-            ShowEmails::All => allow_creation = !is_mdn,
+            ShowEmails::All => {}
         }
-    } else {
-        allow_creation = !is_mdn && !is_reaction;
     }
 
     // check if the message introduces a new chat:
