@@ -781,7 +781,9 @@ async fn add_parts(
             ShowEmails::All => allow_creation = !is_mdn,
         }
     } else {
-        allow_creation = !is_mdn && !is_reaction;
+        // DC reaction messages don't contain extra parts, so they mustn't create chats.
+        let is_dc_reaction = is_dc_message == MessengerMessage::Yes && is_reaction;
+        allow_creation = !is_mdn && !is_dc_reaction;
     }
 
     // check if the message introduces a new chat:
