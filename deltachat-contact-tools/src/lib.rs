@@ -108,15 +108,16 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
             None
         }
     }
-    fn vcard_property<'a>(s: &'a str, property: &str) -> Option<&'a str> {
-        let remainder = remove_prefix(s, property)?;
+    /// Returns (parameters, value) tuple.
+    fn vcard_property<'a>(line: &'a str, property: &str) -> Option<(&'a str, &'a str)> {
+        let remainder = remove_prefix(line, property)?;
         // If `s` is `EMAIL;TYPE=work:alice@example.com` and `property` is `EMAIL`,
         // then `remainder` is now `;TYPE=work:alice@example.com`
 
         // Note: This doesn't handle the case where there are quotes around a colon,
         // like `NAME;Foo="Some quoted text: that contains a colon":value`.
         // This could be improved in the future, but for now, the parsing is good enough.
-        let (params, value) = remainder.split_once(':')?;
+        let (mut params, value) = remainder.split_once(':')?;
         // In the example from above, `params` is now `;TYPE=work`
         // and `value` is now `alice@example.com`
 
@@ -130,7 +131,47 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
             // so this line's property is actually something else
             return None;
         }
-        Some(value)
+        if let Some(p) = remove_prefix(params, ";") {
+            params = p;
+        }
+        if let Some(p) = remove_prefix(params, "PREF=1") {
+            params = p;
+        }
+        Some((params, value))
+    }
+    fn base64_key(line: &str) -> Option<&str> {
+        let (params, value) = vcard_property(line, "key")?;
+        if params.eq_ignore_ascii_case("PGP;ENCODING=BASE64")
+            || params.eq_ignore_ascii_case("TYPE=PGP;ENCODING=b")
+        {
+            return Some(value);
+        }
+        if let Some(value) = remove_prefix(value, "data:application/pgp-keys;base64,")
+            .or_else(|| remove_prefix(value, r"data:application/pgp-keys;base64\,"))
+        {
+            return Some(value);
+        }
+
+        None
+    }
+    fn base64_photo(line: &str) -> Option<&str> {
+        let (params, value) = vcard_property(line, "photo")?;
+        if params.eq_ignore_ascii_case("JPEG;ENCODING=BASE64")
+            || params.eq_ignore_ascii_case("ENCODING=BASE64;JPEG")
+            || params.eq_ignore_ascii_case("TYPE=JPEG;ENCODING=b")
+            || params.eq_ignore_ascii_case("ENCODING=b;TYPE=JPEG")
+            || params.eq_ignore_ascii_case("ENCODING=BASE64;TYPE=JPEG")
+            || params.eq_ignore_ascii_case("TYPE=JPEG;ENCODING=BASE64")
+        {
+            return Some(value);
+        }
+        if let Some(value) = remove_prefix(value, "data:image/jpeg;base64,")
+            .or_else(|| remove_prefix(value, r"data:image/jpeg;base64\,"))
+        {
+            return Some(value);
+        }
+
+        None
     }
     fn parse_datetime(datetime: &str) -> Result<i64> {
         // According to https://www.rfc-editor.org/rfc/rfc6350#section-4.3.5, the timestamp
@@ -185,26 +226,15 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
                 line = remainder;
             }
 
-            if let Some(email) = vcard_property(line, "email") {
+            if let Some((_params, email)) = vcard_property(line, "email") {
                 addr.get_or_insert(email);
-            } else if let Some(name) = vcard_property(line, "fn") {
+            } else if let Some((_params, name)) = vcard_property(line, "fn") {
                 display_name.get_or_insert(name);
-            } else if let Some(k) = remove_prefix(line, "KEY;PGP;ENCODING=BASE64:")
-                .or_else(|| remove_prefix(line, "KEY;TYPE=PGP;ENCODING=b:"))
-                .or_else(|| remove_prefix(line, "KEY:data:application/pgp-keys;base64,"))
-                .or_else(|| remove_prefix(line, "KEY;PREF=1:data:application/pgp-keys;base64,"))
-            {
+            } else if let Some(k) = base64_key(line) {
                 key.get_or_insert(k);
-            } else if let Some(p) = remove_prefix(line, "PHOTO;JPEG;ENCODING=BASE64:")
-                .or_else(|| remove_prefix(line, "PHOTO;ENCODING=BASE64;JPEG:"))
-                .or_else(|| remove_prefix(line, "PHOTO;TYPE=JPEG;ENCODING=b:"))
-                .or_else(|| remove_prefix(line, "PHOTO;ENCODING=b;TYPE=JPEG:"))
-                .or_else(|| remove_prefix(line, "PHOTO;ENCODING=BASE64;TYPE=JPEG:"))
-                .or_else(|| remove_prefix(line, "PHOTO;TYPE=JPEG;ENCODING=BASE64:"))
-                .or_else(|| remove_prefix(line, "PHOTO:data:image/jpeg;base64,"))
-            {
+            } else if let Some(p) = base64_photo(line) {
                 photo.get_or_insert(p);
-            } else if let Some(rev) = vcard_property(line, "rev") {
+            } else if let Some((_params, rev)) = vcard_property(line, "rev") {
                 datetime.get_or_insert(rev);
             } else if line.eq_ignore_ascii_case("END:VCARD") {
                 let (authname, addr) =
@@ -772,6 +802,33 @@ END:VCARD",
         assert_eq!(contacts[0].key.as_ref().unwrap(), "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert!(contacts[0].timestamp.is_err());
         assert_eq!(contacts[0].profile_image, None);
+    }
+
+    /// Proton at some point slightly changed the format of their vcards
+    #[test]
+    fn test_protonmail_vcard2() {
+        let contacts = parse_vcard(
+            r"BEGIN:VCARD
+VERSION:4.0
+FN;PREF=1:Alice
+PHOTO;PREF=1:data:image/jpeg;base64\,/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z
+REV:Invalid Date
+ITEM1.EMAIL;PREF=1:alice@example.org
+KEY;PREF=1:data:application/pgp-keys;base64\,xsaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==
+UID:proton-web-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+END:VCARD",
+        );
+
+        assert_eq!(contacts.len(), 1);
+        assert_eq!(&contacts[0].addr, "alice@example.org");
+        assert_eq!(&contacts[0].authname, "Alice");
+        assert_eq!(contacts[0].key.as_ref().unwrap(), "xsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==");
+        assert!(contacts[0].timestamp.is_err());
+        assert_eq!(contacts[0].profile_image.as_ref().unwrap(), "/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z");
     }
 
     #[test]
