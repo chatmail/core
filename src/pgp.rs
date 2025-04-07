@@ -1,7 +1,6 @@
 //! OpenPGP helper module using [rPGP facilities](https://github.com/rpgp/rpgp).
 
 use std::collections::{BTreeMap, HashSet};
-use std::io;
 use std::io::Cursor;
 
 use anyhow::{bail, Context as _, Result};
@@ -14,8 +13,8 @@ use pgp::composed::{
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::types::{CompressionAlgorithm, PublicKeyTrait, SignatureBytes, StringToKey};
-use rand::{thread_rng, CryptoRng, Rng};
+use pgp::types::{CompressionAlgorithm, PublicKeyTrait, StringToKey};
+use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -30,95 +29,6 @@ const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AE
 
 /// Preferred cryptographic hash.
 const HASH_ALGORITHM: HashAlgorithm = HashAlgorithm::SHA2_256;
-
-/// A wrapper for rPGP public key types
-#[derive(Debug)]
-enum SignedPublicKeyOrSubkey<'a> {
-    Key(&'a SignedPublicKey),
-    Subkey(&'a SignedPublicSubKey),
-}
-
-impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
-    fn version(&self) -> pgp::types::KeyVersion {
-        match self {
-            Self::Key(k) => k.version(),
-            Self::Subkey(k) => k.version(),
-        }
-    }
-
-    fn fingerprint(&self) -> pgp::types::Fingerprint {
-        match self {
-            Self::Key(k) => k.fingerprint(),
-            Self::Subkey(k) => k.fingerprint(),
-        }
-    }
-
-    fn key_id(&self) -> pgp::types::KeyId {
-        match self {
-            Self::Key(k) => k.key_id(),
-            Self::Subkey(k) => k.key_id(),
-        }
-    }
-
-    fn algorithm(&self) -> pgp::crypto::public_key::PublicKeyAlgorithm {
-        match self {
-            Self::Key(k) => k.algorithm(),
-            Self::Subkey(k) => k.algorithm(),
-        }
-    }
-
-    fn created_at(&self) -> &chrono::DateTime<chrono::Utc> {
-        match self {
-            Self::Key(k) => k.created_at(),
-            Self::Subkey(k) => k.created_at(),
-        }
-    }
-
-    fn expiration(&self) -> Option<u16> {
-        match self {
-            Self::Key(k) => k.expiration(),
-            Self::Subkey(k) => k.expiration(),
-        }
-    }
-
-    fn verify_signature(
-        &self,
-        hash: HashAlgorithm,
-        data: &[u8],
-        sig: &SignatureBytes,
-    ) -> pgp::errors::Result<()> {
-        match self {
-            Self::Key(k) => k.verify_signature(hash, data, sig),
-            Self::Subkey(k) => k.verify_signature(hash, data, sig),
-        }
-    }
-
-    fn encrypt<R: Rng + CryptoRng>(
-        &self,
-        rng: R,
-        plain: &[u8],
-        typ: pgp::types::EskType,
-    ) -> pgp::errors::Result<pgp::types::PkeskBytes> {
-        match self {
-            Self::Key(k) => k.encrypt(rng, plain, typ),
-            Self::Subkey(k) => k.encrypt(rng, plain, typ),
-        }
-    }
-
-    fn serialize_for_hashing(&self, writer: &mut impl io::Write) -> pgp::errors::Result<()> {
-        match self {
-            Self::Key(k) => k.serialize_for_hashing(writer),
-            Self::Subkey(k) => k.serialize_for_hashing(writer),
-        }
-    }
-
-    fn public_params(&self) -> &pgp::types::PublicParams {
-        match self {
-            Self::Key(k) => k.public_params(),
-            Self::Subkey(k) => k.public_params(),
-        }
-    }
-}
 
 /// Split data from PGP Armored Data as defined in <https://tools.ietf.org/html/rfc4880#section-6.2>.
 ///
@@ -236,28 +146,15 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
     Ok(key_pair)
 }
 
-/// Select public key or subkey to use for encryption.
+/// Selects a subkey of the public key to use for encryption.
 ///
-/// First, tries to use subkeys. If none of the subkeys are suitable
-/// for encryption, tries to use primary key. Returns `None` if the public
-/// key cannot be used for encryption.
+/// Returns `None` if the public key cannot be used for encryption.
 ///
 /// TODO: take key flags and expiration dates into account
-fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<SignedPublicKeyOrSubkey> {
+fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
     key.public_subkeys
         .iter()
         .find(|subkey| subkey.is_encryption_key())
-        .map_or_else(
-            || {
-                // No usable subkey found, try primary key
-                if key.is_encryption_key() {
-                    Some(SignedPublicKeyOrSubkey::Key(key))
-                } else {
-                    None
-                }
-            },
-            |subkey| Some(SignedPublicKeyOrSubkey::Subkey(subkey)),
-        )
 }
 
 /// Encrypts `plain` text using `public_keys_for_encryption`
@@ -272,11 +169,10 @@ pub async fn pk_encrypt(
 
     Handle::current()
         .spawn_blocking(move || {
-            let pkeys: Vec<SignedPublicKeyOrSubkey> = public_keys_for_encryption
+            let pkeys: Vec<&SignedPublicSubKey> = public_keys_for_encryption
                 .iter()
                 .filter_map(select_pk_for_encryption)
                 .collect();
-            let pkeys_refs: Vec<&SignedPublicKeyOrSubkey> = pkeys.iter().collect();
 
             let mut rng = thread_rng();
 
@@ -287,13 +183,9 @@ pub async fn pk_encrypt(
                 } else {
                     signed_msg
                 };
-                compressed_msg.encrypt_to_keys_seipdv1(
-                    &mut rng,
-                    SYMMETRIC_KEY_ALGORITHM,
-                    &pkeys_refs,
-                )?
+                compressed_msg.encrypt_to_keys_seipdv1(&mut rng, SYMMETRIC_KEY_ALGORITHM, &pkeys)?
             } else {
-                lit_msg.encrypt_to_keys_seipdv1(&mut rng, SYMMETRIC_KEY_ALGORITHM, &pkeys_refs)?
+                lit_msg.encrypt_to_keys_seipdv1(&mut rng, SYMMETRIC_KEY_ALGORITHM, &pkeys)?
             };
 
             let encoded_msg = encrypted_msg.to_armored_string(Default::default())?;
