@@ -32,7 +32,7 @@ codegen-units = 1
 strip = true
 
 [patch.crates-io]
-netwatch = { git = "https://github.com/n0-computer/net-tools.git", branch = "main" }
+netwatch = { git = "https://github.com/n0-computer/net-tools.git", branch = "minimal-versions" }
 
 [dependencies]
 deltachat_derive = { path = "./deltachat_derive" }
