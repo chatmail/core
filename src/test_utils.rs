@@ -25,7 +25,6 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::configure::EnteredLoginParam;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::constants::DC_GCL_NO_SPECIALS;
 use crate::constants::{Blocked, Chattype};
@@ -34,7 +33,6 @@ use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, DcSecretKey};
-use crate::login_param::ConfiguredLoginParam;
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::peerstate::Peerstate;
