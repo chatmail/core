@@ -104,14 +104,23 @@ jobs:
             rust: minimum
     runs-on: ${{ matrix.os }}
     steps:
+      - shell: bash
+        run:
+          echo "RUSTUP_TOOLCHAIN=$MSRV" >> $GITHUB_ENV
+        if: matrix.rust == 'minimum'
+      - shell: bash
+        run:
+          echo "RUSTUP_TOOLCHAIN=$RUST_VERSION" >> $GITHUB_ENV
+        if: matrix.rust == 'latest'
+
       - uses: actions/checkout@v4
         with:
           show-progress: false
           persist-credentials: false
 
       - name: Install Rust ${{ matrix.rust }}
-        run: rustup toolchain install --profile minimal ${{ matrix.rust == 'minimum' && env.MSRV || env.RUST_VERSION }}
-      - run: rustup override set ${{ matrix.rust }}
+        run: rustup toolchain install --profile minimal $RUSTUP_TOOLCHAIN
+      - run: rustup override set $RUSTUP_TOOLCHAIN
 
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@v2
