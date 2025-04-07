@@ -829,7 +829,8 @@ impl ConfiguredLoginParam {
             )
             .await?;
         context
-            .set_config(Config::ConfiguredAddr, Some(&addr))
+            .sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
             .await?;
         Ok(())
     }

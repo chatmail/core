@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{bail, ensure, Context as _, Result};
 use base64::Engine as _;
 use deltachat_contact_tools::{addr_cmp, sanitize_single_line};
 use serde::{Deserialize, Serialize};
@@ -13,10 +13,12 @@ use strum_macros::{AsRefStr, Display, EnumIter, EnumString};
 use tokio::fs;
 
 use crate::blob::BlobObject;
+use crate::configure::EnteredLoginParam;
 use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
+use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{get_provider_by_id, Provider};
 use crate::sync::{self, Sync::*, SyncData};
@@ -510,6 +512,12 @@ impl Context {
             Config::SysVersion => Some((*constants::DC_VERSION_STR).clone()),
             Config::SysMsgsizeMaxRecommended => Some(format!("{RECOMMENDED_FILE_SIZE}")),
             Config::SysConfigKeys => Some(get_config_keys_string()),
+            Config::Addr => {
+                // We are not saving anything in Config::Addr anymore
+                self.sql
+                    .get_raw_config(Config::ConfiguredAddr.as_ref())
+                    .await?
+            }
             _ => self.sql.get_raw_config(key.as_ref()).await?,
         };
         Ok(value)
@@ -804,6 +812,19 @@ impl Context {
                 self.sql
                     .set_raw_config(constants::DC_FOLDERS_CONFIGURED_KEY, None)
                     .await?;
+            }
+            Config::ConfiguredAddr => {
+                if self.is_configured().await? {
+                    bail!("Cannot change ConfiguredSelfAddr");
+                }
+                if let Some(addr) = value {
+                    info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. ONLY MEANT FOR TESTS.");
+                    ConfiguredLoginParam::from_json(&format!(
+                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
+                    ))?
+                    .save_to_transports_table(self, &EnteredLoginParam::default())
+                    .await?;
+                }
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
