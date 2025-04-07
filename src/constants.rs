@@ -228,7 +228,10 @@ pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
 
     To decrypt and use your setup, \
     open the message in an Autocrypt-compliant client \
-    and enter the setup code presented on the generating device.";
+    and enter the setup code presented on the generating device.
+
+    If you see this message in a chatmail client (Delta Chat, Arcane Chat, Delta Touch ...), \
+    use \"Settings / Add Second Device\" instead.";
 
 #[cfg(test)]
 mod tests {
