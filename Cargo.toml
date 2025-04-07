@@ -31,6 +31,9 @@ opt-level = "z"
 codegen-units = 1
 strip = true
 
+[patch.crates-io]
+netwatch = { git = "https://github.com/n0-computer/net-tools.git", branch = "minimal-versions" }
+
 [dependencies]
 deltachat_derive = { path = "./deltachat_derive" }
 deltachat-time = { path = "./deltachat-time" }
@@ -62,8 +65,8 @@ humansize = "2"
 hyper = "1"
 hyper-util = "0.1.11"
 image = { version = "0.25.5", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
-iroh-gossip = { version = "0.33", default-features = false, features = ["net"] }
-iroh = { version = "0.33", default-features = false }
+iroh-gossip = { version = "0.34", default-features = false, features = ["net"] }
+iroh = { version = "0.34", default-features = false }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
 mail-builder = { version = "0.4.2", default-features = false }
