@@ -479,14 +479,10 @@ impl TestContext {
     /// The context will be configured but the key will not be pre-generated so if a key is
     /// used the fingerprint will be different every time.
     pub async fn configure_addr(&self, addr: &str) {
-        self.ctx.set_config(Config::Addr, Some(addr)).await.unwrap();
-        ConfiguredLoginParam::from_json(&format!(
-            r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
-        ))
-        .unwrap()
-        .save_to_transports_table(self, &EnteredLoginParam::default())
-        .await
-        .unwrap();
+        self.ctx
+            .set_config(Config::ConfiguredAddr, Some(addr))
+            .await
+            .unwrap();
 
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
