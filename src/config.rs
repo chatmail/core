@@ -924,7 +924,8 @@ impl Context {
         )
         .await?;
 
-        self.set_config_internal(Config::ConfiguredAddr, Some(primary_new))
+        self.sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(primary_new))
             .await?;
         self.emit_event(EventType::ConnectivityChanged);
         Ok(())

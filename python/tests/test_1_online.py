@@ -1503,7 +1503,7 @@ def test_connectivity(acfactory, lp):
     assert msgs[1].text == "Hi 2"
 
 
-def test_connectivity_not_connected(acfactory, lp)
+def test_connectivity_not_connected(acfactory, lp):
     ac1 = acfactory.get_pseudo_configured_account()
     lp.sec("Test that the connectivity is NOT_CONNECTED if the password is wrong")
     ac1.start_io()

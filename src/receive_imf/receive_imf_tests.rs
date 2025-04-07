@@ -3113,7 +3113,6 @@ Message with references."#;
 async fn test_rfc1847_encapsulation() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
-    alice.configure_addr("alice@example.org").await;
 
     // Alice sends an Autocrypt message to Bob so Bob gets Alice's key.
     let chat_alice = alice.create_chat(&bob).await;
