@@ -415,12 +415,10 @@ impl MimeFactory {
 
     fn should_force_plaintext(&self) -> bool {
         match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                msg.param
-                    .get_bool(Param::ForcePlaintext)
-                    .unwrap_or_default()
-                    || chat.typ == Chattype::Broadcast
-            }
+            Loaded::Message { msg, .. } => msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default(),
             Loaded::Mdn { .. } => false,
         }
     }

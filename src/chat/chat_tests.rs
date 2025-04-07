@@ -2552,7 +2552,7 @@ async fn test_broadcast() -> Result<()> {
         let msg = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast list");
-        assert!(!msg.get_showpadlock()); // avoid leaking recipients in encryption data
+        assert!(msg.get_showpadlock());
         let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
         assert_eq!(chat.typ, Chattype::Mailinglist);
         assert_ne!(chat.id, chat_bob.id);
