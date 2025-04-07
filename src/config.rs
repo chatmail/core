@@ -512,12 +512,6 @@ impl Context {
             Config::SysVersion => Some((*constants::DC_VERSION_STR).clone()),
             Config::SysMsgsizeMaxRecommended => Some(format!("{RECOMMENDED_FILE_SIZE}")),
             Config::SysConfigKeys => Some(get_config_keys_string()),
-            Config::Addr => {
-                // We are not saving anything in Config::Addr anymore
-                self.sql
-                    .get_raw_config(Config::ConfiguredAddr.as_ref())
-                    .await?
-            }
             _ => self.sql.get_raw_config(key.as_ref()).await?,
         };
         Ok(value)
@@ -533,21 +527,25 @@ impl Context {
         // Default values
         let val = match key {
             Config::BccSelf => match Box::pin(self.is_chatmail()).await? {
-                false => Some("1"),
-                true => Some("0"),
+                false => Some("1".to_string()),
+                true => Some("0".to_string()),
             },
-            Config::ConfiguredInboxFolder => Some("INBOX"),
+            Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
             Config::DeleteServerAfter => {
                 match !Box::pin(self.get_config_bool(Config::BccSelf)).await?
                     && Box::pin(self.is_chatmail()).await?
                 {
-                    true => Some("1"),
-                    false => Some("0"),
+                    true => Some("1".to_string()),
+                    false => Some("0".to_string()),
                 }
             }
-            _ => key.get_str("default"),
+            Config::Addr => {
+                warn!(self, "It looks like you are using `Config::Addr` to get the configured address. You should use `Config::ConfiguredAddr` instead.");
+                self.get_config_opt(Config::ConfiguredAddr).await?
+            }
+            _ => key.get_str("default").map(|s| s.to_string()),
         };
-        Ok(val.map(|s| s.to_string()))
+        Ok(val)
     }
 
     /// Returns Some(T) if a value for the given key is set and was successfully parsed.
