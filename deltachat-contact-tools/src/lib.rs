@@ -816,7 +816,7 @@ PHOTO;PREF=1:data:image/jpeg;base64\,/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z
 REV:Invalid Date
 ITEM1.EMAIL;PREF=1:alice@example.org
-KEY;PREF=1:data:application/pgp-keys;base64\,xsaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+KEY;PREF=1:data:application/pgp-keys;base64,xsaaaaaaaaaaaaaaaaaaaaaaaaaaaa
  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==
 UID:proton-web-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
