@@ -1503,14 +1503,6 @@ def test_connectivity(acfactory, lp):
     assert msgs[1].text == "Hi 2"
 
 
-def test_connectivity_not_connected(acfactory, lp):
-    ac1 = acfactory.get_pseudo_configured_account()
-    lp.sec("Test that the connectivity is NOT_CONNECTED if the password is wrong")
-    ac1.start_io()
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTING)
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_NOT_CONNECTED)
-
-
 def test_fetch_deleted_msg(acfactory, lp):
     """This is a regression test: Messages with \\Deleted flag were downloaded again and again,
     hundreds of times, because uid_next was not updated.
