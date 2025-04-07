@@ -5,7 +5,9 @@ use serde::Serialize;
 use yerpc::TypeDef;
 
 /// Login parameters entered by the user.
-
+///
+/// Usually it will be enough to only set `addr` and `password`,
+/// and all the other settings will be autoconfigured.
 #[derive(Serialize, Deserialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct EnteredLoginParam {

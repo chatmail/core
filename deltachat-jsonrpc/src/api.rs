@@ -2272,6 +2272,37 @@ impl CommandApi {
 
     // mimics the old desktop call, will get replaced with something better in the composer rewrite,
     // the better version will just be sending the current draft, though there will be probably something similar with more options to this for the corner cases like setting a marker on the map
+    /// Send a message to a chat.
+    ///
+    /// This function returns after the message has been placed in the sending queue.
+    /// This does not imply that the message was really sent out yet.
+    /// However, from your view, you're done with the message.
+    /// Sooner or later it will find its way.
+    ///
+    /// **Attaching files:**
+    ///
+    /// Pass the file path in the `file` parameter.
+    /// If `file` is not in the blob directory yet,
+    /// it will be copied into the blob directory.
+    /// If you want, you can delete the file immediately after this function returns.
+    ///
+    /// You can also write the attachment directly into the blob directory
+    /// and then pass the path as the `file` parameter;
+    /// this will prevent an unnecessary copying of the file.
+    ///
+    /// In `filename`, you can pass the original name of the file,
+    /// which will then be shown in the UI.
+    /// in this case the current name of `file` on the filesystem will be ignored.
+    ///
+    /// In order to deduplicate files that contain the same data,
+    /// the file will be named `<hash>.<extension>`, e.g. `ce940175885d7b78f7b7e9f1396611f.jpg`.
+    ///
+    /// NOTE:
+    /// - This function will rename the file. To get the new file path, call `get_file()`.
+    /// - The file must not be modified after this function was called.
+    /// - Images etc. will NOT be recoded.
+    ///   In order to recode images,
+    ///   use `misc_set_draft` and pass `Image` as the viewtype.
     #[expect(clippy::too_many_arguments)]
     async fn misc_send_msg(
         &self,
