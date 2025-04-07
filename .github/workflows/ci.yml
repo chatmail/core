@@ -20,20 +20,22 @@ permissions: {}
 
 env:
   RUSTFLAGS: -Dwarnings
+  RUST_VERSION: 1.86.0
+
+  # Minimum Supported Rust Version
+  MSRV: 1.81.0
 
 jobs:
   lint_rust:
     name: Lint Rust
     runs-on: ubuntu-latest
-    env:
-      RUSTUP_TOOLCHAIN: 1.86.0
     steps:
       - uses: actions/checkout@v4
         with:
           show-progress: false
           persist-credentials: false
       - name: Install rustfmt and clippy
-        run: rustup toolchain install $RUSTUP_TOOLCHAIN --profile minimal --component rustfmt --component clippy
+        run: rustup toolchain install $RUST_VERSION --profile minimal --component rustfmt --component clippy
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@v2
       - name: Run rustfmt
@@ -91,15 +93,15 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            rust: 1.86.0
+            rust: latest
           - os: windows-latest
-            rust: 1.86.0
+            rust: latest
           - os: macos-latest
-            rust: 1.86.0
+            rust: latest
 
-          # Minimum Supported Rust Version = 1.81.0
+          # Minimum Supported Rust Version
           - os: ubuntu-latest
-            rust: 1.81.0
+            rust: minimum
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -108,7 +110,7 @@ jobs:
           persist-credentials: false
 
       - name: Install Rust ${{ matrix.rust }}
-        run: rustup toolchain install --profile minimal ${{ matrix.rust }}
+        run: rustup toolchain install --profile minimal ${{ matrix.rust == 'minimum' && env.MSRV || env.RUST_VERSION }}
       - run: rustup override set ${{ matrix.rust }}
 
       - name: Cache rust cargo artifacts
