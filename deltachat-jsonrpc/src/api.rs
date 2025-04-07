@@ -327,8 +327,12 @@ impl CommandApi {
             .get_config_bool(deltachat::config::Config::ProxyEnabled)
             .await?;
 
-        let provider_info =
-            get_provider_info(&ctx, email.split('@').last().unwrap_or(""), proxy_enabled).await;
+        let provider_info = get_provider_info(
+            &ctx,
+            email.split('@').next_back().unwrap_or(""),
+            proxy_enabled,
+        )
+        .await;
         Ok(ProviderInfo::from_dc_type(provider_info))
     }
 

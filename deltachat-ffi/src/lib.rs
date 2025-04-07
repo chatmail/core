@@ -536,7 +536,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::IncomingReaction { .. } => 2002,
         EventType::IncomingWebxdcNotify { .. } => 2003,
         EventType::IncomingMsg { .. } => 2005,
-        EventType::IncomingMsgBunch { .. } => 2006,
+        EventType::IncomingMsgBunch => 2006,
         EventType::MsgsNoticed { .. } => 2008,
         EventType::MsgDelivered { .. } => 2010,
         EventType::MsgFailed { .. } => 2012,
@@ -594,7 +594,7 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::ConnectivityChanged
         | EventType::SelfavatarChanged
         | EventType::ConfigSynced { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::ErrorSelfNotInGroup(_)
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatlistChanged
@@ -669,7 +669,7 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::MsgsNoticed(_)
         | EventType::ConnectivityChanged
         | EventType::WebxdcInstanceDeleted { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::SelfavatarChanged
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatlistChanged
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatEphemeralTimerModified { .. }
         | EventType::ChatDeleted { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::ChatlistItemChanged { .. }
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
