@@ -220,6 +220,16 @@ pub(crate) const SECUREJOIN_WAIT_TIMEOUT: u64 = 15;
 // Newer Delta Chats will remove the prefix as needed.
 pub(crate) const EDITED_PREFIX: &str = "✏️";
 
+// Strings needed to render the Autocrypt Setup Message.
+// Left untranslated as not being supported/recommended workflow and as translations would require deep knowledge.
+pub(crate) const ASM_SUBJECT: &str = "Autocrypt Setup Message";
+pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
+    used to transfer your end-to-end setup between clients.
+
+    To decrypt and use your setup, \
+    open the message in an Autocrypt-compliant client \
+    and enter the setup code presented on the generating device.";
+
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;

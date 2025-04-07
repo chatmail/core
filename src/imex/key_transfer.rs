@@ -6,6 +6,7 @@ use anyhow::{bail, ensure, Result};
 use crate::blob::BlobObject;
 use crate::chat::{self, ChatId};
 use crate::config::Config;
+use crate::constants::{ASM_BODY, ASM_SUBJECT};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::imex::set_self_key;
@@ -14,7 +15,6 @@ use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::pgp;
-use crate::stock_str;
 use crate::tools::open_file_std;
 
 /// Initiates key transfer via Autocrypt Setup Message.
@@ -39,7 +39,7 @@ pub async fn initiate_key_transfer(context: &Context) -> Result<String> {
     msg.param.set(Param::File, setup_file_blob.as_name());
     msg.param
         .set(Param::Filename, "autocrypt-setup-message.html");
-    msg.subject = stock_str::ac_setup_msg_subject(context).await;
+    msg.subject = ASM_SUBJECT.to_owned();
     msg.param
         .set(Param::MimeType, "application/autocrypt-setup");
     msg.param.set_cmd(SystemMessage::AutocryptSetupMessage);
@@ -113,8 +113,8 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
     );
     let pgp_msg = encr.replace("-----BEGIN PGP MESSAGE-----", &replacement);
 
-    let msg_subj = stock_str::ac_setup_msg_subject(context).await;
-    let msg_body = stock_str::ac_setup_msg_body(context).await;
+    let msg_subj = ASM_SUBJECT;
+    let msg_body = ASM_BODY.to_string();
     let msg_body_html = msg_body.replace('\r', "").replace('\n', "<br>");
     Ok(format!(
         concat!(
@@ -187,7 +187,6 @@ mod tests {
 
     use crate::pgp::{split_armored_data, HEADER_AUTOCRYPT, HEADER_SETUPCODE};
     use crate::receive_imf::receive_imf;
-    use crate::stock_str::StockMessage;
     use crate::test_utils::{TestContext, TestContextManager};
     use ::pgp::armor::BlockType;
 
@@ -213,12 +212,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_render_setup_file_newline_replace() {
         let t = TestContext::new_alice().await;
-        t.set_stock_translation(StockMessage::AcSetupMsgBody, "hello\r\nthere".to_string())
-            .await
-            .unwrap();
         let msg = render_setup_file(&t, "pw").await.unwrap();
         println!("{}", &msg);
-        assert!(msg.contains("<p>hello<br>there</p>"));
+        assert!(msg.contains("<p>This is the Autocrypt Setup Message used to transfer your end-to-end setup between clients.<br>"));
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -6912,12 +6912,12 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Autocrypt Setup Message"
 ///
-/// Used in subjects of outgoing Autocrypt Setup Messages.
+/// @deprecated 2025-04
 #define DC_STR_AC_SETUP_MSG_SUBJECT       42
 
 /// "This is the Autocrypt Setup Message, open it in a compatible client to use your setup"
 ///
-/// Used as message text of outgoing Autocrypt Setup Messages.
+/// @deprecated 2025-04
 #define DC_STR_AC_SETUP_MSG_BODY          43
 
 /// "Cannot login as %1$s."

@@ -95,14 +95,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
 
-    #[strum(props(fallback = "Autocrypt Setup Message"))]
-    AcSetupMsgSubject = 42,
-
-    #[strum(props(
-        fallback = "This is the Autocrypt Setup Message used to transfer your key between clients.\n\nTo decrypt and use your key, open the message in an Autocrypt-compliant client and enter the setup code presented on the generating device."
-    ))]
-    AcSetupMsgBody = 43,
-
     #[strum(props(
         fallback = "Cannot login as \"%1$s\". Please check if the email address and the password are correct."
     ))]
@@ -887,16 +879,6 @@ pub(crate) async fn contact_setup_changed(context: &Context, contact_addr: &str)
 /// Stock string: `Archived chats`.
 pub(crate) async fn archived_chats(context: &Context) -> String {
     translated(context, StockMessage::ArchivedChats).await
-}
-
-/// Stock string: `Autocrypt Setup Message`.
-pub(crate) async fn ac_setup_msg_subject(context: &Context) -> String {
-    translated(context, StockMessage::AcSetupMsgSubject).await
-}
-
-/// Stock string: `This is the Autocrypt Setup Message used to transfer...`.
-pub(crate) async fn ac_setup_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::AcSetupMsgBody).await
 }
 
 /// Stock string: `Multi Device Synchronization`.
