@@ -32,7 +32,7 @@ CREATE TABLE chats (
     grpid TEXT DEFAULT '',
     param TEXT DEFAULT '',
     archived INTEGER DEFAULT 0,
-    gossiped_timestamp INTEGER DEFAULT 0,
+    gossiped_timestamp INTEGER DEFAULT 0, -- deprecated 2025-04-08, replaced with gossiped_timestamp table
     locations_send_begin INTEGER DEFAULT 0,
     locations_send_until INTEGER DEFAULT 0,
     locations_last_sent INTEGER DEFAULT 0,

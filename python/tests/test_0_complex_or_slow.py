@@ -16,8 +16,6 @@ class TestGroupStressTests:
         lp.sec("ac1: send message to new group chat")
         msg1 = chat.send_text("hello")
         assert msg1.is_encrypted()
-        gossiped_timestamp = chat.get_summary()["gossiped_timestamp"]
-        assert gossiped_timestamp > 0
 
         assert chat.num_contacts() == 3 + 1
 
@@ -46,19 +44,13 @@ class TestGroupStressTests:
         assert to_remove.addr in sysmsg.text
         assert sysmsg.chat.num_contacts() == 3
 
-        # Receiving message about removed contact does not reset gossip
-        assert chat.get_summary()["gossiped_timestamp"] == gossiped_timestamp
-
         lp.sec("ac1: sending another message to the chat")
         chat.send_text("hello2")
         msg = ac2._evtracker.wait_next_incoming_message()
         assert msg.text == "hello2"
-        assert chat.get_summary()["gossiped_timestamp"] == gossiped_timestamp
 
         lp.sec("ac1: adding fifth member to the chat")
         chat.add_contact(ac5)
-        # Adding contact to chat resets gossiped_timestamp
-        assert chat.get_summary()["gossiped_timestamp"] >= gossiped_timestamp
 
         lp.sec("ac2: receiving system message about contact addition")
         sysmsg = ac2._evtracker.wait_next_incoming_message()

@@ -1169,6 +1169,23 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 130)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE gossip_timestamp (
+  chat_id INTEGER NOT NULL, 
+  fingerprint TEXT NOT NULL, -- Upper-case fingerprint of the key.
+  timestamp INTEGER NOT NULL,
+  UNIQUE (chat_id, fingerprint)
+) STRICT;
+CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
+",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
