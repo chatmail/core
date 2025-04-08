@@ -145,37 +145,19 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
 
 /// Applies Autocrypt header to Autocrypt peer state and saves it into the database.
 ///
-/// If we already know this fingerprint from another contact's peerstate, return that
-/// peerstate in order to make AEAP work, but don't save it into the db yet.
-///
 /// Returns updated peerstate.
 pub(crate) async fn get_autocrypt_peerstate(
     context: &Context,
     from: &str,
     autocrypt_header: Option<&Aheader>,
     message_time: i64,
-    allow_aeap: bool,
 ) -> Result<Option<Peerstate>> {
     let allow_change = !context.is_self_addr(from).await?;
     let mut peerstate;
 
     // Apply Autocrypt header
     if let Some(header) = autocrypt_header {
-        if allow_aeap {
-            // If we know this fingerprint from another addr,
-            // we may want to do a transition from this other addr
-            // (and keep its peerstate)
-            // For security reasons, for now, we only do a transition
-            // if the fingerprint is verified.
-            peerstate = Peerstate::from_verified_fingerprint_or_addr(
-                context,
-                &header.public_key.dc_fingerprint(),
-                from,
-            )
-            .await?;
-        } else {
-            peerstate = Peerstate::from_addr(context, from).await?;
-        }
+        peerstate = Peerstate::from_addr(context, from).await?;
 
         if let Some(ref mut peerstate) = peerstate {
             if addr_cmp(&peerstate.addr, from) {
