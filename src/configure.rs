@@ -129,7 +129,7 @@ impl Context {
         );
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
         if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
-            bail!("Adding a new transport is not supported right now. Check back in a few months!");
+            bail!("Changing your email address is not supported right now. Check back in a few months!");
         }
         let cancel_channel = self.alloc_ongoing().await?;
 
