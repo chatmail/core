@@ -436,6 +436,12 @@ impl MimeFactory {
     async fn should_do_gossip(&self, context: &Context, multiple_recipients: bool) -> Result<bool> {
         match &self.loaded {
             Loaded::Message { chat, msg } => {
+                if chat.typ == Chattype::Broadcast {
+                    // Never send Autocrypt-Gossip in broadcast lists
+                    // as it discloses recipient email addresses.
+                    return Ok(false);
+                }
+
                 let cmd = msg.param.get_cmd();
                 if cmd == SystemMessage::MemberAddedToGroup
                     || cmd == SystemMessage::SecurejoinMessage
