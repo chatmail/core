@@ -817,6 +817,13 @@ impl ConfiguredLoginParam {
         }
         context
             .sql
+            .set_raw_config(
+                Config::ConfiguredProvider.as_ref(),
+                self.provider.map(|provider| provider.id),
+            )
+            .await?;
+        context
+            .sql
             .execute(
                 "INSERT INTO transports (addr, entered_param, configured_param)
                 VALUES (?, ?, ?)
@@ -964,6 +971,7 @@ mod tests {
     use super::*;
     use crate::provider::get_provider_by_id;
     use crate::test_utils::TestContext;
+    use pretty_assertions::assert_eq;
 
     #[test]
     fn test_certificate_checks_display() {
@@ -1118,7 +1126,8 @@ mod tests {
         t.set_config(Config::Configured, Some("1")).await?;
         t.set_config(Config::ConfiguredProvider, Some("posteo"))
             .await?;
-        t.set_config(Config::ConfiguredAddr, Some("alice@posteo.at"))
+        t.sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some("alice@posteo.at"))
             .await?;
         t.set_config(Config::ConfiguredMailServer, Some("posteo.de"))
             .await?;
@@ -1219,7 +1228,9 @@ mod tests {
         t.set_config(Config::Configured, Some("1")).await?;
         t.set_config(Config::ConfiguredProvider, Some(provider.id))
             .await?;
-        t.set_config(Config::ConfiguredAddr, Some(&addr)).await?;
+        t.sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
+            .await?;
         t.set_config(Config::ConfiguredMailPw, Some("foobarbaz"))
             .await?;
         t.set_config(Config::ConfiguredImapCertificateChecks, Some("1"))
@@ -1299,6 +1310,8 @@ mod tests {
         assert_eq!(loaded.provider, Some(*provider));
         assert_eq!(loaded.imap.is_empty(), false);
         assert_eq!(loaded.smtp.is_empty(), false);
+        assert_eq!(t.get_configured_provider().await?, Some(*provider));
+
         Ok(())
     }
 }
