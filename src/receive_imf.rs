@@ -3111,65 +3111,7 @@ async fn mark_recipients_as_verified(
             continue;
         }
 
-        let Some((to_addr, is_verified)) = context
-            .sql
-            .query_row_optional(
-                "SELECT c.addr, LENGTH(ps.verified_key_fingerprint) FROM contacts c
-                LEFT JOIN acpeerstates ps ON c.addr=ps.addr WHERE c.id=?",
-                (id,),
-                |row| {
-                    let to_addr: String = row.get(0)?;
-                    let is_verified: i32 = row.get(1).unwrap_or(0);
-                    Ok((to_addr, is_verified != 0))
-                },
-            )
-            .await?
-        else {
-            continue;
-        };
-        // mark gossiped keys (if any) as verified
-        if let Some(gossiped_key) = mimeparser.gossiped_keys.get(&to_addr.to_lowercase()) {
-            if let Some(mut peerstate) = Peerstate::from_addr(context, &to_addr).await? {
-                // If we're here, we know the gossip key is verified.
-                //
-                // Use the gossip-key as verified-key if there is no verified-key.
-                //
-                // Store gossip key as secondary verified key if there is a verified key and
-                // gossiped key is different.
-                //
-                // See <https://github.com/nextleap-project/countermitm/issues/46>
-                // and <https://github.com/deltachat/deltachat-core-rust/issues/4541> for discussion.
-                let verifier_addr = contact.get_addr().to_owned();
-                if !is_verified {
-                    info!(context, "{verifier_addr} has verified {to_addr}.");
-                    if let Some(fp) = peerstate.gossip_key_fingerprint.clone() {
-                        peerstate.set_verified(gossiped_key.clone(), fp, verifier_addr)?;
-                        peerstate.backward_verified_key_id =
-                            Some(context.get_config_i64(Config::KeyId).await?).filter(|&id| id > 0);
-                        peerstate.save_to_db(&context.sql).await?;
-
-                        let (to_contact_id, _) = Contact::add_or_lookup(
-                            context,
-                            "",
-                            &ContactAddress::new(&to_addr)?,
-                            Origin::Hidden,
-                        )
-                        .await?;
-                        ChatId::set_protection_for_contact(
-                            context,
-                            to_contact_id,
-                            mimeparser.timestamp_sent,
-                        )
-                        .await?;
-                    }
-                } else {
-                    // The contact already has a verified key.
-                    // Store gossiped key as the secondary verified key.
-                    peerstate.set_secondary_verified_key(gossiped_key.clone(), verifier_addr);
-                    peerstate.save_to_db(&context.sql).await?;
-                }
-            }
-        }
+        // TODO: mark recipient PGP-contacts as verified.
     }
 
     Ok(())
