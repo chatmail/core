@@ -33,6 +33,7 @@ use crate::reaction::get_msg_reactions;
 use crate::sql;
 use crate::summary::Summary;
 use crate::sync::SyncData;
+use crate::tools::create_outgoing_rfc724_mid;
 use crate::tools::{
     buf_compress, buf_decompress, get_filebytes, get_filemeta, gm2local_offset, read_file,
     sanitize_filename, time, timestamp_to_str,
@@ -416,7 +417,7 @@ impl Default for MessengerMessage {
 /// An object representing a single message in memory.
 /// The message object is not updated.
 /// If you want an update, you have to recreate the object.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct Message {
     /// Message ID.
     pub(crate) id: MsgId,
@@ -470,6 +471,7 @@ impl Message {
     pub fn new(viewtype: Viewtype) -> Self {
         Message {
             viewtype,
+            rfc724_mid: create_outgoing_rfc724_mid(),
             ..Default::default()
         }
     }
@@ -479,6 +481,7 @@ impl Message {
         Message {
             viewtype: Viewtype::Text,
             text,
+            rfc724_mid: create_outgoing_rfc724_mid(),
             ..Default::default()
         }
     }
