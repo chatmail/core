@@ -539,10 +539,7 @@ impl Context {
                     false => Some("0".to_string()),
                 }
             }
-            Config::Addr => {
-                warn!(self, "It looks like you are using `Config::Addr` to get the configured address. You should use `Config::ConfiguredAddr` instead.");
-                self.get_config_opt(Config::ConfiguredAddr).await?
-            }
+            Config::Addr => self.get_config_opt(Config::ConfiguredAddr).await?,
             _ => key.get_str("default").map(|s| s.to_string()),
         };
         Ok(val)
