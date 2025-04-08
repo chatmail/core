@@ -535,6 +535,7 @@ impl ConfiguredLoginParam {
         }
     }
 
+    /// Load legacy configured param. Only used for tests and the migration.
     pub(crate) async fn load_legacy(context: &Context) -> Result<Option<Self>> {
         if !context.get_config_bool(Config::Configured).await? {
             return Ok(None);
@@ -837,15 +838,11 @@ impl ConfiguredLoginParam {
 
     pub(crate) fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
-        let imap;
-        let smtp;
-        let provider_option;
+        let mut imap = vec![];
+        let mut smtp = vec![];
+        let mut provider_option = None;
 
-        if let Some(provider) = json
-            .provider_id
-            .and_then(|id| get_provider_by_id(&id))
-            .filter(|p| !p.server.is_empty())
-        {
+        if let Some(provider) = json.provider_id.and_then(|id| get_provider_by_id(&id)) {
             // Load servers from provider, rather than the servers saved in the database
             provider_option = Some(provider);
 
@@ -909,9 +906,12 @@ impl ConfiguredLoginParam {
                     })
                 })
                 .collect();
-        } else {
-            provider_option = None;
+        }
+
+        if imap.is_empty() {
             imap = json.imap;
+        }
+        if smtp.is_empty() {
             smtp = json.smtp;
         }
 
@@ -1195,11 +1195,15 @@ mod tests {
         let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
         assert_eq!(loaded, param);
 
+        migrate_configured_login_param(&t).await;
+        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        assert_eq!(loaded, param);
+
         Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_empty_server_list() -> Result<()> {
+    async fn test_empty_server_list_legacy() -> Result<()> {
         // Find a provider that does not have server list set.
         //
         // There is at least one such provider in the provider database.
@@ -1228,6 +1232,70 @@ mod tests {
             .await?;
 
         let loaded = ConfiguredLoginParam::load_legacy(&t).await?.unwrap();
+        assert_eq!(loaded.provider, Some(*provider));
+        assert_eq!(loaded.imap.is_empty(), false);
+        assert_eq!(loaded.smtp.is_empty(), false);
+
+        migrate_configured_login_param(&t).await;
+
+        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        assert_eq!(loaded.provider, Some(*provider));
+        assert_eq!(loaded.imap.is_empty(), false);
+        assert_eq!(loaded.smtp.is_empty(), false);
+
+        Ok(())
+    }
+
+    async fn migrate_configured_login_param(t: &TestContext) {
+        t.sql.execute("DROP TABLE transports;", ()).await.unwrap();
+        t.sql.set_raw_config_int("dbversion", 129).await.unwrap();
+        t.sql.run_migrations(t).await.unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_empty_server_list() -> Result<()> {
+        // Find a provider that does not have server list set.
+        //
+        // There is at least one such provider in the provider database.
+        let (domain, provider) = crate::provider::data::PROVIDER_DATA
+            .iter()
+            .find(|(_domain, provider)| provider.server.is_empty())
+            .unwrap();
+
+        let t = TestContext::new().await;
+
+        let addr = format!("alice@{domain}");
+
+        ConfiguredLoginParam {
+            addr: addr.clone(),
+            imap: vec![ConfiguredServerLoginParam {
+                connection: ConnectionCandidate {
+                    host: "example.org".to_string(),
+                    port: 100,
+                    security: ConnectionSecurity::Tls,
+                },
+                user: addr.clone(),
+            }],
+            imap_user: addr.clone(),
+            imap_password: "foobarbaz".to_string(),
+            smtp: vec![ConfiguredServerLoginParam {
+                connection: ConnectionCandidate {
+                    host: "example.org".to_string(),
+                    port: 100,
+                    security: ConnectionSecurity::Tls,
+                },
+                user: addr.clone(),
+            }],
+            smtp_user: addr.clone(),
+            smtp_password: "foobarbaz".to_string(),
+            provider: Some(provider),
+            certificate_checks: ConfiguredCertificateChecks::Automatic,
+            oauth2: false,
+        }
+        .save_to_transports_table(&t, &EnteredLoginParam::default())
+        .await?;
+
+        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(loaded.provider, Some(*provider));
         assert_eq!(loaded.imap.is_empty(), false);
         assert_eq!(loaded.smtp.is_empty(), false);
