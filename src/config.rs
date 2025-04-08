@@ -816,7 +816,7 @@ impl Context {
                     bail!("Cannot change ConfiguredSelfAddr");
                 }
                 if let Some(addr) = value {
-                    info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. ONLY MEANT FOR TESTS.");
+                    info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!");
                     ConfiguredLoginParam::from_json(&format!(
                         r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
                     ))?
