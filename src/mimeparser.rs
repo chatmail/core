@@ -309,8 +309,6 @@ impl MimeMessage {
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
 
-        let allow_aeap = get_encrypted_mime(&mail).is_some();
-
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
         let mut gossiped_keys = Default::default();
@@ -395,7 +393,6 @@ impl MimeMessage {
             &from.addr,
             autocrypt_header.as_ref(),
             timestamp_sent,
-            allow_aeap,
         )
         .await?;
 
