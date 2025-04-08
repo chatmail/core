@@ -822,6 +822,24 @@ pub unsafe extern "C" fn dc_event_get_account_id(event: *mut dc_event_t) -> u32 
     (*event).id
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn dc_event_get_json(event: *mut dc_event_t) -> *mut libc::c_char {
+    if event.is_null() {
+        eprintln!("ignoring careless call to dc_event_get_json()");
+        return ptr::null_mut();
+    }
+
+    match serde_json::to_string(&deltachat_jsonrpc::api::types::events::Event::from(
+        (*event).clone(),
+    )) {
+        Ok(string) => string.strdup(),
+        Err(error) => {
+            eprintln!("dc_event_get_json() failed to serialise to json: {error:#}");
+            ptr::null_mut()
+        }
+    }
+}
+
 pub type dc_event_emitter_t = EventEmitter;
 
 #[no_mangle]
