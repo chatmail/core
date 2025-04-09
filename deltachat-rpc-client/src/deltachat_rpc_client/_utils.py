@@ -92,6 +92,12 @@ def _run_cli(
     )
     parser.add_argument("--email", action="store", help="email address", default=os.getenv("DELTACHAT_EMAIL"))
     parser.add_argument("--password", action="store", help="password", default=os.getenv("DELTACHAT_PASSWORD"))
+    parser.add_argument(
+        "--displayname", action="store", help="the profile's display name", default=os.getenv("DELTACHAT_DISPLAYNAME")
+    )
+    parser.add_argument(
+        "--avatar", action="store", help="filename of the profile's avatar", default=os.getenv("DELTACHAT_AVATAR")
+    )
     args = parser.parse_args(argv[1:])
 
     with Rpc(accounts_dir=args.accounts_dir, **kwargs) as rpc:
@@ -108,7 +114,12 @@ def _run_cli(
             configure_thread = Thread(
                 target=client.configure,
                 daemon=True,
-                kwargs={"email": args.email, "password": args.password},
+                kwargs={
+                    "email": args.email,
+                    "password": args.password,
+                    "displayname": args.displayname,
+                    "selfavatar": args.avatar,
+                },
             )
             configure_thread.start()
         client.run_forever()
