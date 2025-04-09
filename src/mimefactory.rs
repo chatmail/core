@@ -95,7 +95,7 @@ pub struct MimeFactory {
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
 
-    /// Timestamps of the members in the same order as in the `recipients`
+    /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
     /// If this is not empty, its length
