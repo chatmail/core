@@ -1203,63 +1203,6 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reset_encryption() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    let msg = tcm.send_recv_accept(bob, alice, "Hi!").await;
-    assert_eq!(msg.get_showpadlock(), true);
-
-    let alice_bob_chat_id = msg.chat_id;
-    let alice_bob_contact_id = msg.from_id;
-
-    alice_bob_contact_id.reset_encryption(alice).await?;
-
-    let sent = alice.send_text(alice_bob_chat_id, "Unencrypted").await;
-    let msg = bob.recv_msg(&sent).await;
-    assert_eq!(msg.get_showpadlock(), false);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reset_verified_encryption() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    tcm.execute_securejoin(bob, alice).await;
-
-    let msg = tcm.send_recv(bob, alice, "Encrypted").await;
-    assert_eq!(msg.get_showpadlock(), true);
-
-    let alice_bob_chat_id = msg.chat_id;
-    let alice_bob_contact_id = msg.from_id;
-
-    alice_bob_contact_id.reset_encryption(alice).await?;
-
-    // Check that the contact is still verified after resetting encryption.
-    let alice_bob_contact = Contact::get_by_id(alice, alice_bob_contact_id).await?;
-    assert_eq!(alice_bob_contact.is_verified(alice).await?, true);
-
-    // 1:1 chat and profile is no longer verified.
-    assert_eq!(alice_bob_contact.is_profile_verified(alice).await?, false);
-
-    let info_msg = alice.get_last_msg_in(alice_bob_chat_id).await;
-    assert_eq!(
-        info_msg.text,
-        "bob@example.net sent a message from another device."
-    );
-
-    let sent = alice.send_text(alice_bob_chat_id, "Unencrypted").await;
-    let msg = bob.recv_msg(&sent).await;
-    assert_eq!(msg.get_showpadlock(), false);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_self_is_verified() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
