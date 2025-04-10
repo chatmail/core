@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -24,8 +24,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
-use crate::key::DcKey;
-use crate::key::Fingerprint;
+use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::message::{
     self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
@@ -317,19 +316,6 @@ pub(crate) async fn receive_imf_inner(
             }
         };
 
-    let to_ids = add_or_lookup_contacts_by_address_list(
-        context,
-        &mime_parser.recipients,
-        if !mime_parser.incoming {
-            Origin::OutgoingTo
-        } else if incoming_origin.is_known() {
-            Origin::IncomingTo
-        } else {
-            Origin::IncomingUnknownTo
-        },
-    )
-    .await?;
-
     let chat_id = if let Some(grpid) = mime_parser.get_chat_group_id() {
         if let Some((chat_id, _protected, _blocked)) =
             chat::get_chat_id_by_grpid(context, &grpid).await?
@@ -342,10 +328,41 @@ pub(crate) async fn receive_imf_inner(
         None
     };
 
-    let past_ids: Vec<Option<ContactId>> = if let Some(chat_id) = chat_id {
-        lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id).await?
+    let to_ids: Vec<Option<ContactId>>;
+    let past_ids: Vec<Option<ContactId>>;
+
+    if let Some(chat_id) = chat_id {
+        to_ids = add_or_lookup_pgp_contacts_by_address_list(
+            context,
+            &mime_parser.recipients,
+            &mime_parser.gossiped_keys,
+            if !mime_parser.incoming {
+                Origin::OutgoingTo
+            } else if incoming_origin.is_known() {
+                Origin::IncomingTo
+            } else {
+                Origin::IncomingUnknownTo
+            },
+        )
+        .await?;
+
+        past_ids = lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id)
+            .await?;
     } else {
-        add_or_lookup_contacts_by_address_list(
+        to_ids = add_or_lookup_contacts_by_address_list(
+            context,
+            &mime_parser.recipients,
+            if !mime_parser.incoming {
+                Origin::OutgoingTo
+            } else if incoming_origin.is_known() {
+                Origin::IncomingTo
+            } else {
+                Origin::IncomingUnknownTo
+            },
+        )
+        .await?;
+
+        past_ids = add_or_lookup_contacts_by_address_list(
             context,
             &mime_parser.past_members,
             if !mime_parser.incoming {
@@ -356,10 +373,7 @@ pub(crate) async fn receive_imf_inner(
                 Origin::IncomingUnknownTo
             },
         )
-        .await?
-        .into_iter()
-        .map(|contact_id| Some(contact_id))
-        .collect()
+        .await?;
     };
 
     update_verified_keys(context, &mut mime_parser, from_id).await?;
@@ -376,7 +390,7 @@ pub(crate) async fn receive_imf_inner(
             let contact = Contact::get_by_id(context, from_id).await?;
             mime_parser.peerstate = Peerstate::from_addr(context, contact.get_addr()).await?;
         } else {
-            let to_id = to_ids.first().copied().unwrap_or(ContactId::SELF);
+            let to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
             // handshake may mark contacts as verified and must be processed before chats are created
             res = observe_securejoin_on_other_device(context, &mime_parser, to_id)
                 .await
@@ -402,6 +416,9 @@ pub(crate) async fn receive_imf_inner(
     } else {
         received_msg = None;
     }
+
+    // FIXME: do not flatten to_ids
+    let to_ids: Vec<ContactId> = to_ids.into_iter().filter_map(|x| x).collect();
 
     let verified_encryption = has_verified_encryption(&mime_parser, from_id)?;
 
@@ -3170,11 +3187,12 @@ async fn add_or_lookup_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
     origin: Origin,
-) -> Result<Vec<ContactId>> {
+) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
     for info in address_list {
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
+            contact_ids.push(None);
             continue;
         }
         let display_name = info.display_name.as_deref();
@@ -3182,9 +3200,44 @@ async fn add_or_lookup_contacts_by_address_list(
             let (contact_id, _) =
                 Contact::add_or_lookup(context, display_name.unwrap_or_default(), &addr, origin)
                     .await?;
-            contact_ids.push(contact_id);
+            contact_ids.push(Some(contact_id));
         } else {
             warn!(context, "Contact with address {:?} cannot exist.", addr);
+            contact_ids.push(None);
+        }
+    }
+
+    Ok(contact_ids)
+}
+
+/// Looks up contact IDs from the database given the list of recipients.
+async fn add_or_lookup_pgp_contacts_by_address_list(
+    context: &Context,
+    address_list: &[SingleInfo],
+    gossiped_keys: &HashMap<String, SignedPublicKey>,
+    origin: Origin,
+) -> Result<Vec<Option<ContactId>>> {
+    let mut contact_ids = Vec::new();
+    for info in address_list {
+        let addr = &info.addr;
+        if !may_be_valid_addr(addr) {
+            contact_ids.push(None);
+            continue;
+        }
+        let Some(key) = gossiped_keys.get(addr) else {
+            contact_ids.push(None);
+            continue;
+        };
+        let fingerprint = key.dc_fingerprint().hex();
+        let display_name = info.display_name.as_deref();
+        if let Ok(addr) = ContactAddress::new(addr) {
+            let (contact_id, _) =
+                Contact::add_or_lookup_ex(context, display_name.unwrap_or_default(), &addr, &fingerprint, origin)
+                    .await?;
+            contact_ids.push(Some(contact_id));
+        } else {
+            warn!(context, "Contact with address {:?} cannot exist.", addr);
+            contact_ids.push(None);
         }
     }
 
