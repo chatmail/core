@@ -423,9 +423,6 @@ pub(crate) async fn receive_imf_inner(
         received_msg = None;
     }
 
-    // FIXME: do not flatten to_ids
-    let to_ids: Vec<ContactId> = to_ids.into_iter().filter_map(|x| x).collect();
-
     let verified_encryption = has_verified_encryption(&mime_parser, from_id)?;
 
     if verified_encryption == VerifiedEncryption::Verified {
@@ -737,7 +734,7 @@ async fn add_parts(
     context: &Context,
     mime_parser: &mut MimeMessage,
     imf_raw: &[u8],
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
     rfc724_mid: &str,
     from_id: ContactId,
@@ -903,7 +900,7 @@ async fn add_parts(
                 context,
                 mime_parser,
                 &parent,
-                to_ids,
+                &to_ids,
                 from_id,
                 allow_creation || test_normal_chat.is_some(),
                 create_blocked,
@@ -1081,7 +1078,7 @@ async fn add_parts(
         // the mail is on the IMAP server, probably it is also delivered.
         // We cannot recreate other states (read, error).
         state = MessageState::OutDelivered;
-        to_id = to_ids.first().copied().unwrap_or(ContactId::SELF);
+        to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
 
         // Older Delta Chat versions with core <=1.152.2 only accepted
         // self-sent messages in Saved Messages with own address in the `To` field.
@@ -1994,15 +1991,18 @@ async fn lookup_chat_or_create_adhoc_group(
     context: &Context,
     mime_parser: &MimeMessage,
     parent: &Option<Message>,
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     from_id: ContactId,
     allow_creation: bool,
     create_blocked: Blocked,
     is_partial_download: bool,
 ) -> Result<Option<(ChatId, Blocked)>> {
+    // FIXME
+    let to_ids: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
+
     if let Some((new_chat_id, new_chat_id_blocked)) =
         // Try to assign to a chat based on In-Reply-To/References.
-        lookup_chat_by_reply(context, mime_parser, parent, to_ids, from_id).await?
+        lookup_chat_by_reply(context, mime_parser, parent, &to_ids, from_id).await?
     {
         return Ok(Some((new_chat_id, new_chat_id_blocked)));
     }
@@ -2029,7 +2029,7 @@ async fn lookup_chat_or_create_adhoc_group(
         .map(|s| remove_subject_prefix(&s))
         .unwrap_or_else(|| "👥📧".to_string());
     let mut contact_ids = Vec::with_capacity(to_ids.len() + 1);
-    contact_ids.extend(to_ids);
+    contact_ids.extend(&to_ids);
     if !contact_ids.contains(&from_id) {
         contact_ids.push(from_id);
     }
@@ -2085,7 +2085,7 @@ async fn lookup_chat_or_create_adhoc_group(
         mime_parser,
         create_blocked,
         from_id,
-        to_ids,
+        &to_ids,
         &grpname,
     )
     .await
@@ -2141,11 +2141,12 @@ async fn create_group(
     is_partial_download: bool,
     create_blocked: Blocked,
     from_id: ContactId,
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
     grpid: &str,
 ) -> Result<Option<(ChatId, Blocked)>> {
+    let to_ids_flat: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
 
@@ -2153,7 +2154,7 @@ async fn create_group(
     // they belong to the group because of the Chat-Group-Id or Message-Id header
     if let Some(chat_id) = chat_id {
         if !mime_parser.has_chat_version()
-            && is_probably_private_reply(context, to_ids, from_id, mime_parser, chat_id).await?
+            && is_probably_private_reply(context, &to_ids_flat, from_id, mime_parser, chat_id).await?
         {
             return Ok(None);
         }
@@ -2218,8 +2219,8 @@ async fn create_group(
         // Create initial member list.
         if let Some(mut chat_group_member_timestamps) = mime_parser.chat_group_member_timestamps() {
             let mut new_to_ids = to_ids.to_vec();
-            if !new_to_ids.contains(&from_id) {
-                new_to_ids.insert(0, from_id);
+            if !new_to_ids.contains(&Some(from_id)) {
+                new_to_ids.insert(0, Some(from_id));
                 chat_group_member_timestamps.insert(0, mime_parser.timestamp_sent);
             }
 
@@ -2237,7 +2238,7 @@ async fn create_group(
             if !from_id.is_special() {
                 members.push(from_id);
             }
-            members.extend(to_ids);
+            members.extend(to_ids_flat);
 
             // Add all members with 0 timestamp
             // because we don't know the real timestamp of their addition.
@@ -2276,7 +2277,7 @@ async fn update_chats_contacts_timestamps(
     context: &Context,
     chat_id: ChatId,
     ignored_id: Option<ContactId>,
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
     chat_group_member_timestamps: &[i64],
 ) -> Result<bool> {
@@ -2310,11 +2311,13 @@ async fn update_chats_contacts_timestamps(
                 to_ids.iter(),
                 chat_group_member_timestamps.iter().take(to_ids.len()),
             ) {
-                if Some(*contact_id) != ignored_id {
-                    // It could be that member was already added,
-                    // but updated addition timestamp
-                    // is also a modification worth notifying about.
-                    modified |= add_statement.execute((chat_id, contact_id, ts))? > 0;
+                if let Some(contact_id) = contact_id {
+                    if Some(*contact_id) != ignored_id {
+                        // It could be that member was already added,
+                        // but updated addition timestamp
+                        // is also a modification worth notifying about.
+                        modified |= add_statement.execute((chat_id, contact_id, ts))? > 0;
+                    }
                 }
             }
 
@@ -2331,10 +2334,12 @@ async fn update_chats_contacts_timestamps(
                 past_ids.iter(),
                 chat_group_member_timestamps.iter().skip(to_ids.len()),
             ) {
-                // It could be that member was already removed,
-                // but updated removal timestamp
-                // is also a modification worth notifying about.
-                modified |= remove_statement.execute((chat_id, contact_id, ts))? > 0;
+                if let Some(contact_id) = contact_id {
+                    // It could be that member was already removed,
+                    // but updated removal timestamp
+                    // is also a modification worth notifying about.
+                    modified |= remove_statement.execute((chat_id, contact_id, ts))? > 0;
+                }
             }
 
             Ok(())
@@ -2371,10 +2376,12 @@ async fn apply_group_changes(
     mime_parser: &mut MimeMessage,
     chat_id: ChatId,
     from_id: ContactId,
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
 ) -> Result<GroupChangesInfo> {
+    // FIXME
+    let to_ids_flat: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
     if chat_id.is_special() {
         // Do not apply group changes to the trash chat.
         return Ok(GroupChangesInfo::default());
@@ -2513,7 +2520,7 @@ async fn apply_group_changes(
     if is_from_in_chat {
         if chat.member_list_is_stale(context).await? {
             info!(context, "Member list is stale.");
-            let mut new_members: HashSet<ContactId> = HashSet::from_iter(to_ids.iter().copied());
+            let mut new_members: HashSet<ContactId> = HashSet::from_iter(to_ids_flat.iter().copied());
             new_members.insert(ContactId::SELF);
             if !from_id.is_special() {
                 new_members.insert(from_id);
@@ -2549,15 +2556,15 @@ async fn apply_group_changes(
                 context,
                 chat_id,
                 Some(from_id),
-                to_ids,
+                &to_ids,
                 past_ids,
                 chat_group_member_timestamps,
             )
             .await?;
         } else {
-            let mut new_members;
+            let mut new_members: HashSet<ContactId>;
             if self_added {
-                new_members = HashSet::from_iter(to_ids.iter().copied());
+                new_members = HashSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
                 if !from_id.is_special() {
                     new_members.insert(from_id);
@@ -2570,7 +2577,7 @@ async fn apply_group_changes(
             if mime_parser.get_header(HeaderDef::ChatVersion).is_none() {
                 // Don't delete any members locally, but instead add absent ones to provide group
                 // membership consistency for all members:
-                new_members.extend(to_ids.iter());
+                new_members.extend(to_ids_flat.iter());
             }
 
             // Apply explicit addition if any.
@@ -3122,14 +3129,14 @@ fn has_verified_encryption(
 async fn mark_recipients_as_verified(
     context: &Context,
     from_id: ContactId,
-    to_ids: &[ContactId],
+    to_ids: &[Option<ContactId>],
     mimeparser: &MimeMessage,
 ) -> Result<()> {
     if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
         return Ok(());
     }
     let contact = Contact::get_by_id(context, from_id).await?;
-    for &id in to_ids {
+    for id in to_ids.iter().filter_map(|&x| x) {
         if id == ContactId::SELF {
             continue;
         }
