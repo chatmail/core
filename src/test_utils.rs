@@ -1033,8 +1033,8 @@ impl TestContext {
         let chat_id = create_group_chat(self, protect, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
-            let contact = self.add_or_lookup_contact(member).await;
-            to_add.push(contact.id);
+            let contact_id = self.add_or_lookup_contact_id(member).await;
+            to_add.push(contact_id);
         }
         add_to_chat_contacts_table(self, time(), chat_id, &to_add)
             .await
