@@ -325,13 +325,15 @@ async fn test_member_add_remove() -> Result<()> {
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group chat").await?;
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
     add_contact_to_chat(&alice, alice_chat_id, alice_fiona_contact_id).await?;
-    alice
+    let sent = alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
+    let fiona_chat_id = fiona.recv_msg(&sent).await.chat_id;
 
     // Alice adds Bob to the chat.
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
+    fiona.recv_msg(&sent).await;
 
     // Locally set name "robert" should not leak.
     assert!(!sent.payload.contains("robert"));
@@ -339,6 +341,12 @@ async fn test_member_add_remove() -> Result<()> {
         sent.load_from_db().await.get_text(),
         "You added member robert."
     );
+    let fiona_contact_ids = get_chat_contacts(&fiona, fiona_chat_id).await?;
+    assert_eq!(fiona_contact_ids.len(), 3);
+    for contact_id in fiona_contact_ids {
+        let contact = Contact::get_by_id(&fiona, contact_id).await?;
+        assert_ne!(contact.get_name(), "robert");
+    }
 
     // Alice removes Bob from the chat.
     remove_contact_from_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
