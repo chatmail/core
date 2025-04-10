@@ -15,7 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat};
+use crate::chat::{self, Chat, get_chat_contacts};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -753,9 +753,33 @@ impl MimeFactory {
             }
         }
 
+        let is_chatmail = context.is_chatmail().await?;
         let peerstates = self.peerstates_for_recipients(context).await?;
         let is_encrypted = !self.should_force_plaintext()
-            && (e2ee_guaranteed || encrypt_helper.should_encrypt(context, &peerstates).await?);
+            && (e2ee_guaranteed
+                || is_chatmail
+                || match &self.loaded {
+                    Loaded::Message { chat, .. } => {
+                        match chat.typ {
+                            Chattype::Single => {
+                                let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
+                                if let Some(contact_id) = chat_contact_ids.first() {
+                                    let contact = Contact::get_by_id(context, *contact_id).await?;
+                                    contact.is_pgp_contact()
+                                } else {
+                                    true
+                                }
+                            }
+                            Chattype::Group => {
+                                // Do not encrypt ad-hoc groups.
+                                !chat.grpid.is_empty()
+                            }
+                            Chattype::Mailinglist => false,
+                            Chattype::Broadcast => true,
+                        }
+                    }
+                    Loaded::Mdn { .. } => true,
+                });
         let is_securejoin_message = if let Loaded::Message { msg, .. } = &self.loaded {
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         } else {
