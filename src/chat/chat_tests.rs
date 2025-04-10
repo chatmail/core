@@ -346,6 +346,7 @@ async fn test_member_add_remove() -> Result<()> {
     for contact_id in fiona_contact_ids {
         let contact = Contact::get_by_id(&fiona, contact_id).await?;
         assert_ne!(contact.get_name(), "robert");
+        assert!(contact.is_pgp_contact());
     }
 
     // Alice removes Bob from the chat.
