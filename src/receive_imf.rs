@@ -331,7 +331,7 @@ pub(crate) async fn receive_imf_inner(
     let to_ids: Vec<Option<ContactId>>;
     let past_ids: Vec<Option<ContactId>>;
 
-    if let Some(chat_id) = chat_id {
+    if mime_parser.get_chat_group_id().is_some() {
         to_ids = add_or_lookup_pgp_contacts_by_address_list(
             context,
             &mime_parser.recipients,
@@ -346,8 +346,14 @@ pub(crate) async fn receive_imf_inner(
         )
         .await?;
 
-        past_ids = lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id)
-            .await?;
+        if let Some(chat_id) = chat_id {
+            past_ids =
+                lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id)
+                    .await?;
+        } else {
+            // TODO: lookup by fingerprints if they are available.
+            past_ids = vec![None; mime_parser.past_members.len()];
+        }
     } else {
         to_ids = add_or_lookup_contacts_by_address_list(
             context,
