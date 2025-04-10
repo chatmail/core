@@ -264,7 +264,6 @@ def test_contact(acfactory) -> None:
     assert repr(alice_contact_bob)
     alice_contact_bob.block()
     alice_contact_bob.unblock()
-    alice_contact_bob.reset_encryption()
     alice_contact_bob.set_name("new name")
     alice_contact_bob.get_encryption_info()
     snapshot = alice_contact_bob.get_snapshot()
