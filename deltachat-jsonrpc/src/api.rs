@@ -1542,15 +1542,6 @@ impl CommandApi {
         Ok(())
     }
 
-    /// Resets contact encryption.
-    async fn reset_contact_encryption(&self, account_id: u32, contact_id: u32) -> Result<()> {
-        let ctx = self.get_context(account_id).await?;
-        let contact_id = ContactId::new(contact_id);
-
-        contact_id.reset_encryption(&ctx).await?;
-        Ok(())
-    }
-
     /// Sets display name for existing contact.
     async fn change_contact_name(
         &self,

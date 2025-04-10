@@ -196,31 +196,6 @@ impl ContactId {
             .await?;
         Ok(addr)
     }
-
-    /// Resets encryption with the contact.
-    ///
-    /// Effect is similar to receiving a message without Autocrypt header
-    /// from the contact, but this action is triggered manually by the user.
-    ///
-    /// For example, this will result in sending the next message
-    /// to 1:1 chat unencrypted, but will not remove existing verified keys.
-    pub async fn reset_encryption(self, context: &Context) -> Result<()> {
-        let now = time();
-
-        let addr = self.addr(context).await?;
-        if let Some(mut peerstate) = Peerstate::from_addr(context, &addr).await? {
-            peerstate.degrade_encryption(now);
-            peerstate.save_to_db(&context.sql).await?;
-        }
-
-        // Reset 1:1 chat protection.
-        if let Some(chat_id) = ChatId::lookup_by_contact(context, self).await? {
-            chat_id
-                .set_protection(context, ProtectionStatus::Unprotected, now, Some(self))
-                .await?;
-        }
-        Ok(())
-    }
 }
 
 impl fmt::Display for ContactId {
