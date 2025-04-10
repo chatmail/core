@@ -3395,7 +3395,7 @@ async fn test_info_contact_id() -> Result<()> {
         expected_bob_id: ContactId,
     ) -> Result<()> {
         let sent_msg = alice.pop_sent_msg().await;
-        let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
+        let msg = sent_msg.load_from_db().await;
         assert_eq!(msg.get_info_type(), expected_type);
         assert_eq!(
             msg.get_info_contact_id(alice).await?,
