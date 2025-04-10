@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::{HashSet, HashMap};
+use std::collections::{HashMap, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -3231,9 +3231,14 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
         let fingerprint = key.dc_fingerprint().hex();
         let display_name = info.display_name.as_deref();
         if let Ok(addr) = ContactAddress::new(addr) {
-            let (contact_id, _) =
-                Contact::add_or_lookup_ex(context, display_name.unwrap_or_default(), &addr, &fingerprint, origin)
-                    .await?;
+            let (contact_id, _) = Contact::add_or_lookup_ex(
+                context,
+                display_name.unwrap_or_default(),
+                &addr,
+                &fingerprint,
+                origin,
+            )
+            .await?;
             contact_ids.push(Some(contact_id));
         } else {
             warn!(context, "Contact with address {:?} cannot exist.", addr);
