@@ -340,11 +340,12 @@ async fn test_subject_in_group() -> Result<()> {
 
     // 6. Test that in a group, replies also take the quoted message's subject, while non-replies use the group title as subject
     let t = TestContext::new_alice().await;
+    let bob = TestContext::new_bob().await;
     let group_id = chat::create_group_chat(&t, chat::ProtectionStatus::Unprotected, "groupname") // TODO encodings, ä
         .await
         .unwrap();
-    let bob = Contact::create(&t, "", "bob@example.org").await?;
-    chat::add_contact_to_chat(&t, group_id, bob).await?;
+    let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
+    chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
     let subject = send_msg_get_subject(&t, group_id, None).await?;
     assert_eq!(subject, "groupname");
