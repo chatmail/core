@@ -2516,6 +2516,7 @@ async fn test_broadcast() -> Result<()> {
     // create two context, send two messages so both know the other
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
+    let fiona = TestContext::new_fiona().await;
 
     let chat_alice = alice.create_chat(&bob).await;
     send_text_msg(&alice, chat_alice.id, "hi!".to_string()).await?;
@@ -2534,6 +2535,8 @@ async fn test_broadcast() -> Result<()> {
         get_chat_contacts(&alice, chat_bob.id).await?.pop().unwrap(),
     )
     .await?;
+    let fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
+    add_contact_to_chat(&alice, broadcast_id, fiona_contact_id).await?;
     set_chat_name(&alice, broadcast_id, "Broadcast list").await?;
     {
         let chat = Chat::load_from_db(&alice, broadcast_id).await?;
@@ -2548,7 +2551,12 @@ async fn test_broadcast() -> Result<()> {
 
     {
         let sent_msg = alice.pop_sent_msg().await;
-        assert!(!sent_msg.payload.contains("Chat-Group-Member-Timestamps:"));
+        let msg = bob.parse_msg(&sent_msg).await;
+        assert!(msg.was_encrypted());
+        assert!(msg
+            .get_header(HeaderDef::ChatGroupMemberTimestamps)
+            .is_none());
+        assert!(msg.get_header(HeaderDef::AutocryptGossip).is_none());
         let msg = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast list");
