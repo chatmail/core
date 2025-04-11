@@ -360,7 +360,7 @@ impl MimeFactory {
                 };
 
             if is_encrypted {
-                let mut additional_encryption_keyring = Vec::new();
+                let mut certificates = Vec::new();
                 let mut missing_key_addresses = BTreeSet::new();
 
                 for addr in recipients.iter().filter(|&addr| *addr != from_addr) {
@@ -376,14 +376,14 @@ impl MimeFactory {
 
                     let key_opt: Option<SignedPublicKey> = peerstate.take_key(verified);
                     if let Some(key) = key_opt {
-                        additional_encryption_keyring.push((addr.clone(), key));
+                        certificates.push((addr.clone(), key));
                     } else {
                         warn!(context, "Encryption key for {addr} is missing.");
                         missing_key_addresses.insert(addr.clone());
                     }
                 }
 
-                if additional_encryption_keyring.is_empty() {
+                if certificates.is_empty() {
                     bail!("No recipient keys are available, cannot encrypt");
                 }
 
@@ -392,7 +392,7 @@ impl MimeFactory {
                     recipients.retain(|addr| !missing_key_addresses.contains(addr));
                 }
 
-                Some(additional_encryption_keyring)
+                Some(certificates)
             } else {
                 None
             }
