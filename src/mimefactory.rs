@@ -1,6 +1,6 @@
 //! # MIME message production.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, BTreeSet};
 use std::io::Cursor;
 use std::path::Path;
 
@@ -23,7 +23,7 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
-use crate::key::DcKey;
+use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{is_hidden, SystemMessage};
@@ -926,14 +926,37 @@ impl MimeFactory {
                     message.header(header, value)
                 });
 
-            let mut peerstates = Vec::new();
-            for addr in self.recipients.iter().filter(|&addr| *addr != self.from_addr) {
-                peerstates.push((Peerstate::from_addr(context, addr).await?, addr.clone()));
+            let mut additional_encryption_keyring = Vec::new();
+            let mut missing_key_addresses = BTreeSet::new();
+
+            for addr in self
+                .recipients
+                .iter()
+                .filter(|&addr| *addr != self.from_addr)
+            {
+                let peerstate_opt = Peerstate::from_addr(context, addr).await?;
+                let Some(peerstate) = peerstate_opt else {
+                    warn!(context, "Peerstate for {addr} is missing.");
+                    missing_key_addresses.insert(addr.clone());
+                    continue;
+                };
+
+                let key_opt: Option<SignedPublicKey> = peerstate.take_key(verified);
+                if let Some(key) = key_opt {
+                    additional_encryption_keyring.push((addr.clone(), key));
+                } else {
+                    warn!(context, "Encryption key for {addr} is missing.");
+                    missing_key_addresses.insert(addr.clone());
+                }
+            }
+
+            if additional_encryption_keyring.is_empty() {
+                bail!("No recipient keys are available, cannot encrypt");
             }
 
             // Add gossip headers in chats with multiple recipients
-            let multiple_recipients =
-                peerstates.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
+            let multiple_recipients = additional_encryption_keyring.len() > 1
+                || context.get_config_bool(Config::BccSelf).await?;
 
             let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
             let now = time();
@@ -941,11 +964,7 @@ impl MimeFactory {
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
                     if chat.typ != Chattype::Broadcast {
-                        for peerstate in peerstates.iter().filter_map(|(state, _)| state.as_ref()) {
-                            let Some(key) = peerstate.peek_key(verified) else {
-                                continue;
-                            };
-
+                        for (addr, key) in &additional_encryption_keyring {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
                             let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
@@ -977,7 +996,7 @@ impl MimeFactory {
                             }
 
                             let header = Aheader::new(
-                                peerstate.addr.clone(),
+                                addr.clone(),
                                 key.clone(),
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
@@ -1027,8 +1046,10 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            let (encryption_keyring, missing_key_addresses) =
-                encrypt_helper.encryption_keyring(context, verified, &peerstates)?;
+            // Encrypt to self unconditionally,
+            // even for a single-device setup.
+            let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
+            encryption_keyring.extend(additional_encryption_keyring.iter().map(|(addr, key)| (*key).clone()));
 
             // XXX: additional newline is needed
             // to pass filtermail at
