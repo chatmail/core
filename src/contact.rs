@@ -356,6 +356,17 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         context.emit_event(EventType::ContactsChanged(Some(id)));
     }
     if let Some(public_key) = key {
+        let fingerprint = public_key.dc_fingerprint().hex();
+        context
+            .sql
+            .execute(
+                "INSERT INTO public_keys (fingerprint, public_key)
+                 VALUES (?, ?)
+                 ON CONFLICT (fingerprint)
+                 DO NOTHING",
+                (&fingerprint, public_key.to_bytes()),
+            )
+            .await?;
         let timestamp = contact
             .timestamp
             .as_ref()
