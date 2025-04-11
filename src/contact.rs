@@ -33,7 +33,6 @@ use crate::log::LogExt;
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::sync::{self, Sync::*};
 use crate::tools::{duration_to_str, get_abs_path, smeared_time, time, SystemTime};
 use crate::{chat, chatlist_events, stock_str};
@@ -265,13 +264,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
     let mut vcard_contacts = Vec::with_capacity(contacts.len());
     for id in contacts {
         let c = Contact::get_by_id(context, *id).await?;
-        let key = match *id {
-            ContactId::SELF => Some(load_self_public_key(context).await?),
-            _ => Peerstate::from_addr(context, &c.addr)
-                .await?
-                .and_then(|peerstate| peerstate.take_key(false)),
-        };
-        let key = key.map(|k| k.to_base64());
+        let key = c.openpgp_certificate(context).await?.map(|k| k.to_base64());
         let profile_image = match c.get_profile_image(context).await? {
             None => None,
             Some(path) => tokio::fs::read(path)
@@ -338,25 +331,11 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             .log_err(context)
             .ok()
     });
-    let fingerprint = key.as_ref().map(|k| k.dc_fingerprint().hex());
-    let (id, modified) = match Contact::add_or_lookup_ex(
-        context,
-        &contact.authname,
-        &addr,
-        &fingerprint.unwrap_or_default(),
-        origin,
-    )
-    .await
-    {
-        Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
-        Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
-        Ok(val) => val,
-    };
-    if modified != Modifier::None {
-        context.emit_event(EventType::ContactsChanged(Some(id)));
-    }
+
+    let fingerprint;
     if let Some(public_key) = key {
-        let fingerprint = public_key.dc_fingerprint().hex();
+        fingerprint = public_key.dc_fingerprint().hex();
+
         context
             .sql
             .execute(
@@ -367,49 +346,25 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
                 (&fingerprint, public_key.to_bytes()),
             )
             .await?;
-        let timestamp = contact
-            .timestamp
-            .as_ref()
-            .map_or(0, |&t| min(t, smeared_time(context)));
-        let aheader = Aheader {
-            addr: contact.addr.clone(),
-            public_key,
-            prefer_encrypt: EncryptPreference::Mutual,
-        };
-        let peerstate = match Peerstate::from_addr(context, &aheader.addr).await {
-            Err(e) => {
-                warn!(
-                    context,
-                    "import_vcard_contact: Cannot create peerstate from {}: {e:#}.", contact.addr
-                );
-                return Ok(id);
-            }
-            Ok(p) => p,
-        };
-        let peerstate = if let Some(mut p) = peerstate {
-            p.apply_gossip(&aheader, timestamp);
-            p
-        } else {
-            Peerstate::from_gossip(&aheader, timestamp)
-        };
-        if let Err(e) = peerstate.save_to_db(&context.sql).await {
-            warn!(
-                context,
-                "import_vcard_contact: Could not save peerstate for {}: {e:#}.", contact.addr
-            );
-            return Ok(id);
-        }
-        if let Err(e) = peerstate
-            .handle_fingerprint_change(context, timestamp)
-            .await
-        {
-            warn!(
-                context,
-                "import_vcard_contact: handle_fingerprint_change() failed for {}: {e:#}.",
-                contact.addr
-            );
-            return Ok(id);
-        }
+    } else {
+        fingerprint = String::new();
+    }
+
+    let (id, modified) = match Contact::add_or_lookup_ex(
+        context,
+        &contact.authname,
+        &addr,
+        &fingerprint,
+        origin,
+    )
+    .await
+    {
+        Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
+        Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
+        Ok(val) => val,
+    };
+    if modified != Modifier::None {
+        context.emit_event(EventType::ContactsChanged(Some(id)));
     }
     if modified != Modifier::Created {
         return Ok(id);
@@ -1304,18 +1259,12 @@ impl Contact {
             .get_config(Config::ConfiguredAddr)
             .await?
             .unwrap_or_default();
-        let peerstate = Peerstate::from_addr(context, &contact.addr).await?;
 
-        let Some(peerstate) = peerstate.filter(|peerstate| peerstate.peek_key(false).is_some())
-        else {
+        let Some(fingerprint_other) = contact.fingerprint() else {
             return Ok(stock_str::encr_none(context).await);
         };
 
-        let stock_message = match peerstate.prefer_encrypt {
-            EncryptPreference::Mutual => stock_str::e2e_preferred(context).await,
-            EncryptPreference::NoPreference => stock_str::e2e_available(context).await,
-            EncryptPreference::Reset => stock_str::encr_none(context).await,
-        };
+        let stock_message = stock_str::e2e_available(context).await;
 
         let finger_prints = stock_str::finger_prints(context).await;
         let mut ret = format!("{stock_message}.\n{finger_prints}:");
@@ -1324,43 +1273,31 @@ impl Contact {
             .await?
             .dc_fingerprint()
             .to_string();
-        let fingerprint_other_verified = peerstate
-            .peek_key(true)
-            .map(|k| k.dc_fingerprint().to_string())
-            .unwrap_or_default();
-        let fingerprint_other_unverified = peerstate
-            .peek_key(false)
-            .map(|k| k.dc_fingerprint().to_string())
-            .unwrap_or_default();
-        if addr < peerstate.addr {
+        if addr < contact.addr {
             cat_fingerprint(
                 &mut ret,
                 &stock_str::self_msg(context).await,
                 &addr,
                 &fingerprint_self,
-                "",
             );
             cat_fingerprint(
                 &mut ret,
                 contact.get_display_name(),
-                &peerstate.addr,
-                &fingerprint_other_verified,
-                &fingerprint_other_unverified,
+                &contact.addr,
+                &fingerprint_other,
             );
         } else {
             cat_fingerprint(
                 &mut ret,
                 contact.get_display_name(),
-                &peerstate.addr,
-                &fingerprint_other_verified,
-                &fingerprint_other_unverified,
+                &contact.addr,
+                &fingerprint_other,
             );
             cat_fingerprint(
                 &mut ret,
                 &stock_str::self_msg(context).await,
                 &addr,
                 &fingerprint_self,
-                "",
             );
         }
 
@@ -1453,6 +1390,10 @@ impl Contact {
     /// It is possible for a PGP-contact to not have a certificate,
     /// e.g. if only the fingerprint is known from a QR-code.
     pub async fn openpgp_certificate(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
+        if self.id == ContactId::SELF {
+            return Ok(Some(load_self_public_key(context).await?));
+        }
+
         if let Some(fingerprint) = &self.fingerprint {
             if let Some(certificate_bytes) = context
                 .sql
@@ -1573,25 +1514,21 @@ impl Contact {
     /// Returns whether end-to-end encryption to the contact is available.
     pub async fn e2ee_avail(&self, context: &Context) -> Result<bool> {
         if self.id == ContactId::SELF {
+            // We don't need to check if we have our own key.
             return Ok(true);
         }
-        let Some(peerstate) = Peerstate::from_addr(context, &self.addr).await? else {
-            return Ok(false);
-        };
-        Ok(peerstate.peek_key(false).is_some())
+        Ok(self.openpgp_certificate(context).await?.is_some())
     }
 
     /// Returns true if the contact
-    /// can be added to verified chats,
-    /// i.e. has a verified key
-    /// and Autocrypt key matches the verified key.
+    /// can be added to verified chats.
     ///
     /// If contact is verified
     /// UI should display green checkmark after the contact name
     /// in contact list items and
     /// in chat member list items.
     ///
-    /// In contact profile view, us this function only if there is no chat with the contact,
+    /// In contact profile view, use this function only if there is no chat with the contact,
     /// otherwise use is_chat_protected().
     /// Use [Self::get_verifier_id] to display the verifier contact
     /// in the info section of the contact profile.
@@ -1602,30 +1539,7 @@ impl Contact {
             return Ok(true);
         }
 
-        let Some(peerstate) = Peerstate::from_addr(context, &self.addr).await? else {
-            return Ok(false);
-        };
-
-        let forward_verified = peerstate.is_using_verified_key();
-        let backward_verified = peerstate.is_backward_verified(context).await?;
-        Ok(forward_verified && backward_verified)
-    }
-
-    /// Returns true if we have a verified key for the contact
-    /// and it is the same as Autocrypt key.
-    /// This is enough to send messages to the contact in verified chat
-    /// and verify received messages, but not enough to display green checkmark
-    /// or add the contact to verified groups.
-    pub async fn is_forward_verified(&self, context: &Context) -> Result<bool> {
-        if self.id == ContactId::SELF {
-            return Ok(true);
-        }
-
-        let Some(peerstate) = Peerstate::from_addr(context, &self.addr).await? else {
-            return Ok(false);
-        };
-
-        Ok(peerstate.is_using_verified_key())
+        Ok(self.get_verifier_id(context).await?.is_some())
     }
 
     /// Returns the `ContactId` that verified the contact.
@@ -1634,32 +1548,15 @@ impl Contact {
     /// display green checkmark in the profile and "Introduced by ..." line
     /// with the name and address of the contact
     /// formatted by [Self::get_name_n_addr].
-    ///
-    /// If this function returns a verifier,
-    /// this does not necessarily mean
-    /// you can add the contact to verified chats.
-    /// Use [Self::is_verified] to check
-    /// if a contact can be added to a verified chat instead.
     pub async fn get_verifier_id(&self, context: &Context) -> Result<Option<ContactId>> {
-        let Some(verifier_addr) = Peerstate::from_addr(context, self.get_addr())
-            .await?
-            .and_then(|peerstate| peerstate.get_verifier().map(|addr| addr.to_owned()))
-        else {
-            return Ok(None);
-        };
+        let verifier_id: u32 = 
+        context.sql.query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,)).await?.
+        context("Contact does not exist")?;
 
-        if addr_cmp(&verifier_addr, &self.addr) {
-            // Contact is directly verified via QR code.
-            return Ok(Some(ContactId::SELF));
-        }
-
-        match Contact::lookup_id_by_addr(context, &verifier_addr, Origin::Unknown).await? {
-            Some(contact_id) => Ok(Some(contact_id)),
-            None => {
-                let addr = &self.addr;
-                warn!(context, "Could not lookup contact with address {verifier_addr} which introduced {addr}.");
-                Ok(None)
-            }
+        if verifier_id == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(ContactId::new(verifier_id)))
         }
     }
 
@@ -1962,25 +1859,14 @@ fn cat_fingerprint(
     ret: &mut String,
     name: &str,
     addr: &str,
-    fingerprint_verified: &str,
-    fingerprint_unverified: &str,
+    fingerprint: &str,
 ) {
     *ret += &format!(
         "\n\n{} ({}):\n{}",
         name,
         addr,
-        if !fingerprint_verified.is_empty() {
-            fingerprint_verified
-        } else {
-            fingerprint_unverified
-        },
+        fingerprint
     );
-    if !fingerprint_verified.is_empty()
-        && !fingerprint_unverified.is_empty()
-        && fingerprint_verified != fingerprint_unverified
-    {
-        *ret += &format!("\n\n{name} (alternative):\n{fingerprint_unverified}");
-    }
 }
 
 fn split_address_book(book: &str) -> Vec<(&str, &str)> {
