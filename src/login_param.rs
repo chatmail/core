@@ -846,92 +846,18 @@ impl ConfiguredLoginParam {
 
     pub(crate) fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
-        let mut imap = vec![];
-        let mut smtp = vec![];
-        let mut provider_option = None;
 
-        if let Some(provider) = json.provider_id.and_then(|id| get_provider_by_id(&id)) {
-            // Load servers from provider, rather than the servers saved in the database
-            provider_option = Some(provider);
-
-            let parsed_addr = EmailAddress::new(&json.addr).context("Bad email-address")?;
-            let addr_localpart = parsed_addr.local;
-            imap = provider
-                .server
-                .iter()
-                .filter_map(|server| {
-                    if server.protocol != Protocol::Imap {
-                        return None;
-                    }
-
-                    let Ok(security) = server.socket.try_into() else {
-                        return None;
-                    };
-
-                    Some(ConfiguredServerLoginParam {
-                        connection: ConnectionCandidate {
-                            host: server.hostname.to_string(),
-                            port: server.port,
-                            security,
-                        },
-                        user: if !json.imap_user.is_empty() {
-                            json.imap_user.clone()
-                        } else {
-                            match server.username_pattern {
-                                UsernamePattern::Email => json.addr.to_string(),
-                                UsernamePattern::Emaillocalpart => addr_localpart.clone(),
-                            }
-                        },
-                    })
-                })
-                .collect();
-            smtp = provider
-                .server
-                .iter()
-                .filter_map(|server| {
-                    if server.protocol != Protocol::Smtp {
-                        return None;
-                    }
-
-                    let Ok(security) = server.socket.try_into() else {
-                        return None;
-                    };
-
-                    Some(ConfiguredServerLoginParam {
-                        connection: ConnectionCandidate {
-                            host: server.hostname.to_string(),
-                            port: server.port,
-                            security,
-                        },
-                        user: if !json.smtp_user.is_empty() {
-                            json.smtp_user.clone()
-                        } else {
-                            match server.username_pattern {
-                                UsernamePattern::Email => json.addr.to_string(),
-                                UsernamePattern::Emaillocalpart => addr_localpart.clone(),
-                            }
-                        },
-                    })
-                })
-                .collect();
-        }
-
-        if imap.is_empty() {
-            imap = json.imap;
-        }
-        if smtp.is_empty() {
-            smtp = json.smtp;
-        }
+        let provider = json.provider_id.and_then(|id| get_provider_by_id(&id));
 
         Ok(ConfiguredLoginParam {
             addr: json.addr,
-            imap,
+            imap: json.imap,
             imap_user: json.imap_user,
             imap_password: json.imap_password,
-            smtp,
+            smtp: json.smtp,
             smtp_user: json.smtp_user,
             smtp_password: json.smtp_password,
-            provider: provider_option,
+            provider,
             certificate_checks: json.certificate_checks,
             oauth2: json.oauth2,
         })
