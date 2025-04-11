@@ -186,11 +186,6 @@ impl MimeFactory {
                 (name, None)
             };
 
-        let should_force_plaintext = msg
-            .param
-            .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default();
-
         let mut recipients = Vec::new();
         let mut to = Vec::new();
         let mut past_members = Vec::new();
@@ -222,12 +217,43 @@ impl MimeFactory {
                 None
             };
 
+            let is_encrypted = if msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+            {
+                false
+            } else {
+                chat.is_protected()
+                    || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
+                    || match chat.typ {
+                        Chattype::Single => {
+                            let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
+                            if let Some(contact_id) = chat_contact_ids.first() {
+                                let contact = Contact::get_by_id(context, *contact_id).await?;
+                                contact.is_pgp_contact()
+                            } else {
+                                true
+                            }
+                        }
+                        Chattype::Group => {
+                            // Do not encrypt ad-hoc groups.
+                            !chat.grpid.is_empty()
+                        }
+                        Chattype::Mailinglist => false,
+                        Chattype::Broadcast => true,
+                    }
+            };
+
+            let mut certificates = Vec::new();
+            let mut missing_key_addresses = BTreeSet::new();
             context
                 .sql
                 .query_map(
-                    "SELECT c.authname, c.addr, c.id, cc.add_timestamp, cc.remove_timestamp
+                    "SELECT c.authname, c.addr, c.id, cc.add_timestamp, cc.remove_timestamp, k.public_key
                      FROM chats_contacts cc
                      LEFT JOIN contacts c ON cc.contact_id=c.id
+                     LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
                      WHERE cc.chat_id=? AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
                     (msg.chat_id, chat.typ == Chattype::Group),
                     |row| {
@@ -236,13 +262,21 @@ impl MimeFactory {
                         let id: ContactId = row.get(2)?;
                         let add_timestamp: i64 = row.get(3)?;
                         let remove_timestamp: i64 = row.get(4)?;
-                        Ok((authname, addr, id, add_timestamp, remove_timestamp))
+                        let certificate_bytes_opt: Option<Vec<u8>> = row.get(5)?;
+                        Ok((authname, addr, id, add_timestamp, remove_timestamp, certificate_bytes_opt))
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
 
                         for row in rows {
-                            let (authname, addr, id, add_timestamp, remove_timestamp) = row?;
+                            let (authname, addr, id, add_timestamp, remove_timestamp, certificate_bytes) = row?;
+
+                            let certificate_opt = if let Some(certificate_bytes) = certificate_bytes {
+                                Some(SignedPublicKey::from_slice(&certificate_bytes)?)
+                            } else {
+                                None
+                            };
+
                             let addr = if id == ContactId::SELF {
                                 from_addr.to_string()
                             } else {
@@ -256,7 +290,7 @@ impl MimeFactory {
                                 if !recipients_contain_addr(&to, &addr) {
                                     recipients.push(addr.clone());
                                     if !undisclosed_recipients {
-                                        to.push((name, addr));
+                                        to.push((name, addr.clone()));
                                         member_timestamps.push(add_timestamp);
                                     }
                                 }
@@ -274,10 +308,16 @@ impl MimeFactory {
                                         }
                                     }
                                     if !undisclosed_recipients {
-                                        past_members.push((name, addr));
+                                        past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
                                     }
                                 }
+                            }
+
+                            if let Some(certificate) = certificate_opt {
+                                certificates.push((addr.clone(), certificate))
+                            } else {
+                                missing_key_addresses.insert(addr.clone());
                             }
                         }
 
@@ -305,66 +345,15 @@ impl MimeFactory {
                 req_mdn = true;
             }
 
-            encryption_certificates = if should_force_plaintext {
+            encryption_certificates = if !is_encrypted {
                 None
             } else {
-                let is_encrypted = chat.is_protected()
-                    || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
-                    || match chat.typ {
-                        Chattype::Single => {
-                            let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
-                            if let Some(contact_id) = chat_contact_ids.first() {
-                                let contact = Contact::get_by_id(context, *contact_id).await?;
-                                contact.is_pgp_contact()
-                            } else {
-                                true
-                            }
-                        }
-                        Chattype::Group => {
-                            // Do not encrypt ad-hoc groups.
-                            !chat.grpid.is_empty()
-                        }
-                        Chattype::Mailinglist => false,
-                        Chattype::Broadcast => true,
-                    };
-
-                if is_encrypted {
-                    let mut certificates = Vec::new();
-                    let mut missing_key_addresses = BTreeSet::new();
-
-                    for addr in recipients.iter().filter(|&addr| *addr != from_addr) {
-                        let peerstate_opt = Peerstate::from_addr(context, addr).await?;
-                        let Some(peerstate) = peerstate_opt else {
-                            warn!(context, "Peerstate for {addr} is missing.");
-                            missing_key_addresses.insert(addr.clone());
-                            continue;
-                        };
-
-                        // TODO: PGP-contact has only one key, verified or not
-                        let verified = false;
-
-                        let key_opt: Option<SignedPublicKey> = peerstate.take_key(verified);
-                        if let Some(key) = key_opt {
-                            certificates.push((addr.clone(), key));
-                        } else {
-                            warn!(context, "Encryption key for {addr} is missing.");
-                            missing_key_addresses.insert(addr.clone());
-                        }
-                    }
-
-                    if certificates.is_empty() {
-                        bail!("No recipient keys are available, cannot encrypt");
-                    }
-
-                    // Remove recipients for which the key is missing.
-                    if !missing_key_addresses.is_empty() {
-                        recipients.retain(|addr| !missing_key_addresses.contains(addr));
-                    }
-
-                    Some(certificates)
-                } else {
-                    None
+                // Remove recipients for which the key is missing.
+                if !missing_key_addresses.is_empty() {
+                    recipients.retain(|addr| !missing_key_addresses.contains(addr));
                 }
+
+                Some(certificates)
             };
         }
         let (in_reply_to, references) = context
