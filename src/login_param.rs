@@ -2,7 +2,7 @@
 
 use std::fmt;
 
-use anyhow::{bail, format_err, Context as _, Result};
+use anyhow::{bail, ensure, format_err, Context as _, Result};
 use deltachat_contact_tools::{addr_cmp, addr_normalize, EmailAddress};
 use num_traits::ToPrimitive as _;
 use serde::{Deserialize, Serialize};
@@ -525,13 +525,13 @@ impl ConfiguredLoginParam {
             .sql
             .query_get_value(
                 "SELECT configured_param FROM transports WHERE addr=?",
-                (self_addr,),
+                (&self_addr,),
             )
             .await?;
         if let Some(json) = json {
             Ok(Some(Self::from_json(&json)?))
         } else {
-            Ok(None)
+            bail!("Self address {self_addr} doesn't have a corresponding transport");
         }
     }
 
@@ -811,9 +811,10 @@ impl ConfiguredLoginParam {
         let addr = addr_normalize(&self.addr);
         let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
         if let Some(configured_addr) = configured_addr {
-            if !addr_cmp(&configured_addr, &addr) {
-                bail!("Adding a second transport is not supported right now.");
-            }
+            ensure!(
+                addr_cmp(&configured_addr, &addr,),
+                "Adding a second transport is not supported right now."
+            );
         }
         context
             .sql
