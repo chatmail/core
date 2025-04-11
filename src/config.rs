@@ -164,7 +164,6 @@ pub enum Config {
 
     /// True if chat messages should be moved to a separate folder. Auto-sent messages like sync
     /// ones are moved there anyway.
-    #[strum(props(default = "1"))]
     MvboxMove,
 
     /// Watch for new messages in the "Mvbox" (aka DeltaChat folder) only.
@@ -596,9 +595,17 @@ impl Context {
             .unwrap_or_default())
     }
 
+    /// Returns true if chat messages should be moved to the mvbox ("DeltaChat" folder).
+    pub(crate) async fn should_move_to_mvbox(&self) -> Result<bool> {
+        match self.get_config_bool_opt(Config::MvboxMove).await? {
+            Some(val) => Ok(val),
+            None => Ok(!self.get_config_bool(Config::IsChatmail).await?),
+        }
+    }
+
     /// Returns true if movebox ("DeltaChat" folder) should be watched.
     pub(crate) async fn should_watch_mvbox(&self) -> Result<bool> {
-        Ok(self.get_config_bool(Config::MvboxMove).await?
+        Ok(self.should_move_to_mvbox().await?
             || self.get_config_bool(Config::OnlyFetchMvbox).await?
             || !self.get_config_bool(Config::IsChatmail).await?)
     }
