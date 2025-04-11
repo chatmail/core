@@ -22,8 +22,7 @@ use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{
-    get_autocrypt_peerstate, get_encrypted_mime, keyring_from_peerstate, try_decrypt,
-    validate_detached_signature,
+    get_autocrypt_peerstate, get_encrypted_mime, try_decrypt, validate_detached_signature,
 };
 use crate::dehtml::dehtml;
 use crate::events::EventType;
@@ -68,16 +67,12 @@ pub(crate) struct MimeMessage {
     /// `From:` address.
     pub from: SingleInfo,
 
-    /// Whether the From address was repeated in the signed part
-    /// (and we know that the signer intended to send from this address)
-    pub from_is_signed: bool,
     /// Whether the message is incoming or outgoing (self-sent).
     pub incoming: bool,
     /// The List-Post address is only set for mailing lists. Users can send
     /// messages to this address to post them to the list.
     pub list_post: Option<String>,
     pub chat_disposition_notification_to: Option<SingleInfo>,
-    pub autocrypt_header: Option<Aheader>,
     pub peerstate: Option<Peerstate>,
     pub decrypting_failed: bool,
 
@@ -314,12 +309,9 @@ impl MimeMessage {
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
 
-        let allow_aeap = get_encrypted_mime(&mail).is_some();
-
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
         let mut gossiped_keys = Default::default();
-        let mut from_is_signed = false;
         hop_info += "\n\n";
         hop_info += &dkim_results.to_string();
 
@@ -401,13 +393,17 @@ impl MimeMessage {
             &from.addr,
             autocrypt_header.as_ref(),
             timestamp_sent,
-            allow_aeap,
         )
         .await?;
 
-        let public_keyring = match peerstate.is_none() && !incoming {
-            true => key::load_self_public_keyring(context).await?,
-            false => keyring_from_peerstate(peerstate.as_ref()),
+        let public_keyring = if incoming {
+            if let Some(autocrypt_header) = autocrypt_header {
+                vec![autocrypt_header.public_key]
+            } else {
+                vec![]
+            }
+        } else {
+            key::load_self_public_keyring(context).await?
         };
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
@@ -502,20 +498,10 @@ impl MimeMessage {
                     bail!("From header is forged");
                 }
                 from = inner_from;
-                from_is_signed = !signatures.is_empty();
             }
         }
         if signatures.is_empty() {
             Self::remove_secured_headers(&mut headers);
-
-            // If it is not a read receipt, degrade encryption.
-            if let (Some(peerstate), Ok(mail)) = (&mut peerstate, mail) {
-                if timestamp_sent > peerstate.last_seen_autocrypt
-                    && mail.ctype.mimetype != "multipart/report"
-                {
-                    peerstate.degrade_encryption(timestamp_sent);
-                }
-            }
         }
         if !encrypted {
             signatures.clear();
@@ -534,10 +520,8 @@ impl MimeMessage {
             past_members,
             list_post,
             from,
-            from_is_signed,
             incoming,
             chat_disposition_notification_to,
-            autocrypt_header,
             peerstate,
             decrypting_failed: mail.is_err(),
 
