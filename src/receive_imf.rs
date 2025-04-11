@@ -2154,7 +2154,8 @@ async fn create_group(
     // they belong to the group because of the Chat-Group-Id or Message-Id header
     if let Some(chat_id) = chat_id {
         if !mime_parser.has_chat_version()
-            && is_probably_private_reply(context, &to_ids_flat, from_id, mime_parser, chat_id).await?
+            && is_probably_private_reply(context, &to_ids_flat, from_id, mime_parser, chat_id)
+                .await?
         {
             return Ok(None);
         }
@@ -2520,7 +2521,8 @@ async fn apply_group_changes(
     if is_from_in_chat {
         if chat.member_list_is_stale(context).await? {
             info!(context, "Member list is stale.");
-            let mut new_members: HashSet<ContactId> = HashSet::from_iter(to_ids_flat.iter().copied());
+            let mut new_members: HashSet<ContactId> =
+                HashSet::from_iter(to_ids_flat.iter().copied());
             new_members.insert(ContactId::SELF);
             if !from_id.is_special() {
                 new_members.insert(from_id);
