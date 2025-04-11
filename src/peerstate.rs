@@ -405,28 +405,6 @@ impl Peerstate {
         };
     }
 
-    /// Returns the contents of the `Autocrypt-Gossip` header for outgoing messages.
-    pub fn render_gossip_header(&self, verified: bool) -> Option<String> {
-        if let Some(key) = self.peek_key(verified) {
-            let header = Aheader::new(
-                self.addr.clone(),
-                key.clone(), // TODO: avoid cloning
-                // Autocrypt 1.1.0 specification says that
-                // `prefer-encrypt` attribute SHOULD NOT be included,
-                // but we include it anyway to propagate encryption
-                // preference to new members in group chats.
-                if self.last_seen_autocrypt > 0 {
-                    self.prefer_encrypt
-                } else {
-                    EncryptPreference::NoPreference
-                },
-            );
-            Some(header.to_string())
-        } else {
-            None
-        }
-    }
-
     /// Converts the peerstate into the contact public key.
     ///
     /// Similar to [`Self::peek_key`], but consumes the peerstate and returns owned key.

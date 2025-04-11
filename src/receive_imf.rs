@@ -24,6 +24,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
+use crate::key::DcKey;
 use crate::log::LogExt;
 use crate::message::{
     self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
@@ -452,22 +453,25 @@ pub(crate) async fn receive_imf_inner(
     }
 
     // Update gossiped timestamp for the chat if someone else or our other device sent
-    // Autocrypt-Gossip for all recipients in the chat to avoid sending Autocrypt-Gossip ourselves
+    // Autocrypt-Gossip header to avoid sending Autocrypt-Gossip ourselves
     // and waste traffic.
     let chat_id = received_msg.chat_id;
-    if !chat_id.is_special()
-        && mime_parser.recipients.iter().all(|recipient| {
-            recipient.addr == mime_parser.from.addr
-                || mime_parser.gossiped_keys.contains_key(&recipient.addr)
-        })
-    {
-        info!(
-            context,
-            "Received message contains Autocrypt-Gossip for all members of {chat_id}, updating timestamp."
-        );
-        if chat_id.get_gossiped_timestamp(context).await? < mime_parser.timestamp_sent {
-            chat_id
-                .set_gossiped_timestamp(context, mime_parser.timestamp_sent)
+    if !chat_id.is_special() {
+        for gossiped_key in mime_parser.gossiped_keys.values() {
+            context
+                .sql
+                .transaction(move |transaction| {
+                    let fingerprint = gossiped_key.dc_fingerprint().hex();
+                    transaction.execute(
+                        "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
+                         VALUES                       (?, ?, ?)
+                         ON CONFLICT                  (chat_id, fingerprint)
+                         DO UPDATE SET timestamp=MAX(timestamp, excluded.timestamp)",
+                        (chat_id, &fingerprint, mime_parser.timestamp_sent),
+                    )?;
+
+                    Ok(())
+                })
                 .await?;
         }
     }

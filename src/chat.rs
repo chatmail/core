@@ -1376,41 +1376,10 @@ impl ChatId {
     }
 
     pub(crate) async fn reset_gossiped_timestamp(self, context: &Context) -> Result<()> {
-        self.set_gossiped_timestamp(context, 0).await
-    }
-
-    /// Get timestamp of the last gossip sent in the chat.
-    /// Zero return value means that gossip was never sent.
-    pub async fn get_gossiped_timestamp(self, context: &Context) -> Result<i64> {
-        let timestamp: Option<i64> = context
-            .sql
-            .query_get_value("SELECT gossiped_timestamp FROM chats WHERE id=?;", (self,))
-            .await?;
-        Ok(timestamp.unwrap_or_default())
-    }
-
-    pub(crate) async fn set_gossiped_timestamp(
-        self,
-        context: &Context,
-        timestamp: i64,
-    ) -> Result<()> {
-        ensure!(
-            !self.is_special(),
-            "can not set gossiped timestamp for special chats"
-        );
-        info!(
-            context,
-            "Set gossiped_timestamp for chat {} to {}.", self, timestamp,
-        );
-
         context
             .sql
-            .execute(
-                "UPDATE chats SET gossiped_timestamp=? WHERE id=?;",
-                (timestamp, self),
-            )
+            .execute("DELETE FROM gossip_timestamp WHERE chat_id=?", (self,))
             .await?;
-
         Ok(())
     }
 
@@ -1917,7 +1886,6 @@ impl Chat {
             name: self.name.clone(),
             archived: self.visibility == ChatVisibility::Archived,
             param: self.param.to_string(),
-            gossiped_timestamp: self.id.get_gossiped_timestamp(context).await?,
             is_sending_locations: self.is_sending_locations,
             color: self.get_color(context).await?,
             profile_image: self
@@ -2459,9 +2427,6 @@ pub struct ChatInfo {
     ///
     /// This is the string-serialised version of `Params` currently.
     pub param: String,
-
-    /// Last time this client sent autocrypt gossip headers to this chat.
-    pub gossiped_timestamp: i64,
 
     /// Whether this chat is currently sending location-stream messages.
     pub is_sending_locations: bool,
@@ -3100,10 +3065,6 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     }
 
     let now = smeared_time(context);
-
-    if rendered_msg.is_gossiped {
-        msg.chat_id.set_gossiped_timestamp(context, now).await?;
-    }
 
     if rendered_msg.last_added_location_id.is_some() {
         if let Err(err) = location::set_kml_sent_timestamp(context, msg.chat_id, now).await {
