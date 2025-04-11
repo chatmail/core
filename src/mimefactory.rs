@@ -374,20 +374,6 @@ impl MimeFactory {
         Ok(res)
     }
 
-    async fn peerstates_for_recipients(
-        &self,
-        context: &Context,
-    ) -> Result<Vec<(Option<Peerstate>, String)>> {
-        let self_addr = context.get_primary_self_addr().await?;
-
-        let mut res = Vec::new();
-        for addr in self.recipients.iter().filter(|&addr| *addr != self_addr) {
-            res.push((Peerstate::from_addr(context, addr).await?, addr.clone()));
-        }
-
-        Ok(res)
-    }
-
     fn is_e2ee_guaranteed(&self) -> bool {
         match &self.loaded {
             Loaded::Message { chat, msg } => {
@@ -754,7 +740,6 @@ impl MimeFactory {
         }
 
         let is_chatmail = context.is_chatmail().await?;
-        let peerstates = self.peerstates_for_recipients(context).await?;
         let is_encrypted = !self.should_force_plaintext()
             && (e2ee_guaranteed
                 || is_chatmail
@@ -940,6 +925,11 @@ impl MimeFactory {
                 .fold(message, |message, (header, value)| {
                     message.header(header, value)
                 });
+
+            let mut peerstates = Vec::new();
+            for addr in self.recipients.iter().filter(|&addr| *addr != self.from_addr) {
+                peerstates.push((Peerstate::from_addr(context, addr).await?, addr.clone()));
+            }
 
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
