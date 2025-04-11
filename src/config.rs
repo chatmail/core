@@ -810,7 +810,7 @@ impl Context {
             }
             Config::ConfiguredAddr => {
                 if self.is_configured().await? {
-                    bail!("Cannot change ConfiguredSelfAddr");
+                    bail!("Cannot change ConfiguredAddr");
                 }
                 if let Some(addr) = value {
                     info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!");

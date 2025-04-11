@@ -717,7 +717,7 @@ def test_configured_imap_certificate_checks(acfactory):
     # Certificate checks should be configured (not None)
     assert "cert_automatic" in alice.get_info().used_account_settings
 
-    # "old_automatic" is the value old Delta Chat core versions used
+    # "cert_old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)
     # and configuration failed to use strict TLS checks
     # so it switched strict TLS checks off.
