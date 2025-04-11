@@ -1205,12 +1205,6 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
              SELECT verified_key_fingerprint, verified_key FROM acpeerstates;
              INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
              SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
-
-             CREATE TABLE pgp_contacts_addr (
-               id INTEGER PRIMARY KEY AUTOINCREMENT,
-               contact_id INTEGER NOT NULL UNIQUE, -- ID of a PGP-contact.
-               addr TEXT NOT NULL -- Email address.
-             ) STRICT;
             ",
             migration_version,
         )
