@@ -3597,19 +3597,24 @@ async fn test_past_members() -> Result<()> {
     let fiona = &tcm.fiona().await;
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
+    tcm.section("Alice creates a chat.");
     let alice_chat_id =
         create_group_chat(alice, ProtectionStatus::Unprotected, "Group chat").await?;
     add_contact_to_chat(alice, alice_chat_id, alice_fiona_contact_id).await?;
     alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
+
+    tcm.section("Alice removes Fiona from the chat.");
     remove_contact_from_chat(alice, alice_chat_id, alice_fiona_contact_id).await?;
     assert_eq!(get_past_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
+    tcm.section("Alice adds Bob to the chat.");
     let bob = &tcm.bob().await;
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
 
+    tcm.section("Bob receives a message.");
     let add_message = alice.pop_sent_msg().await;
     let bob_add_message = bob.recv_msg(&add_message).await;
     let bob_chat_id = bob_add_message.chat_id;
