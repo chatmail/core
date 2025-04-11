@@ -535,7 +535,7 @@ impl ConfiguredLoginParam {
         }
     }
 
-    /// Load legacy configured param. Only used for tests and the migration.
+    /// Loads legacy configured param. Only used for tests and the migration.
     pub(crate) async fn load_legacy(context: &Context) -> Result<Option<Self>> {
         if !context.get_config_bool(Config::Configured).await? {
             return Ok(None);
