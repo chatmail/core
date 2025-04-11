@@ -186,6 +186,11 @@ impl MimeFactory {
                 (name, None)
             };
 
+        let should_force_plaintext = msg
+            .param
+            .get_bool(Param::ForcePlaintext)
+            .unwrap_or_default();
+
         let mut recipients = Vec::new();
         let mut to = Vec::new();
         let mut past_members = Vec::new();
@@ -193,8 +198,13 @@ impl MimeFactory {
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
 
+        let encryption_certificates;
+
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
+
+            // Encrypt, but only to self.
+            encryption_certificates = Some(Vec::new());
         } else if chat.is_mailing_list() {
             let list_post = chat
                 .param
@@ -202,6 +212,9 @@ impl MimeFactory {
                 .context("Can't write to mailinglist without ListPost param")?;
             to.push(("".to_string(), list_post.to_string()));
             recipients.push(list_post.to_string());
+
+            // Do not encrypt messages to mailing lists.
+            encryption_certificates = None;
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -291,6 +304,68 @@ impl MimeFactory {
             {
                 req_mdn = true;
             }
+
+            encryption_certificates = if should_force_plaintext {
+                None
+            } else {
+                let is_encrypted = chat.is_protected()
+                    || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
+                    || match chat.typ {
+                        Chattype::Single => {
+                            let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
+                            if let Some(contact_id) = chat_contact_ids.first() {
+                                let contact = Contact::get_by_id(context, *contact_id).await?;
+                                contact.is_pgp_contact()
+                            } else {
+                                true
+                            }
+                        }
+                        Chattype::Group => {
+                            // Do not encrypt ad-hoc groups.
+                            !chat.grpid.is_empty()
+                        }
+                        Chattype::Mailinglist => false,
+                        Chattype::Broadcast => true,
+                    };
+
+                if is_encrypted {
+                    let mut certificates = Vec::new();
+                    let mut missing_key_addresses = BTreeSet::new();
+
+                    for addr in recipients.iter().filter(|&addr| *addr != from_addr) {
+                        let peerstate_opt = Peerstate::from_addr(context, addr).await?;
+                        let Some(peerstate) = peerstate_opt else {
+                            warn!(context, "Peerstate for {addr} is missing.");
+                            missing_key_addresses.insert(addr.clone());
+                            continue;
+                        };
+
+                        // TODO: PGP-contact has only one key, verified or not
+                        let verified = false;
+
+                        let key_opt: Option<SignedPublicKey> = peerstate.take_key(verified);
+                        if let Some(key) = key_opt {
+                            certificates.push((addr.clone(), key));
+                        } else {
+                            warn!(context, "Encryption key for {addr} is missing.");
+                            missing_key_addresses.insert(addr.clone());
+                        }
+                    }
+
+                    if certificates.is_empty() {
+                        bail!("No recipient keys are available, cannot encrypt");
+                    }
+
+                    // Remove recipients for which the key is missing.
+                    if !missing_key_addresses.is_empty() {
+                        recipients.retain(|addr| !missing_key_addresses.contains(addr));
+                    }
+
+                    Some(certificates)
+                } else {
+                    None
+                }
+            };
         }
         let (in_reply_to, references) = context
             .sql
@@ -324,79 +399,6 @@ impl MimeFactory {
             member_timestamps.is_empty()
                 || to.len() + past_members.len() == member_timestamps.len()
         );
-
-        let should_force_plaintext = msg
-            .param
-            .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default();
-        let encryption_certificates = if should_force_plaintext {
-            None
-        } else {
-            let is_chatmail = context.is_chatmail().await?;
-            let e2ee_guaranteed = is_chatmail
-                || (!msg
-                    .param
-                    .get_bool(Param::ForcePlaintext)
-                    .unwrap_or_default()
-                    && (chat.is_protected()
-                        || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()));
-            let is_encrypted = e2ee_guaranteed
-                || match chat.typ {
-                    Chattype::Single => {
-                        let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
-                        if let Some(contact_id) = chat_contact_ids.first() {
-                            let contact = Contact::get_by_id(context, *contact_id).await?;
-                            contact.is_pgp_contact()
-                        } else {
-                            true
-                        }
-                    }
-                    Chattype::Group => {
-                        // Do not encrypt ad-hoc groups.
-                        !chat.grpid.is_empty()
-                    }
-                    Chattype::Mailinglist => false,
-                    Chattype::Broadcast => true,
-                };
-
-            if is_encrypted {
-                let mut certificates = Vec::new();
-                let mut missing_key_addresses = BTreeSet::new();
-
-                for addr in recipients.iter().filter(|&addr| *addr != from_addr) {
-                    let peerstate_opt = Peerstate::from_addr(context, addr).await?;
-                    let Some(peerstate) = peerstate_opt else {
-                        warn!(context, "Peerstate for {addr} is missing.");
-                        missing_key_addresses.insert(addr.clone());
-                        continue;
-                    };
-
-                    // TODO: PGP-contact has only one key, verified or not
-                    let verified = false;
-
-                    let key_opt: Option<SignedPublicKey> = peerstate.take_key(verified);
-                    if let Some(key) = key_opt {
-                        certificates.push((addr.clone(), key));
-                    } else {
-                        warn!(context, "Encryption key for {addr} is missing.");
-                        missing_key_addresses.insert(addr.clone());
-                    }
-                }
-
-                if certificates.is_empty() {
-                    bail!("No recipient keys are available, cannot encrypt");
-                }
-
-                // Remove recipients for which the key is missing.
-                if !missing_key_addresses.is_empty() {
-                    recipients.retain(|addr| !missing_key_addresses.contains(addr));
-                }
-
-                Some(certificates)
-            } else {
-                None
-            }
-        };
 
         let factory = MimeFactory {
             from_addr,
@@ -477,16 +479,6 @@ impl MimeFactory {
                     // This has to work independently of whether the chat is protected right now.
                     chat.is_protected() && msg.get_info_type() != SystemMessage::SecurejoinMessage
             }
-            Loaded::Mdn { .. } => false,
-        }
-    }
-
-    fn should_force_plaintext(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { msg, .. } => msg
-                .param
-                .get_bool(Param::ForcePlaintext)
-                .unwrap_or_default(),
             Loaded::Mdn { .. } => false,
         }
     }
