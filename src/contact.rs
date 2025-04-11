@@ -1436,14 +1436,32 @@ impl Contact {
     }
 
     /// Returns OpenPGP certificate of a contact.
+    ///
+    /// Returns `None` if the contact is not a PGP-contact
+    /// or if the key is not available.
+    /// It is possible for a PGP-contact to not have a certificate,
+    /// e.g. if only the fingerprint is known from a QR-code.
     pub async fn openpgp_certificate(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
-        if self.fingerprint.is_some() {
-            // TODO: load by fingerprint from a key table.
-            let Some(peerstate) = Peerstate::from_addr(context, &self.addr).await? else {
-                return Ok(None);
-            };
-            let key_opt: Option<SignedPublicKey> = peerstate.take_key(false);
-            Ok(key_opt)
+        if let Some(fingerprint) = &self.fingerprint {
+            if let Some(certificate_bytes) = context
+                .sql
+                .query_row_optional(
+                    "SELECT public_key
+                     FROM public_keys
+                     WHERE fingerprint=?",
+                    (fingerprint,),
+                    |row| {
+                        let bytes: Vec<u8> = row.get(0)?;
+                        Ok(bytes)
+                    },
+                )
+                .await?
+            {
+                let certificate = SignedPublicKey::from_slice(&certificate_bytes)?;
+                Ok(Some(certificate))
+            } else {
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
