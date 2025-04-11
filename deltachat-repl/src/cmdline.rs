@@ -35,14 +35,6 @@ use tokio::fs;
 /// e.g. bitmask 7 triggers actions defined with bits 1, 2 and 4.
 async fn reset_tables(context: &Context, bits: i32) {
     println!("Resetting tables ({bits})...");
-    if 0 != bits & 2 {
-        context
-            .sql()
-            .execute("DELETE FROM acpeerstates;", ())
-            .await
-            .unwrap();
-        println!("(2) Peerstates reset.");
-    }
     if 0 != bits & 4 {
         context
             .sql()
@@ -296,15 +288,6 @@ async fn log_contactlist(context: &Context, contacts: &[ContactId]) -> Result<()
             verified_str,
             if !addr.is_empty() { addr } else { "addr unset" }
         );
-        let peerstate = Peerstate::from_addr(context, addr)
-            .await
-            .expect("peerstate error");
-        if peerstate.is_some() && *contact_id != ContactId::SELF {
-            line2 = format!(
-                ", prefer-encrypt={}",
-                peerstate.as_ref().unwrap().prefer_encrypt
-            );
-        }
 
         println!("Contact#{}: {}{}", *contact_id, line, line2);
     }
