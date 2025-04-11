@@ -1226,6 +1226,11 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     if dbversion < migration_version {
         sql.execute_migration(
             "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+
+             -- Verifier is an ID of the verifier contact.
+             -- 0 if the contact is not verified.
+             ALTER TABLE contacts ADD COLUMN verifier INTEGER NOT NULL DEFAULT 0;
+
              CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
 
              CREATE TABLE public_keys (
