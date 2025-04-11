@@ -1435,6 +1435,20 @@ impl Contact {
         self.fingerprint.as_deref()
     }
 
+    /// Returns OpenPGP certificate of a contact.
+    pub async fn openpgp_certificate(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
+        if self.fingerprint.is_some() {
+            // TODO: load by fingerprint from a key table.
+            let Some(peerstate) = Peerstate::from_addr(context, &self.addr).await? else {
+                return Ok(None);
+            };
+            let key_opt: Option<SignedPublicKey> = peerstate.take_key(false);
+            Ok(key_opt)
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Get name authorized by the contact.
     pub fn get_authname(&self) -> &str {
         &self.authname
