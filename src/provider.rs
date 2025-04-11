@@ -5,6 +5,7 @@ pub(crate) mod data;
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
 use hickory_resolver::{config, Resolver, TokioResolver};
+use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::context::Context;
@@ -37,7 +38,19 @@ pub enum Protocol {
 }
 
 /// Socket security.
-#[derive(Debug, Default, Display, PartialEq, Eq, Copy, Clone, FromPrimitive, ToPrimitive)]
+#[derive(
+    Debug,
+    Default,
+    Display,
+    PartialEq,
+    Eq,
+    Copy,
+    Clone,
+    FromPrimitive,
+    ToPrimitive,
+    Serialize,
+    Deserialize,
+)]
 #[repr(u8)]
 pub enum Socket {
     /// Unspecified socket security, select automatically.

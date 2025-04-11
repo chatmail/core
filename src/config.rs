@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{bail, ensure, Context as _, Result};
 use base64::Engine as _;
 use deltachat_contact_tools::{addr_cmp, sanitize_single_line};
 use serde::{Deserialize, Serialize};
@@ -13,10 +13,12 @@ use strum_macros::{AsRefStr, Display, EnumIter, EnumString};
 use tokio::fs;
 
 use crate::blob::BlobObject;
+use crate::configure::EnteredLoginParam;
 use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
+use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{get_provider_by_id, Provider};
 use crate::sync::{self, Sync::*, SyncData};
@@ -525,21 +527,22 @@ impl Context {
         // Default values
         let val = match key {
             Config::BccSelf => match Box::pin(self.is_chatmail()).await? {
-                false => Some("1"),
-                true => Some("0"),
+                false => Some("1".to_string()),
+                true => Some("0".to_string()),
             },
-            Config::ConfiguredInboxFolder => Some("INBOX"),
+            Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
             Config::DeleteServerAfter => {
                 match !Box::pin(self.get_config_bool(Config::BccSelf)).await?
                     && Box::pin(self.is_chatmail()).await?
                 {
-                    true => Some("1"),
-                    false => Some("0"),
+                    true => Some("1".to_string()),
+                    false => Some("0".to_string()),
                 }
             }
-            _ => key.get_str("default"),
+            Config::Addr => self.get_config_opt(Config::ConfiguredAddr).await?,
+            _ => key.get_str("default").map(|s| s.to_string()),
         };
-        Ok(val.map(|s| s.to_string()))
+        Ok(val)
     }
 
     /// Returns Some(T) if a value for the given key is set and was successfully parsed.
@@ -805,6 +808,19 @@ impl Context {
                     .set_raw_config(constants::DC_FOLDERS_CONFIGURED_KEY, None)
                     .await?;
             }
+            Config::ConfiguredAddr => {
+                if self.is_configured().await? {
+                    bail!("Cannot change ConfiguredAddr");
+                }
+                if let Some(addr) = value {
+                    info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!");
+                    ConfiguredLoginParam::from_json(&format!(
+                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
+                    ))?
+                    .save_to_transports_table(self, &EnteredLoginParam::default())
+                    .await?;
+                }
+            }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
             }
@@ -891,6 +907,7 @@ impl Context {
     /// primary address (if exists) as a secondary address.
     ///
     /// This should only be used by test code and during configure.
+    #[cfg(test)] // AEAP is disabled, but there are still tests for it
     pub(crate) async fn set_primary_self_addr(&self, primary_new: &str) -> Result<()> {
         self.quota.write().await.take();
 
@@ -904,7 +921,8 @@ impl Context {
         )
         .await?;
 
-        self.set_config_internal(Config::ConfiguredAddr, Some(primary_new))
+        self.sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(primary_new))
             .await?;
         self.emit_event(EventType::ConnectivityChanged);
         Ok(())
