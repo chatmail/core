@@ -3,6 +3,7 @@ use deltachat_contact_tools::may_be_valid_addr;
 use super::*;
 use crate::chat::{get_chat_contacts, send_text_msg, Chat};
 use crate::chatlist::Chatlist;
+use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
 

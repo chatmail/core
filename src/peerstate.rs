@@ -452,17 +452,6 @@ impl Peerstate {
         verified.is_some() && verified == self.peek_key_fingerprint(false)
     }
 
-    pub(crate) async fn is_backward_verified(&self, context: &Context) -> Result<bool> {
-        let Some(backward_verified_key_id) = self.backward_verified_key_id else {
-            return Ok(false);
-        };
-
-        let self_key_id = context.get_config_i64(Config::KeyId).await?;
-
-        let backward_verified = backward_verified_key_id == self_key_id;
-        Ok(backward_verified)
-    }
-
     /// Set this peerstate to verified;
     /// make sure to call `self.save_to_db` to save these changes.
     ///

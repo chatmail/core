@@ -350,19 +350,14 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         fingerprint = String::new();
     }
 
-    let (id, modified) = match Contact::add_or_lookup_ex(
-        context,
-        &contact.authname,
-        &addr,
-        &fingerprint,
-        origin,
-    )
-    .await
-    {
-        Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
-        Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
-        Ok(val) => val,
-    };
+    let (id, modified) =
+        match Contact::add_or_lookup_ex(context, &contact.authname, &addr, &fingerprint, origin)
+            .await
+        {
+            Err(e) => return Err(e).context("Contact::add_or_lookup() failed"),
+            Ok((ContactId::SELF, _)) => return Ok(ContactId::SELF),
+            Ok(val) => val,
+        };
     if modified != Modifier::None {
         context.emit_event(EventType::ContactsChanged(Some(id)));
     }
@@ -1549,9 +1544,11 @@ impl Contact {
     /// with the name and address of the contact
     /// formatted by [Self::get_name_n_addr].
     pub async fn get_verifier_id(&self, context: &Context) -> Result<Option<ContactId>> {
-        let verifier_id: u32 = 
-        context.sql.query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,)).await?.
-        context("Contact does not exist")?;
+        let verifier_id: u32 = context
+            .sql
+            .query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,))
+            .await?
+            .context("Contact does not exist")?;
 
         if verifier_id == 0 {
             Ok(None)
@@ -1855,18 +1852,8 @@ pub(crate) async fn update_last_seen(
     Ok(())
 }
 
-fn cat_fingerprint(
-    ret: &mut String,
-    name: &str,
-    addr: &str,
-    fingerprint: &str,
-) {
-    *ret += &format!(
-        "\n\n{} ({}):\n{}",
-        name,
-        addr,
-        fingerprint
-    );
+fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
+    *ret += &format!("\n\n{} ({}):\n{}", name, addr, fingerprint);
 }
 
 fn split_address_book(book: &str) -> Vec<(&str, &str)> {
