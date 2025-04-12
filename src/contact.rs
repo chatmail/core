@@ -778,9 +778,10 @@ impl Contact {
         let id = context
             .sql
             .query_get_value(
-                "SELECT id FROM contacts \
-            WHERE addr=?1 COLLATE NOCASE \
-            AND id>?2 AND origin>=?3 AND (? OR blocked=?)",
+                "SELECT id FROM contacts
+                 WHERE addr=?1 COLLATE NOCASE
+                 AND fingerprint='' -- Do not lookup PGP-contacts
+                 AND id>?2 AND origin>=?3 AND (? OR blocked=?)",
                 (
                     &addr_normalized,
                     ContactId::LAST_SPECIAL,
@@ -1547,7 +1548,7 @@ impl Contact {
             .sql
             .query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,))
             .await?
-            .context("Contact does not exist")?;
+            .with_context(|| format!("Contact {} does not exist", self.id))?;
 
         if verifier_id == 0 {
             Ok(None)
