@@ -1,6 +1,5 @@
 //! End-to-end encryption support.
 
-use std::collections::BTreeSet;
 use std::io::Cursor;
 
 use anyhow::Result;

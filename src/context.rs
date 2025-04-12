@@ -11,18 +11,16 @@ use std::time::Duration;
 use anyhow::{bail, ensure, Context as _, Result};
 use async_channel::{self as channel, Receiver, Sender};
 use pgp::types::PublicKeyTrait;
-use pgp::SignedPublicKey;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::aheader::EncryptPreference;
 use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
     self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
 };
-use crate::contact::{Contact, ContactId, import_vcard};
+use crate::contact::{import_vcard, Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -1170,8 +1168,7 @@ impl Context {
             .await?
             .first()
             .context("Self reporting bot vCard does not contain a contact")?;
-        self
-            .sql
+        self.sql
             .execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (contact_id,))
             .await?;
 

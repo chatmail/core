@@ -3,11 +3,8 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use deltachat_contact_tools::addr_cmp;
 use mailparse::ParsedMail;
 
-use crate::aheader::Aheader;
-use crate::context::Context;
 use crate::key::{Fingerprint, SignedPublicKey, SignedSecretKey};
 use crate::pgp;
 
