@@ -540,6 +540,8 @@ async fn test_secure_join() -> Result<()> {
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
+    let contact_alice_id = bob.add_or_lookup_pgp_contact(&alice).await.id;
+
     // Check Bob emitted the JoinerProgress event.
     let event = bob
         .evtracker
@@ -550,12 +552,7 @@ async fn test_secure_join() -> Result<()> {
             contact_id,
             progress,
         } => {
-            let alice_contact_id =
-                Contact::lookup_id_by_addr(&bob.ctx, "alice@example.org", Origin::Unknown)
-                    .await
-                    .expect("Error looking up contact")
-                    .expect("Contact not found");
-            assert_eq!(contact_id, alice_contact_id);
+            assert_eq!(contact_id, contact_alice_id);
             assert_eq!(progress, 400);
         }
         _ => unreachable!(),
@@ -617,14 +614,11 @@ async fn test_secure_join() -> Result<()> {
         assert_eq!(msg.get_text(), expected_text);
     }
 
-    // Bob should not yet have Alice verified
-    let contact_alice_id =
-        Contact::lookup_id_by_addr(&bob.ctx, "alice@example.org", Origin::Unknown)
-            .await
-            .expect("Error looking up contact")
-            .expect("Contact not found");
-    let contact_alice = Contact::get_by_id(&bob.ctx, contact_alice_id).await?;
-    assert_eq!(contact_alice.is_verified(&bob.ctx).await?, false);
+    // Bob has verified Alice already.
+    //
+    // Alice may not have verified Bob yet.
+    let contact_alice = bob.add_or_lookup_pgp_contact(&alice).await;
+    assert_eq!(contact_alice.is_verified(&bob.ctx).await?, true);
 
     tcm.section("Step 7: Bob receives vg-member-added");
     bob.recv_msg(&sent).await;
