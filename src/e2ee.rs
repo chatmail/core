@@ -42,26 +42,6 @@ impl EncryptHelper {
         Aheader::new(addr, pk, self.prefer_encrypt)
     }
 
-    /// Determines if we can and should encrypt.
-    pub(crate) async fn should_encrypt(
-        &self,
-        context: &Context,
-        peerstates: &[(Option<Peerstate>, String)],
-    ) -> Result<bool> {
-        let is_chatmail = context.is_chatmail().await?;
-        for (peerstate, _addr) in peerstates {
-            if let Some(peerstate) = peerstate {
-                // For chatmail we ignore the encryption preference,
-                // because we can either send encrypted or not at all.
-                if is_chatmail || peerstate.prefer_encrypt != EncryptPreference::Reset {
-                    continue;
-                }
-            }
-            return Ok(false);
-        }
-        Ok(true)
-    }
-
     /// Tries to encrypt the passed in `mail`.
     pub async fn encrypt(
         self,
@@ -258,26 +238,6 @@ Sent with my Delta Chat Messenger: https://delta.chat";
             fingerprint_changed: false,
         };
         vec![(Some(peerstate), addr.to_string())]
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_should_encrypt() -> Result<()> {
-        let t = TestContext::new_alice().await;
-        let encrypt_helper = EncryptHelper::new(&t).await.unwrap();
-
-        let ps = new_peerstates(EncryptPreference::NoPreference);
-        assert!(encrypt_helper.should_encrypt(&t, &ps).await?);
-
-        let ps = new_peerstates(EncryptPreference::Reset);
-        assert!(!encrypt_helper.should_encrypt(&t, &ps).await?);
-
-        let ps = new_peerstates(EncryptPreference::Mutual);
-        assert!(encrypt_helper.should_encrypt(&t, &ps).await?);
-
-        // test with missing peerstate
-        let ps = vec![(None, "bob@foo.bar".to_string())];
-        assert!(!encrypt_helper.should_encrypt(&t, &ps).await?);
-        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
