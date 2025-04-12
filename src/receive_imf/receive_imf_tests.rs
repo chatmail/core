@@ -18,7 +18,8 @@ use crate::imap::prefetch_should_download;
 use crate::imex::{imex, ImexMode};
 use crate::peerstate::Peerstate;
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::{get_chat_msg, mark_as_verified, TestContext, TestContextManager};
+use crate::test_utils::mark_as_verified;
+use crate::test_utils::{get_chat_msg, TestContext, TestContextManager};
 use crate::tools::{time, SystemTime};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
