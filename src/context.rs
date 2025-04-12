@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::constants::{
     self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
 };
-use crate::contact::{import_vcard, Contact, ContactId};
+use crate::contact::{import_vcard, mark_contact_id_as_verified, Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -1168,9 +1168,7 @@ impl Context {
             .await?
             .first()
             .context("Self reporting bot vCard does not contain a contact")?;
-        self.sql
-            .execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (contact_id,))
-            .await?;
+        mark_contact_id_as_verified(self, contact_id, contact_id).await?;
 
         let chat_id = ChatId::create_for_contact(self, contact_id).await?;
         chat_id

@@ -9,6 +9,7 @@ use crate::chat::{self, get_chat_id_by_grpid, Chat, ChatId, ChatIdBlocked, Prote
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
+use crate::contact::mark_contact_id_as_verified;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::ensure_secret_key_exists;
@@ -210,10 +211,7 @@ async fn verify_sender_by_fingerprint(
     let contact = Contact::get_by_id(context, contact_id).await?;
     let is_verified = contact.fingerprint().is_some_and(|fp| fp == fingerprint);
     if is_verified {
-        context
-            .sql
-            .execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (contact_id,))
-            .await?;
+        mark_contact_id_as_verified(context, contact_id, contact_id).await?;
     }
     Ok(is_verified)
 }

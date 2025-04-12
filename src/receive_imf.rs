@@ -15,7 +15,7 @@ use regex::Regex;
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, ShowEmails, DC_CHAT_ID_TRASH, EDITED_PREFIX};
-use crate::contact::{Contact, ContactId, Origin};
+use crate::contact::{mark_contact_id_as_verified, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
 use crate::download::DownloadState;
@@ -3054,10 +3054,7 @@ async fn mark_recipients_as_verified(
             continue;
         }
 
-        context
-            .sql
-            .execute("UPDATE contacts SET verifier=? WHERE id=?", (from_id, id))
-            .await?;
+        mark_contact_id_as_verified(context, id, from_id).await?;
     }
 
     Ok(())
