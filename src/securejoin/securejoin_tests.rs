@@ -155,6 +155,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     // Step 4: Bob receives vc-auth-required, sends vc-request-with-auth
     bob.recv_msg_trash(&sent).await;
     let bob_chat = bob.get_pgp_chat(&alice).await;
+    assert_eq!(bob_chat.why_cant_send(&bob).await.unwrap(), None);
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
 
     // Check Bob emitted the JoinerProgress event.
