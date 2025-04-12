@@ -460,20 +460,6 @@ impl MimeFactory {
         Ok(res)
     }
 
-    fn verified(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                chat.is_self_talk() ||
-                    // Securejoin messages are supposed to verify a key.
-                    // In order to do this, it is necessary that they can be sent
-                    // to a key that is not yet verified.
-                    // This has to work independently of whether the chat is protected right now.
-                    chat.is_protected() && msg.get_info_type() != SystemMessage::SecurejoinMessage
-            }
-            Loaded::Mdn { .. } => false,
-        }
-    }
-
     fn should_skip_autocrypt(&self) -> bool {
         match &self.loaded {
             Loaded::Message { msg, .. } => {
