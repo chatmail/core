@@ -440,17 +440,6 @@ impl Peerstate {
         }
     }
 
-    /// Returns true if the key used for opportunistic encryption in the 1:1 chat
-    /// is the same as the verified key.
-    ///
-    /// Note that verified groups always use the verified key no matter if the
-    /// opportunistic key matches or not.
-    pub(crate) fn is_using_verified_key(&self) -> bool {
-        let verified = self.peek_key_fingerprint(true);
-
-        verified.is_some() && verified == self.peek_key_fingerprint(false)
-    }
-
     /// Set this peerstate to verified;
     /// make sure to call `self.save_to_db` to save these changes.
     ///
