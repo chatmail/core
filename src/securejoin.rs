@@ -199,45 +199,20 @@ async fn info_chat_id(context: &Context, contact_id: ContactId) -> Result<ChatId
     Ok(chat_id_blocked.id)
 }
 
-/// Checks fingerprint and marks the contact as forward verified
+/// Checks fingerprint and marks the contact as verified
 /// if fingerprint matches.
 async fn verify_sender_by_fingerprint(
     context: &Context,
     fingerprint: &Fingerprint,
     contact_id: ContactId,
 ) -> Result<bool> {
+    let fingerprint = fingerprint.hex();
     let contact = Contact::get_by_id(context, contact_id).await?;
-    let peerstate = match Peerstate::from_addr(context, contact.get_addr()).await {
-        Ok(peerstate) => peerstate,
-        Err(err) => {
-            warn!(
-                context,
-                "Failed to sender peerstate for {}: {}",
-                contact.get_addr(),
-                err
-            );
-            return Ok(false);
-        }
-    };
-
-    if let Some(mut peerstate) = peerstate {
-        if peerstate
-            .public_key_fingerprint
-            .as_ref()
-            .filter(|&fp| fp == fingerprint)
-            .is_some()
-        {
-            if let Some(public_key) = &peerstate.public_key {
-                let verifier = contact.get_addr().to_owned();
-                peerstate.set_verified(public_key.clone(), fingerprint.clone(), verifier)?;
-                peerstate.prefer_encrypt = EncryptPreference::Mutual;
-                peerstate.save_to_db(&context.sql).await?;
-                return Ok(true);
-            }
-        }
+    let is_verified = contact.fingerprint().is_some_and(|fp| fp == fingerprint);
+    if is_verified {
+        context.sql.execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (contact_id,)).await?;
     }
-
-    Ok(false)
+    Ok(is_verified)
 }
 
 /// What to do with a Secure-Join handshake message after it was handled.
