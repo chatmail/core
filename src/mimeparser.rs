@@ -399,15 +399,6 @@ impl MimeMessage {
             None
         };
 
-        // The peerstate that will be used to validate the signatures.
-        let mut peerstate = get_autocrypt_peerstate(
-            context,
-            &from.addr,
-            autocrypt_header.as_ref(),
-            timestamp_sent,
-        )
-        .await?;
-
         let public_keyring = if incoming {
             if let Some(autocrypt_header) = autocrypt_header {
                 vec![autocrypt_header.public_key]
@@ -517,12 +508,6 @@ impl MimeMessage {
         }
         if !encrypted {
             signatures.clear();
-        }
-        if let Some(peerstate) = &mut peerstate {
-            if peerstate.prefer_encrypt != EncryptPreference::Mutual && !signatures.is_empty() {
-                peerstate.prefer_encrypt = EncryptPreference::Mutual;
-                peerstate.save_to_db(&context.sql).await?;
-            }
         }
 
         let mut parser = MimeMessage {
@@ -1322,6 +1307,8 @@ impl MimeMessage {
         if decoded_data.is_empty() {
             return Ok(());
         }
+
+        // Process attached PGP keys.
         if let Some(peerstate) = &mut self.peerstate {
             if peerstate.prefer_encrypt != EncryptPreference::Mutual
                 && mime_type.type_() == mime::APPLICATION
