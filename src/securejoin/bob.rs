@@ -59,8 +59,15 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         let peer_verified =
             verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
                 .await?;
+        let has_key = context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM public_keys WHERE fingerprint=?",
+                (invite.fingerprint().hex(),),
+            )
+            .await?;
 
-        if peer_verified {
+        if has_key && peer_verified {
             // The scanned fingerprint matches Alice's key, we can proceed to step 4b.
             info!(context, "Taking securejoin protocol shortcut");
             send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth)

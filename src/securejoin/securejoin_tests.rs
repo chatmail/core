@@ -294,8 +294,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         "vc-contact-confirm"
     );
 
-    // Bob should not yet have Alice verified
-    assert_eq!(contact_alice.is_verified(&bob.ctx).await.unwrap(), false);
+    // Bob has verified Alice already.
+    //
+    // Alice may not have verified Bob yet.
+    assert_eq!(contact_alice.is_verified(&bob.ctx).await.unwrap(), true);
 
     // Step 7: Bob receives vc-contact-confirm
     bob.recv_msg_trash(&sent).await;
