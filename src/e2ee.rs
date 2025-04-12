@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::io::Cursor;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use mail_builder::mime::MimePart;
 use num_traits::FromPrimitive;
 
@@ -11,7 +11,6 @@ use crate::aheader::{Aheader, EncryptPreference};
 use crate::config::Config;
 use crate::context::Context;
 use crate::key::{load_self_public_key, load_self_secret_key, SignedPublicKey};
-use crate::peerstate::Peerstate;
 use crate::pgp;
 
 #[derive(Debug)]
@@ -90,11 +89,11 @@ mod tests {
     use super::*;
     use crate::chat::send_text_msg;
     use crate::config::Config;
-    use crate::key::DcKey;
     use crate::message::{Message, Viewtype};
     use crate::param::Param;
     use crate::receive_imf::receive_imf;
-    use crate::test_utils::{bob_keypair, TestContext, TestContextManager};
+    use crate::test_utils::{TestContext, TestContextManager};
+    use crate::peerstate::Peerstate;
 
     mod ensure_secret_key_exists {
         use super::*;
@@ -213,31 +212,6 @@ Sent with my Delta Chat Messenger: https://delta.chat";
         assert_eq!(peerstate_alice.prefer_encrypt, EncryptPreference::Reset);
 
         Ok(())
-    }
-
-    fn new_peerstates(prefer_encrypt: EncryptPreference) -> Vec<(Option<Peerstate>, String)> {
-        let addr = "bob@foo.bar";
-        let pub_key = bob_keypair().public;
-        let peerstate = Peerstate {
-            addr: addr.into(),
-            last_seen: 13,
-            last_seen_autocrypt: 14,
-            prefer_encrypt,
-            public_key: Some(pub_key.clone()),
-            public_key_fingerprint: Some(pub_key.dc_fingerprint()),
-            gossip_key: Some(pub_key.clone()),
-            gossip_timestamp: 15,
-            gossip_key_fingerprint: Some(pub_key.dc_fingerprint()),
-            verified_key: Some(pub_key.clone()),
-            verified_key_fingerprint: Some(pub_key.dc_fingerprint()),
-            verifier: None,
-            secondary_verified_key: None,
-            secondary_verified_key_fingerprint: None,
-            secondary_verifier: None,
-            backward_verified_key_id: None,
-            fingerprint_changed: false,
-        };
-        vec![(Some(peerstate), addr.to_string())]
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

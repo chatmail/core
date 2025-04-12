@@ -1334,17 +1334,11 @@ impl ChatId {
         {
             let contact = Contact::get_by_id(context, *contact_id).await?;
             let addr = contact.get_addr();
-            let peerstate = Peerstate::from_addr(context, addr).await?;
-
-            match peerstate
-                .filter(|peerstate| peerstate.peek_key(false).is_some())
-                .map(|peerstate| peerstate.prefer_encrypt)
-            {
-                Some(EncryptPreference::Mutual) | Some(EncryptPreference::NoPreference) => {
-                    ret_available += &format!("{addr}\n")
-                }
-                Some(EncryptPreference::Reset) | None => ret_reset += &format!("{addr}\n"),
-            };
+            if contact.is_pgp_contact() {
+                ret_available += &format!("{addr}\n");
+            } else {
+                ret_reset += &format!("{addr}\n");
+            }
         }
 
         let mut ret = String::new();
