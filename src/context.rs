@@ -22,7 +22,7 @@ use crate::config::Config;
 use crate::constants::{
     self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
 };
-use crate::contact::{Contact, ContactId};
+use crate::contact::{Contact, ContactId, import_vcard};
 use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -32,7 +32,6 @@ use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
-use crate::peerstate::Peerstate;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
 use crate::scheduler::{convert_folder_meaning, SchedulerState};
@@ -1166,32 +1165,17 @@ impl Context {
     /// On the other end, a bot will receive the message and make it available
     /// to Delta Chat's developers.
     pub async fn draft_self_report(&self) -> Result<ChatId> {
-        const SELF_REPORTING_BOT: &str = "self_reporting@testrun.org";
+        const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bot.vcf");
+        let contact_id: ContactId = *import_vcard(self, SELF_REPORTING_BOT_VCARD)
+            .await?
+            .first()
+            .context("Self reporting bot vCard does not contain a contact")?;
+        self
+            .sql
+            .execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (contact_id,))
+            .await?;
 
-        let contact_id = Contact::create(self, "Statistics bot", SELF_REPORTING_BOT).await?;
         let chat_id = ChatId::create_for_contact(self, contact_id).await?;
-
-        // We're including the bot's public key in Delta Chat
-        // so that the first message to the bot can directly be encrypted:
-        let public_key = SignedPublicKey::from_base64(
-            "xjMEZbfBlBYJKwYBBAHaRw8BAQdABpLWS2PUIGGo4pslVt4R8sylP5wZihmhf1DTDr3oCM\
-	        PNHDxzZWxmX3JlcG9ydGluZ0B0ZXN0cnVuLm9yZz7CiwQQFggAMwIZAQUCZbfBlAIbAwQLCQgHBhUI\
-	        CQoLAgMWAgEWIQTS2i16sHeYTckGn284K3M5Z4oohAAKCRA4K3M5Z4oohD8dAQCQV7CoH6UP4PD+Nq\
-	        I4kW5tbbqdh2AnDROg60qotmLExAEAxDfd3QHAK9f8b9qQUbLmHIztCLxhEuVbWPBEYeVW0gvOOARl\
-	        t8GUEgorBgEEAZdVAQUBAQdAMBUhYoAAcI625vGZqnM5maPX4sGJ7qvJxPAFILPy6AcDAQgHwngEGB\
-	        YIACAFAmW3wZQCGwwWIQTS2i16sHeYTckGn284K3M5Z4oohAAKCRA4K3M5Z4oohPwCAQCvzk1ObIkj\
-	        2GqsuIfaULlgdnfdZY8LNary425CEfHZDQD5AblXVrlMO1frdlc/Vo9z3pEeCrfYdD7ITD3/OeVoiQ\
-	        4=",
-        )?;
-        let mut peerstate = Peerstate::from_public_key(
-            SELF_REPORTING_BOT,
-            0,
-            EncryptPreference::Mutual,
-            &public_key,
-        );
-        let fingerprint = public_key.dc_fingerprint();
-        peerstate.set_verified(public_key, fingerprint, "".to_string())?;
-        peerstate.save_to_db(&self.sql).await?;
         chat_id
             .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
             .await?;
