@@ -20,7 +20,6 @@ use serde::{Deserialize, Serialize};
 use tokio::task;
 use tokio::time::{timeout, Duration};
 
-use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
 use crate::chat::{ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::color::str_to_color;
@@ -34,7 +33,7 @@ use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
 use crate::sync::{self, Sync::*};
-use crate::tools::{duration_to_str, get_abs_path, smeared_time, time, SystemTime};
+use crate::tools::{duration_to_str, get_abs_path, time, SystemTime};
 use crate::{chat, chatlist_events, stock_str};
 
 /// Time during which a contact is considered as seen recently.

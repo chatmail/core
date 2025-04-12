@@ -32,7 +32,6 @@ use crate::message::{
 use crate::mimeparser::{parse_message_ids, AvatarAction, MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
-use crate::peerstate::Peerstate;
 use crate::reaction::{set_msg_reaction, Reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
@@ -382,8 +381,6 @@ pub(crate) async fn receive_imf_inner(
         .await?;
     };
 
-    update_verified_keys(context, &mut mime_parser, from_id).await?;
-
     let received_msg;
     if mime_parser.get_header(HeaderDef::SecureJoin).is_some() {
         let res;
@@ -391,10 +388,6 @@ pub(crate) async fn receive_imf_inner(
             res = handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
                 .context("error in Secure-Join message handling")?;
-
-            // Peerstate could be updated by handling the Securejoin handshake.
-            let contact = Contact::get_by_id(context, from_id).await?;
-            mime_parser.peerstate = Peerstate::from_addr(context, contact.get_addr()).await?;
         } else {
             let to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
             // handshake may mark contacts as verified and must be processed before chats are created
@@ -427,24 +420,6 @@ pub(crate) async fn receive_imf_inner(
 
     if verified_encryption == VerifiedEncryption::Verified {
         mark_recipients_as_verified(context, from_id, &to_ids, &mime_parser).await?;
-    }
-
-    if verified_encryption == VerifiedEncryption::Verified
-        && mime_parser.get_header(HeaderDef::ChatVerified).is_some()
-    {
-        if let Some(peerstate) = &mut mime_parser.peerstate {
-            // NOTE: it might be better to remember ID of the key
-            // that we used to decrypt the message, but
-            // it is unlikely that default key ever changes
-            // as it only happens when user imports a new default key.
-            //
-            // Backward verification is not security-critical,
-            // it is only needed to avoid adding user who does not
-            // have our key as verified to protected chats.
-            peerstate.backward_verified_key_id =
-                Some(context.get_config_i64(Config::KeyId).await?).filter(|&id| id > 0);
-            peerstate.save_to_db(&context.sql).await?;
-        }
     }
 
     let received_msg = if let Some(received_msg) = received_msg {
@@ -1054,13 +1029,10 @@ async fn add_parts(
                             )
                             .await?;
                     }
-                    if let Some(peerstate) = &mime_parser.peerstate {
-                        restore_protection = new_protection != ProtectionStatus::Protected
-                            && peerstate.prefer_encrypt == EncryptPreference::Mutual
-                            // Check that the contact still has the Autocrypt key same as the
-                            // verified key, see also `Peerstate::is_using_verified_key()`.
-                            && contact.is_verified(context).await?;
-                    }
+                    restore_protection = new_protection != ProtectionStatus::Protected
+                        // Check that the contact still has the Autocrypt key same as the
+                        // verified key, see also `Peerstate::is_using_verified_key()`.
+                        && contact.is_verified(context).await?;
                 }
             }
         }
@@ -3028,65 +3000,6 @@ enum VerifiedEncryption {
     NotVerified(String), // The string contains the reason why it's not verified
 }
 
-/// Moves secondary verified key to primary verified key
-/// if the message is signed with a secondary verified key.
-/// Removes secondary verified key if the message is signed with primary key.
-async fn update_verified_keys(
-    context: &Context,
-    mimeparser: &mut MimeMessage,
-    from_id: ContactId,
-) -> Result<Option<String>> {
-    if from_id == ContactId::SELF {
-        return Ok(None);
-    }
-
-    if !mimeparser.was_encrypted() {
-        return Ok(None);
-    }
-
-    let Some(peerstate) = &mut mimeparser.peerstate else {
-        // No peerstate means no verified keys.
-        return Ok(None);
-    };
-
-    let signed_with_primary_verified_key = peerstate
-        .verified_key_fingerprint
-        .as_ref()
-        .filter(|fp| mimeparser.signatures.contains(fp))
-        .is_some();
-    let signed_with_secondary_verified_key = peerstate
-        .secondary_verified_key_fingerprint
-        .as_ref()
-        .filter(|fp| mimeparser.signatures.contains(fp))
-        .is_some();
-
-    if signed_with_primary_verified_key {
-        // Remove secondary key if it exists.
-        if peerstate.secondary_verified_key.is_some()
-            || peerstate.secondary_verified_key_fingerprint.is_some()
-            || peerstate.secondary_verifier.is_some()
-        {
-            peerstate.secondary_verified_key = None;
-            peerstate.secondary_verified_key_fingerprint = None;
-            peerstate.secondary_verifier = None;
-            peerstate.save_to_db(&context.sql).await?;
-        }
-
-        // No need to notify about secondary key removal.
-        Ok(None)
-    } else if signed_with_secondary_verified_key {
-        peerstate.verified_key = peerstate.secondary_verified_key.take();
-        peerstate.verified_key_fingerprint = peerstate.secondary_verified_key_fingerprint.take();
-        peerstate.verifier = peerstate.secondary_verifier.take();
-        peerstate.fingerprint_changed = true;
-        peerstate.save_to_db(&context.sql).await?;
-
-        // Primary verified key changed.
-        Ok(None)
-    } else {
-        Ok(None)
-    }
-}
 
 /// Checks whether the message is allowed to appear in a protected chat.
 ///
@@ -3106,6 +3019,8 @@ fn has_verified_encryption(
     // this check is skipped for SELF as there is no proper SELF-peerstate
     // and results in group-splits otherwise.
     if from_id != ContactId::SELF {
+        // FIXME
+        /*
         let Some(peerstate) = &mimeparser.peerstate else {
             return Ok(NotVerified(
                 "No peerstate, the contact isn't verified".to_string(),
@@ -3123,6 +3038,7 @@ fn has_verified_encryption(
                 "The message was sent with non-verified encryption".to_string(),
             ));
         }
+        */
     }
 
     Ok(Verified)
