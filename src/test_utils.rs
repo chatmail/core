@@ -25,17 +25,17 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_TRASH;
-use crate::constants::DC_GCL_NO_SPECIALS;
 use crate::constants::{Blocked, Chattype};
-use crate::contact::{import_vcard, make_vcard, Contact, ContactId, Modifier, Origin};
+use crate::constants::{DC_CHAT_ID_TRASH, DC_GCL_NO_SPECIALS};
+use crate::contact::{
+    import_vcard, make_vcard, mark_contact_id_as_verified, Contact, ContactId, Modifier, Origin,
+};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, load_self_public_key, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
-use crate::peerstate::Peerstate;
 use crate::pgp::KeyPair;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
@@ -1362,25 +1362,10 @@ fn print_logevent(logevent: &LogEvent) {
 /// Saves the other account's public key as verified
 /// and peerstate as backwards verified.
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
-    let mut peerstate = Peerstate::from_header(
-        &EncryptHelper::new(other).await.unwrap().get_aheader(),
-        // We have to give 0 as the time, not the current time:
-        // The time is going to be saved in peerstate.last_seen.
-        // The code in `peerstate.rs` then compares `if message_time > self.last_seen`,
-        // and many similar checks in peerstate.rs, and doesn't allow changes otherwise.
-        // Giving the current time would mean that message_time == peerstate.last_seen,
-        // so changes would not be allowed.
-        // This might lead to flaky tests.
-        0,
-    );
-
-    peerstate.verified_key.clone_from(&peerstate.public_key);
-    peerstate
-        .verified_key_fingerprint
-        .clone_from(&peerstate.public_key_fingerprint);
-    peerstate.backward_verified_key_id = Some(this.get_config_i64(Config::KeyId).await.unwrap());
-
-    peerstate.save_to_db(&this.sql).await.unwrap();
+    let contact_id = this.add_or_lookup_contact_id(other).await;
+    mark_contact_id_as_verified(this, contact_id, contact_id)
+        .await
+        .unwrap();
 }
 
 /// Pops a sync message from alice0 and receives it on alice1. Should be used after an action on

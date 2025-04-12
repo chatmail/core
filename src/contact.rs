@@ -1852,6 +1852,41 @@ pub(crate) async fn update_last_seen(
     Ok(())
 }
 
+/// Marks contact `contact_id` as verified by `verifier_id`.
+pub(crate) async fn mark_contact_id_as_verified(
+    context: &Context,
+    contact_id: ContactId,
+    verifier_id: ContactId,
+) -> Result<()> {
+    context
+        .sql
+        .transaction(|transaction| {
+            let contact_fingerprint: String = transaction.query_row(
+                "SELECT fingerprint FROM contacts WHERE id=?",
+                (contact_id,),
+                |row| row.get(0),
+            )?;
+            if contact_fingerprint.is_empty() {
+                bail!("Non-PGP contact {contact_id} cannot be verified.");
+            }
+            let verifier_fingerprint: String = transaction.query_row(
+                "SELECT fingerprint FROM contacts WHERE id=?",
+                (verifier_id,),
+                |row| row.get(0),
+            )?;
+            if verifier_fingerprint.is_empty() {
+                bail!("Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}.");
+            }
+            transaction.execute(
+                "UPDATE contacts SET verifier=? WHERE id=?",
+                (verifier_id, contact_id),
+            )?;
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
 fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
     *ret += &format!("\n\n{} ({}):\n{}", name, addr, fingerprint);
 }
