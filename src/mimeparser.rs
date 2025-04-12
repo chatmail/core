@@ -21,7 +21,7 @@ use crate::config::Config;
 use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{get_encrypted_mime, try_decrypt, validate_detached_signature};
+use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
