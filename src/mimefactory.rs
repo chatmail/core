@@ -317,6 +317,9 @@ impl MimeFactory {
                                 certificates.push((addr.clone(), certificate))
                             } else {
                                 missing_key_addresses.insert(addr.clone());
+                                if is_encrypted {
+                                    warn!(context, "Missing key for {addr}");
+                                }
                             }
                         }
 

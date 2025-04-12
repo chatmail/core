@@ -21,9 +21,7 @@ use crate::config::Config;
 use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{
-    get_encrypted_mime, try_decrypt, validate_detached_signature,
-};
+use crate::decrypt::{get_encrypted_mime, try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -400,11 +398,22 @@ impl MimeMessage {
 
         if let Some(autocrypt_header) = &autocrypt_header {
             let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
-            context.sql.execute("INSERT INTO public_keys (fingerprint, public_key)
+            let inserted = context
+                .sql
+                .execute(
+                    "INSERT INTO public_keys (fingerprint, public_key)
                                  VALUES (?, ?)
                                  ON CONFLICT (fingerprint)
                                  DO NOTHING",
-                                 (&fingerprint, autocrypt_header.public_key.to_bytes())).await?;
+                    (&fingerprint, autocrypt_header.public_key.to_bytes()),
+                )
+                .await?;
+            if inserted > 0 {
+                info!(
+                    context,
+                    "Saved key with fingerprint {fingerprint} from the Autocrypt header"
+                );
+            }
         }
 
         let public_keyring = if incoming {

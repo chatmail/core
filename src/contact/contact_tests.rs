@@ -1065,7 +1065,11 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let sent_msg = bob.send_text(chat.id, "moin").await;
     let bob_id = alice.recv_msg(&sent_msg).await.from_id;
     let bob_contact = Contact::get_by_id(alice, bob_id).await?;
-    let key_base64 = bob_contact.openpgp_certificate(alice).await?.unwrap().to_base64();
+    let key_base64 = bob_contact
+        .openpgp_certificate(alice)
+        .await?
+        .unwrap()
+        .to_base64();
     let fiona_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
 
     assert_eq!(make_vcard(alice, &[]).await?, "".to_string());
