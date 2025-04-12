@@ -8,7 +8,7 @@ use mailparse::ParsedMail;
 
 use crate::aheader::Aheader;
 use crate::context::Context;
-use crate::key::{DcKey, Fingerprint, SignedPublicKey, SignedSecretKey};
+use crate::key::{Fingerprint, SignedPublicKey, SignedSecretKey};
 use crate::peerstate::Peerstate;
 use crate::pgp;
 

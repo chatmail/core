@@ -499,17 +499,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 return Ok(HandshakeMessage::Propagate);
             }
 
-            // Mark peer as backward verified.
-            //
-            // This is needed for the case when we join a non-protected group
-            // because in this case `Chat-Verified` header that otherwise
-            // sets backward verification is not sent.
-            if let Some(peerstate) = &mut mime_message.peerstate {
-                peerstate.backward_verified_key_id =
-                    Some(context.get_config_i64(Config::KeyId).await?).filter(|&id| id > 0);
-                peerstate.save_to_db(&context.sql).await?;
-            }
-
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id,
                 progress: JoinerProgress::Succeeded.to_usize(),

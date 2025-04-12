@@ -13,6 +13,7 @@ use crate::chatlist::Chatlist;
 use crate::constants::{DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS};
 use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
+use crate::peerstate::Peerstate;
 use crate::imap::prefetch_should_download;
 use crate::imex::{imex, ImexMode};
 use crate::securejoin::get_securejoin_qr;
