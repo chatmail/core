@@ -4,19 +4,19 @@ use std::time::Duration;
 use tokio::fs;
 
 use super::*;
+use crate::aheader::EncryptPreference;
 use crate::chat::{
     add_contact_to_chat, add_to_chat_contacts_table, create_group_chat, get_chat_contacts,
     get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg, ChatItem,
     ChatVisibility,
 };
-use crate::aheader::EncryptPreference;
 use crate::chatlist::Chatlist;
 use crate::constants::{DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS};
 use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
-use crate::peerstate::Peerstate;
 use crate::imap::prefetch_should_download;
 use crate::imex::{imex, ImexMode};
+use crate::peerstate::Peerstate;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{get_chat_msg, mark_as_verified, TestContext, TestContextManager};
 use crate::tools::{time, SystemTime};

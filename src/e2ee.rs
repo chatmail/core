@@ -91,9 +91,9 @@ mod tests {
     use crate::config::Config;
     use crate::message::{Message, Viewtype};
     use crate::param::Param;
+    use crate::peerstate::Peerstate;
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
-    use crate::peerstate::Peerstate;
 
     mod ensure_secret_key_exists {
         use super::*;
