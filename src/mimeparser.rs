@@ -73,7 +73,6 @@ pub(crate) struct MimeMessage {
     /// messages to this address to post them to the list.
     pub list_post: Option<String>,
     pub chat_disposition_notification_to: Option<SingleInfo>,
-    pub peerstate: Option<Peerstate>,
     pub decrypting_failed: bool,
 
     /// Set of valid signature fingerprints if a message is an
@@ -507,7 +506,6 @@ impl MimeMessage {
             from,
             incoming,
             chat_disposition_notification_to,
-            peerstate,
             decrypting_failed: mail.is_err(),
 
             // only non-empty if it was a valid autocrypt message
@@ -1284,15 +1282,14 @@ impl MimeMessage {
         }
 
         // Process attached PGP keys.
-        if let Some(peerstate) = &mut self.peerstate {
-            if peerstate.prefer_encrypt != EncryptPreference::Mutual
-                && mime_type.type_() == mime::APPLICATION
-                && mime_type.subtype().as_str() == "pgp-keys"
-                && Self::try_set_peer_key_from_file_part(context, peerstate, decoded_data).await?
-            {
-                return Ok(());
-            }
+        /*
+        if mime_type.type_() == mime::APPLICATION
+            && mime_type.subtype().as_str() == "pgp-keys"
+            && Self::try_set_peer_key_from_file_part(context, peerstate, decoded_data).await?
+        {
+            return Ok(());
         }
+        */
         let mut part = Part::default();
         let msg_type = if context
             .is_webxdc_file(filename, decoded_data)
