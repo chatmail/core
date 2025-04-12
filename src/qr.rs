@@ -457,11 +457,6 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         None
     };
 
-    // retrieve known state for this fingerprint
-    let peerstate = Peerstate::from_fingerprint(context, &fingerprint)
-        .await
-        .context("Can't load peerstate")?;
-
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
         let (contact_id, _) = Contact::add_or_lookup_ex(
@@ -534,6 +529,13 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             })
         }
     } else if let Some(addr) = addr {
+        // FIXME don't use peerstate
+
+        // retrieve known state for this fingerprint
+        let peerstate = Peerstate::from_fingerprint(context, &fingerprint)
+            .await
+            .context("Can't load peerstate")?;
+
         if let Some(peerstate) = peerstate {
             let peerstate_addr = ContactAddress::new(&peerstate.addr)?;
             let (contact_id, _) =
