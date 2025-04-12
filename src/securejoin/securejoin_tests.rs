@@ -95,7 +95,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         0
     );
 
-    // Step 1: Generate QR-code, ChatId(0) indicates setup-contact
+    tcm.section("Step 1: Generate QR-code, ChatId(0) indicates setup-contact");
     let qr = get_securejoin_qr(&alice.ctx, None).await.unwrap();
     // We want Bob to learn Alice's name from their messages, not from the QR code.
     alice
@@ -103,16 +103,13 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         .await
         .unwrap();
 
-    // Step 2: Bob scans QR-code, sends vc-request
+    tcm.section("Step 2: Bob scans QR-code, sends vc-request");
     join_securejoin(&bob.ctx, &qr).await.unwrap();
     assert_eq!(
         Chatlist::try_load(&bob, 0, None, None).await.unwrap().len(),
         1
     );
-    let contact_alice_id = Contact::lookup_id_by_addr(&bob.ctx, alice_addr, Origin::Unknown)
-        .await
-        .expect("Error looking up contact")
-        .expect("Contact not found");
+    let contact_alice_id = bob.add_or_lookup_pgp_contact(&alice).await.id;
     let sent = bob.pop_sent_msg().await;
     assert!(!sent.payload.contains("Bob Examplenet"));
     assert_eq!(sent.recipient(), EmailAddress::new(alice_addr).unwrap());
@@ -122,7 +119,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
-    // Step 3: Alice receives vc-request, sends vc-auth-required
+    tcm.section("Step 3: Alice receives vc-request, sends vc-auth-required");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
@@ -152,7 +149,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
     }
 
-    // Step 4: Bob receives vc-auth-required, sends vc-request-with-auth
+    tcm.section("Step 4: Bob receives vc-auth-required, sends vc-request-with-auth");
     bob.recv_msg_trash(&sent).await;
     let bob_chat = bob.get_pgp_chat(&alice).await;
     assert_eq!(bob_chat.why_cant_send(&bob).await.unwrap(), None);
@@ -168,12 +165,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
             contact_id,
             progress,
         } => {
-            let alice_contact_id =
-                Contact::lookup_id_by_addr(&bob.ctx, alice_addr, Origin::Unknown)
-                    .await
-                    .expect("Error looking up contact")
-                    .expect("Contact not found");
-            assert_eq!(contact_id, alice_contact_id);
+            assert_eq!(contact_id, contact_alice_id);
             assert_eq!(progress, 400);
         }
         _ => unreachable!(),
@@ -238,7 +230,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         SystemTime::shift(Duration::from_secs(3600));
     }
 
-    // Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm
+    tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await.unwrap(), true);
     let contact_bob = Contact::get_by_id(&alice.ctx, contact_bob_id)
@@ -504,12 +496,12 @@ async fn test_secure_join() -> Result<()> {
     let alice_chatid =
         chat::create_group_chat(&alice.ctx, ProtectionStatus::Protected, "the chat").await?;
 
-    // Step 1: Generate QR-code, secure-join implied by chatid
+    tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
     let qr = get_securejoin_qr(&alice.ctx, Some(alice_chatid))
         .await
         .unwrap();
 
-    // Step 2: Bob scans QR-code, sends vg-request
+    tcm.section("Step 2: Bob scans QR-code, sends vg-request");
     let bob_chatid = join_securejoin(&bob.ctx, &qr).await?;
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 1);
 
@@ -532,7 +524,7 @@ async fn test_secure_join() -> Result<()> {
     // is only sent in `vg-request-with-auth` for compatibility.
     assert!(!msg.header_exists(HeaderDef::SecureJoinGroup));
 
-    // Step 3: Alice receives vg-request, sends vg-auth-required
+    tcm.section("Step 3: Alice receives vg-request, sends vg-auth-required");
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;

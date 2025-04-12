@@ -7,7 +7,6 @@ use num_traits::FromPrimitive;
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::chat;
 use crate::chatlist::Chatlist;
-use crate::config::Config;
 use crate::context::Context;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::message::Message;
