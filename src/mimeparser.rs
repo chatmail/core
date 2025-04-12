@@ -88,6 +88,11 @@ pub(crate) struct MimeMessage {
     /// regardless of whether they modified any peerstates.
     pub gossiped_keys: HashMap<String, SignedPublicKey>,
 
+    /// Fingerprint of the key in the Autocrypt header.
+    ///
+    /// It is not verified that the sender can use this key.
+    pub autocrypt_fingerprint: Option<String>,
+
     /// True if the message is a forwarded message.
     pub is_forwarded: bool,
     pub is_system_message: SystemMessage,
@@ -396,7 +401,7 @@ impl MimeMessage {
             None
         };
 
-        if let Some(autocrypt_header) = &autocrypt_header {
+        let autocrypt_fingerprint = if let Some(autocrypt_header) = &autocrypt_header {
             let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
             let inserted = context
                 .sql
@@ -414,7 +419,10 @@ impl MimeMessage {
                     "Saved key with fingerprint {fingerprint} from the Autocrypt header"
                 );
             }
-        }
+            Some(fingerprint)
+        } else {
+            None
+        };
 
         let public_keyring = if incoming {
             if let Some(autocrypt_header) = autocrypt_header {
@@ -543,6 +551,7 @@ impl MimeMessage {
 
             // only non-empty if it was a valid autocrypt message
             signatures,
+            autocrypt_fingerprint,
             gossiped_keys,
             is_forwarded: false,
             mdn_reports: Vec::new(),
