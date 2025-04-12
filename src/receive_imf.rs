@@ -1029,8 +1029,6 @@ async fn add_parts(
                             .await?;
                     }
                     restore_protection = new_protection != ProtectionStatus::Protected
-                        // Check that the contact still has the Autocrypt key same as the
-                        // verified key, see also `Peerstate::is_using_verified_key()`.
                         && contact.is_verified(context).await?;
                 }
             }

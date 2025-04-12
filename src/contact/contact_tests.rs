@@ -1,4 +1,4 @@
-use deltachat_contact_tools::{may_be_valid_addr, addr_cmp};
+use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 
 use super::*;
 use crate::chat::{get_chat_contacts, send_text_msg, Chat};

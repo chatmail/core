@@ -774,7 +774,6 @@ impl MimeFactory {
             ));
         }
 
-        let verified = self.verified();
         let grpimage = self.grpimage();
         let skip_autocrypt = self.should_skip_autocrypt();
         let encrypt_helper = EncryptHelper::new(context).await?;
