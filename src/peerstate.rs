@@ -14,16 +14,6 @@ use crate::mimeparser::SystemMessage;
 use crate::sql::Sql;
 use crate::{chatlist_events, stock_str};
 
-/// Type of the public key stored inside the peerstate.
-#[derive(Debug)]
-pub enum PeerstateKeyType {
-    /// Public key sent in the `Autocrypt-Gossip` header.
-    GossipKey,
-
-    /// Public key sent in the `Autocrypt` header.
-    PublicKey,
-}
-
 /// Peerstate represents the state of an Autocrypt peer.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Peerstate {
@@ -424,19 +414,6 @@ impl Peerstate {
             self.verified_key.as_ref()
         } else {
             self.public_key.as_ref().or(self.gossip_key.as_ref())
-        }
-    }
-
-    /// Returns a reference to the contact's public key fingerprint.
-    ///
-    /// Similar to [`Self::peek_key`], but returns the fingerprint instead of the key.
-    fn peek_key_fingerprint(&self, verified: bool) -> Option<&Fingerprint> {
-        if verified {
-            self.verified_key_fingerprint.as_ref()
-        } else {
-            self.public_key_fingerprint
-                .as_ref()
-                .or(self.gossip_key_fingerprint.as_ref())
         }
     }
 

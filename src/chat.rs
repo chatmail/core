@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use tokio::task;
 
-use crate::aheader::EncryptPreference;
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
 use crate::color::str_to_color;
@@ -39,7 +38,6 @@ use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::receive_imf::ReceivedMsg;
 use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
