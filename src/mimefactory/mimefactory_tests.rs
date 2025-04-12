@@ -893,10 +893,7 @@ async fn test_dont_remove_self() -> Result<()> {
     let mime_message = MimeMessage::from_bytes(alice, sent.payload.as_bytes(), None)
         .await
         .unwrap();
-    assert_eq!(
-        mime_message.get_header(HeaderDef::ChatGroupPastMembers),
-        None
-    );
+    assert!(!mime_message.header_exists(HeaderDef::ChatGroupPastMembers));
     assert_eq!(
         mime_message.chat_group_member_timestamps().unwrap().len(),
         1 // There is a timestamp for Bob, not for Alice

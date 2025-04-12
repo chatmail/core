@@ -57,6 +57,10 @@ pub(crate) struct MimeMessage {
     /// Message headers.
     headers: HashMap<String, String>,
 
+    #[cfg(test)]
+    /// Names of removed (ignored) headers. Used by `header_exists()` needed for tests.
+    headers_removed: HashSet<String>,
+
     /// List of addresses from the `To` and `Cc` headers.
     ///
     /// Addresses are normalized and lowercase.
@@ -236,6 +240,7 @@ impl MimeMessage {
         let mut hop_info = parse_receive_headers(&mail.get_headers());
 
         let mut headers = Default::default();
+        let mut headers_removed = HashSet::<String>::new();
         let mut recipients = Default::default();
         let mut past_members = Default::default();
         let mut from = Default::default();
@@ -253,7 +258,12 @@ impl MimeMessage {
             &mut chat_disposition_notification_to,
             &mail.headers,
         );
-        headers.retain(|k, _| !is_hidden(k));
+        headers.retain(|k, _| {
+            !is_hidden(k) || {
+                headers_removed.insert(k.clone());
+                false
+            }
+        });
 
         // Parse hidden headers.
         let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
@@ -298,9 +308,11 @@ impl MimeMessage {
         // Overwrite Message-ID with X-Microsoft-Original-Message-ID.
         // However if we later find Message-ID in the protected part,
         // it will overwrite both.
-        if let Some(microsoft_message_id) =
-            headers.remove(HeaderDef::XMicrosoftOriginalMessageId.get_headername())
-        {
+        if let Some(microsoft_message_id) = remove_header(
+            &mut headers,
+            HeaderDef::XMicrosoftOriginalMessageId.get_headername(),
+            &mut headers_removed,
+        ) {
             headers.insert(
                 HeaderDef::MessageId.get_headername().to_string(),
                 microsoft_message_id,
@@ -309,7 +321,7 @@ impl MimeMessage {
 
         // Remove headers that are allowed _only_ in the encrypted+signed part. It's ok to leave
         // them in signed-only emails, but has no value currently.
-        Self::remove_secured_headers(&mut headers);
+        Self::remove_secured_headers(&mut headers, &mut headers_removed);
 
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
@@ -442,7 +454,7 @@ impl MimeMessage {
                     HeaderDef::ChatEdit,
                     HeaderDef::ChatUserAvatar,
                 ] {
-                    headers.remove(h.get_headername());
+                    remove_header(&mut headers, h.get_headername(), &mut headers_removed);
                 }
             }
 
@@ -506,7 +518,7 @@ impl MimeMessage {
             }
         }
         if signatures.is_empty() {
-            Self::remove_secured_headers(&mut headers);
+            Self::remove_secured_headers(&mut headers, &mut headers_removed);
 
             // If it is not a read receipt, degrade encryption.
             if let (Some(peerstate), Ok(mail)) = (&mut peerstate, mail) {
@@ -530,6 +542,9 @@ impl MimeMessage {
         let mut parser = MimeMessage {
             parts: Vec::new(),
             headers,
+            #[cfg(test)]
+            headers_removed,
+
             recipients,
             past_members,
             list_post,
@@ -929,6 +944,16 @@ impl MimeMessage {
         self.headers
             .get(headerdef.get_headername())
             .map(|s| s.as_str())
+    }
+
+    #[cfg(test)]
+    /// Returns whether the header exists in any part of the parsed message.
+    ///
+    /// Use this to check for header absense. Header presense should be checked using
+    /// `get_header(...).is_some()` as it also checks that the header isn't ignored.
+    pub(crate) fn header_exists(&self, headerdef: HeaderDef) -> bool {
+        let hname = headerdef.get_headername();
+        self.headers.contains_key(hname) || self.headers_removed.contains(hname)
     }
 
     /// Returns `Chat-Group-ID` header value if it is a valid group ID.
@@ -1526,14 +1551,17 @@ impl MimeMessage {
             .and_then(|msgid| parse_message_id(msgid).ok())
     }
 
-    fn remove_secured_headers(headers: &mut HashMap<String, String>) {
-        headers.remove("secure-join-fingerprint");
-        headers.remove("secure-join-auth");
-        headers.remove("chat-verified");
-        headers.remove("autocrypt-gossip");
+    fn remove_secured_headers(
+        headers: &mut HashMap<String, String>,
+        removed: &mut HashSet<String>,
+    ) {
+        remove_header(headers, "secure-join-fingerprint", removed);
+        remove_header(headers, "secure-join-auth", removed);
+        remove_header(headers, "chat-verified", removed);
+        remove_header(headers, "autocrypt-gossip", removed);
 
         // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
-        if let Some(secure_join) = headers.remove("secure-join") {
+        if let Some(secure_join) = remove_header(headers, "secure-join", removed) {
             if secure_join == "vc-request" || secure_join == "vg-request" {
                 headers.insert("secure-join".to_string(), secure_join);
             }
@@ -1858,6 +1886,19 @@ impl MimeMessage {
                     .map(|ts| std::cmp::min(now, ts))
                     .collect()
             })
+    }
+}
+
+fn remove_header(
+    headers: &mut HashMap<String, String>,
+    key: &str,
+    removed: &mut HashSet<String>,
+) -> Option<String> {
+    if let Some((k, v)) = headers.remove_entry(key) {
+        removed.insert(k);
+        Some(v)
+    } else {
+        None
     }
 }
 

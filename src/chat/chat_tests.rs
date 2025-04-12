@@ -2553,10 +2553,8 @@ async fn test_broadcast() -> Result<()> {
         let sent_msg = alice.pop_sent_msg().await;
         let msg = bob.parse_msg(&sent_msg).await;
         assert!(msg.was_encrypted());
-        assert!(msg
-            .get_header(HeaderDef::ChatGroupMemberTimestamps)
-            .is_none());
-        assert!(msg.get_header(HeaderDef::AutocryptGossip).is_none());
+        assert!(!msg.header_exists(HeaderDef::ChatGroupMemberTimestamps));
+        assert!(!msg.header_exists(HeaderDef::AutocryptGossip));
         let msg = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast list");
