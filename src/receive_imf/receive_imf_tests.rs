@@ -9,6 +9,7 @@ use crate::chat::{
     get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg, ChatItem,
     ChatVisibility,
 };
+use crate::aheader::EncryptPreference;
 use crate::chatlist::Chatlist;
 use crate::constants::{DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS};
 use crate::contact;

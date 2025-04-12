@@ -3,7 +3,6 @@ use deltachat_contact_tools::may_be_valid_addr;
 use super::*;
 use crate::chat::{get_chat_contacts, send_text_msg, Chat};
 use crate::chatlist::Chatlist;
-use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
 
@@ -1065,12 +1064,8 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
     let bob_id = alice.recv_msg(&sent_msg).await.from_id;
-    let key_base64 = Peerstate::from_addr(alice, &bob_addr)
-        .await?
-        .unwrap()
-        .peek_key(false)
-        .unwrap()
-        .to_base64();
+    let bob_contact = Contact::get_by_id(alice, bob_id).await?;
+    let key_base64 = bob_contact.openpgp_certificate(alice).await?.unwrap().to_base64();
     let fiona_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
 
     assert_eq!(make_vcard(alice, &[]).await?, "".to_string());

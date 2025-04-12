@@ -12,7 +12,6 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::aheader::EncryptPreference;
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, ShowEmails, DC_CHAT_ID_TRASH, EDITED_PREFIX};
