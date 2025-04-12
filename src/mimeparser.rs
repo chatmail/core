@@ -22,7 +22,7 @@ use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{
-    get_autocrypt_peerstate, get_encrypted_mime, try_decrypt, validate_detached_signature,
+    get_encrypted_mime, try_decrypt, validate_detached_signature,
 };
 use crate::dehtml::dehtml;
 use crate::events::EventType;
@@ -397,6 +397,15 @@ impl MimeMessage {
         } else {
             None
         };
+
+        if let Some(autocrypt_header) = &autocrypt_header {
+            let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
+            context.sql.execute("INSERT INTO public_keys (fingerprint, public_key)
+                                 VALUES (?, ?)
+                                 ON CONFLICT (fingerprint)
+                                 DO NOTHING",
+                                 (&fingerprint, autocrypt_header.public_key.to_bytes())).await?;
+        }
 
         let public_keyring = if incoming {
             if let Some(autocrypt_header) = autocrypt_header {
