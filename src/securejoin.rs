@@ -2,6 +2,7 @@
 
 use anyhow::{ensure, Context as _, Error, Result};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use deltachat_contact_tools::ContactAddress;
 
 use crate::aheader::EncryptPreference;
 use crate::chat::{self, get_chat_id_by_grpid, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
@@ -334,10 +335,20 @@ pub(crate) async fn handle_securejoin_handshake(
 
             inviter_progress(context, contact_id, 300);
 
+            let from_addr = ContactAddress::new(&mime_message.from.addr)?;
+            let autocrypt_fingerprint = mime_message.autocrypt_fingerprint.clone().unwrap_or_default();
+            let (autocrypt_contact_id, _) = Contact::add_or_lookup_ex(
+                context,
+                "",
+                &from_addr,
+                &autocrypt_fingerprint,
+                Origin::IncomingUnknownFrom
+            ).await?;
+
             // Alice -> Bob
             send_alice_handshake_msg(
                 context,
-                contact_id,
+                autocrypt_contact_id,
                 &format!("{}-auth-required", &step.get(..2).unwrap_or_default()),
             )
             .await
