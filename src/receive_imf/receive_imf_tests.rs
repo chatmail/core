@@ -1,3 +1,4 @@
+use deltachat_contact_tools::addr_cmp;
 use rand::Rng;
 use std::time::Duration;
 

@@ -1,6 +1,6 @@
 //! Contacts module
 
-use std::cmp::{min, Reverse};
+use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashSet};
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -11,8 +11,8 @@ use async_channel::{self as channel, Receiver, Sender};
 use base64::Engine as _;
 pub use deltachat_contact_tools::may_be_valid_addr;
 use deltachat_contact_tools::{
-    self as contact_tools, addr_cmp, addr_normalize, sanitize_name, sanitize_name_and_addr,
-    ContactAddress, VcardContact,
+    self as contact_tools, addr_normalize, sanitize_name, sanitize_name_and_addr, ContactAddress,
+    VcardContact,
 };
 use deltachat_derive::{FromSql, ToSql};
 use rusqlite::OptionalExtension;
