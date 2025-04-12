@@ -143,52 +143,6 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
     }
 }
 
-/// Applies Autocrypt header to Autocrypt peer state and saves it into the database.
-///
-/// Returns updated peerstate.
-pub(crate) async fn get_autocrypt_peerstate(
-    context: &Context,
-    from: &str,
-    autocrypt_header: Option<&Aheader>,
-    message_time: i64,
-) -> Result<Option<Peerstate>> {
-    let allow_change = !context.is_self_addr(from).await?;
-    let mut peerstate;
-
-    // Apply Autocrypt header
-    if let Some(header) = autocrypt_header {
-        peerstate = Peerstate::from_addr(context, from).await?;
-
-        if let Some(ref mut peerstate) = peerstate {
-            if addr_cmp(&peerstate.addr, from) {
-                if allow_change {
-                    peerstate.apply_header(context, header, message_time);
-                    peerstate.save_to_db(&context.sql).await?;
-                } else {
-                    info!(
-                        context,
-                        "Refusing to update existing peerstate of {}", &peerstate.addr
-                    );
-                }
-            }
-            // If `peerstate.addr` and `from` differ, this means that
-            // someone is using the same key but a different addr, probably
-            // because they made an AEAP transition.
-            // But we don't know if that's legit until we checked the
-            // signatures, so wait until then with writing anything
-            // to the database.
-        } else {
-            let p = Peerstate::from_header(header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = Some(p);
-        }
-    } else {
-        peerstate = Peerstate::from_addr(context, from).await?;
-    }
-
-    Ok(peerstate)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
