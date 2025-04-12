@@ -9,7 +9,6 @@ use mailparse::ParsedMail;
 use crate::aheader::Aheader;
 use crate::context::Context;
 use crate::key::{Fingerprint, SignedPublicKey, SignedSecretKey};
-use crate::peerstate::Peerstate;
 use crate::pgp;
 
 /// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
