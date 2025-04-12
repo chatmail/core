@@ -3137,7 +3137,6 @@ async fn mark_recipients_as_verified(
     if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
         return Ok(());
     }
-    let contact = Contact::get_by_id(context, from_id).await?;
     for id in to_ids.iter().filter_map(|&x| x) {
         if id == ContactId::SELF {
             continue;
