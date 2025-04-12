@@ -3143,7 +3143,10 @@ async fn mark_recipients_as_verified(
             continue;
         }
 
-        // TODO: mark recipient PGP-contacts as verified.
+        context
+            .sql
+            .execute("UPDATE contacts SET verifier=? WHERE id=?", (from_id, id))
+            .await?;
     }
 
     Ok(())
