@@ -544,7 +544,7 @@ async fn test_secure_join() -> Result<()> {
         "vg-auth-required"
     );
 
-    // Step 4: Bob receives vg-auth-required, sends vg-request-with-auth
+    tcm.section("Step 4: Bob receives vg-auth-required, sends vg-request-with-auth");
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
@@ -585,13 +585,10 @@ async fn test_secure_join() -> Result<()> {
     );
 
     // Alice should not yet have Bob verified
-    let contact_bob_id = Contact::lookup_id_by_addr(&alice.ctx, "bob@example.net", Origin::Unknown)
-        .await?
-        .expect("Contact not found");
-    let contact_bob = Contact::get_by_id(&alice.ctx, contact_bob_id).await?;
+    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await?, false);
 
-    // Step 5+6: Alice receives vg-request-with-auth, sends vg-member-added
+    tcm.section("Step 5+6: Alice receives vg-request-with-auth, sends vg-member-added");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await?, true);
 
@@ -637,7 +634,7 @@ async fn test_secure_join() -> Result<()> {
     let contact_alice = Contact::get_by_id(&bob.ctx, contact_alice_id).await?;
     assert_eq!(contact_alice.is_verified(&bob.ctx).await?, false);
 
-    // Step 7: Bob receives vg-member-added
+    tcm.section("Step 7: Bob receives vg-member-added");
     bob.recv_msg(&sent).await;
     {
         // Bob has Alice verified, message shows up in the group chat.
