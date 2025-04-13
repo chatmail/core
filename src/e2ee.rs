@@ -88,7 +88,7 @@ mod tests {
     use super::*;
     use crate::chat::send_text_msg;
     use crate::config::Config;
-    use crate::message::{Message, Viewtype};
+    use crate::message::Message;
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
 

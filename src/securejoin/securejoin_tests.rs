@@ -5,10 +5,12 @@ use crate::chat::{remove_contact_from_chat, CantSendReason};
 use crate::chatlist::Chatlist;
 use crate::constants::{self, Chattype};
 use crate::imex::{imex, ImexMode};
+use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
-use crate::test_utils::{get_chat_msg, TimeShiftFalsePositiveNote};
-use crate::test_utils::{TestContext, TestContextManager};
+use crate::test_utils::{
+    get_chat_msg, TestContext, TestContextManager, TimeShiftFalsePositiveNote,
+};
 use crate::tools::SystemTime;
 use std::collections::HashSet;
 use std::time::Duration;

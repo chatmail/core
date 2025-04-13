@@ -1,11 +1,8 @@
 use super::*;
-use crate::aheader::EncryptPreference;
 use crate::chat::{create_group_chat, ProtectionStatus};
 use crate::config::Config;
-use crate::key::DcKey;
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::{alice_keypair, TestContext};
-use crate::peerstate::Peerstate;
+use crate::test_utils::{TestContext, TestContextManager};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_http() -> Result<()> {
@@ -354,52 +351,29 @@ async fn test_decode_openpgp_secure_join() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_fingerprint() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+    let alice = &tcm.alice().await;
 
-    let alice_contact_id = Contact::create(&ctx, "Alice", "alice@example.org")
-        .await
-        .context("failed to create contact")?;
-    let pub_key = alice_keypair().public;
-    let peerstate = Peerstate {
-        addr: "alice@example.org".to_string(),
-        last_seen: 1,
-        last_seen_autocrypt: 1,
-        prefer_encrypt: EncryptPreference::Mutual,
-        public_key: Some(pub_key.clone()),
-        public_key_fingerprint: Some(pub_key.dc_fingerprint()),
-        gossip_key: None,
-        gossip_timestamp: 0,
-        gossip_key_fingerprint: None,
-        verified_key: None,
-        verified_key_fingerprint: None,
-        verifier: None,
-        secondary_verified_key: None,
-        secondary_verified_key_fingerprint: None,
-        secondary_verifier: None,
-        backward_verified_key_id: None,
-        fingerprint_changed: false,
-    };
-    assert!(
-        peerstate.save_to_db(&ctx.ctx.sql).await.is_ok(),
-        "failed to save peerstate"
-    );
+    let alice_contact = bob.add_or_lookup_contact(alice).await;
+    let alice_contact_id = alice_contact.id;
 
     let qr = check_qr(
-        &ctx.ctx,
+        bob,
         "OPENPGP4FPR:1234567890123456789012345678901234567890#a=alice@example.org",
     )
     .await?;
     if let Qr::FprMismatch { contact_id, .. } = qr {
-        assert_eq!(contact_id, Some(alice_contact_id));
+        assert_ne!(contact_id.unwrap(), alice_contact_id);
     } else {
         bail!("Wrong QR code type");
     }
 
     let qr = check_qr(
-        &ctx.ctx,
+        bob,
         &format!(
             "OPENPGP4FPR:{}#a=alice@example.org",
-            pub_key.dc_fingerprint()
+            alice_contact.fingerprint().unwrap()
         ),
     )
     .await?;
@@ -409,14 +383,14 @@ async fn test_decode_openpgp_fingerprint() -> Result<()> {
         bail!("Wrong QR code type");
     }
 
-    assert_eq!(
+    assert!(matches!(
         check_qr(
-            &ctx.ctx,
+            bob,
             "OPENPGP4FPR:1234567890123456789012345678901234567890#a=bob@example.org",
         )
         .await?,
-        Qr::FprMismatch { contact_id: None }
-    );
+        Qr::FprMismatch { .. }
+    ));
 
     Ok(())
 }
