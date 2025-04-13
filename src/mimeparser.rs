@@ -1940,18 +1940,16 @@ async fn update_gossip_peerstates(
             continue;
         }
 
-        let peerstate;
-        if let Some(mut p) = Peerstate::from_addr(context, &header.addr).await? {
-            p.apply_gossip(&header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = p;
-        } else {
-            let p = Peerstate::from_gossip(&header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = p;
-        };
-        peerstate
-            .handle_fingerprint_change(context, message_time)
+        let fingerprint = header.public_key.dc_fingerprint().hex();
+        context
+            .sql
+            .execute(
+                "INSERT INTO public_keys (fingerprint, public_key)
+                             VALUES (?, ?)
+                             ON CONFLICT (fingerprint)
+                             DO NOTHING",
+                (&fingerprint, header.public_key.to_bytes()),
+            )
             .await?;
 
         gossiped_keys.insert(header.addr.to_lowercase(), header.public_key);
