@@ -4348,11 +4348,11 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.subject = "".to_string();
 
         msg.state = MessageState::OutPending;
+        msg.rfc724_mid = create_outgoing_rfc724_mid();
         let new_msg_id = chat
             .prepare_msg_raw(context, &mut msg, None, curr_timestamp)
             .await?;
 
-        msg.rfc724_mid = create_outgoing_rfc724_mid();
         curr_timestamp += 1;
         if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             context.scheduler.interrupt_smtp().await;

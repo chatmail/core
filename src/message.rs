@@ -417,7 +417,7 @@ impl Default for MessengerMessage {
 /// An object representing a single message in memory.
 /// The message object is not updated.
 /// If you want an update, you have to recreate the object.
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Message {
     /// Message ID.
     pub(crate) id: MsgId,
