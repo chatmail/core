@@ -10,7 +10,7 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{PublicKeyTrait, SecretKeyTrait};
+use pgp::types::{KeyDetails, KeyId, Password};
 use rand::thread_rng;
 use tokio::runtime::Handle;
 
@@ -24,7 +24,7 @@ use crate::tools::{self, time_elapsed};
 /// This trait is implemented for rPGP's [SignedPublicKey] and
 /// [SignedSecretKey] types and makes working with them a little
 /// easier in the deltachat world.
-pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
+pub(crate) trait DcKey: Serialize + Deserializable + Clone {
     /// Create a key from some bytes.
     fn from_slice(bytes: &[u8]) -> Result<Self> {
         let res = <Self as Deserializable>::from_bytes(Cursor::new(bytes));
@@ -78,7 +78,7 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
         let bytes = data.as_bytes();
         let res = Self::from_armor_single(Cursor::new(bytes));
         let (key, headers) = match res {
-            Err(pgp::errors::Error::NoMatchingPacket) => match Self::is_private() {
+            Err(pgp::errors::Error::NoMatchingPacket { .. }) => match Self::is_private() {
                 true => bail!("No private key packet found"),
                 false => bail!("No public key packet found"),
             },
@@ -123,11 +123,10 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
     fn to_asc(&self, header: Option<(&str, &str)>) -> String;
 
     /// The fingerprint for the key.
-    fn dc_fingerprint(&self) -> Fingerprint {
-        PublicKeyTrait::fingerprint(self).into()
-    }
+    fn dc_fingerprint(&self) -> Fingerprint;
 
     fn is_private() -> bool;
+    fn key_id(&self) -> KeyId;
 }
 
 pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPublicKey> {
@@ -230,6 +229,14 @@ impl DcKey for SignedPublicKey {
     fn is_private() -> bool {
         false
     }
+
+    fn dc_fingerprint(&self) -> Fingerprint {
+        self.fingerprint().into()
+    }
+
+    fn key_id(&self) -> KeyId {
+        KeyDetails::key_id(self)
+    }
 }
 
 impl DcKey for SignedSecretKey {
@@ -249,6 +256,14 @@ impl DcKey for SignedSecretKey {
     fn is_private() -> bool {
         true
     }
+
+    fn dc_fingerprint(&self) -> Fingerprint {
+        self.fingerprint().into()
+    }
+
+    fn key_id(&self) -> KeyId {
+        KeyDetails::key_id(&**self)
+    }
 }
 
 /// Deltachat extension trait for secret keys.
@@ -262,9 +277,14 @@ pub(crate) trait DcSecretKey {
 impl DcSecretKey for SignedSecretKey {
     fn split_public_key(&self) -> Result<SignedPublicKey> {
         self.verify()?;
-        let unsigned_pubkey = SecretKeyTrait::public_key(self);
+        let unsigned_pubkey = self.public_key();
         let mut rng = thread_rng();
-        let signed_pubkey = unsigned_pubkey.sign(&mut rng, self, || "".into())?;
+        let signed_pubkey = unsigned_pubkey.sign(
+            &mut rng,
+            &self.primary_key,
+            self.primary_key.public_key(),
+            &Password::empty(),
+        )?;
         Ok(signed_pubkey)
     }
 }
