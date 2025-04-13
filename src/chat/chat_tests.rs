@@ -320,7 +320,7 @@ async fn test_member_add_remove() -> Result<()> {
         assert_eq!(alice_bob_contact.get_display_name(), "robert");
     }
 
-    // Create and promote a group.
+    tcm.section("Create and promote a group.");
     let alice_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group chat").await?;
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
@@ -330,7 +330,7 @@ async fn test_member_add_remove() -> Result<()> {
         .await;
     let fiona_chat_id = fiona.recv_msg(&sent).await.chat_id;
 
-    // Alice adds Bob to the chat.
+    tcm.section("Alice adds Bob to the chat.");
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
     fiona.recv_msg(&sent).await;
@@ -349,7 +349,7 @@ async fn test_member_add_remove() -> Result<()> {
         assert!(contact.is_pgp_contact());
     }
 
-    // Alice removes Bob from the chat.
+    tcm.section("Alice removes Bob from the chat.");
     remove_contact_from_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
     assert!(!sent.payload.contains("robert"));
