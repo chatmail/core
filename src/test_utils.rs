@@ -31,7 +31,6 @@ use crate::contact::{
     import_vcard, make_vcard, mark_contact_id_as_verified, Contact, ContactId, Modifier, Origin,
 };
 use crate::context::Context;
-use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, load_self_public_key, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
