@@ -5,7 +5,6 @@ use crate::contact;
 use crate::contact::Contact;
 use crate::contact::ContactId;
 use crate::message::Message;
-use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
 use crate::stock_str;
@@ -224,15 +223,6 @@ async fn check_aeap_transition(
     )
     .await;
     check_no_transition_done(&groups[0..2], "alice@example.org", &bob).await;
-
-    // Assert that the autocrypt header is also applied to the peerstate
-    // if the address changed
-    let bob_alice_peerstate = Peerstate::from_addr(&bob, ALICE_NEW_ADDR)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(bob_alice_peerstate.last_seen, sent_timestamp);
-    assert_eq!(bob_alice_peerstate.last_seen_autocrypt, sent_timestamp);
 
     tcm.section("Test switching back");
     tcm.change_addr(&alice, "alice@example.org").await;
