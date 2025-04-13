@@ -5,7 +5,6 @@ use crate::chat::{remove_contact_from_chat, CantSendReason};
 use crate::chatlist::Chatlist;
 use crate::constants::{self, Chattype};
 use crate::imex::{imex, ImexMode};
-use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
@@ -351,27 +350,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     let bob = tcm.bob().await;
 
     // Ensure Bob knows Alice_FP
-    let alice_pubkey = load_self_public_key(&alice.ctx).await?;
-    let peerstate = Peerstate {
-        addr: "alice@example.org".into(),
-        last_seen: 10,
-        last_seen_autocrypt: 10,
-        prefer_encrypt: EncryptPreference::Mutual,
-        public_key: Some(alice_pubkey.clone()),
-        public_key_fingerprint: Some(alice_pubkey.dc_fingerprint()),
-        gossip_key: Some(alice_pubkey.clone()),
-        gossip_timestamp: 10,
-        gossip_key_fingerprint: Some(alice_pubkey.dc_fingerprint()),
-        verified_key: None,
-        verified_key_fingerprint: None,
-        verifier: None,
-        secondary_verified_key: None,
-        secondary_verified_key_fingerprint: None,
-        secondary_verifier: None,
-        backward_verified_key_id: None,
-        fingerprint_changed: false,
-    };
-    peerstate.save_to_db(&bob.ctx.sql).await?;
+    let alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
 
     // Step 1: Generate QR-code, ChatId(0) indicates setup-contact
     let qr = get_securejoin_qr(&alice.ctx, None).await?;
@@ -389,11 +368,6 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
             contact_id,
             progress,
         } => {
-            let alice_contact_id =
-                Contact::lookup_id_by_addr(&bob.ctx, "alice@example.org", Origin::Unknown)
-                    .await
-                    .expect("Error looking up contact")
-                    .expect("Contact not found");
             assert_eq!(contact_id, alice_contact_id);
             assert_eq!(progress, 400);
         }

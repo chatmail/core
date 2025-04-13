@@ -74,7 +74,6 @@ mod mimefactory;
 pub mod mimeparser;
 pub mod oauth2;
 mod param;
-pub mod peerstate;
 mod pgp;
 pub mod provider;
 pub mod qr;
