@@ -28,7 +28,6 @@ use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, load_self_secret_keyring, DcKey, Fingerprint, SignedPublicKey};
 use crate::message::{self, get_vcard_summary, set_msg_failed, Message, MsgId, Viewtype};
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::simplify::{simplify, SimplifiedText};
 use crate::sync::SyncItems;
 use crate::tools::time;
@@ -1334,14 +1333,12 @@ impl MimeMessage {
         }
 
         // Process attached PGP keys.
-        /*
         if mime_type.type_() == mime::APPLICATION
             && mime_type.subtype().as_str() == "pgp-keys"
-            && Self::try_set_peer_key_from_file_part(context, peerstate, decoded_data).await?
+            && Self::try_set_peer_key_from_file_part(context, decoded_data).await?
         {
             return Ok(());
         }
-        */
         let mut part = Part::default();
         let msg_type = if context
             .is_webxdc_file(filename, decoded_data)
@@ -1433,10 +1430,9 @@ impl MimeMessage {
         Ok(())
     }
 
-    /// Returns whether a key from the attachment was set as peer's pubkey.
+    /// Returns whether a key from the attachment was saved.
     async fn try_set_peer_key_from_file_part(
         context: &Context,
-        peerstate: &mut Peerstate,
         decoded_data: &[u8],
     ) -> Result<bool> {
         let key = match str::from_utf8(decoded_data) {
@@ -1448,47 +1444,29 @@ impl MimeMessage {
         };
         let key = match SignedPublicKey::from_asc(key) {
             Err(err) => {
-                warn!(
-                    context,
-                    "PGP key attachment is not an ASCII-armored file: {:#}", err
-                );
+                warn!(context, "PGP key attachment is not an ASCII-armored file: {err:#}.");
                 return Ok(false);
             }
             Ok((key, _)) => key,
         };
         if let Err(err) = key.verify() {
-            warn!(context, "attached PGP key verification failed: {}", err);
+            warn!(context, "Attached PGP key verification failed: {err:#}.");
             return Ok(false);
         }
-        if !key.details.users.iter().any(|user| {
-            user.id
-                .id()
-                .ends_with((String::from("<") + &peerstate.addr + ">").as_bytes())
-        }) {
-            return Ok(false);
-        }
-        if let Some(curr_key) = &peerstate.public_key {
-            if key != *curr_key && peerstate.prefer_encrypt != EncryptPreference::Reset {
-                // We don't want to break the existing Autocrypt setup. Yes, it's unlikely that a
-                // user have an Autocrypt-capable MUA and also attaches a key, but if that's the
-                // case, let 'em first disable Autocrypt and then change the key by attaching it.
-                warn!(
-                    context,
-                    "not using attached PGP key for peer '{}' because another one is already set \
-                    with prefer-encrypt={}",
-                    peerstate.addr,
-                    peerstate.prefer_encrypt,
-                );
-                return Ok(false);
-            }
-        }
-        peerstate.public_key = Some(key);
-        info!(
-            context,
-            "using attached PGP key for peer '{}' with prefer-encrypt=mutual", peerstate.addr,
-        );
-        peerstate.prefer_encrypt = EncryptPreference::Mutual;
-        peerstate.save_to_db(&context.sql).await?;
+
+        let fingerprint = key.dc_fingerprint().hex();
+        context
+            .sql
+            .execute(
+                "INSERT INTO public_keys (fingerprint, public_key)
+                             VALUES (?, ?)
+                             ON CONFLICT (fingerprint)
+                             DO NOTHING",
+                (&fingerprint, key.to_bytes()),
+            )
+            .await?;
+
+        info!(context, "Imported PGP key {fingerprint} from attachment.");
         Ok(true)
     }
 
@@ -1941,6 +1919,7 @@ async fn update_gossip_peerstates(
         }
 
         let fingerprint = header.public_key.dc_fingerprint().hex();
+        // TODO: header.public_key.verify() ?
         context
             .sql
             .execute(
