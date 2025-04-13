@@ -1277,9 +1277,16 @@ impl Contact {
             .map(|k| k.dc_fingerprint().to_string())
             .unwrap_or_default();
         if addr < peerstate.addr {
-            cat_fingerprint(&mut ret, &addr, &fingerprint_self, "");
             cat_fingerprint(
                 &mut ret,
+                &stock_str::self_msg(context).await,
+                &addr,
+                &fingerprint_self,
+                "",
+            );
+            cat_fingerprint(
+                &mut ret,
+                contact.get_display_name(),
                 &peerstate.addr,
                 &fingerprint_other_verified,
                 &fingerprint_other_unverified,
@@ -1287,11 +1294,18 @@ impl Contact {
         } else {
             cat_fingerprint(
                 &mut ret,
+                contact.get_display_name(),
                 &peerstate.addr,
                 &fingerprint_other_verified,
                 &fingerprint_other_unverified,
             );
-            cat_fingerprint(&mut ret, &addr, &fingerprint_self, "");
+            cat_fingerprint(
+                &mut ret,
+                &stock_str::self_msg(context).await,
+                &addr,
+                &fingerprint_self,
+                "",
+            );
         }
 
         Ok(ret)
@@ -1392,16 +1406,13 @@ impl Contact {
         &self.addr
     }
 
-    /// Get a summary of authorized name and address.
-    ///
-    /// The returned string is either "Name (email@domain.com)" or just
-    /// "email@domain.com" if the name is unset.
+    /// Get authorized name or address.
     ///
     /// This string is suitable for sending over email
     /// as it does not leak the locally set name.
-    pub fn get_authname_n_addr(&self) -> String {
+    pub(crate) fn get_authname_or_addr(&self) -> String {
         if !self.authname.is_empty() {
-            format!("{} ({})", self.authname, self.addr)
+            (&self.authname).into()
         } else {
             (&self.addr).into()
         }
@@ -1848,12 +1859,14 @@ pub(crate) async fn update_last_seen(
 
 fn cat_fingerprint(
     ret: &mut String,
+    name: &str,
     addr: &str,
     fingerprint_verified: &str,
     fingerprint_unverified: &str,
 ) {
     *ret += &format!(
-        "\n\n{}:\n{}",
+        "\n\n{} ({}):\n{}",
+        name,
         addr,
         if !fingerprint_verified.is_empty() {
             fingerprint_verified
@@ -1865,7 +1878,7 @@ fn cat_fingerprint(
         && !fingerprint_unverified.is_empty()
         && fingerprint_verified != fingerprint_unverified
     {
-        *ret += &format!("\n\n{addr} (alternative):\n{fingerprint_unverified}");
+        *ret += &format!("\n\n{name} (alternative):\n{fingerprint_unverified}");
     }
 }
 

@@ -18,7 +18,7 @@ use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
     CompressionAlgorithm, KeyDetails, KeyVersion, Password, PublicKeyTrait, SecretKeyTrait,
-    SignatureBytes, StringToKey,
+    StringToKey,
 };
 use rand::thread_rng;
 use tokio::runtime::Handle;
@@ -35,78 +35,6 @@ const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AE
 
 /// Preferred cryptographic hash.
 const HASH_ALGORITHM: HashAlgorithm = HashAlgorithm::Sha256;
-
-/// A wrapper for rPGP public key types
-#[derive(Debug)]
-enum SignedPublicKeyOrSubkey<'a> {
-    Key(&'a SignedPublicKey),
-    Subkey(&'a SignedPublicSubKey),
-}
-
-impl KeyDetails for SignedPublicKeyOrSubkey<'_> {
-    fn version(&self) -> pgp::types::KeyVersion {
-        match self {
-            Self::Key(k) => k.version(),
-            Self::Subkey(k) => k.version(),
-        }
-    }
-
-    fn fingerprint(&self) -> pgp::types::Fingerprint {
-        match self {
-            Self::Key(k) => k.fingerprint(),
-            Self::Subkey(k) => k.fingerprint(),
-        }
-    }
-
-    fn key_id(&self) -> pgp::types::KeyId {
-        match self {
-            Self::Key(k) => k.key_id(),
-            Self::Subkey(k) => k.key_id(),
-        }
-    }
-
-    fn algorithm(&self) -> pgp::crypto::public_key::PublicKeyAlgorithm {
-        match self {
-            Self::Key(k) => k.algorithm(),
-            Self::Subkey(k) => k.algorithm(),
-        }
-    }
-}
-
-impl PublicKeyTrait for SignedPublicKeyOrSubkey<'_> {
-    fn created_at(&self) -> &chrono::DateTime<chrono::Utc> {
-        match self {
-            Self::Key(k) => k.created_at(),
-            Self::Subkey(k) => k.created_at(),
-        }
-    }
-
-    fn expiration(&self) -> Option<u16> {
-        match self {
-            Self::Key(k) => k.expiration(),
-            Self::Subkey(k) => k.expiration(),
-        }
-    }
-
-    fn verify_signature(
-        &self,
-        hash: HashAlgorithm,
-        data: &[u8],
-        sig: &SignatureBytes,
-    ) -> pgp::errors::Result<()> {
-        match self {
-            Self::Key(k) => k.verify_signature(hash, data, sig),
-            Self::Subkey(k) => k.verify_signature(hash, data, sig),
-        }
-    }
-
-    fn public_params(&self) -> &pgp::types::PublicParams {
-        match self {
-            Self::Key(k) => k.public_params(),
-            Self::Subkey(k) => k.public_params(),
-        }
-    }
-}
 
 /// Split data from PGP Armored Data as defined in <https://tools.ietf.org/html/rfc4880#section-6.2>.
 ///
@@ -169,7 +97,7 @@ impl KeyPair {
 /// Both secret and public key consist of signing primary key and encryption subkey
 /// as [described in the Autocrypt standard](https://autocrypt.org/level1.html#openpgp-based-key-data).
 pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
-    let signing_key_type = PgpKeyType::EdDSALegacy;
+    let signing_key_type = PgpKeyType::Ed25519Legacy;
     let encryption_key_type = PgpKeyType::ECDH(ECCCurve::Curve25519);
 
     let user_id = format!("<{addr}>");
@@ -223,28 +151,15 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
     Ok(key_pair)
 }
 
-/// Select public key or subkey to use for encryption.
+/// Selects a subkey of the public key to use for encryption.
 ///
-/// First, tries to use subkeys. If none of the subkeys are suitable
-/// for encryption, tries to use primary key. Returns `None` if the public
-/// key cannot be used for encryption.
+/// Returns `None` if the public key cannot be used for encryption.
 ///
 /// TODO: take key flags and expiration dates into account
-fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<SignedPublicKeyOrSubkey> {
+fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
     key.public_subkeys
         .iter()
         .find(|subkey| subkey.is_encryption_key())
-        .map_or_else(
-            || {
-                // No usable subkey found, try primary key
-                if key.is_encryption_key() {
-                    Some(SignedPublicKeyOrSubkey::Key(key))
-                } else {
-                    None
-                }
-            },
-            |subkey| Some(SignedPublicKeyOrSubkey::Subkey(subkey)),
-        )
 }
 
 /// Encrypts `plain` text using `public_keys_for_encryption`
@@ -263,16 +178,16 @@ pub async fn pk_encrypt(
                 .iter()
                 .filter_map(select_pk_for_encryption);
 
-            let mut msg =
-                MessageBuilder::from_bytes("", plain).seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+            let msg = MessageBuilder::from_bytes("", plain);
+            let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
             for pkey in pkeys {
-                msg = msg.encrypt_to_key(&mut rng, &pkey)?;
+                msg.encrypt_to_key(&mut rng, &pkey)?;
             }
 
             if let Some(ref skey) = private_key_for_signing {
-                msg = msg.sign(&**skey, Password::empty(), HASH_ALGORITHM);
+                msg.sign(&**skey, Password::empty(), HASH_ALGORITHM);
                 if compress {
-                    msg = msg.compression(CompressionAlgorithm::ZLIB);
+                    msg.compression(CompressionAlgorithm::ZLIB);
                 }
             }
 
@@ -406,15 +321,13 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
-        let lit_msg = MessageBuilder::from_bytes("", plain);
-
         let mut rng = thread_rng();
         let s2k = StringToKey::new_default(&mut rng);
-        let msg = lit_msg
-            .seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM)
-            .encrypt_with_password(s2k, &passphrase)?;
+        let builder = MessageBuilder::from_bytes("", plain);
+        let mut builder = builder.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+        builder.encrypt_with_password(s2k, &passphrase)?;
 
-        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
+        let encoded_msg = builder.to_armored_string(&mut rng, Default::default())?;
 
         Ok(encoded_msg)
     })
@@ -440,7 +353,7 @@ pub async fn symm_decrypt<T: BufRead + std::fmt::Debug + 'static + Send>(
 
 #[cfg(test)]
 mod tests {
-    use once_cell::sync::Lazy;
+    use std::sync::LazyLock;
     use tokio::sync::OnceCell;
 
     use super::*;
@@ -523,7 +436,7 @@ mod tests {
     static CLEARTEXT: &[u8] = b"This is a test";
 
     /// Initialised [TestKeys] for tests.
-    static KEYS: Lazy<TestKeys> = Lazy::new(TestKeys::new);
+    static KEYS: LazyLock<TestKeys> = LazyLock::new(TestKeys::new);
 
     static CTEXT_SIGNED: OnceCell<String> = OnceCell::const_new();
     static CTEXT_UNSIGNED: OnceCell<String> = OnceCell::const_new();

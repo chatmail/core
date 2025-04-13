@@ -25,8 +25,8 @@ def test_echo_quit_plugin(acfactory, lp):
     (ac1,) = acfactory.get_online_accounts(1)
 
     lp.sec("sending a message to the bot")
-    bot_contact = ac1.create_contact(botproc.addr)
-    bot_chat = bot_contact.create_chat()
+    bot_chat = ac1.qr_setup_contact(botproc.qr)
+    ac1._evtracker.wait_securejoin_joiner_progress(1000)
     bot_chat.send_text("hello")
 
     lp.sec("waiting for the reply message from the bot to arrive")
@@ -48,7 +48,9 @@ def test_group_tracking_plugin(acfactory, lp):
     ac2.add_account_plugin(FFIEventLogger(ac2))
 
     lp.sec("creating bot test group with bot")
-    bot_contact = ac1.create_contact(botproc.addr)
+    bot_chat = ac1.qr_setup_contact(botproc.qr)
+    ac1._evtracker.wait_securejoin_joiner_progress(1000)
+    bot_contact = bot_chat.get_contacts()[0]
     ch = ac1.create_group_chat("bot test group")
     ch.add_contact(bot_contact)
     ch.send_text("hello")
@@ -60,7 +62,7 @@ def test_group_tracking_plugin(acfactory, lp):
     )
 
     lp.sec("adding third member {}".format(ac2.get_config("addr")))
-    contact3 = ac1.create_contact(ac2.get_config("addr"))
+    contact3 = ac1.create_contact(ac2)
     ch.add_contact(contact3)
 
     reply = ac1._evtracker.wait_next_incoming_message()

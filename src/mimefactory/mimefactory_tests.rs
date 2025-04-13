@@ -340,11 +340,12 @@ async fn test_subject_in_group() -> Result<()> {
 
     // 6. Test that in a group, replies also take the quoted message's subject, while non-replies use the group title as subject
     let t = TestContext::new_alice().await;
+    let bob = TestContext::new_bob().await;
     let group_id = chat::create_group_chat(&t, chat::ProtectionStatus::Unprotected, "groupname") // TODO encodings, ä
         .await
         .unwrap();
-    let bob = Contact::create(&t, "", "bob@example.org").await?;
-    chat::add_contact_to_chat(&t, group_id, bob).await?;
+    let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
+    chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
     let subject = send_msg_get_subject(&t, group_id, None).await?;
     assert_eq!(subject, "groupname");
@@ -772,19 +773,24 @@ async fn test_selfavatar_unencrypted_signed() {
 /// Test that removed member address does not go into the `To:` field.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_remove_member_bcc() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
     // Alice creates a group with Bob and Claire and then removes Bob.
-    let alice = TestContext::new_alice().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
 
-    let claire_addr = "claire@foo.de";
-    let bob_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "Claire", claire_addr).await?;
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    let charlie_contact = Contact::get_by_id(alice, charlie_id).await?;
+    let charlie_addr = charlie_contact.get_addr();
 
-    let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
-    add_contact_to_chat(&alice, alice_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_chat_id, claire_id).await?;
-    send_text_msg(&alice, alice_chat_id, "Creating a group".to_string()).await?;
+    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foo").await?;
+    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
+    add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
+    send_text_msg(alice, alice_chat_id, "Creating a group".to_string()).await?;
 
-    remove_contact_from_chat(&alice, alice_chat_id, claire_id).await?;
+    remove_contact_from_chat(alice, alice_chat_id, charlie_id).await?;
     let remove = alice.pop_sent_msg().await;
     let remove_payload = remove.payload();
     let parsed = mailparse::parse_mail(remove_payload.as_bytes())?;
@@ -796,8 +802,8 @@ async fn test_remove_member_bcc() -> Result<()> {
     for to_addr in to.iter() {
         match to_addr {
             mailparse::MailAddr::Single(ref info) => {
-                // Addresses should be of existing members (Alice and Bob) and not Claire.
-                assert_ne!(info.addr, claire_addr);
+                // Addresses should be of existing members (Alice and Bob) and not Charlie.
+                assert_ne!(info.addr, charlie_addr);
             }
             mailparse::MailAddr::Group(_) => {
                 panic!("Group addresses are not expected here");
@@ -887,10 +893,7 @@ async fn test_dont_remove_self() -> Result<()> {
     let mime_message = MimeMessage::from_bytes(alice, sent.payload.as_bytes(), None)
         .await
         .unwrap();
-    assert_eq!(
-        mime_message.get_header(HeaderDef::ChatGroupPastMembers),
-        None
-    );
+    assert!(!mime_message.header_exists(HeaderDef::ChatGroupPastMembers));
     assert_eq!(
         mime_message.chat_group_member_timestamps().unwrap().len(),
         1 // There is a timestamp for Bob, not for Alice

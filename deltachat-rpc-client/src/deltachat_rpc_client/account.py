@@ -110,6 +110,11 @@ class Account:
         """Configure an account."""
         yield self._rpc.configure.future(self.id)
 
+    @futuremethod
+    def add_transport(self, params):
+        """Add a new transport."""
+        yield self._rpc.add_transport.future(self.id, params)
+
     def bring_online(self):
         """Start I/O and wait until IMAP becomes IDLE."""
         self.start_io()

@@ -18,7 +18,7 @@ use std::future::Future;
 use std::ops::Deref;
 use std::ptr;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
@@ -38,7 +38,6 @@ use deltachat::{accounts::Accounts, log::LogExt};
 use deltachat_jsonrpc::api::CommandApi;
 use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
 use num_traits::{FromPrimitive, ToPrimitive};
-use once_cell::sync::Lazy;
 use rand::Rng;
 use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
@@ -68,7 +67,8 @@ const DC_GCM_INFO_ONLY: u32 = 0x02;
 /// Struct representing the deltachat context.
 pub type dc_context_t = Context;
 
-static RT: Lazy<Runtime> = Lazy::new(|| Runtime::new().expect("unable to create tokio runtime"));
+static RT: LazyLock<Runtime> =
+    LazyLock::new(|| Runtime::new().expect("unable to create tokio runtime"));
 
 fn block_on<T>(fut: T) -> T::Output
 where
@@ -536,7 +536,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::IncomingReaction { .. } => 2002,
         EventType::IncomingWebxdcNotify { .. } => 2003,
         EventType::IncomingMsg { .. } => 2005,
-        EventType::IncomingMsgBunch { .. } => 2006,
+        EventType::IncomingMsgBunch => 2006,
         EventType::MsgsNoticed { .. } => 2008,
         EventType::MsgDelivered { .. } => 2010,
         EventType::MsgFailed { .. } => 2012,
@@ -594,7 +594,7 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::ConnectivityChanged
         | EventType::SelfavatarChanged
         | EventType::ConfigSynced { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::ErrorSelfNotInGroup(_)
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatlistChanged
@@ -669,7 +669,7 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::MsgsNoticed(_)
         | EventType::ConnectivityChanged
         | EventType::WebxdcInstanceDeleted { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::SelfavatarChanged
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatlistChanged
@@ -771,7 +771,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatEphemeralTimerModified { .. }
         | EventType::ChatDeleted { .. }
-        | EventType::IncomingMsgBunch { .. }
+        | EventType::IncomingMsgBunch
         | EventType::ChatlistItemChanged { .. }
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
@@ -2168,6 +2168,48 @@ pub unsafe extern "C" fn dc_add_address_book(
             Err(_) => 0,
         }
     })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_make_vcard(
+    context: *mut dc_context_t,
+    contact_id: u32,
+) -> *mut libc::c_char {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_make_vcard()");
+        return ptr::null_mut();
+    }
+    let ctx = &*context;
+    let contact_id = ContactId::new(contact_id);
+
+    block_on(contact::make_vcard(ctx, &[contact_id]))
+        .unwrap_or_log_default(ctx, "dc_make_vcard failed")
+        .strdup()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_import_vcard(
+    context: *mut dc_context_t,
+    vcard: *const libc::c_char,
+) -> *mut dc_array::dc_array_t {
+    if context.is_null() || vcard.is_null() {
+        eprintln!("ignoring careless call to dc_import_vcard()");
+        return ptr::null_mut();
+    }
+    let ctx = &*context;
+
+    match block_on(contact::import_vcard(ctx, &to_string_lossy(vcard)))
+        .context("dc_import_vcard failed")
+        .log_err(ctx)
+    {
+        Ok(contact_ids) => Box::into_raw(Box::new(dc_array_t::from(
+            contact_ids
+                .iter()
+                .map(|id| id.to_u32())
+                .collect::<Vec<u32>>(),
+        ))),
+        Err(_) => ptr::null_mut(),
+    }
 }
 
 #[no_mangle]
@@ -3728,6 +3770,20 @@ pub unsafe extern "C" fn dc_msg_get_info_type(msg: *mut dc_msg_t) -> libc::c_int
     }
     let ffi_msg = &*msg;
     ffi_msg.message.get_info_type() as libc::c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_msg_get_info_contact_id(msg: *mut dc_msg_t) -> u32 {
+    if msg.is_null() {
+        eprintln!("ignoring careless call to dc_msg_get_info_contact_id()");
+        return 0;
+    }
+    let ffi_msg = &*msg;
+    let context = &*ffi_msg.context;
+    block_on(ffi_msg.message.get_info_contact_id(context))
+        .unwrap_or_default()
+        .map(|id| id.to_u32())
+        .unwrap_or_default()
 }
 
 #[no_mangle]

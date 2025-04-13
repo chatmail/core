@@ -1,5 +1,134 @@
 # Changelog
 
+## [1.159.1] - 2025-04-12
+
+### API-Changes
+
+- deltachat-rpc-client: Add `Account.add_transport()`.
+- Add jsonrpc for info_contact_id.
+
+### Build system
+
+- Update crossbeam-channel from 0.5.14 to 0.5.15.
+- Increase MSRV to 1.82.0.
+
+### CI
+
+- Don't make ruff format quiet ([#6785](https://github.com/chatmail/core/pull/6785)).
+
+### Documentation
+
+- MimeFactory.member_timestamps has the same order as To: rather than RCPT TO:.
+- Two JsonRPC doc improvements ([#6778](https://github.com/chatmail/core/pull/6778)).
+
+### Features / Changes
+
+- Improve error message when the user tries to do AEAP ([#6786](https://github.com/chatmail/core/pull/6786)).
+- Pass email and password via env in python-jsonrpc.
+- Track gossiping per (chat, fingerprint) pair.
+
+### Fixes
+
+- Add missing ChatDeleted event to python jsonrpc client.
+- Never send Autocrypt-Gossip in broadcast lists.
+- Restart I/O when mvbox_move setting is changed.
+
+### Tests
+
+- Port test_delete_deltachat_folder to JSON-RPC.
+- Autocrypt-Gossip header isn't sent in broadcast messages.
+- Encrypt test_subject_in_group().
+- Encrypt test_remove_member_bcc.
+
+## [1.159.0] - 2025-04-08
+
+### API-Changes
+
+- deltachat-rpc-client: Add Message.get_info().
+- CFFI: Add `dc_make_vcard()` and `dc_import_vcard()`.
+- Add legacy Python bindings for `make_vcard` and `import_vcard`.
+
+### CI
+
+- Upgrade Rust from 1.84.1 to 1.86.0 ([#6784](https://github.com/chatmail/core/pull/6784)).
+
+### Features / Changes
+
+- Add name resp. "Me" to contact encryption info ([#6720](https://github.com/chatmail/core/pull/6720)).
+- Get contact-id for info messages ([#6714](https://github.com/chatmail/core/pull/6714)).
+- No unencrypted chat when securejoin times out ([#6722](https://github.com/chatmail/core/pull/6722)).
+- Clear `Param::IsEdited` when forwarding a message.
+- Remove email address from 'add second device' qr code ([#6760](https://github.com/chatmail/core/pull/6760)).
+- Parse Proton Mail vCards again ([#6771](https://github.com/chatmail/core/pull/6771)).
+- Do not consider encrypting to the primary OpenPGP key.
+
+### Fixes
+
+- jsonrpc: Fix deadlock in get_all_accounts().
+- Set GroupNameTimestamp on group promotion ([#6729](https://github.com/chatmail/core/pull/6729)).
+- Encrypt broadcast lists.
+
+### Miscellaneous Tasks
+
+- Update yerpc to 0.6.3.
+- cargo: Update textwrap from 0.16.1 to 0.16.2.
+- cargo: Bump uuid from 1.15.1 to 1.16.0.
+- cargo: Bump libc from 0.2.170 to 0.2.171.
+- cargo: Bump anyhow from 1.0.96 to 1.0.97.
+- cargo: Bump bytes from 1.10.0 to 1.10.1.
+- cargo: Bump once_cell from 1.20.3 to 1.21.3.
+- cargo: Bump thiserror from 2.0.11 to 2.0.12.
+- cargo: Bump pin-project from 1.1.9 to 1.1.10.
+- cargo: Bump hyper-util from 0.1.10 to 0.1.11.
+- cargo: Bump log from 0.4.26 to 0.4.27.
+- cargo: Bump tokio-util from 0.7.13 to 0.7.14.
+- cargo: Bump syn from 2.0.98 to 2.0.100.
+- cargo: Bump serde_json from 1.0.139 to 1.0.140.
+- cargo: Bump quote from 1.0.38 to 1.0.40.
+- cargo: Bump http-body-util from 0.1.2 to 0.1.3.
+- cargo: Bump openssl from 0.10.71 to 0.10.72.
+- cargo: Bump quick-xml from 0.37.2 to 0.37.4.
+- cargo: Bump blake3 from 1.6.1 to 1.8.0.
+- cargo: Bump tokio from 1.43.0 to 1.43.1 ([#6780](https://github.com/chatmail/core/pull/6780)).
+- Add issue template.
+- Add bug label on bug issue template.
+- cargo: Bump tokio from 1.43.0 to 1.44.1.
+- cargo: Bump fd-lock from 4.0.2 to 4.0.4.
+- Update async-smtp from 0.10.0 to 0.10.1.
+- Update async-imap from 0.10.3 to 0.10.4.
+- cargo: Bump tempfile from 3.14.0 to 3.19.1.
+- cargo: Bump image from 0.25.5 to 0.25.6.
+- cargo: Bump serde from 1.0.218 to 1.0.219.
+
+### Other
+
+- Add python and tox to flake.nix devshell ([#6233](https://github.com/chatmail/core/pull/6233))
+- Update spec wrt edit/delete, minor rewordings ([#6708](https://github.com/chatmail/core/pull/6708))
+- Update 'takes longer' fallback wording.
+- Handle classic emails as such only in classic profiles ([#6767](https://github.com/chatmail/core/pull/6767))
+- Move ASM strings to core, point to "Add Second Device" ([#6777](https://github.com/chatmail/core/pull/6777))
+
+### Refactor
+
+- Replace `once_cell::sync::Lazy` with `std::sync::LazyLock`.
+- Move vCard code to its own file ([#6776](https://github.com/chatmail/core/pull/6776)).
+
+### Tests
+
+- Use encryption in more Rust tests.
+- Use encryption in all JSON-RPC online tests.
+- Encrypt legacy Python tests.
+- Send only encrypted messages in online JS tests.
+- Add APIs to create `dom@example.net` and `elena@example.net`.
+- Split public keys from secret keys in runtime.
+- Remove fetch_existing tests.
+- Port test_forward_encrypted_to_unencrypted from legacy Python to Rust.
+- Port test_one_account_send_bcc_setting from legacy Python to JSON-RPC.
+- Port test_multidevice_sync_seen to JSON-RPC.
+- Use QR codes to setup contact with test bots.
+- Remove flaky key::tests::test_load_self_existing test ([#6763](https://github.com/chatmail/core/pull/6763)).
+- Update blob hash in blob::blob_tests::test_selfavatar_outside_blobdir.
+
 ## [1.158.0] - 2025-03-29
 
 ### API-Changes
@@ -6101,3 +6230,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [1.157.2]: https://github.com/chatmail/core/compare/v1.157.1..v1.157.2
 [1.157.3]: https://github.com/chatmail/core/compare/v1.157.2..v1.157.3
 [1.158.0]: https://github.com/chatmail/core/compare/v1.157.3..v1.158.0
+[1.159.0]: https://github.com/chatmail/core/compare/v1.158.0..v1.159.0
+[1.159.1]: https://github.com/chatmail/core/compare/v1.159.0..v1.159.1

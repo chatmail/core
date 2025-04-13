@@ -649,6 +649,9 @@ class BotProcess:
 
     def __init__(self, popen, addr) -> None:
         self.popen = popen
+
+        # The first thing the bot prints to stdout is an invite link.
+        self.qr = self.popen.stdout.readline()
         self.addr = addr
 
         # we read stdout as quickly as we can in a thread and make

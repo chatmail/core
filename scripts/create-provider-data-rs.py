@@ -215,7 +215,7 @@ if __name__ == "__main__":
         "    Config, ConfigDefault, Oauth2Authorizer, Provider, ProviderOptions, Server, Status,\n"
         "};\n"
         "use std::collections::HashMap;\n\n"
-        "use once_cell::sync::Lazy;\n\n"
+        "use std::sync::LazyLock;\n\n"
     )
 
     process_dir(Path(sys.argv[1]))
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     out_all += out_domains
     out_all += "];\n\n"
 
-    out_all += "pub(crate) static PROVIDER_IDS: Lazy<HashMap<&'static str, &'static Provider>> = Lazy::new(|| HashMap::from([\n"
+    out_all += "pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider>> = LazyLock::new(|| HashMap::from([\n"
     out_all += out_ids
     out_all += "]));\n\n"
 
@@ -233,8 +233,8 @@ if __name__ == "__main__":
     else:
         now = datetime.datetime.fromisoformat(sys.argv[2])
     out_all += (
-        "pub static _PROVIDER_UPDATED: Lazy<chrono::NaiveDate> = "
-        "Lazy::new(|| chrono::NaiveDate::from_ymd_opt("
+        "pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> = "
+        "LazyLock::new(|| chrono::NaiveDate::from_ymd_opt("
         + str(now.year)
         + ", "
         + str(now.month)

@@ -179,7 +179,7 @@ pub(crate) fn gm2local_offset() -> i64 {
 
 /// Returns the current smeared timestamp,
 ///
-/// The returned timestamp MUST NOT be sent out.
+/// The returned timestamp MAY NOT be unique and MUST NOT go to "Date" header.
 pub(crate) fn smeared_time(context: &Context) -> i64 {
     let now = time();
     let ts = context.smeared_timestamp.current();

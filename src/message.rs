@@ -936,6 +936,51 @@ impl Message {
         self.param.get_cmd()
     }
 
+    /// Return the contact ID of the profile to open when tapping the info message.
+    pub async fn get_info_contact_id(&self, context: &Context) -> Result<Option<ContactId>> {
+        match self.param.get_cmd() {
+            SystemMessage::GroupNameChanged
+            | SystemMessage::GroupImageChanged
+            | SystemMessage::EphemeralTimerChanged => {
+                if self.from_id != ContactId::INFO {
+                    Ok(Some(self.from_id))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            SystemMessage::MemberAddedToGroup | SystemMessage::MemberRemovedFromGroup => {
+                if let Some(contact_i32) = self.param.get_int(Param::ContactAddedRemoved) {
+                    let contact_id = ContactId::new(contact_i32.try_into()?);
+                    if contact_id == ContactId::SELF
+                        || Contact::real_exists_by_id(context, contact_id).await?
+                    {
+                        Ok(Some(contact_id))
+                    } else {
+                        Ok(None)
+                    }
+                } else {
+                    Ok(None)
+                }
+            }
+
+            SystemMessage::AutocryptSetupMessage
+            | SystemMessage::SecurejoinMessage
+            | SystemMessage::LocationStreamingEnabled
+            | SystemMessage::LocationOnly
+            | SystemMessage::ChatProtectionEnabled
+            | SystemMessage::ChatProtectionDisabled
+            | SystemMessage::InvalidUnencryptedMail
+            | SystemMessage::SecurejoinWait
+            | SystemMessage::SecurejoinWaitTimeout
+            | SystemMessage::MultiDeviceSync
+            | SystemMessage::WebxdcStatusUpdate
+            | SystemMessage::WebxdcInfoMessage
+            | SystemMessage::IrohNodeAddr
+            | SystemMessage::Unknown => Ok(None),
+        }
+    }
+
     /// Returns true if the message is a system message.
     pub fn is_system_message(&self) -> bool {
         let cmd = self.param.get_cmd();

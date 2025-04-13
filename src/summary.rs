@@ -204,17 +204,10 @@ impl Message {
                 append_text = true
             }
             Viewtype::File => {
-                if self.param.get_cmd() == SystemMessage::AutocryptSetupMessage {
-                    emoji = None;
-                    type_name = Some(stock_str::ac_setup_msg_subject(context).await);
-                    type_file = None;
-                    append_text = false;
-                } else {
-                    emoji = Some("📎");
-                    type_name = Some(stock_str::file(context).await);
-                    type_file = self.get_filename();
-                    append_text = true
-                }
+                emoji = Some("📎");
+                type_name = Some(stock_str::file(context).await);
+                type_file = self.get_filename();
+                append_text = true
             }
             Viewtype::VideochatInvitation => {
                 emoji = None;
@@ -469,10 +462,10 @@ mod tests {
         ); // skipping prefix used for reactions summaries
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_text(some_text.clone());
-        msg.set_file_from_bytes(ctx, "foo.bar", b"data", None)
+        msg.set_file_from_bytes(ctx, "autocrypt-setup-message.html", b"data", None)
             .unwrap();
         msg.param.set_cmd(SystemMessage::AutocryptSetupMessage);
-        assert_summary_texts(&msg, ctx, "Autocrypt Setup Message").await; // file name is not added for autocrypt setup messages
+        assert_summary_texts(&msg, ctx, "📎 autocrypt-setup-message.html").await;
+        // no special handling of ASM
     }
 }

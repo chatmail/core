@@ -182,12 +182,6 @@ pub enum Config {
     #[strum(props(default = "0"))] // also change MediaQuality.default() on changes
     MediaQuality,
 
-    /// If set to "1", on the first time `start_io()` is called after configuring,
-    /// the newest existing messages are fetched.
-    /// Existing recipients are added to the contact database regardless of this setting.
-    #[strum(props(default = "0"))]
-    FetchExistingMsgs,
-
     /// If set to "1", then existing messages are considered to be already fetched.
     /// This flag is reset after successful configuration.
     #[strum(props(default = "1"))]
@@ -481,7 +475,10 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(self, Config::OnlyFetchMvbox | Config::SentboxWatch)
+        matches!(
+            self,
+            Config::MvboxMove | Config::OnlyFetchMvbox | Config::SentboxWatch
+        )
     }
 }
 
@@ -707,7 +704,6 @@ impl Context {
             | Config::SentboxWatch
             | Config::MvboxMove
             | Config::OnlyFetchMvbox
-            | Config::FetchExistingMsgs
             | Config::DeleteToTrash
             | Config::Configured
             | Config::Bot

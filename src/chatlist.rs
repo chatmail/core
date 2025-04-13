@@ -1,7 +1,7 @@
 //! # Chat list module.
 
 use anyhow::{ensure, Context as _, Result};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 use crate::chat::{update_special_chat_names, Chat, ChatId, ChatVisibility};
 use crate::constants::{
@@ -17,8 +17,8 @@ use crate::summary::Summary;
 use crate::tools::IsNoneOrEmpty;
 
 /// Regex to find out if a query should filter by unread messages.
-pub static IS_UNREAD_FILTER: Lazy<regex::Regex> =
-    Lazy::new(|| regex::Regex::new(r"\bis:unread\b").unwrap());
+pub static IS_UNREAD_FILTER: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r"\bis:unread\b").unwrap());
 
 /// An object representing a single chatlist in memory.
 ///
@@ -492,19 +492,20 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_try_load() {
-        let t = TestContext::new_bob().await;
-        let chat_id1 = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
+        let mut tcm = TestContextManager::new();
+        let bob = &tcm.bob().await;
+        let chat_id1 = create_group_chat(bob, ProtectionStatus::Unprotected, "a chat")
             .await
             .unwrap();
-        let chat_id2 = create_group_chat(&t, ProtectionStatus::Unprotected, "b chat")
+        let chat_id2 = create_group_chat(bob, ProtectionStatus::Unprotected, "b chat")
             .await
             .unwrap();
-        let chat_id3 = create_group_chat(&t, ProtectionStatus::Unprotected, "c chat")
+        let chat_id3 = create_group_chat(bob, ProtectionStatus::Unprotected, "c chat")
             .await
             .unwrap();
 
         // check that the chatlist starts with the most recent message
-        let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+        let chats = Chatlist::try_load(bob, 0, None, None).await.unwrap();
         assert_eq!(chats.len(), 3);
         assert_eq!(chats.get_chat_id(0).unwrap(), chat_id3);
         assert_eq!(chats.get_chat_id(1).unwrap(), chat_id2);
@@ -520,51 +521,49 @@ mod tests {
         // 2s here.
         for chat_id in &[chat_id1, chat_id3, chat_id2] {
             let mut msg = Message::new_text("hello".to_string());
-            chat_id.set_draft(&t, Some(&mut msg)).await.unwrap();
+            chat_id.set_draft(bob, Some(&mut msg)).await.unwrap();
         }
 
-        let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
+        let chats = Chatlist::try_load(bob, 0, None, None).await.unwrap();
         assert_eq!(chats.get_chat_id(0).unwrap(), chat_id2);
 
         // check chatlist query and archive functionality
-        let chats = Chatlist::try_load(&t, 0, Some("b"), None).await.unwrap();
+        let chats = Chatlist::try_load(bob, 0, Some("b"), None).await.unwrap();
         assert_eq!(chats.len(), 1);
 
         // receive a message from alice
-        let alice = TestContext::new_alice().await;
-        let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "alice chat")
+        let alice = &tcm.alice().await;
+        let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "alice chat")
             .await
             .unwrap();
         add_contact_to_chat(
-            &alice,
+            alice,
             alice_chat_id,
-            Contact::create(&alice, "bob", "bob@example.net")
-                .await
-                .unwrap(),
+            alice.add_or_lookup_contact_id(bob).await,
         )
         .await
         .unwrap();
-        send_text_msg(&alice, alice_chat_id, "hi".into())
+        send_text_msg(alice, alice_chat_id, "hi".into())
             .await
             .unwrap();
         let sent_msg = alice.pop_sent_msg().await;
 
-        t.recv_msg(&sent_msg).await;
-        let chats = Chatlist::try_load(&t, 0, Some("is:unread"), None)
+        bob.recv_msg(&sent_msg).await;
+        let chats = Chatlist::try_load(bob, 0, Some("is:unread"), None)
             .await
             .unwrap();
         assert_eq!(chats.len(), 1);
 
-        let chats = Chatlist::try_load(&t, DC_GCL_ARCHIVED_ONLY, None, None)
+        let chats = Chatlist::try_load(bob, DC_GCL_ARCHIVED_ONLY, None, None)
             .await
             .unwrap();
         assert_eq!(chats.len(), 0);
 
         chat_id1
-            .set_visibility(&t, ChatVisibility::Archived)
+            .set_visibility(bob, ChatVisibility::Archived)
             .await
             .ok();
-        let chats = Chatlist::try_load(&t, DC_GCL_ARCHIVED_ONLY, None, None)
+        let chats = Chatlist::try_load(bob, DC_GCL_ARCHIVED_ONLY, None, None)
             .await
             .unwrap();
         assert_eq!(chats.len(), 1);

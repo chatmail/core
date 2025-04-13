@@ -54,57 +54,6 @@ def test_configure_unref(tmp_path):
     lib.dc_context_unref(dc_context)
 
 
-def test_one_account_send_bcc_setting(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-    ac1_clone = acfactory.new_online_configuring_account(cloned_from=ac1)
-    acfactory.bring_accounts_online()
-
-    # test if sent messages are copied to it via BCC.
-
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    self_addr = ac1.get_config("addr")
-    other_addr = ac2.get_config("addr")
-
-    lp.sec("send out message without bcc to ourselves")
-    ac1.set_config("bcc_self", "0")
-    msg_out = chat.send_text("message1")
-    assert not msg_out.is_forwarded()
-
-    # wait for send out (no BCC)
-    ev = ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
-    assert ac1.get_config("bcc_self") == "0"
-
-    # make sure we are not sending message to ourselves
-    assert self_addr not in ev.data2
-    assert other_addr in ev.data2
-
-    lp.sec("ac1: setting bcc_self=1")
-    ac1.set_config("bcc_self", "1")
-
-    lp.sec("send out message with bcc to ourselves")
-    msg_out = chat.send_text("message2")
-
-    # wait for send out (BCC)
-    ev = ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
-    assert ac1.get_config("bcc_self") == "1"
-
-    # Second client receives only second message, but not the first.
-    ev_msg = ac1_clone._evtracker.wait_next_messages_changed()
-    assert ev_msg.text == msg_out.text
-
-    # now make sure we are sending message to ourselves too
-    assert self_addr in ev.data2
-    assert other_addr in ev.data2
-
-    # BCC-self messages are marked as seen by the sender device.
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-
-    # Check that the message is marked as seen on IMAP.
-    ac1.direct_imap.select_folder("Inbox")
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
-
-
 def test_send_file_twice_unicode_filename_mangling(tmp_path, acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
@@ -487,26 +436,6 @@ def test_forward_messages(acfactory, lp):
     assert not chat3.get_messages()
 
 
-def test_forward_encrypted_to_unencrypted(acfactory, lp):
-    ac1, ac2, ac3 = acfactory.get_online_accounts(3)
-    chat = acfactory.get_protected_chat(ac1, ac2)
-
-    lp.sec("ac1: send encrypted message to ac2")
-    txt = "This should be encrypted"
-    chat.send_text(txt)
-    msg = ac2._evtracker.wait_next_incoming_message()
-    assert msg.text == txt
-    assert msg.is_encrypted()
-
-    lp.sec("ac2: forward message to ac3 unencrypted")
-    unencrypted_chat = ac2.create_chat(ac3)
-    msg_id = msg.id
-    msg2 = unencrypted_chat.send_msg(msg)
-    assert msg2 == msg
-    assert msg.id != msg_id
-    assert not msg.is_encrypted()
-
-
 def test_forward_own_message(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
@@ -869,12 +798,6 @@ def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
     msg3.mark_seen()
     assert not list(ac1.get_fresh_messages())
 
-    # Test that we do not gossip peer keys in 1-to-1 chat,
-    # as it makes no sense to gossip to peers their own keys.
-    # Gossip is only sent in encrypted messages,
-    # and we sent encrypted msg_back right above.
-    assert chat2b.get_summary()["gossiped_timestamp"] == 0
-
     lp.sec("create group chat with two members, one of which has no encrypt state")
     chat = ac1.create_group_chat("encryption test")
     chat.add_contact(ac2)
@@ -882,41 +805,6 @@ def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
     msg = chat.send_text("test not encrypt")
     assert not msg.is_encrypted()
     ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
-
-
-def test_gossip_optimization(acfactory, lp):
-    """Test that gossip timestamp is updated when someone else sends gossip,
-    so we don't have to send gossip ourselves.
-    """
-    ac1, ac2, ac3 = acfactory.get_online_accounts(3)
-
-    acfactory.introduce_each_other([ac1, ac2])
-    acfactory.introduce_each_other([ac2, ac3])
-
-    lp.sec("ac1 creates a group chat with ac2")
-    group_chat = ac1.create_group_chat("hello")
-    group_chat.add_contact(ac2)
-    msg = group_chat.send_text("hi")
-
-    # No Autocrypt gossip was sent yet.
-    gossiped_timestamp = msg.chat.get_summary()["gossiped_timestamp"]
-    assert gossiped_timestamp == 0
-
-    msg = ac2._evtracker.wait_next_incoming_message()
-    assert msg.is_encrypted()
-    assert msg.text == "hi"
-
-    lp.sec("ac2 adds ac3 to the group")
-    msg.chat.add_contact(ac3)
-
-    lp.sec("ac1 receives message from ac2 and updates gossip timestamp")
-    msg = ac1._evtracker.wait_next_incoming_message()
-    assert msg.is_encrypted()
-
-    # ac1 has updated the gossip timestamp even though no gossip was sent by ac1.
-    # ac1 does not need to send gossip because ac2 already did it.
-    gossiped_timestamp = msg.chat.get_summary()["gossiped_timestamp"]
-    assert gossiped_timestamp == int(msg.time_sent.timestamp())
 
 
 def test_send_first_message_as_long_unicode_with_cr(acfactory, lp):
@@ -931,7 +819,7 @@ def test_send_first_message_as_long_unicode_with_cr(acfactory, lp):
         " wrapped using format=flowed and unwrapped on the receiver"
     )
     msg_out = chat.send_text(text1)
-    assert not msg_out.is_encrypted()
+    assert msg_out.is_encrypted()
 
     lp.sec("wait for ac2 to receive multi-line non-unicode message")
     msg_in = ac2._evtracker.wait_next_incoming_message()
@@ -940,7 +828,7 @@ def test_send_first_message_as_long_unicode_with_cr(acfactory, lp):
     lp.sec("sending multi-line unicode text message from ac1 to ac2")
     text2 = "äalis\nthis is ßßÄ"
     msg_out = chat.send_text(text2)
-    assert not msg_out.is_encrypted()
+    assert msg_out.is_encrypted()
 
     lp.sec("wait for ac2 to receive multi-line unicode message")
     msg_in = ac2._evtracker.wait_next_incoming_message()
@@ -1346,7 +1234,7 @@ def test_qr_email_capitalization(acfactory, lp):
     lp.sec("ac1 joins a verified group via a QR code")
     ac1_chat = ac1.qr_join_chat(qr)
     msg = ac1._evtracker.wait_next_incoming_message()
-    assert msg.text == "Member Me ({}) added by {}.".format(ac1.get_config("addr"), ac3.get_config("addr"))
+    assert msg.text == "Member Me added by {}.".format(ac3.get_config("addr"))
     assert len(ac1_chat.get_contacts()) == 2
 
     lp.sec("ac2 joins a verified group via a QR code")
@@ -1445,7 +1333,7 @@ def test_add_remove_member_remote_events(acfactory, lp):
     lp.sec("ac1: add address2")
     # note that if the above create_chat() would not
     # happen we would not receive a proper member_added event
-    contact2 = chat.add_contact(ac3_addr)
+    contact2 = chat.add_contact(ac3)
     ev = in_list.get()
     assert ev.action == "chat-modified"
     ev = in_list.get()
@@ -1885,9 +1773,7 @@ def test_name_changes(acfactory):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac1.set_config("displayname", "Account 1")
 
-    # Similar to acfactory.get_accepted_chat, but without setting the contact name.
-    ac2.create_contact(ac1.get_config("addr")).create_chat()
-    chat12 = ac1.create_contact(ac2.get_config("addr")).create_chat()
+    chat12 = acfactory.get_accepted_chat(ac1, ac2)
     contact = None
 
     def update_name():
@@ -2050,23 +1936,6 @@ def test_scan_folders(acfactory, lp, folder, move, expected_destination):
     if folder != expected_destination:
         ac1.direct_imap.select_folder(folder)
         assert len(ac1.direct_imap.get_all_messages()) == 0
-
-
-def test_delete_deltachat_folder(acfactory):
-    """Test that DeltaChat folder is recreated if user deletes it manually."""
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.wait_configured(ac1)
-
-    ac1.direct_imap.conn.folder.delete("DeltaChat")
-    assert "DeltaChat" not in ac1.direct_imap.list_folders()
-    acfactory.bring_accounts_online()
-
-    ac2.create_chat(ac1).send_text("hello")
-    msg = ac1._evtracker.wait_next_incoming_message()
-    assert msg.text == "hello"
-
-    assert "DeltaChat" in ac1.direct_imap.list_folders()
 
 
 def test_archived_muted_chat(acfactory, lp):

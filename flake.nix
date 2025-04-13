@@ -584,6 +584,9 @@
               cargo-nextest
               perl # needed to build vendored OpenSSL
               git-cliff
+              (python3.withPackages (pypkgs: with pypkgs; [
+                tox
+              ]))
             ];
           };
       }

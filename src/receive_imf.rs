@@ -2,6 +2,7 @@
 
 use std::collections::HashSet;
 use std::iter;
+use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result};
 use data_encoding::BASE32_NOPAD;
@@ -9,7 +10,6 @@ use deltachat_contact_tools::{addr_cmp, may_be_valid_addr, sanitize_single_line,
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
-use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::aheader::EncryptPreference;
@@ -24,6 +24,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
+use crate::key::DcKey;
 use crate::log::LogExt;
 use crate::message::{
     self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
@@ -98,12 +99,11 @@ pub async fn receive_imf(
                 head.as_bytes(),
                 seen,
                 Some(imf_raw.len().try_into()?),
-                false,
             )
             .await;
         }
     }
-    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen, None, false).await
+    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen, None).await
 }
 
 /// Emulates reception of a message from "INBOX".
@@ -116,7 +116,6 @@ pub(crate) async fn receive_imf_from_inbox(
     imf_raw: &[u8],
     seen: bool,
     is_partial_download: Option<u32>,
-    fetching_existing_messages: bool,
 ) -> Result<Option<ReceivedMsg>> {
     receive_imf_inner(
         context,
@@ -127,7 +126,6 @@ pub(crate) async fn receive_imf_from_inbox(
         imf_raw,
         seen,
         is_partial_download,
-        fetching_existing_messages,
     )
     .await
 }
@@ -171,7 +169,6 @@ pub(crate) async fn receive_imf_inner(
     imf_raw: &[u8],
     seen: bool,
     is_partial_download: Option<u32>,
-    fetching_existing_messages: bool,
 ) -> Result<Option<ReceivedMsg>> {
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
@@ -444,7 +441,6 @@ pub(crate) async fn receive_imf_inner(
             seen,
             is_partial_download,
             replace_msg_id,
-            fetching_existing_messages,
             prevent_rename,
             verified_encryption,
         )
@@ -457,22 +453,25 @@ pub(crate) async fn receive_imf_inner(
     }
 
     // Update gossiped timestamp for the chat if someone else or our other device sent
-    // Autocrypt-Gossip for all recipients in the chat to avoid sending Autocrypt-Gossip ourselves
+    // Autocrypt-Gossip header to avoid sending Autocrypt-Gossip ourselves
     // and waste traffic.
     let chat_id = received_msg.chat_id;
-    if !chat_id.is_special()
-        && mime_parser.recipients.iter().all(|recipient| {
-            recipient.addr == mime_parser.from.addr
-                || mime_parser.gossiped_keys.contains_key(&recipient.addr)
-        })
-    {
-        info!(
-            context,
-            "Received message contains Autocrypt-Gossip for all members of {chat_id}, updating timestamp."
-        );
-        if chat_id.get_gossiped_timestamp(context).await? < mime_parser.timestamp_sent {
-            chat_id
-                .set_gossiped_timestamp(context, mime_parser.timestamp_sent)
+    if !chat_id.is_special() {
+        for gossiped_key in mime_parser.gossiped_keys.values() {
+            context
+                .sql
+                .transaction(move |transaction| {
+                    let fingerprint = gossiped_key.dc_fingerprint().hex();
+                    transaction.execute(
+                        "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
+                         VALUES                       (?, ?, ?)
+                         ON CONFLICT                  (chat_id, fingerprint)
+                         DO UPDATE SET timestamp=MAX(timestamp, excluded.timestamp)",
+                        (chat_id, &fingerprint, mime_parser.timestamp_sent),
+                    )?;
+
+                    Ok(())
+                })
                 .await?;
         }
     }
@@ -718,13 +717,10 @@ async fn add_parts(
     seen: bool,
     is_partial_download: Option<u32>,
     mut replace_msg_id: Option<MsgId>,
-    fetching_existing_messages: bool,
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
-    // Bots handle existing messages the same way as new ones.
-    let fetching_existing_messages = fetching_existing_messages && !is_bot;
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
@@ -767,8 +763,10 @@ async fn add_parts(
     let allow_creation;
     if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
+        && !context.get_config_bool(Config::IsChatmail).await?
     {
-        // this message is a classic email not a chat-message nor a reply to one
+        // the message is a classic email in a classic profile
+        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
         match show_emails {
             ShowEmails::Off => {
                 info!(context, "Classical email not shown (TRASH).");
@@ -1043,11 +1041,7 @@ async fn add_parts(
             }
         }
 
-        state = if seen
-            || fetching_existing_messages
-            || is_mdn
-            || chat_id_blocked == Blocked::Yes
-            || group_changes.silent
+        state = if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
         // No check for `hidden` because only reactions are such and they should be `InFresh`.
         {
             MessageState::InSeen
@@ -1114,7 +1108,7 @@ async fn add_parts(
             }
         }
 
-        if mime_parser.decrypting_failed && !fetching_existing_messages {
+        if mime_parser.decrypting_failed {
             if chat_id.is_none() {
                 chat_id = Some(DC_CHAT_ID_TRASH);
             } else {
@@ -1238,12 +1232,6 @@ async fn add_parts(
                 chat.id.unblock_ex(context, Nosync).await?;
             }
         }
-    }
-
-    if fetching_existing_messages && mime_parser.decrypting_failed {
-        chat_id = Some(DC_CHAT_ID_TRASH);
-        // We are only gathering old messages on first start. We do not want to add loads of non-decryptable messages to the chats.
-        info!(context, "Existing non-decipherable message (TRASH).");
     }
 
     if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
@@ -1451,13 +1439,13 @@ async fn add_parts(
             None => better_msg = Some(m),
             Some(_) => {
                 if !m.is_empty() {
-                    group_changes.extra_msgs.push((m, is_system_message))
+                    group_changes.extra_msgs.push((m, is_system_message, None))
                 }
             }
         }
     }
 
-    for (group_changes_msg, cmd) in group_changes.extra_msgs {
+    for (group_changes_msg, cmd, added_removed_id) in group_changes.extra_msgs {
         chat::add_info_msg_with_cmd(
             context,
             chat_id,
@@ -1467,6 +1455,7 @@ async fn add_parts(
             None,
             None,
             None,
+            added_removed_id,
         )
         .await?;
     }
@@ -1507,7 +1496,7 @@ async fn add_parts(
     while let Some(part) = parts.next() {
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
-            let is_incoming_fresh = mime_parser.incoming && !seen && !fetching_existing_messages;
+            let is_incoming_fresh = mime_parser.incoming && !seen;
             set_msg_reaction(
                 context,
                 mime_in_reply_to,
@@ -1549,6 +1538,10 @@ async fn add_parts(
         };
         let part_is_empty =
             typ == Viewtype::Text && msg.is_empty() && part.param.get(Param::Quote).is_none();
+
+        if let Some(contact_id) = group_changes.added_removed_id {
+            param.set(Param::ContactAddedRemoved, contact_id.to_u32().to_string());
+        }
 
         save_mime_modified |= mime_parser.is_mime_modified && !part_is_empty && !hidden;
         let save_mime_modified = save_mime_modified && parts.peek().is_none();
@@ -2334,10 +2327,12 @@ struct GroupChangesInfo {
     /// Optional: A better message that should replace the original system message.
     /// If this is an empty string, the original system message should be trashed.
     better_msg: Option<String>,
+    /// Added/removed contact `better_msg` refers to.
+    added_removed_id: Option<ContactId>,
     /// If true, the user should not be notified about the group change.
     silent: bool,
     /// A list of additional group changes messages that should be shown in the chat.
-    extra_msgs: Vec<(String, SystemMessage)>,
+    extra_msgs: Vec<(String, SystemMessage, Option<ContactId>)>,
 }
 
 /// Apply group member list, name, avatar and protection status changes from the MIME message.
@@ -2443,16 +2438,16 @@ async fn apply_group_changes(
             .filter(|grpname| grpname.len() < 200)
         {
             let grpname = &sanitize_single_line(grpname);
-            let old_name = &sanitize_single_line(old_name);
 
             let chat_group_name_timestamp =
                 chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
             let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
             // To provide group name consistency, compare names if timestamps are equal.
-            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, old_name)
+            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
                 && chat_id
                     .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
                     .await?
+                && grpname != &chat.name
             {
                 info!(context, "Updating grpname for chat {chat_id}.");
                 context
@@ -2465,6 +2460,7 @@ async fn apply_group_changes(
                 .get_header(HeaderDef::ChatGroupNameChanged)
                 .is_some()
             {
+                let old_name = &sanitize_single_line(old_name);
                 better_msg.get_or_insert(
                     stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
                 );
@@ -2654,6 +2650,11 @@ async fn apply_group_changes(
     }
     Ok(GroupChangesInfo {
         better_msg,
+        added_removed_id: if added_id.is_some() {
+            added_id
+        } else {
+            removed_id
+        },
         silent,
         extra_msgs: group_changes_msgs,
     })
@@ -2665,7 +2666,7 @@ async fn group_changes_msgs(
     added_ids: &HashSet<ContactId>,
     removed_ids: &HashSet<ContactId>,
     chat_id: ChatId,
-) -> Result<Vec<(String, SystemMessage)>> {
+) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
     let mut group_changes_msgs = Vec::new();
     if !added_ids.is_empty() {
         warn!(
@@ -2686,6 +2687,7 @@ async fn group_changes_msgs(
             stock_str::msg_add_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberAddedToGroup,
+            Some(contact.id),
         ));
     }
     for contact_id in removed_ids {
@@ -2694,13 +2696,14 @@ async fn group_changes_msgs(
             stock_str::msg_del_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
                 .await,
             SystemMessage::MemberRemovedFromGroup,
+            Some(contact.id),
         ));
     }
 
     Ok(group_changes_msgs)
 }
 
-static LIST_ID_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(.+)<(.+)>$").unwrap());
+static LIST_ID_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(.+)<(.+)>$").unwrap());
 
 fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
     Ok(match LIST_ID_REGEX.captures(list_id_header) {
@@ -2808,8 +2811,8 @@ fn compute_mailinglist_name(
     // (as that part is much more visible, we assume, that names is shorter and comes more to the point,
     // than the sometimes longer part from ListId)
     let subject = mime_parser.get_subject().unwrap_or_default();
-    static SUBJECT: Lazy<Regex> =
-        Lazy::new(|| Regex::new(r"^.{0,5}\[(.+?)\](\s*\[.+\])?").unwrap()); // remove square brackets around first name
+    static SUBJECT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"^.{0,5}\[(.+?)\](\s*\[.+\])?").unwrap()); // remove square brackets around first name
     if let Some(cap) = SUBJECT.captures(&subject) {
         name = cap[1].to_string() + cap.get(2).map_or("", |m| m.as_str());
     }
@@ -2836,8 +2839,8 @@ fn compute_mailinglist_name(
     // but strip some known, long hash prefixes
     if name.is_empty() {
         // 51231231231231231231231232869f58.xing.com -> xing.com
-        static PREFIX_32_CHARS_HEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"([0-9a-fA-F]{32})\.(.{6,})").unwrap());
+        static PREFIX_32_CHARS_HEX: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"([0-9a-fA-F]{32})\.(.{6,})").unwrap());
         if let Some(cap) = PREFIX_32_CHARS_HEX
             .captures(listid)
             .and_then(|caps| caps.get(2))

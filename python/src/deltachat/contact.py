@@ -90,6 +90,14 @@ class Contact:
         dc_res = lib.dc_contact_get_profile_image(self._dc_contact)
         return from_optional_dc_charpointer(dc_res)
 
+    def make_vcard(self) -> str:
+        """Make a contact vCard.
+
+        :returns: vCard
+        """
+        dc_context = self.account._dc_context
+        return from_dc_charpointer(lib.dc_make_vcard(dc_context, self.id))
+
     @property
     def status(self):
         """Get contact status.

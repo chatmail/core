@@ -476,15 +476,13 @@ impl std::str::FromStr for Fingerprint {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use once_cell::sync::Lazy;
+    use std::sync::{Arc, LazyLock};
 
     use super::*;
     use crate::config::Config;
     use crate::test_utils::{alice_keypair, TestContext};
 
-    static KEYPAIR: Lazy<KeyPair> = Lazy::new(alice_keypair);
+    static KEYPAIR: LazyLock<KeyPair> = LazyLock::new(alice_keypair);
 
     #[test]
     fn test_from_armored_string() {
@@ -632,16 +630,6 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
         let base64 = key.to_base64();
         let key2 = SignedPublicKey::from_base64(&base64).unwrap();
         assert_eq!(key, key2);
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_load_self_existing() {
-        let alice = alice_keypair();
-        let t = TestContext::new_alice().await;
-        let pubkey = load_self_public_key(&t).await.unwrap();
-        assert_eq!(alice.public, pubkey);
-        let seckey = load_self_secret_key(&t).await.unwrap();
-        assert_eq!(alice.secret, seckey);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

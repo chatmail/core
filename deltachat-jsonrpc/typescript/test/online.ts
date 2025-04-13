@@ -1,5 +1,5 @@
 import { assert, expect } from "chai";
-import { StdioDeltaChat as DeltaChat, DcEvent } from "../deltachat.js";
+import { StdioDeltaChat as DeltaChat, DcEvent, C } from "../deltachat.js";
 import { RpcServerHandle, createTempUser, startServer } from "./test_base.js";
 
 const EVENT_TIMEOUT = 20000;
@@ -80,11 +80,8 @@ describe("online tests", function () {
     }
     this.timeout(15000);
 
-    const contactId = await dc.rpc.createContact(
-      accountId1,
-      account2.email,
-      null
-    );
+    const vcard = await dc.rpc.makeVcard(accountId2, [C.DC_CONTACT_ID_SELF]);
+    const contactId = (await dc.rpc.importVcardContents(accountId1, vcard))[0];
     const chatId = await dc.rpc.createChatByContactId(accountId1, contactId);
     const eventPromise = waitForEvent(dc, "IncomingMsg", accountId2);
 
@@ -101,20 +98,18 @@ describe("online tests", function () {
     expect(messageList).have.length(1);
     const message = await dc.rpc.getMessage(accountId2, messageList[0]);
     expect(message.text).equal("Hello");
+    expect(message.showPadlock).equal(true);
   });
 
-  it("send and receive text message roundtrip, encrypted on answer onwards", async function () {
+  it("send and receive text message roundtrip", async function () {
     if (!accountsConfigured) {
       this.skip();
     }
     this.timeout(10000);
 
     // send message from A to B
-    const contactId = await dc.rpc.createContact(
-      accountId1,
-      account2.email,
-      null
-    );
+    const vcard = await dc.rpc.makeVcard(accountId2, [C.DC_CONTACT_ID_SELF]);
+    const contactId = (await dc.rpc.importVcardContents(accountId1, vcard))[0];
     const chatId = await dc.rpc.createChatByContactId(accountId1, contactId);
     const eventPromise = waitForEvent(dc, "IncomingMsg", accountId2);
     dc.rpc.miscSendTextMessage(accountId1, chatId, "Hello2");

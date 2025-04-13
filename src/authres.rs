@@ -4,12 +4,12 @@
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt;
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
 use mailparse::MailHeaderMap;
 use mailparse::ParsedMail;
-use once_cell::sync::Lazy;
 
 use crate::config::Config;
 use crate::context::Context;
@@ -107,7 +107,8 @@ fn remove_comments(header: &str) -> Cow<'_, str> {
     // In Pomsky, this is:
     //     "(" Codepoint* lazy ")"
     // See https://playground.pomsky-lang.org/?text=%22(%22%20Codepoint*%20lazy%20%22)%22
-    static RE: Lazy<regex::Regex> = Lazy::new(|| regex::Regex::new(r"\([\s\S]*?\)").unwrap());
+    static RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"\([\s\S]*?\)").unwrap());
 
     RE.replace_all(header, " ")
 }

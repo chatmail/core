@@ -1,8 +1,7 @@
 def test_webxdc(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
-    bob_addr = bob.get_config("addr")
-    alice_contact_bob = alice.create_contact(bob_addr, "Bob")
+    alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     alice_chat_bob.send_message(text="Let's play chess!", file="../test-data/webxdc/chess.xdc")
 
@@ -45,8 +44,7 @@ def test_webxdc(acfactory) -> None:
 def test_webxdc_insert_lots_of_updates(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
-    bob_addr = bob.get_config("addr")
-    alice_contact_bob = alice.create_contact(bob_addr, "Bob")
+    alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     message = alice_chat_bob.send_message(text="Let's play chess!", file="../test-data/webxdc/chess.xdc")
 

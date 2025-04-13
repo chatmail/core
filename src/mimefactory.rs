@@ -13,14 +13,17 @@ use mail_builder::headers::HeaderType;
 use mail_builder::mime::MimePart;
 use tokio::fs;
 
+use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
 use crate::chat::{self, Chat};
 use crate::config::Config;
+use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
+use crate::key::DcKey;
 use crate::location;
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{is_hidden, SystemMessage};
@@ -94,7 +97,7 @@ pub struct MimeFactory {
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
 
-    /// Timestamps of the members in the same order as in the `recipients`
+    /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
     /// If this is not empty, its length
@@ -130,7 +133,6 @@ pub struct RenderedEmail {
     pub message: String,
     // pub envelope: Envelope,
     pub is_encrypted: bool,
-    pub is_gossiped: bool,
     pub last_added_location_id: Option<u32>,
 
     /// A comma-separated string of sync-IDs that are used by the rendered email and must be deleted
@@ -415,12 +417,10 @@ impl MimeFactory {
 
     fn should_force_plaintext(&self) -> bool {
         match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                msg.param
-                    .get_bool(Param::ForcePlaintext)
-                    .unwrap_or_default()
-                    || chat.typ == Chattype::Broadcast
-            }
+            Loaded::Message { msg, .. } => msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default(),
             Loaded::Mdn { .. } => false,
         }
     }
@@ -431,35 +431,6 @@ impl MimeFactory {
                 msg.param.get_bool(Param::SkipAutocrypt).unwrap_or_default()
             }
             Loaded::Mdn { .. } => true,
-        }
-    }
-
-    async fn should_do_gossip(&self, context: &Context, multiple_recipients: bool) -> Result<bool> {
-        match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                let cmd = msg.param.get_cmd();
-                if cmd == SystemMessage::MemberAddedToGroup
-                    || cmd == SystemMessage::SecurejoinMessage
-                {
-                    Ok(true)
-                } else if multiple_recipients {
-                    // beside key- and member-changes, force a periodic re-gossip.
-                    let gossiped_timestamp = chat.id.get_gossiped_timestamp(context).await?;
-                    let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
-                    // `gossip_period == 0` is a special case for testing,
-                    // enabling gossip in every message.
-                    // Otherwise "smeared timestamps" may result in the condition
-                    // to fail even if the clock is monotonic.
-                    if gossip_period == 0 || time() >= gossiped_timestamp + gossip_period {
-                        Ok(true)
-                    } else {
-                        Ok(false)
-                    }
-                } else {
-                    Ok(false)
-                }
-            }
-            Loaded::Mdn { .. } => Ok(false),
         }
     }
 
@@ -782,8 +753,6 @@ impl MimeFactory {
             }
         }
 
-        let mut is_gossiped = false;
-
         let peerstates = self.peerstates_for_recipients(context).await?;
         let is_encrypted = !self.should_force_plaintext()
             && (e2ee_guaranteed || encrypt_helper.should_encrypt(context, &peerstates).await?);
@@ -951,15 +920,77 @@ impl MimeFactory {
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
                 peerstates.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
-            if self.should_do_gossip(context, multiple_recipients).await? {
-                for peerstate in peerstates.iter().filter_map(|(state, _)| state.as_ref()) {
-                    if let Some(header) = peerstate.render_gossip_header(verified) {
-                        message = message.header(
-                            "Autocrypt-Gossip",
-                            mail_builder::headers::raw::Raw::new(header),
-                        );
-                        is_gossiped = true;
+
+            let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
+            let now = time();
+
+            match &self.loaded {
+                Loaded::Message { chat, msg } => {
+                    if chat.typ != Chattype::Broadcast {
+                        for peerstate in peerstates.iter().filter_map(|(state, _)| state.as_ref()) {
+                            let Some(key) = peerstate.peek_key(verified) else {
+                                continue;
+                            };
+
+                            let fingerprint = key.dc_fingerprint().hex();
+                            let cmd = msg.param.get_cmd();
+                            let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
+                                || cmd == SystemMessage::SecurejoinMessage
+                                || multiple_recipients && {
+                                    let gossiped_timestamp: Option<i64> = context
+                                        .sql
+                                        .query_get_value(
+                                            "SELECT timestamp
+                                         FROM gossip_timestamp
+                                         WHERE chat_id=? AND fingerprint=?",
+                                            (chat.id, &fingerprint),
+                                        )
+                                        .await?;
+
+                                    // `gossip_period == 0` is a special case for testing,
+                                    // enabling gossip in every message.
+                                    //
+                                    // If current time is in the past compared to
+                                    // `gossiped_timestamp`, we also gossip because
+                                    // either the `gossiped_timestamp` or clock is wrong.
+                                    gossip_period == 0
+                                        || gossiped_timestamp
+                                            .is_none_or(|ts| now >= ts + gossip_period || now < ts)
+                                };
+
+                            if !should_do_gossip {
+                                continue;
+                            }
+
+                            let header = Aheader::new(
+                                peerstate.addr.clone(),
+                                key.clone(),
+                                // Autocrypt 1.1.0 specification says that
+                                // `prefer-encrypt` attribute SHOULD NOT be included.
+                                EncryptPreference::NoPreference,
+                            )
+                            .to_string();
+
+                            message = message.header(
+                                "Autocrypt-Gossip",
+                                mail_builder::headers::raw::Raw::new(header),
+                            );
+
+                            context
+                                .sql
+                                .execute(
+                                    "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
+                                     VALUES                       (?, ?, ?)
+                                     ON CONFLICT                  (chat_id, fingerprint)
+                                     DO UPDATE SET timestamp=excluded.timestamp",
+                                    (chat.id, &fingerprint, now),
+                                )
+                                .await?;
+                        }
                     }
+                }
+                Loaded::Mdn { .. } => {
+                    // Never gossip in MDNs.
                 }
             }
 
@@ -1104,7 +1135,6 @@ impl MimeFactory {
             message,
             // envelope: Envelope::new,
             is_encrypted,
-            is_gossiped,
             last_added_location_id,
             sync_ids_to_delete: self.sync_ids_to_delete,
             rfc724_mid,
@@ -1305,7 +1335,7 @@ impl MimeFactory {
                     mail_builder::headers::raw::Raw::new("v1").into(),
                 ));
 
-                placeholdertext = Some(stock_str::ac_setup_msg_body(context).await);
+                placeholdertext = Some(ASM_SUBJECT.to_string());
             }
             SystemMessage::SecurejoinMessage => {
                 let step = msg.param.get(Param::Arg).unwrap_or_default();

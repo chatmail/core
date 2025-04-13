@@ -34,7 +34,7 @@ class ACFactory:
         addr, password = self.get_credentials()
         account = self.get_unconfigured_account()
         params = {"addr": addr, "password": password}
-        yield account._rpc.add_transport.future(account.id, params)
+        yield account.add_transport.future(params)
 
         assert account.is_configured()
         return account
@@ -79,7 +79,7 @@ class ACFactory:
     ) -> Message:
         if not from_account:
             from_account = (self.get_online_accounts(1))[0]
-        to_contact = from_account.create_contact(to_account.get_config("addr"))
+        to_contact = from_account.create_contact(to_account)
         if group:
             to_chat = from_account.create_group(group)
             to_chat.add_contact(to_contact)

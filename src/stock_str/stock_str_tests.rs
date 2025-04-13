@@ -54,10 +54,7 @@ async fn test_stock_string_repl_str() {
         .unwrap();
     let contact = Contact::get_by_id(&t.ctx, contact_id).await.unwrap();
     // uses %1$s substitution
-    assert_eq!(
-        contact_verified(&t, &contact).await,
-        "Someone (someone@example.org) verified."
-    );
+    assert_eq!(contact_verified(&t, &contact).await, "Someone verified.");
     // We have no string using %1$d to test...
 }
 
@@ -95,7 +92,7 @@ async fn test_stock_system_msg_add_member_by_me_with_displayname() {
     );
     assert_eq!(
         msg_add_member_local(&t, "alice@example.org", ContactId::SELF).await,
-        "You added member Alice (alice@example.org)."
+        "You added member Alice."
     );
 }
 
@@ -112,7 +109,7 @@ async fn test_stock_system_msg_add_member_by_other_with_displayname() {
     };
     assert_eq!(
         msg_add_member_local(&t, "alice@example.org", contact_id,).await,
-        "Member Alice (alice@example.org) added by Bob (bob@example.com)."
+        "Member Alice added by Bob."
     );
 }
 

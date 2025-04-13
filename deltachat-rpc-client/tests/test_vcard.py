@@ -1,8 +1,7 @@
 def test_vcard(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
-    bob_addr = bob.get_config("addr")
-    alice_contact_bob = alice.create_contact(bob_addr, "Bob")
+    alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_contact_charlie = alice.create_contact("charlie@example.org", "Charlie")
 
     alice_chat_bob = alice_contact_bob.create_chat()

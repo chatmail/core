@@ -1,6 +1,7 @@
 use super::*;
 use crate::chatlist::get_archived_cnt;
 use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
+use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{has_backup, imex, ImexMode};
 use crate::message::{delete_msgs, MessengerMessage};
@@ -331,11 +332,12 @@ async fn test_member_add_remove() -> Result<()> {
     // Alice adds Bob to the chat.
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
+
     // Locally set name "robert" should not leak.
     assert!(!sent.payload.contains("robert"));
     assert_eq!(
         sent.load_from_db().await.get_text(),
-        "You added member robert (bob@example.net)."
+        "You added member robert."
     );
 
     // Alice removes Bob from the chat.
@@ -344,7 +346,7 @@ async fn test_member_add_remove() -> Result<()> {
     assert!(!sent.payload.contains("robert"));
     assert_eq!(
         sent.load_from_db().await.get_text(),
-        "You removed member robert (bob@example.net)."
+        "You removed member robert."
     );
 
     // Alice leaves the chat.
@@ -412,7 +414,7 @@ async fn test_parallel_member_remove() -> Result<()> {
     // Test that remove message is rewritten.
     assert_eq!(
         bob_received_remove_msg.get_text(),
-        "Member Me (bob@example.net) removed by alice@example.org."
+        "Member Me removed by alice@example.org."
     );
 
     Ok(())
@@ -424,11 +426,10 @@ async fn test_msg_with_implicit_member_removed() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
-    let alice_bob_contact_id =
-        Contact::create(&alice, "Bob", &bob.get_config(Config::Addr).await?.unwrap()).await?;
-    let fiona_addr = "fiona@example.net";
-    let alice_fiona_contact_id = Contact::create(&alice, "Fiona", fiona_addr).await?;
-    let bob_fiona_contact_id = Contact::create(&bob, "Fiona", fiona_addr).await?;
+    let fiona = tcm.fiona().await;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(&bob).await;
+    let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
+    let bob_fiona_contact_id = bob.add_or_lookup_contact_id(&fiona).await;
     let alice_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group chat").await?;
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
@@ -470,8 +471,9 @@ async fn test_msg_with_implicit_member_removed() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_modify_chat_multi_device() -> Result<()> {
-    let a1 = TestContext::new_alice().await;
-    let a2 = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let a1 = tcm.alice().await;
+    let a2 = tcm.alice().await;
     a1.set_config_bool(Config::BccSelf, true).await?;
 
     // create group and sync it to the second device
@@ -495,8 +497,9 @@ async fn test_modify_chat_multi_device() -> Result<()> {
     assert_eq!(get_chat_contacts(&a2, a2_chat_id).await?.len(), 1);
 
     // add a member to the group
-    let bob = Contact::create(&a1, "", "bob@example.org").await?;
-    add_contact_to_chat(&a1, a1_chat_id, bob).await?;
+    let bob = tcm.bob().await;
+    let bob_id = a1.add_or_lookup_contact_id(&bob).await;
+    add_contact_to_chat(&a1, a1_chat_id, bob_id).await?;
     let a1_msg = a1.get_last_msg().await;
 
     let a2_msg = a2.recv_msg(&a1.pop_sent_msg().await).await;
@@ -520,11 +523,19 @@ async fn test_modify_chat_multi_device() -> Result<()> {
     assert!(a2_msg.is_system_message());
     assert_eq!(a1_msg.get_info_type(), SystemMessage::GroupNameChanged);
     assert_eq!(a2_msg.get_info_type(), SystemMessage::GroupNameChanged);
+    assert_eq!(
+        a1_msg.get_info_contact_id(&a1).await?,
+        Some(ContactId::SELF)
+    );
+    assert_eq!(
+        a2_msg.get_info_contact_id(&a2).await?,
+        Some(ContactId::SELF)
+    );
     assert_eq!(Chat::load_from_db(&a1, a1_chat_id).await?.name, "bar");
     assert_eq!(Chat::load_from_db(&a2, a2_chat_id).await?.name, "bar");
 
     // remove member from group
-    remove_contact_from_chat(&a1, a1_chat_id, bob).await?;
+    remove_contact_from_chat(&a1, a1_chat_id, bob_id).await?;
     let a1_msg = a1.get_last_msg().await;
 
     let a2_msg = a2.recv_msg(&a1.pop_sent_msg().await).await;
@@ -551,13 +562,18 @@ async fn test_modify_chat_multi_device() -> Result<()> {
 async fn test_modify_chat_disordered() -> Result<()> {
     let _n = TimeShiftFalsePositiveNote;
 
-    // Alice creates a group with Bob, Claire and Daisy and then removes Claire and Daisy
-    // (time shift is needed as otherwise smeared time from Alice looks to Bob like messages from the future which are all set to "now" then)
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
 
-    let bob_id = Contact::create(&alice, "", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "", "claire@foo.de").await?;
-    let daisy_id = Contact::create(&alice, "", "daisy@bar.de").await?;
+    // Alice creates a group with Bob, Charlie and Fiona and then removes Charlie and Fiona
+    // (time shift is needed as otherwise smeared time from Alice looks to Bob like messages from the future which are all set to "now" then)
+    let alice = tcm.alice().await;
+
+    let bob = tcm.bob().await;
+    let bob_id = alice.add_or_lookup_contact_id(&bob).await;
+    let charlie = tcm.charlie().await;
+    let charlie_id = alice.add_or_lookup_contact_id(&charlie).await;
+    let fiona = tcm.fiona().await;
+    let fiona_id = alice.add_or_lookup_contact_id(&fiona).await;
 
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
     send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
@@ -565,21 +581,21 @@ async fn test_modify_chat_disordered() -> Result<()> {
     add_contact_to_chat(&alice, alice_chat_id, bob_id).await?;
     let add1 = alice.pop_sent_msg().await;
 
-    add_contact_to_chat(&alice, alice_chat_id, claire_id).await?;
+    add_contact_to_chat(&alice, alice_chat_id, charlie_id).await?;
     let add2 = alice.pop_sent_msg().await;
     SystemTime::shift(Duration::from_millis(1100));
 
-    add_contact_to_chat(&alice, alice_chat_id, daisy_id).await?;
+    add_contact_to_chat(&alice, alice_chat_id, fiona_id).await?;
     let add3 = alice.pop_sent_msg().await;
     SystemTime::shift(Duration::from_millis(1100));
 
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 4);
 
-    remove_contact_from_chat(&alice, alice_chat_id, claire_id).await?;
+    remove_contact_from_chat(&alice, alice_chat_id, charlie_id).await?;
     let remove1 = alice.pop_sent_msg().await;
     SystemTime::shift(Duration::from_millis(1100));
 
-    remove_contact_from_chat(&alice, alice_chat_id, daisy_id).await?;
+    remove_contact_from_chat(&alice, alice_chat_id, fiona_id).await?;
     let remove2 = alice.pop_sent_msg().await;
 
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 2);
@@ -630,24 +646,27 @@ async fn test_modify_chat_lost() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
 
-    let bob_id = Contact::create(&alice, "", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "", "claire@foo.de").await?;
-    let daisy_id = Contact::create(&alice, "", "daisy@bar.de").await?;
+    let bob = tcm.bob().await;
+    let bob_id = alice.add_or_lookup_contact_id(&bob).await;
+    let charlie = tcm.charlie().await;
+    let charlie_id = alice.add_or_lookup_contact_id(&charlie).await;
+    let fiona = tcm.fiona().await;
+    let fiona_id = alice.add_or_lookup_contact_id(&fiona).await;
 
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
     add_contact_to_chat(&alice, alice_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_chat_id, claire_id).await?;
-    add_contact_to_chat(&alice, alice_chat_id, daisy_id).await?;
+    add_contact_to_chat(&alice, alice_chat_id, charlie_id).await?;
+    add_contact_to_chat(&alice, alice_chat_id, fiona_id).await?;
 
     send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
     let add = alice.pop_sent_msg().await;
     SystemTime::shift(Duration::from_millis(1100));
 
-    remove_contact_from_chat(&alice, alice_chat_id, claire_id).await?;
+    remove_contact_from_chat(&alice, alice_chat_id, charlie_id).await?;
     let remove1 = alice.pop_sent_msg().await;
     SystemTime::shift(Duration::from_millis(1100));
 
-    remove_contact_from_chat(&alice, alice_chat_id, daisy_id).await?;
+    remove_contact_from_chat(&alice, alice_chat_id, fiona_id).await?;
     let remove2 = alice.pop_sent_msg().await;
 
     let bob = tcm.bob().await;
@@ -1565,6 +1584,7 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         None,
         None,
         None,
+        None,
     )
     .await?;
 
@@ -2008,20 +2028,22 @@ async fn test_forward() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_info_msg() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let chat_id1 = create_group_chat(&t, ProtectionStatus::Unprotected, "a").await?;
-    send_text_msg(&t, chat_id1, "msg one".to_string()).await?;
-    let bob_id = Contact::create(&t, "", "bob@example.net").await?;
-    add_contact_to_chat(&t, chat_id1, bob_id).await?;
-    let msg1 = t.get_last_msg_in(chat_id1).await;
+    let chat_id1 = create_group_chat(alice, ProtectionStatus::Unprotected, "a").await?;
+    send_text_msg(alice, chat_id1, "msg one".to_string()).await?;
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    add_contact_to_chat(alice, chat_id1, bob_id).await?;
+    let msg1 = alice.get_last_msg_in(chat_id1).await;
     assert!(msg1.is_info());
     assert!(msg1.get_text().contains("bob@example.net"));
 
-    let chat_id2 = ChatId::create_for_contact(&t, bob_id).await?;
-    assert_eq!(get_chat_msgs(&t, chat_id2).await?.len(), 0);
-    forward_msgs(&t, &[msg1.id], chat_id2).await?;
-    let msg2 = t.get_last_msg_in(chat_id2).await;
+    let chat_id2 = ChatId::create_for_contact(alice, bob_id).await?;
+    assert_eq!(get_chat_msgs(alice, chat_id2).await?.len(), 0);
+    forward_msgs(alice, &[msg1.id], chat_id2).await?;
+    let msg2 = alice.get_last_msg_in(chat_id2).await;
     assert!(!msg2.is_info()); // forwarded info-messages lose their info-state
     assert_eq!(msg2.get_info_type(), SystemMessage::Unknown);
     assert_ne!(msg2.from_id, ContactId::INFO);
@@ -2071,6 +2093,7 @@ async fn test_forward_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
+    let charlie = tcm.charlie().await;
 
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
@@ -2078,12 +2101,12 @@ async fn test_forward_group() -> Result<()> {
     // Alice creates a group with Bob.
     let alice_group_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    let bob_id = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let claire_id = Contact::create(&alice, "Claire", "claire@example.net").await?;
+    let bob_id = alice.add_or_lookup_contact_id(&bob).await;
+    let charlie_id = alice.add_or_lookup_contact_id(&charlie).await;
     add_contact_to_chat(&alice, alice_group_chat_id, bob_id).await?;
-    add_contact_to_chat(&alice, alice_group_chat_id, claire_id).await?;
+    add_contact_to_chat(&alice, alice_group_chat_id, charlie_id).await?;
     let sent_group_msg = alice
-        .send_text(alice_group_chat_id, "Hi Bob and Claire")
+        .send_text(alice_group_chat_id, "Hi Bob and Charlie")
         .await;
     let bob_group_chat_id = bob.recv_msg(&sent_group_msg).await.chat_id;
 
@@ -2272,6 +2295,29 @@ async fn test_forward_from_saved_to_saved() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_encrypted_to_unencrypted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let txt = "This should be encrypted";
+    let sent = alice.send_text(alice.create_chat(bob).await.id, txt).await;
+    let msg = bob.recv_msg(&sent).await;
+    assert_eq!(msg.text, txt);
+    assert!(msg.get_showpadlock());
+
+    let unencrypted_chat = bob.create_email_chat(charlie).await;
+    forward_msgs(bob, &[msg.id], unencrypted_chat.id).await?;
+    let msg2 = bob.get_last_msg().await;
+    assert_eq!(msg2.text, txt);
+    assert_ne!(msg.id, msg2.id);
+    assert!(!msg2.get_showpadlock());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_save_from_saved_to_saved_failing() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
@@ -2366,19 +2412,15 @@ async fn test_resend_own_message() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_foreign_message_fails() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
-    add_contact_to_chat(
-        &alice,
-        alice_grp,
-        Contact::create(&alice, "", "bob@example.net").await?,
-    )
-    .await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_grp = create_group_chat(alice, ProtectionStatus::Unprotected, "grp").await?;
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
     let sent1 = alice.send_text(alice_grp, "alice->bob").await;
 
-    let bob = TestContext::new_bob().await;
     let msg = bob.recv_msg(&sent1).await;
-    assert!(resend_msgs(&bob, &[msg.id]).await.is_err());
+    assert!(resend_msgs(bob, &[msg.id]).await.is_err());
 
     Ok(())
 }
@@ -2422,24 +2464,23 @@ async fn test_resend_opportunistically_encryption() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_info_message_fails() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
-    add_contact_to_chat(
-        &alice,
-        alice_grp,
-        Contact::create(&alice, "", "bob@example.net").await?,
-    )
-    .await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_grp = create_group_chat(alice, ProtectionStatus::Unprotected, "grp").await?;
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
     alice.send_text(alice_grp, "alice->bob").await;
 
     add_contact_to_chat(
-        &alice,
+        alice,
         alice_grp,
-        Contact::create(&alice, "", "claire@example.org").await?,
+        alice.add_or_lookup_contact_id(charlie).await,
     )
     .await?;
     let sent2 = alice.pop_sent_msg().await;
-    assert!(resend_msgs(&alice, &[sent2.sender_msg_id]).await.is_err());
+    assert!(resend_msgs(alice, &[sent2.sender_msg_id]).await.is_err());
 
     Ok(())
 }
@@ -2475,6 +2516,7 @@ async fn test_broadcast() -> Result<()> {
     // create two context, send two messages so both know the other
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
+    let fiona = TestContext::new_fiona().await;
 
     let chat_alice = alice.create_chat(&bob).await;
     send_text_msg(&alice, chat_alice.id, "hi!".to_string()).await?;
@@ -2493,6 +2535,8 @@ async fn test_broadcast() -> Result<()> {
         get_chat_contacts(&alice, chat_bob.id).await?.pop().unwrap(),
     )
     .await?;
+    let fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
+    add_contact_to_chat(&alice, broadcast_id, fiona_contact_id).await?;
     set_chat_name(&alice, broadcast_id, "Broadcast list").await?;
     {
         let chat = Chat::load_from_db(&alice, broadcast_id).await?;
@@ -2507,11 +2551,14 @@ async fn test_broadcast() -> Result<()> {
 
     {
         let sent_msg = alice.pop_sent_msg().await;
-        assert!(!sent_msg.payload.contains("Chat-Group-Member-Timestamps:"));
+        let msg = bob.parse_msg(&sent_msg).await;
+        assert!(msg.was_encrypted());
+        assert!(!msg.header_exists(HeaderDef::ChatGroupMemberTimestamps));
+        assert!(!msg.header_exists(HeaderDef::AutocryptGossip));
         let msg = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast list");
-        assert!(!msg.get_showpadlock()); // avoid leaking recipients in encryption data
+        assert!(msg.get_showpadlock());
         let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
         assert_eq!(chat.typ, Chattype::Mailinglist);
         assert_ne!(chat.id, chat_bob.id);
@@ -3321,6 +3368,128 @@ async fn test_do_not_overwrite_draft() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_info_contact_id() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    async fn pop_recv_and_check(
+        alice: &TestContext,
+        alice2: &TestContext,
+        bob: &TestContext,
+        expected_type: SystemMessage,
+        expected_alice_id: ContactId,
+        expected_bob_id: ContactId,
+    ) -> Result<()> {
+        let sent_msg = alice.pop_sent_msg().await;
+        let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(
+            msg.get_info_contact_id(alice).await?,
+            Some(expected_alice_id)
+        );
+
+        let msg = alice2.recv_msg(&sent_msg).await;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(
+            msg.get_info_contact_id(alice2).await?,
+            Some(expected_alice_id)
+        );
+
+        let msg = bob.recv_msg(&sent_msg).await;
+        assert_eq!(msg.get_info_type(), expected_type);
+        assert_eq!(msg.get_info_contact_id(bob).await?, Some(expected_bob_id));
+
+        Ok(())
+    }
+
+    // Alice creates group, Bob receives group
+    let alice_chat_id = alice
+        .create_group_with_members(ProtectionStatus::Unprotected, "play", &[bob])
+        .await;
+    let sent_msg1 = alice.send_text(alice_chat_id, "moin").await;
+
+    let msg = bob.recv_msg(&sent_msg1).await;
+    let bob_alice_id = msg.from_id;
+    assert!(!bob_alice_id.is_special());
+
+    // Alice does group changes, Bob receives them
+    set_chat_name(alice, alice_chat_id, "games").await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::GroupNameChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    let file = alice.get_blobdir().join("avatar.png");
+    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
+    tokio::fs::write(&file, bytes).await?;
+    set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::GroupImageChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    alice_chat_id
+        .set_ephemeral_timer(alice, Timer::Enabled { duration: 60 })
+        .await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::EphemeralTimerChanged,
+        ContactId::SELF,
+        bob_alice_id,
+    )
+    .await?;
+
+    let fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await; // contexts are in sync, fiona_id is same everywhere
+    add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::MemberAddedToGroup,
+        fiona_id,
+        fiona_id,
+    )
+    .await?;
+
+    remove_contact_from_chat(alice, alice_chat_id, fiona_id).await?;
+    pop_recv_and_check(
+        alice,
+        alice2,
+        bob,
+        SystemMessage::MemberRemovedFromGroup,
+        fiona_id,
+        fiona_id,
+    )
+    .await?;
+
+    // When fiona_id is deleted, get_info_contact_id() returns None.
+    // We raw delete in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
+    alice
+        .sql
+        .execute("DELETE FROM contacts WHERE id=?", (fiona_id,))
+        .await?;
+    let msg = alice.get_last_msg().await;
+    assert_eq!(msg.get_info_type(), SystemMessage::MemberRemovedFromGroup);
+    assert!(msg.get_info_contact_id(alice).await?.is_none());
+
+    Ok(())
+}
+
 /// Test group consistency.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_add_member_bug() -> Result<()> {
@@ -3328,9 +3497,10 @@ async fn test_add_member_bug() -> Result<()> {
 
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
 
-    let alice_bob_contact_id = Contact::create(alice, "Bob", "bob@example.net").await?;
-    let alice_fiona_contact_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
     // Create a group.
     let alice_chat_id =
@@ -3506,11 +3676,15 @@ async fn test_expire_past_members_after_60_days() -> Result<()> {
 /// Test that past members are ordered by the timestamp of their removal.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_past_members_order() -> Result<()> {
-    let t = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
 
-    let bob_contact_id = Contact::create(t, "Bob", "bob@example.net").await?;
-    let charlie_contact_id = Contact::create(t, "Charlie", "charlie@example.org").await?;
-    let fiona_contact_id = Contact::create(t, "Fiona", "fiona@example.net").await?;
+    let bob = tcm.bob().await;
+    let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
+    let charlie = tcm.charlie().await;
+    let charlie_contact_id = t.add_or_lookup_contact_id(&charlie).await;
+    let fiona = tcm.fiona().await;
+    let fiona_contact_id = t.add_or_lookup_contact_id(&fiona).await;
 
     let chat_id = create_group_chat(t, ProtectionStatus::Unprotected, "Group chat").await?;
     add_contact_to_chat(t, chat_id, bob_contact_id).await?;
@@ -3708,6 +3882,7 @@ async fn test_send_edit_request() -> Result<()> {
     bob.recv_msg_opt(&sent2).await;
     let test = Message::load_from_db(bob, bob_msg.id).await?;
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert!(test.is_edited());
 
     // alice has another device, and sees the correction also there
     let alice2 = tcm.alice().await;
@@ -3717,6 +3892,12 @@ async fn test_send_edit_request() -> Result<()> {
     alice2.recv_msg_opt(&sent2).await;
     let test = Message::load_from_db(&alice2, alice2_msg.id).await?;
     assert_eq!(test.text, "Text me on Delta.Chat");
+    assert!(test.is_edited());
+
+    // Alice forwards the edited message, the new message shouldn't have the "edited" mark.
+    forward_msgs(&alice2, &[test.id], test.chat_id).await?;
+    let forwarded = alice2.get_last_msg().await;
+    assert!(!forwarded.is_edited());
 
     Ok(())
 }

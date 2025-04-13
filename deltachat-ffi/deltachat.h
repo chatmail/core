@@ -2163,6 +2163,29 @@ int             dc_add_address_book          (dc_context_t* context, const char*
 
 
 /**
+ * Make a vCard.
+ *
+ * @memberof dc_context_t
+ * @param context The context object.
+ * @param contact_id The ID of the contact to make the vCard of.
+ * @return vCard, must be released using dc_str_unref() after usage.
+ */
+char*           dc_make_vcard                (dc_context_t* context, uint32_t contact_id);
+
+
+/**
+ * Import a vCard.
+ *
+ * @memberof dc_context_t
+ * @param context The context object.
+ * @param vcard vCard contents.
+ * @return Returns the IDs of the contacts in the order they appear in the vCard.
+ *         Must be dc_array_unref()'d after usage.
+ */
+dc_array_t*     dc_import_vcard              (dc_context_t* context, const char* vcard);
+
+
+/**
  * Returns known and unblocked contacts.
  *
  * To get information about a single contact, see dc_get_contact().
@@ -4483,12 +4506,21 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * UIs can display e.g. an icon based upon the type.
  *
  * Currently, the following types are defined:
+ * - DC_INFO_GROUP_NAME_CHANGED (2) - "Group name changd from OLD to BY by CONTACT"
+ * - DC_INFO_GROUP_IMAGE_CHANGED (3) - "Group image changd by CONTACT"
+ * - DC_INFO_MEMBER_ADDED_TO_GROUP (4) - "Member CONTACT added by OTHER_CONTACT"
+ * - DC_INFO_MEMBER_REMOVED_FROM_GROUP (5) - "Member CONTACT removed by OTHER_CONTACT"
+ * - DC_INFO_EPHEMERAL_TIMER_CHANGED (10) - "Disappearing messages CHANGED_TO by CONTACT"
  * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is now protected"
  * - DC_INFO_PROTECTION_DISABLED (12) - Info-message for "Chat is no longer protected"
  * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message for "Provider requires end-to-end encryption which is not setup yet",
  *   the UI should change the corresponding string using #DC_STR_INVALID_UNENCRYPTED_MAIL
  *   and also offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
+ *
+ * For the messages that refer to a CONTACT,
+ * dc_msg_get_info_contact_id() returns the contact ID.
+ * The UI should open the contact's profile when tapping the info message.
  *
  * Even when you display an icon,
  * you should still display the text of the informational message using dc_msg_get_text()
@@ -4500,6 +4532,29 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  *     or that the message is not an info-message.
  */
 int             dc_msg_get_info_type          (const dc_msg_t* msg);
+
+
+/**
+ * Return the contact ID of the profile to open when tapping the info message.
+ *
+ * - For DC_INFO_MEMBER_ADDED_TO_GROUP and DC_INFO_MEMBER_REMOVED_FROM_GROUP,
+ *   this is the contact being added/removed.
+ *   The contact that did the adding/removal is usually only a tap away
+ *   (as introducer and/or atop of the memberlist),
+ *   and usually more known anyways.
+ * - For DC_INFO_GROUP_NAME_CHANGED, DC_INFO_GROUP_IMAGE_CHANGED and DC_INFO_EPHEMERAL_TIMER_CHANGED
+ *   this is the contact who did the change.
+ *
+ * No need to check additionally for dc_msg_get_info_type(),
+ * unless you e.g. want to show the info message in another style.
+ *
+ * @memberof dc_msg_t
+ * @param msg The message object.
+ * @return If the info message refers to a contact,
+ *     this contact ID or DC_CONTACT_ID_SELF is returned.
+ *     Otherwise 0.
+ */
+uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 
 
 // DC_INFO* uses the same values as SystemMessage in rust-land
@@ -6857,12 +6912,12 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Autocrypt Setup Message"
 ///
-/// Used in subjects of outgoing Autocrypt Setup Messages.
+/// @deprecated 2025-04
 #define DC_STR_AC_SETUP_MSG_SUBJECT       42
 
 /// "This is the Autocrypt Setup Message, open it in a compatible client to use your setup"
 ///
-/// Used as message text of outgoing Autocrypt Setup Messages.
+/// @deprecated 2025-04
 #define DC_STR_AC_SETUP_MSG_BODY          43
 
 /// "Cannot login as %1$s."
@@ -7537,8 +7592,13 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Could not yet establish guaranteed end-to-end encryption, but you may already send a message."
 ///
-/// Used as info message.
+/// @deprecated 2025-03
 #define DC_STR_SECUREJOIN_WAIT_TIMEOUT 191
+
+/// "That seems to take longer, maybe the contact or you are offline. However, the process continues in background, you can do something else…"
+///
+/// Used as info message.
+#define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
 /// "Contact". Deprecated, currently unused.
 #define DC_STR_CONTACT 200

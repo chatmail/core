@@ -6,14 +6,13 @@ use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
 use std::panic;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
-use once_cell::sync::Lazy;
 use pretty_assertions::assert_eq;
 use rand::Rng;
 use tempfile::{tempdir, TempDir};
@@ -33,7 +32,7 @@ use crate::contact::{import_vcard, make_vcard, Contact, ContactId, Modifier, Ori
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, DcKey};
+use crate::key::{self, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::peerstate::Peerstate;
@@ -47,8 +46,8 @@ use crate::tools::time;
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
 
 /// Map of context IDs to names for [`TestContext`]s.
-static CONTEXT_NAMES: Lazy<std::sync::RwLock<BTreeMap<u32, String>>> =
-    Lazy::new(|| std::sync::RwLock::new(BTreeMap::new()));
+static CONTEXT_NAMES: LazyLock<std::sync::RwLock<BTreeMap<u32, String>>> =
+    LazyLock::new(|| std::sync::RwLock::new(BTreeMap::new()));
 
 /// Manage multiple [`TestContext`]s in one place.
 ///
@@ -84,6 +83,22 @@ impl TestContextManager {
     pub async fn charlie(&mut self) -> TestContext {
         TestContext::builder()
             .configure_charlie()
+            .with_log_sink(self.log_sink.clone())
+            .build()
+            .await
+    }
+
+    pub async fn dom(&mut self) -> TestContext {
+        TestContext::builder()
+            .configure_dom()
+            .with_log_sink(self.log_sink.clone())
+            .build()
+            .await
+    }
+
+    pub async fn elena(&mut self) -> TestContext {
+        TestContext::builder()
+            .configure_elena()
             .with_log_sink(self.log_sink.clone())
             .build()
             .await
@@ -249,9 +264,23 @@ impl TestContextBuilder {
 
     /// Configures as charlie@example.net with fixed secret key.
     ///
-    /// This is a shortcut for `.with_key_pair(fiona_keypair())`.
+    /// This is a shortcut for `.with_key_pair(charlie_keypair())`.
     pub fn configure_charlie(self) -> Self {
         self.with_key_pair(charlie_keypair())
+    }
+
+    /// Configures as dom@example.net with fixed secret key.
+    ///
+    /// This is a shortcut for `.with_key_pair(dom_keypair())`.
+    pub fn configure_dom(self) -> Self {
+        self.with_key_pair(dom_keypair())
+    }
+
+    /// Configures as elena@example.net with fixed secret key.
+    ///
+    /// This is a shortcut for `.with_key_pair(elena_keypair())`.
+    pub fn configure_elena(self) -> Self {
+        self.with_key_pair(elena_keypair())
     }
 
     /// Configures as fiona@example.net with fixed secret key.
@@ -1111,12 +1140,10 @@ impl SentMessage<'_> {
 ///
 /// The keypair was created using the crate::key::tests::gen_key test.
 pub fn alice_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/alice-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1124,12 +1151,10 @@ pub fn alice_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn bob_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/bob-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1137,14 +1162,33 @@ pub fn bob_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn charlie_keypair() -> KeyPair {
-    let public =
-        key::SignedPublicKey::from_asc(include_str!("../test-data/key/charlie-public.asc"))
-            .unwrap()
-            .0;
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
             .unwrap()
             .0;
+    let public = secret.split_public_key().unwrap();
+    KeyPair { public, secret }
+}
+
+/// Load a pre-generated keypair for dom@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn dom_keypair() -> KeyPair {
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
+        .unwrap()
+        .0;
+    let public = secret.split_public_key().unwrap();
+    KeyPair { public, secret }
+}
+
+/// Load a pre-generated keypair for elena@example.net from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn elena_keypair() -> KeyPair {
+    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
+        .unwrap()
+        .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 
@@ -1152,12 +1196,10 @@ pub fn charlie_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn fiona_keypair() -> KeyPair {
-    let public = key::SignedPublicKey::from_asc(include_str!("../test-data/key/fiona-public.asc"))
-        .unwrap()
-        .0;
     let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc"))
         .unwrap()
         .0;
+    let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
 

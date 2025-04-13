@@ -130,8 +130,7 @@ pub(crate) enum CantSendReason {
     /// Not a member of the chat.
     NotAMember,
 
-    /// Temporary state for 1:1 chats while SecureJoin is in progress, after a timeout sending
-    /// messages (incl. unencrypted if we don't yet know the contact's pubkey) is allowed.
+    /// Temporary state for 1:1 chats while SecureJoin is in progress.
     SecurejoinWait,
 }
 
@@ -582,7 +581,18 @@ impl ChatId {
             ProtectionStatus::Unprotected => SystemMessage::ChatProtectionDisabled,
             ProtectionStatus::ProtectionBroken => SystemMessage::ChatProtectionDisabled,
         };
-        add_info_msg_with_cmd(context, self, &text, cmd, timestamp_sort, None, None, None).await?;
+        add_info_msg_with_cmd(
+            context,
+            self,
+            &text,
+            cmd,
+            timestamp_sort,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
 
         Ok(())
     }
@@ -1366,41 +1376,10 @@ impl ChatId {
     }
 
     pub(crate) async fn reset_gossiped_timestamp(self, context: &Context) -> Result<()> {
-        self.set_gossiped_timestamp(context, 0).await
-    }
-
-    /// Get timestamp of the last gossip sent in the chat.
-    /// Zero return value means that gossip was never sent.
-    pub async fn get_gossiped_timestamp(self, context: &Context) -> Result<i64> {
-        let timestamp: Option<i64> = context
-            .sql
-            .query_get_value("SELECT gossiped_timestamp FROM chats WHERE id=?;", (self,))
-            .await?;
-        Ok(timestamp.unwrap_or_default())
-    }
-
-    pub(crate) async fn set_gossiped_timestamp(
-        self,
-        context: &Context,
-        timestamp: i64,
-    ) -> Result<()> {
-        ensure!(
-            !self.is_special(),
-            "can not set gossiped timestamp for special chats"
-        );
-        info!(
-            context,
-            "Set gossiped_timestamp for chat {} to {}.", self, timestamp,
-        );
-
         context
             .sql
-            .execute(
-                "UPDATE chats SET gossiped_timestamp=? WHERE id=?;",
-                (timestamp, self),
-            )
+            .execute("DELETE FROM gossip_timestamp WHERE chat_id=?", (self,))
             .await?;
-
         Ok(())
     }
 
@@ -1716,13 +1695,13 @@ impl Chat {
             return Ok(Some(reason));
         }
         let reason = SecurejoinWait;
-        if !skip_fn(&reason)
-            && self
+        if !skip_fn(&reason) {
+            let (can_write, _) = self
                 .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
-                .await?
-                > 0
-        {
-            return Ok(Some(reason));
+                .await?;
+            if !can_write {
+                return Ok(Some(reason));
+            }
         }
         Ok(None)
     }
@@ -1734,28 +1713,32 @@ impl Chat {
         Ok(self.why_cant_send(context).await?.is_none())
     }
 
-    /// Returns the remaining timeout for the 1:1 chat in-progress SecureJoin.
+    /// Returns if the chat can be sent to
+    /// and the remaining timeout for the 1:1 chat in-progress SecureJoin.
     ///
-    /// If the timeout has expired, notifies the user that sending messages is possible. See also
-    /// [`CantSendReason::SecurejoinWait`].
+    /// If the timeout has expired, adds an info message with additional information;
+    /// the chat still cannot be sent to in this case. See also [`CantSendReason::SecurejoinWait`].
     pub(crate) async fn check_securejoin_wait(
         &self,
         context: &Context,
         timeout: u64,
-    ) -> Result<u64> {
+    ) -> Result<(bool, u64)> {
         if self.typ != Chattype::Single || self.protected != ProtectionStatus::Unprotected {
-            return Ok(0);
+            return Ok((true, 0));
         }
-        let (mut param0, mut param1) = (Params::new(), Params::new());
-        param0.set_cmd(SystemMessage::SecurejoinWait);
-        param1.set_cmd(SystemMessage::SecurejoinWaitTimeout);
-        let (param0, param1) = (param0.to_string(), param1.to_string());
+
+        // chat is single and unprotected:
+        // get last info message of type SecurejoinWait or SecurejoinWaitTimeout
+        let (mut param_wait, mut param_timeout) = (Params::new(), Params::new());
+        param_wait.set_cmd(SystemMessage::SecurejoinWait);
+        param_timeout.set_cmd(SystemMessage::SecurejoinWaitTimeout);
+        let (param_wait, param_timeout) = (param_wait.to_string(), param_timeout.to_string());
         let Some((param, ts_sort, ts_start)) = context
             .sql
             .query_row_optional(
                 "SELECT param, timestamp, timestamp_sent FROM msgs WHERE id=\
                  (SELECT MAX(id) FROM msgs WHERE chat_id=? AND param IN (?, ?))",
-                (self.id, &param0, &param1),
+                (self.id, &param_wait, &param_timeout),
                 |row| {
                     let param: String = row.get(0)?;
                     let ts_sort: i64 = row.get(1)?;
@@ -1765,11 +1748,13 @@ impl Chat {
             )
             .await?
         else {
-            return Ok(0);
+            return Ok((true, 0));
         };
-        if param == param1 {
-            return Ok(0);
+
+        if param == param_timeout {
+            return Ok((false, 0));
         }
+
         let now = time();
         // Don't await SecureJoin if the clock was set back.
         if ts_start <= now {
@@ -1777,13 +1762,14 @@ impl Chat {
                 .saturating_add(timeout.try_into()?)
                 .saturating_sub(now);
             if timeout > 0 {
-                return Ok(timeout as u64);
+                return Ok((false, timeout as u64));
             }
         }
+
         add_info_msg_with_cmd(
             context,
             self.id,
-            &stock_str::securejoin_wait_timeout(context).await,
+            &stock_str::securejoin_takes_longer(context).await,
             SystemMessage::SecurejoinWaitTimeout,
             // Use the sort timestamp of the "please wait" message, this way the added message is
             // never sorted below the protection message if the SecureJoin finishes in parallel.
@@ -1791,10 +1777,11 @@ impl Chat {
             Some(now),
             None,
             None,
+            None,
         )
         .await?;
-        context.emit_event(EventType::ChatModified(self.id));
-        Ok(0)
+
+        Ok((false, 0))
     }
 
     /// Checks if the user is part of a chat
@@ -1899,7 +1886,6 @@ impl Chat {
             name: self.name.clone(),
             archived: self.visibility == ChatVisibility::Archived,
             param: self.param.to_string(),
-            gossiped_timestamp: self.id.get_gossiped_timestamp(context).await?,
             is_sending_locations: self.is_sending_locations,
             color: self.get_color(context).await?,
             profile_image: self
@@ -2045,7 +2031,9 @@ impl Chat {
             && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
         {
             msg.param.set_int(Param::AttachGroupImage, 1);
-            self.param.remove(Param::Unpromoted);
+            self.param
+                .remove(Param::Unpromoted)
+                .set_i64(Param::GroupNameTimestamp, timestamp);
             self.update_param(context).await?;
             // TODO: Remove this compat code needed because Core <= v1.143:
             // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also
@@ -2440,9 +2428,6 @@ pub struct ChatInfo {
     /// This is the string-serialised version of `Params` currently.
     pub param: String,
 
-    /// Last time this client sent autocrypt gossip headers to this chat.
-    pub gossiped_timestamp: i64,
-
     /// Whether this chat is currently sending location-stream messages.
     pub is_sending_locations: bool,
 
@@ -2599,7 +2584,7 @@ pub(crate) async fn resume_securejoin_wait(context: &Context) -> Result<()> {
 
     for chat_id in chat_ids {
         let chat = Chat::load_from_db(context, chat_id).await?;
-        let timeout = chat
+        let (_, timeout) = chat
             .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
             .await?;
         if timeout > 0 {
@@ -3080,10 +3065,6 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     }
 
     let now = smeared_time(context);
-
-    if rendered_msg.is_gossiped {
-        msg.chat_id.set_gossiped_timestamp(context, now).await?;
-    }
 
     if rendered_msg.last_added_location_id.is_some() {
         if let Err(err) = location::set_kml_sent_timestamp(context, msg.chat_id, now).await {
@@ -3899,7 +3880,9 @@ pub(crate) async fn add_contact_to_chat_ex(
 
     let sync_qr_code_tokens;
     if from_handshake && chat.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
-        chat.param.remove(Param::Unpromoted);
+        chat.param
+            .remove(Param::Unpromoted)
+            .set_i64(Param::GroupNameTimestamp, smeared_time(context));
         chat.update_param(context).await?;
         sync_qr_code_tokens = true;
     } else {
@@ -3942,6 +3925,8 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
+        msg.param
+            .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
         send_msg(context, chat_id, &mut msg).await?;
 
         sync = Nosync;
@@ -4139,6 +4124,8 @@ pub async fn remove_contact_from_chat(
                     }
                     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
                     msg.param.set(Param::Arg, contact.get_addr().to_lowercase());
+                    msg.param
+                        .set(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
                     let res = send_msg(context, chat_id, &mut msg).await;
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4356,6 +4343,7 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.param.remove(Param::WebxdcDocumentTimestamp);
         msg.param.remove(Param::WebxdcSummary);
         msg.param.remove(Param::WebxdcSummaryTimestamp);
+        msg.param.remove(Param::IsEdited);
         msg.in_reply_to = None;
 
         // do not leak data as group names; a default subject is generated by mimefactory
@@ -4737,13 +4725,17 @@ pub(crate) async fn add_info_msg_with_cmd(
     timestamp_sent_rcvd: Option<i64>,
     parent: Option<&Message>,
     from_id: Option<ContactId>,
+    added_removed_id: Option<ContactId>,
 ) -> Result<MsgId> {
     let rfc724_mid = create_outgoing_rfc724_mid();
     let ephemeral_timer = chat_id.get_ephemeral_timer(context).await?;
 
     let mut param = Params::new();
     if cmd != SystemMessage::Unknown {
-        param.set_cmd(cmd)
+        param.set_cmd(cmd);
+    }
+    if let Some(contact_id) = added_removed_id {
+        param.set(Param::ContactAddedRemoved, contact_id.to_u32().to_string());
     }
 
     let row_id =
@@ -4788,6 +4780,7 @@ pub(crate) async fn add_info_msg(
         text,
         SystemMessage::Unknown,
         timestamp,
+        None,
         None,
         None,
         None,

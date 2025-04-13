@@ -55,6 +55,8 @@ def run_cmdline(argv=None, account_plugins=None):
     args = parser.parse_args(argv[1:])
 
     ac = Account(args.db)
+    qr = ac.get_setup_contact_qr()
+    print(qr)
 
     ac.run_account(addr=args.email, password=args.password, account_plugins=account_plugins, show_ffi=args.show_ffi)
 

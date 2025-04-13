@@ -17,7 +17,7 @@ def test_event_on_configuration(acfactory: ACFactory) -> None:
     account = acfactory.get_unconfigured_account()
     account.clear_all_events()
     assert not account.is_configured()
-    future = account._rpc.add_transport.future(account.id, {"addr": addr, "password": password})
+    future = account.add_transport.future({"addr": addr, "password": password})
     while True:
         event = account.wait_for_event()
         if event.kind == EventType.ACCOUNTS_ITEM_CHANGED:

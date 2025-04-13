@@ -82,15 +82,14 @@ pub(crate) fn encrypt_device_token(device_token: &str) -> Result<String> {
     let padded_device_token = pad_device_token(device_token);
     let mut rng = thread_rng();
 
-    let encoded_message = pgp::composed::MessageBuilder::from_bytes("", padded_device_token)
-        .seipd_v2(
-            &mut rng,
-            SymmetricKeyAlgorithm::AES128,
-            AeadAlgorithm::Ocb,
-            ChunkSize::C8KiB,
-        )
-        .encrypt_to_key(&mut rng, &encryption_subkey)?
-        .to_vec(&mut rng)?;
+    let mut msg = pgp::composed::MessageBuilder::from_bytes("", padded_device_token).seipd_v2(
+        &mut rng,
+        SymmetricKeyAlgorithm::AES128,
+        AeadAlgorithm::Ocb,
+        ChunkSize::C8KiB,
+    );
+    msg.encrypt_to_key(&mut rng, &encryption_subkey)?;
+    let encoded_message = msg.to_vec(&mut rng)?;
 
     Ok(format!(
         "openpgp:{}",

@@ -63,8 +63,7 @@ def test_acfactory(acfactory) -> None:
 def test_configure_starttls(acfactory) -> None:
     addr, password = acfactory.get_credentials()
     account = acfactory.get_unconfigured_account()
-    account._rpc.add_transport(
-        account.id,
+    account.add_transport(
         {
             "addr": addr,
             "password": password,
@@ -81,8 +80,7 @@ def test_configure_ip(acfactory) -> None:
     ip_address = socket.gethostbyname(addr.rsplit("@")[-1])
 
     with pytest.raises(JsonRpcError):
-        account._rpc.add_transport(
-            account.id,
+        account.add_transport(
             {
                 "addr": addr,
                 "password": password,
@@ -96,8 +94,7 @@ def test_configure_alternative_port(acfactory) -> None:
     """Test that configuration with alternative port 443 works."""
     addr, password = acfactory.get_credentials()
     account = acfactory.get_unconfigured_account()
-    account._rpc.add_transport(
-        account.id,
+    account.add_transport(
         {
             "addr": addr,
             "password": password,
@@ -111,8 +108,7 @@ def test_configure_alternative_port(acfactory) -> None:
 def test_list_transports(acfactory) -> None:
     addr, password = acfactory.get_credentials()
     account = acfactory.get_unconfigured_account()
-    account._rpc.add_transport(
-        account.id,
+    account.add_transport(
         {
             "addr": addr,
             "password": password,
@@ -424,7 +420,7 @@ def test_wait_next_messages(acfactory) -> None:
     addr, password = acfactory.get_credentials()
     bot = acfactory.get_unconfigured_account()
     bot.set_config("bot", "1")
-    bot._rpc.add_transport(bot.id, {"addr": addr, "password": password})
+    bot.add_transport({"addr": addr, "password": password})
     assert bot.is_configured()
 
     # There are no old messages and the call returns immediately.
@@ -607,7 +603,7 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
 
     addr, password = acfactory.get_credentials()
     ac2 = acfactory.get_unconfigured_account()
-    ac2._rpc.add_transport(ac2.id, {"addr": addr, "password": password})
+    ac2.add_transport({"addr": addr, "password": password})
     ac2.set_config("mvbox_move", "1")
     assert ac2.is_configured()
 
@@ -797,3 +793,35 @@ def test_rename_group(acfactory):
         alice_group.set_name(name)
         bob.wait_for_incoming_msg_event()
         assert bob_chat.get_basic_snapshot().name == name
+
+
+def test_get_all_accounts_deadlock(rpc):
+    """Regression test for get_all_accounts deadlock."""
+    for _ in range(100):
+        all_accounts = rpc.get_all_accounts.future()
+        rpc.add_account()
+        all_accounts()
+
+
+def test_delete_deltachat_folder(acfactory, direct_imap):
+    """Test that DeltaChat folder is recreated if user deletes it manually."""
+    ac1 = acfactory.new_configured_account()
+    ac1.set_config("mvbox_move", "1")
+    ac1.bring_online()
+
+    ac1_direct_imap = direct_imap(ac1)
+    ac1_direct_imap.conn.folder.delete("DeltaChat")
+    assert "DeltaChat" not in ac1_direct_imap.list_folders()
+
+    # Wait until new folder is created and UIDVALIDITY is updated.
+    while True:
+        event = ac1.wait_for_event()
+        if event.kind == EventType.INFO and "uid/validity change folder DeltaChat" in event.msg:
+            break
+
+    ac2 = acfactory.get_online_account()
+    ac2.create_chat(ac1).send_text("hello")
+    msg = ac1.wait_for_incoming_msg().get_snapshot()
+    assert msg.text == "hello"
+
+    assert "DeltaChat" in ac1_direct_imap.list_folders()

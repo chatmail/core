@@ -2,14 +2,16 @@
 
 #![allow(missing_docs)]
 
+use std::sync::LazyLock;
+
 use deltachat_derive::{FromSql, ToSql};
-use once_cell::sync::Lazy;
 use percent_encoding::{AsciiSet, NON_ALPHANUMERIC};
 use serde::{Deserialize, Serialize};
 
 use crate::chat::ChatId;
 
-pub static DC_VERSION_STR: Lazy<String> = Lazy::new(|| env!("CARGO_PKG_VERSION").to_string());
+pub static DC_VERSION_STR: LazyLock<String> =
+    LazyLock::new(|| env!("CARGO_PKG_VERSION").to_string());
 
 /// Set of characters to percent-encode in email addresses and names.
 pub(crate) const NON_ALPHANUMERIC_WITHOUT_DOT: &AsciiSet = &NON_ALPHANUMERIC.remove(b'.');
@@ -178,9 +180,6 @@ pub const DC_LP_AUTH_NORMAL: i32 = 0x4;
 /// if none of these flags are set, the default is chosen
 pub const DC_LP_AUTH_FLAGS: i32 = DC_LP_AUTH_OAUTH2 | DC_LP_AUTH_NORMAL;
 
-/// How many existing messages shall be fetched after configuration.
-pub(crate) const DC_FETCH_EXISTING_MSGS_COUNT: i64 = 100;
-
 // max. weight of images to send w/o recoding
 pub const BALANCED_IMAGE_BYTES: usize = 500_000;
 pub const WORSE_IMAGE_BYTES: usize = 130_000;
@@ -220,6 +219,19 @@ pub(crate) const SECUREJOIN_WAIT_TIMEOUT: u64 = 15;
 // To make text edits clearer for Non-Delta-MUA or old Delta Chats, edited text will be prefixed by EDITED_PREFIX.
 // Newer Delta Chats will remove the prefix as needed.
 pub(crate) const EDITED_PREFIX: &str = "✏️";
+
+// Strings needed to render the Autocrypt Setup Message.
+// Left untranslated as not being supported/recommended workflow and as translations would require deep knowledge.
+pub(crate) const ASM_SUBJECT: &str = "Autocrypt Setup Message";
+pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
+    used to transfer your end-to-end setup between clients.
+
+    To decrypt and use your setup, \
+    open the message in an Autocrypt-compliant client \
+    and enter the setup code presented on the generating device.
+
+    If you see this message in a chatmail client (Delta Chat, Arcane Chat, Delta Touch ...), \
+    use \"Settings / Add Second Device\" instead.";
 
 #[cfg(test)]
 mod tests {
