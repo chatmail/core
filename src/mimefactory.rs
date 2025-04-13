@@ -1283,6 +1283,8 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
+                    // TODO: lookup the contact by ID rather than email address.
+                    // We are adding PGP contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     placeholdertext =
                         Some(stock_str::msg_add_member_remote(context, email_to_add).await);

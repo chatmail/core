@@ -2411,14 +2411,15 @@ async fn apply_group_changes(
             warn!(context, "Removed {removed_addr:?} has no contact id.")
         }
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        // TODO: lookup PGP contact.
-        // There must be a gossip header.
-        if let Some(contact_id) =
-            Contact::lookup_id_by_addr(context, added_addr, Origin::Unknown).await?
-        {
-            added_id = Some(contact_id);
+        if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
+            let fingerprint = key.dc_fingerprint().hex();
+            if let Some(contact_id) = lookup_pgp_contact_by_fingerprint(context, &fingerprint).await? {
+                added_id = Some(contact_id);
+            } else {
+                warn!(context, "Added {added_addr:?} has no contact id.");
+            }
         } else {
-            warn!(context, "Added {added_addr:?} has no contact id.");
+            warn!(context, "Added {added_addr:?} has no gossiped key.");
         }
 
         better_msg = Some(stock_str::msg_add_member_local(context, added_addr, from_id).await);
@@ -3191,6 +3192,25 @@ async fn lookup_pgp_contact_by_address(
                          WHERE contact_id=contacts.id
                          AND chat_id=?)",
             (addr, chat_id),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                Ok(contact_id)
+            },
+        )
+        .await?;
+    Ok(contact_id)
+}
+
+async fn lookup_pgp_contact_by_fingerprint(
+    context: &Context,
+    fingerprint: &str,
+) -> Result<Option<ContactId>> {
+    let contact_id: Option<ContactId> = context
+        .sql
+        .query_row_optional(
+            "SELECT id FROM contacts
+             WHERE contacts.fingerprint=?",
+             (fingerprint,),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
                 Ok(contact_id)
