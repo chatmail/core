@@ -702,12 +702,12 @@ async fn test_leave_group() -> Result<()> {
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
 
-    // Create group chat with Bob.
+    tcm.section("Alice creates group chat with Bob.");
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
     let bob_contact = alice.add_or_lookup_contact(&bob).await.id;
     add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
 
-    // Alice sends first message to group.
+    tcm.section("Alice sends first message to group.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
     let bob_msg = bob.recv_msg(&sent_msg).await;
 
@@ -720,7 +720,7 @@ async fn test_leave_group() -> Result<()> {
     // Shift the time so that we can later check the 'Group left' message's timestamp:
     SystemTime::shift(Duration::from_secs(60));
 
-    // Bob leaves the group.
+    tcm.section("Bob leaves the group.");
     let bob_chat_id = bob_msg.chat_id;
     bob_chat_id.accept(&bob).await?;
     remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;

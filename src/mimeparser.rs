@@ -493,13 +493,9 @@ impl MimeMessage {
                 // but only if the mail was correctly signed. Probably it's ok to not require
                 // encryption here, but let's follow the standard.
                 let gossip_headers = mail.headers.get_all_values("Autocrypt-Gossip");
-                gossiped_keys = update_gossip_peerstates(
-                    context,
-                    &from.addr,
-                    &recipients,
-                    gossip_headers,
-                )
-                .await?;
+                gossiped_keys =
+                    update_gossip_peerstates(context, &from.addr, &recipients, gossip_headers)
+                        .await?;
             }
 
             if let Some(inner_from) = inner_from {
@@ -1443,7 +1439,10 @@ impl MimeMessage {
         };
         let key = match SignedPublicKey::from_asc(key) {
             Err(err) => {
-                warn!(context, "PGP key attachment is not an ASCII-armored file: {err:#}.");
+                warn!(
+                    context,
+                    "PGP key attachment is not an ASCII-armored file: {err:#}."
+                );
                 return Ok(false);
             }
             Ok((key, _)) => key,

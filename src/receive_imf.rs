@@ -2399,7 +2399,7 @@ async fn apply_group_changes(
     }
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        removed_id = Contact::lookup_id_by_addr(context, removed_addr, Origin::Unknown).await?;
+        removed_id = lookup_pgp_contact_by_address(context, removed_addr, chat_id).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
@@ -2411,6 +2411,8 @@ async fn apply_group_changes(
             warn!(context, "Removed {removed_addr:?} has no contact id.")
         }
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        // TODO: lookup PGP contact.
+        // There must be a gossip header.
         if let Some(contact_id) =
             Contact::lookup_id_by_addr(context, added_addr, Origin::Unknown).await?
         {
@@ -3175,6 +3177,29 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
     Ok(contact_ids)
 }
 
+async fn lookup_pgp_contact_by_address(
+    context: &Context,
+    addr: &str,
+    chat_id: ChatId,
+) -> Result<Option<ContactId>> {
+    let contact_id: Option<ContactId> = context
+        .sql
+        .query_row_optional(
+            "SELECT id FROM contacts
+             WHERE contacts.addr=?
+             AND EXISTS (SELECT 1 FROM chats_contacts
+                         WHERE contact_id=contacts.id
+                         AND chat_id=?)",
+            (addr, chat_id),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                Ok(contact_id)
+            },
+        )
+        .await?;
+    Ok(contact_id)
+}
+
 /// Looks up PGP-contacts by email addresses.
 ///
 /// This is used as a fallback when email addresses are available,
@@ -3198,21 +3223,7 @@ async fn lookup_pgp_contacts_by_address_list(
     for info in address_list {
         let addr = &info.addr;
 
-        let contact_id = context
-            .sql
-            .query_row_optional(
-                "SELECT id FROM contacts
-             WHERE contacts.addr=?
-             AND EXISTS (SELECT 1 FROM chats_contacts
-                         WHERE contact_id=contacts.id
-                         AND chat_id=?)",
-                (addr, chat_id),
-                |row| {
-                    let contact_id: ContactId = row.get(0)?;
-                    Ok(contact_id)
-                },
-            )
-            .await?;
+        let contact_id = lookup_pgp_contact_by_address(context, addr, chat_id).await?;
         contact_ids.push(contact_id);
     }
     debug_assert_eq!(address_list.len(), contact_ids.len());
