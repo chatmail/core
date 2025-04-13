@@ -315,7 +315,7 @@ impl MimeFactory {
 
                             if let Some(certificate) = certificate_opt {
                                 certificates.push((addr.clone(), certificate))
-                            } else {
+                            } else if id != ContactId::SELF {
                                 missing_key_addresses.insert(addr.clone());
                                 if is_encrypted {
                                     warn!(context, "Missing key for {addr}");
