@@ -21,7 +21,6 @@ use crate::key::Fingerprint;
 use crate::message::Message;
 use crate::net::http::post_empty;
 use crate::net::proxy::{ProxyConfig, DEFAULT_SOCKS_PORT};
-use crate::peerstate::Peerstate;
 use crate::token;
 use crate::tools::validate_id;
 
@@ -529,28 +528,14 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             })
         }
     } else if let Some(addr) = addr {
-        // FIXME don't use peerstate
+        let fingerprint = fingerprint.hex();
+        let (contact_id, _) = Contact::add_or_lookup_ex(context, "", &addr, &fingerprint, Origin::UnhandledQrScan).await?;
+        let contact = Contact::get_by_id(context, contact_id).await?;
 
-        // retrieve known state for this fingerprint
-        let peerstate = Peerstate::from_fingerprint(context, &fingerprint)
-            .await
-            .context("Can't load peerstate")?;
-
-        if let Some(peerstate) = peerstate {
-            let peerstate_addr = ContactAddress::new(&peerstate.addr)?;
-            let (contact_id, _) =
-                Contact::add_or_lookup(context, &name, &peerstate_addr, Origin::UnhandledQrScan)
-                    .await
-                    .context("add_or_lookup")?;
-            ChatIdBlocked::get_for_contact(context, contact_id, Blocked::Request)
-                .await
-                .context("Failed to create (new) chat for contact")?;
+        if contact.openpgp_certificate(context).await?.is_some() {
             Ok(Qr::FprOk { contact_id })
         } else {
-            let contact_id = Contact::lookup_id_by_addr(context, &addr, Origin::Unknown)
-                .await
-                .with_context(|| format!("Error looking up contact {addr:?}"))?;
-            Ok(Qr::FprMismatch { contact_id })
+            Ok(Qr::FprMismatch { contact_id: Some(contact_id) })
         }
     } else {
         Ok(Qr::FprWithoutAddr {
