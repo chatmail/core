@@ -13,7 +13,6 @@ use serde::Deserialize;
 pub(crate) use self::dclogin_scheme::configure_from_login_qr;
 use crate::chat::ChatIdBlocked;
 use crate::config::Config;
-use crate::constants::Blocked;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::events::EventType;
