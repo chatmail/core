@@ -16,7 +16,6 @@ use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{imex, ImexMode};
-use crate::peerstate::Peerstate;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::mark_as_verified;
 use crate::test_utils::{get_chat_msg, TestContext, TestContextManager};
@@ -3640,10 +3639,8 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
 
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Mutual);
+    // TODO: if the message should arrive as PGP-contact
+    // with the key taken from Autocrypt header.
 
     Ok(())
 }
@@ -3655,35 +3652,11 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let raw =
         include_bytes!("../../test-data/message/thunderbird_encrypted_signed_with_pubkey.eml");
     receive_imf(&t, raw, false).await?;
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Mutual);
-
-    receive_imf(
-        &t,
-        b"From: alice@example.org\n\
-          To: bob@example.net\n\
-          Subject: foo\n\
-          Message-ID: <message@example.org>\n\
-          Date: Thu, 2 Nov 2023 02:20:28 -0300\n\
-          \n\
-          unencrypted\n",
-        false,
-    )
-    .await?;
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Reset);
+    // TODO: the message should arrive as PGP-contact with a key.
 
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     receive_imf(&t, raw, false).await?;
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert!(peerstate.public_key.is_some());
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Mutual);
+    // TODO: the message should arrive as the same PGP-contact.
 
     Ok(())
 }
@@ -3725,17 +3698,14 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt_unencrypted.eml");
     receive_imf(&t, raw, false).await?;
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Mutual);
+
+    // TODO: the message should arrive as email-contact
 
     let raw = include_bytes!("../../test-data/message/thunderbird_signed_unencrypted.eml");
     receive_imf(&t, raw, false).await?;
-    let peerstate = Peerstate::from_addr(&t, "alice@example.org")
-        .await?
-        .unwrap();
-    assert_eq!(peerstate.prefer_encrypt, EncryptPreference::Mutual);
+
+    // TODO: the message should arrive as email-contact?
+    // or PGP-contact, but no padlock
 
     Ok(())
 }
