@@ -19,7 +19,6 @@ use crate::key::{load_self_public_key, DcKey, Fingerprint};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
-use crate::peerstate::Peerstate;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::stock_str;
@@ -496,17 +495,15 @@ pub(crate) async fn handle_securejoin_handshake(
 ///
 /// If we see self-sent {vc,vg}-request-with-auth,
 /// we know that we are Bob (joiner-observer)
-/// that just marked peer (Alice) as forward-verified
+/// that just marked peer (Alice) as verified
 /// either after receiving {vc,vg}-auth-required
 /// or immediately after scanning the QR-code
 /// if the key was already known.
 ///
 /// If we see self-sent vc-contact-confirm or vg-member-added message,
 /// we know that we are Alice (inviter-observer)
-/// that just marked peer (Bob) as forward (and backward)-verified
+/// that just marked peer (Bob) as verified
 /// in response to correct vc-request-with-auth message.
-///
-/// In both cases we can mark the peer as forward-verified.
 pub(crate) async fn observe_securejoin_on_other_device(
     context: &Context,
     mime_message: &MimeMessage,
@@ -528,13 +525,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
     };
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
-        could_not_establish_secure_connection(
-            context,
-            contact_id,
-            info_chat_id(context, contact_id).await?,
-            "Message not encrypted correctly.",
-        )
-        .await?;
         return Ok(HandshakeMessage::Ignore);
     }
 
@@ -544,51 +534,10 @@ pub(crate) async fn observe_securejoin_on_other_device(
         .to_lowercase();
 
     let Some(key) = mime_message.gossiped_keys.get(&addr) else {
-        could_not_establish_secure_connection(
-            context,
-            contact_id,
-            info_chat_id(context, contact_id).await?,
-            &format!(
-                "No gossip header for '{}' at step {}, please update Delta Chat on all \
-                        your devices.",
-                &addr, step,
-            ),
-        )
-        .await?;
         return Ok(HandshakeMessage::Ignore);
     };
 
-    let Some(mut peerstate) = Peerstate::from_addr(context, &addr).await? else {
-        could_not_establish_secure_connection(
-            context,
-            contact_id,
-            info_chat_id(context, contact_id).await?,
-            &format!("No peerstate in db for '{}' at step {}", &addr, step),
-        )
-        .await?;
-        return Ok(HandshakeMessage::Ignore);
-    };
-
-    let Some(fingerprint) = peerstate.gossip_key_fingerprint.clone() else {
-        could_not_establish_secure_connection(
-            context,
-            contact_id,
-            info_chat_id(context, contact_id).await?,
-            &format!(
-                "No gossip key fingerprint in db for '{}' at step {}",
-                &addr, step,
-            ),
-        )
-        .await?;
-        return Ok(HandshakeMessage::Ignore);
-    };
-    peerstate.set_verified(key.clone(), fingerprint, addr)?;
-    if matches!(step, "vg-member-added" | "vc-contact-confirm") {
-        peerstate.backward_verified_key_id =
-            Some(context.get_config_i64(Config::KeyId).await?).filter(|&id| id > 0);
-    }
-    peerstate.prefer_encrypt = EncryptPreference::Mutual;
-    peerstate.save_to_db(&context.sql).await?;
+    mark_contact_id_as_verified(context, contact_id, contact_id).await?;
 
     ChatId::set_protection_for_contact(context, contact_id, mime_message.timestamp_sent).await?;
 
