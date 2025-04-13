@@ -4,7 +4,6 @@ use std::time::Duration;
 use tokio::fs;
 
 use super::*;
-use crate::aheader::EncryptPreference;
 use crate::chat::{
     add_contact_to_chat, add_to_chat_contacts_table, create_group_chat, get_chat_contacts,
     get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg, ChatItem,

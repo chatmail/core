@@ -4,7 +4,6 @@ use anyhow::{ensure, Context as _, Error, Result};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 
-use crate::aheader::EncryptPreference;
 use crate::chat::{self, get_chat_id_by_grpid, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::chatlist_events;
 use crate::config::Config;

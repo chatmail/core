@@ -350,7 +350,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     let bob = tcm.bob().await;
 
     // Ensure Bob knows Alice_FP
-    let alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
+    let alice_contact_id = bob.add_or_lookup_contact_id(&alice).await;
 
     // Step 1: Generate QR-code, ChatId(0) indicates setup-contact
     let qr = get_securejoin_qr(&alice.ctx, None).await?;
