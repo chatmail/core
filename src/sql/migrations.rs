@@ -1208,7 +1208,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
                 if let Some(configured_param) = configured_param {
                     transaction.execute(
                         "INSERT INTO transports (addr, entered_param, configured_param)
-                        VALUES (?, ?, ?)",
+                         VALUES (?, ?, ?)",
                         (
                             configured_param.addr.clone(),
                             serde_json::to_string(&entered_param)?,
