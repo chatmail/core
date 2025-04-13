@@ -5,6 +5,7 @@ use crate::config::Config;
 use crate::key::DcKey;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{alice_keypair, TestContext};
+use crate::peerstate::Peerstate;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_http() -> Result<()> {
