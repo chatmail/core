@@ -231,11 +231,11 @@ impl DcKey for SignedPublicKey {
     }
 
     fn dc_fingerprint(&self) -> Fingerprint {
-        (&*self).fingerprint().into()
+        self.fingerprint().into()
     }
 
     fn key_id(&self) -> KeyId {
-        KeyDetails::key_id(&*self)
+        KeyDetails::key_id(self)
     }
 }
 
@@ -258,7 +258,7 @@ impl DcKey for SignedSecretKey {
     }
 
     fn dc_fingerprint(&self) -> Fingerprint {
-        (&*self).fingerprint().into()
+        self.fingerprint().into()
     }
 
     fn key_id(&self) -> KeyId {
@@ -282,7 +282,7 @@ impl DcSecretKey for SignedSecretKey {
         let signed_pubkey = unsigned_pubkey.sign(
             &mut rng,
             &self.primary_key,
-            &*self.primary_key.public_key(),
+            self.primary_key.public_key(),
             &Password::empty(),
         )?;
         Ok(signed_pubkey)
