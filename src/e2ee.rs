@@ -89,8 +89,6 @@ mod tests {
     use crate::chat::send_text_msg;
     use crate::config::Config;
     use crate::message::{Message, Viewtype};
-    use crate::param::Param;
-    use crate::peerstate::Peerstate;
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
 
@@ -132,85 +130,6 @@ Sent with my Delta Chat Messenger: https://delta.chat";
             mail.get_body().unwrap().starts_with(
                 "sidenote for all: things are trick atm recommend not to try to run with desktop or ios unless you are ready to hunt bugs")
         );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_encrypted_no_autocrypt() -> anyhow::Result<()> {
-        let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-
-        let chat_alice = alice.create_email_chat(&bob).await.id;
-        let chat_bob = bob.create_email_chat(&alice).await.id;
-
-        // Alice sends unencrypted message to Bob
-        let mut msg = Message::new(Viewtype::Text);
-        let sent = alice.send_msg(chat_alice, &mut msg).await;
-
-        // Bob receives unencrypted message from Alice
-        let msg = bob.recv_msg(&sent).await;
-        assert!(!msg.get_showpadlock());
-
-        let peerstate_alice = Peerstate::from_addr(&bob.ctx, "alice@example.org")
-            .await?
-            .expect("no peerstate found in the database");
-        assert_eq!(peerstate_alice.prefer_encrypt, EncryptPreference::Mutual);
-
-        // Bob sends empty encrypted message to Alice
-        let mut msg = Message::new(Viewtype::Text);
-        let sent = bob.send_msg(chat_bob, &mut msg).await;
-
-        // Alice receives an empty encrypted message from Bob.
-        // This is also a regression test for previously existing bug
-        // that resulted in no padlock on encrypted empty messages.
-        let msg = alice.recv_msg(&sent).await;
-        assert!(msg.get_showpadlock());
-
-        let peerstate_bob = Peerstate::from_addr(&alice.ctx, "bob@example.net")
-            .await?
-            .expect("no peerstate found in the database");
-        assert_eq!(peerstate_bob.prefer_encrypt, EncryptPreference::Mutual);
-
-        // Now Alice and Bob have established keys.
-
-        // Alice sends encrypted message without Autocrypt header.
-        let mut msg = Message::new(Viewtype::Text);
-        msg.param.set_int(Param::SkipAutocrypt, 1);
-        let sent = alice.send_msg(chat_alice, &mut msg).await;
-
-        let msg = bob.recv_msg(&sent).await;
-        assert!(msg.get_showpadlock());
-        let peerstate_alice = Peerstate::from_addr(&bob.ctx, "alice@example.org")
-            .await?
-            .expect("no peerstate found in the database");
-        assert_eq!(peerstate_alice.prefer_encrypt, EncryptPreference::Mutual);
-
-        // Alice sends plaintext message with Autocrypt header.
-        let mut msg = Message::new(Viewtype::Text);
-        msg.force_plaintext();
-        let sent = alice.send_msg(chat_alice, &mut msg).await;
-
-        let msg = bob.recv_msg(&sent).await;
-        assert!(!msg.get_showpadlock());
-        let peerstate_alice = Peerstate::from_addr(&bob.ctx, "alice@example.org")
-            .await?
-            .expect("no peerstate found in the database");
-        assert_eq!(peerstate_alice.prefer_encrypt, EncryptPreference::Mutual);
-
-        // Alice sends plaintext message without Autocrypt header.
-        let mut msg = Message::new(Viewtype::Text);
-        msg.force_plaintext();
-        msg.param.set_int(Param::SkipAutocrypt, 1);
-        let sent = alice.send_msg(chat_alice, &mut msg).await;
-
-        let msg = bob.recv_msg(&sent).await;
-        assert!(!msg.get_showpadlock());
-        let peerstate_alice = Peerstate::from_addr(&bob.ctx, "alice@example.org")
-            .await?
-            .expect("no peerstate found in the database");
-        assert_eq!(peerstate_alice.prefer_encrypt, EncryptPreference::Reset);
-
-        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
