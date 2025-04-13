@@ -534,6 +534,8 @@ pub(crate) async fn observe_securejoin_on_other_device(
         .to_lowercase();
 
     let Some(key) = mime_message.gossiped_keys.get(&addr) else {
+        // TODO: check that contact_id fingerprint is the same as gossiped key fingerprint
+
         return Ok(HandshakeMessage::Ignore);
     };
 

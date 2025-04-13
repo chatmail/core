@@ -529,13 +529,17 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         }
     } else if let Some(addr) = addr {
         let fingerprint = fingerprint.hex();
-        let (contact_id, _) = Contact::add_or_lookup_ex(context, "", &addr, &fingerprint, Origin::UnhandledQrScan).await?;
+        let (contact_id, _) =
+            Contact::add_or_lookup_ex(context, "", &addr, &fingerprint, Origin::UnhandledQrScan)
+                .await?;
         let contact = Contact::get_by_id(context, contact_id).await?;
 
         if contact.openpgp_certificate(context).await?.is_some() {
             Ok(Qr::FprOk { contact_id })
         } else {
-            Ok(Qr::FprMismatch { contact_id: Some(contact_id) })
+            Ok(Qr::FprMismatch {
+                contact_id: Some(contact_id),
+            })
         }
     } else {
         Ok(Qr::FprWithoutAddr {
