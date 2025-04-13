@@ -2024,7 +2024,6 @@ async fn test_forward_basic() -> Result<()> {
     let msg = alice.recv_msg(&forwarded_msg).await;
     assert_eq!(msg.get_text(), "Hi Bob");
     assert!(msg.is_forwarded());
-    let forwarded_msg = bob.pop_sent_msg().await;
     Ok(())
 }
 
