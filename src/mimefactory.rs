@@ -1047,7 +1047,7 @@ impl MimeFactory {
             encryption_keyring.extend(
                 encryption_certificates
                     .iter()
-                    .map(|(addr, key)| (*key).clone()),
+                    .map(|(_addr, key)| (*key).clone()),
             );
 
             // XXX: additional newline is needed

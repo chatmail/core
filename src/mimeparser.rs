@@ -495,7 +495,6 @@ impl MimeMessage {
                 let gossip_headers = mail.headers.get_all_values("Autocrypt-Gossip");
                 gossiped_keys = update_gossip_peerstates(
                     context,
-                    timestamp_sent,
                     &from.addr,
                     &recipients,
                     gossip_headers,
@@ -1882,7 +1881,6 @@ fn remove_header(
 /// Returns the set of mail recipient addresses for which valid gossip headers were found.
 async fn update_gossip_peerstates(
     context: &Context,
-    message_time: i64,
     from: &str,
     recipients: &[SingleInfo],
     gossip_headers: Vec<String>,
