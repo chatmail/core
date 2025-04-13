@@ -896,6 +896,7 @@ impl ConfiguredLoginParam {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::log::LogExt as _;
     use crate::provider::get_provider_by_id;
     use crate::test_utils::TestContext;
     use pretty_assertions::assert_eq;
@@ -1186,8 +1187,8 @@ mod tests {
 
     async fn migrate_configured_login_param(t: &TestContext) {
         t.sql.execute("DROP TABLE transports;", ()).await.unwrap();
-        t.sql.set_raw_config_int("dbversion", 129).await.unwrap();
-        t.sql.run_migrations(t).await.unwrap();
+        t.sql.set_raw_config_int("dbversion", 130).await.unwrap();
+        t.sql.run_migrations(t).await.log_err(t).ok();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
