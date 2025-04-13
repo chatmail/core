@@ -13,7 +13,7 @@ use format_flowed::unformat_flowed;
 use mailparse::{addrparse_header, DispositionType, MailHeader, MailHeaderMap, SingleInfo};
 use mime::Mime;
 
-use crate::aheader::{Aheader, EncryptPreference};
+use crate::aheader::Aheader;
 use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
