@@ -69,7 +69,7 @@ impl Context {
     /// Configures this account with the currently provided parameters.
     ///
     /// Deprecated since 2025-02; use `add_transport_from_qr()`
-    /// or `add_transport()` instead.
+    /// or `add_or_update_transport()` instead.
     pub async fn configure(&self) -> Result<()> {
         let param = EnteredLoginParam::load(self).await?;
 
@@ -105,7 +105,7 @@ impl Context {
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
     /// - [Self::delete_transport()] to remove a transport.
-    pub async fn add_transport(&self, param: &EnteredLoginParam) -> Result<()> {
+    pub async fn add_or_update_transport(&self, param: &EnteredLoginParam) -> Result<()> {
         self.stop_io().await;
         let result = self.add_transport_inner(param).await;
         if result.is_err() {
@@ -156,7 +156,7 @@ impl Context {
 
     /// Adds a new email account as a transport
     /// using the server encoded in the QR code.
-    /// See [Self::add_transport].
+    /// See [Self::add_or_update_transport].
     pub async fn add_transport_from_qr(&self, qr: &str) -> Result<()> {
         self.stop_io().await;
 
@@ -178,7 +178,7 @@ impl Context {
     }
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
-    /// Use [Self::add_transport()] to add or change a transport
+    /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
     pub async fn list_transports(&self) -> Result<Vec<EnteredLoginParam>> {
         let param = EnteredLoginParam::load(self).await?;
