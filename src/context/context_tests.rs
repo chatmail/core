@@ -285,7 +285,6 @@ async fn test_get_info_completeness() {
         "send_security",
         "server_flags",
         "skip_start_messages",
-        "smtp_certificate_checks",
         "proxy_url",      // May contain passwords, don't leak it to the logs.
         "socks5_enabled", // SOCKS5 options are deprecated.
         "socks5_host",
