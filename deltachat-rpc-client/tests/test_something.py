@@ -74,6 +74,29 @@ def test_configure_starttls(acfactory) -> None:
     assert account.is_configured()
 
 
+def test_lowercase_address(acfactory) -> None:
+    addr, password = acfactory.get_credentials()
+    addr_upper = addr.upper()
+    account = acfactory.get_unconfigured_account()
+    account.add_transport(
+        {
+            "addr": addr_upper,
+            "password": password,
+        },
+    )
+    assert account.is_configured()
+    assert addr_upper != addr
+    assert account.get_config("configured_addr") == addr
+    assert account.list_transports()[0]["addr"] == addr
+
+    for param in [
+        account.get_info()["used_account_settings"],
+        account.get_info()["entered_account_settings"],
+    ]:
+        assert addr in param
+        assert addr_upper not in param
+
+
 def test_configure_ip(acfactory) -> None:
     addr, password = acfactory.get_credentials()
     account = acfactory.get_unconfigured_account()
@@ -115,7 +138,7 @@ def test_list_transports(acfactory) -> None:
             "imapUser": addr,
         },
     )
-    transports = account._rpc.list_transports(account.id)
+    transports = account.list_transports()
     assert len(transports) == 1
     params = transports[0]
     assert params["addr"] == addr

@@ -16,7 +16,7 @@ pub(crate) mod server_params;
 use anyhow::{bail, ensure, format_err, Context as _, Result};
 use auto_mozilla::moz_autoconfigure;
 use auto_outlook::outlk_autodiscover;
-use deltachat_contact_tools::EmailAddress;
+use deltachat_contact_tools::{addr_normalize, EmailAddress};
 use futures::FutureExt;
 use futures_lite::FutureExt as _;
 use percent_encoding::utf8_percent_encode;
@@ -71,9 +71,9 @@ impl Context {
     /// Deprecated since 2025-02; use `add_transport_from_qr()`
     /// or `add_or_update_transport()` instead.
     pub async fn configure(&self) -> Result<()> {
-        let param = EnteredLoginParam::load(self).await?;
+        let mut param = EnteredLoginParam::load(self).await?;
 
-        self.add_transport_inner(&param).await
+        self.add_transport_inner(&mut param).await
     }
 
     /// Configures a new email account using the provided parameters
@@ -105,7 +105,7 @@ impl Context {
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
     /// - [Self::delete_transport()] to remove a transport.
-    pub async fn add_or_update_transport(&self, param: &EnteredLoginParam) -> Result<()> {
+    pub async fn add_or_update_transport(&self, param: &mut EnteredLoginParam) -> Result<()> {
         self.stop_io().await;
         let result = self.add_transport_inner(param).await;
         if result.is_err() {
@@ -118,7 +118,7 @@ impl Context {
         Ok(())
     }
 
-    async fn add_transport_inner(&self, param: &EnteredLoginParam) -> Result<()> {
+    async fn add_transport_inner(&self, param: &mut EnteredLoginParam) -> Result<()> {
         ensure!(
             !self.scheduler.is_running().await,
             "cannot configure, already running"
@@ -127,6 +127,7 @@ impl Context {
             self.sql.is_open().await,
             "cannot configure, database not opened."
         );
+        param.addr = addr_normalize(&param.addr);
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
         if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
             bail!("Changing your email address is not supported right now. Check back in a few months!");

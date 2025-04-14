@@ -489,7 +489,7 @@ impl CommandApi {
         param: EnteredLoginParam,
     ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
-        ctx.add_or_update_transport(&param.try_into()?).await
+        ctx.add_or_update_transport(&mut param.try_into()?).await
     }
 
     /// Deprecated 2025-04. Alias for [Self::add_or_update_transport()].
