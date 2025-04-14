@@ -1170,16 +1170,16 @@ async fn test_import_vcard_key_change() -> Result<()> {
     let msg = bob.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
 
-    let bob = &TestContext::new().await;
-    bob.configure_addr(bob_addr).await;
-    bob.set_config(Config::Displayname, Some("New Bob")).await?;
-    let avatar_path = bob.dir.path().join("avatar.png");
+    let bob1 = &TestContext::new().await;
+    bob1.configure_addr(bob_addr).await;
+    bob1.set_config(Config::Displayname, Some("New Bob")).await?;
+    let avatar_path = bob1.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
-    bob.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
+    bob1.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
         .await?;
     SystemTime::shift(Duration::from_secs(1));
-    let vcard1 = make_vcard(bob, &[ContactId::SELF]).await?;
+    let vcard1 = make_vcard(bob1, &[ContactId::SELF]).await?;
     let alice_bob_id1 = import_vcard(alice, &vcard1).await?[0];
     assert_ne!(alice_bob_id1, alice_bob_id);
     let alice_bob_contact = Contact::get_by_id(alice, alice_bob_id).await?;
@@ -1188,14 +1188,18 @@ async fn test_import_vcard_key_change() -> Result<()> {
     let alice_bob_contact1 = Contact::get_by_id(alice, alice_bob_id1).await?;
     assert_eq!(alice_bob_contact1.get_authname(), "New Bob");
     assert!(alice_bob_contact1.get_profile_image(alice).await?.is_some());
+
+    // Last message is still the same,
+    // no new messages are added.
     let msg = alice.get_last_msg_in(chat_id).await;
-    assert!(msg.is_info());
     assert_eq!(
         msg.get_text(),
-        stock_str::contact_setup_changed(alice, bob_addr).await
+        "moin"
     );
-    let sent_msg = alice.send_text(chat_id, "moin").await;
-    let msg = bob.recv_msg(&sent_msg).await;
+
+    let chat_id1 = ChatId::create_for_contact(alice, alice_bob_id1).await?;
+    let sent_msg = alice.send_text(chat_id1, "moin").await;
+    let msg = bob1.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
 
     // The old vCard is imported, but doesn't change Bob's key for Alice.
