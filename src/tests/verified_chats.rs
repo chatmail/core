@@ -891,7 +891,7 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let fiona = &tcm.fiona().await;
     enable_verified_oneonone_chats(&[alice, bob, fiona]).await;
 
-    let alice_fiona_contact_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
+    let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
     // Bob and Fiona scan Alice's QR code.
     tcm.execute_securejoin(bob, alice).await;
@@ -920,7 +920,7 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let fiona_received_message = fiona.recv_msg(&bob_sent_message).await;
     assert_eq!(
         fiona_received_message.get_text(),
-        "[The message was sent with non-verified encryption. See 'Info' for more details]"
+        "[The message was sent by non-verified contact. See 'Info' for more details]"
     );
 
     Ok(())
