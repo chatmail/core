@@ -71,7 +71,7 @@ impl Context {
     /// Deprecated since 2025-02; use `add_transport_from_qr()`
     /// or `add_transport()` instead.
     pub async fn configure(&self) -> Result<()> {
-        let param = EnteredLoginParam::load(self).await?;
+        let param = EnteredLoginParam::load_legacy(self).await?;
 
         self.add_transport_inner(&param).await
     }
@@ -147,7 +147,7 @@ impl Context {
             progress!(self, 0, Some(error_msg.clone()));
             bail!(error_msg);
         } else {
-            param.save(self).await?;
+            param.save_legacy(self).await?;
             progress!(self, 1000);
         }
 

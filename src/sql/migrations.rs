@@ -1190,7 +1190,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 131)?;
     if dbversion < migration_version {
-        let entered_param = EnteredLoginParam::load(context).await?;
+        let entered_param = EnteredLoginParam::load_legacy(context).await?;
         let configured_param = ConfiguredLoginParam::load_legacy(context).await?;
 
         sql.execute_migration_transaction(

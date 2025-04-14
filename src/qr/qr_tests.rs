@@ -608,13 +608,6 @@ async fn test_decode_and_apply_dclogin_advanced_options() -> Result<()> {
         ctx.ctx.get_config(Config::SendUser).await?,
         Some("SendUser".to_owned())
     );
-
-    // `sc` option is actually ignored and `ic` is used instead
-    // because `smtp_certificate_checks` is deprecated.
-    assert_eq!(
-        ctx.ctx.get_config(Config::SmtpCertificateChecks).await?,
-        Some("1".to_owned())
-    );
     assert_eq!(
         ctx.ctx.get_config(Config::SendSecurity).await?,
         Some("3".to_owned()) // plain

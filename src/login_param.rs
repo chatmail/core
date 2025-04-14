@@ -139,7 +139,7 @@ pub struct EnteredLoginParam {
 
 impl EnteredLoginParam {
     /// Loads entered account settings.
-    pub(crate) async fn load(context: &Context) -> Result<Self> {
+    pub(crate) async fn load_legacy(context: &Context) -> Result<Self> {
         let addr = context
             .get_config(Config::Addr)
             .await?
@@ -234,7 +234,7 @@ impl EnteredLoginParam {
 
     /// Saves entered account settings,
     /// so that they can be prefilled if the user wants to configure the server again.
-    pub(crate) async fn save(&self, context: &Context) -> Result<()> {
+    pub(crate) async fn save_legacy(&self, context: &Context) -> Result<()> {
         context.set_config(Config::Addr, Some(&self.addr)).await?;
 
         context
@@ -924,7 +924,7 @@ mod tests {
             .await?;
         t.set_config(Config::MailPw, Some("foobarbaz")).await?;
 
-        let param = EnteredLoginParam::load(t).await?;
+        let param = EnteredLoginParam::load_legacy(t).await?;
         assert_eq!(param.addr, "alice@example.org");
         assert_eq!(
             param.certificate_checks,
@@ -933,13 +933,13 @@ mod tests {
 
         t.set_config(Config::ImapCertificateChecks, Some("1"))
             .await?;
-        let param = EnteredLoginParam::load(t).await?;
+        let param = EnteredLoginParam::load_legacy(t).await?;
         assert_eq!(param.certificate_checks, EnteredCertificateChecks::Strict);
 
         // Fail to load invalid settings, but do not panic.
         t.set_config(Config::ImapCertificateChecks, Some("999"))
             .await?;
-        assert!(EnteredLoginParam::load(t).await.is_err());
+        assert!(EnteredLoginParam::load_legacy(t).await.is_err());
 
         Ok(())
     }
@@ -966,7 +966,7 @@ mod tests {
             certificate_checks: Default::default(),
             oauth2: false,
         };
-        param.save(&t).await?;
+        param.save_legacy(&t).await?;
         assert_eq!(
             t.get_config(Config::Addr).await?.unwrap(),
             "alice@example.org"
@@ -975,7 +975,7 @@ mod tests {
         assert_eq!(t.get_config(Config::SendPw).await?, None);
         assert_eq!(t.get_config_int(Config::SendPort).await?, 2947);
 
-        assert_eq!(EnteredLoginParam::load(&t).await?, param);
+        assert_eq!(EnteredLoginParam::load_legacy(&t).await?, param);
 
         Ok(())
     }
