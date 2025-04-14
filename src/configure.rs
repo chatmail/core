@@ -36,7 +36,6 @@ use crate::login_param::{
 use crate::message::Message;
 use crate::oauth2::get_oauth2_addr;
 use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
-use crate::qr::set_account_from_qr;
 use crate::smtp::Smtp;
 use crate::sync::Sync::*;
 use crate::tools::time;
@@ -160,8 +159,19 @@ impl Context {
     pub async fn add_transport_from_qr(&self, qr: &str) -> Result<()> {
         self.stop_io().await;
 
+        // This code first sets the deprecated Config::Addr, Config::MailPw, etc.
+        // and then calls configure(), which loads them again.
+        // At some point, we will remove configure()
+        // and then simplify the code
+        // to directly create an EnteredLoginParam.
         let result = async move {
-            set_account_from_qr(self, qr).await?;
+            match crate::qr::check_qr(self, qr).await? {
+                crate::qr::Qr::Account { .. } => crate::qr::set_account_from_qr(self, qr).await?,
+                crate::qr::Qr::Login { address, options } => {
+                    crate::qr::configure_from_login_qr(self, &address, options).await?
+                }
+                _ => bail!("QR code does not contain account"),
+            }
             self.configure().await?;
             Ok(())
         }

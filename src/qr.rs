@@ -10,7 +10,7 @@ use deltachat_contact_tools::{addr_normalize, may_be_valid_addr, ContactAddress}
 use percent_encoding::{percent_decode_str, percent_encode, NON_ALPHANUMERIC};
 use serde::Deserialize;
 
-use self::dclogin_scheme::configure_from_login_qr;
+pub(crate) use self::dclogin_scheme::configure_from_login_qr;
 use crate::chat::ChatIdBlocked;
 use crate::config::Config;
 use crate::constants::Blocked;
