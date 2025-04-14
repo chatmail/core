@@ -2013,14 +2013,19 @@ async fn test_forward_basic() -> Result<()> {
     let alice_chat = alice.create_chat(&bob).await;
     let bob_chat = bob.create_chat(&alice).await;
 
-    let mut msg = Message::new_text("Hi Bob".to_owned());
-    let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
+    let mut alice_msg = Message::new_text("Hi Bob".to_owned());
+    let sent_msg = alice.send_msg(alice_chat.get_id(), &mut alice_msg).await;
     let msg = bob.recv_msg(&sent_msg).await;
+    assert_eq!(alice_msg.rfc724_mid, msg.rfc724_mid);
 
     forward_msgs(&bob, &[msg.id], bob_chat.get_id()).await?;
 
     let forwarded_msg = bob.pop_sent_msg().await;
     assert_eq!(bob_chat.id.get_msg_cnt(&bob).await?, 2);
+    assert_ne!(
+        forwarded_msg.load_from_db().await.rfc724_mid,
+        msg.rfc724_mid,
+    );
     let msg = alice.recv_msg(&forwarded_msg).await;
     assert_eq!(msg.get_text(), "Hi Bob");
     assert!(msg.is_forwarded());
