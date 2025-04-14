@@ -28,8 +28,9 @@ use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::log::LogExt;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
-use crate::message::{self, Message, MessageState, MsgId};
+use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
 use crate::peerstate::Peerstate;
@@ -1032,6 +1033,18 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "self_reporting",
+            self.get_config_bool(Config::SelfReporting)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "last_self_report_sent",
+            self.get_config_i64(Config::LastSelfReportSent)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
@@ -1151,7 +1164,8 @@ impl Context {
             Some(id) => id,
             None => {
                 let id = create_id();
-                self.set_config(Config::SelfReportingId, Some(&id)).await?;
+                self.set_config_internal(Config::SelfReportingId, Some(&id))
+                    .await?;
                 id
             }
         };
@@ -1165,7 +1179,15 @@ impl Context {
     ///
     /// On the other end, a bot will receive the message and make it available
     /// to Delta Chat's developers.
-    pub async fn draft_self_report(&self) -> Result<ChatId> {
+    pub async fn send_self_report(&self) -> Result<ChatId> {
+        info!(self, "Sending self report.");
+        // Setting `Config::LastHousekeeping` at the beginning avoids endless loops when things do not
+        // work out for whatever reason or are interrupted by the OS.
+        self.set_config_internal(Config::LastSelfReportSent, Some(&time().to_string()))
+            .await
+            .log_err(self)
+            .ok();
+
         const SELF_REPORTING_BOT: &str = "self_reporting@testrun.org";
 
         let contact_id = Contact::create(self, "Statistics bot", SELF_REPORTING_BOT).await?;
@@ -1196,9 +1218,26 @@ impl Context {
             .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
             .await?;
 
-        let mut msg = Message::new_text(self.get_self_report().await?);
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_text(
+            "The attachment contains anonymous usage statistics, \
+because you enabled this in the settings. \
+This helps us improve the security of Delta Chat. \
+See TODO[blog post] for more information."
+                .to_string(),
+        );
+        msg.set_file_from_bytes(
+            self,
+            "statistics.txt",
+            self.get_self_report().await?.as_bytes(),
+            Some("text/plain"),
+        )?;
 
-        chat_id.set_draft(self, Some(&mut msg)).await?;
+        crate::chat::send_msg(self, chat_id, &mut msg)
+            .await
+            .context("Failed to send self_reporting message")
+            .log_err(self)
+            .ok();
 
         Ok(chat_id)
     }
