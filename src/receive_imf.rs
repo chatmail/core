@@ -415,7 +415,7 @@ pub(crate) async fn receive_imf_inner(
         received_msg = None;
     }
 
-    let verified_encryption = has_verified_encryption(&mime_parser, from_id)?;
+    let verified_encryption = has_verified_encryption(context, &mime_parser, from_id).await?;
 
     if verified_encryption == VerifiedEncryption::Verified {
         mark_recipients_as_verified(context, from_id, &to_ids, &mime_parser).await?;
@@ -3001,7 +3001,8 @@ enum VerifiedEncryption {
 /// Checks whether the message is allowed to appear in a protected chat.
 ///
 /// This means that it is encrypted and signed with a verified key.
-fn has_verified_encryption(
+async fn has_verified_encryption(
+    context: &Context,
     mimeparser: &MimeMessage,
     from_id: ContactId,
 ) -> Result<VerifiedEncryption> {
@@ -3011,34 +3012,37 @@ fn has_verified_encryption(
         return Ok(NotVerified("This message is not encrypted".to_string()));
     };
 
+    if from_id == ContactId::SELF {
+        // TODO: check that the message is signed with our key?
+        return Ok(Verified);
+    }
+
     // ensure, the contact is verified
     // and the message is signed with a verified key of the sender.
     // this check is skipped for SELF as there is no proper SELF-peerstate
     // and results in group-splits otherwise.
-    if from_id != ContactId::SELF {
-        // FIXME
-        /*
-        let Some(peerstate) = &mimeparser.peerstate else {
-            return Ok(NotVerified(
-                "No peerstate, the contact isn't verified".to_string(),
-            ));
-        };
+    let from_contact =
+        Contact::get_by_id(context, from_id).await?;
 
-        let signed_with_verified_key = peerstate
-            .verified_key_fingerprint
-            .as_ref()
-            .filter(|fp| mimeparser.signatures.contains(fp))
-            .is_some();
+    let Some(fingerprint) = from_contact.fingerprint() else {
+        return Ok(NotVerified(
+            "The message was sent without encryption".to_string(),
+        ));
+    };
 
-        if !signed_with_verified_key {
-            return Ok(NotVerified(
-                "The message was sent with non-verified encryption".to_string(),
-            ));
-        }
-        */
+    if from_contact.get_verifier_id(context).await?.is_none() {
+        return Ok(NotVerified("The message was sent by non-verified contact.".to_string()));
     }
+    let fingerprint: Fingerprint = fingerprint.parse().context("Failed to parse fingerprint")?;
 
-    Ok(Verified)
+    let signed_with_verified_key = mimeparser.signatures.contains(&fingerprint);
+    if signed_with_verified_key {
+        Ok(Verified)
+    } else {
+        Ok(NotVerified(
+            "The message was sent with non-verified encryption".to_string(),
+        ))
+    }
 }
 
 async fn mark_recipients_as_verified(
