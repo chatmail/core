@@ -70,20 +70,7 @@ async fn test_stock_system_msg_simple() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stock_system_msg_add_member_by_me() {
     let t = TestContext::new().await;
-    assert_eq!(
-        msg_add_member_remote(&t, "alice@example.org").await,
-        "I added member alice@example.org."
-    );
-    assert_eq!(
-        msg_add_member_local(&t, "alice@example.org", ContactId::SELF).await,
-        "You added member alice@example.org."
-    )
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_stock_system_msg_add_member_by_me_with_displayname() {
-    let t = TestContext::new().await;
-    Contact::create(&t, "Alice", "alice@example.org")
+    let alice_contact_id = Contact::create(&t, "Alice", "alice@example.org")
         .await
         .expect("failed to create contact");
     assert_eq!(
@@ -91,7 +78,23 @@ async fn test_stock_system_msg_add_member_by_me_with_displayname() {
         "I added member alice@example.org."
     );
     assert_eq!(
-        msg_add_member_local(&t, "alice@example.org", ContactId::SELF).await,
+        msg_add_member_local(&t, alice_contact_id, ContactId::SELF).await,
+        "You added member alice@example.org."
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stock_system_msg_add_member_by_me_with_displayname() {
+    let t = TestContext::new().await;
+    let alice_contact_id = Contact::create(&t, "Alice", "alice@example.org")
+        .await
+        .expect("failed to create contact");
+    assert_eq!(
+        msg_add_member_remote(&t, "alice@example.org").await,
+        "I added member alice@example.org."
+    );
+    assert_eq!(
+        msg_add_member_local(&t, alice_contact_id, ContactId::SELF).await,
         "You added member Alice."
     );
 }
@@ -99,16 +102,14 @@ async fn test_stock_system_msg_add_member_by_me_with_displayname() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stock_system_msg_add_member_by_other_with_displayname() {
     let t = TestContext::new().await;
-    let contact_id = {
-        Contact::create(&t, "Alice", "alice@example.org")
-            .await
-            .expect("Failed to create contact Alice");
-        Contact::create(&t, "Bob", "bob@example.com")
-            .await
-            .expect("failed to create bob")
-    };
+    let alice_contact_id = Contact::create(&t, "Alice", "alice@example.org")
+        .await
+        .expect("Failed to create contact Alice");
+    let bob_contact_id = Contact::create(&t, "Bob", "bob@example.com")
+        .await
+        .expect("failed to create bob");
     assert_eq!(
-        msg_add_member_local(&t, "alice@example.org", contact_id,).await,
+        msg_add_member_local(&t, alice_contact_id, bob_contact_id).await,
         "Member Alice added by Bob."
     );
 }

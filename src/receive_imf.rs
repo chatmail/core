@@ -2405,7 +2405,7 @@ async fn apply_group_changes(
                 silent = true;
                 Some(stock_str::msg_group_left_local(context, from_id).await)
             } else {
-                Some(stock_str::msg_del_member_local(context, removed_addr, from_id).await)
+                Some(stock_str::msg_del_member_local(context, id, from_id).await)
             };
         } else {
             warn!(context, "Removed {removed_addr:?} has no contact id.")
@@ -2413,16 +2413,18 @@ async fn apply_group_changes(
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
             let fingerprint = key.dc_fingerprint().hex();
-            if let Some(contact_id) = lookup_pgp_contact_by_fingerprint(context, &fingerprint).await? {
+            if let Some(contact_id) =
+                lookup_pgp_contact_by_fingerprint(context, &fingerprint).await?
+            {
                 added_id = Some(contact_id);
+                better_msg =
+                    Some(stock_str::msg_add_member_local(context, contact_id, from_id).await);
             } else {
                 warn!(context, "Added {added_addr:?} has no contact id.");
             }
         } else {
             warn!(context, "Added {added_addr:?} has no gossiped key.");
         }
-
-        better_msg = Some(stock_str::msg_add_member_local(context, added_addr, from_id).await);
     }
 
     let group_name_timestamp = mime_parser
@@ -2673,7 +2675,7 @@ async fn group_changes_msgs(
     removed_ids: &HashSet<ContactId>,
     chat_id: ChatId,
 ) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
-    let mut group_changes_msgs = Vec::new();
+    let mut group_changes_msgs: Vec<(String, SystemMessage, Option<ContactId>)> = Vec::new();
     if !added_ids.is_empty() {
         warn!(
             context,
@@ -2688,21 +2690,17 @@ async fn group_changes_msgs(
     }
     group_changes_msgs.reserve(added_ids.len() + removed_ids.len());
     for contact_id in added_ids {
-        let contact = Contact::get_by_id(context, *contact_id).await?;
         group_changes_msgs.push((
-            stock_str::msg_add_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
-                .await,
+            stock_str::msg_add_member_local(context, *contact_id, ContactId::UNDEFINED).await,
             SystemMessage::MemberAddedToGroup,
-            Some(contact.id),
+            Some(*contact_id),
         ));
     }
     for contact_id in removed_ids {
-        let contact = Contact::get_by_id(context, *contact_id).await?;
         group_changes_msgs.push((
-            stock_str::msg_del_member_local(context, contact.get_addr(), ContactId::UNDEFINED)
-                .await,
+            stock_str::msg_del_member_local(context, *contact_id, ContactId::UNDEFINED).await,
             SystemMessage::MemberRemovedFromGroup,
-            Some(contact.id),
+            Some(*contact_id),
         ));
     }
 
@@ -3210,7 +3208,7 @@ async fn lookup_pgp_contact_by_fingerprint(
         .query_row_optional(
             "SELECT id FROM contacts
              WHERE contacts.fingerprint=?",
-             (fingerprint,),
+            (fingerprint,),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
                 Ok(contact_id)

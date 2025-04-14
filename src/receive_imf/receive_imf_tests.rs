@@ -4846,7 +4846,7 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     assert!(msg.is_info());
     assert_eq!(
         msg.get_text(),
-        stock_str::msg_add_member_local(alice, &fiona_addr, ContactId::SELF).await
+        stock_str::msg_add_member_local(alice, alice_fiona_id, ContactId::SELF).await
     );
 
     remove_contact_from_chat(alice, group_id, alice_bob_id).await?;
@@ -4855,7 +4855,7 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     assert!(msg.is_info());
     assert_eq!(
         msg.get_text(),
-        stock_str::msg_del_member_local(alice, &bob_addr, ContactId::SELF,).await
+        stock_str::msg_del_member_local(alice, alice_bob_id, ContactId::SELF).await
     );
     Ok(())
 }

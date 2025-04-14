@@ -3909,8 +3909,8 @@ pub(crate) async fn add_contact_to_chat_ex(
     if chat.typ == Chattype::Group && chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
-        let contact_addr = contact.get_addr().to_lowercase();
-        msg.text = stock_str::msg_add_member_local(context, &contact_addr, ContactId::SELF).await;
+        let contact_addr = contact.get_addr().to_lowercase(); // FIXME contact is not identified by addr
+        msg.text = stock_str::msg_add_member_local(context, contact.id, ContactId::SELF).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
@@ -4104,12 +4104,9 @@ pub async fn remove_contact_from_chat(
                     if contact_id == ContactId::SELF {
                         msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
                     } else {
-                        msg.text = stock_str::msg_del_member_local(
-                            context,
-                            contact.get_addr(),
-                            ContactId::SELF,
-                        )
-                        .await;
+                        msg.text =
+                            stock_str::msg_del_member_local(context, contact_id, ContactId::SELF)
+                                .await;
                     }
                     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
                     msg.param.set(Param::Arg, contact.get_addr().to_lowercase());
