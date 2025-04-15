@@ -85,7 +85,7 @@ mod tests {
             assert_eq!(result, response.to_owned());
         }
         {
-            let request = r#"{"jsonrpc":"2.0","method":"batch_set_config","id":2,"params":[1,{"addr":"","mail_user":"","mail_pw":"","mail_server":"","mail_port":"","mail_security":"","imap_certificate_checks":"","send_user":"","send_pw":"","send_server":"","send_port":"","send_security":"","smtp_certificate_checks":""}]}"#;
+            let request = r#"{"jsonrpc":"2.0","method":"batch_set_config","id":2,"params":[1,{"addr":"","mail_user":"","mail_pw":"","mail_server":"","mail_port":"","mail_security":"","imap_certificate_checks":"","send_user":"","send_pw":"","send_server":"","send_port":"","send_security":""}]}"#;
             let response = r#"{"jsonrpc":"2.0","id":2,"result":null}"#;
             session.handle_incoming(request).await;
             let result = receiver.recv().await?;

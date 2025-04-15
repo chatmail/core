@@ -285,7 +285,6 @@ async fn test_get_info_completeness() {
         "send_security",
         "server_flags",
         "skip_start_messages",
-        "smtp_certificate_checks",
         "proxy_url",      // May contain passwords, don't leak it to the logs.
         "socks5_enabled", // SOCKS5 options are deprecated.
         "socks5_host",
@@ -311,6 +310,22 @@ async fn test_get_info_completeness() {
             );
         }
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_info_configured() -> Result<()> {
+    let alice = TestContext::new_alice().await;
+    let info = alice.get_info().await?;
+    let entered_account_settings = &info["entered_account_settings"];
+    assert_eq!(entered_account_settings, "unset imap:unset:0:unset:0:Automatic:AUTH_NORMAL smtp:unset:0:unset:0:Automatic:AUTH_NORMAL cert_automatic");
+
+    let used_account_settings = &info["used_account_settings"];
+    assert_eq!(
+        used_account_settings,
+        "alice@example.org imap:[] smtp:[] provider:none cert_automatic"
+    );
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

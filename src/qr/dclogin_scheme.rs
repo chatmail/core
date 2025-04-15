@@ -247,9 +247,6 @@ pub(crate) async fn configure_from_login_qr(
                 context
                     .set_config_internal(Config::ImapCertificateChecks, Some(&code.to_string()))
                     .await?;
-                context
-                    .set_config_internal(Config::SmtpCertificateChecks, Some(&code.to_string()))
-                    .await?;
             }
             Ok(())
         }

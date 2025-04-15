@@ -28,7 +28,7 @@ use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
-use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
+use crate::login_param::ConfiguredLoginParam;
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
@@ -774,7 +774,7 @@ impl Context {
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
         let unset = "0";
-        let l = EnteredLoginParam::load(self).await?;
+        let l = self.list_transports().await?;
         let l2 = ConfiguredLoginParam::load(self)
             .await?
             .map_or_else(|| "Not configured".to_string(), |param| param.to_string());
@@ -867,7 +867,13 @@ impl Context {
         );
         res.insert("is_configured", is_configured.to_string());
         res.insert("proxy_enabled", proxy_enabled.to_string());
-        res.insert("entered_account_settings", l.to_string());
+        res.insert(
+            "entered_account_settings",
+            l.iter()
+                .map(|l| l.to_string())
+                .collect::<Vec<_>>()
+                .join("; "),
+        );
         res.insert("used_account_settings", l2);
 
         if let Some(server_id) = &*self.server_id.read().await {
