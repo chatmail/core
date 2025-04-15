@@ -780,21 +780,21 @@ CCCB 5AA9 F6E1 141C 9431
 /// synchronized when the message is not encrypted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_synchronize_status() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
     // Alice has two devices.
-    let alice1 = TestContext::new_alice().await;
-    let alice2 = TestContext::new_alice().await;
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
 
     // Bob has one device.
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let default_status = alice1.get_config(Config::Selfstatus).await?;
 
     alice1
         .set_config(Config::Selfstatus, Some("New status"))
         .await?;
-    let chat = alice1
-        .create_chat_with_contact("Bob", "bob@example.net")
-        .await;
+    let chat = alice1.create_email_chat(bob).await;
 
     // Alice sends a message to Bob from the first device.
     send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
@@ -813,17 +813,8 @@ async fn test_synchronize_status() -> Result<()> {
     // Message was not encrypted, so status is not copied.
     assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
 
-    // Bob replies.
-    let chat = bob
-        .create_chat_with_contact("Alice", "alice@example.org")
-        .await;
-
-    send_text_msg(&bob, chat.id, "Reply".to_string()).await?;
-    let sent_msg = bob.pop_sent_msg().await;
-    alice1.recv_msg(&sent_msg).await;
-    alice2.recv_msg(&sent_msg).await;
-
-    // Alice sends second message.
+    // Alice sends encrypted message.
+    let chat = alice1.create_chat(bob).await;
     send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
