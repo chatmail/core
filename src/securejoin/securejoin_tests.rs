@@ -686,8 +686,10 @@ async fn test_unknown_sender() -> Result<()> {
 }
 
 /// Tests that Bob gets Alice as verified
-/// if `vc-contact-confirm` is lost but Alice then sends
-/// a message to Bob in a verified 1:1 chat with a `Chat-Verified` header.
+/// if `vc-contact-confirm` is lost.
+/// Previously `vc-contact-confirm` was used
+/// to confirm backward verification,
+/// but backward verification is not tracked anymore.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_lost_contact_confirm() {
     let mut tcm = TestContextManager::new();
@@ -715,35 +717,15 @@ async fn test_lost_contact_confirm() {
     alice.recv_msg_trash(&sent).await;
 
     // Alice has Bob verified now.
-    let contact_bob_id = Contact::lookup_id_by_addr(&alice.ctx, "bob@example.net", Origin::Unknown)
-        .await
-        .expect("Error looking up contact")
-        .expect("Contact not found");
-    let contact_bob = Contact::get_by_id(&alice.ctx, contact_bob_id)
-        .await
-        .unwrap();
+    let contact_bob = alice.add_or_lookup_pgp_contact(&bob)
+        .await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await.unwrap(), true);
 
     // Alice sends vc-contact-confirm, but it gets lost.
     let _sent_vc_contact_confirm = alice.pop_sent_msg().await;
 
-    // Bob should not yet have Alice verified
-    let contact_alice_id = Contact::lookup_id_by_addr(&bob, "alice@example.org", Origin::Unknown)
-        .await
-        .expect("Error looking up contact")
-        .expect("Contact not found");
-    let contact_alice = Contact::get_by_id(&bob, contact_alice_id).await.unwrap();
-    assert_eq!(contact_alice.is_verified(&bob).await.unwrap(), false);
-
-    // Alice sends a text message to Bob.
-    let received_hello = tcm.send_recv(&alice, &bob, "Hello!").await;
-    let chat_id = received_hello.chat_id;
-    let chat = Chat::load_from_db(&bob, chat_id).await.unwrap();
-    assert_eq!(chat.is_protected(), true);
-
-    // Received text message in a verified 1:1 chat results in backward verification
-    // and Bob now marks alice as verified.
-    let contact_alice = Contact::get_by_id(&bob, contact_alice_id).await.unwrap();
+    // Bob has alice as verified too, even though vc-contact-confirm is lost.
+    let contact_alice = bob.add_or_lookup_pgp_contact(&alice).await;
     assert_eq!(contact_alice.is_verified(&bob).await.unwrap(), true);
 }
 
