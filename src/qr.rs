@@ -11,7 +11,6 @@ use percent_encoding::{percent_decode_str, percent_encode, NON_ALPHANUMERIC};
 use serde::Deserialize;
 
 pub(crate) use self::dclogin_scheme::configure_from_login_qr;
-use crate::chat::ChatIdBlocked;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
