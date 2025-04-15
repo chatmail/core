@@ -143,12 +143,8 @@ async fn test_quote() {
         .await
         .unwrap();
 
-    let chat = d.create_chat_with_contact("", "dest@example.com").await;
-
-    let mut msg = Message::new_text("Quoted message".to_string());
-
-    let msg_id = chat::send_msg(ctx, chat.id, &mut msg).await.unwrap();
-    let msg = Message::load_from_db(ctx, msg_id).await.unwrap();
+    d.create_chat_with_contact("", "dest@example.com").await;
+    let msg = Message::new_text("Quoted message".to_string());
     assert!(!msg.rfc724_mid.is_empty());
 
     let mut msg2 = Message::new(Viewtype::Text);

@@ -2026,7 +2026,9 @@ async fn test_forward_basic() -> Result<()> {
         forwarded_msg.load_from_db().await.rfc724_mid,
         msg.rfc724_mid,
     );
+    let msg_bob = Message::load_from_db(&bob, forwarded_msg.sender_msg_id).await?;
     let msg = alice.recv_msg(&forwarded_msg).await;
+    assert_eq!(msg.rfc724_mid(), msg_bob.rfc724_mid());
     assert_eq!(msg.get_text(), "Hi Bob");
     assert!(msg.is_forwarded());
     Ok(())
