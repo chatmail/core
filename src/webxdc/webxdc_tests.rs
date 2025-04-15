@@ -2195,3 +2195,25 @@ async fn test_webxdc_href() -> Result<()> {
 
     Ok(())
 }
+
+/// Test that the draft `selfAddr` is equal to the `selfAddr` of the sent message.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_addr_consistency() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice_chat = alice
+        .create_group_with_members(ProtectionStatus::Unprotected, "No friends :(", &[])
+        .await;
+    let mut instance = create_webxdc_instance(
+        alice,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+    )?;
+    alice_chat.set_draft(alice, Some(&mut instance)).await?;
+    let self_addr = instance.get_webxdc_self_addr(alice).await?;
+    let sent = alice.send_msg(alice_chat, &mut instance).await;
+    let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
+    assert_eq!(db_msg.get_webxdc_self_addr(alice).await?, self_addr);
+    assert_eq!(alice_chat.get_msg_cnt(alice).await?, 1);
+    Ok(())
+}
