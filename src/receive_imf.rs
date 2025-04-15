@@ -23,6 +23,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
+use crate::key::load_self_public_key_opt;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::message::{
@@ -3021,8 +3022,7 @@ async fn has_verified_encryption(
     // and the message is signed with a verified key of the sender.
     // this check is skipped for SELF as there is no proper SELF-peerstate
     // and results in group-splits otherwise.
-    let from_contact =
-        Contact::get_by_id(context, from_id).await?;
+    let from_contact = Contact::get_by_id(context, from_id).await?;
 
     let Some(fingerprint) = from_contact.fingerprint() else {
         return Ok(NotVerified(
@@ -3031,7 +3031,9 @@ async fn has_verified_encryption(
     };
 
     if from_contact.get_verifier_id(context).await?.is_none() {
-        return Ok(NotVerified("The message was sent by non-verified contact.".to_string()));
+        return Ok(NotVerified(
+            "The message was sent by non-verified contact".to_string(),
+        ));
     }
     let fingerprint: Fingerprint = fingerprint.parse().context("Failed to parse fingerprint")?;
 
@@ -3207,7 +3209,7 @@ async fn lookup_pgp_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
-    let contact_id: Option<ContactId> = context
+    if let Some(contact_id) = context
         .sql
         .query_row_optional(
             "SELECT id FROM contacts
@@ -3218,8 +3220,18 @@ async fn lookup_pgp_contact_by_fingerprint(
                 Ok(contact_id)
             },
         )
-        .await?;
-    Ok(contact_id)
+        .await?
+    {
+        Ok(Some(contact_id))
+    } else if let Some(self_public_key) = load_self_public_key_opt(context).await? {
+        if self_public_key.dc_fingerprint().hex() == fingerprint {
+            Ok(Some(ContactId::SELF))
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
 }
 
 /// Looks up PGP-contacts by email addresses.
