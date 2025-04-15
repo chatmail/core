@@ -78,7 +78,7 @@ def test_lowercase_address(acfactory) -> None:
     addr, password = acfactory.get_credentials()
     addr_upper = addr.upper()
     account = acfactory.get_unconfigured_account()
-    account.add_transport(
+    account.add_or_update_transport(
         {
             "addr": addr_upper,
             "password": password,
