@@ -717,8 +717,7 @@ async fn test_lost_contact_confirm() {
     alice.recv_msg_trash(&sent).await;
 
     // Alice has Bob verified now.
-    let contact_bob = alice.add_or_lookup_pgp_contact(&bob)
-        .await;
+    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await.unwrap(), true);
 
     // Alice sends vc-contact-confirm, but it gets lost.

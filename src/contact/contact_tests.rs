@@ -1154,7 +1154,8 @@ async fn test_import_vcard_key_change() -> Result<()> {
 
     let bob1 = &TestContext::new().await;
     bob1.configure_addr(bob_addr).await;
-    bob1.set_config(Config::Displayname, Some("New Bob")).await?;
+    bob1.set_config(Config::Displayname, Some("New Bob"))
+        .await?;
     let avatar_path = bob1.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
@@ -1174,10 +1175,7 @@ async fn test_import_vcard_key_change() -> Result<()> {
     // Last message is still the same,
     // no new messages are added.
     let msg = alice.get_last_msg_in(chat_id).await;
-    assert_eq!(
-        msg.get_text(),
-        "moin"
-    );
+    assert_eq!(msg.get_text(), "moin");
 
     let chat_id1 = ChatId::create_for_contact(alice, alice_bob_id1).await?;
     let sent_msg = alice.send_text(chat_id1, "moin").await;
