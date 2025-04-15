@@ -890,8 +890,8 @@ impl Contact {
                     .query_row(
                         "SELECT id, name, addr, origin, authname
                          FROM contacts
-                         WHERE (?1<>'' AND fingerprint=?1)
-                         OR (?1='' AND addr=?2 COLLATE NOCASE)",
+                         WHERE fingerprint=?1 AND
+                         (?1<>'' OR addr=?2 COLLATE NOCASE)",
                         (fingerprint, addr),
                         |row| {
                             let row_id: u32 = row.get(0)?;
