@@ -836,12 +836,14 @@ async fn test_synchronize_status() -> Result<()> {
 /// Tests that DC_EVENT_SELFAVATAR_CHANGED is emitted on avatar changes.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_selfavatar_changed_event() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
     // Alice has two devices.
-    let alice1 = TestContext::new_alice().await;
-    let alice2 = TestContext::new_alice().await;
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
 
     // Bob has one device.
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     assert_eq!(alice1.get_config(Config::Selfavatar).await?, None);
 
@@ -857,19 +859,8 @@ async fn test_selfavatar_changed_event() -> Result<()> {
         .get_matching(|e| matches!(e, EventType::SelfavatarChanged))
         .await;
 
-    // Bob sends a message so that Alice can encrypt to him.
-    let chat = bob
-        .create_chat_with_contact("Alice", "alice@example.org")
-        .await;
-
-    send_text_msg(&bob, chat.id, "Reply".to_string()).await?;
-    let sent_msg = bob.pop_sent_msg().await;
-    alice1.recv_msg(&sent_msg).await;
-    alice2.recv_msg(&sent_msg).await;
-
     // Alice sends a message.
-    let alice1_chat_id = alice1.get_last_msg().await.chat_id;
-    alice1_chat_id.accept(&alice1).await?;
+    let alice1_chat_id = alice1.create_chat(bob).await.id;
     send_text_msg(&alice1, alice1_chat_id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
