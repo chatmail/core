@@ -741,7 +741,9 @@ impl TestContext {
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
     pub async fn add_or_lookup_email_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_email_contact_id(other).await;
-        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
+        let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
+        debug_assert_eq!(contact.is_pgp_contact(), false);
+        contact
     }
 
     /// Returns the [`ContactId`] for the other [`TestContext`], creating it if necessary.
