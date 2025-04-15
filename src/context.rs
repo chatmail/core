@@ -13,6 +13,7 @@ use async_channel::{self as channel, Receiver, Sender};
 use pgp::types::PublicKeyTrait;
 use pgp::SignedPublicKey;
 use ratelimit::Ratelimit;
+use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::aheader::EncryptPreference;
@@ -1053,7 +1054,17 @@ impl Context {
     }
 
     async fn get_self_report(&self) -> Result<String> {
-        #[derive(Default)]
+        #[derive(Serialize)]
+        struct Statistics {
+            core_version: String,
+            num_msgs: u32,
+            num_chats: u32,
+            db_size: u64,
+            key_created: i64,
+            chat_numbers: ChatNumbers,
+            self_reporting_id: String,
+        }
+        #[derive(Default, Serialize)]
         struct ChatNumbers {
             protected: u32,
             protection_broken: u32,
@@ -1063,9 +1074,6 @@ impl Context {
             unencrypted_mua: u32,
         }
 
-        let mut res = String::new();
-        res += &format!("core_version {}\n", get_version_str());
-
         let num_msgs: u32 = self
             .sql
             .query_get_value(
@@ -1074,21 +1082,20 @@ impl Context {
             )
             .await?
             .unwrap_or_default();
-        res += &format!("num_msgs {}\n", num_msgs);
 
         let num_chats: u32 = self
             .sql
             .query_get_value("SELECT COUNT(*) FROM chats WHERE id>9 AND blocked!=1", ())
             .await?
             .unwrap_or_default();
-        res += &format!("num_chats {}\n", num_chats);
 
         let db_size = tokio::fs::metadata(&self.sql.dbfile).await?.len();
-        res += &format!("db_size_bytes {}\n", db_size);
 
-        let secret_key = &load_self_secret_key(self).await?.primary_key;
-        let key_created = secret_key.created_at().timestamp();
-        res += &format!("key_created {}\n", key_created);
+        let key_created = load_self_secret_key(self)
+            .await?
+            .primary_key
+            .created_at()
+            .timestamp();
 
         // how many of the chats active in the last months are:
         // - protected
@@ -1098,7 +1105,7 @@ impl Context {
         // - unencrypted and the contact uses Delta Chat
         // - unencrypted and the contact uses a classical MUA
         let three_months_ago = time().saturating_sub(3600 * 24 * 30 * 3);
-        let chats = self
+        let chat_numbers = self
             .sql
             .query_map(
                 "SELECT c.protected, m.param, m.msgrmsg
@@ -1153,12 +1160,6 @@ impl Context {
                 },
             )
             .await?;
-        res += &format!("chats_protected {}\n", chats.protected);
-        res += &format!("chats_protection_broken {}\n", chats.protection_broken);
-        res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
-        res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
-        res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);
-        res += &format!("chats_unencrypted_mua {}\n", chats.unencrypted_mua);
 
         let self_reporting_id = match self.get_config(Config::SelfReportingId).await? {
             Some(id) => id,
@@ -1169,9 +1170,17 @@ impl Context {
                 id
             }
         };
-        res += &format!("self_reporting_id {}", self_reporting_id);
+        let statistics = Statistics {
+            core_version: get_version_str().to_string(),
+            num_msgs,
+            num_chats,
+            db_size,
+            key_created,
+            chat_numbers,
+            self_reporting_id,
+        };
 
-        Ok(res)
+        Ok(serde_json::to_string_pretty(&statistics)?)
     }
 
     /// Drafts a message with statistics about the usage of Delta Chat.
