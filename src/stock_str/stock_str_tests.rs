@@ -79,7 +79,7 @@ async fn test_stock_system_msg_add_member_by_me() {
     );
     assert_eq!(
         msg_add_member_local(&t, alice_contact_id, ContactId::SELF).await,
-        "You added member alice@example.org."
+        "You added member Alice."
     )
 }
 
