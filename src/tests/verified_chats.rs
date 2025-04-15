@@ -155,27 +155,19 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
     tcm.send_recv(&fiona_new, &alice, "I have a new device")
         .await;
 
-    // The chat should be and stay unprotected
+    // Alice gets a new unprotected chat with new Fiona contact.
     {
-        let chat = alice.get_chat(&fiona_new).await;
+        let chat = alice.get_pgp_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(chat.is_protection_broken());
 
-        let msg1 = get_chat_msg(&alice, chat.id, 0, 3).await;
-        assert_eq!(msg1.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 1, 3).await;
-        assert_eq!(msg2.get_info_type(), SystemMessage::ChatProtectionDisabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 2, 3).await;
-        assert_eq!(msg2.text, "I have a new device");
+        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
+        assert_eq!(msg.text, "I have a new device");
 
         // After recreating the chat, it should still be unprotected
         chat.id.delete(&alice).await?;
 
         let chat = alice.create_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(!chat.is_protection_broken());
     }
 
     Ok(())
