@@ -1041,7 +1041,11 @@ async fn add_parts(
             }
         }
 
-        state = if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
+        state = if seen
+            || is_mdn
+            || chat_id_blocked == Blocked::Yes
+            || group_changes.silent
+            || mime_parser.from.addr == "self_reporting@testrun.org"
         // No check for `hidden` because only reactions are such and they should be `InFresh`.
         {
             MessageState::InSeen

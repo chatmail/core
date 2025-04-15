@@ -17,7 +17,7 @@ use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::aheader::EncryptPreference;
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{self, get_chat_cnt, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
@@ -1200,7 +1200,17 @@ impl Context {
         const SELF_REPORTING_BOT: &str = "self_reporting@testrun.org";
 
         let contact_id = Contact::create(self, "Statistics bot", SELF_REPORTING_BOT).await?;
-        let chat_id = ChatId::create_for_contact(self, contact_id).await?;
+        let chat_id = if let Some(res) = ChatId::lookup_by_contact(self, contact_id).await? {
+            // Already exists, no need to create.
+            res
+        } else {
+            let chat_id = ChatId::get_for_contact(self, contact_id).await?;
+            chat_id
+                .set_visibility(self, ChatVisibility::Archived)
+                .await?;
+            chat::set_muted(self, chat_id, MuteDuration::Forever).await?;
+            chat_id
+        };
 
         // We're including the bot's public key in Delta Chat
         // so that the first message to the bot can directly be encrypted:
