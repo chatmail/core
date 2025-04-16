@@ -7595,7 +7595,7 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated 2025-03
 #define DC_STR_SECUREJOIN_WAIT_TIMEOUT 191
 
-/// "That seems to take longer, maybe the contact or you are offline. However, the process continues in background, you can do something else…"
+/// "The contact must be online to proceed. This process will continue automatically in background."
 ///
 /// Used as info message.
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
