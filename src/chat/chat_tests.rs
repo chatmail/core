@@ -3046,7 +3046,7 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     a0b_chat_id.accept(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::CreateChat);
-    assert_eq!(alice0.get_chat(bob).await.blocked, Blocked::Not);
+    assert_eq!(alice0.get_pgp_chat(bob).await.blocked, Blocked::Not);
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
