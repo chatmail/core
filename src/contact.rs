@@ -1725,9 +1725,15 @@ WHERE type=? AND id IN (
                 true => chat::SyncAction::Block,
                 false => chat::SyncAction::Unblock,
             };
+            let sync_id = if let Some(fingerprint) = contact.fingerprint() {
+                chat::SyncId::ContactFingerprint(fingerprint.to_string())
+            } else {
+                chat::SyncId::ContactAddr(contact.addr.clone())
+            };
+
             chat::sync(
                 context,
-                chat::SyncId::ContactAddr(contact.addr.clone()),
+                sync_id,
                 action,
             )
             .await
