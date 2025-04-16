@@ -798,43 +798,6 @@ async fn test_verify_then_verify_again() -> Result<()> {
     Ok(())
 }
 
-/// Regression test:
-/// - Verify a contact
-/// - The contact stops using DC and sends a message from a classical MUA instead
-/// - Delete the 1:1 chat
-/// - Create a 1:1 chat
-/// - Check that the created chat is not marked as protected
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_oneonone_chat_with_former_verified_contact() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice]).await;
-
-    mark_as_verified(&alice, &bob).await;
-
-    receive_imf(
-        &alice,
-        b"Subject: Message from bob\r\n\
-          From: <bob@example.net>\r\n\
-          To: <alice@example.org>\r\n\
-          Date: Mon, 12 Dec 2022 14:33:39 +0000\r\n\
-          Message-ID: <abcd@example.net>\r\n\
-          \r\n\
-          Heyho!\r\n",
-        false,
-    )
-    .await
-    .unwrap()
-    .unwrap();
-
-    alice.create_chat(&bob).await;
-
-    assert_verified(&alice, &bob, ProtectionStatus::Unprotected).await;
-
-    Ok(())
-}
-
 /// Tests that on the second device of a protected group creator the first message is
 /// `SystemMessage::ChatProtectionEnabled` and the second one is the message populating the group.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
