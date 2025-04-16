@@ -522,7 +522,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_html_forwarding_encrypted() {
         let mut tcm = TestContextManager::new();
         // Alice receives a non-delta html-message
-        // (`ShowEmails=AcceptedContacts` lets Alice actually receive non-delta messages for known
+        // (`ShowEmails=All` lets Alice actually receive non-delta messages for known
         // contacts, the contact is marked as known by creating a chat using `chat_with_contact()`)
         let alice = &tcm.alice().await;
         alice

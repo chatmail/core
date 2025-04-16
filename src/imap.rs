@@ -2243,7 +2243,7 @@ pub(crate) async fn prefetch_should_download(
         Some(f) => f,
         None => return Ok(false),
     };
-    let (_from_id, blocked_contact, origin) =
+    let (_from_id, blocked_contact, _origin) =
         match from_field_to_contact_id(context, &from, true).await? {
             Some(res) => res,
             None => return Ok(false),
@@ -2257,7 +2257,6 @@ pub(crate) async fn prefetch_should_download(
     }
 
     let is_chat_message = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    let accepted_contact = origin.is_known();
     let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
         .await?
         .map(|parent| match parent.is_dc_message {
@@ -2272,10 +2271,7 @@ pub(crate) async fn prefetch_should_download(
     let show = is_autocrypt_setup_message
         || match show_emails {
             ShowEmails::Off => is_chat_message || is_reply_to_chat_message,
-            ShowEmails::AcceptedContacts => {
-                is_chat_message || is_reply_to_chat_message || accepted_contact
-            }
-            ShowEmails::All => true,
+            ShowEmails::All | ShowEmails::All1 => true,
         };
 
     let should_download = (show && !blocked_contact) || maybe_ndn;

@@ -113,11 +113,8 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    bob.set_config(
-        Config::ShowEmails,
-        Some(&ShowEmails::AcceptedContacts.to_string()),
-    )
-    .await?;
+    bob.set_config(Config::ShowEmails, Some(&ShowEmails::All.to_string()))
+        .await?;
     tcm.send_recv(alice, bob, "hi").await;
     receive_imf(
         bob,
