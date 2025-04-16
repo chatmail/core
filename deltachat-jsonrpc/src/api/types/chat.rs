@@ -30,6 +30,7 @@ pub struct FullChat {
     /// in the contact profile
     /// if 1:1 chat with this contact exists and is protected.
     is_protected: bool,
+    is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
@@ -108,6 +109,7 @@ impl FullChat {
             id: chat_id,
             name: chat.name.clone(),
             is_protected: chat.is_protected(),
+            is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,
@@ -159,6 +161,8 @@ pub struct BasicChat {
     /// in the contact profile
     /// if 1:1 chat with this contact exists and is protected.
     is_protected: bool,
+
+    is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
@@ -187,6 +191,7 @@ impl BasicChat {
             id: chat_id,
             name: chat.name.clone(),
             is_protected: chat.is_protected(),
+            is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,

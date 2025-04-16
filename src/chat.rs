@@ -1925,6 +1925,29 @@ impl Chat {
         self.protected == ProtectionStatus::Protected
     }
 
+    /// Returns true if the chat is encrypted.
+    pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
+        let is_encrypted = self.is_protected()
+            || match self.typ {
+                Chattype::Single => {
+                    let chat_contact_ids = get_chat_contacts(context, self.id).await?;
+                    if let Some(contact_id) = chat_contact_ids.first() {
+                        let contact = Contact::get_by_id(context, *contact_id).await?;
+                        contact.is_pgp_contact()
+                    } else {
+                        true
+                    }
+                }
+                Chattype::Group => {
+                    // Do not encrypt ad-hoc groups.
+                    !self.grpid.is_empty()
+                }
+                Chattype::Mailinglist => false,
+                Chattype::Broadcast => true,
+            };
+        Ok(is_encrypted)
+    }
+
     /// Returns true if the chat was protected, and then an incoming message broke this protection.
     ///
     /// This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
