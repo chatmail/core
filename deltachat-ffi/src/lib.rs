@@ -3196,6 +3196,18 @@ pub unsafe extern "C" fn dc_chat_is_protected(chat: *mut dc_chat_t) -> libc::c_i
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dc_chat_is_encrypted(chat: *mut dc_chat_t) -> libc::c_int {
+    if chat.is_null() {
+        eprintln!("ignoring careless call to dc_chat_is_encrypted()");
+        return 0;
+    }
+    let ffi_chat = &*chat;
+
+    block_on(ffi_chat.chat.is_encrypted(&ffi_chat.context))
+        .unwrap_or_log_default(&ffi_chat.context, "Failed dc_chat_is_encrypted") as libc::c_int
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_protection_broken(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
         eprintln!("ignoring careless call to dc_chat_is_protection_broken()");
