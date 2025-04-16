@@ -2959,12 +2959,13 @@ async fn test_blob_renaming() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_blocked() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let ba_chat = bob.create_chat(alice0).await;
     let sent_msg = bob.send_text(ba_chat.id, "hi").await;
@@ -2972,16 +2973,16 @@ async fn test_sync_blocked() -> Result<()> {
     alice1.recv_msg(&sent_msg).await;
     let a0b_contact_id = alice0.add_or_lookup_contact_id(&bob).await;
 
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Request);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Request);
     a0b_chat_id.accept(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
     a0b_chat_id.block(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Yes);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Yes);
     a0b_chat_id.unblock(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
 
     // Unblocking a 1:1 chat doesn't unblock the contact currently.
     Contact::unblock(alice0, a0b_contact_id).await?;
