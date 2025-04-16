@@ -232,6 +232,10 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     Ok(())
 }
 
+/// Tests that receiving unencrypted message
+/// does not disable protection of 1:1 chat.
+///
+/// Instead, an email-chat is created.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -255,23 +259,16 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     )
     .await?;
 
-    let contact_id = Contact::lookup_id_by_addr(&alice, "bob@example.net", Origin::Hidden)
-        .await?
-        .unwrap();
-
-    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 3).await;
+    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
     let enabled = stock_str::chat_protection_enabled(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 
-    let msg1 = get_chat_msg(&alice, alice_chat.id, 1, 3).await;
-    let disabled = stock_str::chat_protection_disabled(&alice, contact_id).await;
-    assert_eq!(msg1.text, disabled);
-    assert_eq!(msg1.param.get_cmd(), SystemMessage::ChatProtectionDisabled);
-
-    let msg2 = get_chat_msg(&alice, alice_chat.id, 2, 3).await;
-    assert_eq!(msg2.text, "hello".to_string());
-    assert!(!msg2.is_system_message());
+    let email_chat = alice.get_chat(&bob).await;
+    assert!(!email_chat.is_encrypted(&alice).await?);
+    let email_msg = get_chat_msg(&alice, email_chat.id, 0, 1).await;
+    assert_eq!(email_msg.text, "hello".to_string());
+    assert!(!email_msg.is_system_message());
 
     Ok(())
 }
