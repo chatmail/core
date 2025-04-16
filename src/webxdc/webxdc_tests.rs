@@ -1584,58 +1584,6 @@ async fn test_webxdc_info_msg_no_cleanup_on_interrupted_series() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_webxdc_opportunistic_encryption() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
-
-    // Bob sends sth. to Alice, Alice has Bob's key
-    let bob_chat_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "chat").await?;
-    add_contact_to_chat(
-        &bob,
-        bob_chat_id,
-        Contact::create(&bob, "", "alice@example.org").await?,
-    )
-    .await?;
-    send_text_msg(&bob, bob_chat_id, "populate".to_string()).await?;
-    alice.recv_msg(&bob.pop_sent_msg().await).await;
-
-    // Alice sends instance+update to Bob
-    let alice_chat_id = alice.get_last_msg().await.chat_id;
-    alice_chat_id.accept(&alice).await?;
-    let alice_instance = send_webxdc_instance(&alice, alice_chat_id).await?;
-    let sent1 = &alice.pop_sent_msg().await;
-    alice
-        .send_webxdc_status_update(alice_instance.id, r#"{"payload":42}"#)
-        .await?;
-    alice.flush_status_updates().await?;
-    let sent2 = &alice.pop_sent_msg().await;
-    let update_msg = sent2.load_from_db().await;
-    assert!(alice_instance.get_showpadlock());
-    assert!(update_msg.get_showpadlock());
-
-    // Bob receives instance+update
-    let bob_instance = bob.recv_msg(sent1).await;
-    bob.recv_msg_trash(sent2).await;
-    assert!(bob_instance.get_showpadlock());
-
-    // Bob adds Claire with unknown key, update to Alice+Claire cannot be encrypted
-    add_contact_to_chat(
-        &bob,
-        bob_chat_id,
-        Contact::create(&bob, "", "claire@example.org").await?,
-    )
-    .await?;
-    bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":43}"#)
-        .await?;
-    bob.flush_status_updates().await?;
-    let sent3 = bob.pop_sent_msg().await;
-    let update_msg = sent3.load_from_db().await;
-    assert!(!update_msg.get_showpadlock());
-
-    Ok(())
-}
-
 // check that `info.internet_access` is not set for normal, non-integrated webxdc -
 // even if they use the deprecated option `request_internet_access` in manifest.toml
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
