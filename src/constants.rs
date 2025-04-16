@@ -45,8 +45,12 @@ pub enum Blocked {
 #[repr(u8)]
 pub enum ShowEmails {
     Off = 0,
-    AcceptedContacts = 1,
-    #[default] // also change Config.ShowEmails props(default) on changes
+
+    /// Deprecated 2025-04-16, same as All.
+    All1 = 1,
+
+    // also change Config.ShowEmails props(default) on changes
+    #[default]
     All = 2,
 }
 
@@ -253,10 +257,7 @@ mod tests {
         // values may be written to disk and must not change
         assert_eq!(ShowEmails::All, ShowEmails::default());
         assert_eq!(ShowEmails::Off, ShowEmails::from_i32(0).unwrap());
-        assert_eq!(
-            ShowEmails::AcceptedContacts,
-            ShowEmails::from_i32(1).unwrap()
-        );
+        assert_eq!(ShowEmails::All1, ShowEmails::from_i32(1).unwrap());
         assert_eq!(ShowEmails::All, ShowEmails::from_i32(2).unwrap());
     }
 

@@ -775,8 +775,7 @@ async fn add_parts(
                 chat_id = Some(DC_CHAT_ID_TRASH);
                 allow_creation = false;
             }
-            ShowEmails::AcceptedContacts => allow_creation = false,
-            ShowEmails::All => allow_creation = !is_mdn,
+            ShowEmails::All | ShowEmails::All1 => allow_creation = !is_mdn,
         }
     } else {
         allow_creation = !is_mdn && !is_reaction;
