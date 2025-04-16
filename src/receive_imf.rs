@@ -330,21 +330,22 @@ pub(crate) async fn receive_imf_inner(
     let to_ids: Vec<Option<ContactId>>;
     let past_ids: Vec<Option<ContactId>>;
 
-    if mime_parser.get_chat_group_id().is_some() {
-        to_ids = add_or_lookup_pgp_contacts_by_address_list(
-            context,
-            &mime_parser.recipients,
-            &mime_parser.gossiped_keys,
-            if !mime_parser.incoming {
-                Origin::OutgoingTo
-            } else if incoming_origin.is_known() {
-                Origin::IncomingTo
-            } else {
-                Origin::IncomingUnknownTo
-            },
-        )
-        .await?;
+    let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
+        context,
+        &mime_parser.recipients,
+        &mime_parser.gossiped_keys,
+        if !mime_parser.incoming {
+            Origin::OutgoingTo
+        } else if incoming_origin.is_known() {
+            Origin::IncomingTo
+        } else {
+            Origin::IncomingUnknownTo
+        },
+    )
+    .await?;
 
+    if mime_parser.get_chat_group_id().is_some() {
+        to_ids = pgp_to_ids;
         if let Some(chat_id) = chat_id {
             past_ids =
                 lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id)
@@ -354,18 +355,29 @@ pub(crate) async fn receive_imf_inner(
             past_ids = vec![None; mime_parser.past_members.len()];
         }
     } else {
-        to_ids = add_or_lookup_contacts_by_address_list(
-            context,
-            &mime_parser.recipients,
-            if !mime_parser.incoming {
-                Origin::OutgoingTo
-            } else if incoming_origin.is_known() {
-                Origin::IncomingTo
-            } else {
-                Origin::IncomingUnknownTo
-            },
-        )
-        .await?;
+        if pgp_to_ids.len() == 1
+            && pgp_to_ids
+                .get(0)
+                .is_some_and(|contact_id| contact_id.is_some())
+        {
+            // There is a single recipient and we have
+            // mapped it to a PGP contact.
+            // This is a 1:1 PGP-chat.
+            to_ids = pgp_to_ids
+        } else {
+            to_ids = add_or_lookup_contacts_by_address_list(
+                context,
+                &mime_parser.recipients,
+                if !mime_parser.incoming {
+                    Origin::OutgoingTo
+                } else if incoming_origin.is_known() {
+                    Origin::IncomingTo
+                } else {
+                    Origin::IncomingUnknownTo
+                },
+            )
+            .await?;
+        }
 
         past_ids = add_or_lookup_contacts_by_address_list(
             context,
