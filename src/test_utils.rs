@@ -1344,7 +1344,13 @@ pub(crate) async fn get_chat_msg(
     asserted_msgs_count: usize,
 ) -> Message {
     let msgs = chat::get_chat_msgs(&t.ctx, chat_id).await.unwrap();
-    assert_eq!(msgs.len(), asserted_msgs_count);
+    assert_eq!(
+        msgs.len(),
+        asserted_msgs_count,
+        "expected {} messages in a chat but {} found",
+        asserted_msgs_count,
+        msgs.len()
+    );
     let msg_id = if let ChatItem::Message { msg_id } = msgs[index] {
         msg_id
     } else {
