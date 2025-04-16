@@ -501,13 +501,11 @@ pub enum Origin {
     MailinglistAddress = 0x2,
 
     /// Hidden on purpose, e.g. addresses with the word "noreply" in it
+    /// or past members of the groups.
     Hidden = 0x8,
 
     /// From: of incoming messages of unknown sender
     IncomingUnknownFrom = 0x10,
-
-    /// Cc: of incoming messages of unknown sender
-    IncomingUnknownCc = 0x20,
 
     /// To: of incoming messages of unknown sender
     IncomingUnknownTo = 0x40,
@@ -522,20 +520,8 @@ pub enum Origin {
     /// Contacts with at least this origin value are shown in the contact list.
     IncomingReplyTo = 0x100,
 
-    /// Cc: of incoming message of known sender
-    IncomingCc = 0x200,
-
-    /// additional To:'s of incoming message of known sender
-    IncomingTo = 0x400,
-
     /// a chat was manually created for this user, but no message yet sent
     CreateChat = 0x800,
-
-    /// message sent by us
-    OutgoingBcc = 0x1000,
-
-    /// message sent by us
-    OutgoingCc = 0x2000,
 
     /// message sent by us
     OutgoingTo = 0x4000,

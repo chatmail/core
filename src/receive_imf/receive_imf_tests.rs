@@ -137,7 +137,7 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_known() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
+    t.set_config(Config::ShowEmails, Some("2")).await.unwrap();
     Contact::create(&t, "Bob", "bob@example.com").await.unwrap();
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
 
@@ -150,7 +150,7 @@ async fn test_adhoc_group_show_accepted_contact_known() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_accepted() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
+    t.set_config(Config::ShowEmails, Some("2")).await.unwrap();
 
     // accept Bob by accepting a delta-message from Bob
     receive_imf(&t, MSGRMSG, false).await.unwrap();
@@ -2319,7 +2319,7 @@ async fn test_ignore_footer_status_from_mailinglist() -> Result<()> {
         &t,
         "",
         &ContactAddress::new("bob@example.net").unwrap(),
-        Origin::IncomingUnknownCc,
+        Origin::IncomingUnknownTo,
     )
     .await?
     .0;
@@ -3985,7 +3985,7 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
         chat::get_chat_contacts(&alice, group_chat.id).await?.len(),
         4
     );
-    let fiona = Contact::lookup_id_by_addr(&alice, "fiona@example.net", Origin::IncomingTo)
+    let fiona = Contact::lookup_id_by_addr(&alice, "fiona@example.net", Origin::IncomingUnknownTo)
         .await?
         .unwrap();
     assert!(chat::is_contact_in_chat(&alice, group_chat.id, fiona).await?);

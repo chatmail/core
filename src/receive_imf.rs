@@ -322,7 +322,7 @@ pub(crate) async fn receive_imf_inner(
     // For example, GitHub sends messages from `notifications@github.com`,
     // but uses display name of the user whose action generated the notification
     // as the display name.
-    let (from_id, _from_id_blocked, incoming_origin) =
+    let (from_id, _from_id_blocked) =
         match from_field_to_contact_id(context, &mime_parser.from, prevent_rename).await? {
             Some(contact_id_res) => contact_id_res,
             None => {
@@ -337,12 +337,10 @@ pub(crate) async fn receive_imf_inner(
     let to_ids = add_or_lookup_contacts_by_address_list(
         context,
         &mime_parser.recipients,
-        if !mime_parser.incoming {
-            Origin::OutgoingTo
-        } else if incoming_origin.is_known() {
-            Origin::IncomingTo
-        } else {
+        if mime_parser.incoming {
             Origin::IncomingUnknownTo
+        } else {
+            Origin::OutgoingTo
         },
     )
     .await?;
@@ -646,7 +644,7 @@ pub(crate) async fn receive_imf_inner(
 
 /// Converts "From" field to contact id.
 ///
-/// Also returns whether it is blocked or not and its origin.
+/// Also returns whether it is blocked or not.
 ///
 /// * `prevent_rename`: if true, the display_name of this contact will not be changed. Useful for
 ///   mailing lists: In some mailing lists, many users write from the same address but with different
@@ -658,7 +656,7 @@ pub async fn from_field_to_contact_id(
     context: &Context,
     from: &SingleInfo,
     prevent_rename: bool,
-) -> Result<Option<(ContactId, bool, Origin)>> {
+) -> Result<Option<(ContactId, bool)>> {
     let display_name = if prevent_rename {
         Some("")
     } else {
@@ -684,12 +682,11 @@ pub async fn from_field_to_contact_id(
     .await?;
 
     if from_id == ContactId::SELF {
-        Ok(Some((ContactId::SELF, false, Origin::OutgoingBcc)))
+        Ok(Some((ContactId::SELF, false)))
     } else {
         let contact = Contact::get_by_id(context, from_id).await?;
         let from_id_blocked = contact.blocked;
-        let incoming_origin = contact.origin;
-        Ok(Some((from_id, from_id_blocked, incoming_origin)))
+        Ok(Some((from_id, from_id_blocked)))
     }
 }
 
