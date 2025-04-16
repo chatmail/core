@@ -287,7 +287,7 @@ async fn test_decode_openpgp_group() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_openpgp_invalid_token() -> Result<()> {
-    let ctx = TestContext::new().await;
+    let ctx = TestContext::new_alice().await;
 
     // Token cannot contain "/"
     let qr = check_qr(
