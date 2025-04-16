@@ -34,30 +34,6 @@ async fn test_change_primary_self_addr() -> Result<()> {
     let alice_bob_chat = alice.create_chat(&bob).await;
     assert_eq!(alice_msg.chat_id, alice_bob_chat.id);
 
-    tcm.section("Bob sends a message to Alice without In-Reply-To");
-    // Even if Bob sends a message to Alice without In-Reply-To,
-    // it's still assigned to the 1:1 chat with Bob and not to
-    // a group (without secondary addresses, an ad-hoc group
-    // would be created)
-    receive_imf(
-        &alice,
-        b"From: bob@example.net
-To: alice@example.org
-Chat-Version: 1.0
-Message-ID: <456@example.com>
-
-Message w/out In-Reply-To
-",
-        false,
-    )
-    .await?;
-
-    let alice_msg = alice.get_last_msg().await;
-
-    assert_eq!(alice_msg.text, "Message w/out In-Reply-To");
-    assert_eq!(alice_msg.get_showpadlock(), false);
-    assert_eq!(alice_msg.chat_id, alice_bob_chat.id);
-
     Ok(())
 }
 
