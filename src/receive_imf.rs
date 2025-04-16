@@ -3062,12 +3062,7 @@ async fn mark_recipients_as_verified(
         }
 
         mark_contact_id_as_verified(context, to_id, from_id).await?;
-        ChatId::set_protection_for_contact(
-            context,
-            to_id,
-            mimeparser.timestamp_sent,
-        )
-        .await?;
+        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
     }
 
     Ok(())

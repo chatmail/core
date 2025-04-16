@@ -15,7 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, get_chat_contacts, Chat};
+use crate::chat::{self, Chat};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -223,25 +223,8 @@ impl MimeFactory {
             {
                 false
             } else {
-                chat.is_protected()
-                    || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
-                    || match chat.typ {
-                        Chattype::Single => {
-                            let chat_contact_ids = get_chat_contacts(context, chat.id).await?;
-                            if let Some(contact_id) = chat_contact_ids.first() {
-                                let contact = Contact::get_by_id(context, *contact_id).await?;
-                                contact.is_pgp_contact()
-                            } else {
-                                true
-                            }
-                        }
-                        Chattype::Group => {
-                            // Do not encrypt ad-hoc groups.
-                            !chat.grpid.is_empty()
-                        }
-                        Chattype::Mailinglist => false,
-                        Chattype::Broadcast => true,
-                    }
+                msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
+                    || chat.is_encrypted(context).await?
             };
 
             let mut certificates = Vec::new();
