@@ -1731,14 +1731,10 @@ WHERE type=? AND id IN (
                 chat::SyncId::ContactAddr(contact.addr.clone())
             };
 
-            chat::sync(
-                context,
-                sync_id,
-                action,
-            )
-            .await
-            .log_err(context)
-            .ok();
+            chat::sync(context, sync_id, action)
+                .await
+                .log_err(context)
+                .ok();
         }
     }
 
