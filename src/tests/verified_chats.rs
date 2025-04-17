@@ -7,7 +7,7 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Chattype, DC_GCL_FOR_FORWARDING};
-use crate::contact::{Contact, ContactId, Origin};
+use crate::contact::{Contact, ContactId};
 use crate::message::Message;
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
