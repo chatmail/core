@@ -10,7 +10,6 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::contact::Contact;
 use crate::download::DownloadState;
 use crate::ephemeral;
 use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
