@@ -1224,32 +1224,37 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
-        sql.execute_migration(
-            "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+        sql.execute_migration_transaction(
+            |transaction| {
+                transaction.execute_batch(
+                "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
 
-             -- Verifier is an ID of the verifier contact.
-             -- 0 if the contact is not verified.
-             ALTER TABLE contacts ADD COLUMN verifier INTEGER NOT NULL DEFAULT 0;
+                 -- Verifier is an ID of the verifier contact.
+                 -- 0 if the contact is not verified.
+                 ALTER TABLE contacts ADD COLUMN verifier INTEGER NOT NULL DEFAULT 0;
 
-             CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
+                 CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
 
-             CREATE TABLE public_keys (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                fingerprint TEXT NOT NULL UNIQUE, -- Upper-case fingerprint of the key.
-                public_key BLOB NOT NULL -- Binary key, not ASCII-armored
-             ) STRICT;
-             CREATE INDEX public_key_index ON public_keys (fingerprint);
+                 CREATE TABLE public_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fingerprint TEXT NOT NULL UNIQUE, -- Upper-case fingerprint of the key.
+                    public_key BLOB NOT NULL -- Binary key, not ASCII-armored
+                 ) STRICT;
+                 CREATE INDEX public_key_index ON public_keys (fingerprint);
 
-             INSERT INTO public_keys (fingerprint, public_key)
-             SELECT public_key_fingerprint, public_key FROM acpeerstates;
-             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-             SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates;
-             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-             SELECT verified_key_fingerprint, verified_key FROM acpeerstates;
-             INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-             SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
-            ",
-            migration_version,
+                 INSERT INTO public_keys (fingerprint, public_key)
+                 SELECT public_key_fingerprint, public_key FROM acpeerstates;
+                 INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+                 SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates;
+                 INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+                 SELECT verified_key_fingerprint, verified_key FROM acpeerstates;
+                 INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+                 SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
+                ")?;
+
+                Ok(())
+            },
+            migration_version
         )
         .await?;
     }
