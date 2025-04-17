@@ -139,9 +139,7 @@ async fn check_aeap_transition(
         );
     }
 
-    let old_contact = Contact::create(&bob, "Alice", "alice@example.org")
-        .await
-        .unwrap();
+    let old_contact = bob.add_or_lookup_contact_id(&alice).await;
     for group in &groups {
         chat::add_contact_to_chat(&bob, *group, old_contact)
             .await
