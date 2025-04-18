@@ -68,10 +68,7 @@ async fn test_aeap_transition_2_verified() {
 /// Happy path test for AEAP.
 /// - `chat_for_transition`: Which chat the transition message should be sent in
 /// - `verified`: Whether Alice and Bob verified each other
-async fn check_aeap_transition(
-    chat_for_transition: ChatForTransition,
-    verified: bool,
-) {
+async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified: bool) {
     const ALICE_NEW_ADDR: &str = "alice2@example.net";
 
     let mut tcm = TestContextManager::new();
@@ -144,13 +141,7 @@ async fn check_aeap_transition(
     assert_eq!(recvd.text, "Hello from my new addr!");
 
     tcm.section("Check that the AEAP transition worked");
-    check_that_transition_worked(
-        bob,
-        &groups,
-        alice_contact,
-        ALICE_NEW_ADDR,
-    )
-    .await;
+    check_that_transition_worked(bob, &groups, alice_contact, ALICE_NEW_ADDR).await;
 
     tcm.section("Test switching back");
     tcm.change_addr(&alice, "alice@example.org").await;
@@ -160,13 +151,7 @@ async fn check_aeap_transition(
     let recvd = bob.recv_msg(&sent).await;
     assert_eq!(recvd.text, "Hello from my old addr!");
 
-    check_that_transition_worked(
-        bob,
-        &groups,
-        alice_contact,
-        "alice@example.org",
-    )
-    .await;
+    check_that_transition_worked(bob, &groups, alice_contact, "alice@example.org").await;
 }
 
 async fn check_that_transition_worked(
