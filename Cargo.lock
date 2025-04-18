@@ -1372,7 +1372,6 @@ dependencies = [
  "deltachat",
  "deltachat-contact-tools",
  "futures",
- "log",
  "num-traits",
  "sanitize-filename",
  "schemars",
