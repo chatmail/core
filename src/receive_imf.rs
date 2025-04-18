@@ -709,6 +709,15 @@ pub async fn from_field_to_contact_id(
         let contact = Contact::get_by_id(context, from_id).await?;
         let from_id_blocked = contact.blocked;
         let incoming_origin = contact.origin;
+
+        context
+            .sql
+            .execute(
+                "UPDATE contacts SET addr=? WHERE id=?",
+                (from_addr, from_id),
+            )
+            .await?;
+
         Ok(Some((from_id, from_id_blocked, incoming_origin)))
     }
 }
