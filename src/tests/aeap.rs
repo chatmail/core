@@ -5,7 +5,6 @@ use crate::contact;
 use crate::contact::Contact;
 use crate::contact::ContactId;
 use crate::message::Message;
-use crate::peerstate::Peerstate;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
 use crate::stock_str;
@@ -35,30 +34,6 @@ async fn test_change_primary_self_addr() -> Result<()> {
     let alice_bob_chat = alice.create_chat(&bob).await;
     assert_eq!(alice_msg.chat_id, alice_bob_chat.id);
 
-    tcm.section("Bob sends a message to Alice without In-Reply-To");
-    // Even if Bob sends a message to Alice without In-Reply-To,
-    // it's still assigned to the 1:1 chat with Bob and not to
-    // a group (without secondary addresses, an ad-hoc group
-    // would be created)
-    receive_imf(
-        &alice,
-        b"From: bob@example.net
-To: alice@example.org
-Chat-Version: 1.0
-Message-ID: <456@example.com>
-
-Message w/out In-Reply-To
-",
-        false,
-    )
-    .await?;
-
-    let alice_msg = alice.get_last_msg().await;
-
-    assert_eq!(alice_msg.text, "Message w/out In-Reply-To");
-    assert_eq!(alice_msg.get_showpadlock(), false);
-    assert_eq!(alice_msg.chat_id, alice_bob_chat.id);
-
     Ok(())
 }
 
@@ -71,76 +46,41 @@ use ChatForTransition::*;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_0() {
-    check_aeap_transition(OneToOne, false, false).await;
+    check_aeap_transition(OneToOne, false).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_1() {
-    check_aeap_transition(GroupChat, false, false).await;
+    check_aeap_transition(GroupChat, false).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_0_verified() {
-    check_aeap_transition(OneToOne, true, false).await;
+    check_aeap_transition(OneToOne, true).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_1_verified() {
-    check_aeap_transition(GroupChat, true, false).await;
+    check_aeap_transition(GroupChat, true).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_aeap_transition_2_verified() {
-    check_aeap_transition(VerifiedGroup, true, false).await;
+    check_aeap_transition(VerifiedGroup, true).await;
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_0_bob_knew_new_addr() {
-    check_aeap_transition(OneToOne, false, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_1_bob_knew_new_addr() {
-    check_aeap_transition(GroupChat, false, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_0_verified_bob_knew_new_addr() {
-    check_aeap_transition(OneToOne, true, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_1_verified_bob_knew_new_addr() {
-    check_aeap_transition(GroupChat, true, true).await;
-}
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_aeap_transition_2_verified_bob_knew_new_addr() {
-    check_aeap_transition(VerifiedGroup, true, true).await;
-}
-
-/// Happy path test for AEAP in various configurations.
+/// Happy path test for AEAP.
 /// - `chat_for_transition`: Which chat the transition message should be sent in
 /// - `verified`: Whether Alice and Bob verified each other
-/// - `bob_knew_new_addr`: Whether Bob already had a chat with Alice's new address
-async fn check_aeap_transition(
-    chat_for_transition: ChatForTransition,
-    verified: bool,
-    bob_knew_new_addr: bool,
-) {
-    // Alice's new address is "fiona@example.net" so that we can test
-    // the case where Bob already had contact with Alice's new address
-    const ALICE_NEW_ADDR: &str = "fiona@example.net";
+async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified: bool) {
+    const ALICE_NEW_ADDR: &str = "alice2@example.net";
 
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    if bob_knew_new_addr {
-        let fiona = tcm.fiona().await;
-
-        tcm.send_recv_accept(&fiona, &bob, "Hi").await;
-        tcm.send_recv(&bob, &fiona, "Hi back").await;
-    }
-
-    tcm.send_recv_accept(&alice, &bob, "Hi").await;
-    tcm.send_recv(&bob, &alice, "Hi back").await;
+    tcm.send_recv_accept(alice, bob, "Hi").await;
+    tcm.send_recv(bob, alice, "Hi back").await;
 
     if verified {
-        mark_as_verified(&alice, &bob).await;
-        mark_as_verified(&bob, &alice).await;
+        mark_as_verified(alice, bob).await;
+        mark_as_verified(bob, alice).await;
     }
 
     let mut groups = vec![
@@ -164,22 +104,9 @@ async fn check_aeap_transition(
         );
     }
 
-    let old_contact = Contact::create(&bob, "Alice", "alice@example.org")
-        .await
-        .unwrap();
+    let alice_contact = bob.add_or_lookup_contact_id(&alice).await;
     for group in &groups {
-        chat::add_contact_to_chat(&bob, *group, old_contact)
-            .await
-            .unwrap();
-    }
-
-    // Already add the new contact to one of the groups.
-    // We can then later check that the contact isn't in the group twice.
-    let already_new_contact = Contact::create(&bob, "Alice", ALICE_NEW_ADDR)
-        .await
-        .unwrap();
-    if verified {
-        chat::add_contact_to_chat(&bob, groups[2], already_new_contact)
+        chat::add_contact_to_chat(&bob, *group, alice_contact)
             .await
             .unwrap();
     }
@@ -214,25 +141,7 @@ async fn check_aeap_transition(
     assert_eq!(recvd.text, "Hello from my new addr!");
 
     tcm.section("Check that the AEAP transition worked");
-    check_that_transition_worked(
-        &groups[2..],
-        &alice,
-        "alice@example.org",
-        ALICE_NEW_ADDR,
-        "Alice",
-        &bob,
-    )
-    .await;
-    check_no_transition_done(&groups[0..2], "alice@example.org", &bob).await;
-
-    // Assert that the autocrypt header is also applied to the peerstate
-    // if the address changed
-    let bob_alice_peerstate = Peerstate::from_addr(&bob, ALICE_NEW_ADDR)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(bob_alice_peerstate.last_seen, sent_timestamp);
-    assert_eq!(bob_alice_peerstate.last_seen_autocrypt, sent_timestamp);
+    check_that_transition_worked(bob, &groups, alice_contact, ALICE_NEW_ADDR).await;
 
     tcm.section("Test switching back");
     tcm.change_addr(&alice, "alice@example.org").await;
@@ -242,96 +151,37 @@ async fn check_aeap_transition(
     let recvd = bob.recv_msg(&sent).await;
     assert_eq!(recvd.text, "Hello from my old addr!");
 
-    check_that_transition_worked(
-        &groups[2..],
-        &alice,
-        // Note that "alice@example.org" and ALICE_NEW_ADDR are switched now:
-        ALICE_NEW_ADDR,
-        "alice@example.org",
-        "Alice",
-        &bob,
-    )
-    .await;
+    check_that_transition_worked(bob, &groups, alice_contact, "alice@example.org").await;
 }
 
 async fn check_that_transition_worked(
-    groups: &[ChatId],
-    alice: &TestContext,
-    old_alice_addr: &str,
-    new_alice_addr: &str,
-    name: &str,
     bob: &TestContext,
+    groups: &[ChatId],
+    alice_contact_id: ContactId,
+    alice_addr: &str,
 ) {
-    let new_contact = Contact::lookup_id_by_addr(bob, new_alice_addr, contact::Origin::Unknown)
-        .await
-        .unwrap()
-        .unwrap();
-
     for group in groups {
         let members = chat::get_chat_contacts(bob, *group).await.unwrap();
-        // In all the groups, exactly Bob and Alice's new number are members.
-        // (and Alice's new number isn't in there twice)
+        // In all the groups, exactly Bob and Alice are members.
         assert_eq!(
             members.len(),
             2,
             "Group {} has members {:?}, but should have members {:?} and {:?}",
             group,
             &members,
-            new_contact,
+            alice_contact_id,
             ContactId::SELF
         );
         assert!(
-            members.contains(&new_contact),
-            "Group {group} lacks {new_contact}"
+            members.contains(&alice_contact_id),
+            "Group {group} lacks {alice_contact_id}"
         );
         assert!(members.contains(&ContactId::SELF));
-
-        let info_msg = get_last_info_msg(bob, *group).await.unwrap();
-        let expected_text =
-            stock_str::aeap_addr_changed(bob, name, old_alice_addr, new_alice_addr).await;
-        assert_eq!(info_msg.text, expected_text);
-        assert_eq!(info_msg.from_id, ContactId::INFO);
-
-        let msg = format!("Sending to group {group}");
-        let sent = bob.send_text(*group, &msg).await;
-        let recvd = alice.recv_msg(&sent).await;
-        assert_eq!(recvd.text, msg);
     }
-}
 
-async fn check_no_transition_done(groups: &[ChatId], old_alice_addr: &str, bob: &TestContext) {
-    let old_contact = Contact::lookup_id_by_addr(bob, old_alice_addr, contact::Origin::Unknown)
-        .await
-        .unwrap()
-        .unwrap();
-
-    for group in groups {
-        let members = chat::get_chat_contacts(bob, *group).await.unwrap();
-        // In all the groups, exactly Bob and Alice's _old_ number are members.
-        assert_eq!(
-            members.len(),
-            2,
-            "Group {} has members {:?}, but should have members {:?} and {:?}",
-            group,
-            &members,
-            old_contact,
-            ContactId::SELF
-        );
-        assert!(members.contains(&old_contact));
-        assert!(members.contains(&ContactId::SELF));
-
-        let last_info_msg = get_last_info_msg(bob, *group).await;
-        assert!(
-            last_info_msg.is_none(),
-            "{last_info_msg:?} shouldn't be there (or it's an unrelated info msg)"
-        );
-
-        let sent = bob.send_text(*group, "hi").await;
-        let msg = Message::load_from_db(bob, sent.sender_msg_id)
-            .await
-            .unwrap();
-        assert_eq!(msg.get_showpadlock(), true);
-    }
+    // Test that the email address of Alice is updated.
+    let alice_contact = Contact::get_by_id(bob, alice_contact_id).await.unwrap();
+    assert_eq!(alice_contact.get_addr(), alice_addr);
 }
 
 async fn get_last_info_msg(t: &TestContext, chat_id: ChatId) -> Option<Message> {

@@ -25,17 +25,16 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_TRASH;
-use crate::constants::DC_GCL_NO_SPECIALS;
 use crate::constants::{Blocked, Chattype};
-use crate::contact::{import_vcard, make_vcard, Contact, ContactId, Modifier, Origin};
+use crate::constants::{DC_CHAT_ID_TRASH, DC_GCL_NO_SPECIALS};
+use crate::contact::{
+    import_vcard, make_vcard, mark_contact_id_as_verified, Contact, ContactId, Modifier, Origin,
+};
 use crate::context::Context;
-use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, DcKey, DcSecretKey};
+use crate::key::{self, load_self_public_key, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
-use crate::peerstate::Peerstate;
 use crate::pgp::KeyPair;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
@@ -742,7 +741,9 @@ impl TestContext {
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
     pub async fn add_or_lookup_email_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_email_contact_id(other).await;
-        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
+        let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
+        debug_assert_eq!(contact.is_pgp_contact(), false);
+        contact
     }
 
     /// Returns the [`ContactId`] for the other [`TestContext`], creating it if necessary.
@@ -754,12 +755,38 @@ impl TestContext {
     }
 
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
+    ///
+    /// This function imports a vCard, so will transfer the public key
+    /// as a side effect.
     pub async fn add_or_lookup_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_contact_id(other).await;
         Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
     }
 
-    /// Returns 1:1 [`Chat`] with another account. Panics if it doesn't exist.
+    /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
+    ///
+    /// If the contact does not exist yet, a new contact will be created
+    /// with the correct fingerprint, but without the public key.
+    pub async fn add_or_lookup_pgp_contact(&self, other: &TestContext) -> Contact {
+        let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
+        let addr = ContactAddress::new(&primary_self_addr).unwrap();
+        let public_key = load_self_public_key(other).await.unwrap();
+        let fingerprint = public_key.dc_fingerprint();
+
+        let (contact_id, _modified) = Contact::add_or_lookup_ex(
+            self,
+            "",
+            &addr,
+            &fingerprint.hex(),
+            Origin::MailinglistAddress,
+        )
+        .await
+        .expect("add_or_lookup");
+        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
+    }
+
+    /// Returns 1:1 [`Chat`] with another account email contact.
+    /// Panics if it doesn't exist.
     /// May return a blocked chat.
     ///
     /// This first creates a contact using the configured details on the other account, then
@@ -779,17 +806,35 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
+    /// Returns 1:1 [`Chat`] with another account PGP-contact.
+    /// Panics if the chat does not exist.
+    ///
+    /// This first creates a contact, but does not import the key,
+    /// so may create a PGP-contact with a fingerprint
+    /// but without the key.
+    pub async fn get_pgp_chat(&self, other: &TestContext) -> Chat {
+        let contact = self.add_or_lookup_contact_id(other).await;
+
+        let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact)
+            .await
+            .unwrap()
+            .map(|chat_id_blocked| chat_id_blocked.id)
+            .expect(
+                "There is no chat with this contact. \
+                 Hint: Use create_chat() instead of get_pgp_chat() if this is expected.",
+            );
+
+        Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
+    }
+
     /// Creates or returns an existing 1:1 [`Chat`] with another account.
     ///
     /// This first creates a contact by exporting a vCard from the `other`
     /// and importing it into `self`,
     /// then creates a 1:1 chat with this contact.
     pub async fn create_chat(&self, other: &TestContext) -> Chat {
-        let vcard = make_vcard(other, &[ContactId::SELF]).await.unwrap();
-        let contact_ids = import_vcard(self, &vcard).await.unwrap();
-        assert_eq!(contact_ids.len(), 1);
-        let contact_id = contact_ids.first().unwrap();
-        let chat_id = ChatId::create_for_contact(self, *contact_id).await.unwrap();
+        let contact_id = self.add_or_lookup_contact_id(other).await;
+        let chat_id = ChatId::create_for_contact(self, contact_id).await.unwrap();
         Chat::load_from_db(self, chat_id).await.unwrap()
     }
 
@@ -913,7 +958,11 @@ impl TestContext {
             "device-talk".to_string()
         } else if sel_chat.get_type() == Chattype::Single && !members.is_empty() {
             let contact = Contact::get_by_id(self, members[0]).await.unwrap();
-            contact.get_addr().to_string()
+            if contact.is_pgp_contact() {
+                format!("PGP {}", contact.get_addr())
+            } else {
+                contact.get_addr().to_string()
+            }
         } else if sel_chat.get_type() == Chattype::Mailinglist && !members.is_empty() {
             "mailinglist".to_string()
         } else {
@@ -981,8 +1030,8 @@ impl TestContext {
         let chat_id = create_group_chat(self, protect, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
-            let contact = self.add_or_lookup_contact(member).await;
-            to_add.push(contact.id);
+            let contact_id = self.add_or_lookup_contact_id(member).await;
+            to_add.push(contact_id);
         }
         add_to_chat_contacts_table(self, time(), chat_id, &to_add)
             .await
@@ -1295,7 +1344,13 @@ pub(crate) async fn get_chat_msg(
     asserted_msgs_count: usize,
 ) -> Message {
     let msgs = chat::get_chat_msgs(&t.ctx, chat_id).await.unwrap();
-    assert_eq!(msgs.len(), asserted_msgs_count);
+    assert_eq!(
+        msgs.len(),
+        asserted_msgs_count,
+        "expected {} messages in a chat but {} found",
+        asserted_msgs_count,
+        msgs.len()
+    );
     let msg_id = if let ChatItem::Message { msg_id } = msgs[index] {
         msg_id
     } else {
@@ -1314,25 +1369,10 @@ fn print_logevent(logevent: &LogEvent) {
 /// Saves the other account's public key as verified
 /// and peerstate as backwards verified.
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
-    let mut peerstate = Peerstate::from_header(
-        &EncryptHelper::new(other).await.unwrap().get_aheader(),
-        // We have to give 0 as the time, not the current time:
-        // The time is going to be saved in peerstate.last_seen.
-        // The code in `peerstate.rs` then compares `if message_time > self.last_seen`,
-        // and many similar checks in peerstate.rs, and doesn't allow changes otherwise.
-        // Giving the current time would mean that message_time == peerstate.last_seen,
-        // so changes would not be allowed.
-        // This might lead to flaky tests.
-        0,
-    );
-
-    peerstate.verified_key.clone_from(&peerstate.public_key);
-    peerstate
-        .verified_key_fingerprint
-        .clone_from(&peerstate.public_key_fingerprint);
-    peerstate.backward_verified_key_id = Some(this.get_config_i64(Config::KeyId).await.unwrap());
-
-    peerstate.save_to_db(&this.sql).await.unwrap();
+    let contact_id = this.add_or_lookup_contact_id(other).await;
+    mark_contact_id_as_verified(this, contact_id, contact_id)
+        .await
+        .unwrap();
 }
 
 /// Pops a sync message from alice0 and receives it on alice1. Should be used after an action on

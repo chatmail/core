@@ -7,7 +7,7 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Chattype, DC_GCL_FOR_FORWARDING};
-use crate::contact::{Contact, ContactId, Origin};
+use crate::contact::{Contact, ContactId};
 use crate::message::Message;
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -18,16 +18,16 @@ use crate::tools::SystemTime;
 use crate::{e2ee, message};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_classical() {
-    check_verified_oneonone_chat(true).await;
+async fn test_verified_oneonone_chat_not_broken_by_classical() {
+    check_verified_oneonone_chat_protection_not_broken(true).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_device_change() {
-    check_verified_oneonone_chat(false).await;
+async fn test_verified_oneonone_chat_not_broken_by_device_change() {
+    check_verified_oneonone_chat_protection_not_broken(false).await;
 }
 
-async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
+async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_email: bool) {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -57,7 +57,7 @@ async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
         // Bob's contact is still verified, but the chat isn't marked as protected anymore
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     } else {
         tcm.section("Bob sets up another Delta Chat device");
         let bob2 = TestContext::new().await;
@@ -69,7 +69,7 @@ async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
             .await;
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), false);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     }
 
     tcm.section("Bob sends another message from DC");
@@ -126,7 +126,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Alice should have a hidden protected chat with Fiona
     {
-        let chat = alice.get_chat(&fiona).await;
+        let chat = alice.get_pgp_chat(&fiona).await;
         assert!(chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
@@ -136,7 +136,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Fiona should have a hidden protected chat with Alice
     {
-        let chat = fiona.get_chat(&alice).await;
+        let chat = fiona.get_pgp_chat(&alice).await;
         assert!(chat.is_protected());
 
         let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
@@ -155,27 +155,19 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
     tcm.send_recv(&fiona_new, &alice, "I have a new device")
         .await;
 
-    // The chat should be and stay unprotected
+    // Alice gets a new unprotected chat with new Fiona contact.
     {
-        let chat = alice.get_chat(&fiona_new).await;
+        let chat = alice.get_pgp_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(chat.is_protection_broken());
 
-        let msg1 = get_chat_msg(&alice, chat.id, 0, 3).await;
-        assert_eq!(msg1.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 1, 3).await;
-        assert_eq!(msg2.get_info_type(), SystemMessage::ChatProtectionDisabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 2, 3).await;
-        assert_eq!(msg2.text, "I have a new device");
+        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
+        assert_eq!(msg.text, "I have a new device");
 
         // After recreating the chat, it should still be unprotected
         chat.id.delete(&alice).await?;
 
         let chat = alice.create_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(!chat.is_protection_broken());
     }
 
     Ok(())
@@ -240,6 +232,10 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     Ok(())
 }
 
+/// Tests that receiving unencrypted message
+/// does not disable protection of 1:1 chat.
+///
+/// Instead, an email-chat is created.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -263,23 +259,16 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     )
     .await?;
 
-    let contact_id = Contact::lookup_id_by_addr(&alice, "bob@example.net", Origin::Hidden)
-        .await?
-        .unwrap();
-
-    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 3).await;
+    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
     let enabled = stock_str::chat_protection_enabled(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 
-    let msg1 = get_chat_msg(&alice, alice_chat.id, 1, 3).await;
-    let disabled = stock_str::chat_protection_disabled(&alice, contact_id).await;
-    assert_eq!(msg1.text, disabled);
-    assert_eq!(msg1.param.get_cmd(), SystemMessage::ChatProtectionDisabled);
-
-    let msg2 = get_chat_msg(&alice, alice_chat.id, 2, 3).await;
-    assert_eq!(msg2.text, "hello".to_string());
-    assert!(!msg2.is_system_message());
+    let email_chat = alice.get_chat(&bob).await;
+    assert!(!email_chat.is_encrypted(&alice).await?);
+    let email_msg = get_chat_msg(&alice, email_chat.id, 0, 1).await;
+    assert_eq!(email_msg.text, "hello".to_string());
+    assert!(!email_msg.is_system_message());
 
     Ok(())
 }
@@ -809,43 +798,6 @@ async fn test_verify_then_verify_again() -> Result<()> {
     Ok(())
 }
 
-/// Regression test:
-/// - Verify a contact
-/// - The contact stops using DC and sends a message from a classical MUA instead
-/// - Delete the 1:1 chat
-/// - Create a 1:1 chat
-/// - Check that the created chat is not marked as protected
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_oneonone_chat_with_former_verified_contact() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice]).await;
-
-    mark_as_verified(&alice, &bob).await;
-
-    receive_imf(
-        &alice,
-        b"Subject: Message from bob\r\n\
-          From: <bob@example.net>\r\n\
-          To: <alice@example.org>\r\n\
-          Date: Mon, 12 Dec 2022 14:33:39 +0000\r\n\
-          Message-ID: <abcd@example.net>\r\n\
-          \r\n\
-          Heyho!\r\n",
-        false,
-    )
-    .await
-    .unwrap()
-    .unwrap();
-
-    alice.create_chat(&bob).await;
-
-    assert_verified(&alice, &bob, ProtectionStatus::Unprotected).await;
-
-    Ok(())
-}
-
 /// Tests that on the second device of a protected group creator the first message is
 /// `SystemMessage::ChatProtectionEnabled` and the second one is the message populating the group.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -891,7 +843,7 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let fiona = &tcm.fiona().await;
     enable_verified_oneonone_chats(&[alice, bob, fiona]).await;
 
-    let alice_fiona_contact_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
+    let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
     // Bob and Fiona scan Alice's QR code.
     tcm.execute_securejoin(bob, alice).await;
@@ -920,7 +872,7 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let fiona_received_message = fiona.recv_msg(&bob_sent_message).await;
     assert_eq!(
         fiona_received_message.get_text(),
-        "[The message was sent with non-verified encryption. See 'Info' for more details]"
+        "[The message was sent by non-verified contact. See 'Info' for more details]"
     );
 
     Ok(())
@@ -1027,7 +979,7 @@ async fn assert_verified(this: &TestContext, other: &TestContext, protected: Pro
         assert_eq!(contact.is_verified(this).await.unwrap(), true);
     }
 
-    let chat = this.get_chat(other).await;
+    let chat = this.get_pgp_chat(other).await;
     let (expect_protected, expect_broken) = match protected {
         ProtectionStatus::Unprotected => (false, false),
         ProtectionStatus::Protected => (true, false),

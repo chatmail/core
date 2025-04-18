@@ -1,4 +1,4 @@
-use deltachat_contact_tools::may_be_valid_addr;
+use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 
 use super::*;
 use crate::chat::{get_chat_contacts, send_text_msg, Chat};
@@ -133,7 +133,7 @@ async fn test_is_self_addr() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_add_or_lookup() {
     // add some contacts, this also tests add_address_book()
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let book = concat!(
         "  Name one  \n one@eins.org \n",
         "Name two\ntwo@deux.net\n",
@@ -247,7 +247,7 @@ async fn test_add_or_lookup() {
     // check SELF
     let contact = Contact::get_by_id(&t, ContactId::SELF).await.unwrap();
     assert_eq!(contact.get_name(), stock_str::self_msg(&t).await);
-    assert_eq!(contact.get_addr(), ""); // we're not configured
+    assert_eq!(contact.get_addr(), "alice@example.org");
     assert!(!contact.is_blocked());
 }
 
@@ -780,21 +780,21 @@ CCCB 5AA9 F6E1 141C 9431
 /// synchronized when the message is not encrypted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_synchronize_status() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
     // Alice has two devices.
-    let alice1 = TestContext::new_alice().await;
-    let alice2 = TestContext::new_alice().await;
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
 
     // Bob has one device.
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let default_status = alice1.get_config(Config::Selfstatus).await?;
 
     alice1
         .set_config(Config::Selfstatus, Some("New status"))
         .await?;
-    let chat = alice1
-        .create_chat_with_contact("Bob", "bob@example.net")
-        .await;
+    let chat = alice1.create_email_chat(bob).await;
 
     // Alice sends a message to Bob from the first device.
     send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
@@ -813,17 +813,8 @@ async fn test_synchronize_status() -> Result<()> {
     // Message was not encrypted, so status is not copied.
     assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
 
-    // Bob replies.
-    let chat = bob
-        .create_chat_with_contact("Alice", "alice@example.org")
-        .await;
-
-    send_text_msg(&bob, chat.id, "Reply".to_string()).await?;
-    let sent_msg = bob.pop_sent_msg().await;
-    alice1.recv_msg(&sent_msg).await;
-    alice2.recv_msg(&sent_msg).await;
-
-    // Alice sends second message.
+    // Alice sends encrypted message.
+    let chat = alice1.create_chat(bob).await;
     send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
@@ -845,12 +836,14 @@ async fn test_synchronize_status() -> Result<()> {
 /// Tests that DC_EVENT_SELFAVATAR_CHANGED is emitted on avatar changes.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_selfavatar_changed_event() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+
     // Alice has two devices.
-    let alice1 = TestContext::new_alice().await;
-    let alice2 = TestContext::new_alice().await;
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
 
     // Bob has one device.
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     assert_eq!(alice1.get_config(Config::Selfavatar).await?, None);
 
@@ -866,19 +859,8 @@ async fn test_selfavatar_changed_event() -> Result<()> {
         .get_matching(|e| matches!(e, EventType::SelfavatarChanged))
         .await;
 
-    // Bob sends a message so that Alice can encrypt to him.
-    let chat = bob
-        .create_chat_with_contact("Alice", "alice@example.org")
-        .await;
-
-    send_text_msg(&bob, chat.id, "Reply".to_string()).await?;
-    let sent_msg = bob.pop_sent_msg().await;
-    alice1.recv_msg(&sent_msg).await;
-    alice2.recv_msg(&sent_msg).await;
-
     // Alice sends a message.
-    let alice1_chat_id = alice1.get_last_msg().await.chat_id;
-    alice1_chat_id.accept(&alice1).await?;
+    let alice1_chat_id = alice1.create_chat(bob).await.id;
     send_text_msg(&alice1, alice1_chat_id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
@@ -1063,12 +1045,11 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
-    alice.recv_msg(&sent_msg).await;
-    let bob_id = Contact::create(alice, "Some Bob", &bob_addr).await?;
-    let key_base64 = Peerstate::from_addr(alice, &bob_addr)
+    let bob_id = alice.recv_msg(&sent_msg).await.from_id;
+    let bob_contact = Contact::get_by_id(alice, bob_id).await?;
+    let key_base64 = bob_contact
+        .openpgp_certificate(alice)
         .await?
-        .unwrap()
-        .peek_key(false)
         .unwrap()
         .to_base64();
     let fiona_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
@@ -1150,8 +1131,10 @@ async fn test_make_n_import_vcard() -> Result<()> {
     Ok(())
 }
 
+/// Tests importing a vCard with the same email address,
+/// but a new key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_import_vcard_updates_only_key() -> Result<()> {
+async fn test_import_vcard_key_change() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let bob = &TestContext::new_bob().await;
     let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
@@ -1169,28 +1152,34 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
     let msg = bob.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
 
-    let bob = &TestContext::new().await;
-    bob.configure_addr(bob_addr).await;
-    bob.set_config(Config::Displayname, Some("Not Bob")).await?;
-    let avatar_path = bob.dir.path().join("avatar.png");
+    let bob1 = &TestContext::new().await;
+    bob1.configure_addr(bob_addr).await;
+    bob1.set_config(Config::Displayname, Some("New Bob"))
+        .await?;
+    let avatar_path = bob1.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     tokio::fs::write(&avatar_path, avatar_bytes).await?;
-    bob.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
+    bob1.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
         .await?;
     SystemTime::shift(Duration::from_secs(1));
-    let vcard1 = make_vcard(bob, &[ContactId::SELF]).await?;
-    assert_eq!(import_vcard(alice, &vcard1).await?, vec![alice_bob_id]);
+    let vcard1 = make_vcard(bob1, &[ContactId::SELF]).await?;
+    let alice_bob_id1 = import_vcard(alice, &vcard1).await?[0];
+    assert_ne!(alice_bob_id1, alice_bob_id);
     let alice_bob_contact = Contact::get_by_id(alice, alice_bob_id).await?;
     assert_eq!(alice_bob_contact.get_authname(), "Bob");
     assert_eq!(alice_bob_contact.get_profile_image(alice).await?, None);
+    let alice_bob_contact1 = Contact::get_by_id(alice, alice_bob_id1).await?;
+    assert_eq!(alice_bob_contact1.get_authname(), "New Bob");
+    assert!(alice_bob_contact1.get_profile_image(alice).await?.is_some());
+
+    // Last message is still the same,
+    // no new messages are added.
     let msg = alice.get_last_msg_in(chat_id).await;
-    assert!(msg.is_info());
-    assert_eq!(
-        msg.get_text(),
-        stock_str::contact_setup_changed(alice, bob_addr).await
-    );
-    let sent_msg = alice.send_text(chat_id, "moin").await;
-    let msg = bob.recv_msg(&sent_msg).await;
+    assert_eq!(msg.get_text(), "moin");
+
+    let chat_id1 = ChatId::create_for_contact(alice, alice_bob_id1).await?;
+    let sent_msg = alice.send_text(chat_id1, "moin").await;
+    let msg = bob1.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
 
     // The old vCard is imported, but doesn't change Bob's key for Alice.
@@ -1198,63 +1187,6 @@ async fn test_import_vcard_updates_only_key() -> Result<()> {
     let sent_msg = alice.send_text(chat_id, "moin").await;
     let msg = bob.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reset_encryption() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    let msg = tcm.send_recv_accept(bob, alice, "Hi!").await;
-    assert_eq!(msg.get_showpadlock(), true);
-
-    let alice_bob_chat_id = msg.chat_id;
-    let alice_bob_contact_id = msg.from_id;
-
-    alice_bob_contact_id.reset_encryption(alice).await?;
-
-    let sent = alice.send_text(alice_bob_chat_id, "Unencrypted").await;
-    let msg = bob.recv_msg(&sent).await;
-    assert_eq!(msg.get_showpadlock(), false);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_reset_verified_encryption() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    tcm.execute_securejoin(bob, alice).await;
-
-    let msg = tcm.send_recv(bob, alice, "Encrypted").await;
-    assert_eq!(msg.get_showpadlock(), true);
-
-    let alice_bob_chat_id = msg.chat_id;
-    let alice_bob_contact_id = msg.from_id;
-
-    alice_bob_contact_id.reset_encryption(alice).await?;
-
-    // Check that the contact is still verified after resetting encryption.
-    let alice_bob_contact = Contact::get_by_id(alice, alice_bob_contact_id).await?;
-    assert_eq!(alice_bob_contact.is_verified(alice).await?, true);
-
-    // 1:1 chat and profile is no longer verified.
-    assert_eq!(alice_bob_contact.is_profile_verified(alice).await?, false);
-
-    let info_msg = alice.get_last_msg_in(alice_bob_chat_id).await;
-    assert_eq!(
-        info_msg.text,
-        "bob@example.net sent a message from another device."
-    );
-
-    let sent = alice.send_text(alice_bob_chat_id, "Unencrypted").await;
-    let msg = bob.recv_msg(&sent).await;
-    assert_eq!(msg.get_showpadlock(), false);
 
     Ok(())
 }
@@ -1268,9 +1200,27 @@ async fn test_self_is_verified() -> Result<()> {
     assert_eq!(contact.is_verified(&alice).await?, true);
     assert!(contact.is_profile_verified(&alice).await?);
     assert!(contact.get_verifier_id(&alice).await?.is_none());
+    assert!(contact.is_pgp_contact());
 
     let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
     assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
+
+    Ok(())
+}
+
+/// Tests that importing a vCard with a key creates a PGP-contact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_vcard_creates_pgp_contact() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let vcard = make_vcard(bob, &[ContactId::SELF]).await?;
+    let contact_ids = import_vcard(alice, &vcard).await?;
+    assert_eq!(contact_ids.len(), 1);
+    let contact_id = contact_ids.first().unwrap();
+    let contact = Contact::get_by_id(alice, *contact_id).await?;
+    assert!(contact.is_pgp_contact());
 
     Ok(())
 }

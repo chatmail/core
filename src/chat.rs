@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
 use tokio::task;
 
-use crate::aheader::EncryptPreference;
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
 use crate::color::str_to_color;
@@ -39,7 +38,6 @@ use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::receive_imf::ReceivedMsg;
 use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
@@ -1334,17 +1332,11 @@ impl ChatId {
         {
             let contact = Contact::get_by_id(context, *contact_id).await?;
             let addr = contact.get_addr();
-            let peerstate = Peerstate::from_addr(context, addr).await?;
-
-            match peerstate
-                .filter(|peerstate| peerstate.peek_key(false).is_some())
-                .map(|peerstate| peerstate.prefer_encrypt)
-            {
-                Some(EncryptPreference::Mutual) | Some(EncryptPreference::NoPreference) => {
-                    ret_available += &format!("{addr}\n")
-                }
-                Some(EncryptPreference::Reset) | None => ret_reset += &format!("{addr}\n"),
-            };
+            if contact.is_pgp_contact() {
+                ret_available += &format!("{addr}\n");
+            } else {
+                ret_reset += &format!("{addr}\n");
+            }
         }
 
         let mut ret = String::new();
@@ -1936,6 +1928,29 @@ impl Chat {
         self.protected == ProtectionStatus::Protected
     }
 
+    /// Returns true if the chat is encrypted.
+    pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
+        let is_encrypted = self.is_protected()
+            || match self.typ {
+                Chattype::Single => {
+                    let chat_contact_ids = get_chat_contacts(context, self.id).await?;
+                    if let Some(contact_id) = chat_contact_ids.first() {
+                        let contact = Contact::get_by_id(context, *contact_id).await?;
+                        contact.is_pgp_contact()
+                    } else {
+                        true
+                    }
+                }
+                Chattype::Group => {
+                    // Do not encrypt ad-hoc groups.
+                    !self.grpid.is_empty()
+                }
+                Chattype::Mailinglist => false,
+                Chattype::Broadcast => true,
+            };
+        Ok(is_encrypted)
+    }
+
     /// Returns true if the chat was protected, and then an incoming message broke this protection.
     ///
     /// This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
@@ -2319,7 +2334,11 @@ impl Chat {
                         return Ok(None);
                     }
                     let contact = Contact::get_by_id(context, contact_id).await?;
-                    r = Some(SyncId::ContactAddr(contact.get_addr().to_string()));
+                    if let Some(fingerprint) = contact.fingerprint() {
+                        r = Some(SyncId::ContactFingerprint(fingerprint.to_string()));
+                    } else {
+                        r = Some(SyncId::ContactAddr(contact.get_addr().to_string()));
+                    }
                 }
                 Ok(r)
             }
@@ -2677,12 +2696,7 @@ impl ChatIdBlocked {
             _ => (),
         }
 
-        let protected = contact_id == ContactId::SELF || {
-            let peerstate = Peerstate::from_addr(context, contact.get_addr()).await?;
-            peerstate.is_some_and(|p| {
-                p.is_using_verified_key() && p.prefer_encrypt == EncryptPreference::Mutual
-            })
-        };
+        let protected = contact_id == ContactId::SELF || contact.is_verified(context).await?;
         let smeared_time = create_smeared_timestamp(context);
 
         let chat_id = context
@@ -3920,8 +3934,8 @@ pub(crate) async fn add_contact_to_chat_ex(
     if chat.typ == Chattype::Group && chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
-        let contact_addr = contact.get_addr().to_lowercase();
-        msg.text = stock_str::msg_add_member_local(context, &contact_addr, ContactId::SELF).await;
+        let contact_addr = contact.get_addr().to_lowercase(); // FIXME contact is not identified by addr
+        msg.text = stock_str::msg_add_member_local(context, contact.id, ContactId::SELF).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
@@ -4115,12 +4129,9 @@ pub async fn remove_contact_from_chat(
                     if contact_id == ContactId::SELF {
                         msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
                     } else {
-                        msg.text = stock_str::msg_del_member_local(
-                            context,
-                            contact.get_addr(),
-                            ContactId::SELF,
-                        )
-                        .await;
+                        msg.text =
+                            stock_str::msg_del_member_local(context, contact_id, ContactId::SELF)
+                                .await;
                     }
                     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
                     msg.param.set(Param::Arg, contact.get_addr().to_lowercase());
@@ -4847,7 +4858,12 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
 /// A cross-device chat id used for synchronisation.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) enum SyncId {
+    // E-mail address of the contact.
     ContactAddr(String),
+
+    // OpenPGP fingerprint of the contact.
+    ContactFingerprint(String),
+
     Grpid(String),
     /// "Message-ID"-s, from oldest to latest. Used for ad-hoc groups.
     Msgids(Vec<String>),
@@ -4895,6 +4911,29 @@ impl Context {
                 }
                 // Use `Request` so that even if the program crashes, the user doesn't have to look
                 // into the blocked contacts.
+                ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
+                    .await?
+                    .id
+            }
+            SyncId::ContactFingerprint(fingerprint) => {
+                let name = "";
+                let addr = "";
+                let (contact_id, _) =
+                    Contact::add_or_lookup_ex(self, name, addr, fingerprint, Origin::Hidden)
+                        .await?;
+                match action {
+                    SyncAction::Rename(to) => {
+                        contact_id.set_name_ex(self, Nosync, to).await?;
+                        return Ok(());
+                    }
+                    SyncAction::Block => {
+                        return contact::set_blocked(self, Nosync, contact_id, true).await
+                    }
+                    SyncAction::Unblock => {
+                        return contact::set_blocked(self, Nosync, contact_id, false).await
+                    }
+                    _ => (),
+                }
                 ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
                     .await?
                     .id

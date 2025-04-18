@@ -43,7 +43,7 @@ async fn test_chat_info() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft_no_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat = t.get_self_chat().await;
     let draft = chat.id.get_draft(&t).await.unwrap();
     assert!(draft.is_none());
@@ -60,14 +60,14 @@ async fn test_get_draft_special_chat_id() {
 async fn test_get_draft_no_chat() {
     // This is a weird case, maybe this should be an error but we
     // do not get this info from the database currently.
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let draft = ChatId::new(42).get_draft(&t).await.unwrap();
     assert!(draft.is_none());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_draft() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let chat_id = &t.get_self_chat().await.id;
     let mut msg = Message::new_text("hello".to_string());
 
@@ -320,18 +320,20 @@ async fn test_member_add_remove() -> Result<()> {
         assert_eq!(alice_bob_contact.get_display_name(), "robert");
     }
 
-    // Create and promote a group.
+    tcm.section("Create and promote a group.");
     let alice_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group chat").await?;
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
     add_contact_to_chat(&alice, alice_chat_id, alice_fiona_contact_id).await?;
-    alice
+    let sent = alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
+    let fiona_chat_id = fiona.recv_msg(&sent).await.chat_id;
 
-    // Alice adds Bob to the chat.
+    tcm.section("Alice adds Bob to the chat.");
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
+    fiona.recv_msg(&sent).await;
 
     // Locally set name "robert" should not leak.
     assert!(!sent.payload.contains("robert"));
@@ -339,8 +341,15 @@ async fn test_member_add_remove() -> Result<()> {
         sent.load_from_db().await.get_text(),
         "You added member robert."
     );
+    let fiona_contact_ids = get_chat_contacts(&fiona, fiona_chat_id).await?;
+    assert_eq!(fiona_contact_ids.len(), 3);
+    for contact_id in fiona_contact_ids {
+        let contact = Contact::get_by_id(&fiona, contact_id).await?;
+        assert_ne!(contact.get_name(), "robert");
+        assert!(contact.is_pgp_contact());
+    }
 
-    // Alice removes Bob from the chat.
+    tcm.section("Alice removes Bob from the chat.");
     remove_contact_from_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.pop_sent_msg().await;
     assert!(!sent.payload.contains("robert"));
@@ -693,12 +702,12 @@ async fn test_leave_group() -> Result<()> {
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
 
-    // Create group chat with Bob.
+    tcm.section("Alice creates group chat with Bob.");
     let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
     let bob_contact = alice.add_or_lookup_contact(&bob).await.id;
     add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
 
-    // Alice sends first message to group.
+    tcm.section("Alice sends first message to group.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
     let bob_msg = bob.recv_msg(&sent_msg).await;
 
@@ -711,7 +720,7 @@ async fn test_leave_group() -> Result<()> {
     // Shift the time so that we can later check the 'Group left' message's timestamp:
     SystemTime::shift(Duration::from_secs(60));
 
-    // Bob leaves the group.
+    tcm.section("Bob leaves the group.");
     let bob_chat_id = bob_msg.chat_id;
     bob_chat_id.accept(&bob).await?;
     remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;
@@ -968,7 +977,7 @@ async fn test_delete_device_chat() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_device_chat_cannot_sent() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     t.update_device_chats().await.unwrap();
     let device_chat_id = ChatId::get_for_contact(&t, ContactId::DEVICE)
         .await
@@ -1015,7 +1024,7 @@ async fn chatlist_len(ctx: &Context, listflags: usize) -> usize {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive() {
     // create two chats
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
     let mut msg = Message::new_text("foo".to_string());
     let msg_id = add_device_msg(&t, None, Some(&mut msg)).await.unwrap();
     let chat_id1 = message::Message::load_from_db(&t, msg_id)
@@ -1313,7 +1322,7 @@ async fn get_chats_from_chat_list(ctx: &Context, listflags: usize) -> Vec<ChatId
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pinned() {
-    let t = TestContext::new().await;
+    let t = TestContext::new_alice().await;
 
     // create 3 chats, wait 1 second in between to get a reliable order (we order by time)
     let mut msg = Message::new_text("foo".to_string());
@@ -2909,12 +2918,13 @@ async fn test_blob_renaming() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_blocked() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let ba_chat = bob.create_chat(alice0).await;
     let sent_msg = bob.send_text(ba_chat.id, "hi").await;
@@ -2922,16 +2932,16 @@ async fn test_sync_blocked() -> Result<()> {
     alice1.recv_msg(&sent_msg).await;
     let a0b_contact_id = alice0.add_or_lookup_contact_id(&bob).await;
 
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Request);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Request);
     a0b_chat_id.accept(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
     a0b_chat_id.block(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Yes);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Yes);
     a0b_chat_id.unblock(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
 
     // Unblocking a 1:1 chat doesn't unblock the contact currently.
     Contact::unblock(alice0, a0b_contact_id).await?;
@@ -2995,16 +3005,16 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     a0b_chat_id.accept(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::CreateChat);
-    assert_eq!(alice0.get_chat(bob).await.blocked, Blocked::Not);
+    assert_eq!(alice0.get_pgp_chat(bob).await.blocked, Blocked::Not);
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
     assert_eq!(alice1_contacts.len(), 1);
     let a1b_contact_id = alice1_contacts[0];
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
-    assert_eq!(a1b_contact.get_addr(), "bob@example.net");
+    assert_eq!(a1b_contact.get_addr(), "");
     assert_eq!(a1b_contact.origin, Origin::CreateChat);
-    let a1b_chat = alice1.get_chat(bob).await;
+    let a1b_chat = alice1.get_pgp_chat(bob).await;
     assert_eq!(a1b_chat.blocked, Blocked::Not);
     let chats = Chatlist::try_load(alice1, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
@@ -3205,7 +3215,7 @@ async fn test_sync_muted() -> Result<()> {
     alice1.create_chat(&bob).await;
 
     assert_eq!(
-        alice1.get_chat(&bob).await.mute_duration,
+        alice1.get_pgp_chat(&bob).await.mute_duration,
         MuteDuration::NotMuted
     );
     let mute_durations = [
@@ -3223,7 +3233,7 @@ async fn test_sync_muted() -> Result<()> {
             ),
             _ => m,
         };
-        assert_eq!(alice1.get_chat(&bob).await.mute_duration, m);
+        assert_eq!(alice1.get_pgp_chat(&bob).await.mute_duration, m);
     }
     Ok(())
 }
@@ -3384,7 +3394,7 @@ async fn test_info_contact_id() -> Result<()> {
         expected_bob_id: ContactId,
     ) -> Result<()> {
         let sent_msg = alice.pop_sent_msg().await;
-        let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
+        let msg = sent_msg.load_from_db().await;
         assert_eq!(msg.get_info_type(), expected_type);
         assert_eq!(
             msg.get_info_contact_id(alice).await?,
@@ -3547,19 +3557,24 @@ async fn test_past_members() -> Result<()> {
     let fiona = &tcm.fiona().await;
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
+    tcm.section("Alice creates a chat.");
     let alice_chat_id =
         create_group_chat(alice, ProtectionStatus::Unprotected, "Group chat").await?;
     add_contact_to_chat(alice, alice_chat_id, alice_fiona_contact_id).await?;
     alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
+
+    tcm.section("Alice removes Fiona from the chat.");
     remove_contact_from_chat(alice, alice_chat_id, alice_fiona_contact_id).await?;
     assert_eq!(get_past_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
+    tcm.section("Alice adds Bob to the chat.");
     let bob = &tcm.bob().await;
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
 
+    tcm.section("Bob receives a message.");
     let add_message = alice.pop_sent_msg().await;
     let bob_add_message = bob.recv_msg(&add_message).await;
     let bob_chat_id = bob_add_message.chat_id;

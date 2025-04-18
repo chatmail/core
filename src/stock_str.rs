@@ -636,29 +636,22 @@ pub(crate) async fn msg_add_member_remote(context: &Context, added_member_addr: 
 /// contacts to combine with the display name.
 pub(crate) async fn msg_add_member_local(
     context: &Context,
-    added_member_addr: &str,
+    added_member: ContactId,
     by_contact: ContactId,
 ) -> String {
-    let addr = added_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_display_name().to_string())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
+    let whom = added_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
         translated(context, StockMessage::MsgAddMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouAddMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else {
         translated(context, StockMessage::MsgAddMemberBy)
             .await
-            .replace1(whom)
+            .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
 }
@@ -687,29 +680,22 @@ pub(crate) async fn msg_del_member_remote(context: &Context, removed_member_addr
 /// the contacts to combine with the display name.
 pub(crate) async fn msg_del_member_local(
     context: &Context,
-    removed_member_addr: &str,
+    removed_member: ContactId,
     by_contact: ContactId,
 ) -> String {
-    let addr = removed_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_display_name().to_string())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
+    let whom = removed_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
         translated(context, StockMessage::MsgDelMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouDelMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else {
         translated(context, StockMessage::MsgDelMemberBy)
             .await
-            .replace1(whom)
+            .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
 }
