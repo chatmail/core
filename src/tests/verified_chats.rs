@@ -589,8 +589,13 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     .unwrap();
     tcm.send_recv(&alice, &bob, "Sending with DC again").await;
 
+    // Unencrypted message from MUA gets into a separate chat.
+    // PGP chat gets all encrypted messages.
     alice
         .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
+        .await;
+    alice
+        .golden_test_chat(alice.get_pgp_chat(&bob).await.id, "test_outgoing_mua_msg_pgp")
         .await;
 
     Ok(())
