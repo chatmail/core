@@ -585,25 +585,6 @@ async fn secure_connection_established(
     Ok(())
 }
 
-async fn could_not_establish_secure_connection(
-    context: &Context,
-    contact_id: ContactId,
-    chat_id: ChatId,
-    details: &str,
-) -> Result<()> {
-    let contact = Contact::get_by_id(context, contact_id).await?;
-    let mut msg = stock_str::contact_not_verified(context, &contact).await;
-    msg += " (";
-    msg += details;
-    msg += ")";
-    chat::add_info_msg(context, chat_id, &msg, time()).await?;
-    warn!(
-        context,
-        "StockMessage::ContactNotVerified posted to 1:1 chat ({})", details
-    );
-    Ok(())
-}
-
 /* ******************************************************************************
  * Tools: Misc.
  ******************************************************************************/

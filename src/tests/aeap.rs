@@ -7,7 +7,6 @@ use crate::contact::ContactId;
 use crate::message::Message;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
-use crate::stock_str;
 use crate::test_utils::mark_as_verified;
 use crate::test_utils::TestContext;
 use crate::test_utils::TestContextManager;
