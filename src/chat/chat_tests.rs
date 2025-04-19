@@ -1504,6 +1504,40 @@ async fn test_shall_attach_selfavatar() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_profile_data_on_group_leave() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let chat_id = create_group_chat(t, ProtectionStatus::Unprotected, "foo").await?;
+
+    let (contact_id, _) = Contact::add_or_lookup(
+        t,
+        "",
+        &ContactAddress::new("foo@bar.org")?,
+        Origin::IncomingUnknownTo,
+    )
+    .await?;
+    add_contact_to_chat(t, chat_id, contact_id).await?;
+
+    send_text_msg(t, chat_id, "populate".to_string()).await?;
+    t.pop_sent_msg().await;
+
+    t.set_config(Config::Displayname, Some("aae7b258ad3cabd9"))
+        .await?;
+    let file = t.dir.path().join("avatar.png");
+    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
+    tokio::fs::write(&file, bytes).await?;
+    t.set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
+        .await?;
+    assert!(shall_attach_selfavatar(t, chat_id).await?);
+
+    remove_contact_from_chat(t, chat_id, ContactId::SELF).await?;
+    let sent_msg = t.pop_sent_msg().await;
+    assert!(!sent_msg.payload().contains("aae7b258ad3cabd9"));
+    assert!(!sent_msg.payload().contains("Chat-User-Avatar"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_mute_duration() {
     let t = TestContext::new().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo")

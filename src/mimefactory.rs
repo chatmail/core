@@ -161,7 +161,7 @@ impl MimeFactory {
     pub async fn from_msg(context: &Context, msg: Message) -> Result<MimeFactory> {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
-        let attach_profile_data = Self::should_attach_profile_data(&msg);
+        let attach_profile_data = Self::should_attach_profile_data(context, &msg).await?;
         let undisclosed_recipients = chat.typ == Chattype::Broadcast;
 
         let from_addr = context.get_primary_self_addr().await?;
@@ -312,7 +312,7 @@ impl MimeFactory {
                 .unwrap_or_default(),
             false => "".to_string(),
         };
-        let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await;
+        let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await?;
 
         debug_assert!(
             member_timestamps.is_empty()
@@ -434,8 +434,14 @@ impl MimeFactory {
         }
     }
 
-    fn should_attach_profile_data(msg: &Message) -> bool {
-        msg.param.get_cmd() != SystemMessage::SecurejoinMessage || {
+    async fn should_attach_profile_data(context: &Context, msg: &Message) -> Result<bool> {
+        if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup
+            && msg.param.get(Param::Arg)
+                == context.get_config(Config::ConfiguredAddr).await?.as_deref()
+        {
+            return Ok(false);
+        }
+        Ok(msg.param.get_cmd() != SystemMessage::SecurejoinMessage || {
             let step = msg.param.get(Param::Arg).unwrap_or_default();
             // Don't attach profile data at the earlier SecureJoin steps:
             // - The corresponding messages, i.e. "v{c,g}-request" and "v{c,g}-auth-required" are
@@ -446,11 +452,11 @@ impl MimeFactory {
                 || step == "vc-request-with-auth"
                 || step == "vg-member-added"
                 || step == "vc-contact-confirm"
-        }
+        })
     }
 
-    async fn should_attach_selfavatar(context: &Context, msg: &Message) -> bool {
-        Self::should_attach_profile_data(msg)
+    async fn should_attach_selfavatar(context: &Context, msg: &Message) -> Result<bool> {
+        Ok(Self::should_attach_profile_data(context, msg).await?
             && match chat::shall_attach_selfavatar(context, msg.chat_id).await {
                 Ok(should) => should,
                 Err(err) => {
@@ -460,7 +466,7 @@ impl MimeFactory {
                     );
                     false
                 }
-            }
+            })
     }
 
     fn grpimage(&self) -> Option<String> {
@@ -521,7 +527,7 @@ impl MimeFactory {
                     return Ok(format!("Re: {}", remove_subject_prefix(last_subject)));
                 }
 
-                let self_name = match Self::should_attach_profile_data(msg) {
+                let self_name = match Self::should_attach_profile_data(context, msg).await? {
                     true => context.get_config(Config::Displayname).await?,
                     false => None,
                 };
