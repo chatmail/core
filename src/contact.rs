@@ -27,7 +27,9 @@ use crate::config::Config;
 use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF, DC_GCL_VERIFIED_ONLY};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::{load_self_public_key, load_self_public_key_opt, DcKey, SignedPublicKey};
+use crate::key::{
+    load_self_public_key, load_self_public_key_opt, DcKey, Fingerprint, SignedPublicKey,
+};
 use crate::log::LogExt;
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
@@ -1258,6 +1260,7 @@ impl Contact {
         let Some(fingerprint_other) = contact.fingerprint() else {
             return Ok(stock_str::encr_none(context).await);
         };
+        let fingerprint_other = fingerprint_other.to_string();
 
         let stock_message = stock_str::e2e_available(context).await;
 
@@ -1374,8 +1377,12 @@ impl Contact {
     /// Returns OpenPGP fingerprint of a contact.
     ///
     /// `None` for e-mail contacts.
-    pub fn fingerprint(&self) -> Option<&str> {
-        self.fingerprint.as_deref()
+    pub fn fingerprint(&self) -> Option<Fingerprint> {
+        if let Some(fingerprint) = &self.fingerprint {
+            fingerprint.parse().ok()
+        } else {
+            None
+        }
     }
 
     /// Returns OpenPGP certificate of a contact.
@@ -1726,7 +1733,7 @@ WHERE type=? AND id IN (
                 false => chat::SyncAction::Unblock,
             };
             let sync_id = if let Some(fingerprint) = contact.fingerprint() {
-                chat::SyncId::ContactFingerprint(fingerprint.to_string())
+                chat::SyncId::ContactFingerprint(fingerprint.hex())
             } else {
                 chat::SyncId::ContactAddr(contact.addr.clone())
             };

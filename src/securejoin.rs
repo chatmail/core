@@ -205,9 +205,8 @@ async fn verify_sender_by_fingerprint(
     fingerprint: &Fingerprint,
     contact_id: ContactId,
 ) -> Result<bool> {
-    let fingerprint = fingerprint.hex();
     let contact = Contact::get_by_id(context, contact_id).await?;
-    let is_verified = contact.fingerprint().is_some_and(|fp| fp == fingerprint);
+    let is_verified = contact.fingerprint().is_some_and(|fp| &fp == fingerprint);
     if is_verified {
         mark_contact_id_as_verified(context, contact_id, contact_id).await?;
     }

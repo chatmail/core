@@ -595,7 +595,10 @@ async fn test_outgoing_mua_msg() -> Result<()> {
         .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
         .await;
     alice
-        .golden_test_chat(alice.get_pgp_chat(&bob).await.id, "test_outgoing_mua_msg_pgp")
+        .golden_test_chat(
+            alice.get_pgp_chat(&bob).await.id,
+            "test_outgoing_mua_msg_pgp",
+        )
         .await;
 
     Ok(())

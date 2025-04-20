@@ -2333,7 +2333,7 @@ impl Chat {
                     }
                     let contact = Contact::get_by_id(context, contact_id).await?;
                     if let Some(fingerprint) = contact.fingerprint() {
-                        r = Some(SyncId::ContactFingerprint(fingerprint.to_string()));
+                        r = Some(SyncId::ContactFingerprint(fingerprint.hex()));
                     } else {
                         r = Some(SyncId::ContactAddr(contact.get_addr().to_string()));
                     }
