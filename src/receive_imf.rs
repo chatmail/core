@@ -3056,7 +3056,6 @@ async fn has_verified_encryption(
             "The message was sent by non-verified contact".to_string(),
         ));
     }
-    let fingerprint: Fingerprint = fingerprint.parse().context("Failed to parse fingerprint")?;
 
     let signed_with_verified_key = mimeparser.signatures.contains(&fingerprint);
     if signed_with_verified_key {

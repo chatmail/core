@@ -728,7 +728,9 @@ async fn test_contact_get_color() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_contact_get_encrinfo() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     // Return error for special IDs
     let encrinfo = Contact::get_encrinfo(&alice, ContactId::SELF).await;
@@ -736,38 +738,25 @@ async fn test_contact_get_encrinfo() -> Result<()> {
     let encrinfo = Contact::get_encrinfo(&alice, ContactId::DEVICE).await;
     assert!(encrinfo.is_err());
 
-    let (contact_bob_id, _modified) = Contact::add_or_lookup(
-        &alice,
-        "Bob",
-        &ContactAddress::new("bob@example.net")?,
-        Origin::ManuallyCreated,
-    )
-    .await?;
-
-    let encrinfo = Contact::get_encrinfo(&alice, contact_bob_id).await?;
+    let email_contact_bob_id = alice.add_or_lookup_email_contact_id(bob).await;
+    let encrinfo = Contact::get_encrinfo(&alice, email_contact_bob_id).await?;
     assert_eq!(encrinfo, "No encryption");
-    let contact = Contact::get_by_id(&alice, contact_bob_id).await?;
+
+    let contact = Contact::get_by_id(&alice, email_contact_bob_id).await?;
     assert!(!contact.e2ee_avail(&alice).await?);
 
-    let bob = TestContext::new_bob().await;
-    let chat_alice = bob
-        .create_chat_with_contact("Alice", "alice@example.org")
-        .await;
-    send_text_msg(&bob, chat_alice.id, "Hello".to_string()).await?;
-    let msg = bob.pop_sent_msg().await;
-    alice.recv_msg(&msg).await;
-
+    let contact_bob_id = alice.add_or_lookup_contact_id(bob).await;
     let encrinfo = Contact::get_encrinfo(&alice, contact_bob_id).await?;
     assert_eq!(
         encrinfo,
-        "End-to-end encryption preferred.
+        "End-to-end encryption available.
 Fingerprints:
 
 Me (alice@example.org):
 2E6F A2CB 23B5 32D7 2863
 4B58 64B0 8F61 A9ED 9443
 
-Bob (bob@example.net):
+bob@example.net (bob@example.net):
 CCCB 5AA9 F6E1 141C 9431
 65F1 DB18 B18C BCF7 0487"
     );
