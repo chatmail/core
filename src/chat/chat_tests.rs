@@ -1490,25 +1490,22 @@ async fn test_create_same_chat_twice() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_shall_attach_selfavatar() -> Result<()> {
-    let t = TestContext::new().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
-    assert!(!shall_attach_selfavatar(&t, chat_id).await?);
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let (contact_id, _) = Contact::add_or_lookup(
-        &t,
-        "",
-        &ContactAddress::new("foo@bar.org")?,
-        Origin::IncomingUnknownTo,
-    )
-    .await?;
-    add_contact_to_chat(&t, chat_id, contact_id).await?;
-    assert!(shall_attach_selfavatar(&t, chat_id).await?);
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foo").await?;
+    assert!(!shall_attach_selfavatar(alice, chat_id).await?);
 
-    chat_id.set_selfavatar_timestamp(&t, time()).await?;
-    assert!(!shall_attach_selfavatar(&t, chat_id).await?);
+    let contact_id = alice.add_or_lookup_contact_id(bob).await;
+    add_contact_to_chat(alice, chat_id, contact_id).await?;
+    assert!(shall_attach_selfavatar(alice, chat_id).await?);
 
-    t.set_config(Config::Selfavatar, None).await?; // setting to None also forces re-sending
-    assert!(shall_attach_selfavatar(&t, chat_id).await?);
+    chat_id.set_selfavatar_timestamp(alice, time()).await?;
+    assert!(!shall_attach_selfavatar(alice, chat_id).await?);
+
+    alice.set_config(Config::Selfavatar, None).await?; // setting to None also forces re-sending
+    assert!(shall_attach_selfavatar(alice, chat_id).await?);
     Ok(())
 }
 
