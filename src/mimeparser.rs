@@ -1858,6 +1858,16 @@ impl MimeMessage {
                     .collect()
             })
     }
+
+    /// Returns list of fingerprints from
+    /// `Chat-Group-Past-Members-Fpr` header.
+    pub fn chat_group_past_members_fingerprints(&self) -> Vec<Fingerprint> {
+        if let Some(header) = self.get_header(HeaderDef::ChatGroupPastMembersFpr) {
+            header.split_ascii_whitespace().filter_map(|fpr| fpr.parse::<Fingerprint>().ok()).collect()
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 fn remove_header(

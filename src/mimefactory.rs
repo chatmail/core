@@ -103,6 +103,9 @@ pub struct MimeFactory {
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
 
+    /// Vector of OpenPGP fingerprints for past members.
+    past_member_fingerprints: Vec<String>,
+
     /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
@@ -189,6 +192,7 @@ impl MimeFactory {
         let mut recipients = Vec::new();
         let mut to = Vec::new();
         let mut past_members = Vec::new();
+        let mut past_member_fingerprints = Vec::new();
         let mut member_timestamps = Vec::new();
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
@@ -241,7 +245,7 @@ impl MimeFactory {
             context
                 .sql
                 .query_map(
-                    "SELECT c.authname, c.addr, c.id, cc.add_timestamp, cc.remove_timestamp, k.public_key
+                    "SELECT c.authname, c.addr, c.fingerprint, c.id, cc.add_timestamp, cc.remove_timestamp, k.public_key
                      FROM chats_contacts cc
                      LEFT JOIN contacts c ON cc.contact_id=c.id
                      LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
@@ -250,17 +254,18 @@ impl MimeFactory {
                     |row| {
                         let authname: String = row.get(0)?;
                         let addr: String = row.get(1)?;
-                        let id: ContactId = row.get(2)?;
-                        let add_timestamp: i64 = row.get(3)?;
-                        let remove_timestamp: i64 = row.get(4)?;
-                        let certificate_bytes_opt: Option<Vec<u8>> = row.get(5)?;
-                        Ok((authname, addr, id, add_timestamp, remove_timestamp, certificate_bytes_opt))
+                        let fingerprint: String = row.get(2)?;
+                        let id: ContactId = row.get(3)?;
+                        let add_timestamp: i64 = row.get(4)?;
+                        let remove_timestamp: i64 = row.get(5)?;
+                        let certificate_bytes_opt: Option<Vec<u8>> = row.get(6)?;
+                        Ok((authname, addr, fingerprint, id, add_timestamp, remove_timestamp, certificate_bytes_opt))
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
 
                         for row in rows {
-                            let (authname, addr, id, add_timestamp, remove_timestamp, certificate_bytes) = row?;
+                            let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, certificate_bytes) = row?;
 
                             let certificate_opt = if let Some(certificate_bytes) = certificate_bytes {
                                 Some(SignedPublicKey::from_slice(&certificate_bytes)?)
@@ -301,6 +306,12 @@ impl MimeFactory {
                                     if !undisclosed_recipients {
                                         past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
+
+                                        if !fingerprint.is_empty() {
+                                            past_member_fingerprints.push(fingerprint);
+                                        } else {
+                                            debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                        }
                                     }
                                 }
                             }
@@ -392,6 +403,7 @@ impl MimeFactory {
             encryption_keys,
             to,
             past_members,
+            past_member_fingerprints,
             member_timestamps,
             timestamp: msg.timestamp_sort,
             loaded: Loaded::Message { msg, chat },
@@ -435,6 +447,7 @@ impl MimeFactory {
             encryption_keys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
+            past_member_fingerprints: vec![],
             member_timestamps: vec![],
             timestamp,
             loaded: Loaded::Mdn {
@@ -624,6 +637,20 @@ impl MimeFactory {
                 "Chat-Group-Past-Members",
                 mail_builder::headers::address::Address::new_list(past_members.clone()).into(),
             ));
+
+            if !self.past_member_fingerprints.is_empty() {
+                headers.push((
+                    "Chat-Group-Past-Members-Fpr",
+                    mail_builder::headers::raw::Raw::new(
+                        self.past_member_fingerprints
+                            .iter()
+                            .map(|fp| fp.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                    )
+                    .into()
+                ));
+            }
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
