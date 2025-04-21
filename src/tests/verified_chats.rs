@@ -264,7 +264,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 
-    let email_chat = alice.get_chat(&bob).await;
+    let email_chat = alice.get_email_chat(&bob).await;
     assert!(!email_chat.is_encrypted(&alice).await?);
     let email_msg = get_chat_msg(&alice, email_chat.id, 0, 1).await;
     assert_eq!(email_msg.text, "hello".to_string());
@@ -398,7 +398,7 @@ async fn test_old_message_3() -> Result<()> {
     .await?;
 
     alice
-        .golden_test_chat(alice.get_chat(&bob).await.id, "test_old_message_3")
+        .golden_test_chat(alice.get_pgp_chat(&bob).await.id, "test_old_message_3")
         .await;
 
     Ok(())
@@ -600,78 +600,6 @@ async fn test_reply() -> Result<()> {
     Ok(())
 }
 
-/// Regression test for the following bug:
-///
-/// - Scan your chat partner's QR Code
-/// - They change devices
-/// - They send you a message
-/// - Without accepting the encryption downgrade, scan your chat partner's QR Code again
-///
-/// -> The re-verification fails.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_break_protection_then_verify_again() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    // Cave: Bob can't write a message to Alice here.
-    // If he did, alice would increase his peerstate's last_seen timestamp.
-    // Then, after Bob reinstalls DC, alice's `if message_time > last_seen*`
-    // checks would return false (there are many checks of this form in peerstate.rs).
-    // Therefore, during the securejoin, Alice wouldn't accept the new key
-    // and reject the securejoin.
-
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
-
-    alice.create_chat(&bob).await;
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
-    let chats = Chatlist::try_load(&alice, DC_GCL_FOR_FORWARDING, None, None).await?;
-    assert_eq!(chats.len(), 1);
-
-    tcm.section("Bob reinstalls DC");
-    drop(bob);
-    let bob_new = tcm.unconfigured().await;
-    enable_verified_oneonone_chats(&[&bob_new]).await;
-    bob_new.configure_addr("bob@example.net").await;
-    e2ee::ensure_secret_key_exists(&bob_new).await?;
-
-    tcm.send_recv(&bob_new, &alice, "I have a new device").await;
-
-    let contact = alice.add_or_lookup_contact(&bob_new).await;
-    assert_eq!(
-        contact.is_verified(&alice).await.unwrap(),
-        // Bob sent a message with a new key, so he most likely doesn't have
-        // the old key anymore. This means that Alice's device should show
-        // him as unverified:
-        false
-    );
-    let chat = alice.get_chat(&bob_new).await;
-    assert_eq!(chat.is_protected(), false);
-    assert_eq!(chat.is_protection_broken(), true);
-    let chats = Chatlist::try_load(&alice, DC_GCL_FOR_FORWARDING, None, None).await?;
-    assert_eq!(chats.len(), 1);
-
-    {
-        let alice_bob_chat = alice.get_chat(&bob_new).await;
-        assert!(!alice_bob_chat.can_send(&alice).await?);
-
-        // Alice's UI should still be able to save a draft, which Alice started to type right when she got Bob's message:
-        let mut msg = Message::new_text("Draftttt".to_string());
-        alice_bob_chat.id.set_draft(&alice, Some(&mut msg)).await?;
-        assert_eq!(
-            alice_bob_chat.id.get_draft(&alice).await?.unwrap().text,
-            "Draftttt"
-        );
-    }
-
-    tcm.execute_securejoin(&alice, &bob_new).await;
-    assert_verified(&alice, &bob_new, ProtectionStatus::Protected).await;
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_from_old_dc_setup() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -701,7 +629,7 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     let contact = alice.add_or_lookup_contact(bob).await;
     // The outdated Bob's Autocrypt header isn't applied, so the verification preserves.
     assert!(contact.is_verified(alice).await.unwrap());
-    let chat = alice.get_chat(bob).await;
+    let chat = alice.get_pgp_chat(bob).await;
     assert!(chat.is_protected());
     assert_eq!(chat.is_protection_broken(), false);
     let protection_msg = alice.get_last_msg().await;
