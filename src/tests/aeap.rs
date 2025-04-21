@@ -209,6 +209,7 @@ async fn test_aeap_replay_attack() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
+    let fiona = tcm.fiona().await;
 
     tcm.send_recv_accept(&alice, &bob, "Hi").await;
     tcm.send_recv(&bob, &alice, "Hi back").await;
@@ -216,7 +217,8 @@ async fn test_aeap_replay_attack() -> Result<()> {
     let group =
         chat::create_group_chat(&bob, chat::ProtectionStatus::Unprotected, "Group 0").await?;
 
-    let bob_alice_contact = Contact::create(&bob, "Alice", "alice@example.org").await?;
+    let bob_alice_contact = bob.add_or_lookup_contact_id(&alice).await;
+    let bob_fiona_contact = bob.add_or_lookup_contact_id(&fiona).await;
     chat::add_contact_to_chat(&bob, group, bob_alice_contact).await?;
 
     // Alice sends a message which Bob doesn't receive or something
@@ -238,7 +240,6 @@ async fn test_aeap_replay_attack() -> Result<()> {
 
     // Check that no transition was done
     assert!(chat::is_contact_in_chat(&bob, group, bob_alice_contact).await?);
-    let bob_fiona_contact = Contact::create(&bob, "", "fiona@example.net").await?;
     assert!(!chat::is_contact_in_chat(&bob, group, bob_fiona_contact).await?);
 
     Ok(())
