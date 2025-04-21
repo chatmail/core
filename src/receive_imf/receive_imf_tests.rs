@@ -273,31 +273,32 @@ async fn test_adhoc_groups_merge() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_read_receipt_and_unarchive() -> Result<()> {
-    // create alice's account
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let bob_id = Contact::create(&t, "bob", "bob@example.com").await?;
-    let one2one_id = ChatId::create_for_contact(&t, bob_id).await?;
-    one2one_id
-        .set_visibility(&t, ChatVisibility::Archived)
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let one2one = alice.create_chat(bob).await;
+    one2one.id
+        .set_visibility(alice, ChatVisibility::Archived)
         .await
         .unwrap();
-    let one2one = Chat::load_from_db(&t, one2one_id).await?;
-    assert!(one2one.get_visibility() == ChatVisibility::Archived);
+    let one2one = Chat::load_from_db(alice, one2one.id).await?;
+    assert_eq!(one2one.get_visibility(), ChatVisibility::Archived);
 
     // create a group with bob, archive group
-    let group_id = chat::create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
-    chat::add_contact_to_chat(&t, group_id, bob_id).await?;
-    assert_eq!(chat::get_chat_msgs(&t, group_id).await.unwrap().len(), 0);
+    let group_id = chat::create_group_chat(alice, ProtectionStatus::Unprotected, "foo").await?;
+    chat::add_contact_to_chat(alice, group_id, bob_id).await?;
+    assert_eq!(chat::get_chat_msgs(alice, group_id).await.unwrap().len(), 0);
     group_id
-        .set_visibility(&t, ChatVisibility::Archived)
+        .set_visibility(alice, ChatVisibility::Archived)
         .await?;
-    let group = Chat::load_from_db(&t, group_id).await?;
-    assert!(group.get_visibility() == ChatVisibility::Archived);
+    let group = Chat::load_from_db(alice, group_id).await?;
+    assert_eq!(group.get_visibility(), ChatVisibility::Archived);
 
     // everything archived, chatlist should be empty
     assert_eq!(
-        Chatlist::try_load(&t, DC_GCL_NO_SPECIALS, None, None)
+        Chatlist::try_load(alice, DC_GCL_NO_SPECIALS, None, None)
             .await?
             .len(),
         0
@@ -305,7 +306,7 @@ async fn test_read_receipt_and_unarchive() -> Result<()> {
 
     // send a message to group with bob
     receive_imf(
-        &t,
+        alice,
         format!(
             "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
                  From: alice@example.org\n\
@@ -325,16 +326,16 @@ async fn test_read_receipt_and_unarchive() -> Result<()> {
         false,
     )
     .await?;
-    let msg = get_chat_msg(&t, group_id, 0, 1).await;
+    let msg = get_chat_msg(alice, group_id, 0, 1).await;
     assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
     assert_eq!(msg.text, "hello");
     assert_eq!(msg.state, MessageState::OutDelivered);
-    let group = Chat::load_from_db(&t, group_id).await?;
+    let group = Chat::load_from_db(alice, group_id).await?;
     assert!(group.get_visibility() == ChatVisibility::Normal);
 
     // bob sends a read receipt to the group
     receive_imf(
-            &t,
+            alice,
             format!(
                 "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
                  From: bob@example.com\n\
@@ -369,19 +370,19 @@ async fn test_read_receipt_and_unarchive() -> Result<()> {
             false,
         )
         .await?;
-    assert_eq!(chat::get_chat_msgs(&t, group_id).await?.len(), 1);
-    let msg = message::Message::load_from_db(&t, msg.id).await?;
+    assert_eq!(chat::get_chat_msgs(alice, group_id).await?.len(), 1);
+    let msg = message::Message::load_from_db(alice, msg.id).await?;
     assert_eq!(msg.state, MessageState::OutMdnRcvd);
 
     // check, the read-receipt has not unarchived the one2one
     assert_eq!(
-        Chatlist::try_load(&t, DC_GCL_NO_SPECIALS, None, None)
+        Chatlist::try_load(alice, DC_GCL_NO_SPECIALS, None, None)
             .await?
             .len(),
         1
     );
-    let one2one = Chat::load_from_db(&t, one2one_id).await?;
-    assert!(one2one.get_visibility() == ChatVisibility::Archived);
+    let one2one = Chat::load_from_db(alice, one2one.id).await?;
+    assert_eq!(one2one.get_visibility(), ChatVisibility::Archived);
     Ok(())
 }
 
