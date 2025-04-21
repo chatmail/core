@@ -2313,7 +2313,7 @@ async fn test_saved_msgs_not_added_to_shared_chats() -> Result<()> {
     assert_eq!(shared_chats.len(), 1);
     assert_eq!(
         shared_chats.get_chat_id(0).unwrap(),
-        bob.get_chat(&alice).await.id
+        bob.get_pgp_chat(&alice).await.id
     );
 
     Ok(())
