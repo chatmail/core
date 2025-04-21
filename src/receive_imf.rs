@@ -334,6 +334,7 @@ pub(crate) async fn receive_imf_inner(
         context,
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
+        &[], // TODO use To fingerprints
         if !mime_parser.incoming {
             Origin::OutgoingTo
         } else if incoming_origin.is_known() {
@@ -346,9 +347,11 @@ pub(crate) async fn receive_imf_inner(
 
     if mime_parser.get_chat_group_id().is_some() {
         to_ids = pgp_to_ids;
+        let past_members_fingerprints = mime_parser.chat_group_past_members_fingerprints();
+
         if let Some(chat_id) = chat_id {
             past_ids =
-                lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, chat_id)
+                lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, &past_members_fingerprints, chat_id)
                     .await?;
         } else {
             // TODO: lookup by fingerprints if they are available.
@@ -3169,6 +3172,7 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
     gossiped_keys: &HashMap<String, SignedPublicKey>,
+    fingerprints: &[Fingerprint],
     origin: Origin,
 ) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
@@ -3272,6 +3276,7 @@ async fn lookup_pgp_contact_by_fingerprint(
 async fn lookup_pgp_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
+    fingerprints: &[Fingerprint],
     chat_id: ChatId,
 ) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
