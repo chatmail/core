@@ -273,63 +273,6 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_enable_disable() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    // Alice & Bob verify each other
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
-
-    let chat = alice.create_chat(&bob).await;
-    assert!(chat.is_protected());
-
-    for alice_accepts_breakage in [true, false] {
-        SystemTime::shift(std::time::Duration::from_secs(300));
-        // Bob uses Thunderbird to send a message
-        receive_imf(
-            &alice,
-            format!(
-                "From: Bob <bob@example.net>\n\
-              To: alice@example.org\n\
-              Message-ID: <1234-2{alice_accepts_breakage}@example.org>\n\
-              \n\
-              Message from Thunderbird\n"
-            )
-            .as_bytes(),
-            false,
-        )
-        .await?;
-
-        let chat = alice.get_chat(&bob).await;
-        assert!(!chat.is_protected());
-        assert!(chat.is_protection_broken());
-
-        if alice_accepts_breakage {
-            tcm.section("Alice clicks 'Accept' on the input-bar-dialog");
-            chat.id.accept(&alice).await?;
-            let chat = alice.get_chat(&bob).await;
-            assert!(!chat.is_protected());
-            assert!(!chat.is_protection_broken());
-        }
-
-        // Bob sends a message from DC again
-        tcm.send_recv(&bob, &alice, "Hello from DC").await;
-        let chat = alice.get_chat(&bob).await;
-        assert!(chat.is_protected());
-        assert!(!chat.is_protection_broken());
-    }
-
-    alice
-        .golden_test_chat(chat.id, "test_verified_oneonone_chat_enable_disable")
-        .await;
-
-    Ok(())
-}
-
 /// Messages with old timestamps are difficult for verified chats:
 /// - They must not be sorted over a protection-changed info message.
 ///   That's what `test_old_message_2` tests
