@@ -3067,23 +3067,24 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_block_before_first_msg() -> Result<()> {
-    let alice0 = &TestContext::new_alice().await;
-    let alice1 = &TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
 
     let ba_chat = bob.create_chat(alice0).await;
     let sent_msg = bob.send_text(ba_chat.id, "hi").await;
     let rcvd_msg = alice0.recv_msg(&sent_msg).await;
     let a0b_chat_id = rcvd_msg.chat_id;
     let a0b_contact_id = rcvd_msg.from_id;
-    assert_eq!(alice0.get_chat(&bob).await.blocked, Blocked::Request);
+    assert_eq!(Chat::load_from_db(alice0, a0b_chat_id).await?.blocked, Blocked::Request);
     a0b_chat_id.block(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::IncomingUnknownFrom);
-    assert_eq!(alice0.get_chat(&bob).await.blocked, Blocked::Yes);
+    assert_eq!(Chat::load_from_db(alice0, a0b_chat_id).await?.blocked, Blocked::Yes);
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
@@ -3093,9 +3094,9 @@ async fn test_sync_block_before_first_msg() -> Result<()> {
     let a1b_contact_id = rcvd_msg.from_id;
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.origin, Origin::IncomingUnknownFrom);
-    let a1b_chat = alice1.get_chat(&bob).await;
-    assert_eq!(a1b_chat.blocked, Blocked::Yes);
-    assert_eq!(rcvd_msg.chat_id, a1b_chat.id);
+    let ChatIdBlocked {id: a1b_chat_id, blocked: a1b_chat_blocked} = ChatIdBlocked::lookup_by_contact(alice1, a1b_contact_id).await?.unwrap();
+    assert_eq!(a1b_chat_blocked, Blocked::Yes);
+    assert_eq!(rcvd_msg.chat_id, a1b_chat_id);
     Ok(())
 }
 
