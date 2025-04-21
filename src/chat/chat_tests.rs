@@ -4172,3 +4172,39 @@ async fn test_no_email_contacts_in_group_chats() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that PGP-contacts cannot be added to ad-hoc groups.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let chat_id = receive_imf(
+        alice,
+        b"Subject: Email thread\r\n\
+          From: alice@example.org\r\n\
+          To: Bob <bob@example.net>, Fiona <fiona@example.net>\r\n\
+          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
+          Message-ID: <alice-mail@example.org>\r\n\
+          \r\n\
+          Starting a new thread\r\n",
+        false,
+    )
+    .await?
+    .unwrap()
+    .chat_id;
+
+    let email_bob_contact_id = alice.add_or_lookup_email_contact_id(bob).await;
+    let pgp_charlie_contact_id = alice.add_or_lookup_contact_id(charlie).await;
+
+    // Email-contact should be added successfully.
+    add_contact_to_chat(alice, chat_id, email_bob_contact_id).await?;
+
+    // Adding PGP-contact should fail.
+    let res = add_contact_to_chat(alice, chat_id, pgp_charlie_contact_id).await;
+    assert!(res.is_err());
+
+    Ok(())
+}
