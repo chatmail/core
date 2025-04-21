@@ -3882,6 +3882,10 @@ pub(crate) async fn add_contact_to_chat_ex(
         chat.typ != Chattype::Broadcast || contact_id != ContactId::SELF,
         "Cannot add SELF to broadcast."
     );
+    ensure!(
+        chat.is_encrypted(context).await? == contact.is_pgp_contact(),
+        "Only PGP-contacts can be added to encrypted chats"
+    );
 
     if !chat.is_self_in_chat(context).await? {
         context.emit_event(EventType::ErrorSelfNotInGroup(
