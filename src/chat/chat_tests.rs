@@ -3080,11 +3080,17 @@ async fn test_sync_block_before_first_msg() -> Result<()> {
     let rcvd_msg = alice0.recv_msg(&sent_msg).await;
     let a0b_chat_id = rcvd_msg.chat_id;
     let a0b_contact_id = rcvd_msg.from_id;
-    assert_eq!(Chat::load_from_db(alice0, a0b_chat_id).await?.blocked, Blocked::Request);
+    assert_eq!(
+        Chat::load_from_db(alice0, a0b_chat_id).await?.blocked,
+        Blocked::Request
+    );
     a0b_chat_id.block(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::IncomingUnknownFrom);
-    assert_eq!(Chat::load_from_db(alice0, a0b_chat_id).await?.blocked, Blocked::Yes);
+    assert_eq!(
+        Chat::load_from_db(alice0, a0b_chat_id).await?.blocked,
+        Blocked::Yes
+    );
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
@@ -3094,7 +3100,12 @@ async fn test_sync_block_before_first_msg() -> Result<()> {
     let a1b_contact_id = rcvd_msg.from_id;
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.origin, Origin::IncomingUnknownFrom);
-    let ChatIdBlocked {id: a1b_chat_id, blocked: a1b_chat_blocked} = ChatIdBlocked::lookup_by_contact(alice1, a1b_contact_id).await?.unwrap();
+    let ChatIdBlocked {
+        id: a1b_chat_id,
+        blocked: a1b_chat_blocked,
+    } = ChatIdBlocked::lookup_by_contact(alice1, a1b_contact_id)
+        .await?
+        .unwrap();
     assert_eq!(a1b_chat_blocked, Blocked::Yes);
     assert_eq!(rcvd_msg.chat_id, a1b_chat_id);
     Ok(())
@@ -4136,6 +4147,28 @@ async fn test_oneone_gossip() -> Result<()> {
     let rcvd_msg2 = bob.recv_msg(&sent_msg2).await;
     assert_eq!(rcvd_msg2.get_showpadlock(), true);
     assert_eq!(rcvd_msg2.text, "Hello from second device!");
+
+    Ok(())
+}
+
+/// Tests that email contacts cannot be added to encrypted group chats.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_email_contacts_in_group_chats() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group chat").await?;
+    let pgp_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let email_charlie_contact_id = alice.add_or_lookup_email_contact_id(charlie).await;
+
+    // PGP-contact should be added successfully.
+    add_contact_to_chat(alice, chat_id, pgp_bob_contact_id).await?;
+
+    // Adding email-contact should fail.
+    let res = add_contact_to_chat(alice, chat_id, email_charlie_contact_id).await;
+    assert!(res.is_err());
 
     Ok(())
 }
