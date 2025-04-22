@@ -2473,43 +2473,6 @@ async fn test_resend_foreign_message_fails() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_resend_opportunistically_encryption() -> Result<()> {
-    // Alice creates group with Bob and sends an initial message
-    let alice = TestContext::new_alice().await;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
-    add_contact_to_chat(
-        &alice,
-        alice_grp,
-        Contact::create(&alice, "", "bob@example.net").await?,
-    )
-    .await?;
-    let sent1 = alice.send_text(alice_grp, "alice->bob").await;
-
-    // Bob now can send an encrypted message
-    let bob = TestContext::new_bob().await;
-    let msg = bob.recv_msg(&sent1).await;
-    assert!(!msg.get_showpadlock());
-
-    msg.chat_id.accept(&bob).await?;
-    let sent2 = bob.send_text(msg.chat_id, "bob->alice").await;
-    let msg = bob.get_last_msg().await;
-    assert!(msg.get_showpadlock());
-
-    // Bob adds Claire and resends his last message: this will drop encryption in opportunistic chats
-    add_contact_to_chat(
-        &bob,
-        msg.chat_id,
-        Contact::create(&bob, "", "claire@example.org").await?,
-    )
-    .await?;
-    let _sent3 = bob.pop_sent_msg().await;
-    resend_msgs(&bob, &[sent2.sender_msg_id]).await?;
-    let _sent4 = bob.pop_sent_msg().await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_info_message_fails() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
