@@ -279,7 +279,8 @@ async fn test_read_receipt_and_unarchive() -> Result<()> {
 
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let one2one = alice.create_chat(bob).await;
-    one2one.id
+    one2one
+        .id
         .set_visibility(alice, ChatVisibility::Archived)
         .await
         .unwrap();

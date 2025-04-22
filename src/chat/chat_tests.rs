@@ -2681,7 +2681,10 @@ async fn test_chat_get_encryption_info() -> Result<()> {
     let contact_fiona = alice.add_or_lookup_contact_id(fiona).await;
 
     let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
-    assert_eq!(chat_id.get_encryption_info(alice).await?, "End-to-end encryption available");
+    assert_eq!(
+        chat_id.get_encryption_info(alice).await?,
+        "End-to-end encryption available"
+    );
 
     add_contact_to_chat(alice, chat_id, contact_bob).await?;
     assert_eq!(
