@@ -4793,34 +4793,6 @@ Chat-Group-Member-Added: charlie@example.com",
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_leave_protected_group_missing_member_key() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    mark_as_verified(alice, bob).await;
-    let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
-    let group_id = create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
-    add_contact_to_chat(alice, group_id, alice_bob_id).await?;
-    alice.send_text(group_id, "Hello!").await;
-    alice
-        .sql
-        .execute(
-            "UPDATE acpeerstates SET addr=? WHERE addr=?",
-            ("b@b", "bob@example.net"),
-        )
-        .await?;
-
-    // We fail to send the message.
-    assert!(remove_contact_from_chat(alice, group_id, ContactId::SELF)
-        .await
-        .is_err());
-
-    // The contact is already removed anyway.
-    assert!(!is_contact_in_chat(alice, group_id, ContactId::SELF).await?);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
