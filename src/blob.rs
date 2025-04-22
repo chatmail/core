@@ -432,7 +432,7 @@ impl<'a> BlobObject<'a> {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
                     }
-                    let new_img = img.thumbnail(img_wh, img_wh);
+                    let new_img = img.resize(img_wh, img_wh, image::imageops::FilterType::Triangle);
 
                     if encoded_img_exceeds_bytes(
                         context,
