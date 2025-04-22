@@ -245,11 +245,17 @@ async fn test_aeap_replay_attack() -> Result<()> {
     Ok(())
 }
 
+/// Tests that writing to a contact is possible
+/// after address change.
+///
+/// This test is redundant after introduction
+/// of PGP-contacts, but is kept to avoid deleting the tests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_write_to_alice_after_aeap() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+
     let alice_grp_id = chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
     let qr = get_securejoin_qr(alice, Some(alice_grp_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
@@ -265,15 +271,13 @@ async fn test_write_to_alice_after_aeap() -> Result<()> {
     let sent = alice.send_text(alice_grp_id, "Hello!").await;
     bob.recv_msg(&sent).await;
 
-    assert!(!bob_alice_contact.is_verified(bob).await?);
+    assert!(bob_alice_contact.is_verified(bob).await?);
     let bob_alice_chat = Chat::load_from_db(bob, bob_alice_chat.id).await?;
     assert!(bob_alice_chat.is_protected());
     let mut msg = Message::new_text("hi".to_string());
-    assert!(chat::send_msg(bob, bob_alice_chat.id, &mut msg)
-        .await
-        .is_err());
+    chat::send_msg(bob, bob_alice_chat.id, &mut msg).await?;
 
-    // But encrypted communication is still possible in unprotected groups with old Alice.
+    // Encrypted communication is also possible in unprotected groups with Alice.
     let sent = bob
         .send_text(bob_unprotected_grp_id, "Alice, how is your address change?")
         .await;
