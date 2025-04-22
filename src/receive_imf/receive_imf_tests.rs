@@ -2754,8 +2754,10 @@ Reply to all"#,
 /// headers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_assignment_adhoc() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let fiona = tcm.fiona().await;
 
     let first_thread_mime = br#"Subject: First thread
 Message-ID: first@example.org
@@ -2785,8 +2787,8 @@ Second thread."#;
     let bob_second_msg = bob.get_last_msg().await;
 
     // Messages go to separate chats both for Alice and Bob.
-    assert!(alice_first_msg.chat_id != alice_second_msg.chat_id);
-    assert!(bob_first_msg.chat_id != bob_second_msg.chat_id);
+    assert_ne!(alice_first_msg.chat_id, alice_second_msg.chat_id);
+    assert_ne!(bob_first_msg.chat_id, bob_second_msg.chat_id);
 
     // Alice replies to both chats. Bob receives two messages and assigns them to corresponding
     // chats.
@@ -2805,8 +2807,7 @@ Second thread."#;
     assert_eq!(bob_second_reply.chat_id, bob_second_msg.chat_id);
 
     // Alice adds Fiona to both ad hoc groups.
-    let fiona = TestContext::new_fiona().await;
-    let alice_fiona_contact = alice.add_or_lookup_contact(&fiona).await;
+    let alice_fiona_contact = alice.add_or_lookup_email_contact(&fiona).await;
     let alice_fiona_contact_id = alice_fiona_contact.id;
 
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
@@ -2819,7 +2820,7 @@ Second thread."#;
 
     // Fiona was added to two separate chats and should see two separate chats, even though they
     // don't have different group IDs to distinguish them.
-    assert!(fiona_first_invite.chat_id != fiona_second_invite.chat_id);
+    assert_ne!(fiona_first_invite.chat_id, fiona_second_invite.chat_id);
 
     Ok(())
 }
