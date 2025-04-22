@@ -4805,7 +4805,7 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     alice.send_text(group_id, "Hello!").await;
     alice
         .sql
-        .execute("DELETE FROM acpeerstates WHERE addr=?", (&bob_addr,))
+        .execute("DELETE FROM public_keys", ())
         .await?;
 
     let fiona = &tcm.fiona().await;
