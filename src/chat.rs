@@ -1337,7 +1337,9 @@ impl ChatId {
             let contact = Contact::get_by_id(context, *contact_id).await?;
             let addr = contact.get_addr();
             debug_assert!(contact.is_pgp_contact());
-            let fingerprint = contact.fingerprint().context("Contact does not have a fingerprint in encrypted chat")?;
+            let fingerprint = contact
+                .fingerprint()
+                .context("Contact does not have a fingerprint in encrypted chat")?;
             ret += &format!("\n{addr}\n{fingerprint}\n");
         }
 
