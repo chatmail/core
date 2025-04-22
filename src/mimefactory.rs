@@ -197,8 +197,16 @@ impl MimeFactory {
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            // Encrypt, but only to self.
-            encryption_certificates = Some(Vec::new());
+            encryption_certificates = if msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+            {
+                None
+            } else {
+                // Encrypt, but only to self.
+                Some(Vec::new())
+            };
         } else if chat.is_mailing_list() {
             let list_post = chat
                 .param
