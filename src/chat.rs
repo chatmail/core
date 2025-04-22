@@ -1322,8 +1322,12 @@ impl ChatId {
     ///
     /// To get more verbose summary for a contact, including its key fingerprint, use [`Contact::get_encrinfo`].
     pub async fn get_encryption_info(self, context: &Context) -> Result<String> {
-        let mut ret_available = String::new();
-        let mut ret_reset = String::new();
+        let chat = Chat::load_from_db(context, self).await?;
+        if !chat.is_encrypted(context).await? {
+            return Ok(stock_str::encr_none(context).await);
+        }
+
+        let mut ret = stock_str::e2e_available(context).await + "\n";
 
         for contact_id in get_chat_contacts(context, self)
             .await?
@@ -1332,28 +1336,9 @@ impl ChatId {
         {
             let contact = Contact::get_by_id(context, *contact_id).await?;
             let addr = contact.get_addr();
-            if contact.is_pgp_contact() {
-                ret_available += &format!("{addr}\n");
-            } else {
-                ret_reset += &format!("{addr}\n");
-            }
-        }
-
-        let mut ret = String::new();
-        if !ret_reset.is_empty() {
-            ret += &stock_str::encr_none(context).await;
-            ret.push(':');
-            ret.push('\n');
-            ret += &ret_reset;
-        }
-        if !ret_available.is_empty() {
-            if !ret.is_empty() {
-                ret.push('\n');
-            }
-            ret += &stock_str::e2e_available(context).await;
-            ret.push(':');
-            ret.push('\n');
-            ret += &ret_available;
+            debug_assert!(contact.is_pgp_contact());
+            let fingerprint = contact.fingerprint().context("Contact does not have a fingerprint in encrypted chat")?;
+            ret += &format!("\n{addr}\n{fingerprint}\n");
         }
 
         Ok(ret.trim().to_string())

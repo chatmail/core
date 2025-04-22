@@ -2709,53 +2709,45 @@ async fn test_create_for_contact_with_blocked() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_get_encryption_info() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
 
-    let contact_bob = Contact::create(&alice, "Bob", "bob@example.net").await?;
-    let contact_fiona = Contact::create(&alice, "", "fiona@example.net").await?;
+    let contact_bob = alice.add_or_lookup_contact_id(bob).await;
+    let contact_fiona = alice.add_or_lookup_contact_id(fiona).await;
 
-    let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
-    assert_eq!(chat_id.get_encryption_info(&alice).await?, "");
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    assert_eq!(chat_id.get_encryption_info(alice).await?, "End-to-end encryption available");
 
-    add_contact_to_chat(&alice, chat_id, contact_bob).await?;
+    add_contact_to_chat(alice, chat_id, contact_bob).await?;
     assert_eq!(
         chat_id.get_encryption_info(&alice).await?,
-        "No encryption:\n\
-            bob@example.net"
+        "End-to-end encryption available\n\
+         \n\
+         bob@example.net\n\
+         CCCB 5AA9 F6E1 141C 9431\n\
+         65F1 DB18 B18C BCF7 0487"
     );
 
     add_contact_to_chat(&alice, chat_id, contact_fiona).await?;
     assert_eq!(
         chat_id.get_encryption_info(&alice).await?,
-        "No encryption:\n\
-            fiona@example.net\n\
-            bob@example.net"
+        "End-to-end encryption available\n\
+         \n\
+         fiona@example.net\n\
+         C8BA 50BF 4AC1 2FAF 38D7\n\
+         F657 DDFC 8E9F 3C79 9195\n\
+         \n\
+         bob@example.net\n\
+         CCCB 5AA9 F6E1 141C 9431\n\
+         65F1 DB18 B18C BCF7 0487"
     );
 
-    let direct_chat = bob.create_chat(&alice).await;
-    send_text_msg(&bob, direct_chat.id, "Hello!".to_string()).await?;
-    alice.recv_msg(&bob.pop_sent_msg().await).await;
-
+    let email_chat = alice.create_email_chat(bob).await;
     assert_eq!(
-        chat_id.get_encryption_info(&alice).await?,
-        "No encryption:\n\
-            fiona@example.net\n\
-            \n\
-            End-to-end encryption available:\n\
-            bob@example.net"
-    );
-
-    send_text_msg(&bob, direct_chat.id, "Hello!".to_string()).await?;
-    alice.recv_msg(&bob.pop_sent_msg().await).await;
-
-    assert_eq!(
-        chat_id.get_encryption_info(&alice).await?,
-        "No encryption:\n\
-            fiona@example.net\n\
-            \n\
-            End-to-end encryption available:\n\
-            bob@example.net"
+        email_chat.id.get_encryption_info(&alice).await?,
+        "No encryption"
     );
 
     Ok(())
