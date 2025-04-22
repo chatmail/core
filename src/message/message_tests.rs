@@ -183,6 +183,8 @@ async fn test_no_quote() {
     assert!(msg.quoted_message(bob).await.unwrap().is_none());
 }
 
+/// Tests that quote of encrypted message
+/// cannot be sent unencrypted.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -190,40 +192,25 @@ async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "Group chat", &[bob])
-        .await;
-    let sent = alice.send_text(alice_group, "Hi! I created a group").await;
+    tcm.section("Bob sends encrypted message to Alice");
+    let alice_chat = alice.create_chat(bob).await;
+    let sent = alice.send_text(alice_chat.id, "Hi! This is encrypted.").await;
+
     let bob_received_message = bob.recv_msg(&sent).await;
+    assert_eq!(bob_received_message.get_showpadlock(), true);
+    let bob_chat_id = bob_received_message.chat_id;
 
-    let bob_group = bob_received_message.chat_id;
-    bob_group.accept(bob).await?;
-    let sent = bob.send_text(bob_group, "Encrypted message").await;
-    let alice_received_message = alice.recv_msg(&sent).await;
-    assert!(alice_received_message.get_showpadlock());
+    // Bob quotes encrypted message in unencrypted chat.
+    let bob_email_chat = bob.create_email_chat(alice).await;
+    let mut msg = Message::new_text("I am sending an unencrypted reply.".to_string());
+    msg.set_quote(bob, Some(&bob_received_message)).await?;
+    chat::send_msg(bob, bob_email_chat.id, &mut msg).await?;
 
-    // Alice adds contact without key so chat becomes unencrypted.
-    let alice_flubby_contact_id = Contact::create(alice, "Flubby", "flubby@example.org").await?;
-    add_contact_to_chat(alice, alice_group, alice_flubby_contact_id).await?;
-
-    // Alice quotes encrypted message in unencrypted chat.
-    let mut msg = Message::new_text("unencrypted".to_string());
-    msg.set_quote(alice, Some(&alice_received_message)).await?;
-    chat::send_msg(alice, alice_group, &mut msg).await?;
-
-    let bob_received_message = bob.recv_msg(&alice.pop_sent_msg().await).await;
-    assert_eq!(bob_received_message.quoted_text().unwrap(), "...");
-    assert_eq!(bob_received_message.get_showpadlock(), false);
-
-    // Alice replaces a quote of encrypted message with a quote of unencrypted one.
-    let mut msg1 = Message::new(Viewtype::Text);
-    msg1.set_quote(alice, Some(&alice_received_message)).await?;
-    msg1.set_quote(alice, Some(&msg)).await?;
-    chat::send_msg(alice, alice_group, &mut msg1).await?;
-
-    let bob_received_message = bob.recv_msg(&alice.pop_sent_msg().await).await;
-    assert_eq!(bob_received_message.quoted_text().unwrap(), "unencrypted");
-    assert_eq!(bob_received_message.get_showpadlock(), false);
+    // Alice receives unencrypted message,
+    // but the quote of encrypted message is replaced with "...".
+    let alice_received_message = alice.recv_msg(&bob.pop_sent_msg().await).await;
+    assert_eq!(alice_received_message.quoted_text().unwrap(), "...");
+    assert_eq!(alice_received_message.get_showpadlock(), false);
 
     Ok(())
 }
