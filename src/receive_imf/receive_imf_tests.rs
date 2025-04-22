@@ -3115,20 +3115,16 @@ Message with references."#;
 /// Test a message with RFC 1847 encapsulation as created by Thunderbird.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_rfc1847_encapsulation() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    // Alice sends an Autocrypt message to Bob so Bob gets Alice's key.
-    let chat_alice = alice.create_chat(&bob).await;
-    let first_msg = alice
-        .send_text(chat_alice.id, "Sending Alice key to Bob.")
-        .await;
-    bob.recv_msg(&first_msg).await;
-    message::delete_msgs(&bob, &[bob.get_last_msg().await.id]).await?;
+    // Bob gets Alice's key via vCard.
+    bob.add_or_lookup_contact_id(alice).await;
 
     // Alice sends a message to Bob using Thunderbird.
     let raw = include_bytes!("../../test-data/message/rfc1847_encapsulation.eml");
-    receive_imf(&bob, raw, false).await?;
+    receive_imf(bob, raw, false).await?;
 
     let msg = bob.get_last_msg().await;
     assert!(msg.get_showpadlock());
