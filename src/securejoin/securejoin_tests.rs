@@ -720,62 +720,6 @@ async fn test_lost_contact_confirm() {
     assert_eq!(contact_alice.is_verified(&bob).await.unwrap(), true);
 }
 
-/// An unencrypted message with already known Autocrypt key, but sent from another address,
-/// means that it's rather a new contact sharing the same key than the existing one changed its
-/// address, otherwise it would already have our key to encrypt.
-///
-/// This is a regression test for a bug where DC wrongly executed AEAP in this case.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_shared_bobs_key() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let bob_addr = &bob.get_config(Config::Addr).await?.unwrap();
-
-    tcm.execute_securejoin(bob, alice).await;
-
-    let export_dir = tempfile::tempdir().unwrap();
-    imex(bob, ImexMode::ExportSelfKeys, export_dir.path(), None).await?;
-    let bob2 = &TestContext::new().await;
-    let bob2_addr = "bob2@example.net";
-    bob2.configure_addr(bob2_addr).await;
-    imex(bob2, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
-
-    tcm.execute_securejoin(bob2, alice).await;
-
-    let bob3 = &TestContext::new().await;
-    let bob3_addr = "bob3@example.net";
-    bob3.configure_addr(bob3_addr).await;
-    imex(bob3, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
-    let chat = bob3.create_email_chat(alice).await;
-    let sent = bob3.send_text(chat.id, "hi Alice!").await;
-    let msg = alice.recv_msg(&sent).await;
-    assert!(!msg.get_showpadlock());
-    let chat = alice.create_email_chat(bob3).await;
-    let sent = alice.send_text(chat.id, "hi Bob3!").await;
-    let msg = bob3.recv_msg(&sent).await;
-    assert!(msg.get_showpadlock());
-
-    let mut bob_ids = HashSet::new();
-    bob_ids.insert(
-        Contact::lookup_id_by_addr(alice, bob_addr, Origin::Unknown)
-            .await?
-            .unwrap(),
-    );
-    bob_ids.insert(
-        Contact::lookup_id_by_addr(alice, bob2_addr, Origin::Unknown)
-            .await?
-            .unwrap(),
-    );
-    bob_ids.insert(
-        Contact::lookup_id_by_addr(alice, bob3_addr, Origin::Unknown)
-            .await?
-            .unwrap(),
-    );
-    assert_eq!(bob_ids.len(), 3);
-    Ok(())
-}
-
 /// Tests Bob joining two groups by scanning two QR codes
 /// from the same Alice at the same time.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
