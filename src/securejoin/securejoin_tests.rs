@@ -346,16 +346,17 @@ async fn test_setup_contact_bad_qr() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     // Ensure Bob knows Alice_FP
-    let alice_contact_id = bob.add_or_lookup_contact_id(&alice).await;
+    let alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
 
-    // Step 1: Generate QR-code, ChatId(0) indicates setup-contact
+    tcm.section("Step 1: Generate QR-code");
+    // `None` indicates setup-contact.
     let qr = get_securejoin_qr(&alice.ctx, None).await?;
 
-    // Step 2+4: Bob scans QR-code, sends vc-request-with-auth, skipping vc-request
+    tcm.section("Step 2+4: Bob scans QR-code, sends vc-request-with-auth, skipping vc-request");
     join_securejoin(&bob.ctx, &qr).await.unwrap();
 
     // Check Bob emitted the JoinerProgress event.
@@ -383,24 +384,17 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
         "vc-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
-    let bob_fp = load_self_public_key(&bob.ctx).await?.dc_fingerprint();
+    let bob_fp = load_self_public_key(bob).await?.dc_fingerprint();
     assert_eq!(
         *msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
         bob_fp.hex()
     );
 
     // Alice should not yet have Bob verified
-    let (contact_bob_id, _modified) = Contact::add_or_lookup(
-        &alice.ctx,
-        "",
-        &ContactAddress::new("bob@example.net")?,
-        Origin::ManuallyCreated,
-    )
-    .await?;
-    let contact_bob = Contact::get_by_id(&alice.ctx, contact_bob_id).await?;
+    let contact_bob = alice.add_or_lookup_pgp_contact(bob).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await?, false);
 
-    // Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm
+    tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice.ctx).await?, true);
 
@@ -412,18 +406,16 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
         "vc-contact-confirm"
     );
 
-    // Bob should not yet have Alice verified
-    let contact_alice_id =
-        Contact::lookup_id_by_addr(&bob.ctx, "alice@example.org", Origin::Unknown)
-            .await
-            .expect("Error looking up contact")
-            .expect("Contact not found");
-    let contact_alice = Contact::get_by_id(&bob.ctx, contact_alice_id).await?;
-    assert_eq!(contact_alice.is_verified(&bob.ctx).await?, false);
+    // Bob has verified Alice already.
+    let contact_alice = bob.add_or_lookup_pgp_contact(alice).await;
+    assert_eq!(contact_alice.is_verified(bob).await?, true);
 
-    // Step 7: Bob receives vc-contact-confirm
+    // Alice confirms that Bob is now verified.
+    //
+    // This does not change anything for Bob.
+    tcm.section("Step 7: Bob receives vc-contact-confirm");
     bob.recv_msg_trash(&sent).await;
-    assert_eq!(contact_alice.is_verified(&bob.ctx).await?, true);
+    assert_eq!(contact_alice.is_verified(bob).await?, true);
 
     Ok(())
 }
@@ -470,15 +462,15 @@ async fn test_secure_join() -> Result<()> {
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 0);
 
     let alice_chatid =
-        chat::create_group_chat(&alice.ctx, ProtectionStatus::Protected, "the chat").await?;
+        chat::create_group_chat(&alice, ProtectionStatus::Protected, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
-    let qr = get_securejoin_qr(&alice.ctx, Some(alice_chatid))
+    let qr = get_securejoin_qr(&alice, Some(alice_chatid))
         .await
         .unwrap();
 
     tcm.section("Step 2: Bob scans QR-code, sends vg-request");
-    let bob_chatid = join_securejoin(&bob.ctx, &qr).await?;
+    let bob_chatid = join_securejoin(&bob, &qr).await?;
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 1);
 
     let sent = bob.pop_sent_msg().await;
@@ -543,7 +535,7 @@ async fn test_secure_join() -> Result<()> {
         "vg-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
-    let bob_fp = load_self_public_key(&bob.ctx).await?.dc_fingerprint();
+    let bob_fp = load_self_public_key(&bob).await?.dc_fingerprint();
     assert_eq!(
         *msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
         bob_fp.hex()
@@ -594,13 +586,13 @@ async fn test_secure_join() -> Result<()> {
     //
     // Alice may not have verified Bob yet.
     let contact_alice = bob.add_or_lookup_pgp_contact(&alice).await;
-    assert_eq!(contact_alice.is_verified(&bob.ctx).await?, true);
+    assert_eq!(contact_alice.is_verified(&bob).await?, true);
 
     tcm.section("Step 7: Bob receives vg-member-added");
     bob.recv_msg(&sent).await;
     {
         // Bob has Alice verified, message shows up in the group chat.
-        assert_eq!(contact_alice.is_verified(&bob.ctx).await?, true);
+        assert_eq!(contact_alice.is_verified(&bob).await?, true);
         let chat = bob.get_pgp_chat(&alice).await;
         assert_eq!(
             chat.blocked,
