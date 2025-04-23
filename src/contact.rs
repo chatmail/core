@@ -1867,6 +1867,7 @@ pub(crate) async fn mark_contact_id_as_verified(
     contact_id: ContactId,
     verifier_id: ContactId,
 ) -> Result<()> {
+    debug_assert_ne!(contact_id, verifier_id, "Contact cannot be verified by self");
     context
         .sql
         .transaction(|transaction| {
@@ -1878,13 +1879,15 @@ pub(crate) async fn mark_contact_id_as_verified(
             if contact_fingerprint.is_empty() {
                 bail!("Non-PGP contact {contact_id} cannot be verified.");
             }
-            let verifier_fingerprint: String = transaction.query_row(
-                "SELECT fingerprint FROM contacts WHERE id=?",
-                (verifier_id,),
-                |row| row.get(0),
-            )?;
-            if verifier_fingerprint.is_empty() {
-                bail!("Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}.");
+            if verifier_id != ContactId::SELF {
+                let verifier_fingerprint: String = transaction.query_row(
+                    "SELECT fingerprint FROM contacts WHERE id=?",
+                    (verifier_id,),
+                    |row| row.get(0),
+                )?;
+                if verifier_fingerprint.is_empty() {
+                    bail!("Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}.");
+                }
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=? WHERE id=?",
