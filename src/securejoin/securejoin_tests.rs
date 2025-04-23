@@ -149,7 +149,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
     if case == SetupContactCase::SecurejoinWaitTimeout {
         SystemTime::shift(Duration::from_secs(constants::SECUREJOIN_WAIT_TIMEOUT));
-        assert_eq!(bob_chat.can_send(&bob).await.unwrap(), false);
+        assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
     }
 
     // Step 4: Bob receives vc-auth-required, sends vc-request-with-auth
@@ -318,7 +318,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
                 .check_securejoin_wait(&bob, constants::SECUREJOIN_WAIT_TIMEOUT)
                 .await
                 .unwrap(),
-            (true, 0)
+            0
         );
     }
 
