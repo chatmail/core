@@ -4,9 +4,8 @@ use pretty_assertions::assert_eq;
 use crate::chat::{
     self, add_contact_to_chat, remove_contact_from_chat, send_msg, Chat, ProtectionStatus,
 };
-use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::{Chattype, DC_GCL_FOR_FORWARDING};
+use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
 use crate::message::Message;
 use crate::mimefactory::MimeFactory;

@@ -1,9 +1,7 @@
 use anyhow::Result;
 
 use crate::chat::{self, Chat, ChatId, ProtectionStatus};
-use crate::contact;
-use crate::contact::Contact;
-use crate::contact::ContactId;
+use crate::contact::{Contact, ContactId};
 use crate::message::Message;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;

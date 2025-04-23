@@ -1,17 +1,15 @@
-use deltachat_contact_tools::{ContactAddress, EmailAddress};
+use deltachat_contact_tools::EmailAddress;
 
 use super::*;
 use crate::chat::{remove_contact_from_chat, CantSendReason};
 use crate::chatlist::Chatlist;
 use crate::constants::{self, Chattype};
-use crate::imex::{imex, ImexMode};
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
     get_chat_msg, TestContext, TestContextManager, TimeShiftFalsePositiveNote,
 };
 use crate::tools::SystemTime;
-use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(PartialEq)]
@@ -234,9 +232,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), true);
-    let contact_bob = Contact::get_by_id(&alice, contact_bob_id)
-        .await
-        .unwrap();
+    let contact_bob = Contact::get_by_id(&alice, contact_bob_id).await.unwrap();
     assert_eq!(contact_bob.get_authname(), "Bob Examplenet");
     assert!(contact_bob.get_name().is_empty());
     assert_eq!(contact_bob.is_bot(), false);
@@ -465,9 +461,7 @@ async fn test_secure_join() -> Result<()> {
         chat::create_group_chat(&alice, ProtectionStatus::Protected, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
-    let qr = get_securejoin_qr(&alice, Some(alice_chatid))
-        .await
-        .unwrap();
+    let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
 
     tcm.section("Step 2: Bob scans QR-code, sends vg-request");
     let bob_chatid = join_securejoin(&bob, &qr).await?;

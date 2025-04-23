@@ -1,10 +1,7 @@
 use num_traits::FromPrimitive;
 
 use super::*;
-use crate::chat::{
-    self, add_contact_to_chat, forward_msgs, marknoticed_chat, save_msgs, send_text_msg, ChatItem,
-    ProtectionStatus,
-};
+use crate::chat::{self, forward_msgs, marknoticed_chat, save_msgs, send_text_msg, ChatItem};
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::reaction::send_reaction;
@@ -194,7 +191,9 @@ async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
 
     tcm.section("Bob sends encrypted message to Alice");
     let alice_chat = alice.create_chat(bob).await;
-    let sent = alice.send_text(alice_chat.id, "Hi! This is encrypted.").await;
+    let sent = alice
+        .send_text(alice_chat.id, "Hi! This is encrypted.")
+        .await;
 
     let bob_received_message = bob.recv_msg(&sent).await;
     assert_eq!(bob_received_message.get_showpadlock(), true);
