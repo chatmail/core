@@ -1370,7 +1370,7 @@ fn print_logevent(logevent: &LogEvent) {
 /// and peerstate as backwards verified.
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
     let contact_id = this.add_or_lookup_contact_id(other).await;
-    mark_contact_id_as_verified(this, contact_id, contact_id)
+    mark_contact_id_as_verified(this, contact_id, ContactId::SELF)
         .await
         .unwrap();
 }
