@@ -3254,7 +3254,7 @@ async fn test_sync_broadcast() -> Result<()> {
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let bob = TestContext::new_bob().await;
+    let bob = &tcm.bob().await;
     let a0b_contact_id = alice0.add_or_lookup_contact(&bob).await.id;
 
     let a0_broadcast_id = create_broadcast_list(alice0).await?;
@@ -3270,13 +3270,12 @@ async fn test_sync_broadcast() -> Result<()> {
     assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
     add_contact_to_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
     sync(alice0, alice1).await;
-    let a1b_contact_id = Contact::lookup_id_by_addr(
-        alice1,
-        &bob.get_config(Config::Addr).await?.unwrap(),
-        Origin::Hidden,
-    )
-    .await?
-    .unwrap();
+
+    // This also imports Bob's key from the vCard.
+    // Otherwise it is possible that second device
+    // does not have Bob's key as only the fingerprint
+    // is transferred in the sync message.
+    let a1b_contact_id = alice1.add_or_lookup_contact(bob).await.id;
     assert_eq!(
         get_chat_contacts(alice1, a1_broadcast_id).await?,
         vec![a1b_contact_id]

@@ -2287,19 +2287,40 @@ impl Chat {
 
     /// Sends a `SyncAction` synchronising chat contacts to other devices.
     pub(crate) async fn sync_contacts(&self, context: &Context) -> Result<()> {
-        let addrs = context
-            .sql
-            .query_map(
-                "SELECT c.addr \
-                FROM contacts c INNER JOIN chats_contacts cc \
-                ON c.id=cc.contact_id \
-                WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
-                (self.id,),
-                |row| row.get::<_, String>(0),
-                |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
-            )
-            .await?;
-        self.sync(context, SyncAction::SetContacts(addrs)).await
+        if self.is_encrypted(context).await? {
+            let fingerprint_addrs = context
+                .sql
+                .query_map(
+                    "SELECT c.fingerprint, c.addr
+                     FROM contacts c INNER JOIN chats_contacts cc
+                     ON c.id=cc.contact_id
+                     WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
+                    (self.id,),
+                    |row| {
+                        let fingerprint = row.get(0)?;
+                        let addr = row.get(1)?;
+                        Ok((fingerprint, addr))
+                    },
+                    |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
+                )
+                .await?;
+            self.sync(context, SyncAction::SetPgpContacts(fingerprint_addrs)).await?;
+        } else {
+            let addrs = context
+                .sql
+                .query_map(
+                    "SELECT c.addr \
+                    FROM contacts c INNER JOIN chats_contacts cc \
+                    ON c.id=cc.contact_id \
+                    WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
+                    (self.id,),
+                    |row| row.get::<_, String>(0),
+                    |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
+                )
+                .await?;
+            self.sync(context, SyncAction::SetContacts(addrs)).await?;
+        }
+        Ok(())
     }
 
     /// Returns chat id for the purpose of synchronisation across devices.
@@ -4812,6 +4833,10 @@ pub(crate) async fn update_msg_text_and_timestamp(
 async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) -> Result<()> {
     let chat = Chat::load_from_db(context, id).await?;
     ensure!(
+        !chat.is_encrypted(context).await?,
+        "Cannot add email-contacts to encrypted chat {id}"
+    );
+    ensure!(
         chat.typ == Chattype::Broadcast,
         "{id} is not a broadcast list",
     );
@@ -4819,6 +4844,54 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
     for addr in addrs {
         let contact_addr = ContactAddress::new(addr)?;
         let contact = Contact::add_or_lookup(context, "", &contact_addr, Origin::Hidden)
+            .await?
+            .0;
+        contacts.insert(contact);
+    }
+    let contacts_old = HashSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
+    if contacts == contacts_old {
+        return Ok(());
+    }
+    context
+        .sql
+        .transaction(move |transaction| {
+            transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (id,))?;
+
+            // We do not care about `add_timestamp` column
+            // because timestamps are not used for broadcast lists.
+            let mut statement = transaction
+                .prepare("INSERT INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)")?;
+            for contact_id in &contacts {
+                statement.execute((id, contact_id))?;
+            }
+            Ok(())
+        })
+        .await?;
+    context.emit_event(EventType::ChatModified(id));
+    Ok(())
+}
+
+/// Set chat contacts by their fingerprints creating the corresponding contacts if necessary.
+///
+/// `fingerprint_addrs` is a list of pairs of fingerprint and address.
+async fn set_contacts_by_fingerprints(
+    context: &Context,
+    id: ChatId,
+    fingerprint_addrs: &[(String, String)],
+) -> Result<()> {
+    let chat = Chat::load_from_db(context, id).await?;
+    ensure!(
+        chat.is_encrypted(context).await?,
+        "Cannot add PGP-contacts to unencrypted chat {id}"
+    );
+    ensure!(
+        chat.typ == Chattype::Broadcast,
+        "{id} is not a broadcast list",
+    );
+    let mut contacts = HashSet::new();
+    for (fingerprint, addr) in fingerprint_addrs {
+        let contact_addr = ContactAddress::new(addr)?;
+        let contact = Contact::add_or_lookup_ex(context, "", &contact_addr, &fingerprint, Origin::Hidden)
             .await?
             .0;
         contacts.insert(contact);
@@ -4876,6 +4949,10 @@ pub(crate) enum SyncAction {
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
+    /// Set chat contacts by their fingerprints.
+    ///
+    /// The list is a list of pairs of fingerprint and address.
+    SetPgpContacts(Vec<(String, String)>),
     Delete,
 }
 
@@ -4959,6 +5036,7 @@ impl Context {
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
             SyncAction::SetContacts(addrs) => set_contacts_by_addrs(self, chat_id, addrs).await,
+            SyncAction::SetPgpContacts(fingerprint_addrs) => set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await,
             SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
         }
     }

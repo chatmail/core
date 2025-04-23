@@ -4735,10 +4735,7 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
     add_contact_to_chat(alice, group_id, alice_bob_id).await?;
     alice.send_text(group_id, "Hello!").await;
-    alice
-        .sql
-        .execute("DELETE FROM public_keys", ())
-        .await?;
+    alice.sql.execute("DELETE FROM public_keys", ()).await?;
 
     let fiona = &tcm.fiona().await;
     let fiona_addr = fiona.get_config(Config::Addr).await?.unwrap();
