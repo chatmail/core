@@ -16,14 +16,14 @@ def test_qr_setup_contact(acfactory, tmp_path) -> None:
     alice.wait_for_securejoin_inviter_success()
 
     # Test that Alice verified Bob's profile.
-    alice_contact_bob = alice.get_contact_by_addr(bob.get_config("addr"))
+    alice_contact_bob = alice.create_contact(bob)
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
     assert alice_contact_bob_snapshot.is_verified
 
     bob.wait_for_securejoin_joiner_success()
 
     # Test that Bob verified Alice's profile.
-    bob_contact_alice = bob.get_contact_by_addr(alice.get_config("addr"))
+    bob_contact_alice = bob.create_contact(bob)
     bob_contact_alice_snapshot = bob_contact_alice.get_snapshot()
     assert bob_contact_alice_snapshot.is_verified
 
@@ -84,7 +84,7 @@ def test_qr_securejoin(acfactory, protect):
     bob.wait_for_securejoin_joiner_success()
 
     # Test that Alice verified Bob's profile.
-    alice_contact_bob = alice.get_contact_by_addr(bob.get_config("addr"))
+    alice_contact_bob = alice.create_contact(bob)
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
     assert alice_contact_bob_snapshot.is_verified
 
@@ -93,7 +93,7 @@ def test_qr_securejoin(acfactory, protect):
     assert snapshot.chat.get_basic_snapshot().is_protected == protect
 
     # Test that Bob verified Alice's profile.
-    bob_contact_alice = bob.get_contact_by_addr(alice.get_config("addr"))
+    bob_contact_alice = bob.create_contact(alice)
     bob_contact_alice_snapshot = bob_contact_alice.get_snapshot()
     assert bob_contact_alice_snapshot.is_verified
 
@@ -101,7 +101,7 @@ def test_qr_securejoin(acfactory, protect):
     # Alice observes securejoin protocol and verifies Bob on second device.
     alice2.start_io()
     alice2.wait_for_securejoin_inviter_success()
-    alice2_contact_bob = alice2.get_contact_by_addr(bob.get_config("addr"))
+    alice2_contact_bob = alice2.create_contact(bob)
     alice2_contact_bob_snapshot = alice2_contact_bob.get_snapshot()
     assert alice2_contact_bob_snapshot.is_verified
 
@@ -227,7 +227,7 @@ def test_verified_group_recovery(acfactory) -> None:
     ac2.wait_for_securejoin_joiner_success()
 
     # ac1 has ac2 directly verified.
-    ac1_contact_ac2 = ac1.get_contact_by_addr(ac2.get_config("addr"))
+    ac1_contact_ac2 = ac1.create_contact(ac2)
     assert ac1_contact_ac2.get_snapshot().verifier_id == SpecialContactId.SELF
 
     logging.info("ac3 joins verified group")
@@ -278,7 +278,7 @@ def test_verified_group_recovery(acfactory) -> None:
 
 
 def test_verified_group_member_added_recovery(acfactory) -> None:
-    """Tests verified group recovery by reverifiying than removing and adding a member back."""
+    """Tests verified group recovery by reverifying than removing and adding a member back."""
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
 
     logging.info("ac1 creates verified group")
@@ -291,7 +291,7 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     ac2.wait_for_securejoin_joiner_success()
 
     # ac1 has ac2 directly verified.
-    ac1_contact_ac2 = ac1.get_contact_by_addr(ac2.get_config("addr"))
+    ac1_contact_ac2 = ac1.create_contact(ac2)
     assert ac1_contact_ac2.get_snapshot().verifier_id == SpecialContactId.SELF
 
     logging.info("ac3 joins verified group")
@@ -319,7 +319,7 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
 
     ac1.wait_for_incoming_msg_event()  # Hi!
 
-    ac3_contact_ac2 = ac3.get_contact_by_addr(ac2.get_config("addr"))
+    ac3_contact_ac2 = ac3.create_contact(ac2)
     ac3_chat.remove_contact(ac3_contact_ac2)
 
     msg_id = ac2.wait_for_incoming_msg_event().msg_id
@@ -354,19 +354,16 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert snapshot.text == "Works again!"
 
-    ac1_contact_ac2 = ac1.get_contact_by_addr(ac2.get_config("addr"))
+    ac1_contact_ac2 = ac1.create_contact(ac2)
+    ac1_contact_ac3 = ac1.create_contact(ac3)
     ac1_contact_ac2_snapshot = ac1_contact_ac2.get_snapshot()
     assert ac1_contact_ac2_snapshot.is_verified
-    assert ac1_contact_ac2_snapshot.verifier_id == ac1.get_contact_by_addr(ac3.get_config("addr")).id
-
-    # ac2 is now verified by ac3 for ac1
-    ac1_contact_ac3 = ac1.get_contact_by_addr(ac3.get_config("addr"))
-    assert ac1_contact_ac2.get_snapshot().verifier_id == ac1_contact_ac3.id
+    assert ac1_contact_ac2_snapshot.verifier_id == ac1_contact_ac3.id
 
 
 def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     """Regression test for
-    issue <https://github.com/deltachat/deltachat-core-rust/issues/4894>.
+    issue <https://github.com/chatmail/core/issues/4894>.
     """
     ac1, ac2, ac3, ac4 = acfactory.get_online_accounts(4)
 
@@ -400,12 +397,12 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     logging.info("ac2 now has pending bobstate but ac1 is shutoff")
 
     # we meanwhile expect ac3/ac2 verification started in the beginning to have completed
-    assert ac3.get_contact_by_addr(ac2.get_config("addr")).get_snapshot().is_verified
-    assert ac2.get_contact_by_addr(ac3.get_config("addr")).get_snapshot().is_verified
+    assert ac3.create_contact(ac2).get_snapshot().is_verified
+    assert ac2.create_contact(ac3).get_snapshot().is_verified
 
     logging.info("ac3: create a verified group VG with ac2")
     vg = ac3.create_group("ac3-created", protect=True)
-    vg.add_contact(ac3.get_contact_by_addr(ac2.get_config("addr")))
+    vg.add_contact(ac3.create_contact(ac2))
 
     # ensure ac2 receives message in VG
     vg.send_text("hello")
@@ -443,7 +440,7 @@ def test_qr_new_group_unblocked(acfactory):
     ac1.wait_for_securejoin_inviter_success()
 
     ac1_new_chat = ac1.create_group("Another group")
-    ac1_new_chat.add_contact(ac1.get_contact_by_addr(ac2.get_config("addr")))
+    ac1_new_chat.add_contact(ac1.create_contact(ac2))
     # Receive "Member added" message.
     ac2.wait_for_incoming_msg_event()
 
