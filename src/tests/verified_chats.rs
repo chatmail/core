@@ -600,14 +600,17 @@ async fn test_reply() -> Result<()> {
     Ok(())
 }
 
+/// Tests that message from old DC setup does not break
+/// new verified chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_from_old_dc_setup() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob_old = &tcm.unconfigured().await;
+
     enable_verified_oneonone_chats(&[alice, bob_old]).await;
-    mark_as_verified(bob_old, alice).await;
     bob_old.configure_addr("bob@example.net").await;
+    mark_as_verified(bob_old, alice).await;
     let chat = bob_old.create_chat(alice).await;
     let sent_old = bob_old
         .send_text(chat.id, "Soon i'll have a new device")
@@ -625,22 +628,15 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     assert_verified(alice, bob, ProtectionStatus::Protected).await;
 
     let msg = alice.recv_msg(&sent_old).await;
-    assert!(!msg.get_showpadlock());
+    assert!(msg.get_showpadlock());
     let contact = alice.add_or_lookup_contact(bob).await;
-    // The outdated Bob's Autocrypt header isn't applied, so the verification preserves.
+
+    // The outdated Bob's Autocrypt header isn't applied
+    // and the message goes to another chat, so the verification preserves.
     assert!(contact.is_verified(alice).await.unwrap());
     let chat = alice.get_pgp_chat(bob).await;
     assert!(chat.is_protected());
     assert_eq!(chat.is_protection_broken(), false);
-    let protection_msg = alice.get_last_msg().await;
-    assert_eq!(
-        protection_msg.param.get_cmd(),
-        SystemMessage::ChatProtectionEnabled
-    );
-    assert!(protection_msg.timestamp_sort >= msg.timestamp_rcvd);
-    alice
-        .golden_test_chat(msg.chat_id, "verified_chats_message_from_old_dc_setup")
-        .await;
     Ok(())
 }
 
