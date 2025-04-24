@@ -245,11 +245,20 @@ impl MimeFactory {
             context
                 .sql
                 .query_map(
-                    "SELECT c.authname, c.addr, c.fingerprint, c.id, cc.add_timestamp, cc.remove_timestamp, k.public_key
+                    "SELECT
+                     c.authname,
+                     c.addr,
+                     c.fingerprint,
+                     c.id,
+                     cc.add_timestamp,
+                     cc.remove_timestamp,
+                     k.public_key
                      FROM chats_contacts cc
                      LEFT JOIN contacts c ON cc.contact_id=c.id
                      LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
-                     WHERE cc.chat_id=? AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
+                     WHERE cc.chat_id=?
+                     AND cc.add_timestamp >= cc.remove_timestamp
+                     AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
                     (msg.chat_id, chat.typ == Chattype::Group),
                     |row| {
                         let authname: String = row.get(0)?;
@@ -258,17 +267,17 @@ impl MimeFactory {
                         let id: ContactId = row.get(3)?;
                         let add_timestamp: i64 = row.get(4)?;
                         let remove_timestamp: i64 = row.get(5)?;
-                        let certificate_bytes_opt: Option<Vec<u8>> = row.get(6)?;
-                        Ok((authname, addr, fingerprint, id, add_timestamp, remove_timestamp, certificate_bytes_opt))
+                        let public_key_bytes_opt: Option<Vec<u8>> = row.get(6)?;
+                        Ok((authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt))
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
 
                         for row in rows {
-                            let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, certificate_bytes) = row?;
+                            let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
 
-                            let certificate_opt = if let Some(certificate_bytes) = certificate_bytes {
-                                Some(SignedPublicKey::from_slice(&certificate_bytes)?)
+                            let public_key_opt = if let Some(ref public_key_bytes) = public_key_bytes_opt {
+                                Some(SignedPublicKey::from_slice(public_key_bytes)?)
                             } else {
                                 None
                             };
@@ -316,8 +325,8 @@ impl MimeFactory {
                                 }
                             }
 
-                            if let Some(certificate) = certificate_opt {
-                                keys.push((addr.clone(), certificate))
+                            if let Some(public_key) = public_key_opt {
+                                keys.push((addr.clone(), public_key))
                             } else if id != ContactId::SELF {
                                 missing_key_addresses.insert(addr.clone());
                                 if is_encrypted {
