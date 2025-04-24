@@ -438,7 +438,7 @@ impl<'a> BlobObject<'a> {
                     // for a typical camera image that is sent, this may be a change from "instant" (500ms) to "long time waiting" (3s).
                     // as we do not have recoding in background while chat has already a preview,
                     // we vote for speed.
-                    // exception is the avatar image: this is far more often send than recoded,
+                    // exception is the avatar image: this is far more often sent than recoded,
                     // usually has less pixels by cropping, UI that needs to wait anyways,
                     // and also benefits from slightly better (5%) encoding of Triangle-filtered images.
                     let new_img = if is_avatar {
