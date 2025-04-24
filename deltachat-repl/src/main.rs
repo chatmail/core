@@ -323,7 +323,7 @@ async fn start(args: Vec<String>) -> Result<(), Error> {
         }
     });
 
-    println!("Delta Chat Core is awaiting your commands.");
+    println!("Chatmail is awaiting your commands.");
 
     let config = Config::builder()
         .history_ignore_space(true)
