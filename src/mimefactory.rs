@@ -85,11 +85,12 @@ pub struct MimeFactory {
     /// but `MimeFactory` is not responsible for this.
     recipients: Vec<String>,
 
-    /// Vector of recipient OpenPGP certificates
+    /// Vector of pairs of recipient
+    /// addresses and OpenPGP keys
     /// to use for encryption.
     ///
     /// `None` if the message is not encrypted.
-    encryption_certificates: Option<Vec<(String, SignedPublicKey)>>,
+    encryption_keys: Option<Vec<(String, SignedPublicKey)>>,
 
     /// Vector of pairs of recipient name and address that goes into the `To` field.
     ///
@@ -192,12 +193,12 @@ impl MimeFactory {
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
 
-        let encryption_certificates;
+        let encryption_keys;
 
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            encryption_certificates = if msg
+            encryption_keys = if msg
                 .param
                 .get_bool(Param::ForcePlaintext)
                 .unwrap_or_default()
@@ -216,7 +217,7 @@ impl MimeFactory {
             recipients.push(list_post.to_string());
 
             // Do not encrypt messages to mailing lists.
-            encryption_certificates = None;
+            encryption_keys = None;
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -235,7 +236,7 @@ impl MimeFactory {
                     || chat.is_encrypted(context).await?
             };
 
-            let mut certificates = Vec::new();
+            let mut keys = Vec::new();
             let mut missing_key_addresses = BTreeSet::new();
             context
                 .sql
@@ -305,7 +306,7 @@ impl MimeFactory {
                             }
 
                             if let Some(certificate) = certificate_opt {
-                                certificates.push((addr.clone(), certificate))
+                                keys.push((addr.clone(), certificate))
                             } else if id != ContactId::SELF {
                                 missing_key_addresses.insert(addr.clone());
                                 if is_encrypted {
@@ -338,7 +339,7 @@ impl MimeFactory {
                 req_mdn = true;
             }
 
-            encryption_certificates = if !is_encrypted {
+            encryption_keys = if !is_encrypted {
                 None
             } else {
                 // Remove recipients for which the key is missing.
@@ -346,7 +347,7 @@ impl MimeFactory {
                     recipients.retain(|addr| !missing_key_addresses.contains(addr));
                 }
 
-                Some(certificates)
+                Some(keys)
             };
         }
         let (in_reply_to, references) = context
@@ -388,7 +389,7 @@ impl MimeFactory {
             sender_displayname,
             selfstatus,
             recipients,
-            encryption_certificates,
+            encryption_keys,
             to,
             past_members,
             member_timestamps,
@@ -415,9 +416,9 @@ impl MimeFactory {
         let timestamp = create_smeared_timestamp(context);
 
         let addr = contact.get_addr().to_string();
-        let encryption_certificates = if contact.is_pgp_contact() {
-            if let Some(openpgp_certificate) = contact.openpgp_certificate(context).await? {
-                Some(vec![(addr.clone(), openpgp_certificate)])
+        let encryption_keys = if contact.is_pgp_contact() {
+            if let Some(key) = contact.public_key(context).await? {
+                Some(vec![(addr.clone(), key)])
             } else {
                 Some(Vec::new())
             }
@@ -431,7 +432,7 @@ impl MimeFactory {
             sender_displayname: None,
             selfstatus: "".to_string(),
             recipients: vec![addr],
-            encryption_certificates,
+            encryption_keys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
             member_timestamps: vec![],
@@ -764,7 +765,7 @@ impl MimeFactory {
             ));
         }
 
-        let is_encrypted = self.encryption_certificates.is_some();
+        let is_encrypted = self.encryption_keys.is_some();
 
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
@@ -925,7 +926,7 @@ impl MimeFactory {
             }
         }
 
-        let outer_message = if let Some(encryption_certificates) = self.encryption_certificates {
+        let outer_message = if let Some(encryption_keys) = self.encryption_keys {
             // Store protected headers in the inner message.
             let message = protected_headers
                 .into_iter()
@@ -941,8 +942,8 @@ impl MimeFactory {
                 });
 
             // Add gossip headers in chats with multiple recipients
-            let multiple_recipients = encryption_certificates.len() > 1
-                || context.get_config_bool(Config::BccSelf).await?;
+            let multiple_recipients =
+                encryption_keys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
 
             let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
             let now = time();
@@ -950,7 +951,7 @@ impl MimeFactory {
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
                     if chat.typ != Chattype::Broadcast {
-                        for (addr, key) in &encryption_certificates {
+                        for (addr, key) in &encryption_keys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
                             let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
@@ -1035,11 +1036,7 @@ impl MimeFactory {
             // Encrypt to self unconditionally,
             // even for a single-device setup.
             let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
-            encryption_keyring.extend(
-                encryption_certificates
-                    .iter()
-                    .map(|(_addr, key)| (*key).clone()),
-            );
+            encryption_keyring.extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
 
             // XXX: additional newline is needed
             // to pass filtermail at

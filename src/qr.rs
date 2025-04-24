@@ -532,7 +532,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 .await?;
         let contact = Contact::get_by_id(context, contact_id).await?;
 
-        if contact.openpgp_certificate(context).await?.is_some() {
+        if contact.public_key(context).await?.is_some() {
             Ok(Qr::FprOk { contact_id })
         } else {
             Ok(Qr::FprMismatch {

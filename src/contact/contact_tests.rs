@@ -1037,7 +1037,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let bob_id = alice.recv_msg(&sent_msg).await.from_id;
     let bob_contact = Contact::get_by_id(alice, bob_id).await?;
     let key_base64 = bob_contact
-        .openpgp_certificate(alice)
+        .public_key(alice)
         .await?
         .unwrap()
         .to_base64();
