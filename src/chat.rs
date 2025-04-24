@@ -2304,7 +2304,8 @@ impl Chat {
                     |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
                 )
                 .await?;
-            self.sync(context, SyncAction::SetPgpContacts(fingerprint_addrs)).await?;
+            self.sync(context, SyncAction::SetPgpContacts(fingerprint_addrs))
+                .await?;
         } else {
             let addrs = context
                 .sql
@@ -4891,9 +4892,10 @@ async fn set_contacts_by_fingerprints(
     let mut contacts = HashSet::new();
     for (fingerprint, addr) in fingerprint_addrs {
         let contact_addr = ContactAddress::new(addr)?;
-        let contact = Contact::add_or_lookup_ex(context, "", &contact_addr, &fingerprint, Origin::Hidden)
-            .await?
-            .0;
+        let contact =
+            Contact::add_or_lookup_ex(context, "", &contact_addr, &fingerprint, Origin::Hidden)
+                .await?
+                .0;
         contacts.insert(contact);
     }
     let contacts_old = HashSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
@@ -5036,7 +5038,9 @@ impl Context {
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
             SyncAction::SetContacts(addrs) => set_contacts_by_addrs(self, chat_id, addrs).await,
-            SyncAction::SetPgpContacts(fingerprint_addrs) => set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await,
+            SyncAction::SetPgpContacts(fingerprint_addrs) => {
+                set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await
+            }
             SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
         }
     }

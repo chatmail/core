@@ -265,7 +265,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
     let mut vcard_contacts = Vec::with_capacity(contacts.len());
     for id in contacts {
         let c = Contact::get_by_id(context, *id).await?;
-        let key = c.openpgp_certificate(context).await?.map(|k| k.to_base64());
+        let key = c.public_key(context).await?.map(|k| k.to_base64());
         let profile_image = match c.get_profile_image(context).await? {
             None => None,
             Some(path) => tokio::fs::read(path)
@@ -1385,19 +1385,19 @@ impl Contact {
         }
     }
 
-    /// Returns OpenPGP certificate of a contact.
+    /// Returns OpenPGP public key of a contact.
     ///
     /// Returns `None` if the contact is not a PGP-contact
     /// or if the key is not available.
-    /// It is possible for a PGP-contact to not have a certificate,
+    /// It is possible for a PGP-contact to not have a key,
     /// e.g. if only the fingerprint is known from a QR-code.
-    pub async fn openpgp_certificate(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
+    pub async fn public_key(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
         if self.id == ContactId::SELF {
             return Ok(Some(load_self_public_key(context).await?));
         }
 
         if let Some(fingerprint) = &self.fingerprint {
-            if let Some(certificate_bytes) = context
+            if let Some(public_key_bytes) = context
                 .sql
                 .query_row_optional(
                     "SELECT public_key
@@ -1411,8 +1411,8 @@ impl Contact {
                 )
                 .await?
             {
-                let certificate = SignedPublicKey::from_slice(&certificate_bytes)?;
-                Ok(Some(certificate))
+                let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+                Ok(Some(public_key))
             } else {
                 Ok(None)
             }
@@ -1519,7 +1519,7 @@ impl Contact {
             // We don't need to check if we have our own key.
             return Ok(true);
         }
-        Ok(self.openpgp_certificate(context).await?.is_some())
+        Ok(self.public_key(context).await?.is_some())
     }
 
     /// Returns true if the contact
