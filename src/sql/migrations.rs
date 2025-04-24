@@ -1,7 +1,11 @@
 //! Migrations module.
 
+use std::collections::BTreeMap;
+use std::time::Instant;
+
 use anyhow::{ensure, Context as _, Result};
 use deltachat_contact_tools::EmailAddress;
+use pgp::SignedPublicKey;
 use rusqlite::OptionalExtension;
 
 use crate::config::Config;
@@ -9,6 +13,7 @@ use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
 use crate::context::Context;
 use crate::imap;
+use crate::key::DcKey;
 use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_by_domain;
@@ -1224,6 +1229,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
+        let start = Instant::now();
         sql.execute_migration_transaction(
             |transaction| {
                 transaction.execute_batch(
@@ -1252,11 +1258,164 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
                  SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
                 ")?;
 
+                // TODO remove this commented-out code
+                // transaction.execute(
+                //     "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
+                //         authname, param, status, is_bot)
+                //     SELECT c.name, c.addr, c.origin, c.blocked, c.last_seen,
+                //         c.authname, c.param, c.status, c.is_bot
+                //     FROM contacts c
+                //     INNER JOIN peerstates ON c.addr=acpeerstates.addr", ()
+                // )?;
+
+                // Create up to 3 new contacts for every contact that has a peerstate:
+                // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
+                // one from the secondary verified key fingerprint.
+                // In the process, build two maps from old contact id to new contact id:
+                // one that maps to Autocrypt PGP-contact, one that maps to verified PGP-contact.
+                let mut autocrypt_pgp_contacts = BTreeMap::new();
+                let mut verified_pgp_contacts = BTreeMap::new();
+                // This maps from the verified contact to the original contact id of the verifier.
+                // It can't map to the verified pgp contact id, because at the time of constructing
+                // this map, not all pgp contacts are in the database.
+                let mut verifications = BTreeMap::new();
+
+                let mut load_contacts_stmt = transaction.prepare(
+                    "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
+                    c.authname, c.param, c.status, c.is_bot, c.selfavatar_sent,
+                    IFNULL(p.public_key, p.gossip_key),
+                    p.verified_key, p.verifier,
+                    p.secondary_verified_key, p.secondary_verifier
+                    FROM contacts c
+                    INNER JOIN acpeerstates p ON c.addr=p.addr"
+                )?;
+                let all_email_contacts = load_contacts_stmt.query_map((),
+                    |row| {
+                        let id: i64 = row.get(0)?;
+                        let name: String = row.get(1)?;
+                        let addr: String = row.get(2)?;
+                        let origin: i64 = row.get(3)?;
+                        let blocked: Option<bool> = row.get(4)?;
+                        let last_seen: i64 = row.get(5)?;
+                        let authname: String = row.get(6)?;
+                        let param: String = row.get(7)?;
+                        let status: Option<String> = row.get(8)?;
+                        let is_bot: bool = row.get(9)?;
+                        let selfavatar_sent: i64 = row.get(10)?;
+                        let autocrypt_key = row
+                            .get(11)
+                            .ok()
+                            .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                        let verified_key = row
+                            .get(12)
+                            .ok()
+                            .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                        let verifier: String = row.get(13)?;
+                        let secondary_verified_key = row
+                            .get(12)
+                            .ok()
+                            .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                        let secondary_verifier: String = row.get(15)?;
+                        Ok((id,
+                            name,
+                            addr,
+                            origin,
+                            blocked,
+                            last_seen,
+                            authname,
+                            param,
+                            status,
+                            is_bot,
+                            selfavatar_sent,
+                            autocrypt_key,
+                            verified_key,
+                            verifier,
+                            secondary_verified_key,
+                            secondary_verifier))
+                    })?;
+
+                let mut insert_contact_stmt = transaction.prepare(
+                    "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
+                    authname, param, status, is_bot, selfavatar_sent, fingerprint)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)"
+                )?;
+                let mut fingerprint_exists_stmt = transaction.prepare(
+                    "SELECT id FROM contacts WHERE fingerprint=?"
+                )?;
+                let mut original_contact_id_from_addr_stmt = transaction.prepare(
+                    "SELECT id FROM contacts WHERE addr=? AND fingerprint=''"
+                )?;
+                for row in all_email_contacts {
+                    let (
+                        original_id,
+                        name,
+                        addr,
+                        origin,
+                        blocked,
+                        last_seen,
+                        authname,
+                        param,
+                        status,
+                        is_bot,
+                        selfavatar_sent,
+                        autocrypt_key,
+                        verified_key,
+                        verifier,
+                        secondary_verified_key,
+                        secondary_verifier
+                    ) = row?;
+                    let mut insert_contact = |key: SignedPublicKey| {
+                        let fingerprint = key.dc_fingerprint().hex();
+                        if fingerprint_exists_stmt.exists((&fingerprint,))? {
+                            insert_contact_stmt.execute((
+                                &name,
+                                &addr,
+                                origin,
+                                blocked,
+                                last_seen,
+                                &authname,
+                                &param,
+                                &status,
+                                is_bot,
+                                selfavatar_sent,
+                                fingerprint,
+                            ))
+                        } else {
+                            Ok(0)
+                        }
+                    };
+                    let mut original_contact_id_from_addr = |addr: &str| {
+                        original_contact_id_from_addr_stmt.query_row((addr,), |row| row.get(0))
+                    };
+
+                    if let Some(autocrypt_key) = autocrypt_key {
+                        insert_contact(autocrypt_key)?;
+                        autocrypt_pgp_contacts.insert(original_id, transaction.last_insert_rowid());
+                    }
+
+                    if let Some(verified_key) = verified_key {
+                        insert_contact(verified_key)?;
+                        let new_id = transaction.last_insert_rowid();
+                        verified_pgp_contacts.insert(original_id, new_id);
+                        let verifier_id: i64 = original_contact_id_from_addr(&verifier)?;
+                        verifications.insert(new_id, verifier_id);
+                    }
+
+                    if let Some(secondary_verified_key) = secondary_verified_key {
+                        insert_contact(secondary_verified_key)?;
+                        let new_id = transaction.last_insert_rowid();
+                        let verifier_id: i64 = original_contact_id_from_addr(&secondary_verifier)?;
+                        verifications.insert(new_id, verifier_id);
+                    }
+                }
+                drop(load_contacts_stmt);
+
                 Ok(())
             },
             migration_version
         )
         .await?;
+        info!(context, "PGP contacts migration took {:?}", start.elapsed());
     }
 
     let new_version = sql
