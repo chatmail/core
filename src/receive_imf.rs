@@ -330,30 +330,45 @@ pub(crate) async fn receive_imf_inner(
     let to_ids: Vec<Option<ContactId>>;
     let past_ids: Vec<Option<ContactId>>;
 
+    let member_fingerprints = mime_parser.chat_group_member_fingerprints();
+    let to_member_fingerprints;
+    let past_member_fingerprints;
+
+    if member_fingerprints.len() > mime_parser.recipients.len() {
+        (to_member_fingerprints, past_member_fingerprints) = member_fingerprints.split_at(mime_parser.recipients.len());
+    } else {
+        warn!(context, "Unexpected length of the fingerprint header.");
+        to_member_fingerprints = &[];
+        past_member_fingerprints = &[];
+    };
+
     let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
         context,
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
-        &[], // TODO use To fingerprints
-        Origin::Hidden
+        &to_member_fingerprints,
+        Origin::Hidden,
     )
     .await?;
 
     if mime_parser.get_chat_group_id().is_some() {
         to_ids = pgp_to_ids;
-        let past_members_fingerprints = mime_parser.chat_group_past_members_fingerprints();
 
         if let Some(chat_id) = chat_id {
-            past_ids =
-                lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, &past_members_fingerprints, chat_id)
-                    .await?;
+            past_ids = lookup_pgp_contacts_by_address_list(
+                context,
+                &mime_parser.past_members,
+                &past_member_fingerprints,
+                chat_id,
+            )
+            .await?;
         } else {
             past_ids = add_or_lookup_pgp_contacts_by_address_list(
                 context,
                 &mime_parser.past_members,
                 &mime_parser.gossiped_keys,
-                &past_members_fingerprints,
-                Origin::Hidden
+                &past_member_fingerprints,
+                Origin::Hidden,
             )
             .await?;
         }
