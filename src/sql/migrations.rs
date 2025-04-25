@@ -25,6 +25,11 @@ const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
 const TABLES: &str = include_str!("./tables.sql");
 
+#[cfg(test)]
+tokio::task_local! {
+    static STOP_MIGRATIONS_AT: i32;
+}
+
 pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool, bool)> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
@@ -1259,6 +1264,7 @@ fn migrate_pgp_contacts(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
 ) -> std::result::Result<(), anyhow::Error> {
+    info!(context, "Starting PGP contact transition.");
     // =============================== Step 1: ===============================
     //                              Alter tables
     transaction.execute_batch(
@@ -1278,14 +1284,20 @@ fn migrate_pgp_contacts(
         CREATE INDEX public_key_index ON public_keys (fingerprint);
 
         INSERT INTO public_keys (fingerprint, public_key)
-        SELECT public_key_fingerprint, public_key FROM acpeerstates;
+        SELECT public_key_fingerprint, public_key FROM acpeerstates
+         WHERE public_key_fingerprint IS NOT NULL AND public_key IS NOT NULL;
+
         INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates;
+        SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates
+         WHERE gossip_key_fingerprint IS NOT NULL AND gossip_key IS NOT NULL;
+
         INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT verified_key_fingerprint, verified_key FROM acpeerstates;
+        SELECT verified_key_fingerprint, verified_key FROM acpeerstates
+         WHERE verified_key_fingerprint IS NOT NULL AND verified_key IS NOT NULL;
+
         INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates;
-    ",
+        SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates
+         WHERE secondary_verified_key_fingerprint IS NOT NULL AND secondary_verified_key IS NOT NULL;",
     )?;
 
     // TODO remove this commented-out code
@@ -1422,9 +1434,14 @@ fn migrate_pgp_contacts(
                     &status,
                     is_bot,
                     selfavatar_sent,
-                    fingerprint,
+                    fingerprint.clone(),
                 ))?;
-                Ok(transaction.last_insert_rowid().try_into()?)
+                let id = transaction.last_insert_rowid().try_into()?;
+                info!(
+                    context,
+                    "Inserted new contact id={id} name={name} addr={addr} fingerprint={fingerprint}"
+                );
+                Ok(id)
             };
             let mut original_contact_id_from_addr = |addr: &str| {
                 original_contact_id_from_addr_stmt.query_row((addr,), |row| row.get(0))
@@ -1459,6 +1476,16 @@ fn migrate_pgp_contacts(
             // Only use secondary verification if there is no primary verification:
             verifications.entry(new_id).or_insert(verifier_id);
         }
+        info!(
+            context,
+            "Created PGP contacts identified by autocrypt key: {autocrypt_pgp_contacts:?}"
+        );
+        info!(context, "Created PGP contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_pgp_contacts_with_reset_peerstate:?}");
+        info!(
+            context,
+            "Created PGP contacts identified by verified key: {verified_pgp_contacts:?}"
+        );
+        info!(context, "Migrated verifications: {verifications:?}");
     }
 
     // ======================= Step 3: =======================
@@ -1466,14 +1493,15 @@ fn migrate_pgp_contacts(
     // In the process, track the set of contacts which remained no any chat at all
     // in a `BTreeSet<u32>`, which initially contains all contact ids
     let mut orphaned_contacts: BTreeSet<u32> = transaction
-        .prepare("SELECT id FROM contacts")?
+        .prepare("SELECT id FROM contacts WHERE id>9")?
         .query_map((), |row| row.get::<usize, u32>(0))?
         .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()?;
 
     {
         let mut stmt = transaction.prepare(
             "SELECT c.id, c.type, c.grpid, c.protected
-        FROM chats c",
+            FROM chats c
+            WHERE id>9",
         )?;
         let mut load_chat_contacts_stmt =
             transaction.prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=?")?;
@@ -1493,6 +1521,7 @@ fn migrate_pgp_contacts(
                 .collect::<Result<Vec<u32>, rusqlite::Error>>()?;
 
             let mut keep_email_contacts = || {
+                info!(context, "Chat {chat_id} will be an unencrypted chat where contacts are identified by email address.");
                 for m in &old_members {
                     orphaned_contacts.remove(m);
                 }
@@ -1507,7 +1536,8 @@ fn migrate_pgp_contacts(
                 //   and the effect will be the same.
                 100 => {
                     let Some(old_member) = old_members.first() else {
-                        warn!(context, "1:1 chat doesn't contain contact");
+                        warn!(context, "1:1 chat {chat_id} doesn't contain contact");
+                        debug_assert!(false, "1:1 chat {chat_id} doesn't contain contact");
                         continue;
                     };
                     let Some(&new_contact) = autocrypt_pgp_contacts.get(old_member) else {
@@ -1571,6 +1601,16 @@ fn migrate_pgp_contacts(
                 continue;
             }
 
+            let human_readable_transitions = old_and_new_members
+                .iter()
+                .map(|(old, new)| format!("{old}->{}", new.unwrap_or_default()))
+                .collect::<Vec<String>>()
+                .join(" ");
+            info!(
+                context,
+                "Migrating chat {chat_id} to PGP contacts: {human_readable_transitions}"
+            );
+
             for (old_member, new_member) in old_and_new_members {
                 if let Some(new_member) = new_member {
                     orphaned_contacts.remove(&new_member);
@@ -1589,7 +1629,10 @@ fn migrate_pgp_contacts(
     }
 
     // ======================= Step 4: =======================
-    // Mark all contacts which remained in no chat at all as hidden
+    info!(
+        context,
+        "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
+    );
     let mut mark_as_hidden_stmt = transaction.prepare("UPDATE contacts SET origin=? WHERE id=?")?;
     for contact in orphaned_contacts {
         mark_as_hidden_stmt.execute((0x8, contact))?;
@@ -1635,6 +1678,14 @@ impl Sql {
         migration: impl Send + FnOnce(&mut rusqlite::Transaction) -> Result<()>,
         version: i32,
     ) -> Result<()> {
+        #[cfg(test)]
+        if STOP_MIGRATIONS_AT.try_with(|stop_migrations_at| version > *stop_migrations_at)
+            == Ok(true)
+        {
+            println!("Not running migration {version}, because STOP_MIGRATIONS_AT is set");
+            return Ok(());
+        }
+
         self.transaction(move |transaction| {
             let curr_version: String = transaction.query_row(
                 "SELECT IFNULL(value, ?) FROM config WHERE keyname=?;",
@@ -1658,28 +1709,4 @@ impl Sql {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::Config;
-    use crate::test_utils::TestContext;
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_clear_config_cache() -> anyhow::Result<()> {
-        // Some migrations change the `config` table in SQL.
-        // This test checks that the config cache is invalidated in `execute_migration()`.
-
-        let t = TestContext::new().await;
-        assert_eq!(t.get_config_bool(Config::IsChatmail).await?, false);
-
-        t.sql
-            .execute_migration(
-                "INSERT INTO config (keyname, value) VALUES ('is_chatmail', '1')",
-                1000,
-            )
-            .await?;
-        assert_eq!(t.get_config_bool(Config::IsChatmail).await?, true);
-        assert_eq!(t.sql.get_raw_config_int(VERSION_CFG).await?.unwrap(), 1000);
-
-        Ok(())
-    }
-}
+mod migrations_tests;
