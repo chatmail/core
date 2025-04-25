@@ -358,6 +358,7 @@ impl MimeFactory {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
                                 to.remove(position);
                                 member_timestamps.remove(position);
+                                member_fingerprints.remove(position);
                             }
                         }
 
