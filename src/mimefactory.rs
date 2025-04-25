@@ -15,7 +15,6 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::key::load_self_public_key;
 use crate::chat::{self, Chat};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
@@ -24,6 +23,7 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
+use crate::key::load_self_public_key;
 use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
 use crate::message::{self, Message, MsgId, Viewtype};
@@ -668,9 +668,9 @@ impl MimeFactory {
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
-            if chat.typ == Chattype::Group
-            {
-                if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await? {
+            if chat.typ == Chattype::Group {
+                if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await?
+                {
                     headers.push((
                         "Chat-Group-Member-Timestamps",
                         mail_builder::headers::raw::Raw::new(

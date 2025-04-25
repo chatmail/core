@@ -334,10 +334,16 @@ pub(crate) async fn receive_imf_inner(
     let to_member_fingerprints;
     let past_member_fingerprints;
 
-    if member_fingerprints.len() > mime_parser.recipients.len() {
-        (to_member_fingerprints, past_member_fingerprints) = member_fingerprints.split_at(mime_parser.recipients.len());
+    if member_fingerprints.len() >= mime_parser.recipients.len() {
+        (to_member_fingerprints, past_member_fingerprints) =
+            member_fingerprints.split_at(mime_parser.recipients.len());
     } else {
-        warn!(context, "Unexpected length of the fingerprint header.");
+        warn!(
+            context,
+            "Unexpected length of the fingerprint header, expected at least {}, got {}.",
+            mime_parser.recipients.len(),
+            member_fingerprints.len()
+        );
         to_member_fingerprints = &[];
         past_member_fingerprints = &[];
     };
@@ -400,7 +406,7 @@ pub(crate) async fn receive_imf_inner(
         past_ids = add_or_lookup_contacts_by_address_list(
             context,
             &mime_parser.past_members,
-            Origin::Hidden
+            Origin::Hidden,
         )
         .await?;
     };
