@@ -400,13 +400,7 @@ pub(crate) async fn receive_imf_inner(
         past_ids = add_or_lookup_contacts_by_address_list(
             context,
             &mime_parser.past_members,
-            if !mime_parser.incoming {
-                Origin::OutgoingTo
-            } else if incoming_origin.is_known() {
-                Origin::IncomingTo
-            } else {
-                Origin::IncomingUnknownTo
-            },
+            Origin::Hidden
         )
         .await?;
     };
