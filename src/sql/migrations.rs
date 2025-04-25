@@ -1332,7 +1332,7 @@ fn migrate_pgp_contacts(
         // It can't map to the verified pgp contact id, because at the time of constructing
         // this map, not all pgp contacts are in the database.
         // TODO apply verifications
-        let mut verifications = BTreeMap::new();
+        let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
 
         let mut load_contacts_stmt = transaction.prepare(
             "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
@@ -1449,11 +1449,11 @@ fn migrate_pgp_contacts(
                 let id = transaction.last_insert_rowid().try_into()?;
                 info!(
                     context,
-                    "Inserted new contact id={id} name={name} addr={addr} fingerprint={fingerprint}"
+                    "Inserted new contact id={id} name='{name}' addr='{addr}' fingerprint={fingerprint}"
                 );
                 Ok(id)
             };
-            let mut original_contact_id_from_addr = |addr: &str| -> rusqlite::Result<i64> {
+            let mut original_contact_id_from_addr = |addr: &str| -> rusqlite::Result<u32> {
                 if addr_cmp(addr, &self_addr) {
                     return Ok(1); // ContactId::SELF
                 }
@@ -1478,14 +1478,14 @@ fn migrate_pgp_contacts(
             };
             let new_id = insert_contact(verified_key)?;
             verified_pgp_contacts.insert(original_id.try_into()?, new_id);
-            let verifier_id: i64 = original_contact_id_from_addr(&verifier)?;
+            let verifier_id: u32 = original_contact_id_from_addr(&verifier)?;
             verifications.insert(new_id, verifier_id);
 
             let Some(secondary_verified_key) = secondary_verified_key else {
                 continue;
             };
             let new_id = insert_contact(secondary_verified_key)?;
-            let verifier_id: i64 = original_contact_id_from_addr(&secondary_verifier)?;
+            let verifier_id: u32 = original_contact_id_from_addr(&secondary_verifier)?;
             // Only use secondary verification if there is no primary verification:
             verifications.entry(new_id).or_insert(verifier_id);
         }
@@ -1498,6 +1498,22 @@ fn migrate_pgp_contacts(
             context,
             "Created PGP contacts identified by verified key: {verified_pgp_contacts:?}"
         );
+
+        for (&new_contact, &verifier_original_contact) in &verifications {
+            let verifier = if verifier_original_contact == 1 {
+                Some(&1) // Verified by ContactId::SELF
+            } else {
+                // `verifications` contains the original contact id.
+                // We need to get the new, verified-pgp-identified contact id.
+                verified_pgp_contacts.get(&verifier_original_contact)
+            };
+            if let Some(&verifier) = verifier {
+                transaction.execute(
+                    "UPDATE contacts SET verifier=? WHERE id=?",
+                    (verifier, new_contact),
+                )?;
+            }
+        }
         info!(context, "Migrated verifications: {verifications:?}");
     }
 
@@ -1534,7 +1550,7 @@ fn migrate_pgp_contacts(
                 .collect::<Result<Vec<u32>, rusqlite::Error>>()?;
 
             let mut keep_email_contacts = || {
-                info!(context, "Chat {chat_id} will be an unencrypted chat where contacts are identified by email address.");
+                info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address.");
                 for m in &old_members {
                     orphaned_contacts.remove(m);
                 }
