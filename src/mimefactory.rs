@@ -346,7 +346,7 @@ impl MimeFactory {
                                         } else if id == ContactId::SELF {
                                             // It's fine to have self in past members
                                             // if we are leaving the group.
-                                            member_fingerprints.push(self_fingerprint.clone());
+                                            past_member_fingerprints.push(self_fingerprint.clone());
                                         } else {
                                             debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
                                         }
