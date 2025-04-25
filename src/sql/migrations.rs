@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use std::time::Instant;
 
 use anyhow::{ensure, Context as _, Result};
+use deltachat_contact_tools::addr_cmp;
 use deltachat_contact_tools::EmailAddress;
 use pgp::SignedPublicKey;
 use rusqlite::OptionalExtension;
@@ -12,6 +13,7 @@ use rusqlite::OptionalExtension;
 use crate::config::Config;
 use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
+use crate::contact::ContactId;
 use crate::context::Context;
 use crate::imap;
 use crate::key::DcKey;
@@ -1265,6 +1267,12 @@ fn migrate_pgp_contacts(
     transaction: &mut rusqlite::Transaction<'_>,
 ) -> std::result::Result<(), anyhow::Error> {
     info!(context, "Starting PGP contact transition.");
+    let self_addr: String = transaction.query_row(
+        "SELECT value FROM config WHERE keyname='configured_addr'",
+        (),
+        |row| row.get(0),
+    )?;
+
     // =============================== Step 1: ===============================
     //                              Alter tables
     transaction.execute_batch(
@@ -1337,53 +1345,55 @@ fn migrate_pgp_contacts(
             WHERE c.id > 9",
         )?;
 
-        let all_email_contacts = load_contacts_stmt.query_map((), |row| {
-            let id: i64 = row.get(0)?;
-            let name: String = row.get(1)?;
-            let addr: String = row.get(2)?;
-            let origin: i64 = row.get(3)?;
-            let blocked: Option<bool> = row.get(4)?;
-            let last_seen: i64 = row.get(5)?;
-            let authname: String = row.get(6)?;
-            let param: String = row.get(7)?;
-            let status: Option<String> = row.get(8)?;
-            let is_bot: bool = row.get(9)?;
-            let selfavatar_sent: i64 = row.get(10)?;
-            let autocrypt_key = row
-                .get(11)
-                .ok()
-                .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-            let verified_key = row
-                .get(12)
-                .ok()
-                .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-            let verifier: String = row.get(13)?;
-            let secondary_verified_key = row
-                .get(12)
-                .ok()
-                .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-            let secondary_verifier: String = row.get(15)?;
-            let prefer_encrypt: u8 = row.get(16)?;
-            Ok((
-                id,
-                name,
-                addr,
-                origin,
-                blocked,
-                last_seen,
-                authname,
-                param,
-                status,
-                is_bot,
-                selfavatar_sent,
-                autocrypt_key,
-                verified_key,
-                verifier,
-                secondary_verified_key,
-                secondary_verifier,
-                prefer_encrypt,
-            ))
-        })?;
+        let all_email_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
+            .query_map((), |row| {
+                let id: i64 = row.get(0)?;
+                let name: String = row.get(1)?;
+                let addr: String = row.get(2)?;
+                let origin: i64 = row.get(3)?;
+                let blocked: Option<bool> = row.get(4)?;
+                let last_seen: i64 = row.get(5)?;
+                let authname: String = row.get(6)?;
+                let param: String = row.get(7)?;
+                let status: Option<String> = row.get(8)?;
+                let is_bot: bool = row.get(9)?;
+                let selfavatar_sent: i64 = row.get(10)?;
+                let autocrypt_key = row
+                    .get(11)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let verified_key = row
+                    .get(12)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let verifier: String = row.get(13)?;
+                let secondary_verified_key = row
+                    .get(12)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let secondary_verifier: String = row.get(15)?;
+                let prefer_encrypt: u8 = row.get(16)?;
+                Ok((
+                    id,
+                    name,
+                    addr,
+                    origin,
+                    blocked,
+                    last_seen,
+                    authname,
+                    param,
+                    status,
+                    is_bot,
+                    selfavatar_sent,
+                    autocrypt_key,
+                    verified_key,
+                    verifier,
+                    secondary_verified_key,
+                    secondary_verifier,
+                    prefer_encrypt,
+                ))
+            })?
+            .collect();
 
         let mut insert_contact_stmt = transaction.prepare(
             "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
@@ -1395,7 +1405,7 @@ fn migrate_pgp_contacts(
         let mut original_contact_id_from_addr_stmt =
             transaction.prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint=''")?;
 
-        for row in all_email_contacts {
+        for row in all_email_contacts? {
             let (
                 original_id,
                 name,
@@ -1414,7 +1424,7 @@ fn migrate_pgp_contacts(
                 secondary_verified_key,
                 secondary_verifier,
                 prefer_encrypt,
-            ) = row?;
+            ) = row;
             let mut insert_contact = |key: SignedPublicKey| -> Result<u32> {
                 let fingerprint = key.dc_fingerprint().hex();
                 let existing_contact_id: Option<u32> = fingerprint_to_id_stmt
@@ -1443,7 +1453,10 @@ fn migrate_pgp_contacts(
                 );
                 Ok(id)
             };
-            let mut original_contact_id_from_addr = |addr: &str| {
+            let mut original_contact_id_from_addr = |addr: &str| -> rusqlite::Result<i64> {
+                if addr_cmp(addr, &self_addr) {
+                    return Ok(1); // ContactId::SELF
+                }
                 original_contact_id_from_addr_stmt.query_row((addr,), |row| row.get(0))
             };
 
@@ -1503,8 +1516,8 @@ fn migrate_pgp_contacts(
             FROM chats c
             WHERE id>9",
         )?;
-        let mut load_chat_contacts_stmt =
-            transaction.prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=?")?;
+        let mut load_chat_contacts_stmt = transaction
+            .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
         let all_chats = stmt.query_map((), |row| {
             let id: u32 = row.get(0)?;
             let typ: u32 = row.get(1)?;
