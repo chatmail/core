@@ -335,6 +335,15 @@ impl MimeFactory {
                                             // we need to notify removed member
                                             // that it was removed.
                                             recipients.push(addr.clone());
+
+                                            if let Some(public_key) = public_key_opt {
+                                                keys.push((addr.clone(), public_key))
+                                            } else if id != ContactId::SELF {
+                                                missing_key_addresses.insert(addr.clone());
+                                                if is_encrypted {
+                                                    warn!(context, "Missing key for {addr}");
+                                                }
+                                            }
                                         }
                                     }
                                     if !undisclosed_recipients {
