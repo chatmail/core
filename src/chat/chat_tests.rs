@@ -380,7 +380,7 @@ async fn test_parallel_member_remove() -> Result<()> {
     let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
     let alice_charlie_contact_id = alice.add_or_lookup_contact_id(&charlie).await;
 
-    // Create and promote a group.
+    tcm.section("Alice creates and promotes a group");
     let alice_chat_id =
         create_group_chat(&alice, ProtectionStatus::Unprotected, "Group chat").await?;
     add_contact_to_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
@@ -393,31 +393,31 @@ async fn test_parallel_member_remove() -> Result<()> {
     let bob_chat_id = bob_received_msg.get_chat_id();
     bob_chat_id.accept(&bob).await?;
 
-    // Alice adds Charlie to the chat.
+    tcm.section("Alice adds Charlie to the chat");
     add_contact_to_chat(&alice, alice_chat_id, alice_charlie_contact_id).await?;
     let alice_sent_add_msg = alice.pop_sent_msg().await;
 
-    // Bob leaves the chat.
+    tcm.section("Bob leaves the chat");
     remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;
     bob.pop_sent_msg().await;
 
-    // Bob receives a msg about Alice adding Claire to the group.
+    tcm.section("Bob receives a message about Alice adding Charlie to the group");
     bob.recv_msg(&alice_sent_add_msg).await;
 
     SystemTime::shift(Duration::from_secs(3600));
 
-    // Alice sends a message to Bob because the message about leaving is lost.
+    tcm.section("Alice sends a message to Bob because the message about leaving is lost");
     let alice_sent_msg = alice.send_text(alice_chat_id, "What a silence!").await;
     bob.recv_msg(&alice_sent_msg).await;
 
     bob.golden_test_chat(bob_chat_id, "chat_test_parallel_member_remove")
         .await;
 
-    // Alice removes Bob from the chat.
+    tcm.section("Alice removes Bob from the chat");
     remove_contact_from_chat(&alice, alice_chat_id, alice_bob_contact_id).await?;
     let alice_sent_remove_msg = alice.pop_sent_msg().await;
 
-    // Bob receives a msg about Alice removing him from the group.
+    tcm.section("Bob receives a msg about Alice removing him from the group");
     let bob_received_remove_msg = bob.recv_msg(&alice_sent_remove_msg).await;
 
     // Test that remove message is rewritten.
