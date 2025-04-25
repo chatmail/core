@@ -69,14 +69,14 @@ pub enum HeaderDef {
     /// Past members of the group.
     ChatGroupPastMembers,
 
-    /// Fingerprints of past members.
-    ChatGroupPastMembersFpr,
-
     /// Space-separated timestamps of member addition
     /// for members listed in the `To` field
     /// followed by timestamps of member removal
     /// for members listed in the `Chat-Group-Past-Members` field.
     ChatGroupMemberTimestamps,
+
+    /// Fingerprints of the To header.
+    ChatGroupMemberFpr,
 
     /// Duration of the attached media file.
     ChatDuration,

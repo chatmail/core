@@ -15,6 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
+use crate::key::load_self_public_key;
 use crate::chat::{self, Chat};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
@@ -103,14 +104,18 @@ pub struct MimeFactory {
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
 
-    /// Vector of OpenPGP fingerprints for past members.
-    past_member_fingerprints: Vec<String>,
+    /// Fingerprints of the members in the same order as in the `to`
+    /// followed by `past_members`.
+    ///
+    /// If this is not empty, its length
+    /// should be the sum of `to` and `past_members` length.
+    member_fingerprints: Vec<String>,
 
     /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
     /// If this is not empty, its length
-    /// should be the sum of `recipients` and `past_members` length.
+    /// should be the sum of `to` and `past_members` length.
     member_timestamps: Vec<i64>,
 
     timestamp: i64,
@@ -192,12 +197,15 @@ impl MimeFactory {
         let mut recipients = Vec::new();
         let mut to = Vec::new();
         let mut past_members = Vec::new();
-        let mut past_member_fingerprints = Vec::new();
+        let mut member_fingerprints = Vec::new();
         let mut member_timestamps = Vec::new();
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
 
         let encryption_keys;
+
+        let self_public_key = load_self_public_key(context).await?;
+        let self_fingerprint = self_public_key.dc_fingerprint().hex();
 
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
@@ -271,6 +279,7 @@ impl MimeFactory {
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
+                        let mut past_member_fingerprints = Vec::new();
 
                         for row in rows {
                             let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
@@ -295,6 +304,14 @@ impl MimeFactory {
                                     recipients.push(addr.clone());
                                     if !undisclosed_recipients {
                                         to.push((name, addr.clone()));
+
+                                        if !fingerprint.is_empty() {
+                                            member_fingerprints.push(fingerprint);
+                                        } else if id == ContactId::SELF {
+                                            member_fingerprints.push(self_fingerprint.clone());
+                                        } else {
+                                            debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                        }
                                         member_timestamps.push(add_timestamp);
                                     }
                                 }
@@ -335,6 +352,7 @@ impl MimeFactory {
                         }
 
                         debug_assert!(member_timestamps.len() >= to.len());
+                        debug_assert!(member_fingerprints.is_empty() || member_fingerprints.len() >= to.len());
 
                         if to.len() > 1 {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
@@ -344,6 +362,7 @@ impl MimeFactory {
                         }
 
                         member_timestamps.extend(past_member_timestamps);
+                        member_fingerprints.extend(past_member_fingerprints);
                         Ok(())
                     },
                 )
@@ -411,7 +430,7 @@ impl MimeFactory {
             encryption_keys,
             to,
             past_members,
-            past_member_fingerprints,
+            member_fingerprints,
             member_timestamps,
             timestamp: msg.timestamp_sort,
             loaded: Loaded::Message { msg, chat },
@@ -455,7 +474,7 @@ impl MimeFactory {
             encryption_keys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
-            past_member_fingerprints: vec![],
+            member_fingerprints: vec![],
             member_timestamps: vec![],
             timestamp,
             loaded: Loaded::Mdn {
@@ -645,38 +664,38 @@ impl MimeFactory {
                 "Chat-Group-Past-Members",
                 mail_builder::headers::address::Address::new_list(past_members.clone()).into(),
             ));
-
-            if !self.past_member_fingerprints.is_empty() {
-                headers.push((
-                    "Chat-Group-Past-Members-Fpr",
-                    mail_builder::headers::raw::Raw::new(
-                        self.past_member_fingerprints
-                            .iter()
-                            .map(|fp| fp.to_string())
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                    )
-                    .into()
-                ));
-            }
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
             if chat.typ == Chattype::Group
-                && !self.member_timestamps.is_empty()
-                && !chat.member_list_is_stale(context).await?
             {
-                headers.push((
-                    "Chat-Group-Member-Timestamps",
-                    mail_builder::headers::raw::Raw::new(
-                        self.member_timestamps
-                            .iter()
-                            .map(|ts| ts.to_string())
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                    )
-                    .into(),
-                ));
+                if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await? {
+                    headers.push((
+                        "Chat-Group-Member-Timestamps",
+                        mail_builder::headers::raw::Raw::new(
+                            self.member_timestamps
+                                .iter()
+                                .map(|ts| ts.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                        .into(),
+                    ));
+                }
+
+                if !self.member_fingerprints.is_empty() {
+                    headers.push((
+                        "Chat-Group-Member-Fpr",
+                        mail_builder::headers::raw::Raw::new(
+                            self.member_fingerprints
+                                .iter()
+                                .map(|fp| fp.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                        .into(),
+                    ));
+                }
             }
         }
 
