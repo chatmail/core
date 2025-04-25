@@ -335,13 +335,7 @@ pub(crate) async fn receive_imf_inner(
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
         &[], // TODO use To fingerprints
-        if !mime_parser.incoming {
-            Origin::OutgoingTo
-        } else if incoming_origin.is_known() {
-            Origin::IncomingTo
-        } else {
-            Origin::IncomingUnknownTo
-        },
+        Origin::Hidden
     )
     .await?;
 
@@ -354,8 +348,14 @@ pub(crate) async fn receive_imf_inner(
                 lookup_pgp_contacts_by_address_list(context, &mime_parser.past_members, &past_members_fingerprints, chat_id)
                     .await?;
         } else {
-            // TODO: lookup by fingerprints if they are available.
-            past_ids = vec![None; mime_parser.past_members.len()];
+            past_ids = add_or_lookup_pgp_contacts_by_address_list(
+                context,
+                &mime_parser.past_members,
+                &mime_parser.gossiped_keys,
+                &past_members_fingerprints,
+                Origin::Hidden
+            )
+            .await?;
         }
     } else {
         if pgp_to_ids.len() == 1
@@ -3176,17 +3176,22 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
     origin: Origin,
 ) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
+    let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
             contact_ids.push(None);
             continue;
         }
-        let Some(key) = gossiped_keys.get(addr) else {
+        let fingerprint: String = if let Some(fp) = fingerprint_iter.next() {
+            // Iterator has not ran out of fingerprints yet.
+            fp.hex()
+        } else if let Some(key) = gossiped_keys.get(addr) {
+            key.dc_fingerprint().hex()
+        } else {
             contact_ids.push(None);
             continue;
         };
-        let fingerprint = key.dc_fingerprint().hex();
         let display_name = info.display_name.as_deref();
         if let Ok(addr) = ContactAddress::new(addr) {
             let (contact_id, _) = Contact::add_or_lookup_ex(
@@ -3279,6 +3284,8 @@ async fn lookup_pgp_contacts_by_address_list(
     fingerprints: &[Fingerprint],
     chat_id: ChatId,
 ) -> Result<Vec<Option<ContactId>>> {
+    // TODO: create a contact with a given fingerprint
+    // if fingerprint is available.
     let mut contact_ids = Vec::new();
     for info in address_list {
         let addr = &info.addr;
