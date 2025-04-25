@@ -630,6 +630,7 @@ async fn test_lost_member_added() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
     let alice_chat_id = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[bob])
         .await;
@@ -638,8 +639,8 @@ async fn test_lost_member_added() -> Result<()> {
     assert_eq!(get_chat_contacts(bob, bob_chat_id).await?.len(), 2);
 
     // Attempt to add member, but message is lost.
-    let claire_id = Contact::create(alice, "", "claire@foo.de").await?;
-    add_contact_to_chat(alice, alice_chat_id, claire_id).await?;
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
     alice.pop_sent_msg().await;
 
     let alice_sent = alice.send_text(alice_chat_id, "Hi again!").await;
