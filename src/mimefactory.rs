@@ -257,7 +257,6 @@ impl MimeFactory {
                      LEFT JOIN contacts c ON cc.contact_id=c.id
                      LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
                      WHERE cc.chat_id=?
-                     AND cc.add_timestamp >= cc.remove_timestamp
                      AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
                     (msg.chat_id, chat.typ == Chattype::Group),
                     |row| {
@@ -300,6 +299,15 @@ impl MimeFactory {
                                     }
                                 }
                                 recipient_ids.insert(id);
+
+                                if let Some(public_key) = public_key_opt {
+                                    keys.push((addr.clone(), public_key))
+                                } else if id != ContactId::SELF {
+                                    missing_key_addresses.insert(addr.clone());
+                                    if is_encrypted {
+                                        warn!(context, "Missing key for {addr}");
+                                    }
+                                }
                             } else if remove_timestamp.saturating_add(60 * 24 * 3600) > now {
                                 // Row is a tombstone,
                                 // member is not actually part of the group.
@@ -322,15 +330,6 @@ impl MimeFactory {
                                             debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
                                         }
                                     }
-                                }
-                            }
-
-                            if let Some(public_key) = public_key_opt {
-                                keys.push((addr.clone(), public_key))
-                            } else if id != ContactId::SELF {
-                                missing_key_addresses.insert(addr.clone());
-                                if is_encrypted {
-                                    warn!(context, "Missing key for {addr}");
                                 }
                             }
                         }
