@@ -13,7 +13,6 @@ use rusqlite::OptionalExtension;
 use crate::config::Config;
 use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
-use crate::contact::ContactId;
 use crate::context::Context;
 use crate::imap;
 use crate::key::DcKey;
@@ -1267,11 +1266,6 @@ fn migrate_pgp_contacts(
     transaction: &mut rusqlite::Transaction<'_>,
 ) -> std::result::Result<(), anyhow::Error> {
     info!(context, "Starting PGP contact transition.");
-    let self_addr: String = transaction.query_row(
-        "SELECT value FROM config WHERE keyname='configured_addr'",
-        (),
-        |row| row.get(0),
-    )?;
 
     // =============================== Step 1: ===============================
     //                              Alter tables
@@ -1309,6 +1303,22 @@ fn migrate_pgp_contacts(
     )
     .context("Creating PGP-contact tables")?;
 
+    let Some(self_addr): Option<String> = transaction
+        .query_row(
+            "SELECT value FROM config WHERE keyname='configured_addr'",
+            (),
+            |row| row.get(0),
+        )
+        .optional()
+        .context("Step 0")?
+    else {
+        info!(
+            context,
+            "Not yet configured, no need to migrate PGP contacts"
+        );
+        return Ok(());
+    };
+
     // TODO remove this commented-out code
     // transaction.execute(
     //     "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
@@ -1335,8 +1345,9 @@ fn migrate_pgp_contacts(
         // TODO apply verifications
         let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
 
-        let mut load_contacts_stmt = transaction.prepare(
-            "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
+        let mut load_contacts_stmt = transaction
+            .prepare(
+                "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
             c.authname, c.param, c.status, c.is_bot, c.selfavatar_sent,
             IFNULL(p.public_key, p.gossip_key),
             p.verified_key, p.verifier,
@@ -1402,9 +1413,9 @@ fn migrate_pgp_contacts(
             VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         )?;
         let mut fingerprint_to_id_stmt =
-            transaction.prepare("SELECT id FROM contacts WHERE fingerprint=?")?;
-        let mut original_contact_id_from_addr_stmt =
-            transaction.prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint=''")?;
+            transaction.prepare("SELECT id FROM contacts WHERE fingerprint=? AND id>9")?;
+        let mut original_contact_id_from_addr_stmt = transaction
+            .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")?;
 
         for row in all_email_contacts? {
             let (
@@ -1454,11 +1465,19 @@ fn migrate_pgp_contacts(
                 );
                 Ok(id)
             };
-            let mut original_contact_id_from_addr = |addr: &str| -> rusqlite::Result<u32> {
-                if addr_cmp(addr, &self_addr) {
+            let mut original_contact_id_from_addr = |addr: &str| -> Result<u32> {
+                if addr_cmp(addr, &self_addr) || addr.is_empty() {
+                    // TODO not sure what to do when addr is empty:
+                    // This marks all contacts that were verified
+                    // before we recorded who introduced whom
+                    // as directly verified.
+                    // An alternative would be putting `new_id` here.
+
                     return Ok(1); // ContactId::SELF
                 }
-                original_contact_id_from_addr_stmt.query_row((addr,), |row| row.get(0))
+                original_contact_id_from_addr_stmt
+                    .query_row((addr,), |row| row.get(0))
+                    .with_context(|| format!("Verifier '{addr}' not found in original contacts"))
             };
 
             let Some(autocrypt_key) = autocrypt_key else {
@@ -1479,7 +1498,7 @@ fn migrate_pgp_contacts(
             };
             let new_id = insert_contact(verified_key)?;
             verified_pgp_contacts.insert(original_id.try_into()?, new_id);
-            let verifier_id: u32 = original_contact_id_from_addr(&verifier)?;
+            let verifier_id = original_contact_id_from_addr(&verifier)?;
             verifications.insert(new_id, verifier_id);
 
             let Some(secondary_verified_key) = secondary_verified_key else {
@@ -1552,8 +1571,8 @@ fn migrate_pgp_contacts(
                 .query_map((chat_id,), |row| row.get::<_, u32>(0))?
                 .collect::<Result<Vec<u32>, rusqlite::Error>>()?;
 
-            let mut keep_email_contacts = || {
-                info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address.");
+            let mut keep_email_contacts = |reason: &str| {
+                info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}");
                 for m in &old_members {
                     orphaned_contacts.remove(m);
                 }
@@ -1572,8 +1591,7 @@ fn migrate_pgp_contacts(
                         continue;
                     };
                     let Some(&new_contact) = autocrypt_pgp_contacts.get(old_member) else {
-                        // No peerstate, or peerstate in "reset" state. Keep email contact.
-                        keep_email_contacts();
+                        keep_email_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
                     vec![(*old_member, Some(new_contact))]
@@ -1584,7 +1602,7 @@ fn migrate_pgp_contacts(
                     if grpid.is_empty() {
                         // Ad-hoc group that has empty Chat-Group-ID
                         // because it was created in response to receiving a non-chat email.
-                        keep_email_contacts();
+                        keep_email_contacts("Empty chat-Group-ID");
                         continue;
                     } else if protected == 1 {
                         old_members
@@ -1620,7 +1638,7 @@ fn migrate_pgp_contacts(
 
                 // Mailinglist | Broadcast list
                 140 | 160 => {
-                    keep_email_contacts();
+                    keep_email_contacts("Mailinglist/Broadcast");
                     continue;
                 }
 
@@ -1630,8 +1648,8 @@ fn migrate_pgp_contacts(
                 }
             };
 
-            if old_and_new_members.is_empty() {
-                keep_email_contacts();
+            if old_and_new_members.iter().all(|(_old, new)| *new == None) {
+                keep_email_contacts("All contacts in chat are e-mail contacts");
                 continue;
             }
 
