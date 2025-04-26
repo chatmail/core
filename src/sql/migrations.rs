@@ -1291,7 +1291,7 @@ fn migrate_pgp_contacts(
         ) STRICT;
         CREATE INDEX public_key_index ON public_keys (fingerprint);
 
-        INSERT INTO public_keys (fingerprint, public_key)
+        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
         SELECT public_key_fingerprint, public_key FROM acpeerstates
          WHERE public_key_fingerprint IS NOT NULL AND public_key IS NOT NULL;
 
@@ -1306,7 +1306,8 @@ fn migrate_pgp_contacts(
         INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
         SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates
          WHERE secondary_verified_key_fingerprint IS NOT NULL AND secondary_verified_key IS NOT NULL;",
-    )?;
+    )
+    .context("Creating PGP-contact tables")?;
 
     // TODO remove this commented-out code
     // transaction.execute(
@@ -1542,6 +1543,8 @@ fn migrate_pgp_contacts(
             Ok((id, typ, grpid, protected))
         })?;
 
+        let mut update_member_stmt = transaction
+            .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
         for chat in all_chats {
             let (chat_id, typ, grpid, protected) = chat?;
             // In groups, this also contains past members
@@ -1565,8 +1568,7 @@ fn migrate_pgp_contacts(
                 //   and the effect will be the same.
                 100 => {
                     let Some(old_member) = old_members.first() else {
-                        warn!(context, "1:1 chat {chat_id} doesn't contain contact");
-                        debug_assert!(false, "1:1 chat {chat_id} doesn't contain contact");
+                        info!(context, "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat");
                         continue;
                     };
                     let Some(&new_contact) = autocrypt_pgp_contacts.get(old_member) else {
@@ -1602,6 +1604,9 @@ fn migrate_pgp_contacts(
                                         // TODO it's unclear whether we want to do this:
                                         // We could also make the group unencrypted
                                         // if any peerstate is reset.
+                                        // Also, right now, if we have no key at all,
+                                        // the member will be silently removed from the group;
+                                        // maybe we should at least post an info message?
                                         .or_else(|| {
                                             autocrypt_pgp_contacts_with_reset_peerstate
                                                 .get(original)
@@ -1643,10 +1648,36 @@ fn migrate_pgp_contacts(
             for (old_member, new_member) in old_and_new_members {
                 if let Some(new_member) = new_member {
                     orphaned_contacts.remove(&new_member);
-                    transaction.execute(
-                        "UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?",
-                        (new_member, old_member, chat_id),
-                    )?;
+                    let res = update_member_stmt.execute((new_member, old_member, chat_id));
+                    if res.is_err() {
+                        // The same chat partner exists multiple times in the chat,
+                        // with mutliple profiles which have different email addresses
+                        // but the same key.
+                        // We can only keep one of them.
+                        // So, if one of them is not in the chat anymore, delete it,
+                        // otherwise delete the one that was added least recently.
+                        let member_to_delete: u32 = transaction.query_row(
+                            "SELECT contact_id
+                               FROM chats_contacts
+                              WHERE chat_id=? AND contact_id IN (?,?)
+                           ORDER BY add_timestamp>=remove_timestamp, add_timestamp LIMIT 1",
+                            (chat_id, new_member, old_member),
+                            |row| row.get(0),
+                        )?;
+                        info!(
+                            context,
+                            "Chat partner is in the chat {chat_id} multiple times. \
+                            Deleting {member_to_delete}, then trying to update \
+                            {old_member}->{new_member} again"
+                        );
+                        transaction.execute(
+                            "DELETE FROM chats_contacts WHERE chat_id=? AND contact_id=?",
+                            (chat_id, member_to_delete),
+                        )?;
+                        // If we removed `old_member`, then this will be a no-op,
+                        // which is exactly what we want in this case:
+                        update_member_stmt.execute((new_member, old_member, chat_id))?;
+                    }
                 } else {
                     transaction.execute(
                         "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
