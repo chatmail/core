@@ -301,7 +301,9 @@ impl MimeFactory {
                             };
                             if add_timestamp >= remove_timestamp {
                                 if !recipients_contain_addr(&to, &addr) {
-                                    recipients.push(addr.clone());
+                                    if id != ContactId::SELF {
+                                        recipients.push(addr.clone());
+                                    }
                                     if !undisclosed_recipients {
                                         to.push((name, addr.clone()));
 
@@ -334,7 +336,9 @@ impl MimeFactory {
                                             // This is a "member removed" message,
                                             // we need to notify removed member
                                             // that it was removed.
-                                            recipients.push(addr.clone());
+                                            if id != ContactId::SELF {
+                                                recipients.push(addr.clone());
+                                            }
 
                                             if let Some(public_key) = public_key_opt {
                                                 keys.push((addr.clone(), public_key))
@@ -394,6 +398,13 @@ impl MimeFactory {
             encryption_keys = if !is_encrypted {
                 None
             } else {
+                if keys.is_empty() && !recipients.is_empty() {
+                    bail!(
+                        "No recipient keys are available, cannot encrypt to {:?}.",
+                        recipients
+                    );
+                }
+
                 // Remove recipients for which the key is missing.
                 if !missing_key_addresses.is_empty() {
                     recipients.retain(|addr| !missing_key_addresses.contains(addr));
@@ -402,6 +413,7 @@ impl MimeFactory {
                 Some(keys)
             };
         }
+
         let (in_reply_to, references) = context
             .sql
             .query_row(
