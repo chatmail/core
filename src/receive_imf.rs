@@ -3232,6 +3232,18 @@ async fn lookup_pgp_contact_by_address(
     addr: &str,
     chat_id: ChatId,
 ) -> Result<Option<ContactId>> {
+    if context.is_self_addr(addr).await? {
+        let is_self_in_chat = context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM chats_contacts WHERE chat_id=? AND contact_id=1",
+                (chat_id,),
+            )
+            .await?;
+        if is_self_in_chat {
+            return Ok(Some(ContactId::SELF));
+        }
+    }
     let contact_id: Option<ContactId> = context
         .sql
         .query_row_optional(
