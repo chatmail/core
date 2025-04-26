@@ -334,19 +334,24 @@ pub(crate) async fn receive_imf_inner(
     let to_member_fingerprints;
     let past_member_fingerprints;
 
-    if member_fingerprints.len() >= mime_parser.recipients.len() {
-        (to_member_fingerprints, past_member_fingerprints) =
-            member_fingerprints.split_at(mime_parser.recipients.len());
+    if !member_fingerprints.is_empty() {
+        if member_fingerprints.len() >= mime_parser.recipients.len() {
+            (to_member_fingerprints, past_member_fingerprints) =
+                member_fingerprints.split_at(mime_parser.recipients.len());
+        } else {
+            warn!(
+                context,
+                "Unexpected length of the fingerprint header, expected at least {}, got {}.",
+                mime_parser.recipients.len(),
+                member_fingerprints.len()
+            );
+            to_member_fingerprints = &[];
+            past_member_fingerprints = &[];
+        }
     } else {
-        warn!(
-            context,
-            "Unexpected length of the fingerprint header, expected at least {}, got {}.",
-            mime_parser.recipients.len(),
-            member_fingerprints.len()
-        );
         to_member_fingerprints = &[];
         past_member_fingerprints = &[];
-    };
+    }
 
     let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
         context,
