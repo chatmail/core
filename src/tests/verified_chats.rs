@@ -59,14 +59,14 @@ async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_
         assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     } else {
         tcm.section("Bob sets up another Delta Chat device");
-        let bob2 = TestContext::new().await;
+        let bob2 = tcm.unconfigured().await;
         bob2.set_name("bob2");
         bob2.configure_addr("bob@example.net").await;
 
         SystemTime::shift(std::time::Duration::from_secs(3600));
         tcm.send_recv(&bob2, &alice, "Using another device now")
             .await;
-        let contact = alice.add_or_lookup_contact(&bob).await;
+        let contact = alice.add_or_lookup_contact(&bob2).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), false);
         assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     }
