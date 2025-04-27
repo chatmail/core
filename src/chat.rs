@@ -4277,8 +4277,12 @@ pub async fn set_chat_profile_image(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group || chat.typ == Chattype::Mailinglist,
-        "Failed to set profile image; group does not exist"
+        chat.typ == Chattype::Group,
+        "Can only set profile image for group chats"
+    );
+    ensure!(
+        !chat.grpid.is_empty(),
+        "Cannot set profile image for ad hoc groups"
     );
     /* we should respect this - whatever we send to the group, it gets discarded anyway! */
     if !is_contact_in_chat(context, chat_id, ContactId::SELF).await? {
