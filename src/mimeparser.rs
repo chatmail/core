@@ -114,8 +114,7 @@ pub(crate) struct MimeMessage {
     /// MIME message in this case.
     pub is_mime_modified: bool,
 
-    /// Decrypted, raw MIME structure. Nonempty iff `is_mime_modified` and the message was actually
-    /// encrypted.
+    /// Decrypted raw MIME structure.
     pub decoded_data: Vec<u8>,
 
     /// Hop info for debugging.
@@ -608,10 +607,7 @@ impl MimeMessage {
         parser.maybe_remove_inline_mailinglist_footer();
         parser.heuristically_parse_ndn(context).await;
         parser.parse_headers(context).await?;
-
-        if parser.is_mime_modified {
-            parser.decoded_data = mail_raw;
-        }
+        parser.decoded_data = mail_raw;
 
         Ok(parser)
     }
