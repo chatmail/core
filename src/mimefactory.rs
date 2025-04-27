@@ -307,12 +307,14 @@ impl MimeFactory {
                                     if !undisclosed_recipients {
                                         to.push((name, addr.clone()));
 
-                                        if !fingerprint.is_empty() {
-                                            member_fingerprints.push(fingerprint);
-                                        } else if id == ContactId::SELF {
-                                            member_fingerprints.push(self_fingerprint.clone());
-                                        } else {
-                                            debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                        if is_encrypted {
+                                            if !fingerprint.is_empty() {
+                                                member_fingerprints.push(fingerprint);
+                                            } else if id == ContactId::SELF {
+                                                member_fingerprints.push(self_fingerprint.clone());
+                                            } else {
+                                                debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                            }
                                         }
                                         member_timestamps.push(add_timestamp);
                                     }
@@ -354,14 +356,16 @@ impl MimeFactory {
                                         past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
 
-                                        if !fingerprint.is_empty() {
-                                            past_member_fingerprints.push(fingerprint);
-                                        } else if id == ContactId::SELF {
-                                            // It's fine to have self in past members
-                                            // if we are leaving the group.
-                                            past_member_fingerprints.push(self_fingerprint.clone());
-                                        } else {
-                                            debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                        if is_encrypted {
+                                            if !fingerprint.is_empty() {
+                                                past_member_fingerprints.push(fingerprint);
+                                            } else if id == ContactId::SELF {
+                                                // It's fine to have self in past members
+                                                // if we are leaving the group.
+                                                past_member_fingerprints.push(self_fingerprint.clone());
+                                            } else {
+                                                debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                            }
                                         }
                                     }
                                 }
@@ -375,12 +379,16 @@ impl MimeFactory {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
                                 to.remove(position);
                                 member_timestamps.remove(position);
-                                member_fingerprints.remove(position);
+                                if is_encrypted {
+                                    member_fingerprints.remove(position);
+                                }
                             }
                         }
 
                         member_timestamps.extend(past_member_timestamps);
-                        member_fingerprints.extend(past_member_fingerprints);
+                        if is_encrypted {
+                            member_fingerprints.extend(past_member_fingerprints);
+                        }
                         Ok(())
                     },
                 )
