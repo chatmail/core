@@ -4128,7 +4128,7 @@ async fn test_no_email_contacts_in_group_chats() -> Result<()> {
     Ok(())
 }
 
-/// Tests that PGP-contacts cannot be added to ad-hoc groups.
+/// Tests that PGP-contacts cannot be added to ad hoc groups.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -4159,6 +4159,37 @@ async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
 
     // Adding PGP-contact should fail.
     let res = add_contact_to_chat(alice, chat_id, pgp_charlie_contact_id).await;
+    assert!(res.is_err());
+
+    Ok(())
+}
+
+/// Tests that avatar cannot be set in ad hoc groups.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_avatar_in_adhoc_chats() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let chat_id = receive_imf(
+        alice,
+        b"Subject: Email thread\r\n\
+          From: alice@example.org\r\n\
+          To: Bob <bob@example.net>, Fiona <fiona@example.net>\r\n\
+          Date: Mon, 2 Dec 2023 16:59:39 +0000\r\n\
+          Message-ID: <alice-mail@example.org>\r\n\
+          \r\n\
+          Starting a new thread\r\n",
+        false,
+    )
+    .await?
+    .unwrap()
+    .chat_id;
+
+    // Test that setting avatar in ad hoc group is not possible.
+    let file = alice.dir.path().join("avatar.png");
+    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
+    tokio::fs::write(&file, bytes).await?;
+    let res = set_chat_profile_image(alice, chat_id, file.to_str().unwrap()).await;
     assert!(res.is_err());
 
     Ok(())
