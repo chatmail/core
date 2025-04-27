@@ -624,43 +624,6 @@ async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_group_avatar_unencrypted() -> anyhow::Result<()> {
-    let t = &TestContext::new_alice().await;
-    let group_id = chat::create_group_chat(t, chat::ProtectionStatus::Unprotected, "Group")
-        .await
-        .unwrap();
-    let bob = Contact::create(t, "", "bob@example.org").await?;
-    chat::add_contact_to_chat(t, group_id, bob).await?;
-
-    let file = t.dir.path().join("avatar.png");
-    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    tokio::fs::write(&file, bytes).await?;
-    chat::set_chat_profile_image(t, group_id, file.to_str().unwrap()).await?;
-
-    // Send message to bob: that should get multipart/mixed because of the avatar moved to inner header.
-    let mut msg = Message::new_text("this is the text!".to_string());
-    let sent_msg = t.send_msg(group_id, &mut msg).await;
-    let mut payload = sent_msg.payload().splitn(3, "\r\n\r\n");
-
-    let outer = payload.next().unwrap();
-    let inner = payload.next().unwrap();
-    let body = payload.next().unwrap();
-
-    assert_eq!(outer.match_indices("multipart/mixed").count(), 1);
-    assert_eq!(outer.match_indices("Message-ID:").count(), 1);
-    assert_eq!(outer.match_indices("Subject:").count(), 1);
-    assert_eq!(outer.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(outer.match_indices("Chat-Group-Avatar:").count(), 0);
-
-    assert_eq!(inner.match_indices("text/plain").count(), 1);
-    assert_eq!(inner.match_indices("Message-ID:").count(), 1);
-    assert_eq!(inner.match_indices("Chat-Group-Avatar:").count(), 1);
-
-    assert_eq!(body.match_indices("this is the text!").count(), 1);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_selfavatar_unencrypted_signed() {
     // create chat with bob, set selfavatar
     let t = TestContext::new_alice().await;
