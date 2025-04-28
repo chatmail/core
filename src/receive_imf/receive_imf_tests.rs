@@ -4892,6 +4892,7 @@ async fn test_no_op_member_added_is_trash() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
     let alice_chat_id = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "foos", &[bob])
         .await;
@@ -4901,11 +4902,11 @@ async fn test_no_op_member_added_is_trash() -> Result<()> {
     let bob_chat_id = bob.get_last_msg().await.chat_id;
     bob_chat_id.accept(bob).await?;
 
-    let fiona_id = Contact::create(alice, "", "fiona@example.net").await?;
+    let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
     add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
     let msg = alice.pop_sent_msg().await;
 
-    let fiona_id = Contact::create(bob, "", "fiona@example.net").await?;
+    let fiona_id = bob.add_or_lookup_contact_id(fiona).await;
     add_contact_to_chat(bob, bob_chat_id, fiona_id).await?;
     bob.recv_msg_trash(&msg).await;
     let contacts = get_chat_contacts(bob, bob_chat_id).await?;
