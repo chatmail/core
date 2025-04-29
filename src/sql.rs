@@ -8,7 +8,10 @@ use rusqlite::{config::DbConfig, types::ValueRef, Connection, OpenFlags, Row};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::{self, add_device_msg, update_device_icon, update_saved_messages_icon};
+use crate::chat::{
+    self, add_device_msg, add_device_msg_with_importance, update_device_icon,
+    update_saved_messages_icon,
+};
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -190,7 +193,11 @@ impl Sql {
     async fn try_open(&self, context: &Context, dbfile: &Path, passphrase: String) -> Result<()> {
         *self.pool.write().await = Some(Self::new_pool(dbfile, passphrase.to_string())?);
 
-        self.run_migrations(context).await?;
+        if let Err(e) = self.run_migrations(context).await {
+            error!(context, "Running migrations failed: {e:#}");
+            context.set_last_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
+            // TODO possibly we should make the db read-only or close it
+        }
 
         Ok(())
     }
