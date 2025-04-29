@@ -15,7 +15,7 @@ opt-level = 1
 # Make anyhow `backtrace` feature useful.
 # With `debug = 0` there are no line numbers in the backtrace
 # produced with RUST_BACKTRACE=1.
-debug = 'full'
+debug = 1
 opt-level = 0
 
 # Always optimize dependencies.
