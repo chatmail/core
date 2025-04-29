@@ -2226,8 +2226,7 @@ async fn test_only_minimal_data_are_forwarded() -> Result<()> {
         let parsed_msg = bob.parse_msg(&sent_msg).await;
         let encrypted_payload = String::from_utf8(parsed_msg.decoded_data.clone()).unwrap();
 
-        assert!(encrypted_payload
-            .contains("---------- Forwarded message ----------"));
+        assert!(encrypted_payload.contains("---------- Forwarded message ----------"));
         assert!(!encrypted_payload.contains("secretgrpname"));
         assert!(!encrypted_payload.contains("secretname"));
         assert!(!encrypted_payload.contains("alice"));
