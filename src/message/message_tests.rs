@@ -410,12 +410,16 @@ async fn test_markseen_not_downloaded_msg() -> Result<()> {
     let alice = &tcm.alice().await;
     alice.set_config(Config::DownloadLimit, Some("1")).await?;
     let bob = &tcm.bob().await;
-    let bob_chat_id = tcm.send_recv_accept(alice, bob, "hi").await.chat_id;
+    let bob_chat_id = bob.create_chat(alice).await.id;
+    alice.create_chat(bob).await; // Make sure the chat is accepted.
 
+    tcm.section("Bob sends a large message to Alice");
     let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
     let mut msg = Message::new(Viewtype::Image);
     msg.set_file_from_bytes(bob, "a.jpg", file_bytes, None)?;
     let sent_msg = bob.send_msg(bob_chat_id, &mut msg).await;
+
+    tcm.section("Alice receives a large message from Bob");
     let msg = alice.recv_msg(&sent_msg).await;
     assert_eq!(msg.download_state, DownloadState::Available);
     assert!(!msg.param.get_bool(Param::WantsMdn).unwrap_or_default());

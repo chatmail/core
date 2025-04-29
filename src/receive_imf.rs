@@ -6,7 +6,9 @@ use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result};
 use data_encoding::BASE32_NOPAD;
-use deltachat_contact_tools::{addr_cmp, may_be_valid_addr, sanitize_single_line, ContactAddress};
+use deltachat_contact_tools::{
+    addr_cmp, addr_normalize, may_be_valid_addr, sanitize_single_line, ContactAddress,
+};
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
@@ -301,19 +303,24 @@ pub(crate) async fn receive_imf_inner(
     // but uses display name of the user whose action generated the notification
     // as the display name.
     let fingerprint = mime_parser.signatures.iter().next();
-    let (from_id, _from_id_blocked, incoming_origin) =
-        match from_field_to_contact_id(context, &mime_parser.from, fingerprint, prevent_rename)
-            .await?
-        {
-            Some(contact_id_res) => contact_id_res,
-            None => {
-                warn!(
-                    context,
-                    "receive_imf: From field does not contain an acceptable address."
-                );
-                return Ok(None);
-            }
-        };
+    let (from_id, _from_id_blocked, incoming_origin) = match from_field_to_contact_id(
+        context,
+        &mime_parser.from,
+        fingerprint,
+        prevent_rename,
+        is_partial_download.is_some(),
+    )
+    .await?
+    {
+        Some(contact_id_res) => contact_id_res,
+        None => {
+            warn!(
+                context,
+                "receive_imf: From field does not contain an acceptable address."
+            );
+            return Ok(None);
+        }
+    };
 
     let chat_id = if let Some(grpid) = mime_parser.get_chat_group_id() {
         if let Some((chat_id, _protected, _blocked)) =
@@ -693,12 +700,19 @@ pub(crate) async fn receive_imf_inner(
 ///   display names. We don't want the display name to change every time the user gets a new email from
 ///   a mailing list.
 ///
+/// * `is_partial_download`: the message is partially downloaded.
+///   We only know the email address and not the contact fingerprint,
+///   but try to assign the message to some PGP-contact.
+///   If we get it wrong, the message will be placed into the correct
+///   chat after downloading.
+///
 /// Returns `None` if From field does not contain a valid contact address.
 pub async fn from_field_to_contact_id(
     context: &Context,
     from: &SingleInfo,
     fingerprint: Option<&Fingerprint>,
     prevent_rename: bool,
+    is_partial_download: bool,
 ) -> Result<Option<(ContactId, bool, Origin)>> {
     let fingerprint = fingerprint.as_ref().map(|fp| fp.hex()).unwrap_or_default();
     let display_name = if prevent_rename {
@@ -716,6 +730,37 @@ pub async fn from_field_to_contact_id(
             return Ok(None);
         }
     };
+
+    if fingerprint.is_empty() && is_partial_download {
+        let addr_normalized = addr_normalize(&from_addr);
+
+        // Try to assign to some PGP-contact.
+        if let Some((from_id, origin)) = context
+            .sql
+            .query_row_optional(
+                "SELECT id, origin FROM contacts
+                 WHERE addr=?1 COLLATE NOCASE
+                 AND fingerprint<>'' -- Only PGP-contacts
+                 AND id>?2 AND origin>=?3 AND blocked=?4
+                 ORDER BY last_seen DESC
+                 LIMIT 1",
+                (
+                    &addr_normalized,
+                    ContactId::LAST_SPECIAL,
+                    Origin::IncomingUnknownFrom,
+                    Blocked::Not,
+                ),
+                |row| {
+                    let id: ContactId = row.get(0)?;
+                    let origin: Origin = row.get(1)?;
+                    Ok((id, origin))
+                },
+            )
+            .await?
+        {
+            return Ok(Some((from_id, false, origin)));
+        }
+    }
 
     let (from_id, _) = Contact::add_or_lookup_ex(
         context,
