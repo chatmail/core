@@ -4566,12 +4566,9 @@ async fn test_create_group_with_big_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
-    let ba_contact = Contact::create(
-        &bob,
-        "alice",
-        &alice.get_config(Config::Addr).await?.unwrap(),
-    )
-    .await?;
+    let ba_contact = bob.add_or_lookup_contact_id(&alice).await;
+    let ab_chat_id = alice.create_chat(&bob).await.id;
+
     let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
 
     let bob_grp_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "Group").await?;
@@ -4579,26 +4576,22 @@ async fn test_create_group_with_big_msg() -> Result<()> {
     let mut msg = Message::new(Viewtype::Image);
     msg.set_file_from_bytes(&bob, "a.jpg", file_bytes, None)?;
     let sent_msg = bob.send_msg(bob_grp_id, &mut msg).await;
-    assert!(!msg.get_showpadlock());
+    assert!(msg.get_showpadlock());
 
     alice.set_config(Config::DownloadLimit, Some("1")).await?;
     assert_eq!(alice.download_limit().await?, Some(MIN_DOWNLOAD_LIMIT));
     let msg = alice.recv_msg(&sent_msg).await;
     assert_eq!(msg.download_state, DownloadState::Available);
-    let alice_grp = Chat::load_from_db(&alice, msg.chat_id).await?;
-    assert_eq!(alice_grp.typ, Chattype::Group);
-    assert_eq!(alice_grp.name, "Group");
-    assert_eq!(
-        chat::get_chat_contacts(&alice, alice_grp.id).await?.len(),
-        2
-    );
+    let alice_chat = Chat::load_from_db(&alice, msg.chat_id).await?;
+    // Incomplete message is assigned to 1:1 chat.
+    assert_eq!(alice_chat.typ, Chattype::Single);
 
     alice.set_config(Config::DownloadLimit, None).await?;
     let msg = alice.recv_msg(&sent_msg).await;
     assert_eq!(msg.download_state, DownloadState::Done);
     assert_eq!(msg.state, MessageState::InFresh);
     assert_eq!(msg.viewtype, Viewtype::Image);
-    assert_eq!(msg.chat_id, alice_grp.id);
+    assert_ne!(msg.chat_id, alice_chat.id);
     let alice_grp = Chat::load_from_db(&alice, msg.chat_id).await?;
     assert_eq!(alice_grp.typ, Chattype::Group);
     assert_eq!(alice_grp.name, "Group");
@@ -4607,7 +4600,6 @@ async fn test_create_group_with_big_msg() -> Result<()> {
         2
     );
 
-    let ab_chat_id = tcm.send_recv_accept(&alice, &bob, "hi").await.chat_id;
     // Now Bob can send encrypted messages to Alice.
 
     let bob_grp_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "Group1").await?;
@@ -4638,7 +4630,8 @@ async fn test_create_group_with_big_msg() -> Result<()> {
     );
 
     // The big message must go away from the 1:1 chat.
-    assert_eq!(alice.get_last_msg_in(ab_chat_id).await.text, "hi");
+    let msgs = chat::get_chat_msgs(&alice, ab_chat_id).await?;
+    assert!(msgs.is_empty());
 
     Ok(())
 }
