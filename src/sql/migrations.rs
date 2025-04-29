@@ -1355,7 +1355,8 @@ fn migrate_pgp_contacts(
             FROM contacts c
             INNER JOIN acpeerstates p ON c.addr=p.addr
             WHERE c.id > 9",
-        )?;
+            )
+            .context("Step 2")?;
 
         let all_email_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
             .query_map((), |row| {
@@ -1404,18 +1405,23 @@ fn migrate_pgp_contacts(
                     secondary_verifier,
                     prefer_encrypt,
                 ))
-            })?
+            })
+            .context("Step 3")?
             .collect();
 
-        let mut insert_contact_stmt = transaction.prepare(
-            "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
+        let mut insert_contact_stmt = transaction
+            .prepare(
+                "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
             authname, param, status, is_bot, selfavatar_sent, fingerprint)
             VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-        )?;
-        let mut fingerprint_to_id_stmt =
-            transaction.prepare("SELECT id FROM contacts WHERE fingerprint=? AND id>9")?;
+            )
+            .context("Step 4")?;
+        let mut fingerprint_to_id_stmt = transaction
+            .prepare("SELECT id FROM contacts WHERE fingerprint=? AND id>9")
+            .context("Step 5")?;
         let mut original_contact_id_from_addr_stmt = transaction
-            .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")?;
+            .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")
+            .context("Step 6")?;
 
         for row in all_email_contacts? {
             let (
@@ -1441,24 +1447,30 @@ fn migrate_pgp_contacts(
                 let fingerprint = key.dc_fingerprint().hex();
                 let existing_contact_id: Option<u32> = fingerprint_to_id_stmt
                     .query_row((&fingerprint,), |row| row.get(0))
-                    .optional()?;
+                    .optional()
+                    .context("Step 7")?;
                 if let Some(existing_contact_id) = existing_contact_id {
                     return Ok(existing_contact_id);
                 }
-                insert_contact_stmt.execute((
-                    &name,
-                    &addr,
-                    origin,
-                    blocked,
-                    last_seen,
-                    &authname,
-                    &param,
-                    &status,
-                    is_bot,
-                    selfavatar_sent,
-                    fingerprint.clone(),
-                ))?;
-                let id = transaction.last_insert_rowid().try_into()?;
+                insert_contact_stmt
+                    .execute((
+                        &name,
+                        &addr,
+                        origin,
+                        blocked,
+                        last_seen,
+                        &authname,
+                        &param,
+                        &status,
+                        is_bot,
+                        selfavatar_sent,
+                        fingerprint.clone(),
+                    ))
+                    .context("Step 8")?;
+                let id = transaction
+                    .last_insert_rowid()
+                    .try_into()
+                    .context("Step 9")?;
                 info!(
                     context,
                     "Inserted new contact id={id} name='{name}' addr='{addr}' fingerprint={fingerprint}"
@@ -1483,29 +1495,31 @@ fn migrate_pgp_contacts(
             let Some(autocrypt_key) = autocrypt_key else {
                 continue;
             };
-            let new_id = insert_contact(autocrypt_key)?;
+            let new_id = insert_contact(autocrypt_key).context("Step 10")?;
 
             // prefer_encrypt == 20 would mean EncryptPreference::Reset,
             // i.e. we shouldn't encrypt if possible.
             if prefer_encrypt != 20 {
-                autocrypt_pgp_contacts.insert(original_id.try_into()?, new_id);
+                autocrypt_pgp_contacts.insert(original_id.try_into().context("Step 11")?, new_id);
             } else {
-                autocrypt_pgp_contacts_with_reset_peerstate.insert(original_id.try_into()?, new_id);
+                autocrypt_pgp_contacts_with_reset_peerstate
+                    .insert(original_id.try_into().context("Step 12")?, new_id);
             }
 
             let Some(verified_key) = verified_key else {
                 continue;
             };
-            let new_id = insert_contact(verified_key)?;
-            verified_pgp_contacts.insert(original_id.try_into()?, new_id);
-            let verifier_id = original_contact_id_from_addr(&verifier)?;
+            let new_id = insert_contact(verified_key).context("Step 13")?;
+            verified_pgp_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
+            let verifier_id = original_contact_id_from_addr(&verifier).context("Step 15")?;
             verifications.insert(new_id, verifier_id);
 
             let Some(secondary_verified_key) = secondary_verified_key else {
                 continue;
             };
-            let new_id = insert_contact(secondary_verified_key)?;
-            let verifier_id: u32 = original_contact_id_from_addr(&secondary_verifier)?;
+            let new_id = insert_contact(secondary_verified_key).context("Step 16")?;
+            let verifier_id: u32 =
+                original_contact_id_from_addr(&secondary_verifier).context("Step 17")?;
             // Only use secondary verification if there is no primary verification:
             verifications.entry(new_id).or_insert(verifier_id);
         }
@@ -1528,10 +1542,12 @@ fn migrate_pgp_contacts(
                 verified_pgp_contacts.get(&verifier_original_contact)
             };
             if let Some(&verifier) = verifier {
-                transaction.execute(
-                    "UPDATE contacts SET verifier=? WHERE id=?",
-                    (verifier, new_contact),
-                )?;
+                transaction
+                    .execute(
+                        "UPDATE contacts SET verifier=? WHERE id=?",
+                        (verifier, new_contact),
+                    )
+                    .context("Step 18")?;
             }
         }
         info!(context, "Migrated verifications: {verifications:?}");
@@ -1542,34 +1558,43 @@ fn migrate_pgp_contacts(
     // In the process, track the set of contacts which remained no any chat at all
     // in a `BTreeSet<u32>`, which initially contains all contact ids
     let mut orphaned_contacts: BTreeSet<u32> = transaction
-        .prepare("SELECT id FROM contacts WHERE id>9")?
-        .query_map((), |row| row.get::<usize, u32>(0))?
-        .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()?;
+        .prepare("SELECT id FROM contacts WHERE id>9")
+        .context("Step 19")?
+        .query_map((), |row| row.get::<usize, u32>(0))
+        .context("Step 20")?
+        .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
+        .context("Step 21")?;
 
     {
-        let mut stmt = transaction.prepare(
-            "SELECT c.id, c.type, c.grpid, c.protected
+        let mut stmt = transaction
+            .prepare(
+                "SELECT c.id, c.type, c.grpid, c.protected
             FROM chats c
             WHERE id>9",
-        )?;
+            )
+            .context("Step 22")?;
         let mut load_chat_contacts_stmt = transaction
             .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
-        let all_chats = stmt.query_map((), |row| {
-            let id: u32 = row.get(0)?;
-            let typ: u32 = row.get(1)?;
-            let grpid: String = row.get(2)?;
-            let protected: u32 = row.get(3)?;
-            Ok((id, typ, grpid, protected))
-        })?;
+        let all_chats = stmt
+            .query_map((), |row| {
+                let id: u32 = row.get(0)?;
+                let typ: u32 = row.get(1)?;
+                let grpid: String = row.get(2)?;
+                let protected: u32 = row.get(3)?;
+                Ok((id, typ, grpid, protected))
+            })
+            .context("Step 23")?;
 
         let mut update_member_stmt = transaction
             .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
         for chat in all_chats {
-            let (chat_id, typ, grpid, protected) = chat?;
+            let (chat_id, typ, grpid, protected) = chat.context("Step 24")?;
             // In groups, this also contains past members
             let old_members: Vec<u32> = load_chat_contacts_stmt
-                .query_map((chat_id,), |row| row.get::<_, u32>(0))?
-                .collect::<Result<Vec<u32>, rusqlite::Error>>()?;
+                .query_map((chat_id,), |row| row.get::<_, u32>(0))
+                .context("Step 25")?
+                .collect::<Result<Vec<u32>, rusqlite::Error>>()
+                .context("Step 26")?;
 
             let mut keep_email_contacts = |reason: &str| {
                 info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}");
@@ -1674,33 +1699,39 @@ fn migrate_pgp_contacts(
                         // We can only keep one of them.
                         // So, if one of them is not in the chat anymore, delete it,
                         // otherwise delete the one that was added least recently.
-                        let member_to_delete: u32 = transaction.query_row(
-                            "SELECT contact_id
+                        let member_to_delete: u32 = transaction
+                            .query_row(
+                                "SELECT contact_id
                                FROM chats_contacts
                               WHERE chat_id=? AND contact_id IN (?,?)
                            ORDER BY add_timestamp>=remove_timestamp, add_timestamp LIMIT 1",
-                            (chat_id, new_member, old_member),
-                            |row| row.get(0),
-                        )?;
+                                (chat_id, new_member, old_member),
+                                |row| row.get(0),
+                            )
+                            .context("Step 27")?;
                         info!(
                             context,
                             "Chat partner is in the chat {chat_id} multiple times. \
                             Deleting {member_to_delete}, then trying to update \
                             {old_member}->{new_member} again"
                         );
-                        transaction.execute(
-                            "DELETE FROM chats_contacts WHERE chat_id=? AND contact_id=?",
-                            (chat_id, member_to_delete),
-                        )?;
+                        transaction
+                            .execute(
+                                "DELETE FROM chats_contacts WHERE chat_id=? AND contact_id=?",
+                                (chat_id, member_to_delete),
+                            )
+                            .context("Step 28")?;
                         // If we removed `old_member`, then this will be a no-op,
                         // which is exactly what we want in this case:
                         update_member_stmt.execute((new_member, old_member, chat_id))?;
                     }
                 } else {
-                    transaction.execute(
-                        "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
-                        (old_member, chat_id),
-                    )?;
+                    transaction
+                        .execute(
+                            "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
+                            (old_member, chat_id),
+                        )
+                        .context("Step 29")?;
                 }
             }
         }
@@ -1711,9 +1742,13 @@ fn migrate_pgp_contacts(
         context,
         "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
     );
-    let mut mark_as_hidden_stmt = transaction.prepare("UPDATE contacts SET origin=? WHERE id=?")?;
+    let mut mark_as_hidden_stmt = transaction
+        .prepare("UPDATE contacts SET origin=? WHERE id=?")
+        .context("Step 30")?;
     for contact in orphaned_contacts {
-        mark_as_hidden_stmt.execute((0x8, contact))?;
+        mark_as_hidden_stmt
+            .execute((0x8, contact))
+            .context("Step 31")?;
     }
 
     Ok(())
