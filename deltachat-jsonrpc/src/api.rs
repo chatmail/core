@@ -354,6 +354,11 @@ impl CommandApi {
         Ok(ctx.get_blobdir().to_str().map(|s| s.to_owned()))
     }
 
+    async fn get_migration_error(&self, account_id: u32) -> Result<Option<String>> {
+        let ctx = self.get_context(account_id).await?;
+        Ok(ctx.get_migration_error())
+    }
+
     /// Copy file to blob dir.
     async fn copy_to_blob_dir(&self, account_id: u32, path: String) -> Result<PathBuf> {
         let ctx = self.get_context(account_id).await?;
