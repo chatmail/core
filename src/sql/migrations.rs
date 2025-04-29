@@ -1319,15 +1319,6 @@ fn migrate_pgp_contacts(
         return Ok(());
     };
 
-    // TODO remove this commented-out code
-    // transaction.execute(
-    //     "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
-    //         authname, param, status, is_bot)
-    //     SELECT c.name, c.addr, c.origin, c.blocked, c.last_seen,
-    //         c.authname, c.param, c.status, c.is_bot
-    //     FROM contacts c
-    //     INNER JOIN peerstates ON c.addr=acpeerstates.addr", ()
-    // )?;
     // =============================== Step 2: ===============================
     // Create up to 3 new contacts for every contact that has a peerstate:
     // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
@@ -1336,13 +1327,11 @@ fn migrate_pgp_contacts(
     // one that maps to Autocrypt PGP-contact, one that maps to verified PGP-contact.
     let mut autocrypt_pgp_contacts: BTreeMap<u32, u32> = BTreeMap::new();
     let mut autocrypt_pgp_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
-    // TODO should secondary verified PGP keys also go in here?
     let mut verified_pgp_contacts: BTreeMap<u32, u32> = BTreeMap::new();
     {
         // This maps from the verified contact to the original contact id of the verifier.
         // It can't map to the verified pgp contact id, because at the time of constructing
         // this map, not all pgp contacts are in the database.
-        // TODO apply verifications
         let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
 
         let mut load_contacts_stmt = transaction
@@ -1479,11 +1468,11 @@ fn migrate_pgp_contacts(
             };
             let mut original_contact_id_from_addr = |addr: &str| -> Result<u32> {
                 if addr_cmp(addr, &self_addr) || addr.is_empty() {
-                    // TODO not sure what to do when addr is empty:
-                    // This marks all contacts that were verified
-                    // before we recorded who introduced whom
-                    // as directly verified.
-                    // An alternative would be putting `new_id` here.
+                    // TODO not sure what to do when addr is empty,
+                    // i.e. the contact was verified before we recorded who introduced whom.
+                    // Right now, we put ContactId::SELF, i.e. mark it as directly verified by us.
+                    // An alternative would be putting `new_id` here,
+                    // in order to record that it's unclear who verified.
 
                     return Ok(1); // ContactId::SELF
                 }
