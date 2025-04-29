@@ -195,7 +195,7 @@ impl Sql {
 
         if let Err(e) = self.run_migrations(context).await {
             error!(context, "Running migrations failed: {e:#}");
-            context.set_last_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
+            context.set_migration_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
             // TODO possibly we should make the db read-only or close it
         }
 

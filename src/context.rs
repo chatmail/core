@@ -275,6 +275,13 @@ pub struct InnerContext {
     /// `last_error` should be used to avoid races with the event thread.
     pub(crate) last_error: parking_lot::RwLock<String>,
 
+    /// It's not possible to emit migration errors as an event,
+    /// because at the time of the migration, there is no event emitter yet.
+    /// So, this holds the error that happened during migration, if any.
+    /// This is necessary for the possibly-failible PGP migration,
+    /// which happened 2025-05, and can be removed a few releases later.
+    pub(crate) migration_error: parking_lot::RwLock<Option<String>>,
+
     /// If debug logging is enabled, this contains all necessary information
     ///
     /// Standard RwLock instead of [`tokio::sync::RwLock`] is used
@@ -444,6 +451,7 @@ impl Context {
             creation_time: tools::Time::now(),
             last_full_folder_scan: Mutex::new(None),
             last_error: parking_lot::RwLock::new("".to_string()),
+            migration_error: parking_lot::RwLock::new(None),
             debug_logging: std::sync::RwLock::new(None),
             push_subscriber,
             push_subscribed: AtomicBool::new(false),
