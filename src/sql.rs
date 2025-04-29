@@ -196,7 +196,11 @@ impl Sql {
         if let Err(e) = self.run_migrations(context).await {
             error!(context, "Running migrations failed: {e:#}");
             context.set_migration_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
-            // TODO possibly we should make the db read-only or close it
+            // TODO possibly we should make the db read-only.
+            // We can't simply close it for two reasons:
+            // a. backup export would fail
+            // b. The UI would think that the account is unconfigured (because `is_configured()` fails)
+            // and remove the account
         }
 
         Ok(())
