@@ -524,16 +524,24 @@ pub(crate) async fn observe_securejoin_on_other_device(
         return Ok(HandshakeMessage::Ignore);
     }
 
-    let addr = Contact::get_by_id(context, contact_id)
-        .await?
+    let contact = Contact::get_by_id(context, contact_id).await?;
+    let addr = contact
         .get_addr()
         .to_lowercase();
 
     let Some(key) = mime_message.gossiped_keys.get(&addr) else {
-        // TODO: check that contact_id fingerprint is the same as gossiped key fingerprint
-
         return Ok(HandshakeMessage::Ignore);
     };
+
+    let Some(contact_fingerprint) = contact.fingerprint() else {
+        // Not a PGP-contact, should not happen.
+        return Ok(HandshakeMessage::Ignore);
+    };
+
+    if key.dc_fingerprint() != contact_fingerprint {
+        // Fingerprint does not match, ignore.
+        return Ok(HandshakeMessage::Ignore);
+    }
 
     mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
 
