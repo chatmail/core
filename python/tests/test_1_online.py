@@ -767,7 +767,7 @@ def test_mdn_asymmetric(acfactory, lp):
     assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
 
 
-def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
+def test_send_receive_encrypt(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
     ac1.get_device_chat().mark_noticed()
@@ -798,12 +798,11 @@ def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
     msg3.mark_seen()
     assert not list(ac1.get_fresh_messages())
 
-    lp.sec("create group chat with two members, one of which has no encrypt state")
+    lp.sec("create group chat with two members")
     chat = ac1.create_group_chat("encryption test")
     chat.add_contact(ac2)
-    chat.add_contact(ac1.create_contact("notexisting@testrun.org"))
     msg = chat.send_text("test not encrypt")
-    assert not msg.is_encrypted()
+    assert msg.is_encrypted()
     ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
 
 
