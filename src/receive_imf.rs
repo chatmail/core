@@ -324,7 +324,7 @@ pub(crate) async fn receive_imf_inner(
 
     let chat_id = if let Some(grpid) = mime_parser.get_chat_group_id() {
         if let Some((chat_id, _protected, _blocked)) =
-            chat::get_chat_id_by_grpid(context, &grpid).await?
+            chat::get_chat_id_by_grpid(context, grpid).await?
         {
             Some(chat_id)
         } else {
@@ -376,7 +376,7 @@ pub(crate) async fn receive_imf_inner(
             past_ids = lookup_pgp_contacts_by_address_list(
                 context,
                 &mime_parser.past_members,
-                &past_member_fingerprints,
+                past_member_fingerprints,
                 chat_id,
             )
             .await?;
@@ -385,7 +385,7 @@ pub(crate) async fn receive_imf_inner(
                 context,
                 &mime_parser.past_members,
                 &mime_parser.gossiped_keys,
-                &past_member_fingerprints,
+                past_member_fingerprints,
                 Origin::Hidden,
             )
             .await?;
@@ -393,7 +393,7 @@ pub(crate) async fn receive_imf_inner(
     } else {
         if pgp_to_ids.len() == 1
             && pgp_to_ids
-                .get(0)
+                .first()
                 .is_some_and(|contact_id| contact_id.is_some())
         {
             // There is a single recipient and we have
@@ -425,18 +425,17 @@ pub(crate) async fn receive_imf_inner(
 
     let received_msg;
     if mime_parser.get_header(HeaderDef::SecureJoin).is_some() {
-        let res;
-        if mime_parser.incoming {
-            res = handle_securejoin_handshake(context, &mut mime_parser, from_id)
+        let res = if mime_parser.incoming {
+            handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
-                .context("error in Secure-Join message handling")?;
+                .context("error in Secure-Join message handling")?
         } else {
             let to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
             // handshake may mark contacts as verified and must be processed before chats are created
-            res = observe_securejoin_on_other_device(context, &mime_parser, to_id)
+            observe_securejoin_on_other_device(context, &mime_parser, to_id)
                 .await
                 .context("error in Secure-Join watching")?
-        }
+        };
 
         match res {
             securejoin::HandshakeMessage::Done | securejoin::HandshakeMessage::Ignore => {
@@ -964,7 +963,7 @@ async fn add_parts(
                 context,
                 mime_parser,
                 &parent,
-                &to_ids,
+                to_ids,
                 from_id,
                 allow_creation || test_normal_chat.is_some(),
                 create_blocked,
@@ -2622,7 +2621,7 @@ async fn apply_group_changes(
                 context,
                 chat_id,
                 Some(from_id),
-                &to_ids,
+                to_ids,
                 past_ids,
                 chat_group_member_timestamps,
             )

@@ -4897,7 +4897,7 @@ async fn set_contacts_by_fingerprints(
     for (fingerprint, addr) in fingerprint_addrs {
         let contact_addr = ContactAddress::new(addr)?;
         let contact =
-            Contact::add_or_lookup_ex(context, "", &contact_addr, &fingerprint, Origin::Hidden)
+            Contact::add_or_lookup_ex(context, "", &contact_addr, fingerprint, Origin::Hidden)
                 .await?
                 .0;
         contacts.insert(contact);

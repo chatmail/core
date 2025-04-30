@@ -2695,7 +2695,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
 
     add_contact_to_chat(alice, chat_id, contact_bob).await?;
     assert_eq!(
-        chat_id.get_encryption_info(&alice).await?,
+        chat_id.get_encryption_info(alice).await?,
         "End-to-end encryption available\n\
          \n\
          bob@example.net\n\
@@ -2703,9 +2703,9 @@ async fn test_chat_get_encryption_info() -> Result<()> {
          65F1 DB18 B18C BCF7 0487"
     );
 
-    add_contact_to_chat(&alice, chat_id, contact_fiona).await?;
+    add_contact_to_chat(alice, chat_id, contact_fiona).await?;
     assert_eq!(
-        chat_id.get_encryption_info(&alice).await?,
+        chat_id.get_encryption_info(alice).await?,
         "End-to-end encryption available\n\
          \n\
          fiona@example.net\n\
@@ -2719,7 +2719,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
 
     let email_chat = alice.create_email_chat(bob).await;
     assert_eq!(
-        email_chat.id.get_encryption_info(&alice).await?,
+        email_chat.id.get_encryption_info(alice).await?,
         "No encryption"
     );
 
@@ -2933,29 +2933,29 @@ async fn test_sync_blocked() -> Result<()> {
     let sent_msg = bob.send_text(ba_chat.id, "hi").await;
     let a0b_chat_id = alice0.recv_msg(&sent_msg).await.chat_id;
     alice1.recv_msg(&sent_msg).await;
-    let a0b_contact_id = alice0.add_or_lookup_contact_id(&bob).await;
+    let a0b_contact_id = alice0.add_or_lookup_contact_id(bob).await;
 
-    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Request);
+    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Request);
     a0b_chat_id.accept(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Not);
     a0b_chat_id.block(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Yes);
+    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Yes);
     a0b_chat_id.unblock(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(&bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Not);
 
     // Unblocking a 1:1 chat doesn't unblock the contact currently.
     Contact::unblock(alice0, a0b_contact_id).await?;
 
-    assert!(!alice1.add_or_lookup_contact(&bob).await.is_blocked());
+    assert!(!alice1.add_or_lookup_contact(bob).await.is_blocked());
     Contact::block(alice0, a0b_contact_id).await?;
     sync(alice0, alice1).await;
-    assert!(alice1.add_or_lookup_contact(&bob).await.is_blocked());
+    assert!(alice1.add_or_lookup_contact(bob).await.is_blocked());
     Contact::unblock(alice0, a0b_contact_id).await?;
     sync(alice0, alice1).await;
-    assert!(!alice1.add_or_lookup_contact(&bob).await.is_blocked());
+    assert!(!alice1.add_or_lookup_contact(bob).await.is_blocked());
 
     // Test accepting and blocking groups. This way we test:
     // - Group chats synchronisation.
@@ -3262,7 +3262,7 @@ async fn test_sync_broadcast() -> Result<()> {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
     let bob = &tcm.bob().await;
-    let a0b_contact_id = alice0.add_or_lookup_contact(&bob).await.id;
+    let a0b_contact_id = alice0.add_or_lookup_contact(bob).await.id;
 
     let a0_broadcast_id = create_broadcast_list(alice0).await?;
     sync(alice0, alice1).await;
@@ -3289,7 +3289,7 @@ async fn test_sync_broadcast() -> Result<()> {
     );
     let sent_msg = alice1.send_text(a1_broadcast_id, "hi").await;
     let msg = bob.recv_msg(&sent_msg).await;
-    let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
+    let chat = Chat::load_from_db(bob, msg.chat_id).await?;
     assert_eq!(chat.get_type(), Chattype::Mailinglist);
     let msg = alice0.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, a0_broadcast_id);

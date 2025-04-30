@@ -197,7 +197,6 @@ async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
 
     let bob_received_message = bob.recv_msg(&sent).await;
     assert_eq!(bob_received_message.get_showpadlock(), true);
-    let bob_chat_id = bob_received_message.chat_id;
 
     // Bob quotes encrypted message in unencrypted chat.
     let bob_email_chat = bob.create_email_chat(alice).await;

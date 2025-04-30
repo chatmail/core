@@ -81,29 +81,29 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     }
 
     let mut groups = vec![
-        chat::create_group_chat(&bob, chat::ProtectionStatus::Unprotected, "Group 0")
+        chat::create_group_chat(bob, chat::ProtectionStatus::Unprotected, "Group 0")
             .await
             .unwrap(),
-        chat::create_group_chat(&bob, chat::ProtectionStatus::Unprotected, "Group 1")
+        chat::create_group_chat(bob, chat::ProtectionStatus::Unprotected, "Group 1")
             .await
             .unwrap(),
     ];
     if verified {
         groups.push(
-            chat::create_group_chat(&bob, chat::ProtectionStatus::Protected, "Group 2")
+            chat::create_group_chat(bob, chat::ProtectionStatus::Protected, "Group 2")
                 .await
                 .unwrap(),
         );
         groups.push(
-            chat::create_group_chat(&bob, chat::ProtectionStatus::Protected, "Group 3")
+            chat::create_group_chat(bob, chat::ProtectionStatus::Protected, "Group 3")
                 .await
                 .unwrap(),
         );
     }
 
-    let alice_contact = bob.add_or_lookup_contact_id(&alice).await;
+    let alice_contact = bob.add_or_lookup_contact_id(alice).await;
     for group in &groups {
-        chat::add_contact_to_chat(&bob, *group, alice_contact)
+        chat::add_contact_to_chat(bob, *group, alice_contact)
             .await
             .unwrap();
     }
@@ -121,12 +121,12 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
         group3_alice = Some(alice.recv_msg(&sent).await.chat_id);
     }
 
-    tcm.change_addr(&alice, ALICE_NEW_ADDR).await;
+    tcm.change_addr(alice, ALICE_NEW_ADDR).await;
 
     tcm.section("Alice sends another message to Bob, this time from her new addr");
     // No matter which chat Alice sends to, the transition should be done in all groups
     let chat_to_send = match chat_for_transition {
-        OneToOne => alice.create_chat(&bob).await.id,
+        OneToOne => alice.create_chat(bob).await.id,
         GroupChat => group1_alice,
         VerifiedGroup => group3_alice.expect("No verified group"),
     };
@@ -134,14 +134,13 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
         .send_text(chat_to_send, "Hello from my new addr!")
         .await;
     let recvd = bob.recv_msg(&sent).await;
-    let sent_timestamp = recvd.timestamp_sent;
     assert_eq!(recvd.text, "Hello from my new addr!");
 
     tcm.section("Check that the AEAP transition worked");
     check_that_transition_worked(bob, &groups, alice_contact, ALICE_NEW_ADDR).await;
 
     tcm.section("Test switching back");
-    tcm.change_addr(&alice, "alice@example.org").await;
+    tcm.change_addr(alice, "alice@example.org").await;
     let sent = alice
         .send_text(chat_to_send, "Hello from my old addr!")
         .await;
@@ -179,25 +178,6 @@ async fn check_that_transition_worked(
     // Test that the email address of Alice is updated.
     let alice_contact = Contact::get_by_id(bob, alice_contact_id).await.unwrap();
     assert_eq!(alice_contact.get_addr(), alice_addr);
-}
-
-async fn get_last_info_msg(t: &TestContext, chat_id: ChatId) -> Option<Message> {
-    let msgs = chat::get_chat_msgs_ex(
-        &t.ctx,
-        chat_id,
-        chat::MessageListOptions {
-            info_only: true,
-            add_daymarker: false,
-        },
-    )
-    .await
-    .unwrap();
-    let msg_id = if let chat::ChatItem::Message { msg_id } = msgs.last()? {
-        msg_id
-    } else {
-        return None;
-    };
-    Some(Message::load_from_db(&t.ctx, *msg_id).await.unwrap())
 }
 
 /// Test that an attacker - here Fiona - can't replay a message sent by Alice

@@ -4722,7 +4722,6 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
     mark_as_verified(alice, bob).await;
     let group_id = create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
     let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
@@ -4731,7 +4730,6 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     alice.sql.execute("DELETE FROM public_keys", ()).await?;
 
     let fiona = &tcm.fiona().await;
-    let fiona_addr = fiona.get_config(Config::Addr).await?.unwrap();
     mark_as_verified(alice, fiona).await;
     let alice_fiona_id = alice.add_or_lookup_contact(fiona).await.id;
     add_contact_to_chat(alice, group_id, alice_fiona_id).await?;

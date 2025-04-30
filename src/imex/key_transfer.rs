@@ -310,20 +310,14 @@ mod tests {
         alice2.recv_msg(&sent).await;
         let msg = alice2.get_last_msg().await;
         assert!(msg.is_setupmessage());
-        assert_eq!(
-            crate::key::load_self_secret_keyring(&alice2).await?.len(),
-            0
-        );
+        assert_eq!(crate::key::load_self_secret_keyring(alice2).await?.len(), 0);
 
         // Transfer the key.
         tcm.section("Alice imports a key from Autocrypt Setup Message");
         alice2.set_config(Config::BccSelf, Some("0")).await?;
-        continue_key_transfer(&alice2, msg.id, &setup_code).await?;
+        continue_key_transfer(alice2, msg.id, &setup_code).await?;
         assert_eq!(alice2.get_config_bool(Config::BccSelf).await?, true);
-        assert_eq!(
-            crate::key::load_self_secret_keyring(&alice2).await?.len(),
-            1
-        );
+        assert_eq!(crate::key::load_self_secret_keyring(alice2).await?.len(), 1);
 
         // Alice sends a message to self from the new device.
         let sent = alice2.send_text(msg.chat_id, "Test").await;
