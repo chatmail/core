@@ -3331,7 +3331,7 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
 
     assert_eq!(received_msg.msg_ids.len(), 1);
     let msg_id = received_msg.msg_ids[0];
-    let msg = Message::load_from_db(&t, msg_id).await?;
+    let msg = Message::load_from_db(t, msg_id).await?;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
 
