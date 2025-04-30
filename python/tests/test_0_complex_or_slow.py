@@ -474,7 +474,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ac2_offl.start_io()
     msg_in = ac2_offl._evtracker.wait_next_incoming_message()
     assert not msg_in.is_system_message()
-    assert msg_in.text.startswith("[The message was sent with non-verified encryption")
+    assert msg_in.text.startswith("[The message was sent by non-verified contact")
     ac2_offl_ac1_contact = msg_in.get_sender_contact()
     assert ac2_offl_ac1_contact.addr == ac1.get_config("addr")
     assert not ac2_offl_ac1_contact.is_verified()
