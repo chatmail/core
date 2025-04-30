@@ -753,7 +753,10 @@ class TestOfflineChat:
         assert in_list[1][1] == chat
         assert in_list[1][2] == contacts[3]
 
-    def test_audit_log_view_without_daymarker(self, ac1, lp):
+    def test_audit_log_view_without_daymarker(self, acfactory, lp):
+        ac1 = acfactory.get_pseudo_configured_account()
+        ac2 = acfactory.get_pseudo_configured_account()
+
         lp.sec("ac1: test audit log (show only system messages)")
         chat = ac1.create_group_chat(name="audit log sample data")
 
@@ -762,7 +765,7 @@ class TestOfflineChat:
         assert chat.is_promoted()
 
         lp.sec("create test data")
-        chat.add_contact(ac1.create_contact("some-1@example.org"))
+        chat.add_contact(ac2)
         chat.set_name("audit log test group")
         chat.send_text("a message in between")
 
