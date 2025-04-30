@@ -20,7 +20,6 @@ use deltachat::log::LogExt;
 use deltachat::message::{self, Message, MessageState, MsgId, Viewtype};
 use deltachat::mimeparser::SystemMessage;
 use deltachat::peer_channels::{send_webxdc_realtime_advertisement, send_webxdc_realtime_data};
-use deltachat::peerstate::*;
 use deltachat::qr::*;
 use deltachat::qr_code_generator::create_qr_svg;
 use deltachat::reaction::send_reaction;
@@ -269,7 +268,7 @@ async fn log_msglist(context: &Context, msglist: &[MsgId]) -> Result<()> {
 
 async fn log_contactlist(context: &Context, contacts: &[ContactId]) -> Result<()> {
     for contact_id in contacts {
-        let mut line2 = "".to_string();
+        let line2 = "".to_string();
         let contact = Contact::get_by_id(context, *contact_id).await?;
         let name = contact.get_display_name();
         let addr = contact.get_addr();
