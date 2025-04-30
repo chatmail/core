@@ -171,7 +171,7 @@ async fn test_pgp_contacts_migration_verified() -> Result<()> {
         pgp_bob.fingerprint().unwrap(),
         pgp_bob.public_key(&t).await?.unwrap().dc_fingerprint()
     );
-    assert_eq!(pgp_bob.get_verifier_id(&t).await?.unwrap(), ContactId::SELF);
+    assert_eq!(pgp_bob.get_verifier_id(&t).await?, Some(None));
 
     Ok(())
 }
