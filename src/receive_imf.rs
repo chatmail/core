@@ -2055,8 +2055,7 @@ async fn lookup_chat_or_create_adhoc_group(
     create_blocked: Blocked,
     is_partial_download: bool,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    // FIXME
-    let to_ids: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
+    let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
 
     if let Some((new_chat_id, new_chat_id_blocked)) =
         // Try to assign to a chat based on In-Reply-To/References.
@@ -2204,7 +2203,7 @@ async fn create_group(
     verified_encryption: &VerifiedEncryption,
     grpid: &str,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    let to_ids_flat: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
+    let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
 
@@ -2439,8 +2438,7 @@ async fn apply_group_changes(
     past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
 ) -> Result<GroupChangesInfo> {
-    // FIXME
-    let to_ids_flat: Vec<ContactId> = to_ids.iter().copied().filter_map(|x| x).collect();
+    let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     if chat_id.is_special() {
         // Do not apply group changes to the trash chat.
         return Ok(GroupChangesInfo::default());
@@ -3342,6 +3340,7 @@ async fn lookup_pgp_contact_by_fingerprint(
 
 /// Looks up PGP-contacts by email addresses.
 ///
+/// `fingerprints` may be empty.
 /// This is used as a fallback when email addresses are available,
 /// but not the fingerprints, e.g. when core 1.157.3
 /// client sends the `To` and `Chat-Group-Past-Members` header
@@ -3360,14 +3359,38 @@ async fn lookup_pgp_contacts_by_address_list(
     fingerprints: &[Fingerprint],
     chat_id: ChatId,
 ) -> Result<Vec<Option<ContactId>>> {
-    // TODO: create a contact with a given fingerprint
-    // if fingerprint is available.
     let mut contact_ids = Vec::new();
+    let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
         let addr = &info.addr;
+        if !may_be_valid_addr(addr) {
+            contact_ids.push(None);
+            continue;
+        }
 
-        let contact_id = lookup_pgp_contact_by_address(context, addr, chat_id).await?;
-        contact_ids.push(contact_id);
+        if let Some(fp) = fingerprint_iter.next() {
+            // Iterator has not ran out of fingerprints yet.
+            let display_name = info.display_name.as_deref();
+            let fingerprint: String = fp.hex();
+
+            if let Ok(addr) = ContactAddress::new(addr) {
+                let (contact_id, _) = Contact::add_or_lookup_ex(
+                    context,
+                    display_name.unwrap_or_default(),
+                    &addr,
+                    &fingerprint,
+                    Origin::Hidden,
+                )
+                .await?;
+                contact_ids.push(Some(contact_id));
+            } else {
+                warn!(context, "Contact with address {:?} cannot exist.", addr);
+                contact_ids.push(None);
+            }
+        } else {
+            let contact_id = lookup_pgp_contact_by_address(context, addr, chat_id).await?;
+            contact_ids.push(contact_id);
+        }
     }
     debug_assert_eq!(address_list.len(), contact_ids.len());
     Ok(contact_ids)

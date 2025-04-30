@@ -525,9 +525,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     }
 
     let contact = Contact::get_by_id(context, contact_id).await?;
-    let addr = contact
-        .get_addr()
-        .to_lowercase();
+    let addr = contact.get_addr().to_lowercase();
 
     let Some(key) = mime_message.gossiped_keys.get(&addr) else {
         return Ok(HandshakeMessage::Ignore);

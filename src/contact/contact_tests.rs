@@ -1217,14 +1217,18 @@ async fn test_name_changes() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    alice.set_config(Config::Displayname, Some("Alice Revision 1")).await?;
+    alice
+        .set_config(Config::Displayname, Some("Alice Revision 1"))
+        .await?;
     let alice_bob_chat = alice.create_chat(bob).await;
     let sent_msg = alice.send_text(alice_bob_chat.id, "Hello").await;
     let bob_alice_id = bob.recv_msg(&sent_msg).await.from_id;
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_id).await?;
     assert_eq!(bob_alice_contact.get_display_name(), "Alice Revision 1");
 
-    alice.set_config(Config::Displayname, Some("Alice Revision 2")).await?;
+    alice
+        .set_config(Config::Displayname, Some("Alice Revision 2"))
+        .await?;
     let sent_msg = alice.send_text(alice_bob_chat.id, "Hello").await;
     bob.recv_msg(&sent_msg).await;
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_id).await?;
@@ -1235,14 +1239,19 @@ async fn test_name_changes() -> Result<()> {
     bob_alice_contact.id.set_name(bob, "Renamed").await?;
     let event = bob
         .evtracker
-        .get_matching(|e| matches!(e, EventType::ContactsChanged {..}))
+        .get_matching(|e| matches!(e, EventType::ContactsChanged { .. }))
         .await;
-    assert_eq!(event, EventType::ContactsChanged(Some(bob_alice_contact.id)));
+    assert_eq!(
+        event,
+        EventType::ContactsChanged(Some(bob_alice_contact.id))
+    );
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_id).await?;
     assert_eq!(bob_alice_contact.get_display_name(), "Renamed");
 
     // Alice also renames self into "Renamed".
-    alice.set_config(Config::Displayname, Some("Renamed")).await?;
+    alice
+        .set_config(Config::Displayname, Some("Renamed"))
+        .await?;
     let sent_msg = alice.send_text(alice_bob_chat.id, "Hello").await;
     bob.recv_msg(&sent_msg).await;
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_id).await?;
@@ -1250,7 +1259,9 @@ async fn test_name_changes() -> Result<()> {
 
     // Contact name was set to "Renamed" explicitly before,
     // so it should not be changed.
-    alice.set_config(Config::Displayname, Some("Renamed again")).await?;
+    alice
+        .set_config(Config::Displayname, Some("Renamed again"))
+        .await?;
     let sent_msg = alice.send_text(alice_bob_chat.id, "Hello").await;
     bob.recv_msg(&sent_msg).await;
     let bob_alice_contact = Contact::get_by_id(bob, bob_alice_id).await?;
