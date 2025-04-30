@@ -5070,7 +5070,7 @@ Hello!"
             .get_value_raw(),
         "Group\n name\u{202B}".as_bytes()
     );
-    assert_eq!(chat.name, "Group name");
+    assert_eq!(chat.name, "Saved messages");
 
     Ok(())
 }
