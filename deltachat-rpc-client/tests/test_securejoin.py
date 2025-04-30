@@ -512,30 +512,8 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
 
     # ac1 resetups the account.
     ac1 = acfactory.resetup_account(ac1)
-
-    # Loop sending message from ac1 to ac2
-    # until ac2 accepts new ac1 key.
-    #
-    # This may not happen immediately because resetup of ac1
-    # rewinds "smeared timestamp" so Date: header for messages
-    # sent by new ac1 are in the past compared to the last Date:
-    # header sent by old ac1.
-    while True:
-        # ac1 sends a message to ac2.
-        ac1_contact_ac2 = ac1.create_contact(ac2, "")
-        ac1_chat_ac2 = ac1_contact_ac2.create_chat()
-        ac1_chat_ac2.send_text("Hello!")
-
-        # ac2 receives a message.
-        snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
-        assert snapshot.text == "Hello!"
-        logging.info("ac2 received Hello!")
-
-        # ac1 is no longer verified for ac2 as new Autocrypt key is not the same as old verified key.
-        logging.info("ac2 addr={}, ac1 addr={}".format(ac2.get_config("addr"), ac1.get_config("addr")))
-        if not ac2_contact_ac1.get_snapshot().is_verified:
-            break
-        time.sleep(1)
+    ac2_contact_ac1 = ac2.create_contact(ac1, "")
+    assert not ac2_contact_ac1.get_snapshot().is_verified
 
     # ac1 goes offline.
     ac1.remove()
