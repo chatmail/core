@@ -2564,7 +2564,7 @@ async fn test_chat_assignment_private_chat_reply() {
 Subject: =?utf-8?q?single_reply-to?=
 {}
 Date: Fri, 28 May 2021 10:15:05 +0000
-To: Bob <bob@example.com>{}
+To: Bob <bob@example.com>, Charlie <charlie@example.net>{}
 From: Alice <alice@example.org>
 Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
 Content-Transfer-Encoding: quoted-printable
