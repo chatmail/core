@@ -1466,19 +1466,16 @@ fn migrate_pgp_contacts(
                 );
                 Ok(id)
             };
-            let mut original_contact_id_from_addr = |addr: &str| -> Result<u32> {
-                if addr_cmp(addr, &self_addr) || addr.is_empty() {
-                    // TODO not sure what to do when addr is empty,
-                    // i.e. the contact was verified before we recorded who introduced whom.
-                    // Right now, we put ContactId::SELF, i.e. mark it as directly verified by us.
-                    // An alternative would be putting `new_id` here,
-                    // in order to record that it's unclear who verified.
-
-                    return Ok(1); // ContactId::SELF
+            let mut original_contact_id_from_addr = |addr: &str, default: u32| -> Result<u32> {
+                if addr_cmp(addr, &self_addr) {
+                    Ok(1) // ContactId::SELF
+                } else if addr.is_empty() {
+                    Ok(default)
+                } else {
+                    original_contact_id_from_addr_stmt
+                        .query_row((addr,), |row| row.get(0))
+                        .with_context(|| format!("Original contact '{addr}' not found"))
                 }
-                original_contact_id_from_addr_stmt
-                    .query_row((addr,), |row| row.get(0))
-                    .with_context(|| format!("Verifier '{addr}' not found in original contacts"))
             };
 
             let Some(autocrypt_key) = autocrypt_key else {
@@ -1500,7 +1497,11 @@ fn migrate_pgp_contacts(
             };
             let new_id = insert_contact(verified_key).context("Step 13")?;
             verified_pgp_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
-            let verifier_id = original_contact_id_from_addr(&verifier).context("Step 15")?;
+            // If the original verifier is unknown, we represent this in the database
+            // by putting `new_id` into the place of the verifier,
+            // i.e. we say that this contact verified itself.
+            let verifier_id =
+                original_contact_id_from_addr(&verifier, new_id).context("Step 15")?;
             verifications.insert(new_id, verifier_id);
 
             let Some(secondary_verified_key) = secondary_verified_key else {
@@ -1508,7 +1509,7 @@ fn migrate_pgp_contacts(
             };
             let new_id = insert_contact(secondary_verified_key).context("Step 16")?;
             let verifier_id: u32 =
-                original_contact_id_from_addr(&secondary_verifier).context("Step 17")?;
+                original_contact_id_from_addr(&secondary_verifier, new_id).context("Step 17")?;
             // Only use secondary verification if there is no primary verification:
             verifications.entry(new_id).or_insert(verifier_id);
         }
@@ -1524,20 +1525,26 @@ fn migrate_pgp_contacts(
 
         for (&new_contact, &verifier_original_contact) in &verifications {
             let verifier = if verifier_original_contact == 1 {
-                Some(&1) // Verified by ContactId::SELF
+                1 // Verified by ContactId::SELF
+            } else if verifier_original_contact == new_contact {
+                new_contact // unkwnown verifier
             } else {
                 // `verifications` contains the original contact id.
                 // We need to get the new, verified-pgp-identified contact id.
-                verified_pgp_contacts.get(&verifier_original_contact)
+                match verified_pgp_contacts.get(&verifier_original_contact) {
+                    Some(v) => *v,
+                    None => {
+                        warn!(context, "Couldn't find PGP-contact for {verifier_original_contact} who verified {new_contact}");
+                        continue;
+                    }
+                }
             };
-            if let Some(&verifier) = verifier {
-                transaction
-                    .execute(
-                        "UPDATE contacts SET verifier=? WHERE id=?",
-                        (verifier, new_contact),
-                    )
-                    .context("Step 18")?;
-            }
+            transaction
+                .execute(
+                    "UPDATE contacts SET verifier=? WHERE id=?",
+                    (verifier, new_contact),
+                )
+                .context("Step 18")?;
         }
         info!(context, "Migrated verifications: {verifications:?}");
     }

@@ -4362,6 +4362,7 @@ pub unsafe extern "C" fn dc_contact_get_verifier_id(contact: *mut dc_contact_t) 
         .context("failed to get verifier")
         .log_err(ctx)
         .unwrap_or_default()
+        .unwrap_or_default()
         .unwrap_or_default();
 
     verifier_contact_id.to_u32()

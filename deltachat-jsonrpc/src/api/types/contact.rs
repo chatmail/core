@@ -77,6 +77,7 @@ impl ContactObject {
         let verifier_id = contact
             .get_verifier_id(context)
             .await?
+            .flatten()
             .map(|contact_id| contact_id.to_u32());
 
         Ok(ContactObject {
