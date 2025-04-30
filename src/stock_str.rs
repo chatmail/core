@@ -1249,20 +1249,6 @@ pub(crate) async fn broadcast_list(context: &Context) -> String {
     translated(context, StockMessage::BroadcastList).await
 }
 
-/// Stock string: `%1$s changed their address from %2$s to %3$s`.
-pub(crate) async fn aeap_addr_changed(
-    context: &Context,
-    contact_name: &str,
-    old_addr: &str,
-    new_addr: &str,
-) -> String {
-    translated(context, StockMessage::AeapAddrChanged)
-        .await
-        .replace1(contact_name)
-        .replace2(old_addr)
-        .replace3(new_addr)
-}
-
 /// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.
 pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> String {
     translated(context, StockMessage::InvalidUnencryptedMail)
