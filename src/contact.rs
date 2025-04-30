@@ -1547,11 +1547,14 @@ impl Contact {
 
     /// Returns the `ContactId` that verified the contact.
     ///
-    /// If the function returns non-zero result,
+    /// If this returns Some(_),
     /// display green checkmark in the profile and "Introduced by ..." line
     /// with the name and address of the contact
     /// formatted by [Self::get_name_n_addr].
-    pub async fn get_verifier_id(&self, context: &Context) -> Result<Option<ContactId>> {
+    ///
+    /// If this returns `Some(None)`, then the contact is verified,
+    /// but it's unclear by whom.
+    pub async fn get_verifier_id(&self, context: &Context) -> Result<Option<Option<ContactId>>> {
         let verifier_id: u32 = context
             .sql
             .query_get_value("SELECT verifier FROM contacts WHERE id=?", (self.id,))
@@ -1560,8 +1563,10 @@ impl Contact {
 
         if verifier_id == 0 {
             Ok(None)
+        } else if verifier_id == self.id.to_u32() {
+            Ok(Some(None))
         } else {
-            Ok(Some(ContactId::new(verifier_id)))
+            Ok(Some(Some(ContactId::new(verifier_id))))
         }
     }
 
