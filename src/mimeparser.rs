@@ -1453,9 +1453,9 @@ impl MimeMessage {
             .sql
             .execute(
                 "INSERT INTO public_keys (fingerprint, public_key)
-                             VALUES (?, ?)
-                             ON CONFLICT (fingerprint)
-                             DO NOTHING",
+                 VALUES (?, ?)
+                 ON CONFLICT (fingerprint)
+                 DO NOTHING",
                 (&fingerprint, key.to_bytes()),
             )
             .await?;
