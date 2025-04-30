@@ -3438,6 +3438,7 @@ async fn test_big_forwarded_with_big_attachment() -> Result<()> {
     Ok(())
 }
 
+/// Tests that MUA user can add members to ad-hoc group.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mua_user_adds_member() -> Result<()> {
     let t = TestContext::new_alice().await;
@@ -3445,7 +3446,7 @@ async fn test_mua_user_adds_member() -> Result<()> {
     receive_imf(
         &t,
         b"From: alice@example.org\n\
-          To: bob@example.com\n\
+          To: bob@example.com, charlie@example.net\n\
           Subject: foo\n\
           Message-ID: <Gr.gggroupiddd.12345678901@example.com>\n\
           Chat-Version: 1.0\n\
@@ -3459,10 +3460,10 @@ async fn test_mua_user_adds_member() -> Result<()> {
     .await?
     .unwrap();
 
-    receive_imf(
+    let msg = receive_imf(
         &t,
         b"From: bob@example.com\n\
-          To: alice@example.org, fiona@example.net\n\
+          To: alice@example.org, charlie@example.net, fiona@example.net\n\
           Subject: foo\n\
           Message-ID: <raaaaandoooooooooommmm@example.com>\n\
           In-Reply-To: Gr.gggroupiddd.12345678901@example.com\n\
@@ -3474,13 +3475,12 @@ async fn test_mua_user_adds_member() -> Result<()> {
     .await?
     .unwrap();
 
-    let (chat_id, _, _) = chat::get_chat_id_by_grpid(&t, "gggroupiddd")
-        .await?
-        .unwrap();
+    let chat_id = msg.chat_id;
     let mut actual_chat_contacts = chat::get_chat_contacts(&t, chat_id).await?;
     actual_chat_contacts.sort();
     let mut expected_chat_contacts = vec![
         Contact::create(&t, "", "bob@example.com").await?,
+        Contact::create(&t, "", "charlie@example.net").await?,
         Contact::create(&t, "", "fiona@example.net").await?,
         ContactId::SELF,
     ];
