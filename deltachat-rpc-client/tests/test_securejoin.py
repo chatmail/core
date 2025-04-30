@@ -299,6 +299,8 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     ac3.wait_for_securejoin_joiner_success()
     ac3.wait_for_incoming_msg_event()  # Member added
 
+    ac3_contact_ac2_old = ac3.create_contact(ac2)
+
     logging.info("ac2 logs in on a new device")
     ac2 = acfactory.resetup_account(ac2)
 
@@ -315,17 +317,17 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     message = ac2.get_message_by_id(msg_id)
     snapshot = message.get_snapshot()
     logging.info("Received message %s", snapshot.text)
-    assert snapshot.text == "Hi!"
+    assert snapshot.text == "[...] – [This message was encrypted for another setup.]"
 
     ac1.wait_for_incoming_msg_event()  # Hi!
 
     ac3_contact_ac2 = ac3.create_contact(ac2)
-    ac3_chat.remove_contact(ac3_contact_ac2)
+    ac3_chat.remove_contact(ac3_contact_ac2_old)
 
     msg_id = ac2.wait_for_incoming_msg_event().msg_id
     message = ac2.get_message_by_id(msg_id)
     snapshot = message.get_snapshot()
-    assert "removed" in snapshot.text
+    assert snapshot.text == "[...] – [This message was encrypted for another setup.]"
 
     snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert "removed" in snapshot.text
