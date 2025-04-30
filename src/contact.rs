@@ -129,6 +129,7 @@ impl ContactId {
                             Ok((addr, fingerprint))
                         },
                     )?;
+                    context.emit_event(EventType::ContactsChanged(Some(self)));
                     Ok(Some((addr, fingerprint)))
                 } else {
                     Ok(None)

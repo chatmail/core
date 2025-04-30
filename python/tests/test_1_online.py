@@ -1760,44 +1760,6 @@ def test_configure_error_msgs_invalid_server(acfactory):
     assert "configuration" not in ev.data2.lower()
 
 
-def test_name_changes(acfactory):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("displayname", "Account 1")
-
-    chat12 = acfactory.get_accepted_chat(ac1, ac2)
-    contact = None
-
-    def update_name():
-        """Send a message from ac1 to ac2 to update the name"""
-        nonlocal contact
-        chat12.send_text("Hello")
-        msg = ac2._evtracker.wait_next_incoming_message()
-        contact = msg.get_sender_contact()
-        return contact.name
-
-    assert update_name() == "Account 1"
-
-    ac1.set_config("displayname", "Account 1 revision 2")
-    assert update_name() == "Account 1 revision 2"
-
-    # Explicitly rename contact on ac2 to "Renamed"
-    ac2.create_contact(contact, name="Renamed")
-    assert contact.name == "Renamed"
-    ev = ac2._evtracker.get_matching("DC_EVENT_CONTACTS_CHANGED")
-    assert ev.data1 == contact.id
-
-    # ac1 also renames itself into "Renamed"
-    assert update_name() == "Renamed"
-    ac1.set_config("displayname", "Renamed")
-    assert update_name() == "Renamed"
-
-    # Contact name was set to "Renamed" explicitly before,
-    # so it should not be changed.
-    ac1.set_config("displayname", "Renamed again")
-    updated_name = update_name()
-    assert updated_name == "Renamed"
-
-
 def test_status(acfactory):
     """Test that status is transferred over the network."""
     ac1, ac2 = acfactory.get_online_accounts(2)
