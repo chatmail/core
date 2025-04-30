@@ -364,7 +364,7 @@ pub(crate) async fn receive_imf_inner(
         context,
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
-        &to_member_fingerprints,
+        to_member_fingerprints,
         Origin::Hidden,
     )
     .await?;

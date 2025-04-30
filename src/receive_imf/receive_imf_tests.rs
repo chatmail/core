@@ -10,7 +10,7 @@ use crate::chat::{
     ChatVisibility,
 };
 use crate::chatlist::Chatlist;
-use crate::constants::{DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS};
+use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
@@ -4880,7 +4880,12 @@ async fn test_group_name_with_newline() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group\r\nwith\nnewlines").await?;
+    let chat_id = create_group_chat(
+        alice,
+        ProtectionStatus::Unprotected,
+        "Group\r\nwith\nnewlines",
+    )
+    .await?;
     add_contact_to_chat(alice, chat_id, alice.add_or_lookup_contact_id(bob).await).await?;
     send_text_msg(alice, chat_id, "populate".to_string()).await?;
     let bob_chat_id = bob.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
