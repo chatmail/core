@@ -842,21 +842,6 @@ pub(crate) async fn contact_verified(context: &Context, contact: &Contact) -> St
         .replace1(addr)
 }
 
-/// Stock string: `Cannot establish guaranteed end-to-end encryption with %1$s`.
-pub(crate) async fn contact_not_verified(context: &Context, contact: &Contact) -> String {
-    let addr = contact.get_display_name();
-    translated(context, StockMessage::ContactNotVerified)
-        .await
-        .replace1(addr)
-}
-
-/// Stock string: `Changed setup for %1$s`.
-pub(crate) async fn contact_setup_changed(context: &Context, contact_addr: &str) -> String {
-    translated(context, StockMessage::ContactSetupChanged)
-        .await
-        .replace1(contact_addr)
-}
-
 /// Stock string: `Archived chats`.
 pub(crate) async fn archived_chats(context: &Context) -> String {
     translated(context, StockMessage::ArchivedChats).await
