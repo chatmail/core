@@ -423,7 +423,7 @@ class Chat:
             contact = obj
         else:
             contact = self.account.create_contact(obj)
-            
+
         ret = lib.dc_add_contact_to_chat(self.account._dc_context, self.id, contact.id)
         if ret != 1:
             raise ValueError(f"could not add contact {contact!r} to chat")
