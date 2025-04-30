@@ -3762,15 +3762,15 @@ async fn test_mua_user_adds_member() -> Result<()> {
     receive_imf(
         &t,
         b"From: alice@example.org\n\
-                 To: bob@example.com\n\
-                 Subject: foo\n\
-                 Message-ID: <Gr.gggroupiddd.12345678901@example.com>\n\
-                 Chat-Version: 1.0\n\
-                 Chat-Group-ID: gggroupiddd\n\
-                 Chat-Group-Name: foo\n\
-                 Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-                 \n\
-                 hello\n",
+          To: bob@example.com\n\
+          Subject: foo\n\
+          Message-ID: <Gr.gggroupiddd.12345678901@example.com>\n\
+          Chat-Version: 1.0\n\
+          Chat-Group-ID: gggroupiddd\n\
+          Chat-Group-Name: foo\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          hello\n",
         false,
     )
     .await?
@@ -3779,13 +3779,13 @@ async fn test_mua_user_adds_member() -> Result<()> {
     receive_imf(
         &t,
         b"From: bob@example.com\n\
-                 To: alice@example.org, fiona@example.net\n\
-                 Subject: foo\n\
-                 Message-ID: <raaaaandoooooooooommmm@example.com>\n\
-                 In-Reply-To: Gr.gggroupiddd.12345678901@example.com\n\
-                 Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-                 \n\
-                 hello\n",
+          To: alice@example.org, fiona@example.net\n\
+          Subject: foo\n\
+          Message-ID: <raaaaandoooooooooommmm@example.com>\n\
+          In-Reply-To: Gr.gggroupiddd.12345678901@example.com\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          hello\n",
         false,
     )
     .await?
@@ -5155,8 +5155,12 @@ async fn test_make_n_send_vcard() -> Result<()> {
     Ok(())
 }
 
+/// Tests that group is not created if the message
+/// has no recipients even if it has unencrypted Chat-Group-ID.
+///
+/// Chat-Group-ID in unencrypted messages should be ignored.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_group_no_recipients() -> Result<()> {
+async fn test_unencrypted_group_id_no_recipients() -> Result<()> {
     let t = &TestContext::new_alice().await;
     let raw = "From: alice@example.org
 Subject: Group
@@ -5171,7 +5175,7 @@ Hello!"
     let received = receive_imf(t, raw, false).await?.unwrap();
     let msg = Message::load_from_db(t, *received.msg_ids.last().unwrap()).await?;
     let chat = Chat::load_from_db(t, msg.chat_id).await?;
-    assert_eq!(chat.typ, Chattype::Group);
+    assert_eq!(chat.typ, Chattype::Single);
 
     // Check that the weird group name is sanitzied correctly:
     let mail = mailparse::parse_mail(raw).unwrap();
@@ -5189,31 +5193,18 @@ Hello!"
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_group_name_with_newline() -> Result<()> {
-    let t = &TestContext::new_alice().await;
-    let raw = "From: alice@example.org
-Subject: Group
-Chat-Version: 1.0
-Chat-Group-Name: =?utf-8?q?Delta=0D=0AChat?=
-Chat-Group-ID: GePFDkwEj2K
-Message-ID: <foobar@localhost>
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-Hello!"
-        .as_bytes();
-    let received = receive_imf(t, raw, false).await?.unwrap();
-    let msg = Message::load_from_db(t, *received.msg_ids.last().unwrap()).await?;
-    let chat = Chat::load_from_db(t, msg.chat_id).await?;
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group\r\nwith\nnewlines").await?;
+    add_contact_to_chat(alice, chat_id, alice.add_or_lookup_contact_id(bob).await).await?;
+    send_text_msg(alice, chat_id, "populate".to_string()).await?;
+    let bob_chat_id = bob.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
+
+    let chat = Chat::load_from_db(bob, bob_chat_id).await?;
     assert_eq!(chat.typ, Chattype::Group);
-
-    // Check that the weird group name is sanitzied correctly:
-    let mail = mailparse::parse_mail(raw).unwrap();
-    assert_eq!(
-        mail.headers
-            .get_header(HeaderDef::ChatGroupName)
-            .unwrap()
-            .get_value(),
-        "Delta\r\nChat"
-    );
-    assert_eq!(chat.name, "Delta  Chat");
+    assert_eq!(chat.name, "Group  with newlines");
 
     Ok(())
 }
