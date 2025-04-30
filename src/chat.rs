@@ -4998,6 +4998,7 @@ impl Context {
                 match action {
                     SyncAction::Rename(to) => {
                         contact_id.set_name_ex(self, Nosync, to).await?;
+                        self.emit_event(EventType::ContactsChanged(Some(contact_id)));
                         return Ok(());
                     }
                     SyncAction::Block => {
