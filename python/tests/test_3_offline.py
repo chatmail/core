@@ -268,9 +268,12 @@ class TestOfflineChat:
         assert contact.account == ac1
         chat.remove_contact(ac2)
 
-    def test_group_chat_creation(self, ac1):
-        contact1 = ac1.create_contact("some1@example.org", name="some1")
-        contact2 = ac1.create_contact("some2@example.org", name="some2")
+    def test_group_chat_creation(self, acfactory):
+        ac1 = acfactory.get_pseudo_configured_account()
+        ac2 = acfactory.get_pseudo_configured_account()
+        ac3 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
+        contact2 = ac1.create_contact(ac3)
         chat = ac1.create_group_chat(name="title1", contacts=[contact1, contact2])
         assert chat.get_name() == "title1"
         assert contact1 in chat.get_contacts()
