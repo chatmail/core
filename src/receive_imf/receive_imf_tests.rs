@@ -3256,7 +3256,7 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
-    
+
     assert_eq!(received_msg.msg_ids.len(), 1);
     let msg_id = received_msg.msg_ids[0];
 
