@@ -350,10 +350,10 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
 
     tcm.section("Step 1: Generate QR-code");
     // `None` indicates setup-contact.
-    let qr = get_securejoin_qr(&alice, None).await?;
+    let qr = get_securejoin_qr(alice, None).await?;
 
     tcm.section("Step 2+4: Bob scans QR-code, sends vc-request-with-auth, skipping vc-request");
-    join_securejoin(&bob, &qr).await.unwrap();
+    join_securejoin(bob, &qr).await.unwrap();
 
     // Check Bob emitted the JoinerProgress event.
     let event = bob
@@ -388,11 +388,11 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
 
     // Alice should not yet have Bob verified
     let contact_bob = alice.add_or_lookup_pgp_contact(bob).await;
-    assert_eq!(contact_bob.is_verified(&alice).await?, false);
+    assert_eq!(contact_bob.is_verified(alice).await?, false);
 
     tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
     alice.recv_msg_trash(&sent).await;
-    assert_eq!(contact_bob.is_verified(&alice).await?, true);
+    assert_eq!(contact_bob.is_verified(alice).await?, true);
 
     let sent = alice.pop_sent_msg().await;
     let msg = bob.parse_msg(&sent).await;

@@ -778,11 +778,6 @@ pub(crate) async fn msg_grp_img_deleted(context: &Context, by_contact: ContactId
     }
 }
 
-/// Stock string: `End-to-end encryption preferred.`.
-pub(crate) async fn e2e_preferred(context: &Context) -> String {
-    translated(context, StockMessage::E2ePreferred).await
-}
-
 /// Stock string: `%1$s invited you to join this group. Waiting for the device of %2$s to reply…`.
 pub(crate) async fn secure_join_started(
     context: &Context,

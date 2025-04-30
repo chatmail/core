@@ -733,20 +733,20 @@ async fn test_contact_get_encrinfo() -> Result<()> {
     let bob = &tcm.bob().await;
 
     // Return error for special IDs
-    let encrinfo = Contact::get_encrinfo(&alice, ContactId::SELF).await;
+    let encrinfo = Contact::get_encrinfo(alice, ContactId::SELF).await;
     assert!(encrinfo.is_err());
-    let encrinfo = Contact::get_encrinfo(&alice, ContactId::DEVICE).await;
+    let encrinfo = Contact::get_encrinfo(alice, ContactId::DEVICE).await;
     assert!(encrinfo.is_err());
 
     let email_contact_bob_id = alice.add_or_lookup_email_contact_id(bob).await;
-    let encrinfo = Contact::get_encrinfo(&alice, email_contact_bob_id).await?;
+    let encrinfo = Contact::get_encrinfo(alice, email_contact_bob_id).await?;
     assert_eq!(encrinfo, "No encryption");
 
-    let contact = Contact::get_by_id(&alice, email_contact_bob_id).await?;
-    assert!(!contact.e2ee_avail(&alice).await?);
+    let contact = Contact::get_by_id(alice, email_contact_bob_id).await?;
+    assert!(!contact.e2ee_avail(alice).await?);
 
     let contact_bob_id = alice.add_or_lookup_contact_id(bob).await;
-    let encrinfo = Contact::get_encrinfo(&alice, contact_bob_id).await?;
+    let encrinfo = Contact::get_encrinfo(alice, contact_bob_id).await?;
     assert_eq!(
         encrinfo,
         "End-to-end encryption available.
@@ -760,8 +760,8 @@ bob@example.net (bob@example.net):
 CCCB 5AA9 F6E1 141C 9431
 65F1 DB18 B18C BCF7 0487"
     );
-    let contact = Contact::get_by_id(&alice, contact_bob_id).await?;
-    assert!(contact.e2ee_avail(&alice).await?);
+    let contact = Contact::get_by_id(alice, contact_bob_id).await?;
+    assert!(contact.e2ee_avail(alice).await?);
     Ok(())
 }
 
@@ -786,7 +786,7 @@ async fn test_synchronize_status() -> Result<()> {
     let chat = alice1.create_email_chat(bob).await;
 
     // Alice sends a message to Bob from the first device.
-    send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
+    send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
     // Message is not encrypted.
@@ -804,7 +804,7 @@ async fn test_synchronize_status() -> Result<()> {
 
     // Alice sends encrypted message.
     let chat = alice1.create_chat(bob).await;
-    send_text_msg(&alice1, chat.id, "Hello".to_string()).await?;
+    send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
     // Second message is encrypted.
@@ -850,7 +850,7 @@ async fn test_selfavatar_changed_event() -> Result<()> {
 
     // Alice sends a message.
     let alice1_chat_id = alice1.create_chat(bob).await.id;
-    send_text_msg(&alice1, alice1_chat_id, "Hello".to_string()).await?;
+    send_text_msg(alice1, alice1_chat_id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
     // The message is encrypted.

@@ -20,7 +20,6 @@ use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
-use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::token;
 
