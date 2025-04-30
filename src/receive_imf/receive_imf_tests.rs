@@ -3249,31 +3249,76 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     Ok(())
 }
 
+/// Tests that a message from Thunderbird with an Autocrypt header is assigned to the PGP-contact.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt() -> Result<()> {
     let t = TestContext::new_bob().await;
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let received_msg = receive_imf(&t, raw, false).await?.unwrap();
+    
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
 
-    // TODO: if the message should arrive as PGP-contact
-    // with the key taken from Autocrypt header.
+    let message = Message::load_from_db(&t, msg_id).await?;
+    assert!(message.get_showpadlock());
+
+    let from_id = message.from_id;
+
+    let from_contact = Contact::get_by_id(&t, from_id).await?;
+    assert!(from_contact.is_pgp_contact());
 
     Ok(())
 }
 
+/// Tests reception of a message from Thunderbird with attached key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     let t = TestContext::new_bob().await;
 
+    // The message has public key attached *and* Autocrypt header.
+    //
+    // Autocrypt header is used to check the signature.
+    //
+    // At the time of the writing (2025-04-30, introduction of PGP-contacts)
+    // signature checking does not work without the Autocrypt header.
     let raw =
         include_bytes!("../../test-data/message/thunderbird_encrypted_signed_with_pubkey.eml");
-    receive_imf(&t, raw, false).await?;
-    // TODO: the message should arrive as PGP-contact with a key.
+    let received_msg = receive_imf(&t, raw, false).await?.unwrap();
 
+    // Attached key does not appear as an attachment,
+    // there is only one part.
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+
+    let message = Message::load_from_db(&t, msg_id).await?;
+    assert!(message.get_showpadlock());
+
+    let alice_id = message.from_id;
+    let alice_contact = Contact::get_by_id(&t, alice_id).await?;
+    assert!(alice_contact.is_pgp_contact());
+
+    // The message without the Autocrypt header
+    // cannot be assigned to the contact even if it
+    // is encrypted and signed.
+    //
+    // This could be fixed by looking up
+    // the key by the issuer fingerprint
+    // which is present in the detached signature,
+    // but this is not done yet.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
-    receive_imf(&t, raw, false).await?;
-    // TODO: the message should arrive as the same PGP-contact.
+    let received_msg = receive_imf(&t, raw, false).await?.unwrap();
+
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+
+    let message = Message::load_from_db(&t, msg_id).await?;
+    assert!(!message.get_showpadlock());
+
+    let alice_email_id = message.from_id;
+    assert_ne!(alice_email_id, alice_id);
+    let alice_email_contact = Contact::get_by_id(&t, alice_email_id).await?;
+    assert!(!alice_email_contact.is_pgp_contact());
 
     Ok(())
 }
@@ -3283,7 +3328,10 @@ async fn test_forged_from_and_no_valid_signatures() -> Result<()> {
     let t = &TestContext::new_bob().await;
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let received_msg = receive_imf(t, raw, false).await?.unwrap();
-    let msg = t.get_last_msg().await;
+
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+    let msg = Message::load_from_db(&t, msg_id).await?;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
 
@@ -3300,7 +3348,7 @@ async fn test_wrong_from_name_and_no_valid_signatures() -> Result<()> {
     let t = &TestContext::new_bob().await;
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     let raw = String::from_utf8(raw.to_vec())?.replace("From: Alice", "From: A");
-    let received_msg = receive_imf(t, raw.as_bytes(), false).await?.unwrap();
+    receive_imf(t, raw.as_bytes(), false).await?.unwrap();
     let msg = t.get_last_msg().await;
     assert!(!msg.chat_id.is_trash());
     assert!(!msg.get_showpadlock());
@@ -3337,7 +3385,7 @@ async fn test_thunderbird_unsigned() -> Result<()> {
 
     // Alice receives an unsigned message from Bob.
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_unsigned.eml");
-    let received_msg = receive_imf(&alice, raw, false).await?.unwrap();
+    receive_imf(&alice, raw, false).await?.unwrap();
 
     let msg = alice.get_last_msg().await;
     assert!(!msg.get_showpadlock());
