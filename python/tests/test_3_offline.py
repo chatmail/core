@@ -1,12 +1,11 @@
 import os
-import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 import deltachat as dc
 from deltachat.tracker import ImexFailed
-from deltachat import Account, account_hookimpl, Message
+from deltachat import Account, Message
 
 
 @pytest.mark.parametrize(
