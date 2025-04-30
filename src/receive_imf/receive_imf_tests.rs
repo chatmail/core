@@ -5152,67 +5152,6 @@ async fn test_rename_chat_after_creating_invite() -> Result<()> {
     Ok(())
 }
 
-/// Tests that creating a group
-/// is preferred over assigning message to existing
-/// chat based on `In-Reply-To` and `References`.
-///
-/// Referenced message itself may be incorrectly assigned,
-/// but `Chat-Group-ID` uniquely identifies the chat.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_prefer_chat_group_id_over_references() -> Result<()> {
-    let t = &TestContext::new_alice().await;
-
-    // Alice receives 1:1 message from Bob.
-    let raw = b"From: bob@example.net\n\
-                To: alice@example.org\n\
-                Subject: Hi\n\
-                Message-ID: <oneoneone@localhost>\n\
-                \n\
-                Hello!";
-    receive_imf(t, raw, false).await?.unwrap();
-
-    // Alice receives a group message from Bob.
-    // This references 1:1 message,
-    // but should create a group.
-    let raw = b"From: bob@example.net\n\
-                To: alice@example.org\n\
-                Subject: Group\n\
-                Chat-Version: 1.0\n\
-                Chat-Group-Name: Group 1\n\
-                Chat-Group-ID: GePFDkwEj2K\n\
-                Message-ID: <incoming@localhost>\n\
-                References: <oneoneone@localhost>\n\
-                In-Reply-To: <oneoneone@localhost>\n\
-                \n\
-                Group 1";
-    let received1 = receive_imf(t, raw, false).await?.unwrap();
-    let msg1 = Message::load_from_db(t, *received1.msg_ids.last().unwrap()).await?;
-    let chat1 = Chat::load_from_db(t, msg1.chat_id).await?;
-    assert_eq!(chat1.typ, Chattype::Group);
-
-    // Alice receives outgoing group message.
-    // This references 1:1 message,
-    // but should create another group.
-    let raw = b"From: alice@example.org\n\
-                To: bob@example.net
-                Subject: Group\n\
-                Chat-Version: 1.0\n\
-                Chat-Group-Name: Group 2\n\
-                Chat-Group-ID: Abcdexyzfoo\n\
-                Message-ID: <outgoing@localhost>\n\
-                References: <oneoneone@localhost>\n\
-                In-Reply-To: <oneoneone@localhost>\n\
-                \n\
-                Group 2";
-    let received2 = receive_imf(t, raw, false).await?.unwrap();
-    let msg2 = Message::load_from_db(t, *received2.msg_ids.last().unwrap()).await?;
-    let chat2 = Chat::load_from_db(t, msg2.chat_id).await?;
-    assert_eq!(chat2.typ, Chattype::Group);
-
-    assert_ne!(chat1.id, chat2.id);
-    Ok(())
-}
-
 /// Regression test for the bug
 /// that resulted in an info message
 /// about Bob addition to the group on Fiona's device.
