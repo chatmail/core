@@ -195,12 +195,16 @@ impl Sql {
 
         if let Err(e) = self.run_migrations(context).await {
             error!(context, "Running migrations failed: {e:#}");
+            // Emiting an error event probably doesn't work
+            // because we are in the process of opening the context,
+            // so there is no event emitter yet.
+            // So, try to report the error in other ways:
+            eprintln!("Running migrations failed: {e:#}");
             context.set_migration_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
-            // TODO possibly we should make the db read-only.
-            // We can't simply close it for two reasons:
+            // We can't simply close the db for two reasons:
             // a. backup export would fail
             // b. The UI would think that the account is unconfigured (because `is_configured()` fails)
-            // and remove the account
+            // and remove the account when the user presses "Back"
         }
 
         Ok(())
@@ -274,10 +278,7 @@ impl Sql {
         }
 
         let passphrase_nonempty = !passphrase.is_empty();
-        if let Err(err) = self.try_open(context, &self.dbfile, passphrase).await {
-            self.close().await;
-            return Err(err);
-        }
+        self.try_open(context, &self.dbfile, passphrase).await?;
         info!(context, "Opened database {:?}.", self.dbfile);
         *self.is_encrypted.write().await = Some(passphrase_nonempty);
 
