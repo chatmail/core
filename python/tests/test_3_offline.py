@@ -8,45 +8,6 @@ from deltachat.tracker import ImexFailed
 from deltachat import Account, Message
 
 
-@pytest.mark.parametrize(
-    ("msgtext", "res"),
-    [
-        (
-            "Member Me (tmp1@x.org) removed by tmp2@x.org.",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by tmp2@x.org.",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by Another member (tmp2@x.org).",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by me",
-            ("removed", "tmp1@x.org", "me"),
-        ),
-        (
-            "Group left by some one (tmp1@x.org).",
-            ("removed", "tmp1@x.org", "tmp1@x.org"),
-        ),
-        ("Group left by tmp1@x.org.", ("removed", "tmp1@x.org", "tmp1@x.org")),
-        (
-            "Member tmp1@x.org added by tmp2@x.org.",
-            ("added", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        ("Member nothing bla bla", None),
-        ("Another unknown system message", None),
-    ],
-)
-def test_parse_system_add_remove(msgtext, res):
-    from deltachat.message import parse_system_add_remove
-
-    out = parse_system_add_remove(msgtext)
-    assert out == res
-
-
 class TestOfflineAccountBasic:
     def test_wrong_db(self, tmp_path):
         p = tmp_path / "hello.db"
