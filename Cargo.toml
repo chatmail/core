@@ -107,7 +107,7 @@ tokio = { workspace = true, features = ["fs", "rt-multi-thread", "macros"] }
 toml = "0.8"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
-webpki-roots = "0.26.8"
+webpki-roots = "0.26.10"
 blake3 = "1.8.2"
 
 [dev-dependencies]
