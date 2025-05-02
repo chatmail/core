@@ -1722,6 +1722,7 @@ fn migrate_pgp_contacts(
                         update_member_stmt.execute((new_member, old_member, chat_id))?;
                     }
                 } else {
+                    info!(context, "Old member {old_member} in chat {chat_id} can't be upgraded to PGP-contact, removing them");
                     transaction
                         .execute(
                             "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
