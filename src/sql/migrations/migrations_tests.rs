@@ -5,7 +5,6 @@ use crate::config::Config;
 use crate::contact::Contact;
 use crate::contact::ContactId;
 use crate::contact::Origin;
-use crate::test_utils::bob_keypair;
 use crate::test_utils::TestContext;
 use crate::tools;
 
