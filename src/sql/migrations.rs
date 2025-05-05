@@ -1401,8 +1401,8 @@ fn migrate_pgp_contacts(
         let mut insert_contact_stmt = transaction
             .prepare(
                 "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
-            authname, param, status, is_bot, selfavatar_sent, fingerprint)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                authname, param, status, is_bot, selfavatar_sent, fingerprint)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             )
             .context("Step 4")?;
         let mut fingerprint_to_id_stmt = transaction
@@ -1560,7 +1560,6 @@ fn migrate_pgp_contacts(
         .context("Step 20")?
         .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
         .context("Step 21")?;
-
     {
         let mut stmt = transaction
             .prepare(
@@ -1669,7 +1668,7 @@ fn migrate_pgp_contacts(
                 }
             };
 
-            if old_and_new_members.iter().all(|(_old, new)| *new == None) {
+            if old_and_new_members.iter().all(|(_old, new)| new.is_none()) {
                 keep_email_contacts("All contacts in chat are e-mail contacts");
                 continue;
             }
