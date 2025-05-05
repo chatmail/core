@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
 use crate::chat::{
-    self, add_device_msg, add_device_msg_with_importance, update_device_icon,
+    self, add_device_msg, update_device_icon,
     update_saved_messages_icon,
 };
 use crate::config::Config;
