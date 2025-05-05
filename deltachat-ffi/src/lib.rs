@@ -86,6 +86,13 @@ where
     RT.spawn(fut)
 }
 
+#[track_caller]
+fn print_error(error: &str) {
+    eprintln!("{}", error);
+    #[cfg(debug_assertions)]
+    panic!("{}", error);
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn dc_context_new(
     _os_name: *const libc::c_char,
@@ -95,7 +102,7 @@ pub unsafe extern "C" fn dc_context_new(
     setup_panic!();
 
     if dbfile.is_null() {
-        eprintln!("ignoring careless call to dc_context_new()");
+        print_error("ignoring careless call to dc_context_new()");
         return ptr::null_mut();
     }
 
@@ -108,13 +115,13 @@ pub unsafe extern "C" fn dc_context_new(
                 .open(),
         )
     } else {
-        eprintln!("blobdir can not be defined explicitly anymore");
+        print_error("blobdir can not be defined explicitly anymore");
         return ptr::null_mut();
     };
     match ctx {
         Ok(ctx) => Box::into_raw(Box::new(ctx)),
         Err(err) => {
-            eprintln!("failed to create context: {err:#}");
+            print_error(&format!("failed to create context: {err:#}"));
             ptr::null_mut()
         }
     }
@@ -125,7 +132,7 @@ pub unsafe extern "C" fn dc_context_new_closed(dbfile: *const libc::c_char) -> *
     setup_panic!();
 
     if dbfile.is_null() {
-        eprintln!("ignoring careless call to dc_context_new_closed()");
+        print_error("ignoring careless call to dc_context_new_closed()");
         return ptr::null_mut();
     }
 
@@ -137,7 +144,7 @@ pub unsafe extern "C" fn dc_context_new_closed(dbfile: *const libc::c_char) -> *
     ) {
         Ok(context) => Box::into_raw(Box::new(context)),
         Err(err) => {
-            eprintln!("failed to create context: {err:#}");
+            print_error(&format!("failed to create context: {err:#}"));
             ptr::null_mut()
         }
     }
@@ -149,7 +156,7 @@ pub unsafe extern "C" fn dc_context_open(
     passphrase: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_context_open()");
+        print_error("ignoring careless call to dc_context_open()");
         return 0;
     }
 
@@ -168,7 +175,7 @@ pub unsafe extern "C" fn dc_context_change_passphrase(
     passphrase: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_context_change_passphrase()");
+        print_error("ignoring careless call to dc_context_change_passphrase()");
         return 0;
     }
 
@@ -183,7 +190,7 @@ pub unsafe extern "C" fn dc_context_change_passphrase(
 #[no_mangle]
 pub unsafe extern "C" fn dc_context_is_open(context: *mut dc_context_t) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_context_is_open()");
+        print_error("ignoring careless call to dc_context_is_open()");
         return 0;
     }
 
@@ -197,7 +204,7 @@ pub unsafe extern "C" fn dc_context_is_open(context: *mut dc_context_t) -> libc:
 #[no_mangle]
 pub unsafe extern "C" fn dc_context_unref(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_context_unref()");
+        print_error("ignoring careless call to dc_context_unref()");
         return;
     }
     drop(Box::from_raw(context));
@@ -206,7 +213,7 @@ pub unsafe extern "C" fn dc_context_unref(context: *mut dc_context_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_blobdir(context: *mut dc_context_t) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_blobdir()");
+        print_error("ignoring careless call to dc_get_blobdir()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -220,7 +227,7 @@ pub unsafe extern "C" fn dc_set_config(
     value: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || key.is_null() {
-        eprintln!("ignoring careless call to dc_set_config()");
+        print_error("ignoring careless call to dc_set_config()");
         return 0;
     }
     let ctx = &*context;
@@ -259,7 +266,7 @@ pub unsafe extern "C" fn dc_get_config(
     key: *const libc::c_char,
 ) -> *mut libc::c_char {
     if context.is_null() || key.is_null() {
-        eprintln!("ignoring careless call to dc_get_config()");
+        print_error("ignoring careless call to dc_get_config()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -301,7 +308,7 @@ pub unsafe extern "C" fn dc_set_stock_translation(
     stock_msg: *mut libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || stock_msg.is_null() {
-        eprintln!("ignoring careless call to dc_set_stock_string");
+        print_error("ignoring careless call to dc_set_stock_string");
         return 0;
     }
     let msg = to_string_lossy(stock_msg);
@@ -330,7 +337,7 @@ pub unsafe extern "C" fn dc_set_config_from_qr(
     qr: *mut libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || qr.is_null() {
-        eprintln!("ignoring careless call to dc_set_config_from_qr");
+        print_error("ignoring careless call to dc_set_config_from_qr");
         return 0;
     }
     let qr = to_string_lossy(qr);
@@ -350,7 +357,7 @@ pub unsafe extern "C" fn dc_set_config_from_qr(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_info(context: *const dc_context_t) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_info()");
+        print_error("ignoring careless call to dc_get_info()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -379,7 +386,7 @@ fn render_info(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_connectivity(context: *const dc_context_t) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_connectivity()");
+        print_error("ignoring careless call to dc_get_connectivity()");
         return 0;
     }
     let ctx = &*context;
@@ -391,7 +398,7 @@ pub unsafe extern "C" fn dc_get_connectivity_html(
     context: *const dc_context_t,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_connectivity_html()");
+        print_error("ignoring careless call to dc_get_connectivity_html()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -409,7 +416,7 @@ pub unsafe extern "C" fn dc_get_connectivity_html(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_push_state(context: *const dc_context_t) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_push_state()");
+        print_error("ignoring careless call to dc_get_push_state()");
         return 0;
     }
     let ctx = &*context;
@@ -423,7 +430,7 @@ pub unsafe extern "C" fn dc_get_oauth2_url(
     redirect: *const libc::c_char,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_oauth2_url()");
+        print_error("ignoring careless call to dc_get_oauth2_url()");
         return ptr::null_mut(); // NULL explicitly defined as "unknown"
     }
     let ctx = &*context;
@@ -454,7 +461,7 @@ fn spawn_configure(ctx: Context) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_configure(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_configure()");
+        print_error("ignoring careless call to dc_configure()");
         return;
     }
 
@@ -465,7 +472,7 @@ pub unsafe extern "C" fn dc_configure(context: *mut dc_context_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_is_configured(context: *mut dc_context_t) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_is_configured()");
+        print_error("ignoring careless call to dc_is_configured()");
         return 0;
     }
     let ctx = &*context;
@@ -504,7 +511,7 @@ pub type dc_event_t = Event;
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_unref(a: *mut dc_event_t) {
     if a.is_null() {
-        eprintln!("ignoring careless call to dc_event_unref()");
+        print_error("ignoring careless call to dc_event_unref()");
         return;
     }
 
@@ -514,7 +521,7 @@ pub unsafe extern "C" fn dc_event_unref(a: *mut dc_event_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_id()");
+        print_error("ignoring careless call to dc_event_get_id()");
         return 0;
     }
 
@@ -575,7 +582,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc::c_int {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_data1_int()");
+        print_error("ignoring careless call to dc_event_get_data1_int()");
         return 0;
     }
 
@@ -643,7 +650,7 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc::c_int {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_data2_int()");
+        print_error("ignoring careless call to dc_event_get_data2_int()");
         return 0;
     }
 
@@ -708,7 +715,7 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_data1_str(event: *mut dc_event_t) -> *mut libc::c_char {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_data1_str()");
+        print_error("ignoring careless call to dc_event_get_data1_str()");
         return ptr::null_mut();
     }
 
@@ -729,7 +736,7 @@ pub unsafe extern "C" fn dc_event_get_data1_str(event: *mut dc_event_t) -> *mut 
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut libc::c_char {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_data2_str()");
+        print_error("ignoring careless call to dc_event_get_data2_str()");
         return ptr::null_mut();
     }
 
@@ -816,7 +823,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_get_account_id(event: *mut dc_event_t) -> u32 {
     if event.is_null() {
-        eprintln!("ignoring careless call to dc_event_get_account_id()");
+        print_error("ignoring careless call to dc_event_get_account_id()");
         return 0;
     }
 
@@ -830,7 +837,7 @@ pub unsafe extern "C" fn dc_get_event_emitter(
     context: *mut dc_context_t,
 ) -> *mut dc_event_emitter_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_event_emitter()");
+        print_error("ignoring careless call to dc_get_event_emitter()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -840,7 +847,7 @@ pub unsafe extern "C" fn dc_get_event_emitter(
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_emitter_unref(emitter: *mut dc_event_emitter_t) {
     if emitter.is_null() {
-        eprintln!("ignoring careless call to dc_event_emitter_unref()");
+        print_error("ignoring careless call to dc_event_emitter_unref()");
         return;
     }
 
@@ -850,7 +857,7 @@ pub unsafe extern "C" fn dc_event_emitter_unref(emitter: *mut dc_event_emitter_t
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_next_event(events: *mut dc_event_emitter_t) -> *mut dc_event_t {
     if events.is_null() {
-        eprintln!("ignoring careless call to dc_get_next_event()");
+        print_error("ignoring careless call to dc_get_next_event()");
         return ptr::null_mut();
     }
     let events = &*events;
@@ -867,7 +874,7 @@ pub unsafe extern "C" fn dc_get_next_event(events: *mut dc_event_emitter_t) -> *
 #[no_mangle]
 pub unsafe extern "C" fn dc_stop_io(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_stop_io()");
+        print_error("ignoring careless call to dc_stop_io()");
         return;
     }
     let ctx = &*context;
@@ -880,7 +887,7 @@ pub unsafe extern "C" fn dc_stop_io(context: *mut dc_context_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_maybe_network(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_maybe_network()");
+        print_error("ignoring careless call to dc_maybe_network()");
         return;
     }
     let ctx = &*context;
@@ -894,7 +901,7 @@ pub unsafe extern "C" fn dc_preconfigure_keypair(
     secret_data: *const libc::c_char,
 ) -> i32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_preconfigure_keypair()");
+        print_error("ignoring careless call to dc_preconfigure_keypair()");
         return 0;
     }
     let ctx = &*context;
@@ -913,7 +920,7 @@ pub unsafe extern "C" fn dc_get_chatlist(
     query_id: u32,
 ) -> *mut dc_chatlist_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chatlist()");
+        print_error("ignoring careless call to dc_get_chatlist()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -946,7 +953,7 @@ pub unsafe extern "C" fn dc_create_chat_by_contact_id(
     contact_id: u32,
 ) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_create_chat_by_contact_id()");
+        print_error("ignoring careless call to dc_create_chat_by_contact_id()");
         return 0;
     }
     let ctx = &*context;
@@ -967,7 +974,7 @@ pub unsafe extern "C" fn dc_get_chat_id_by_contact_id(
     contact_id: u32,
 ) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_id_by_contact_id()");
+        print_error("ignoring careless call to dc_get_chat_id_by_contact_id()");
         return 0;
     }
     let ctx = &*context;
@@ -990,7 +997,7 @@ pub unsafe extern "C" fn dc_send_msg(
     msg: *mut dc_msg_t,
 ) -> u32 {
     if context.is_null() || msg.is_null() {
-        eprintln!("ignoring careless call to dc_send_msg()");
+        print_error("ignoring careless call to dc_send_msg()");
         return 0;
     }
     let ctx = &mut *context;
@@ -1011,7 +1018,7 @@ pub unsafe extern "C" fn dc_send_msg_sync(
     msg: *mut dc_msg_t,
 ) -> u32 {
     if context.is_null() || msg.is_null() {
-        eprintln!("ignoring careless call to dc_send_msg_sync()");
+        print_error("ignoring careless call to dc_send_msg_sync()");
         return 0;
     }
     let ctx = &mut *context;
@@ -1032,7 +1039,7 @@ pub unsafe extern "C" fn dc_send_text_msg(
     text_to_send: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || text_to_send.is_null() {
-        eprintln!("ignoring careless call to dc_send_text_msg()");
+        print_error("ignoring careless call to dc_send_text_msg()");
         return 0;
     }
     let ctx = &*context;
@@ -1053,7 +1060,7 @@ pub unsafe extern "C" fn dc_send_edit_request(
     new_text: *const libc::c_char,
 ) {
     if context.is_null() || new_text.is_null() {
-        eprintln!("ignoring careless call to dc_send_edit_request()");
+        print_error("ignoring careless call to dc_send_edit_request()");
         return;
     }
     let ctx = &*context;
@@ -1070,7 +1077,7 @@ pub unsafe extern "C" fn dc_send_delete_request(
     msg_cnt: libc::c_int,
 ) {
     if context.is_null() || msg_ids.is_null() || msg_cnt <= 0 {
-        eprintln!("ignoring careless call to dc_send_delete_request()");
+        print_error("ignoring careless call to dc_send_delete_request()");
         return;
     }
     let ctx = &*context;
@@ -1088,7 +1095,7 @@ pub unsafe extern "C" fn dc_send_videochat_invitation(
     chat_id: u32,
 ) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_send_videochat_invitation()");
+        print_error("ignoring careless call to dc_send_videochat_invitation()");
         return 0;
     }
     let ctx = &*context;
@@ -1109,7 +1116,7 @@ pub unsafe extern "C" fn dc_send_webxdc_status_update(
     _descr: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_send_webxdc_status_update()");
+        print_error("ignoring careless call to dc_send_webxdc_status_update()");
         return 0;
     }
     let ctx = &*context;
@@ -1127,7 +1134,7 @@ pub unsafe extern "C" fn dc_get_webxdc_status_updates(
     last_known_serial: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_webxdc_status_updates()");
+        print_error("ignoring careless call to dc_get_webxdc_status_updates()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -1146,7 +1153,7 @@ pub unsafe extern "C" fn dc_set_webxdc_integration(
     file: *const libc::c_char,
 ) {
     if context.is_null() || file.is_null() {
-        eprintln!("ignoring careless call to dc_set_webxdc_integration()");
+        print_error("ignoring careless call to dc_set_webxdc_integration()");
         return;
     }
     let ctx = &*context;
@@ -1161,7 +1168,7 @@ pub unsafe extern "C" fn dc_init_webxdc_integration(
     chat_id: u32,
 ) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_init_webxdc_integration()");
+        print_error("ignoring careless call to dc_init_webxdc_integration()");
         return 0;
     }
     let ctx = &*context;
@@ -1184,7 +1191,7 @@ pub unsafe extern "C" fn dc_set_draft(
     msg: *mut dc_msg_t,
 ) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_set_draft()");
+        print_error("ignoring careless call to dc_set_draft()");
         return;
     }
     let ctx = &*context;
@@ -1210,7 +1217,7 @@ pub unsafe extern "C" fn dc_add_device_msg(
     msg: *mut dc_msg_t,
 ) -> u32 {
     if context.is_null() || (label.is_null() && msg.is_null()) {
-        eprintln!("ignoring careless call to dc_add_device_msg()");
+        print_error("ignoring careless call to dc_add_device_msg()");
         return 0;
     }
     let ctx = &mut *context;
@@ -1235,7 +1242,7 @@ pub unsafe extern "C" fn dc_was_device_msg_ever_added(
     label: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || label.is_null() {
-        eprintln!("ignoring careless call to dc_was_device_msg_ever_added()");
+        print_error("ignoring careless call to dc_was_device_msg_ever_added()");
         return 0;
     }
     let ctx = &mut *context;
@@ -1250,7 +1257,7 @@ pub unsafe extern "C" fn dc_was_device_msg_ever_added(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_draft(context: *mut dc_context_t, chat_id: u32) -> *mut dc_msg_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_draft()");
+        print_error("ignoring careless call to dc_get_draft()");
         return ptr::null_mut(); // NULL explicitly defined as "no draft"
     }
     let ctx = &*context;
@@ -1281,7 +1288,7 @@ pub unsafe extern "C" fn dc_get_chat_msgs(
     _marker1before: u32,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_msgs()");
+        print_error("ignoring careless call to dc_get_chat_msgs()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1308,7 +1315,7 @@ pub unsafe extern "C" fn dc_get_chat_msgs(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_msg_cnt(context: *mut dc_context_t, chat_id: u32) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_msg_cnt()");
+        print_error("ignoring careless call to dc_get_msg_cnt()");
         return 0;
     }
     let ctx = &*context;
@@ -1327,7 +1334,7 @@ pub unsafe extern "C" fn dc_get_fresh_msg_cnt(
     chat_id: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_fresh_msg_cnt()");
+        print_error("ignoring careless call to dc_get_fresh_msg_cnt()");
         return 0;
     }
     let ctx = &*context;
@@ -1346,7 +1353,7 @@ pub unsafe extern "C" fn dc_get_similar_chatlist(
     chat_id: u32,
 ) -> *mut dc_chatlist_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_similar_chatlist()");
+        print_error("ignoring careless call to dc_get_similar_chatlist()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1371,7 +1378,7 @@ pub unsafe extern "C" fn dc_estimate_deletion_cnt(
     seconds: i64,
 ) -> libc::c_int {
     if context.is_null() || seconds < 0 {
-        eprintln!("ignoring careless call to dc_estimate_deletion_cnt()");
+        print_error("ignoring careless call to dc_estimate_deletion_cnt()");
         return 0;
     }
     let ctx = &*context;
@@ -1387,7 +1394,7 @@ pub unsafe extern "C" fn dc_get_fresh_msgs(
     context: *mut dc_context_t,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_fresh_msgs()");
+        print_error("ignoring careless call to dc_get_fresh_msgs()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1410,7 +1417,7 @@ pub unsafe extern "C" fn dc_get_fresh_msgs(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_next_msgs(context: *mut dc_context_t) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_next_msgs()");
+        print_error("ignoring careless call to dc_get_next_msgs()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1433,7 +1440,7 @@ pub unsafe extern "C" fn dc_wait_next_msgs(
     context: *mut dc_context_t,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_wait_next_msgs()");
+        print_error("ignoring careless call to dc_wait_next_msgs()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1454,7 +1461,7 @@ pub unsafe extern "C" fn dc_wait_next_msgs(
 #[no_mangle]
 pub unsafe extern "C" fn dc_marknoticed_chat(context: *mut dc_context_t, chat_id: u32) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_marknoticed_chat()");
+        print_error("ignoring careless call to dc_marknoticed_chat()");
         return;
     }
     let ctx = &*context;
@@ -1485,7 +1492,7 @@ pub unsafe extern "C" fn dc_get_chat_media(
     or_msg_type3: libc::c_int,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_media()");
+        print_error("ignoring careless call to dc_get_chat_media()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1517,7 +1524,7 @@ pub unsafe extern "C" fn dc_set_chat_visibility(
     archive: libc::c_int,
 ) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_set_chat_visibility()");
+        print_error("ignoring careless call to dc_set_chat_visibility()");
         return;
     }
     let ctx = &*context;
@@ -1547,7 +1554,7 @@ pub unsafe extern "C" fn dc_set_chat_visibility(
 #[no_mangle]
 pub unsafe extern "C" fn dc_delete_chat(context: *mut dc_context_t, chat_id: u32) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_delete_chat()");
+        print_error("ignoring careless call to dc_delete_chat()");
         return;
     }
     let ctx = &*context;
@@ -1565,7 +1572,7 @@ pub unsafe extern "C" fn dc_delete_chat(context: *mut dc_context_t, chat_id: u32
 #[no_mangle]
 pub unsafe extern "C" fn dc_block_chat(context: *mut dc_context_t, chat_id: u32) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_block_chat()");
+        print_error("ignoring careless call to dc_block_chat()");
         return;
     }
     let ctx = &*context;
@@ -1583,7 +1590,7 @@ pub unsafe extern "C" fn dc_block_chat(context: *mut dc_context_t, chat_id: u32)
 #[no_mangle]
 pub unsafe extern "C" fn dc_accept_chat(context: *mut dc_context_t, chat_id: u32) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_accept_chat()");
+        print_error("ignoring careless call to dc_accept_chat()");
         return;
     }
     let ctx = &*context;
@@ -1604,7 +1611,7 @@ pub unsafe extern "C" fn dc_get_chat_contacts(
     chat_id: u32,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_contacts()");
+        print_error("ignoring careless call to dc_get_chat_contacts()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1629,7 +1636,7 @@ pub unsafe extern "C" fn dc_search_msgs(
     query: *const libc::c_char,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() || query.is_null() {
-        eprintln!("ignoring careless call to dc_search_msgs()");
+        print_error("ignoring careless call to dc_search_msgs()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1655,7 +1662,7 @@ pub unsafe extern "C" fn dc_search_msgs(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_chat(context: *mut dc_context_t, chat_id: u32) -> *mut dc_chat_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat()");
+        print_error("ignoring careless call to dc_get_chat()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1679,7 +1686,7 @@ pub unsafe extern "C" fn dc_create_group_chat(
     name: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || name.is_null() {
-        eprintln!("ignoring careless call to dc_create_group_chat()");
+        print_error("ignoring careless call to dc_create_group_chat()");
         return 0;
     }
     let ctx = &*context;
@@ -1703,7 +1710,7 @@ pub unsafe extern "C" fn dc_create_group_chat(
 #[no_mangle]
 pub unsafe extern "C" fn dc_create_broadcast_list(context: *mut dc_context_t) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_create_broadcast_list()");
+        print_error("ignoring careless call to dc_create_broadcast_list()");
         return 0;
     }
     let ctx = &*context;
@@ -1721,7 +1728,7 @@ pub unsafe extern "C" fn dc_is_contact_in_chat(
     contact_id: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_is_contact_in_chat()");
+        print_error("ignoring careless call to dc_is_contact_in_chat()");
         return 0;
     }
     let ctx = &*context;
@@ -1743,7 +1750,7 @@ pub unsafe extern "C" fn dc_add_contact_to_chat(
     contact_id: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_add_contact_to_chat()");
+        print_error("ignoring careless call to dc_add_contact_to_chat()");
         return 0;
     }
     let ctx = &*context;
@@ -1765,7 +1772,7 @@ pub unsafe extern "C" fn dc_remove_contact_from_chat(
     contact_id: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_remove_contact_from_chat()");
+        print_error("ignoring careless call to dc_remove_contact_from_chat()");
         return 0;
     }
     let ctx = &*context;
@@ -1788,7 +1795,7 @@ pub unsafe extern "C" fn dc_set_chat_name(
 ) -> libc::c_int {
     if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() || name.is_null()
     {
-        eprintln!("ignoring careless call to dc_set_chat_name()");
+        print_error("ignoring careless call to dc_set_chat_name()");
         return 0;
     }
     let ctx = &*context;
@@ -1808,7 +1815,7 @@ pub unsafe extern "C" fn dc_set_chat_profile_image(
     image: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() {
-        eprintln!("ignoring careless call to dc_set_chat_profile_image()");
+        print_error("ignoring careless call to dc_set_chat_profile_image()");
         return 0;
     }
     let ctx = &*context;
@@ -1828,7 +1835,7 @@ pub unsafe extern "C" fn dc_set_chat_mute_duration(
     duration: i64,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_set_chat_mute_duration()");
+        print_error("ignoring careless call to dc_set_chat_mute_duration()");
         return 0;
     }
     let ctx = &*context;
@@ -1861,7 +1868,7 @@ pub unsafe extern "C" fn dc_get_chat_encrinfo(
     chat_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_encrinfo()");
+        print_error("ignoring careless call to dc_get_chat_encrinfo()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -1884,7 +1891,7 @@ pub unsafe extern "C" fn dc_get_chat_ephemeral_timer(
     chat_id: u32,
 ) -> u32 {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_chat_ephemeral_timer()");
+        print_error("ignoring careless call to dc_get_chat_ephemeral_timer()");
         return 0;
     }
     let ctx = &*context;
@@ -1908,7 +1915,7 @@ pub unsafe extern "C" fn dc_set_chat_ephemeral_timer(
     timer: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_set_chat_ephemeral_timer()");
+        print_error("ignoring careless call to dc_set_chat_ephemeral_timer()");
         return 0;
     }
     let ctx = &*context;
@@ -1929,7 +1936,7 @@ pub unsafe extern "C" fn dc_get_msg_info(
     msg_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_msg_info()");
+        print_error("ignoring careless call to dc_get_msg_info()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -1945,7 +1952,7 @@ pub unsafe extern "C" fn dc_get_msg_html(
     msg_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_msg_html()");
+        print_error("ignoring careless call to dc_get_msg_html()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -1962,7 +1969,7 @@ pub unsafe extern "C" fn dc_delete_msgs(
     msg_cnt: libc::c_int,
 ) {
     if context.is_null() || msg_ids.is_null() || msg_cnt <= 0 {
-        eprintln!("ignoring careless call to dc_delete_msgs()");
+        print_error("ignoring careless call to dc_delete_msgs()");
         return;
     }
     let ctx = &*context;
@@ -1986,7 +1993,7 @@ pub unsafe extern "C" fn dc_forward_msgs(
         || msg_cnt <= 0
         || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32()
     {
-        eprintln!("ignoring careless call to dc_forward_msgs()");
+        print_error("ignoring careless call to dc_forward_msgs()");
         return;
     }
     let msg_ids = convert_and_prune_message_ids(msg_ids, msg_cnt);
@@ -2006,7 +2013,7 @@ pub unsafe extern "C" fn dc_save_msgs(
     msg_cnt: libc::c_int,
 ) {
     if context.is_null() || msg_ids.is_null() || msg_cnt <= 0 {
-        eprintln!("ignoring careless call to dc_save_msgs()");
+        print_error("ignoring careless call to dc_save_msgs()");
         return;
     }
     let msg_ids = convert_and_prune_message_ids(msg_ids, msg_cnt);
@@ -2026,7 +2033,7 @@ pub unsafe extern "C" fn dc_resend_msgs(
     msg_cnt: libc::c_int,
 ) -> libc::c_int {
     if context.is_null() || msg_ids.is_null() || msg_cnt <= 0 {
-        eprintln!("ignoring careless call to dc_resend_msgs()");
+        print_error("ignoring careless call to dc_resend_msgs()");
         return 0;
     }
     let ctx = &*context;
@@ -2047,7 +2054,7 @@ pub unsafe extern "C" fn dc_markseen_msgs(
     msg_cnt: libc::c_int,
 ) {
     if context.is_null() || msg_ids.is_null() || msg_cnt <= 0 {
-        eprintln!("ignoring careless call to dc_markseen_msgs()");
+        print_error("ignoring careless call to dc_markseen_msgs()");
         return;
     }
     let msg_ids = convert_and_prune_message_ids(msg_ids, msg_cnt);
@@ -2062,7 +2069,7 @@ pub unsafe extern "C" fn dc_markseen_msgs(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> *mut dc_msg_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_msg()");
+        print_error("ignoring careless call to dc_get_msg()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2092,7 +2099,7 @@ pub unsafe extern "C" fn dc_get_msg(context: *mut dc_context_t, msg_id: u32) -> 
 #[no_mangle]
 pub unsafe extern "C" fn dc_download_full_msg(context: *mut dc_context_t, msg_id: u32) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_download_full_msg()");
+        print_error("ignoring careless call to dc_download_full_msg()");
         return;
     }
     let ctx = &*context;
@@ -2105,7 +2112,7 @@ pub unsafe extern "C" fn dc_download_full_msg(context: *mut dc_context_t, msg_id
 #[no_mangle]
 pub unsafe extern "C" fn dc_may_be_valid_addr(addr: *const libc::c_char) -> libc::c_int {
     if addr.is_null() {
-        eprintln!("ignoring careless call to dc_may_be_valid_addr()");
+        print_error("ignoring careless call to dc_may_be_valid_addr()");
         return 0;
     }
 
@@ -2118,7 +2125,7 @@ pub unsafe extern "C" fn dc_lookup_contact_id_by_addr(
     addr: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || addr.is_null() {
-        eprintln!("ignoring careless call to dc_lookup_contact_id_by_addr()");
+        print_error("ignoring careless call to dc_lookup_contact_id_by_addr()");
         return 0;
     }
     let ctx = &*context;
@@ -2139,7 +2146,7 @@ pub unsafe extern "C" fn dc_create_contact(
     addr: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || addr.is_null() {
-        eprintln!("ignoring careless call to dc_create_contact()");
+        print_error("ignoring careless call to dc_create_contact()");
         return 0;
     }
     let ctx = &*context;
@@ -2158,7 +2165,7 @@ pub unsafe extern "C" fn dc_add_address_book(
     addr_book: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || addr_book.is_null() {
-        eprintln!("ignoring careless call to dc_add_address_book()");
+        print_error("ignoring careless call to dc_add_address_book()");
         return 0;
     }
     let ctx = &*context;
@@ -2177,7 +2184,7 @@ pub unsafe extern "C" fn dc_make_vcard(
     contact_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_make_vcard()");
+        print_error("ignoring careless call to dc_make_vcard()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2194,7 +2201,7 @@ pub unsafe extern "C" fn dc_import_vcard(
     vcard: *const libc::c_char,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() || vcard.is_null() {
-        eprintln!("ignoring careless call to dc_import_vcard()");
+        print_error("ignoring careless call to dc_import_vcard()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2220,7 +2227,7 @@ pub unsafe extern "C" fn dc_get_contacts(
     query: *const libc::c_char,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_contacts()");
+        print_error("ignoring careless call to dc_get_contacts()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2239,7 +2246,7 @@ pub unsafe extern "C" fn dc_get_contacts(
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_blocked_cnt(context: *mut dc_context_t) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_blocked_cnt()");
+        print_error("ignoring careless call to dc_get_blocked_cnt()");
         return 0;
     }
     let ctx = &*context;
@@ -2257,7 +2264,7 @@ pub unsafe extern "C" fn dc_get_blocked_contacts(
     context: *mut dc_context_t,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_blocked_contacts()");
+        print_error("ignoring careless call to dc_get_blocked_contacts()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2284,7 +2291,7 @@ pub unsafe extern "C" fn dc_block_contact(
 ) {
     let contact_id = ContactId::new(contact_id);
     if context.is_null() || contact_id.is_special() {
-        eprintln!("ignoring careless call to dc_block_contact()");
+        print_error("ignoring careless call to dc_block_contact()");
         return;
     }
     let ctx = &*context;
@@ -2311,7 +2318,7 @@ pub unsafe extern "C" fn dc_get_contact_encrinfo(
     contact_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_contact_encrinfo()");
+        print_error("ignoring careless call to dc_get_contact_encrinfo()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -2334,7 +2341,7 @@ pub unsafe extern "C" fn dc_delete_contact(
 ) -> libc::c_int {
     let contact_id = ContactId::new(contact_id);
     if context.is_null() || contact_id.is_special() {
-        eprintln!("ignoring careless call to dc_delete_contact()");
+        print_error("ignoring careless call to dc_delete_contact()");
         return 0;
     }
     let ctx = &*context;
@@ -2356,7 +2363,7 @@ pub unsafe extern "C" fn dc_get_contact(
     contact_id: u32,
 ) -> *mut dc_contact_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_contact()");
+        print_error("ignoring careless call to dc_get_contact()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2386,13 +2393,13 @@ pub unsafe extern "C" fn dc_imex(
     param2: *const libc::c_char,
 ) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_imex()");
+        print_error("ignoring careless call to dc_imex()");
         return;
     }
     let what = match imex::ImexMode::from_i32(what_raw) {
         Some(what) => what,
         None => {
-            eprintln!("ignoring invalid argument {what_raw} to dc_imex");
+            print_error(&format!("ignoring invalid argument {what_raw} to dc_imex"));
             return;
         }
     };
@@ -2403,7 +2410,7 @@ pub unsafe extern "C" fn dc_imex(
     if let Some(param1) = to_opt_string_lossy(param1) {
         spawn_imex(ctx.clone(), what, param1, passphrase);
     } else {
-        eprintln!("dc_imex called without a valid directory");
+        print_error("dc_imex called without a valid directory");
     }
 }
 
@@ -2413,7 +2420,7 @@ pub unsafe extern "C" fn dc_imex_has_backup(
     dir: *const libc::c_char,
 ) -> *mut libc::c_char {
     if context.is_null() || dir.is_null() {
-        eprintln!("ignoring careless call to dc_imex_has_backup()");
+        print_error("ignoring careless call to dc_imex_has_backup()");
         return ptr::null_mut(); // NULL explicitly defined as "has no backup"
     }
     let ctx = &*context;
@@ -2434,7 +2441,7 @@ pub unsafe extern "C" fn dc_imex_has_backup(
 #[no_mangle]
 pub unsafe extern "C" fn dc_initiate_key_transfer(context: *mut dc_context_t) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_initiate_key_transfer()");
+        print_error("ignoring careless call to dc_initiate_key_transfer()");
         return ptr::null_mut(); // NULL explicitly defined as "error"
     }
     let ctx = &*context;
@@ -2457,7 +2464,7 @@ pub unsafe extern "C" fn dc_continue_key_transfer(
     setup_code: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || msg_id <= constants::DC_MSG_ID_LAST_SPECIAL || setup_code.is_null() {
-        eprintln!("ignoring careless call to dc_continue_key_transfer()");
+        print_error("ignoring careless call to dc_continue_key_transfer()");
         return 0;
     }
     let ctx = &*context;
@@ -2478,7 +2485,7 @@ pub unsafe extern "C" fn dc_continue_key_transfer(
 #[no_mangle]
 pub unsafe extern "C" fn dc_stop_ongoing_process(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_stop_ongoing_process()");
+        print_error("ignoring careless call to dc_stop_ongoing_process()");
         return;
     }
     let ctx = &*context;
@@ -2491,7 +2498,7 @@ pub unsafe extern "C" fn dc_check_qr(
     qr: *const libc::c_char,
 ) -> *mut dc_lot_t {
     if context.is_null() || qr.is_null() {
-        eprintln!("ignoring careless call to dc_check_qr()");
+        print_error("ignoring careless call to dc_check_qr()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2509,7 +2516,7 @@ pub unsafe extern "C" fn dc_get_securejoin_qr(
     chat_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_securejoin_qr()");
+        print_error("ignoring careless call to dc_get_securejoin_qr()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -2530,7 +2537,7 @@ pub unsafe extern "C" fn dc_get_securejoin_qr_svg(
     chat_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to generate_verification_qr()");
+        print_error("ignoring careless call to generate_verification_qr()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -2551,7 +2558,7 @@ pub unsafe extern "C" fn dc_join_securejoin(
     qr: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || qr.is_null() {
-        eprintln!("ignoring careless call to dc_join_securejoin()");
+        print_error("ignoring careless call to dc_join_securejoin()");
         return 0;
     }
     let ctx = &*context;
@@ -2573,7 +2580,7 @@ pub unsafe extern "C" fn dc_send_locations_to_chat(
     seconds: libc::c_int,
 ) {
     if context.is_null() || chat_id <= constants::DC_CHAT_ID_LAST_SPECIAL.to_u32() || seconds < 0 {
-        eprintln!("ignoring careless call to dc_send_locations_to_chat()");
+        print_error("ignoring careless call to dc_send_locations_to_chat()");
         return;
     }
     let ctx = &*context;
@@ -2594,7 +2601,7 @@ pub unsafe extern "C" fn dc_is_sending_locations_to_chat(
     chat_id: u32,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_is_sending_locations_to_chat()");
+        print_error("ignoring careless call to dc_is_sending_locations_to_chat()");
         return 0;
     }
     let ctx = &*context;
@@ -2616,7 +2623,7 @@ pub unsafe extern "C" fn dc_set_location(
     accuracy: libc::c_double,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_set_location()");
+        print_error("ignoring careless call to dc_set_location()");
         return 0;
     }
     let ctx = &*context;
@@ -2638,7 +2645,7 @@ pub unsafe extern "C" fn dc_get_locations(
     timestamp_end: i64,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_locations()");
+        print_error("ignoring careless call to dc_get_locations()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -2664,7 +2671,7 @@ pub unsafe extern "C" fn dc_get_locations(
 #[no_mangle]
 pub unsafe extern "C" fn dc_delete_all_locations(context: *mut dc_context_t) {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_delete_all_locations()");
+        print_error("ignoring careless call to dc_delete_all_locations()");
         return;
     }
     let ctx = &*context;
@@ -2681,7 +2688,7 @@ pub unsafe extern "C" fn dc_delete_all_locations(context: *mut dc_context_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_create_qr_svg(payload: *const libc::c_char) -> *mut libc::c_char {
     if payload.is_null() {
-        eprintln!("ignoring careless call to dc_create_qr_svg()");
+        print_error("ignoring careless call to dc_create_qr_svg()");
         return "".strdup();
     }
 
@@ -2693,7 +2700,7 @@ pub unsafe extern "C" fn dc_create_qr_svg(payload: *const libc::c_char) -> *mut 
 #[no_mangle]
 pub unsafe extern "C" fn dc_get_last_error(context: *mut dc_context_t) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_last_error()");
+        print_error("ignoring careless call to dc_get_last_error()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -2707,7 +2714,7 @@ pub type dc_array_t = dc_array::dc_array_t;
 #[no_mangle]
 pub unsafe extern "C" fn dc_array_unref(a: *mut dc_array::dc_array_t) {
     if a.is_null() {
-        eprintln!("ignoring careless call to dc_array_unref()");
+        print_error("ignoring careless call to dc_array_unref()");
         return;
     }
 
@@ -2717,7 +2724,7 @@ pub unsafe extern "C" fn dc_array_unref(a: *mut dc_array::dc_array_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_array_get_cnt(array: *const dc_array_t) -> libc::size_t {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_cnt()");
+        print_error("ignoring careless call to dc_array_get_cnt()");
         return 0;
     }
 
@@ -2726,7 +2733,7 @@ pub unsafe extern "C" fn dc_array_get_cnt(array: *const dc_array_t) -> libc::siz
 #[no_mangle]
 pub unsafe extern "C" fn dc_array_get_id(array: *const dc_array_t, index: libc::size_t) -> u32 {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_id()");
+        print_error("ignoring careless call to dc_array_get_id()");
         return 0;
     }
 
@@ -2738,7 +2745,7 @@ pub unsafe extern "C" fn dc_array_get_latitude(
     index: libc::size_t,
 ) -> libc::c_double {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_latitude()");
+        print_error("ignoring careless call to dc_array_get_latitude()");
         return 0.0;
     }
 
@@ -2750,7 +2757,7 @@ pub unsafe extern "C" fn dc_array_get_longitude(
     index: libc::size_t,
 ) -> libc::c_double {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_longitude()");
+        print_error("ignoring careless call to dc_array_get_longitude()");
         return 0.0;
     }
 
@@ -2762,7 +2769,7 @@ pub unsafe extern "C" fn dc_array_get_accuracy(
     index: libc::size_t,
 ) -> libc::c_double {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_accuracy()");
+        print_error("ignoring careless call to dc_array_get_accuracy()");
         return 0.0;
     }
 
@@ -2774,7 +2781,7 @@ pub unsafe extern "C" fn dc_array_get_timestamp(
     index: libc::size_t,
 ) -> i64 {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_timestamp()");
+        print_error("ignoring careless call to dc_array_get_timestamp()");
         return 0;
     }
 
@@ -2786,7 +2793,7 @@ pub unsafe extern "C" fn dc_array_get_chat_id(
     index: libc::size_t,
 ) -> libc::c_uint {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_chat_id()");
+        print_error("ignoring careless call to dc_array_get_chat_id()");
         return 0;
     }
     (*array).get_location(index).chat_id.to_u32()
@@ -2797,7 +2804,7 @@ pub unsafe extern "C" fn dc_array_get_contact_id(
     index: libc::size_t,
 ) -> libc::c_uint {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_contact_id()");
+        print_error("ignoring careless call to dc_array_get_contact_id()");
         return 0;
     }
 
@@ -2809,7 +2816,7 @@ pub unsafe extern "C" fn dc_array_get_msg_id(
     index: libc::size_t,
 ) -> libc::c_uint {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_msg_id()");
+        print_error("ignoring careless call to dc_array_get_msg_id()");
         return 0;
     }
 
@@ -2821,7 +2828,7 @@ pub unsafe extern "C" fn dc_array_get_marker(
     index: libc::size_t,
 ) -> *mut libc::c_char {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_get_marker()");
+        print_error("ignoring careless call to dc_array_get_marker()");
         return std::ptr::null_mut(); // NULL explicitly defined as "no markers"
     }
 
@@ -2839,7 +2846,7 @@ pub unsafe extern "C" fn dc_array_search_id(
     ret_index: *mut libc::size_t,
 ) -> libc::c_int {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_search_id()");
+        print_error("ignoring careless call to dc_array_search_id()");
         return 0;
     }
 
@@ -2863,7 +2870,7 @@ pub unsafe fn dc_array_is_independent(
     index: libc::size_t,
 ) -> libc::c_int {
     if array.is_null() {
-        eprintln!("ignoring careless call to dc_array_is_independent()");
+        print_error("ignoring careless call to dc_array_is_independent()");
         return 0;
     }
 
@@ -2889,7 +2896,7 @@ pub type dc_chatlist_t = ChatlistWrapper;
 #[no_mangle]
 pub unsafe extern "C" fn dc_chatlist_unref(chatlist: *mut dc_chatlist_t) {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_unref()");
+        print_error("ignoring careless call to dc_chatlist_unref()");
         return;
     }
     drop(Box::from_raw(chatlist));
@@ -2898,7 +2905,7 @@ pub unsafe extern "C" fn dc_chatlist_unref(chatlist: *mut dc_chatlist_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chatlist_get_cnt(chatlist: *mut dc_chatlist_t) -> libc::size_t {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_cnt()");
+        print_error("ignoring careless call to dc_chatlist_get_cnt()");
         return 0;
     }
     let ffi_list = &*chatlist;
@@ -2911,7 +2918,7 @@ pub unsafe extern "C" fn dc_chatlist_get_chat_id(
     index: libc::size_t,
 ) -> u32 {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_chat_id()");
+        print_error("ignoring careless call to dc_chatlist_get_chat_id()");
         return 0;
     }
     let ffi_list = &*chatlist;
@@ -2931,7 +2938,7 @@ pub unsafe extern "C" fn dc_chatlist_get_msg_id(
     index: libc::size_t,
 ) -> u32 {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_msg_id()");
+        print_error("ignoring careless call to dc_chatlist_get_msg_id()");
         return 0;
     }
     let ffi_list = &*chatlist;
@@ -2952,7 +2959,7 @@ pub unsafe extern "C" fn dc_chatlist_get_summary(
     chat: *mut dc_chat_t,
 ) -> *mut dc_lot_t {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_summary()");
+        print_error("ignoring careless call to dc_chatlist_get_summary()");
         return ptr::null_mut();
     }
     let maybe_chat = if chat.is_null() {
@@ -2983,7 +2990,7 @@ pub unsafe extern "C" fn dc_chatlist_get_summary2(
     msg_id: u32,
 ) -> *mut dc_lot_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_summary2()");
+        print_error("ignoring careless call to dc_chatlist_get_summary2()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -3009,7 +3016,7 @@ pub unsafe extern "C" fn dc_chatlist_get_context(
     chatlist: *mut dc_chatlist_t,
 ) -> *const dc_context_t {
     if chatlist.is_null() {
-        eprintln!("ignoring careless call to dc_chatlist_get_context()");
+        print_error("ignoring careless call to dc_chatlist_get_context()");
         return ptr::null_mut();
     }
     let ffi_list = &*chatlist;
@@ -3035,7 +3042,7 @@ pub type dc_chat_t = ChatWrapper;
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_unref(chat: *mut dc_chat_t) {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_unref()");
+        print_error("ignoring careless call to dc_chat_unref()");
         return;
     }
 
@@ -3045,7 +3052,7 @@ pub unsafe extern "C" fn dc_chat_unref(chat: *mut dc_chat_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_id(chat: *mut dc_chat_t) -> u32 {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_id()");
+        print_error("ignoring careless call to dc_chat_get_id()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3055,7 +3062,7 @@ pub unsafe extern "C" fn dc_chat_get_id(chat: *mut dc_chat_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_type(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_type()");
+        print_error("ignoring careless call to dc_chat_get_type()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3065,7 +3072,7 @@ pub unsafe extern "C" fn dc_chat_get_type(chat: *mut dc_chat_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_name(chat: *mut dc_chat_t) -> *mut libc::c_char {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_name()");
+        print_error("ignoring careless call to dc_chat_get_name()");
         return "".strdup();
     }
     let ffi_chat = &*chat;
@@ -3075,7 +3082,7 @@ pub unsafe extern "C" fn dc_chat_get_name(chat: *mut dc_chat_t) -> *mut libc::c_
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_mailinglist_addr(chat: *mut dc_chat_t) -> *mut libc::c_char {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_mailinglist_addr()");
+        print_error("ignoring careless call to dc_chat_get_mailinglist_addr()");
         return "".strdup();
     }
     let ffi_chat = &*chat;
@@ -3089,7 +3096,7 @@ pub unsafe extern "C" fn dc_chat_get_mailinglist_addr(chat: *mut dc_chat_t) -> *
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_profile_image(chat: *mut dc_chat_t) -> *mut libc::c_char {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_profile_image()");
+        print_error("ignoring careless call to dc_chat_get_profile_image()");
         return ptr::null_mut(); // NULL explicitly defined as "no image"
     }
     let ffi_chat = &*chat;
@@ -3109,7 +3116,7 @@ pub unsafe extern "C" fn dc_chat_get_profile_image(chat: *mut dc_chat_t) -> *mut
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_color(chat: *mut dc_chat_t) -> u32 {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_color()");
+        print_error("ignoring careless call to dc_chat_get_color()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3121,7 +3128,7 @@ pub unsafe extern "C" fn dc_chat_get_color(chat: *mut dc_chat_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_visibility(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_visibility()");
+        print_error("ignoring careless call to dc_chat_get_visibility()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3135,7 +3142,7 @@ pub unsafe extern "C" fn dc_chat_get_visibility(chat: *mut dc_chat_t) -> libc::c
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_contact_request(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_contact_request()");
+        print_error("ignoring careless call to dc_chat_is_contact_request()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3145,7 +3152,7 @@ pub unsafe extern "C" fn dc_chat_is_contact_request(chat: *mut dc_chat_t) -> lib
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_unpromoted(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_unpromoted()");
+        print_error("ignoring careless call to dc_chat_is_unpromoted()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3155,7 +3162,7 @@ pub unsafe extern "C" fn dc_chat_is_unpromoted(chat: *mut dc_chat_t) -> libc::c_
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_self_talk(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_self_talk()");
+        print_error("ignoring careless call to dc_chat_is_self_talk()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3165,7 +3172,7 @@ pub unsafe extern "C" fn dc_chat_is_self_talk(chat: *mut dc_chat_t) -> libc::c_i
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_device_talk(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_device_talk()");
+        print_error("ignoring careless call to dc_chat_is_device_talk()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3175,7 +3182,7 @@ pub unsafe extern "C" fn dc_chat_is_device_talk(chat: *mut dc_chat_t) -> libc::c
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_can_send(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_can_send()");
+        print_error("ignoring careless call to dc_chat_can_send()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3188,7 +3195,7 @@ pub unsafe extern "C" fn dc_chat_can_send(chat: *mut dc_chat_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_protected(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_protected()");
+        print_error("ignoring careless call to dc_chat_is_protected()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3198,7 +3205,7 @@ pub unsafe extern "C" fn dc_chat_is_protected(chat: *mut dc_chat_t) -> libc::c_i
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_protection_broken(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_protection_broken()");
+        print_error("ignoring careless call to dc_chat_is_protection_broken()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3208,7 +3215,7 @@ pub unsafe extern "C" fn dc_chat_is_protection_broken(chat: *mut dc_chat_t) -> l
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_sending_locations(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_sending_locations()");
+        print_error("ignoring careless call to dc_chat_is_sending_locations()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3218,7 +3225,7 @@ pub unsafe extern "C" fn dc_chat_is_sending_locations(chat: *mut dc_chat_t) -> l
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_is_muted(chat: *mut dc_chat_t) -> libc::c_int {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_muted()");
+        print_error("ignoring careless call to dc_chat_is_muted()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3228,7 +3235,7 @@ pub unsafe extern "C" fn dc_chat_is_muted(chat: *mut dc_chat_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_chat_get_remaining_mute_duration(chat: *mut dc_chat_t) -> i64 {
     if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_remaining_mute_duration()");
+        print_error("ignoring careless call to dc_chat_get_remaining_mute_duration()");
         return 0;
     }
     let ffi_chat = &*chat;
@@ -3252,7 +3259,7 @@ pub unsafe extern "C" fn dc_chat_get_info_json(
     chat_id: u32,
 ) -> *mut libc::c_char {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_chat_get_info_json()");
+        print_error("ignoring careless call to dc_chat_get_info_json()");
         return "".strdup();
     }
     let ctx = &*context;
@@ -3303,7 +3310,7 @@ pub unsafe extern "C" fn dc_msg_new(
     viewtype: libc::c_int,
 ) -> *mut dc_msg_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_msg_new()");
+        print_error("ignoring careless call to dc_msg_new()");
         return ptr::null_mut();
     }
     let context = &*context;
@@ -3318,7 +3325,7 @@ pub unsafe extern "C" fn dc_msg_new(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_unref(msg: *mut dc_msg_t) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_unref()");
+        print_error("ignoring careless call to dc_msg_unref()");
         return;
     }
 
@@ -3328,7 +3335,7 @@ pub unsafe extern "C" fn dc_msg_unref(msg: *mut dc_msg_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_id(msg: *mut dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_id()");
+        print_error("ignoring careless call to dc_msg_get_id()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3338,7 +3345,7 @@ pub unsafe extern "C" fn dc_msg_get_id(msg: *mut dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_from_id(msg: *mut dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_from_id()");
+        print_error("ignoring careless call to dc_msg_get_from_id()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3348,7 +3355,7 @@ pub unsafe extern "C" fn dc_msg_get_from_id(msg: *mut dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_chat_id(msg: *mut dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_chat_id()");
+        print_error("ignoring careless call to dc_msg_get_chat_id()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3358,7 +3365,7 @@ pub unsafe extern "C" fn dc_msg_get_chat_id(msg: *mut dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_viewtype(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_viewtype()");
+        print_error("ignoring careless call to dc_msg_get_viewtype()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3372,7 +3379,7 @@ pub unsafe extern "C" fn dc_msg_get_viewtype(msg: *mut dc_msg_t) -> libc::c_int 
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_state(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_state()");
+        print_error("ignoring careless call to dc_msg_get_state()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3382,7 +3389,7 @@ pub unsafe extern "C" fn dc_msg_get_state(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_download_state(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_download_state()");
+        print_error("ignoring careless call to dc_msg_get_download_state()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3392,7 +3399,7 @@ pub unsafe extern "C" fn dc_msg_get_download_state(msg: *mut dc_msg_t) -> libc::
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_timestamp(msg: *mut dc_msg_t) -> i64 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_received_timestamp()");
+        print_error("ignoring careless call to dc_msg_get_received_timestamp()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3402,7 +3409,7 @@ pub unsafe extern "C" fn dc_msg_get_timestamp(msg: *mut dc_msg_t) -> i64 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_received_timestamp(msg: *mut dc_msg_t) -> i64 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_received_timestamp()");
+        print_error("ignoring careless call to dc_msg_get_received_timestamp()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3412,7 +3419,7 @@ pub unsafe extern "C" fn dc_msg_get_received_timestamp(msg: *mut dc_msg_t) -> i6
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_sort_timestamp(msg: *mut dc_msg_t) -> i64 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_sort_timestamp()");
+        print_error("ignoring careless call to dc_msg_get_sort_timestamp()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3422,7 +3429,7 @@ pub unsafe extern "C" fn dc_msg_get_sort_timestamp(msg: *mut dc_msg_t) -> i64 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_text(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_text()");
+        print_error("ignoring careless call to dc_msg_get_text()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3432,7 +3439,7 @@ pub unsafe extern "C" fn dc_msg_get_text(msg: *mut dc_msg_t) -> *mut libc::c_cha
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_subject(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_subject()");
+        print_error("ignoring careless call to dc_msg_get_subject()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3442,7 +3449,7 @@ pub unsafe extern "C" fn dc_msg_get_subject(msg: *mut dc_msg_t) -> *mut libc::c_
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_file(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_file()");
+        print_error("ignoring careless call to dc_msg_get_file()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3460,7 +3467,7 @@ pub unsafe extern "C" fn dc_msg_save_file(
     path: *const libc::c_char,
 ) -> libc::c_int {
     if msg.is_null() || path.is_null() {
-        eprintln!("ignoring careless call to dc_msg_save_file()");
+        print_error("ignoring careless call to dc_msg_save_file()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3485,7 +3492,7 @@ pub unsafe extern "C" fn dc_msg_save_file(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_filename(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_filename()");
+        print_error("ignoring careless call to dc_msg_get_filename()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3499,7 +3506,7 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_blob(
     ret_bytes: *mut libc::size_t,
 ) -> *mut libc::c_char {
     if msg.is_null() || filename.is_null() || ret_bytes.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_webxdc_blob()");
+        print_error("ignoring careless call to dc_msg_get_webxdc_blob()");
         return ptr::null_mut();
     }
     let ffi_msg = &*msg;
@@ -3518,7 +3525,7 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_blob(
             ptr as *mut libc::c_char
         }
         Err(err) => {
-            eprintln!("failed read blob from archive: {err}");
+            print_error(&format!("failed read blob from archive: {err}"));
             ptr::null_mut()
         }
     }
@@ -3527,7 +3534,7 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_blob(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_webxdc_info(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_webxdc_info()");
+        print_error("ignoring careless call to dc_msg_get_webxdc_info()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3550,7 +3557,7 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_info(msg: *mut dc_msg_t) -> *mut libc
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_filemime(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_filemime()");
+        print_error("ignoring careless call to dc_msg_get_filemime()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3564,7 +3571,7 @@ pub unsafe extern "C" fn dc_msg_get_filemime(msg: *mut dc_msg_t) -> *mut libc::c
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_filebytes(msg: *mut dc_msg_t) -> u64 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_filebytes()");
+        print_error("ignoring careless call to dc_msg_get_filebytes()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3578,7 +3585,7 @@ pub unsafe extern "C" fn dc_msg_get_filebytes(msg: *mut dc_msg_t) -> u64 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_width(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_width()");
+        print_error("ignoring careless call to dc_msg_get_width()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3588,7 +3595,7 @@ pub unsafe extern "C" fn dc_msg_get_width(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_height(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_height()");
+        print_error("ignoring careless call to dc_msg_get_height()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3598,7 +3605,7 @@ pub unsafe extern "C" fn dc_msg_get_height(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_duration(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_duration()");
+        print_error("ignoring careless call to dc_msg_get_duration()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3608,7 +3615,7 @@ pub unsafe extern "C" fn dc_msg_get_duration(msg: *mut dc_msg_t) -> libc::c_int 
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_showpadlock(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_showpadlock()");
+        print_error("ignoring careless call to dc_msg_get_showpadlock()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3618,7 +3625,7 @@ pub unsafe extern "C" fn dc_msg_get_showpadlock(msg: *mut dc_msg_t) -> libc::c_i
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_bot(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_bot()");
+        print_error("ignoring careless call to dc_msg_is_bot()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3628,7 +3635,7 @@ pub unsafe extern "C" fn dc_msg_is_bot(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_ephemeral_timer(msg: *mut dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_ephemeral_timer()");
+        print_error("ignoring careless call to dc_msg_get_ephemeral_timer()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3638,7 +3645,7 @@ pub unsafe extern "C" fn dc_msg_get_ephemeral_timer(msg: *mut dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_ephemeral_timestamp(msg: *mut dc_msg_t) -> i64 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_ephemeral_timer()");
+        print_error("ignoring careless call to dc_msg_get_ephemeral_timer()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3651,7 +3658,7 @@ pub unsafe extern "C" fn dc_msg_get_summary(
     chat: *mut dc_chat_t,
 ) -> *mut dc_lot_t {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_summary()");
+        print_error("ignoring careless call to dc_msg_get_summary()");
         return ptr::null_mut();
     }
     let maybe_chat = if chat.is_null() {
@@ -3676,7 +3683,7 @@ pub unsafe extern "C" fn dc_msg_get_summarytext(
     approx_characters: libc::c_int,
 ) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_summarytext()");
+        print_error("ignoring careless call to dc_msg_get_summarytext()");
         return "".strdup();
     }
     let ffi_msg = &mut *msg;
@@ -3695,7 +3702,7 @@ pub unsafe extern "C" fn dc_msg_get_summarytext(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_override_sender_name(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_override_sender_name()");
+        print_error("ignoring careless call to dc_msg_get_override_sender_name()");
         return "".strdup();
     }
     let ffi_msg = &mut *msg;
@@ -3706,7 +3713,7 @@ pub unsafe extern "C" fn dc_msg_get_override_sender_name(msg: *mut dc_msg_t) -> 
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_has_deviating_timestamp(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_has_deviating_timestamp()");
+        print_error("ignoring careless call to dc_msg_has_deviating_timestamp()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3716,7 +3723,7 @@ pub unsafe extern "C" fn dc_msg_has_deviating_timestamp(msg: *mut dc_msg_t) -> l
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_has_location(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_has_location()");
+        print_error("ignoring careless call to dc_msg_has_location()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3726,7 +3733,7 @@ pub unsafe extern "C" fn dc_msg_has_location(msg: *mut dc_msg_t) -> libc::c_int 
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_sent(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_sent()");
+        print_error("ignoring careless call to dc_msg_is_sent()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3736,7 +3743,7 @@ pub unsafe extern "C" fn dc_msg_is_sent(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_forwarded(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_forwarded()");
+        print_error("ignoring careless call to dc_msg_is_forwarded()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3746,7 +3753,7 @@ pub unsafe extern "C" fn dc_msg_is_forwarded(msg: *mut dc_msg_t) -> libc::c_int 
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_edited(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_edited()");
+        print_error("ignoring careless call to dc_msg_is_edited()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3756,7 +3763,7 @@ pub unsafe extern "C" fn dc_msg_is_edited(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_info(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_info()");
+        print_error("ignoring careless call to dc_msg_is_info()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3766,7 +3773,7 @@ pub unsafe extern "C" fn dc_msg_is_info(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_info_type(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_info_type()");
+        print_error("ignoring careless call to dc_msg_get_info_type()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3776,7 +3783,7 @@ pub unsafe extern "C" fn dc_msg_get_info_type(msg: *mut dc_msg_t) -> libc::c_int
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_info_contact_id(msg: *mut dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_info_contact_id()");
+        print_error("ignoring careless call to dc_msg_get_info_contact_id()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3790,7 +3797,7 @@ pub unsafe extern "C" fn dc_msg_get_info_contact_id(msg: *mut dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_webxdc_href(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_webxdc_href()");
+        print_error("ignoring careless call to dc_msg_get_webxdc_href()");
         return "".strdup();
     }
 
@@ -3801,7 +3808,7 @@ pub unsafe extern "C" fn dc_msg_get_webxdc_href(msg: *mut dc_msg_t) -> *mut libc
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_is_setupmessage(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_is_setupmessage()");
+        print_error("ignoring careless call to dc_msg_is_setupmessage()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3811,7 +3818,7 @@ pub unsafe extern "C" fn dc_msg_is_setupmessage(msg: *mut dc_msg_t) -> libc::c_i
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_has_html(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_has_html()");
+        print_error("ignoring careless call to dc_msg_has_html()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3821,7 +3828,7 @@ pub unsafe extern "C" fn dc_msg_has_html(msg: *mut dc_msg_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_videochat_url(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_videochat_url()");
+        print_error("ignoring careless call to dc_msg_get_videochat_url()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3836,7 +3843,7 @@ pub unsafe extern "C" fn dc_msg_get_videochat_url(msg: *mut dc_msg_t) -> *mut li
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_videochat_type(msg: *mut dc_msg_t) -> libc::c_int {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_videochat_type()");
+        print_error("ignoring careless call to dc_msg_get_videochat_type()");
         return 0;
     }
     let ffi_msg = &*msg;
@@ -3846,7 +3853,7 @@ pub unsafe extern "C" fn dc_msg_get_videochat_type(msg: *mut dc_msg_t) -> libc::
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_setupcodebegin(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_setupcodebegin()");
+        print_error("ignoring careless call to dc_msg_get_setupcodebegin()");
         return "".strdup();
     }
     let ffi_msg = &*msg;
@@ -3860,7 +3867,7 @@ pub unsafe extern "C" fn dc_msg_get_setupcodebegin(msg: *mut dc_msg_t) -> *mut l
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_set_text(msg: *mut dc_msg_t, text: *const libc::c_char) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_text()");
+        print_error("ignoring careless call to dc_msg_set_text()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3870,7 +3877,7 @@ pub unsafe extern "C" fn dc_msg_set_text(msg: *mut dc_msg_t, text: *const libc::
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_set_html(msg: *mut dc_msg_t, html: *const libc::c_char) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_html()");
+        print_error("ignoring careless call to dc_msg_set_html()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3880,7 +3887,7 @@ pub unsafe extern "C" fn dc_msg_set_html(msg: *mut dc_msg_t, html: *const libc::
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_set_subject(msg: *mut dc_msg_t, subject: *const libc::c_char) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_subject()");
+        print_error("ignoring careless call to dc_msg_get_subject()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3893,7 +3900,7 @@ pub unsafe extern "C" fn dc_msg_set_override_sender_name(
     name: *const libc::c_char,
 ) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_override_sender_name()");
+        print_error("ignoring careless call to dc_msg_set_override_sender_name()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3910,7 +3917,7 @@ pub unsafe extern "C" fn dc_msg_set_file_and_deduplicate(
     filemime: *const libc::c_char,
 ) {
     if msg.is_null() || file.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_file_and_deduplicate()");
+        print_error("ignoring careless call to dc_msg_set_file_and_deduplicate()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3936,7 +3943,7 @@ pub unsafe extern "C" fn dc_msg_set_dimension(
     height: libc::c_int,
 ) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_dimension()");
+        print_error("ignoring careless call to dc_msg_set_dimension()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3946,7 +3953,7 @@ pub unsafe extern "C" fn dc_msg_set_dimension(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_set_duration(msg: *mut dc_msg_t, duration: libc::c_int) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_duration()");
+        print_error("ignoring careless call to dc_msg_set_duration()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3960,7 +3967,7 @@ pub unsafe extern "C" fn dc_msg_set_location(
     longitude: libc::c_double,
 ) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_location()");
+        print_error("ignoring careless call to dc_msg_set_location()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3975,7 +3982,7 @@ pub unsafe extern "C" fn dc_msg_latefiling_mediasize(
     duration: libc::c_int,
 ) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_latefiling_mediasize()");
+        print_error("ignoring careless call to dc_msg_latefiling_mediasize()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -3994,7 +4001,7 @@ pub unsafe extern "C" fn dc_msg_latefiling_mediasize(
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_error(msg: *mut dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_error()");
+        print_error("ignoring careless call to dc_msg_get_error()");
         return ptr::null_mut();
     }
     let ffi_msg = &*msg;
@@ -4007,7 +4014,7 @@ pub unsafe extern "C" fn dc_msg_get_error(msg: *mut dc_msg_t) -> *mut libc::c_ch
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_set_quote(msg: *mut dc_msg_t, quote: *const dc_msg_t) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_set_quote()");
+        print_error("ignoring careless call to dc_msg_set_quote()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -4016,7 +4023,7 @@ pub unsafe extern "C" fn dc_msg_set_quote(msg: *mut dc_msg_t, quote: *const dc_m
     } else {
         let ffi_quote = &*quote;
         if ffi_msg.context != ffi_quote.context {
-            eprintln!("ignoring attempt to quote message from a different context");
+            print_error("ignoring attempt to quote message from a different context");
             return;
         }
         Some(&ffi_quote.message)
@@ -4036,7 +4043,7 @@ pub unsafe extern "C" fn dc_msg_set_quote(msg: *mut dc_msg_t, quote: *const dc_m
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_quoted_text(msg: *const dc_msg_t) -> *mut libc::c_char {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_quoted_text()");
+        print_error("ignoring careless call to dc_msg_get_quoted_text()");
         return ptr::null_mut();
     }
     let ffi_msg: &MessageWrapper = &*msg;
@@ -4049,7 +4056,7 @@ pub unsafe extern "C" fn dc_msg_get_quoted_text(msg: *const dc_msg_t) -> *mut li
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_quoted_msg(msg: *const dc_msg_t) -> *mut dc_msg_t {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_get_quoted_msg()");
+        print_error("ignoring careless call to dc_get_quoted_msg()");
         return ptr::null_mut();
     }
     let ffi_msg: &MessageWrapper = &*msg;
@@ -4073,7 +4080,7 @@ pub unsafe extern "C" fn dc_msg_get_quoted_msg(msg: *const dc_msg_t) -> *mut dc_
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_parent(msg: *const dc_msg_t) -> *mut dc_msg_t {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_parent()");
+        print_error("ignoring careless call to dc_msg_get_parent()");
         return ptr::null_mut();
     }
     let ffi_msg: &MessageWrapper = &*msg;
@@ -4097,7 +4104,7 @@ pub unsafe extern "C" fn dc_msg_get_parent(msg: *const dc_msg_t) -> *mut dc_msg_
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_original_msg_id(msg: *const dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_original_msg_id()");
+        print_error("ignoring careless call to dc_msg_get_original_msg_id()");
         return 0;
     }
     let ffi_msg: &MessageWrapper = &*msg;
@@ -4118,7 +4125,7 @@ pub unsafe extern "C" fn dc_msg_get_original_msg_id(msg: *const dc_msg_t) -> u32
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_get_saved_msg_id(msg: *const dc_msg_t) -> u32 {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_get_saved_msg_id()");
+        print_error("ignoring careless call to dc_msg_get_saved_msg_id()");
         return 0;
     }
     let ffi_msg: &MessageWrapper = &*msg;
@@ -4139,7 +4146,7 @@ pub unsafe extern "C" fn dc_msg_get_saved_msg_id(msg: *const dc_msg_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_msg_force_plaintext(msg: *mut dc_msg_t) {
     if msg.is_null() {
-        eprintln!("ignoring careless call to dc_msg_force_plaintext()");
+        print_error("ignoring careless call to dc_msg_force_plaintext()");
         return;
     }
     let ffi_msg = &mut *msg;
@@ -4165,7 +4172,7 @@ pub type dc_contact_t = ContactWrapper;
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_unref(contact: *mut dc_contact_t) {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_unref()");
+        print_error("ignoring careless call to dc_contact_unref()");
         return;
     }
     drop(Box::from_raw(contact));
@@ -4174,7 +4181,7 @@ pub unsafe extern "C" fn dc_contact_unref(contact: *mut dc_contact_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_id(contact: *mut dc_contact_t) -> u32 {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_id()");
+        print_error("ignoring careless call to dc_contact_get_id()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4184,7 +4191,7 @@ pub unsafe extern "C" fn dc_contact_get_id(contact: *mut dc_contact_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_addr(contact: *mut dc_contact_t) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_addr()");
+        print_error("ignoring careless call to dc_contact_get_addr()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4194,7 +4201,7 @@ pub unsafe extern "C" fn dc_contact_get_addr(contact: *mut dc_contact_t) -> *mut
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_name(contact: *mut dc_contact_t) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_name()");
+        print_error("ignoring careless call to dc_contact_get_name()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4204,7 +4211,7 @@ pub unsafe extern "C" fn dc_contact_get_name(contact: *mut dc_contact_t) -> *mut
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_auth_name(contact: *mut dc_contact_t) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_auth_name()");
+        print_error("ignoring careless call to dc_contact_get_auth_name()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4216,7 +4223,7 @@ pub unsafe extern "C" fn dc_contact_get_display_name(
     contact: *mut dc_contact_t,
 ) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_display_name()");
+        print_error("ignoring careless call to dc_contact_get_display_name()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4228,7 +4235,7 @@ pub unsafe extern "C" fn dc_contact_get_name_n_addr(
     contact: *mut dc_contact_t,
 ) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_name_n_addr()");
+        print_error("ignoring careless call to dc_contact_get_name_n_addr()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4240,7 +4247,7 @@ pub unsafe extern "C" fn dc_contact_get_profile_image(
     contact: *mut dc_contact_t,
 ) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_profile_image()");
+        print_error("ignoring careless call to dc_contact_get_profile_image()");
         return ptr::null_mut(); // NULL explicitly defined as "no profile image"
     }
     let ffi_contact = &*contact;
@@ -4260,7 +4267,7 @@ pub unsafe extern "C" fn dc_contact_get_profile_image(
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32 {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_color()");
+        print_error("ignoring careless call to dc_contact_get_color()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4270,7 +4277,7 @@ pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_status(contact: *mut dc_contact_t) -> *mut libc::c_char {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_status()");
+        print_error("ignoring careless call to dc_contact_get_status()");
         return "".strdup();
     }
     let ffi_contact = &*contact;
@@ -4280,7 +4287,7 @@ pub unsafe extern "C" fn dc_contact_get_status(contact: *mut dc_contact_t) -> *m
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_last_seen(contact: *mut dc_contact_t) -> i64 {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_last_seen()");
+        print_error("ignoring careless call to dc_contact_get_last_seen()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4290,7 +4297,7 @@ pub unsafe extern "C" fn dc_contact_get_last_seen(contact: *mut dc_contact_t) ->
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_was_seen_recently(contact: *mut dc_contact_t) -> libc::c_int {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_was_seen_recently()");
+        print_error("ignoring careless call to dc_contact_was_seen_recently()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4300,7 +4307,7 @@ pub unsafe extern "C" fn dc_contact_was_seen_recently(contact: *mut dc_contact_t
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_is_blocked(contact: *mut dc_contact_t) -> libc::c_int {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_is_blocked()");
+        print_error("ignoring careless call to dc_contact_is_blocked()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4310,7 +4317,7 @@ pub unsafe extern "C" fn dc_contact_is_blocked(contact: *mut dc_contact_t) -> li
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_is_verified(contact: *mut dc_contact_t) -> libc::c_int {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_is_verified()");
+        print_error("ignoring careless call to dc_contact_is_verified()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4332,7 +4339,7 @@ pub unsafe extern "C" fn dc_contact_is_verified(contact: *mut dc_contact_t) -> l
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_is_bot(contact: *mut dc_contact_t) -> libc::c_int {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_is_bot()");
+        print_error("ignoring careless call to dc_contact_is_bot()");
         return 0;
     }
     (*contact).contact.is_bot() as libc::c_int
@@ -4341,7 +4348,7 @@ pub unsafe extern "C" fn dc_contact_is_bot(contact: *mut dc_contact_t) -> libc::
 #[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_verifier_id(contact: *mut dc_contact_t) -> u32 {
     if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_verifier_id()");
+        print_error("ignoring careless call to dc_contact_get_verifier_id()");
         return 0;
     }
     let ffi_contact = &*contact;
@@ -4361,7 +4368,7 @@ pub type dc_lot_t = lot::Lot;
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_unref(lot: *mut dc_lot_t) {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_unref()");
+        print_error("ignoring careless call to dc_lot_unref()");
         return;
     }
 
@@ -4371,7 +4378,7 @@ pub unsafe extern "C" fn dc_lot_unref(lot: *mut dc_lot_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_text1(lot: *mut dc_lot_t) -> *mut libc::c_char {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_text1()");
+        print_error("ignoring careless call to dc_lot_get_text1()");
         return ptr::null_mut(); // NULL explicitly defined as "there is no such text"
     }
 
@@ -4382,7 +4389,7 @@ pub unsafe extern "C" fn dc_lot_get_text1(lot: *mut dc_lot_t) -> *mut libc::c_ch
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_text2(lot: *mut dc_lot_t) -> *mut libc::c_char {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_text2()");
+        print_error("ignoring careless call to dc_lot_get_text2()");
         return ptr::null_mut(); // NULL explicitly defined as "there is no such text"
     }
 
@@ -4393,7 +4400,7 @@ pub unsafe extern "C" fn dc_lot_get_text2(lot: *mut dc_lot_t) -> *mut libc::c_ch
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_text1_meaning(lot: *mut dc_lot_t) -> libc::c_int {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_text1_meaning()");
+        print_error("ignoring careless call to dc_lot_get_text1_meaning()");
         return 0;
     }
 
@@ -4404,7 +4411,7 @@ pub unsafe extern "C" fn dc_lot_get_text1_meaning(lot: *mut dc_lot_t) -> libc::c
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_state(lot: *mut dc_lot_t) -> libc::c_int {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_state()");
+        print_error("ignoring careless call to dc_lot_get_state()");
         return 0;
     }
 
@@ -4415,7 +4422,7 @@ pub unsafe extern "C" fn dc_lot_get_state(lot: *mut dc_lot_t) -> libc::c_int {
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_id(lot: *mut dc_lot_t) -> u32 {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_id()");
+        print_error("ignoring careless call to dc_lot_get_id()");
         return 0;
     }
 
@@ -4426,7 +4433,7 @@ pub unsafe extern "C" fn dc_lot_get_id(lot: *mut dc_lot_t) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn dc_lot_get_timestamp(lot: *mut dc_lot_t) -> i64 {
     if lot.is_null() {
-        eprintln!("ignoring careless call to dc_lot_get_timestamp()");
+        print_error("ignoring careless call to dc_lot_get_timestamp()");
         return 0;
     }
 
@@ -4451,7 +4458,7 @@ pub unsafe extern "C" fn dc_backup_provider_new(
     context: *mut dc_context_t,
 ) -> *mut dc_backup_provider_t {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_backup_provider_new()");
+        print_error("ignoring careless call to dc_backup_provider_new()");
         return ptr::null_mut();
     }
     let ctx = &*context;
@@ -4472,7 +4479,7 @@ pub unsafe extern "C" fn dc_backup_provider_get_qr(
     provider: *const dc_backup_provider_t,
 ) -> *mut libc::c_char {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_backup_provider_qr");
+        print_error("ignoring careless call to dc_backup_provider_qr");
         return "".strdup();
     }
     let ffi_provider = &*provider;
@@ -4490,7 +4497,7 @@ pub unsafe extern "C" fn dc_backup_provider_get_qr_svg(
     provider: *const dc_backup_provider_t,
 ) -> *mut libc::c_char {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_backup_provider_qr_svg()");
+        print_error("ignoring careless call to dc_backup_provider_qr_svg()");
         return "".strdup();
     }
     let ffi_provider = &*provider;
@@ -4507,7 +4514,7 @@ pub unsafe extern "C" fn dc_backup_provider_get_qr_svg(
 #[no_mangle]
 pub unsafe extern "C" fn dc_backup_provider_wait(provider: *mut dc_backup_provider_t) {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_backup_provider_wait()");
+        print_error("ignoring careless call to dc_backup_provider_wait()");
         return;
     }
     let ffi_provider = &mut *provider;
@@ -4523,7 +4530,7 @@ pub unsafe extern "C" fn dc_backup_provider_wait(provider: *mut dc_backup_provid
 #[no_mangle]
 pub unsafe extern "C" fn dc_backup_provider_unref(provider: *mut dc_backup_provider_t) {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_backup_provider_unref()");
+        print_error("ignoring careless call to dc_backup_provider_unref()");
         return;
     }
     drop(Box::from_raw(provider));
@@ -4535,7 +4542,7 @@ pub unsafe extern "C" fn dc_receive_backup(
     qr: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() {
-        eprintln!("ignoring careless call to dc_receive_backup()");
+        print_error("ignoring careless call to dc_receive_backup()");
         return 0;
     }
     let ctx = &*context;
@@ -4655,7 +4662,7 @@ pub unsafe extern "C" fn dc_provider_new_from_email(
     addr: *const libc::c_char,
 ) -> *const dc_provider_t {
     if context.is_null() || addr.is_null() {
-        eprintln!("ignoring careless call to dc_provider_new_from_email()");
+        print_error("ignoring careless call to dc_provider_new_from_email()");
         return ptr::null();
     }
     let addr = to_string_lossy(addr);
@@ -4681,7 +4688,7 @@ pub unsafe extern "C" fn dc_provider_new_from_email_with_dns(
     addr: *const libc::c_char,
 ) -> *const dc_provider_t {
     if context.is_null() || addr.is_null() {
-        eprintln!("ignoring careless call to dc_provider_new_from_email_with_dns()");
+        print_error("ignoring careless call to dc_provider_new_from_email_with_dns()");
         return ptr::null();
     }
     let addr = to_string_lossy(addr);
@@ -4714,7 +4721,7 @@ pub unsafe extern "C" fn dc_provider_get_overview_page(
     provider: *const dc_provider_t,
 ) -> *mut libc::c_char {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_provider_get_overview_page()");
+        print_error("ignoring careless call to dc_provider_get_overview_page()");
         return "".strdup();
     }
     let provider = &*provider;
@@ -4726,7 +4733,7 @@ pub unsafe extern "C" fn dc_provider_get_before_login_hint(
     provider: *const dc_provider_t,
 ) -> *mut libc::c_char {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_provider_get_before_login_hint()");
+        print_error("ignoring careless call to dc_provider_get_before_login_hint()");
         return "".strdup();
     }
     let provider = &*provider;
@@ -4736,7 +4743,7 @@ pub unsafe extern "C" fn dc_provider_get_before_login_hint(
 #[no_mangle]
 pub unsafe extern "C" fn dc_provider_get_status(provider: *const dc_provider_t) -> libc::c_int {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_provider_get_status()");
+        print_error("ignoring careless call to dc_provider_get_status()");
         return 0;
     }
     let provider = &*provider;
@@ -4747,7 +4754,7 @@ pub unsafe extern "C" fn dc_provider_get_status(provider: *const dc_provider_t) 
 #[allow(clippy::needless_return)]
 pub unsafe extern "C" fn dc_provider_unref(provider: *mut dc_provider_t) {
     if provider.is_null() {
-        eprintln!("ignoring careless call to dc_provider_unref()");
+        print_error("ignoring careless call to dc_provider_unref()");
         return;
     }
     // currently, there is nothing to free, the provider info is a static object.
@@ -4788,7 +4795,7 @@ pub unsafe extern "C" fn dc_accounts_new(
     setup_panic!();
 
     if dir.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_new()");
+        print_error("ignoring careless call to dc_accounts_new()");
         return ptr::null_mut();
     }
 
@@ -4798,7 +4805,7 @@ pub unsafe extern "C" fn dc_accounts_new(
         Ok(accs) => Box::into_raw(Box::new(AccountsWrapper::new(accs))),
         Err(err) => {
             // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
-            eprintln!("failed to create accounts: {err:#}");
+            print_error(&format!("failed to create accounts: {err:#}"));
             ptr::null_mut()
         }
     }
@@ -4810,7 +4817,7 @@ pub unsafe extern "C" fn dc_accounts_new(
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_unref(accounts: *mut dc_accounts_t) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_unref()");
+        print_error("ignoring careless call to dc_accounts_unref()");
         return;
     }
     let _ = Box::from_raw(accounts);
@@ -4822,7 +4829,7 @@ pub unsafe extern "C" fn dc_accounts_get_account(
     id: u32,
 ) -> *mut dc_context_t {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_get_account()");
+        print_error("ignoring careless call to dc_accounts_get_account()");
         return ptr::null_mut();
     }
 
@@ -4838,7 +4845,7 @@ pub unsafe extern "C" fn dc_accounts_get_selected_account(
     accounts: *mut dc_accounts_t,
 ) -> *mut dc_context_t {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_get_selected_account()");
+        print_error("ignoring careless call to dc_accounts_get_selected_account()");
         return ptr::null_mut();
     }
 
@@ -4855,7 +4862,7 @@ pub unsafe extern "C" fn dc_accounts_select_account(
     id: u32,
 ) -> libc::c_int {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_select_account()");
+        print_error("ignoring careless call to dc_accounts_select_account()");
         return 0;
     }
 
@@ -4877,7 +4884,7 @@ pub unsafe extern "C" fn dc_accounts_select_account(
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_add_account(accounts: *mut dc_accounts_t) -> u32 {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_add_account()");
+        print_error("ignoring careless call to dc_accounts_add_account()");
         return 0;
     }
 
@@ -4898,7 +4905,7 @@ pub unsafe extern "C" fn dc_accounts_add_account(accounts: *mut dc_accounts_t) -
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_add_closed_account(accounts: *mut dc_accounts_t) -> u32 {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_add_closed_account()");
+        print_error("ignoring careless call to dc_accounts_add_closed_account()");
         return 0;
     }
 
@@ -4922,7 +4929,7 @@ pub unsafe extern "C" fn dc_accounts_remove_account(
     id: u32,
 ) -> libc::c_int {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_remove_account()");
+        print_error("ignoring careless call to dc_accounts_remove_account()");
         return 0;
     }
 
@@ -4948,7 +4955,7 @@ pub unsafe extern "C" fn dc_accounts_migrate_account(
     dbfile: *const libc::c_char,
 ) -> u32 {
     if accounts.is_null() || dbfile.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_migrate_account()");
+        print_error("ignoring careless call to dc_accounts_migrate_account()");
         return 0;
     }
 
@@ -4975,7 +4982,7 @@ pub unsafe extern "C" fn dc_accounts_migrate_account(
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_get_all(accounts: *mut dc_accounts_t) -> *mut dc_array_t {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_get_all()");
+        print_error("ignoring careless call to dc_accounts_get_all()");
         return ptr::null_mut();
     }
 
@@ -4989,7 +4996,7 @@ pub unsafe extern "C" fn dc_accounts_get_all(accounts: *mut dc_accounts_t) -> *m
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_start_io(accounts: *mut dc_accounts_t) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_start_io()");
+        print_error("ignoring careless call to dc_accounts_start_io()");
         return;
     }
 
@@ -5000,7 +5007,7 @@ pub unsafe extern "C" fn dc_accounts_start_io(accounts: *mut dc_accounts_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_stop_io(accounts: *mut dc_accounts_t) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_stop_io()");
+        print_error("ignoring careless call to dc_accounts_stop_io()");
         return;
     }
 
@@ -5011,7 +5018,7 @@ pub unsafe extern "C" fn dc_accounts_stop_io(accounts: *mut dc_accounts_t) {
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_maybe_network(accounts: *mut dc_accounts_t) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_maybe_network()");
+        print_error("ignoring careless call to dc_accounts_maybe_network()");
         return;
     }
 
@@ -5022,7 +5029,7 @@ pub unsafe extern "C" fn dc_accounts_maybe_network(accounts: *mut dc_accounts_t)
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_maybe_network_lost(accounts: *mut dc_accounts_t) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_maybe_network_lost()");
+        print_error("ignoring careless call to dc_accounts_maybe_network_lost()");
         return;
     }
 
@@ -5036,7 +5043,7 @@ pub unsafe extern "C" fn dc_accounts_background_fetch(
     timeout_in_seconds: u64,
 ) -> libc::c_int {
     if accounts.is_null() || timeout_in_seconds <= 2 {
-        eprintln!("ignoring careless call to dc_accounts_background_fetch()");
+        print_error("ignoring careless call to dc_accounts_background_fetch()");
         return 0;
     }
 
@@ -5056,7 +5063,7 @@ pub unsafe extern "C" fn dc_accounts_set_push_device_token(
     token: *const libc::c_char,
 ) {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_set_push_device_token()");
+        print_error("ignoring careless call to dc_accounts_set_push_device_token()");
         return;
     }
 
@@ -5078,7 +5085,7 @@ pub unsafe extern "C" fn dc_accounts_get_event_emitter(
     accounts: *mut dc_accounts_t,
 ) -> *mut dc_event_emitter_t {
     if accounts.is_null() {
-        eprintln!("ignoring careless call to dc_accounts_get_event_emitter()");
+        print_error("ignoring careless call to dc_accounts_get_event_emitter()");
         return ptr::null_mut();
     }
 
@@ -5098,7 +5105,7 @@ pub unsafe extern "C" fn dc_jsonrpc_init(
     account_manager: *mut dc_accounts_t,
 ) -> *mut dc_jsonrpc_instance_t {
     if account_manager.is_null() {
-        eprintln!("ignoring careless call to dc_jsonrpc_init()");
+        print_error("ignoring careless call to dc_jsonrpc_init()");
         return ptr::null_mut();
     }
 
@@ -5118,7 +5125,7 @@ pub unsafe extern "C" fn dc_jsonrpc_init(
 #[no_mangle]
 pub unsafe extern "C" fn dc_jsonrpc_unref(jsonrpc_instance: *mut dc_jsonrpc_instance_t) {
     if jsonrpc_instance.is_null() {
-        eprintln!("ignoring careless call to dc_jsonrpc_unref()");
+        print_error("ignoring careless call to dc_jsonrpc_unref()");
         return;
     }
     drop(Box::from_raw(jsonrpc_instance));
@@ -5136,7 +5143,7 @@ pub unsafe extern "C" fn dc_jsonrpc_request(
     request: *const libc::c_char,
 ) {
     if jsonrpc_instance.is_null() || request.is_null() {
-        eprintln!("ignoring careless call to dc_jsonrpc_request()");
+        print_error("ignoring careless call to dc_jsonrpc_request()");
         return;
     }
 
@@ -5150,7 +5157,7 @@ pub unsafe extern "C" fn dc_jsonrpc_next_response(
     jsonrpc_instance: *mut dc_jsonrpc_instance_t,
 ) -> *mut libc::c_char {
     if jsonrpc_instance.is_null() {
-        eprintln!("ignoring careless call to dc_jsonrpc_next_response()");
+        print_error("ignoring careless call to dc_jsonrpc_next_response()");
         return ptr::null_mut();
     }
     let api = &*jsonrpc_instance;
@@ -5165,7 +5172,7 @@ pub unsafe extern "C" fn dc_jsonrpc_blocking_call(
     input: *const libc::c_char,
 ) -> *mut libc::c_char {
     if jsonrpc_instance.is_null() {
-        eprintln!("ignoring careless call to dc_jsonrpc_blocking_call()");
+        print_error("ignoring careless call to dc_jsonrpc_blocking_call()");
         return ptr::null_mut();
     }
     let api = &*jsonrpc_instance;
