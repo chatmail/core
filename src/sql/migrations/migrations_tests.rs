@@ -81,7 +81,6 @@ async fn test_pgp_contacts_migration_email1() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    //std::thread::sleep(std::time::Duration::from_secs(1000));
     let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
         .await?
         .unwrap();
@@ -111,7 +110,6 @@ async fn test_pgp_contacts_migration_email2() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    //std::thread::sleep(std::time::Duration::from_secs(1000));
     let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
         .await?
         .unwrap();
@@ -145,7 +143,6 @@ async fn test_pgp_contacts_migration_verified() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    //std::thread::sleep(std::time::Duration::from_secs(1000));
     let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
         .await?
         .unwrap();
@@ -156,12 +153,12 @@ async fn test_pgp_contacts_migration_verified() -> Result<()> {
     assert_eq!(email_bob.fingerprint(), None);
     assert_eq!(email_bob.get_verifier_id(&t).await?, None);
 
-    let bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
+    let mut bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
     assert_eq!(bob_chat_contacts.len(), 2);
-    dbg!(&bob_chat_contacts);
-    let pgp_bob_id = ContactId::new(11);
-    assert!(bob_chat_contacts.contains(&pgp_bob_id));
-    assert!(bob_chat_contacts.contains(&ContactId::SELF));
+    bob_chat_contacts.retain(|c| *c != ContactId::SELF);
+    assert_eq!(bob_chat_contacts.len(), 1);
+    let pgp_bob_id = bob_chat_contacts[0];
+
     let pgp_bob = Contact::get_by_id(&t, pgp_bob_id).await?;
     dbg!(&pgp_bob);
     assert_eq!(pgp_bob.origin, Origin::OutgoingTo);
