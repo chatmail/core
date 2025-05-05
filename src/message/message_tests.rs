@@ -135,7 +135,7 @@ async fn test_get_width_height() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_quote() {
+async fn test_quote_basic() {
     let d = TestContext::new().await;
     let ctx = &d.ctx;
 
@@ -143,8 +143,11 @@ async fn test_quote() {
         .await
         .unwrap();
 
-    d.create_chat_with_contact("", "dest@example.com").await;
-    let msg = Message::new_text("Quoted message".to_string());
+    let chat = d.create_chat_with_contact("", "dest@example.com").await;
+    let mut msg = Message::new_text("Quoted message".to_string());
+
+    // Message has to be sent such that it gets saved to db.
+    chat::send_msg(ctx, chat.id, &mut msg).await.unwrap();
     assert!(!msg.rfc724_mid.is_empty());
 
     let mut msg2 = Message::new(Viewtype::Text);
