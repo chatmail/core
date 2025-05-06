@@ -1569,8 +1569,6 @@ fn migrate_pgp_contacts(
             WHERE id>9",
             )
             .context("Step 22")?;
-        let mut load_chat_contacts_stmt = transaction
-            .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
         let all_chats = stmt
             .query_map((), |row| {
                 let id: u32 = row.get(0)?;
@@ -1580,6 +1578,8 @@ fn migrate_pgp_contacts(
                 Ok((id, typ, grpid, protected))
             })
             .context("Step 23")?;
+        let mut load_chat_contacts_stmt = transaction
+            .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
 
         let mut update_member_stmt = transaction
             .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
