@@ -59,7 +59,9 @@ async fn test_get_contacts() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let context = tcm.bob().await;
     let alice = tcm.alice().await;
-    alice.set_config(Config::Displayname, Some("MyName")).await?;
+    alice
+        .set_config(Config::Displayname, Some("MyName"))
+        .await?;
 
     // Alice is not in the contacts yet.
     let contacts = Contact::get_all(&context.ctx, 0, Some("Alice")).await?;
@@ -402,26 +404,51 @@ async fn test_delete_and_recreate_contact() -> Result<()> {
 
     // test recreation after physical deletion
     let contact_id1 = t.add_or_lookup_contact_id(&bob).await;
-    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
+    assert_eq!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .len(),
+        1
+    );
     Contact::delete(&t, contact_id1).await?;
     assert!(Contact::get_by_id(&t, contact_id1).await.is_err());
-    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 0);
+    assert_eq!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .len(),
+        0
+    );
     let contact_id2 = t.add_or_lookup_contact_id(&bob).await;
     assert_ne!(contact_id2, contact_id1);
-    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
+    assert_eq!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .len(),
+        1
+    );
 
     // test recreation after hiding
     t.create_chat(&bob).await;
     Contact::delete(&t, contact_id2).await?;
     let contact = Contact::get_by_id(&t, contact_id2).await?;
     assert_eq!(contact.origin, Origin::Hidden);
-    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 0);
+    assert_eq!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .len(),
+        0
+    );
 
     let contact_id3 = t.add_or_lookup_contact_id(&bob).await;
     let contact = Contact::get_by_id(&t, contact_id3).await?;
     assert_eq!(contact.origin, Origin::CreateChat);
     assert_eq!(contact_id3, contact_id2);
-    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
+    assert_eq!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .len(),
+        1
+    );
 
     Ok(())
 }

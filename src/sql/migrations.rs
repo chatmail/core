@@ -1622,7 +1622,8 @@ fn migrate_pgp_contacts(
                         // Unprotect this 1:1 chat if it was protected.
                         //
                         // Otherwise we get protected chat with email-contact.
-                        transaction.execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))?;
+                        transaction
+                            .execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))?;
 
                         keep_email_contacts("PGP contact has different email");
                         continue;
