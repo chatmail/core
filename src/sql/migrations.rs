@@ -1259,8 +1259,6 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     Ok((update_icons, disable_server_delete, recode_avatar))
 }
 
-// TODO if this takes very long, then it should be multiple transactions
-// so that it can be executed in multiple steps
 fn migrate_pgp_contacts(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
