@@ -3359,18 +3359,34 @@ async fn test_wrong_from_name_and_no_valid_signatures() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
-    let t = TestContext::new_bob().await;
+    let bob = &TestContext::new_bob().await;
 
+    // Thunderbird message with Autocrypt header and a signature,
+    // but not encrypted.
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt_unencrypted.eml");
-    receive_imf(&t, raw, false).await?;
+    let received_msg = receive_imf(bob, raw, false).await?.unwrap();
 
-    // TODO: the message should arrive as email-contact
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+    let msg = Message::load_from_db(bob, msg_id).await?;
+    assert!(!msg.get_showpadlock());
+
+    // The message should arrive as email-contact
+    let alice_id = msg.from_id;
+    let alice_contact = Contact::get_by_id(bob, alice_id).await?;
+    assert!(!alice_contact.is_pgp_contact());
 
     let raw = include_bytes!("../../test-data/message/thunderbird_signed_unencrypted.eml");
-    receive_imf(&t, raw, false).await?;
+    let received_msg = receive_imf(bob, raw, false).await?.unwrap();
 
-    // TODO: the message should arrive as email-contact?
-    // or PGP-contact, but no padlock
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+    let msg = Message::load_from_db(bob, msg_id).await?;
+    assert!(!msg.get_showpadlock());
+
+    let alice_id = msg.from_id;
+    let alice_contact = Contact::get_by_id(bob, alice_id).await?;
+    assert!(!alice_contact.is_pgp_contact());
 
     Ok(())
 }
