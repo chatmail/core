@@ -1516,15 +1516,10 @@ async fn test_shall_attach_selfavatar() -> Result<()> {
 async fn test_profile_data_on_group_leave() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     let chat_id = create_group_chat(t, ProtectionStatus::Unprotected, "foo").await?;
 
-    let (contact_id, _) = Contact::add_or_lookup(
-        t,
-        "",
-        &ContactAddress::new("foo@bar.org")?,
-        Origin::IncomingUnknownTo,
-    )
-    .await?;
+    let contact_id = t.add_or_lookup_contact_id(bob).await;
     add_contact_to_chat(t, chat_id, contact_id).await?;
 
     send_text_msg(t, chat_id, "populate".to_string()).await?;
@@ -1539,7 +1534,8 @@ async fn test_profile_data_on_group_leave() -> Result<()> {
 
     remove_contact_from_chat(t, chat_id, ContactId::SELF).await?;
     let sent_msg = t.pop_sent_msg().await;
-    assert!(sent_msg.payload().contains("Chat-User-Avatar"));
+    let msg = bob.parse_msg(&sent_msg).await;
+    assert!(msg.header_exists(HeaderDef::ChatUserAvatar));
     Ok(())
 }
 
