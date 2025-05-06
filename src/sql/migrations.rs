@@ -1583,6 +1583,8 @@ fn migrate_pgp_contacts(
 
         let mut update_member_stmt = transaction
             .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
+        let mut addr_cmp_stmt = transaction
+            .prepare("SELECT c.addr=d.addr FROM contacts c, contacts d WHERE c.id=? AND d.id=?")?;
         for chat in all_chats {
             let (chat_id, typ, grpid, protected) = chat.context("Step 24")?;
             // In groups, this also contains past members
@@ -1601,7 +1603,8 @@ fn migrate_pgp_contacts(
 
             let old_and_new_members = match typ {
                 // 1:1 chats retain:
-                // - email-contact if peerstate is in the "reset" state.
+                // - email-contact if peerstate is in the "reset" state,
+                //   or if there is no PGP-contact that has the right email address.
                 // - PGP-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
                 // - PGP-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
                 //   Since the autocrypt and verified PGP contact are identital in this case, we can add the AutocryptPgp contact,
@@ -1615,6 +1618,12 @@ fn migrate_pgp_contacts(
                         keep_email_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
+                    if !addr_cmp_stmt
+                        .query_row((old_member, new_contact), |row| row.get::<_, bool>(0))?
+                    {
+                        keep_email_contacts("PGP contact has different email");
+                        continue;
+                    }
                     vec![(*old_member, Some(new_contact))]
                 }
 
