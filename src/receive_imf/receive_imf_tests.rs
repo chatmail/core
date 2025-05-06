@@ -3001,13 +3001,15 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_auto_accept_for_bots() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    t.set_config(Config::Bot, Some("1")).await.unwrap();
-    receive_imf(&t, MSGRMSG, false).await?;
-    let msg = t.get_last_msg().await;
-    let chat = chat::Chat::load_from_db(&t, msg.chat_id).await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config(Config::Bot, Some("1")).await.unwrap();
+    let msg = tcm.send_recv(bob, alice, "Hello!").await;
+    let chat = chat::Chat::load_from_db(alice, msg.chat_id).await?;
     assert!(!chat.is_contact_request());
-    assert!(Contact::get_all(&t, 0, None).await?.len() == 1);
+
+    assert_eq!(Contact::get_all(alice, 0, None).await?.len(), 1);
     Ok(())
 }
 

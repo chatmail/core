@@ -56,58 +56,45 @@ fn test_split_address_book() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_contacts() -> Result<()> {
-    let context = TestContext::new().await;
+    let mut tcm = TestContextManager::new();
+    let context = tcm.bob().await;
+    let alice = tcm.alice().await;
+    alice.set_config(Config::Displayname, Some("MyName")).await?;
 
-    assert!(context.get_all_self_addrs().await?.is_empty());
-
-    // Bob is not in the contacts yet.
-    let contacts = Contact::get_all(&context.ctx, 0, Some("bob")).await?;
+    // Alice is not in the contacts yet.
+    let contacts = Contact::get_all(&context.ctx, 0, Some("Alice")).await?;
     assert_eq!(contacts.len(), 0);
 
-    let (id, _modified) = Contact::add_or_lookup(
-        &context.ctx,
-        "bob",
-        &ContactAddress::new("user@example.org")?,
-        Origin::IncomingReplyTo,
-    )
-    .await?;
+    let id = context.add_or_lookup_contact_id(&alice).await;
     assert_ne!(id, ContactId::UNDEFINED);
 
-    let contact = Contact::get_by_id(&context.ctx, id).await.unwrap();
+    let contact = Contact::get_by_id(&context, id).await.unwrap();
     assert_eq!(contact.get_name(), "");
-    assert_eq!(contact.get_authname(), "bob");
-    assert_eq!(contact.get_display_name(), "bob");
+    assert_eq!(contact.get_authname(), "MyName");
+    assert_eq!(contact.get_display_name(), "MyName");
 
     // Search by name.
-    let contacts = Contact::get_all(&context.ctx, 0, Some("bob")).await?;
+    let contacts = Contact::get_all(&context, 0, Some("myname")).await?;
     assert_eq!(contacts.len(), 1);
     assert_eq!(contacts.first(), Some(&id));
 
     // Search by address.
-    let contacts = Contact::get_all(&context.ctx, 0, Some("user")).await?;
+    let contacts = Contact::get_all(&context, 0, Some("alice@example.org")).await?;
     assert_eq!(contacts.len(), 1);
     assert_eq!(contacts.first(), Some(&id));
 
-    let contacts = Contact::get_all(&context.ctx, 0, Some("alice")).await?;
+    let contacts = Contact::get_all(&context, 0, Some("Foobar")).await?;
     assert_eq!(contacts.len(), 0);
 
-    // Set Bob name to "someone" manually.
-    let (contact_bob_id, modified) = Contact::add_or_lookup(
-        &context.ctx,
-        "someone",
-        &ContactAddress::new("user@example.org")?,
-        Origin::ManuallyCreated,
-    )
-    .await?;
-    assert_eq!(contact_bob_id, id);
-    assert_eq!(modified, Modifier::Modified);
+    // Set Alice name to "someone" manually.
+    id.set_name(&context, "someone").await?;
     let contact = Contact::get_by_id(&context.ctx, id).await.unwrap();
     assert_eq!(contact.get_name(), "someone");
-    assert_eq!(contact.get_authname(), "bob");
+    assert_eq!(contact.get_authname(), "MyName");
     assert_eq!(contact.get_display_name(), "someone");
 
     // Not searchable by authname, because it is not displayed.
-    let contacts = Contact::get_all(&context.ctx, 0, Some("bob")).await?;
+    let contacts = Contact::get_all(&context, 0, Some("MyName")).await?;
     assert_eq!(contacts.len(), 0);
 
     // Search by display name (same as manually set name).
@@ -282,7 +269,7 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_display_name(), "f@example.org");
     assert_eq!(contact.get_name_n_addr(), "f@example.org");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
 
     // second message inits the name
     receive_imf(
@@ -308,9 +295,9 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_display_name(), "Flobbyfoo");
     assert_eq!(contact.get_name_n_addr(), "Flobbyfoo (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
 
     // third message changes the name
     receive_imf(
@@ -338,11 +325,11 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_display_name(), "Foo Flobby");
     assert_eq!(contact.get_name_n_addr(), "Foo Flobby (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
     assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("Foo Flobby")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
 
     // change name manually
     let test_id = Contact::create(&t, "Falk", "f@example.org").await?;
@@ -356,9 +343,9 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_display_name(), "Falk");
     assert_eq!(contact.get_name_n_addr(), "Falk (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("falk")).await?;
-    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.len(), 0);
 
     Ok(())
 }
@@ -366,20 +353,13 @@ async fn test_contact_name_changes() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete() -> Result<()> {
     let alice = TestContext::new_alice().await;
+    let bob = TestContext::new_bob().await;
 
     assert!(Contact::delete(&alice, ContactId::SELF).await.is_err());
 
     // Create Bob contact
-    let (contact_id, _) = Contact::add_or_lookup(
-        &alice,
-        "Bob",
-        &ContactAddress::new("bob@example.net")?,
-        Origin::ManuallyCreated,
-    )
-    .await?;
-    let chat = alice
-        .create_chat_with_contact("Bob", "bob@example.net")
-        .await;
+    let contact_id = alice.add_or_lookup_contact_id(&bob).await;
+    let chat = alice.create_chat(&bob).await;
     assert_eq!(
         Contact::get_all(&alice, 0, Some("bob@example.net"))
             .await?
@@ -416,30 +396,32 @@ async fn test_delete() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_and_recreate_contact() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
+    let bob = tcm.bob().await;
 
     // test recreation after physical deletion
-    let contact_id1 = Contact::create(&t, "Foo", "foo@bar.de").await?;
-    assert_eq!(Contact::get_all(&t, 0, Some("foo@bar.de")).await?.len(), 1);
+    let contact_id1 = t.add_or_lookup_contact_id(&bob).await;
+    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
     Contact::delete(&t, contact_id1).await?;
     assert!(Contact::get_by_id(&t, contact_id1).await.is_err());
-    assert_eq!(Contact::get_all(&t, 0, Some("foo@bar.de")).await?.len(), 0);
-    let contact_id2 = Contact::create(&t, "Foo", "foo@bar.de").await?;
+    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 0);
+    let contact_id2 = t.add_or_lookup_contact_id(&bob).await;
     assert_ne!(contact_id2, contact_id1);
-    assert_eq!(Contact::get_all(&t, 0, Some("foo@bar.de")).await?.len(), 1);
+    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
 
     // test recreation after hiding
-    t.create_chat_with_contact("Foo", "foo@bar.de").await;
+    t.create_chat(&bob).await;
     Contact::delete(&t, contact_id2).await?;
     let contact = Contact::get_by_id(&t, contact_id2).await?;
     assert_eq!(contact.origin, Origin::Hidden);
-    assert_eq!(Contact::get_all(&t, 0, Some("foo@bar.de")).await?.len(), 0);
+    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 0);
 
-    let contact_id3 = Contact::create(&t, "Foo", "foo@bar.de").await?;
+    let contact_id3 = t.add_or_lookup_contact_id(&bob).await;
     let contact = Contact::get_by_id(&t, contact_id3).await?;
-    assert_eq!(contact.origin, Origin::ManuallyCreated);
+    assert_eq!(contact.origin, Origin::CreateChat);
     assert_eq!(contact_id3, contact_id2);
-    assert_eq!(Contact::get_all(&t, 0, Some("foo@bar.de")).await?.len(), 1);
+    assert_eq!(Contact::get_all(&t, 0, Some("bob@example.net")).await?.len(), 1);
 
     Ok(())
 }
