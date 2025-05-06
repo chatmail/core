@@ -1337,7 +1337,7 @@ fn migrate_pgp_contacts(
                 "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
                 c.authname, c.param, c.status, c.is_bot, c.selfavatar_sent,
                 IFNULL(p.public_key, p.gossip_key),
-                p.verified_key, p.verifier,
+                p.verified_key, IFNULL(p.verifier, ''),
                 p.secondary_verified_key, p.secondary_verifier, p.prefer_encrypted
                 FROM contacts c
                 INNER JOIN acpeerstates p ON c.addr=p.addr
