@@ -1919,8 +1919,12 @@ impl Chat {
                 Chattype::Single => {
                     let chat_contact_ids = get_chat_contacts(context, self.id).await?;
                     if let Some(contact_id) = chat_contact_ids.first() {
-                        let contact = Contact::get_by_id(context, *contact_id).await?;
-                        contact.is_pgp_contact()
+                        if *contact_id == ContactId::DEVICE {
+                            true
+                        } else {
+                            let contact = Contact::get_by_id(context, *contact_id).await?;
+                            contact.is_pgp_contact()
+                        }
                     } else {
                         true
                     }

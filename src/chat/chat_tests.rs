@@ -992,6 +992,18 @@ async fn test_device_chat_cannot_sent() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_device_chat_is_encrypted() {
+    let t = TestContext::new_alice().await;
+    t.update_device_chats().await.unwrap();
+    let device_chat_id = ChatId::get_for_contact(&t, ContactId::DEVICE)
+        .await
+        .unwrap();
+
+    let device_chat = Chat::load_from_db(&t, device_chat_id).await.unwrap();
+    assert!(device_chat.is_encrypted(&t).await.unwrap());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_and_reset_all_device_msgs() {
     let t = TestContext::new().await;
     let mut msg = Message::new_text("message text".to_string());
