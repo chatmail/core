@@ -1080,6 +1080,7 @@ impl Contact {
                     "SELECT c.id, c.addr FROM contacts c
                  LEFT JOIN acpeerstates ps ON c.addr=ps.addr  \
                  WHERE c.id>?
+                 AND c.fingerprint!='' \
                  AND c.origin>=? \
                  AND c.blocked=0 \
                  AND (iif(c.name='',c.authname,c.name) LIKE ? OR c.addr LIKE ?) \
@@ -1137,6 +1138,7 @@ impl Contact {
                 .query_map(
                     "SELECT id, addr FROM contacts
                  WHERE id>?
+                 AND fingerprint!=''
                  AND origin>=?
                  AND blocked=0
                  ORDER BY last_seen DESC, id DESC;",
