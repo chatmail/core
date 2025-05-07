@@ -13,8 +13,10 @@ use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
 use crate::stock_str;
-use crate::test_utils::{get_chat_msg, mark_as_verified, TestContext, TestContextManager};
-use crate::tools::SystemTime;
+use crate::test_utils::{
+    get_chat_msg, mark_as_verified, mark_as_verified_ex, TestContext, TestContextManager,
+};
+use crate::tools::{time, SystemTime};
 use crate::{e2ee, message};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -756,11 +758,16 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     tcm.send_recv(bob, alice, "Now i have it!").await;
     assert_verified(alice, bob, ProtectionStatus::Protected).await;
 
+    // Forward verification should be sufficient to keep the chat protected.
+    let backward = false;
+    mark_as_verified_ex(alice, bob, time() - 1, backward).await;
+
     let msg = alice.recv_msg(&sent_old).await;
     assert!(!msg.get_showpadlock());
     let contact = alice.add_or_lookup_contact(bob).await;
     // The outdated Bob's Autocrypt header isn't applied, so the verification preserves.
-    assert!(contact.is_verified(alice).await.unwrap());
+    assert!(contact.is_forward_verified(alice).await.unwrap());
+    assert!(!contact.is_verified(alice).await.unwrap());
     let chat = alice.get_chat(bob).await;
     assert!(chat.is_protected());
     assert_eq!(chat.is_protection_broken(), false);

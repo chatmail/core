@@ -1035,7 +1035,7 @@ async fn add_parts(
                             && peerstate.prefer_encrypt == EncryptPreference::Mutual
                             // Check that the contact still has the Autocrypt key same as the
                             // verified key, see also `Peerstate::is_using_verified_key()`.
-                            && contact.is_verified(context).await?;
+                            && contact.is_forward_verified(context).await?;
                     }
                 }
             }
