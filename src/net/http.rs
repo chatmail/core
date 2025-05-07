@@ -261,6 +261,18 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             continue;
         }
 
+        if !response.status().is_success() {
+            return Err(anyhow!(
+                "The server returned a non-successful response code: {}{}",
+                response.status().as_u16(),
+                response
+                    .status()
+                    .canonical_reason()
+                    .map(|s| format!(" {s}"))
+                    .unwrap_or("".to_string())
+            ));
+        }
+
         let content_type = response
             .headers()
             .get("content-type")
