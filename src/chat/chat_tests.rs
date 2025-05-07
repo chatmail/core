@@ -4117,6 +4117,20 @@ async fn test_oneone_gossip() -> Result<()> {
     assert_eq!(rcvd_msg2.get_showpadlock(), true);
     assert_eq!(rcvd_msg2.text, "Hello from second device!");
 
+    tcm.section("Alice sends another message from the first devicer");
+    let sent_msg3 = alice.send_text(alice_chat.id, "Hello again, Bob!").await;
+
+    // This message has no Autocrypt-Gossip header,
+    // but should still be assigned to PGP-contact.
+    tcm.section("Alice receives a copy of another message on second device");
+    let rcvd_msg3 = alice2.recv_msg(&sent_msg3).await;
+    assert_eq!(rcvd_msg3.get_showpadlock(), true);
+    assert_eq!(rcvd_msg3.chat_id, rcvd_msg.chat_id);
+
+    // Check that there was no gossip.
+    let parsed_msg3 = alice2.parse_msg(&sent_msg3).await;
+    assert!(!parsed_msg3.header_exists(HeaderDef::AutocryptGossip));
+
     Ok(())
 }
 
