@@ -1138,9 +1138,9 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
 
     lp.sec("create some chat content")
     some1_addr = some1.get_config("addr")
-    chat1 = ac1.create_contact(some1_addr, name="some1").create_chat()
+    chat1 = ac1.create_contact(some1).create_chat()
     chat1.send_text("msg1")
-    assert len(ac1.get_contacts(query="some1")) == 1
+    assert len(ac1.get_contacts()) == 1
 
     original_image_path = data.get_path("d.png")
     chat1.send_image(original_image_path)
@@ -1152,7 +1152,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
     chat1.send_file(str(path))
 
     def assert_account_is_proper(ac):
-        contacts = ac.get_contacts(query="some1")
+        contacts = ac.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
         assert contact2.addr == some1_addr
