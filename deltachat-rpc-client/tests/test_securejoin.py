@@ -213,7 +213,7 @@ def test_setup_contact_resetup(acfactory) -> None:
 
 
 def test_verified_group_member_added_recovery(acfactory) -> None:
-    """Tests verified group recovery by reverifying than removing and adding a member back."""
+    """Tests verified group recovery by reverifying then removing and adding a member back."""
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
 
     logging.info("ac1 creates verified group")
