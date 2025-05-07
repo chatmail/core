@@ -186,8 +186,18 @@ impl CommandApi {
     // Account Management
     // ---------------------------------------------
 
+    /// Adds a new account.
     async fn add_account(&self) -> Result<u32> {
         self.accounts.write().await.add_account().await
+    }
+
+    /// Adds a new closed/encrypted account.
+    /// 
+    /// To use it it must be opened first with `open`.
+    /// The first call to `open` after the creation will set the passphrase.
+    /// It can later be changed with `change_passphrase`.
+    async fn add_closed_account(&self) -> Result<u32> {
+        self.accounts.write().await.add_closed_account().await
     }
 
     /// Imports/migrated an existing account from a database path into this account manager.
@@ -340,6 +350,36 @@ impl CommandApi {
     async fn is_configured(&self, account_id: u32) -> Result<bool> {
         let ctx = self.get_context(account_id).await?;
         ctx.is_configured().await
+    }
+
+    /// Checks if the database of the context is open (encrypted accounts are closed unless opened with their passphrase).
+    /// 
+    /// Closed accounts need to be opened with `open(account_id: u32, passphrase: String)`
+    async fn is_open(&self, account_id: u32) -> Result<bool> {
+        let ctx = self.get_context(account_id).await?;
+        Ok(ctx.is_open().await)
+    }
+
+    /// Changes the passphrase on the open database.
+    /// 
+    /// Existing database must already be encrypted and the passphrase cannot be empty.
+    /// 
+    /// It is impossible to encrypt unencrypted database with this method and vice versa.
+    async fn change_passphrase(&self, account_id: u32, passphrase: String) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.change_passphrase(passphrase).await
+    }
+
+    /// Opens the database with the given passphrase.
+    /// 
+    /// This can only be used on closed context, such as created by `add_closed_account`.
+    /// If the database is new, this operation sets the database passphrase.
+    /// For existing databases the passphrase should be the one used to encrypt the database the first time.
+    /// 
+    /// Returns true if passphrase is correct, false is passphrase is not correct. Fails on other errors.
+    async fn open(&self, account_id: u32, passphrase: String) -> Result<bool> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.open(passphrase).await
     }
 
     /// Get system info for an account.
