@@ -22,7 +22,7 @@ def test_qr_setup_contact(acfactory, tmp_path) -> None:
     bob.wait_for_securejoin_joiner_success()
 
     # Test that Bob verified Alice's profile.
-    bob_contact_alice = bob.create_contact(bob)
+    bob_contact_alice = bob.create_contact(alice)
     bob_contact_alice_snapshot = bob_contact_alice.get_snapshot()
     assert bob_contact_alice_snapshot.is_verified
 
