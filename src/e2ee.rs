@@ -48,12 +48,13 @@ impl EncryptHelper {
         context: &Context,
         peerstates: &[(Option<Peerstate>, String)],
     ) -> Result<bool> {
-        let is_chatmail = context.is_chatmail().await?;
+        // For chatmail we ignore the encryption preference,
+        // because we can either send encrypted or not at all.
+        let encrypt_if_possible = context.is_chatmail().await?
+            && !context.get_config_bool(Config::SignUnencrypted).await?;
         for (peerstate, _addr) in peerstates {
             if let Some(peerstate) = peerstate {
-                // For chatmail we ignore the encryption preference,
-                // because we can either send encrypted or not at all.
-                if is_chatmail || peerstate.prefer_encrypt != EncryptPreference::Reset {
+                if encrypt_if_possible || peerstate.prefer_encrypt != EncryptPreference::Reset {
                     continue;
                 }
             }
