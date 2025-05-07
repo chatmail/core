@@ -1888,7 +1888,7 @@ pub(crate) async fn mark_contact_id_as_verified(
                 |row| row.get(0),
             )?;
             if contact_fingerprint.is_empty() {
-                bail!("Non-PGP contact {contact_id} cannot be verified.");
+                bail!("Non-PGP contact {contact_id} cannot be verified");
             }
             if verifier_id != ContactId::SELF {
                 let verifier_fingerprint: String = transaction.query_row(
@@ -1898,7 +1898,7 @@ pub(crate) async fn mark_contact_id_as_verified(
                 )?;
                 if verifier_fingerprint.is_empty() {
                     bail!(
-                        "Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}."
+                        "Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}"
                     );
                 }
             }
