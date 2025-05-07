@@ -6036,6 +6036,19 @@ char* dc_event_get_data2_str(dc_event_t* event);
  */
 uint32_t dc_event_get_account_id(dc_event_t* event);
 
+/**
+ * Get the json representation of the event as the jsonrpc api would return it.
+ * For documentation on this json object see <https://js.jsonrpc.delta.chat/types/T.Event.html>.
+ * 
+ * The difference to the cffi is that the fields are named,
+ * and can also contain more fields than the cffi api (which only has data1 and data2).
+ *
+ * @memberof dc_event_t
+ * @param event The event object as returned from dc_get_next_event().
+ * @return The json representation of the event as string or NULL.
+ *     Must be freed using dc_str_unref().
+ */
+char* dc_event_get_json(dc_event_t* event);
 
 /**
  * Free memory used by an event object.
