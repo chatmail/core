@@ -137,15 +137,16 @@ class TestOfflineContact:
 
     def test_get_contacts_and_delete(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
-        contact1 = ac1.create_contact("some1@example.org", name="some1")
+        ac2 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
         contacts = ac1.get_contacts()
         assert len(contacts) == 1
-        assert contact1 in contacts
 
         assert not ac1.get_contacts(query="some2")
-        assert ac1.get_contacts(query="some1")
+        assert not ac1.get_contacts(query="some1")
         assert not ac1.get_contacts(only_verified=True)
         assert len(ac1.get_contacts(with_self=True)) == 2
+        assert contact1 in ac1.get_contacts()
 
         assert ac1.delete_contact(contact1)
         assert contact1 not in ac1.get_contacts()
@@ -439,7 +440,8 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account()
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        ac_contact = acfactory.get_pseudo_configured_account()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -454,10 +456,10 @@ class TestOfflineChat:
         assert os.path.exists(path)
         ac2 = acfactory.get_unconfigured_account()
         ac2.import_all(path)
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -470,8 +472,9 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account(passphrase=passphrase1)
+        ac2 = acfactory.get_pseudo_configured_account()
 
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        chat = ac1.create_contact(ac2).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -492,10 +495,10 @@ class TestOfflineChat:
         ac2.import_all(path)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        contact2_addr = contact2.addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -509,10 +512,10 @@ class TestOfflineChat:
         ac2.open(passphrase2)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == contact2_addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -525,8 +528,9 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account()
+        ac_contact = acfactory.get_pseudo_configured_account()
 
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -548,10 +552,10 @@ class TestOfflineChat:
         ac2.import_all(path, passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -570,7 +574,8 @@ class TestOfflineChat:
         backupdir.mkdir()
 
         ac1 = acfactory.get_pseudo_configured_account()
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        ac_contact = acfactory.get_pseudo_configured_account()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -593,10 +598,10 @@ class TestOfflineChat:
         ac2.import_all(path, bak_passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -610,10 +615,10 @@ class TestOfflineChat:
         ac2.open(acct_passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
