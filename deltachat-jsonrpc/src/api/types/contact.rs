@@ -25,7 +25,7 @@ pub struct ContactObject {
 
     /// Is encryption available for this contact.
     ///
-    /// This can only be true of PGP-contacts.
+    /// This can only be true for PGP-contacts.
     /// However, it is possible to have a PGP-contact
     /// for which encryption is not available because we don't have a key yet,
     /// e.g. if we just scanned the fingerprint from a QR code.
