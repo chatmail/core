@@ -354,6 +354,15 @@ impl CommandApi {
         Ok(ctx.get_blobdir().to_str().map(|s| s.to_owned()))
     }
 
+    /// If there was an error while the account was opened
+    /// and migrated to the current version,
+    /// then this function returns it.
+    ///
+    /// This function is useful because the PGP-contacts migration could fail due to bugs
+    /// and then the account will not work properly.
+    ///
+    /// After opening an account, the UI should call this function
+    /// and show the error string if one is returned.
     async fn get_migration_error(&self, account_id: u32) -> Result<Option<String>> {
         let ctx = self.get_context(account_id).await?;
         Ok(ctx.get_migration_error())
