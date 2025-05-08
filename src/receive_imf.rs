@@ -330,6 +330,19 @@ pub(crate) async fn receive_imf_inner(
         } else {
             None
         }
+    } else if is_partial_download.is_none() && !mime_parser.incoming {
+        if let Some(parent) = get_parent_message(
+            context,
+            mime_parser.get_header(HeaderDef::References),
+            mime_parser.get_header(HeaderDef::InReplyTo),
+        )
+        .await?
+        {
+            info!(context, "Found parent chat {}", parent.chat_id);
+            Some(parent.chat_id)
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -400,6 +413,14 @@ pub(crate) async fn receive_imf_inner(
             // mapped it to a PGP contact.
             // This is a 1:1 PGP-chat.
             to_ids = pgp_to_ids
+        } else if let Some(chat_id) = chat_id {
+            to_ids = lookup_pgp_contacts_by_address_list(
+                context,
+                &mime_parser.recipients,
+                to_member_fingerprints,
+                chat_id,
+            )
+            .await?;
         } else {
             to_ids = add_or_lookup_contacts_by_address_list(
                 context,
