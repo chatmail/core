@@ -1,3 +1,5 @@
+"""Contact module."""
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -11,8 +13,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class Contact:
-    """
-    Contact API.
+    """Contact API.
 
     Essentially a wrapper for RPC, account ID and a contact ID.
     """
@@ -45,9 +46,7 @@ class Contact:
         self._rpc.change_contact_name(self.account.id, self.id, name)
 
     def get_encryption_info(self) -> str:
-        """Get a multi-line encryption info, containing your fingerprint and
-        the fingerprint of the contact.
-        """
+        """Get a multi-line encryption info, containing your fingerprint and the fingerprint of the contact."""
         return self._rpc.get_contact_encryption_info(self.account.id, self.id)
 
     def get_snapshot(self) -> AttrDict:
@@ -66,4 +65,5 @@ class Contact:
         )
 
     def make_vcard(self) -> str:
+        """Make a vCard for the contact."""
         return self.account.make_vcard([self])

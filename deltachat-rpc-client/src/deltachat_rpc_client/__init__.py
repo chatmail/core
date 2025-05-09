@@ -1,4 +1,4 @@
-"""Delta Chat JSON-RPC high-level API"""
+"""Delta Chat JSON-RPC high-level API."""
 
 from ._utils import AttrDict, run_bot_cli, run_client_cli
 from .account import Account
