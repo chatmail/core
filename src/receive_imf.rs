@@ -322,6 +322,12 @@ pub(crate) async fn receive_imf_inner(
         }
     };
 
+    // ID of the chat to look up the addresses in.
+    //
+    // Note that this is not necessarily the chat we want to assign the message to.
+    // In case of an outgoing private reply to a group message we may
+    // lookup the address of receipient in the list of addresses used in the group,
+    // but want to assign the message to 1:1 chat.
     let chat_id = if let Some(grpid) = mime_parser.get_chat_group_id() {
         if let Some((chat_id, _protected, _blocked)) =
             chat::get_chat_id_by_grpid(context, grpid).await?
@@ -338,7 +344,6 @@ pub(crate) async fn receive_imf_inner(
         )
         .await?
         {
-            info!(context, "Found parent chat {}", parent.chat_id);
             Some(parent.chat_id)
         } else {
             None
