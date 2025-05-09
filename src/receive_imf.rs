@@ -3126,7 +3126,6 @@ async fn has_verified_encryption(
     };
 
     if from_id == ContactId::SELF {
-        // TODO: check that the message is signed with our key?
         return Ok(Verified);
     }
 
