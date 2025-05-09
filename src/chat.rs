@@ -3949,7 +3949,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     if chat.typ == Chattype::Group && chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
-        let contact_addr = contact.get_addr().to_lowercase(); // FIXME contact is not identified by addr
+        let contact_addr = contact.get_addr().to_lowercase();
         msg.text = stock_str::msg_add_member_local(context, contact.id, ContactId::SELF).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
