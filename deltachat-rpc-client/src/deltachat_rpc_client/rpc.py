@@ -1,3 +1,5 @@
+"""JSON-RPC client module."""
+
 from __future__ import annotations
 
 import itertools
@@ -12,16 +14,19 @@ from typing import Any, Iterator, Optional
 
 
 class JsonRpcError(Exception):
-    pass
+    """JSON-RPC error."""
 
 
 class RpcFuture:
+    """RPC future waiting for RPC call result."""
+
     def __init__(self, rpc: "Rpc", request_id: int, event: Event):
         self.rpc = rpc
         self.request_id = request_id
         self.event = event
 
     def __call__(self):
+        """Wait for the future to return the result."""
         self.event.wait()
         response = self.rpc.request_results.pop(self.request_id)
         if "error" in response:
@@ -32,17 +37,19 @@ class RpcFuture:
 
 
 class RpcMethod:
+    """RPC method."""
+
     def __init__(self, rpc: "Rpc", name: str):
         self.rpc = rpc
         self.name = name
 
     def __call__(self, *args) -> Any:
-        """Synchronously calls JSON-RPC method."""
+        """Call JSON-RPC method synchronously."""
         future = self.future(*args)
         return future()
 
     def future(self, *args) -> Any:
-        """Asynchronously calls JSON-RPC method."""
+        """Call JSON-RPC method asynchronously."""
         request_id = next(self.rpc.id_iterator)
         request = {
             "jsonrpc": "2.0",
@@ -58,8 +65,13 @@ class RpcMethod:
 
 
 class Rpc:
+    """RPC client."""
+
     def __init__(self, accounts_dir: Optional[str] = None, **kwargs):
-        """The given arguments will be passed to subprocess.Popen()"""
+        """Initialize RPC client.
+
+        The given arguments will be passed to subprocess.Popen().
+        """
         if accounts_dir:
             kwargs["env"] = {
                 **kwargs.get("env", os.environ),
@@ -81,6 +93,7 @@ class Rpc:
         self.events_thread: Thread
 
     def start(self) -> None:
+        """Start RPC server subprocess."""
         if sys.version_info >= (3, 11):
             self.process = subprocess.Popen(
                 "deltachat-rpc-server",
@@ -130,6 +143,7 @@ class Rpc:
         self.close()
 
     def reader_loop(self) -> None:
+        """Process JSON-RPC responses from the RPC server process output."""
         try:
             while line := self.process.stdout.readline():
                 response = json.loads(line)
@@ -157,12 +171,13 @@ class Rpc:
             logging.exception("Exception in the writer loop")
 
     def get_queue(self, account_id: int) -> Queue:
+        """Get event queue corresponding to the given account ID."""
         if account_id not in self.event_queues:
             self.event_queues[account_id] = Queue()
         return self.event_queues[account_id]
 
     def events_loop(self) -> None:
-        """Requests new events and distributes them between queues."""
+        """Request new events and distributes them between queues."""
         try:
             while True:
                 if self.closing:
@@ -178,12 +193,12 @@ class Rpc:
             logging.exception("Exception in the event loop")
 
     def wait_for_event(self, account_id: int) -> Optional[dict]:
-        """Waits for the next event from the given account and returns it."""
+        """Wait for the next event from the given account and returns it."""
         queue = self.get_queue(account_id)
         return queue.get()
 
     def clear_all_events(self, account_id: int):
-        """Removes all queued-up events for a given account. Useful for tests."""
+        """Remove all queued-up events for a given account. Useful for tests."""
         queue = self.get_queue(account_id)
         try:
             while True:
