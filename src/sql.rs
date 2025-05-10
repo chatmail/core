@@ -8,7 +8,7 @@ use rusqlite::{config::DbConfig, types::ValueRef, Connection, OpenFlags, Row};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::{self, add_device_msg, update_device_icon, update_saved_messages_icon};
+use crate::chat::{add_device_msg, update_device_icon, update_saved_messages_icon};
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -286,10 +286,6 @@ impl Sql {
         {
             set_debug_logging_xdc(context, Some(MsgId::new(xdc_id))).await?;
         }
-        chat::resume_securejoin_wait(context)
-            .await
-            .log_err(context)
-            .ok();
         Ok(())
     }
 

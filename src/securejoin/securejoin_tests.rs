@@ -3,7 +3,7 @@ use deltachat_contact_tools::EmailAddress;
 use super::*;
 use crate::chat::{remove_contact_from_chat, CantSendReason};
 use crate::chatlist::Chatlist;
-use crate::constants::{self, Chattype};
+use crate::constants::Chattype;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
@@ -289,16 +289,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_alice.get_authname(), "Alice Exampleorg");
     assert!(contact_alice.get_name().is_empty());
     assert_eq!(contact_alice.is_bot(), case == SetupContactCase::AliceIsBot);
-
-    // Later we check that the timeout message isn't added to the already protected chat.
-    SystemTime::shift(Duration::from_secs(constants::SECUREJOIN_WAIT_TIMEOUT + 1));
-    assert_eq!(
-        bob_chat
-            .check_securejoin_wait(&bob, constants::SECUREJOIN_WAIT_TIMEOUT)
-            .await
-            .unwrap(),
-        0
-    );
 
     // Check Bob got expected info messages in his 1:1 chat.
     let msg_cnt = 2;

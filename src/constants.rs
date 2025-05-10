@@ -211,11 +211,6 @@ pub(crate) const DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT: u64 = 12 * 60 * 60; 
 /// in the group membership consistency algo to reject outdated membership changes.
 pub(crate) const TIMESTAMP_SENT_TOLERANCE: i64 = 60;
 
-/// How long a 1:1 chat can't be used for sending while the SecureJoin is in progress. This should
-/// be 10-20 seconds so that we are reasonably sure that the app remains active and receiving also
-/// on mobile devices. See also [`crate::chat::CantSendReason::SecurejoinWait`].
-pub(crate) const SECUREJOIN_WAIT_TIMEOUT: u64 = 15;
-
 // To make text edits clearer for Non-Delta-MUA or old Delta Chats, edited text will be prefixed by EDITED_PREFIX.
 // Newer Delta Chats will remove the prefix as needed.
 pub(crate) const EDITED_PREFIX: &str = "✏️";

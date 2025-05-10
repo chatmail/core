@@ -805,11 +805,6 @@ pub(crate) async fn securejoin_wait(context: &Context) -> String {
     translated(context, StockMessage::SecurejoinWait).await
 }
 
-/// Stock string: `The contact must be online to proceed. This process will continue automatically in background.`.
-pub(crate) async fn securejoin_takes_longer(context: &Context) -> String {
-    translated(context, StockMessage::SecurejoinTakesLonger).await
-}
-
 /// Stock string: `Scan to chat with %1$s`.
 pub(crate) async fn setup_contact_qr_description(
     context: &Context,
