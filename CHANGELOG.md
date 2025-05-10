@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.159.3] - 2025-04-24
+
+### CI
+
+- Use `ubuntu-latest` runner for `@deltachat/jsonrpc-client` publishing.
+
+## [1.159.2] - 2025-04-23
+
+### Fixes
+
+- Allow to send to chats after failed securejoin again ([#6817](https://github.com/chatmail/core/pull/6817)).
+- Parse login scheme in `add_transport_from_qr()` ([#6802](https://github.com/chatmail/core/pull/6802)).
+- Lowercase address in add_transport() ([#6805](https://github.com/chatmail/core/pull/6805)).
+
+### API-Changes
+
+- Rename add_transport() -> add_or_update_transport() ([#6800](https://github.com/chatmail/core/pull/6800)).
+
+### Miscellaneous Tasks
+
+- Update yerpc to 0.6.4.
+- Clean up `deltachat-jsonrpc` dependencies.
+
+### Refactor
+
+- Move logins into SQL table ([#6724](https://github.com/chatmail/core/pull/6724)).
+
+### Tests
+
+- Check headers absense straightforwardly.
+- Fix mismatch between the contact and the account in securejoin tests.
+- Test that key of the recipient is gossiped in 1:1 chats.
+
 ## [1.159.1] - 2025-04-12
 
 ### API-Changes
@@ -6232,3 +6265,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [1.158.0]: https://github.com/chatmail/core/compare/v1.157.3..v1.158.0
 [1.159.0]: https://github.com/chatmail/core/compare/v1.158.0..v1.159.0
 [1.159.1]: https://github.com/chatmail/core/compare/v1.159.0..v1.159.1
+[1.159.2]: https://github.com/chatmail/core/compare/v1.159.1..v1.159.2
+[1.159.3]: https://github.com/chatmail/core/compare/v1.159.2..v1.159.3

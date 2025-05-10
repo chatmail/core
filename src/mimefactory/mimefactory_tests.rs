@@ -728,6 +728,7 @@ async fn test_selfavatar_unencrypted_signed() {
         .is_some());
 
     // if another message is sent, that one must not contain the avatar
+    let mut msg = Message::new_text("this is the text!".to_string());
     let sent_msg = t.send_msg(chat.id, &mut msg).await;
     let mut payload = sent_msg.payload().splitn(4, "\r\n\r\n");
 

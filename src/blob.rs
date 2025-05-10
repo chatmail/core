@@ -432,7 +432,20 @@ impl<'a> BlobObject<'a> {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
                     }
-                    let new_img = img.thumbnail(img_wh, img_wh);
+
+                    // resize() results in often slightly better quality,
+                    // however, comes at high price of being 4+ times slower than thumbnail().
+                    // for a typical camera image that is sent, this may be a change from "instant" (500ms) to "long time waiting" (3s).
+                    // as we do not have recoding in background while chat has already a preview,
+                    // we vote for speed.
+                    // exception is the avatar image: this is far more often sent than recoded,
+                    // usually has less pixels by cropping, UI that needs to wait anyways,
+                    // and also benefits from slightly better (5%) encoding of Triangle-filtered images.
+                    let new_img = if is_avatar {
+                        img.resize(img_wh, img_wh, image::imageops::FilterType::Triangle)
+                    } else {
+                        img.thumbnail(img_wh, img_wh)
+                    };
 
                     if encoded_img_exceeds_bytes(
                         context,

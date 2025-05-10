@@ -1,6 +1,6 @@
 [package]
 name = "deltachat"
-version = "1.159.1"
+version = "1.159.3"
 edition = "2021"
 license = "MPL-2.0"
 rust-version = "1.83"
@@ -46,10 +46,10 @@ async-native-tls = { version = "0.5", default-features = false, features = ["run
 async-smtp = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
-brotli = { version = "7", default-features = false, features = ["std"] }
+brotli = { version = "8", default-features=false, features = ["std"] }
 bytes = "1"
 chrono = { workspace = true, features = ["alloc", "clock", "std"] }
-data-encoding = "2.7.0"
+data-encoding = "2.9.0"
 escaper = "0.1"
 fast-socks5 = "0.10"
 fd-lock = "4"
@@ -92,7 +92,7 @@ serde = { workspace = true, features = ["derive"] }
 sha-1 = "0.10"
 sha2 = "0.10"
 shadowsocks = { version = "1.22.0", default-features = false, features = ["aead-cipher", "aead-cipher-2022"] }
-smallvec = "1.14.0"
+smallvec = "1.15.0"
 strum = "0.27"
 strum_macros = "0.27"
 tagger = "4.3.4"
@@ -108,7 +108,7 @@ toml = "0.8"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webpki-roots = "0.26.8"
-blake3 = "1.8.0"
+blake3 = "1.8.2"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
@@ -173,7 +173,7 @@ harness = false
 anyhow = "1"
 async-channel = "2.3.1"
 base64 = "0.22"
-chrono = { version = "0.4.40", default-features = false }
+chrono = { version = "0.4.41", default-features = false }
 deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
@@ -195,7 +195,7 @@ thiserror = "2"
 tokio = "1"
 tokio-util = "0.7.14"
 tracing-subscriber = "0.3"
-yerpc = "0.6.2"
+yerpc = "0.6.4"
 
 [features]
 default = ["vendored"]

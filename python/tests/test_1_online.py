@@ -1502,15 +1502,6 @@ def test_connectivity(acfactory, lp):
     assert len(msgs) == 2
     assert msgs[1].text == "Hi 2"
 
-    lp.sec("Test that the connectivity is NOT_CONNECTED if the password is wrong")
-
-    ac1.set_config("configured_mail_pw", "abc")
-    ac1.stop_io()
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_NOT_CONNECTED)
-    ac1.start_io()
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTING)
-    ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_NOT_CONNECTED)
-
 
 def test_fetch_deleted_msg(acfactory, lp):
     """This is a regression test: Messages with \\Deleted flag were downloaded again and again,

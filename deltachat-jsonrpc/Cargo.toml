@@ -1,6 +1,6 @@
 [package]
 name = "deltachat-jsonrpc"
-version = "1.159.1"
+version = "1.159.3"
 description = "DeltaChat JSON-RPC API"
 edition = "2021"
 license = "MPL-2.0"
@@ -13,10 +13,7 @@ deltachat-contact-tools = { workspace = true }
 num-traits = { workspace = true }
 schemars = "0.8.22"
 serde = { workspace = true, features = ["derive"] }
-tempfile = { workspace = true }
-log = { workspace = true }
 async-channel = { workspace = true }
-futures = { workspace = true }
 serde_json = { workspace = true }
 yerpc = { workspace = true, features = ["anyhow_expose", "openrpc"] }
 typescript-type-def = { version = "0.5.13", features = ["json_value"] }
@@ -27,6 +24,8 @@ base64 = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "rt-multi-thread"] }
+tempfile = { workspace = true }
+futures = { workspace = true }
 
 
 [features]

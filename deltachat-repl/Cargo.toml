@@ -1,6 +1,6 @@
 [package]
 name = "deltachat-repl"
-version = "1.159.1"
+version = "1.159.3"
 license = "MPL-2.0"
 edition = "2021"
 repository = "https://github.com/chatmail/core"

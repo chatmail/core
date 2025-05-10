@@ -9,7 +9,7 @@ permissions: {}
 jobs:
   pack-module:
     name: "Publish @deltachat/jsonrpc-client"
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read

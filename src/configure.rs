@@ -16,7 +16,7 @@ pub(crate) mod server_params;
 use anyhow::{bail, ensure, format_err, Context as _, Result};
 use auto_mozilla::moz_autoconfigure;
 use auto_outlook::outlk_autodiscover;
-use deltachat_contact_tools::EmailAddress;
+use deltachat_contact_tools::{addr_normalize, EmailAddress};
 use futures::FutureExt;
 use futures_lite::FutureExt as _;
 use percent_encoding::utf8_percent_encode;
@@ -35,8 +35,7 @@ use crate::login_param::{
 };
 use crate::message::Message;
 use crate::oauth2::get_oauth2_addr;
-use crate::provider::{Protocol, Socket, UsernamePattern};
-use crate::qr::set_account_from_qr;
+use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
 use crate::smtp::Smtp;
 use crate::sync::Sync::*;
 use crate::tools::time;
@@ -63,17 +62,17 @@ macro_rules! progress {
 impl Context {
     /// Checks if the context is already configured.
     pub async fn is_configured(&self) -> Result<bool> {
-        self.sql.get_raw_config_bool("configured").await
+        self.sql.exists("SELECT COUNT(*) FROM transports", ()).await
     }
 
     /// Configures this account with the currently provided parameters.
     ///
     /// Deprecated since 2025-02; use `add_transport_from_qr()`
-    /// or `add_transport()` instead.
+    /// or `add_or_update_transport()` instead.
     pub async fn configure(&self) -> Result<()> {
-        let param = EnteredLoginParam::load(self).await?;
+        let mut param = EnteredLoginParam::load(self).await?;
 
-        self.add_transport_inner(&param).await
+        self.add_transport_inner(&mut param).await
     }
 
     /// Configures a new email account using the provided parameters
@@ -105,7 +104,7 @@ impl Context {
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
     /// - [Self::delete_transport()] to remove a transport.
-    pub async fn add_transport(&self, param: &EnteredLoginParam) -> Result<()> {
+    pub async fn add_or_update_transport(&self, param: &mut EnteredLoginParam) -> Result<()> {
         self.stop_io().await;
         let result = self.add_transport_inner(param).await;
         if result.is_err() {
@@ -118,7 +117,7 @@ impl Context {
         Ok(())
     }
 
-    async fn add_transport_inner(&self, param: &EnteredLoginParam) -> Result<()> {
+    async fn add_transport_inner(&self, param: &mut EnteredLoginParam) -> Result<()> {
         ensure!(
             !self.scheduler.is_running().await,
             "cannot configure, already running"
@@ -127,9 +126,12 @@ impl Context {
             self.sql.is_open().await,
             "cannot configure, database not opened."
         );
+        param.addr = addr_normalize(&param.addr);
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
         if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
-            bail!("Changing your email address is not supported right now. Check back in a few months!");
+            let error_msg = "Changing your email address is not supported right now. Check back in a few months!";
+            progress!(self, 0, Some(error_msg.to_string()));
+            bail!(error_msg);
         }
         let cancel_channel = self.alloc_ongoing().await?;
 
@@ -156,12 +158,23 @@ impl Context {
 
     /// Adds a new email account as a transport
     /// using the server encoded in the QR code.
-    /// See [Self::add_transport].
+    /// See [Self::add_or_update_transport].
     pub async fn add_transport_from_qr(&self, qr: &str) -> Result<()> {
         self.stop_io().await;
 
+        // This code first sets the deprecated Config::Addr, Config::MailPw, etc.
+        // and then calls configure(), which loads them again.
+        // At some point, we will remove configure()
+        // and then simplify the code
+        // to directly create an EnteredLoginParam.
         let result = async move {
-            set_account_from_qr(self, qr).await?;
+            match crate::qr::check_qr(self, qr).await? {
+                crate::qr::Qr::Account { .. } => crate::qr::set_account_from_qr(self, qr).await?,
+                crate::qr::Qr::Login { address, options } => {
+                    crate::qr::configure_from_login_qr(self, &address, options).await?
+                }
+                _ => bail!("QR code does not contain account"),
+            }
             self.configure().await?;
             Ok(())
         }
@@ -178,12 +191,24 @@ impl Context {
     }
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
-    /// Use [Self::add_transport()] to add or change a transport
+    /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
     pub async fn list_transports(&self) -> Result<Vec<EnteredLoginParam>> {
-        let param = EnteredLoginParam::load(self).await?;
+        let transports = self
+            .sql
+            .query_map(
+                "SELECT entered_param FROM transports",
+                (),
+                |row| row.get::<_, String>(0),
+                |rows| {
+                    rows.flatten()
+                        .map(|s| Ok(serde_json::from_str(&s)?))
+                        .collect::<Result<Vec<EnteredLoginParam>>>()
+                },
+            )
+            .await?;
 
-        Ok(vec![param])
+        Ok(transports)
     }
 
     /// Removes the transport with the specified email address
@@ -197,20 +222,20 @@ impl Context {
         info!(self, "Configure ...");
 
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        let configured_param = configure(self, param).await?;
+        let provider = configure(self, param).await?;
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
-        on_configure_completed(self, configured_param, old_addr).await?;
+        on_configure_completed(self, provider, old_addr).await?;
         Ok(())
     }
 }
 
 async fn on_configure_completed(
     context: &Context,
-    param: ConfiguredLoginParam,
+    provider: Option<&'static Provider>,
     old_addr: Option<String>,
 ) -> Result<()> {
-    if let Some(provider) = param.provider {
+    if let Some(provider) = provider {
         if let Some(config_defaults) = provider.config_defaults {
             for def in config_defaults {
                 if !context.config_exists(def.key).await? {
@@ -446,7 +471,7 @@ async fn get_configured_param(
     Ok(configured_login_param)
 }
 
-async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<ConfiguredLoginParam> {
+async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'static Provider>> {
     progress!(ctx, 1);
 
     let ctx2 = ctx.clone();
@@ -556,7 +581,11 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
         }
     }
 
-    configured_param.save_as_configured_params(ctx).await?;
+    let provider = configured_param.provider;
+    configured_param
+        .save_to_transports_table(ctx, param)
+        .await?;
+
     ctx.set_config_internal(Config::ConfiguredTimestamp, Some(&time().to_string()))
         .await?;
 
@@ -572,7 +601,7 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Configure
     ctx.sql.set_raw_config_bool("configured", true).await?;
     ctx.emit_event(EventType::AccountsItemChanged);
 
-    Ok(configured_param)
+    Ok(provider)
 }
 
 /// Retrieve available autoconfigurations.

@@ -439,7 +439,7 @@ impl CommandApi {
     /// Setup the credential config before calling this.
     ///
     /// Deprecated as of 2025-02; use `add_transport_from_qr()`
-    /// or `add_transport()` instead.
+    /// or `add_or_update_transport()` instead.
     async fn configure(&self, account_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.stop_io().await;
@@ -483,21 +483,30 @@ impl CommandApi {
     ///   from a server encoded in a QR code.
     /// - [Self::list_transports()] to get a list of all configured transports.
     /// - [Self::delete_transport()] to remove a transport.
-    async fn add_transport(&self, account_id: u32, param: EnteredLoginParam) -> Result<()> {
+    async fn add_or_update_transport(
+        &self,
+        account_id: u32,
+        param: EnteredLoginParam,
+    ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
-        ctx.add_transport(&param.try_into()?).await
+        ctx.add_or_update_transport(&mut param.try_into()?).await
+    }
+
+    /// Deprecated 2025-04. Alias for [Self::add_or_update_transport()].
+    async fn add_transport(&self, account_id: u32, param: EnteredLoginParam) -> Result<()> {
+        self.add_or_update_transport(account_id, param).await
     }
 
     /// Adds a new email account as a transport
     /// using the server encoded in the QR code.
-    /// See [Self::add_transport].
+    /// See [Self::add_or_update_transport].
     async fn add_transport_from_qr(&self, account_id: u32, qr: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         ctx.add_transport_from_qr(&qr).await
     }
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
-    /// Use [Self::add_transport()] to add or change a transport
+    /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
     async fn list_transports(&self, account_id: u32) -> Result<Vec<EnteredLoginParam>> {
         let ctx = self.get_context(account_id).await?;

@@ -135,7 +135,7 @@ async fn test_get_width_height() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_quote() {
+async fn test_quote_basic() {
     let d = TestContext::new().await;
     let ctx = &d.ctx;
 
@@ -144,13 +144,10 @@ async fn test_quote() {
         .unwrap();
 
     let chat = d.create_chat_with_contact("", "dest@example.com").await;
-
     let mut msg = Message::new_text("Quoted message".to_string());
 
-    // Send message, so it gets a Message-Id.
-    assert!(msg.rfc724_mid.is_empty());
-    let msg_id = chat::send_msg(ctx, chat.id, &mut msg).await.unwrap();
-    let msg = Message::load_from_db(ctx, msg_id).await.unwrap();
+    // Message has to be sent such that it gets saved to db.
+    chat::send_msg(ctx, chat.id, &mut msg).await.unwrap();
     assert!(!msg.rfc724_mid.is_empty());
 
     let mut msg2 = Message::new(Viewtype::Text);
@@ -358,6 +355,7 @@ async fn test_markseen_msgs() -> Result<()> {
     let sent1 = alice.send_msg(alice_chat.id, &mut msg).await;
     let msg1 = bob.recv_msg(&sent1).await;
     let bob_chat_id = msg1.chat_id;
+    let mut msg = Message::new_text("this is the text!".to_string());
     let sent2 = alice.send_msg(alice_chat.id, &mut msg).await;
     let msg2 = bob.recv_msg(&sent2).await;
     assert_eq!(msg1.chat_id, msg2.chat_id);
@@ -380,9 +378,11 @@ async fn test_markseen_msgs() -> Result<()> {
 
     // bob sends to alice,
     // alice knows bob and messages appear in normal chat
+    let mut msg = Message::new_text("this is the text!".to_string());
     let msg1 = alice
         .recv_msg(&bob.send_msg(bob_chat_id, &mut msg).await)
         .await;
+    let mut msg = Message::new_text("this is the text!".to_string());
     let msg2 = alice
         .recv_msg(&bob.send_msg(bob_chat_id, &mut msg).await)
         .await;

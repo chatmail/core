@@ -3113,7 +3113,6 @@ Message with references."#;
 async fn test_rfc1847_encapsulation() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
-    alice.configure_addr("alice@example.org").await;
 
     // Alice sends an Autocrypt message to Bob so Bob gets Alice's key.
     let chat_alice = alice.create_chat(&bob).await;
@@ -5091,7 +5090,7 @@ async fn test_references() -> Result<()> {
     alice.set_config_bool(Config::BccSelf, true).await?;
 
     let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
-    let _sent = alice
+    alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
 

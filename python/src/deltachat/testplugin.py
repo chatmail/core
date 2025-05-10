@@ -482,12 +482,8 @@ class ACFactory:
         addr = f"{acname}@offline.org"
         ac.update_config(
             {
-                "addr": addr,
-                "displayname": acname,
-                "mail_pw": "123",
                 "configured_addr": addr,
-                "configured_mail_pw": "123",
-                "configured": "1",
+                "displayname": acname,
             },
         )
         self._preconfigure_key(ac)

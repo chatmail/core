@@ -111,9 +111,15 @@ class Account:
         yield self._rpc.configure.future(self.id)
 
     @futuremethod
-    def add_transport(self, params):
+    def add_or_update_transport(self, params):
         """Add a new transport."""
-        yield self._rpc.add_transport.future(self.id, params)
+        yield self._rpc.add_or_update_transport.future(self.id, params)
+
+    @futuremethod
+    def list_transports(self):
+        """Returns the list of all email accounts that are used as a transport in the current profile."""
+        transports = yield self._rpc.list_transports.future(self.id)
+        return transports
 
     def bring_online(self):
         """Start I/O and wait until IMAP becomes IDLE."""

@@ -49,12 +49,12 @@ $ curl https://sh.rustup.rs -sSf | sh
 
 ## Using the CLI client
 
-Compile and run Delta Chat Core command line utility, using `cargo`:
+Compile and run the command line utility, using `cargo`:
 
 ```
-$ cargo run --locked -p deltachat-repl -- ~/deltachat-db
+$ cargo run --locked -p deltachat-repl -- ~/profile-db
 ```
-where ~/deltachat-db is the database file. Delta Chat will create it if it does not exist.
+where ~/profile-db is the database file. The utility will create it if it does not exist.
 
 Optionally, install `deltachat-repl` binary with
 ```
@@ -62,13 +62,13 @@ $ cargo install --locked --path deltachat-repl/
 ```
 and run as
 ```
-$ deltachat-repl ~/deltachat-db
+$ deltachat-repl ~/profile-db
 ```
 
 Configure your account (if not already configured):
 
 ```
-Delta Chat Core is awaiting your commands.
+Chatmail is awaiting your commands.
 > set addr your@email.org
 > set mail_pw yourpassword
 > configure
@@ -105,11 +105,6 @@ Single#10: yourfriends@email.org [yourfriends@email.org]
 > send hi
 Message sent.
 ```
-
-If `yourfriend@email.org` uses DeltaChat, but does not receive message just
-sent, it is advisable to check `Spam` folder. It is known that at least
-`gmx.com` treat such test messages as spam, unless told otherwise with web
-interface.
 
 List messages when inside a chat:
 
@@ -187,11 +182,9 @@ $ cargo bolero test fuzz_format_flowed --release=false -e afl -s NONE
 ## Update Provider Data
 
 To add the updates from the
-[provider-db](https://github.com/deltachat/provider-db) to the core, run:
-
-```
-./src/provider/update.py ../provider-db/_providers/ > src/provider/data.rs
-```
+[provider-db](https://github.com/chatmail/provider-db) to the core,
+check line `REV=` inside `./scripts/update-provider-database.sh`
+and then run the script.
 
 ## Language bindings and frontend projects
 

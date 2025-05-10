@@ -477,15 +477,11 @@ impl TestContext {
     /// The context will be configured but the key will not be pre-generated so if a key is
     /// used the fingerprint will be different every time.
     pub async fn configure_addr(&self, addr: &str) {
-        self.ctx.set_config(Config::Addr, Some(addr)).await.unwrap();
         self.ctx
             .set_config(Config::ConfiguredAddr, Some(addr))
             .await
             .unwrap();
-        self.ctx
-            .set_config(Config::Configured, Some("1"))
-            .await
-            .unwrap();
+
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
         }
