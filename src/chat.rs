@@ -128,8 +128,8 @@ pub(crate) enum CantSendReason {
     /// Not a member of the chat.
     NotAMember,
 
-    /// Temporary state for 1:1 chats while SecureJoin is in progress.
-    SecurejoinWait,
+    /// State for 1:1 chat with a PGP-contact that does not have a key.
+    MissingKey,
 }
 
 impl fmt::Display for CantSendReason {
@@ -149,7 +149,7 @@ impl fmt::Display for CantSendReason {
                 write!(f, "mailing list does not have a know post address")
             }
             Self::NotAMember => write!(f, "not a member of the chat"),
-            Self::SecurejoinWait => write!(f, "awaiting SecureJoin for 1:1 chat"),
+            Self::MissingKey => write!(f, "OpenPGP key is missing"),
         }
     }
 }
@@ -1673,15 +1673,20 @@ impl Chat {
         if !skip_fn(&reason) && !self.is_self_in_chat(context).await? {
             return Ok(Some(reason));
         }
-        let reason = SecurejoinWait;
-        if !skip_fn(&reason)
-            && self
-                .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
-                .await?
-                > 0
-        {
-            return Ok(Some(reason));
+
+        let reason = MissingKey;
+        if !skip_fn(&reason) && self.typ == Chattype::Single {
+            let contact_ids = get_chat_contacts(context, self.id).await?;
+            if let Some(contact_id) = contact_ids.first() {
+                let contact = Contact::get_by_id(context, *contact_id).await?;
+                if contact.is_pgp_contact() {
+                    if contact.public_key(context).await?.is_none() {
+                        return Ok(Some(reason));
+                    }
+                }
+            }
         }
+
         Ok(None)
     }
 
@@ -1695,7 +1700,6 @@ impl Chat {
     /// Returns the remaining timeout for the 1:1 chat in-progress SecureJoin.
     ///
     /// If the timeout has expired, adds an info message with additional information.
-    /// See also [`CantSendReason::SecurejoinWait`].
     pub(crate) async fn check_securejoin_wait(
         &self,
         context: &Context,
@@ -2945,8 +2949,7 @@ async fn prepare_send_msg(
 
     let skip_fn = |reason: &CantSendReason| match reason {
         CantSendReason::ProtectionBroken
-        | CantSendReason::ContactRequest
-        | CantSendReason::SecurejoinWait => {
+        | CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
@@ -2955,6 +2958,10 @@ async fn prepare_send_msg(
         // Necessary checks should be made anyway before removing contact
         // from the chat.
         CantSendReason::NotAMember => msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup,
+        CantSendReason::MissingKey => msg
+            .param
+            .get_bool(Param::ForcePlaintext)
+            .unwrap_or_default(),
         _ => false,
     };
     if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {

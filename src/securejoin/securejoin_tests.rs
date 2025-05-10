@@ -17,7 +17,6 @@ enum SetupContactCase {
     Normal,
     CheckProtectionTimestamp,
     WrongAliceGossip,
-    SecurejoinWaitTimeout,
     AliceIsBot,
     AliceHasName,
 }
@@ -35,11 +34,6 @@ async fn test_setup_contact_protection_timestamp() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_wrong_alice_gossip() {
     test_setup_contact_ex(SetupContactCase::WrongAliceGossip).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_setup_contact_wait_timeout() {
-    test_setup_contact_ex(SetupContactCase::SecurejoinWaitTimeout).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -103,10 +97,15 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         .unwrap();
 
     tcm.section("Step 2: Bob scans QR-code, sends vc-request");
-    join_securejoin(&bob.ctx, &qr).await.unwrap();
+    let bob_chat_id = join_securejoin(&bob.ctx, &qr).await.unwrap();
     assert_eq!(
         Chatlist::try_load(&bob, 0, None, None).await.unwrap().len(),
         1
+    );
+    let bob_chat = Chat::load_from_db(&bob, bob_chat_id).await.unwrap();
+    assert_eq!(
+        bob_chat.why_cant_send(&bob).await.unwrap(),
+        Some(CantSendReason::MissingKey)
     );
     let contact_alice_id = bob.add_or_lookup_pgp_contact(&alice).await.id;
     let sent = bob.pop_sent_msg().await;
@@ -137,16 +136,9 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
         "vc-auth-required"
     );
+
     let bob_chat = bob.get_pgp_chat(&alice).await;
-    assert_eq!(bob_chat.can_send(&bob).await.unwrap(), false);
-    assert_eq!(
-        bob_chat.why_cant_send(&bob).await.unwrap(),
-        Some(CantSendReason::SecurejoinWait)
-    );
-    if case == SetupContactCase::SecurejoinWaitTimeout {
-        SystemTime::shift(Duration::from_secs(constants::SECUREJOIN_WAIT_TIMEOUT));
-        assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
-    }
+    assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
 
     tcm.section("Step 4: Bob receives vc-auth-required, sends vc-request-with-auth");
     bob.recv_msg_trash(&sent).await;
@@ -298,35 +290,22 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(contact_alice.get_name().is_empty());
     assert_eq!(contact_alice.is_bot(), case == SetupContactCase::AliceIsBot);
 
-    if case != SetupContactCase::SecurejoinWaitTimeout {
-        // Later we check that the timeout message isn't added to the already protected chat.
-        SystemTime::shift(Duration::from_secs(constants::SECUREJOIN_WAIT_TIMEOUT + 1));
-        assert_eq!(
-            bob_chat
-                .check_securejoin_wait(&bob, constants::SECUREJOIN_WAIT_TIMEOUT)
-                .await
-                .unwrap(),
-            0
-        );
-    }
+    // Later we check that the timeout message isn't added to the already protected chat.
+    SystemTime::shift(Duration::from_secs(constants::SECUREJOIN_WAIT_TIMEOUT + 1));
+    assert_eq!(
+        bob_chat
+            .check_securejoin_wait(&bob, constants::SECUREJOIN_WAIT_TIMEOUT)
+            .await
+            .unwrap(),
+        0
+    );
 
     // Check Bob got expected info messages in his 1:1 chat.
-    let msg_cnt: usize = match case {
-        SetupContactCase::SecurejoinWaitTimeout => 3,
-        _ => 2,
-    };
+    let msg_cnt = 2;
     let mut i = 0..msg_cnt;
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
-    if case == SetupContactCase::SecurejoinWaitTimeout {
-        let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
-        assert!(msg.is_info());
-        assert_eq!(
-            msg.get_text(),
-            stock_str::securejoin_takes_longer(&bob).await
-        );
-    }
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), chat_protection_enabled(&bob).await);
