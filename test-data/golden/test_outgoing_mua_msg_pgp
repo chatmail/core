@@ -1,6 +1,6 @@
-Single#Chat#10: Bob [PGP bob@example.net] 
+Single#Chat#10: bob@example.net [PGP bob@example.net] 🛡️
 --------------------------------------------------------------------------------
 Msg#10: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
-Msg#11: info (Contact#Contact#Info): Bob sent a message from another device. [NOTICED][INFO 🛡️❌]
-Msg#12:  (Contact#Contact#10): Message from Thunderbird [SEEN]
+Msg#11🔒:  (Contact#Contact#10): Heyho from DC [FRESH]
+Msg#13🔒: Me (Contact#Contact#Self): Sending with DC again  √
 --------------------------------------------------------------------------------

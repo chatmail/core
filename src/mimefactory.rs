@@ -1,6 +1,6 @@
 //! # MIME message production.
 
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 use std::path::Path;
 
@@ -23,13 +23,13 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
-use crate::key::DcKey;
+use crate::key::load_self_public_key;
+use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{is_hidden, SystemMessage};
 use crate::param::Param;
 use crate::peer_channels::create_iroh_header;
-use crate::peerstate::Peerstate;
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::IsNoneOrEmpty;
@@ -86,6 +86,13 @@ pub struct MimeFactory {
     /// but `MimeFactory` is not responsible for this.
     recipients: Vec<String>,
 
+    /// Vector of pairs of recipient
+    /// addresses and OpenPGP keys
+    /// to use for encryption.
+    ///
+    /// `None` if the message is not encrypted.
+    encryption_keys: Option<Vec<(String, SignedPublicKey)>>,
+
     /// Vector of pairs of recipient name and address that goes into the `To` field.
     ///
     /// The list of actual message recipient addresses may be different,
@@ -97,11 +104,18 @@ pub struct MimeFactory {
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
 
+    /// Fingerprints of the members in the same order as in the `to`
+    /// followed by `past_members`.
+    ///
+    /// If this is not empty, its length
+    /// should be the sum of `to` and `past_members` length.
+    member_fingerprints: Vec<String>,
+
     /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
     /// If this is not empty, its length
-    /// should be the sum of `recipients` and `past_members` length.
+    /// should be the sum of `to` and `past_members` length.
     member_timestamps: Vec<i64>,
 
     timestamp: i64,
@@ -183,12 +197,29 @@ impl MimeFactory {
         let mut recipients = Vec::new();
         let mut to = Vec::new();
         let mut past_members = Vec::new();
+        let mut member_fingerprints = Vec::new();
         let mut member_timestamps = Vec::new();
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
 
+        let encryption_keys;
+
+        let self_public_key = load_self_public_key(context).await?;
+        let self_fingerprint = self_public_key.dc_fingerprint().hex();
+
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
+
+            encryption_keys = if msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+            {
+                None
+            } else {
+                // Encrypt, but only to self.
+                Some(Vec::new())
+            };
         } else if chat.is_mailing_list() {
             let list_post = chat
                 .param
@@ -196,6 +227,9 @@ impl MimeFactory {
                 .context("Can't write to mailinglist without ListPost param")?;
             to.push(("".to_string(), list_post.to_string()));
             recipients.push(list_post.to_string());
+
+            // Do not encrypt messages to mailing lists.
+            encryption_keys = None;
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -203,27 +237,59 @@ impl MimeFactory {
                 None
             };
 
+            let is_encrypted = if msg
+                .param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+            {
+                false
+            } else {
+                msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
+                    || chat.is_encrypted(context).await?
+            };
+
+            let mut keys = Vec::new();
+            let mut missing_key_addresses = BTreeSet::new();
             context
                 .sql
                 .query_map(
-                    "SELECT c.authname, c.addr, c.id, cc.add_timestamp, cc.remove_timestamp
+                    "SELECT
+                     c.authname,
+                     c.addr,
+                     c.fingerprint,
+                     c.id,
+                     cc.add_timestamp,
+                     cc.remove_timestamp,
+                     k.public_key
                      FROM chats_contacts cc
                      LEFT JOIN contacts c ON cc.contact_id=c.id
-                     WHERE cc.chat_id=? AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
+                     LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
+                     WHERE cc.chat_id=?
+                     AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
                     (msg.chat_id, chat.typ == Chattype::Group),
                     |row| {
                         let authname: String = row.get(0)?;
                         let addr: String = row.get(1)?;
-                        let id: ContactId = row.get(2)?;
-                        let add_timestamp: i64 = row.get(3)?;
-                        let remove_timestamp: i64 = row.get(4)?;
-                        Ok((authname, addr, id, add_timestamp, remove_timestamp))
+                        let fingerprint: String = row.get(2)?;
+                        let id: ContactId = row.get(3)?;
+                        let add_timestamp: i64 = row.get(4)?;
+                        let remove_timestamp: i64 = row.get(5)?;
+                        let public_key_bytes_opt: Option<Vec<u8>> = row.get(6)?;
+                        Ok((authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt))
                     },
                     |rows| {
                         let mut past_member_timestamps = Vec::new();
+                        let mut past_member_fingerprints = Vec::new();
 
                         for row in rows {
-                            let (authname, addr, id, add_timestamp, remove_timestamp) = row?;
+                            let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
+
+                            let public_key_opt = if let Some(ref public_key_bytes) = public_key_bytes_opt {
+                                Some(SignedPublicKey::from_slice(public_key_bytes)?)
+                            } else {
+                                None
+                            };
+
                             let addr = if id == ContactId::SELF {
                                 from_addr.to_string()
                             } else {
@@ -235,13 +301,34 @@ impl MimeFactory {
                             };
                             if add_timestamp >= remove_timestamp {
                                 if !recipients_contain_addr(&to, &addr) {
-                                    recipients.push(addr.clone());
+                                    if id != ContactId::SELF {
+                                        recipients.push(addr.clone());
+                                    }
                                     if !undisclosed_recipients {
-                                        to.push((name, addr));
+                                        to.push((name, addr.clone()));
+
+                                        if is_encrypted {
+                                            if !fingerprint.is_empty() {
+                                                member_fingerprints.push(fingerprint);
+                                            } else if id == ContactId::SELF {
+                                                member_fingerprints.push(self_fingerprint.clone());
+                                            } else {
+                                                debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                            }
+                                        }
                                         member_timestamps.push(add_timestamp);
                                     }
                                 }
                                 recipient_ids.insert(id);
+
+                                if let Some(public_key) = public_key_opt {
+                                    keys.push((addr.clone(), public_key))
+                                } else if id != ContactId::SELF {
+                                    missing_key_addresses.insert(addr.clone());
+                                    if is_encrypted {
+                                        warn!(context, "Missing key for {addr}");
+                                    }
+                                }
                             } else if remove_timestamp.saturating_add(60 * 24 * 3600) > now {
                                 // Row is a tombstone,
                                 // member is not actually part of the group.
@@ -251,27 +338,57 @@ impl MimeFactory {
                                             // This is a "member removed" message,
                                             // we need to notify removed member
                                             // that it was removed.
-                                            recipients.push(addr.clone());
+                                            if id != ContactId::SELF {
+                                                recipients.push(addr.clone());
+                                            }
+
+                                            if let Some(public_key) = public_key_opt {
+                                                keys.push((addr.clone(), public_key))
+                                            } else if id != ContactId::SELF {
+                                                missing_key_addresses.insert(addr.clone());
+                                                if is_encrypted {
+                                                    warn!(context, "Missing key for {addr}");
+                                                }
+                                            }
                                         }
                                     }
                                     if !undisclosed_recipients {
-                                        past_members.push((name, addr));
+                                        past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
+
+                                        if is_encrypted {
+                                            if !fingerprint.is_empty() {
+                                                past_member_fingerprints.push(fingerprint);
+                                            } else if id == ContactId::SELF {
+                                                // It's fine to have self in past members
+                                                // if we are leaving the group.
+                                                past_member_fingerprints.push(self_fingerprint.clone());
+                                            } else {
+                                                debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
 
                         debug_assert!(member_timestamps.len() >= to.len());
+                        debug_assert!(member_fingerprints.is_empty() || member_fingerprints.len() >= to.len());
 
                         if to.len() > 1 {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
                                 to.remove(position);
                                 member_timestamps.remove(position);
+                                if is_encrypted {
+                                    member_fingerprints.remove(position);
+                                }
                             }
                         }
 
                         member_timestamps.extend(past_member_timestamps);
+                        if is_encrypted {
+                            member_fingerprints.extend(past_member_fingerprints);
+                        }
                         Ok(())
                     },
                 )
@@ -285,7 +402,26 @@ impl MimeFactory {
             {
                 req_mdn = true;
             }
+
+            encryption_keys = if !is_encrypted {
+                None
+            } else {
+                if keys.is_empty() && !recipients.is_empty() {
+                    bail!(
+                        "No recipient keys are available, cannot encrypt to {:?}.",
+                        recipients
+                    );
+                }
+
+                // Remove recipients for which the key is missing.
+                if !missing_key_addresses.is_empty() {
+                    recipients.retain(|addr| !missing_key_addresses.contains(addr));
+                }
+
+                Some(keys)
+            };
         }
+
         let (in_reply_to, references) = context
             .sql
             .query_row(
@@ -318,14 +454,17 @@ impl MimeFactory {
             member_timestamps.is_empty()
                 || to.len() + past_members.len() == member_timestamps.len()
         );
+
         let factory = MimeFactory {
             from_addr,
             from_displayname,
             sender_displayname,
             selfstatus,
             recipients,
+            encryption_keys,
             to,
             past_members,
+            member_fingerprints,
             member_timestamps,
             timestamp: msg.timestamp_sort,
             loaded: Loaded::Message { msg, chat },
@@ -349,14 +488,27 @@ impl MimeFactory {
         let from_addr = context.get_primary_self_addr().await?;
         let timestamp = create_smeared_timestamp(context);
 
+        let addr = contact.get_addr().to_string();
+        let encryption_keys = if contact.is_pgp_contact() {
+            if let Some(key) = contact.public_key(context).await? {
+                Some(vec![(addr.clone(), key)])
+            } else {
+                Some(Vec::new())
+            }
+        } else {
+            None
+        };
+
         let res = MimeFactory {
             from_addr,
             from_displayname: "".to_string(),
             sender_displayname: None,
             selfstatus: "".to_string(),
-            recipients: vec![contact.get_addr().to_string()],
+            recipients: vec![addr],
+            encryption_keys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
+            member_fingerprints: vec![],
             member_timestamps: vec![],
             timestamp,
             loaded: Loaded::Mdn {
@@ -372,57 +524,6 @@ impl MimeFactory {
         };
 
         Ok(res)
-    }
-
-    async fn peerstates_for_recipients(
-        &self,
-        context: &Context,
-    ) -> Result<Vec<(Option<Peerstate>, String)>> {
-        let self_addr = context.get_primary_self_addr().await?;
-
-        let mut res = Vec::new();
-        for addr in self.recipients.iter().filter(|&addr| *addr != self_addr) {
-            res.push((Peerstate::from_addr(context, addr).await?, addr.clone()));
-        }
-
-        Ok(res)
-    }
-
-    fn is_e2ee_guaranteed(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                !msg.param
-                    .get_bool(Param::ForcePlaintext)
-                    .unwrap_or_default()
-                    && (chat.is_protected()
-                        || msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default())
-            }
-            Loaded::Mdn { .. } => false,
-        }
-    }
-
-    fn verified(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { chat, msg } => {
-                chat.is_self_talk() ||
-                    // Securejoin messages are supposed to verify a key.
-                    // In order to do this, it is necessary that they can be sent
-                    // to a key that is not yet verified.
-                    // This has to work independently of whether the chat is protected right now.
-                    chat.is_protected() && msg.get_info_type() != SystemMessage::SecurejoinMessage
-            }
-            Loaded::Mdn { .. } => false,
-        }
-    }
-
-    fn should_force_plaintext(&self) -> bool {
-        match &self.loaded {
-            Loaded::Message { msg, .. } => msg
-                .param
-                .get_bool(Param::ForcePlaintext)
-                .unwrap_or_default(),
-            Loaded::Mdn { .. } => false,
-        }
     }
 
     fn should_skip_autocrypt(&self) -> bool {
@@ -600,21 +701,35 @@ impl MimeFactory {
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
-            if chat.typ == Chattype::Group
-                && !self.member_timestamps.is_empty()
-                && !chat.member_list_is_stale(context).await?
-            {
-                headers.push((
-                    "Chat-Group-Member-Timestamps",
-                    mail_builder::headers::raw::Raw::new(
-                        self.member_timestamps
-                            .iter()
-                            .map(|ts| ts.to_string())
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                    )
-                    .into(),
-                ));
+            if chat.typ == Chattype::Group {
+                if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await?
+                {
+                    headers.push((
+                        "Chat-Group-Member-Timestamps",
+                        mail_builder::headers::raw::Raw::new(
+                            self.member_timestamps
+                                .iter()
+                                .map(|ts| ts.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                        .into(),
+                    ));
+                }
+
+                if !self.member_fingerprints.is_empty() {
+                    headers.push((
+                        "Chat-Group-Member-Fpr",
+                        mail_builder::headers::raw::Raw::new(
+                            self.member_fingerprints
+                                .iter()
+                                .map(|fp| fp.to_string())
+                                .collect::<Vec<String>>()
+                                .join(" "),
+                        )
+                        .into(),
+                    ));
+                }
             }
         }
 
@@ -725,10 +840,8 @@ impl MimeFactory {
             ));
         }
 
-        let verified = self.verified();
         let grpimage = self.grpimage();
         let skip_autocrypt = self.should_skip_autocrypt();
-        let e2ee_guaranteed = self.is_e2ee_guaranteed();
         let encrypt_helper = EncryptHelper::new(context).await?;
 
         if !skip_autocrypt {
@@ -739,6 +852,8 @@ impl MimeFactory {
                 mail_builder::headers::raw::Raw::new(aheader).into(),
             ));
         }
+
+        let is_encrypted = self.encryption_keys.is_some();
 
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
@@ -753,9 +868,6 @@ impl MimeFactory {
             }
         }
 
-        let peerstates = self.peerstates_for_recipients(context).await?;
-        let is_encrypted = !self.should_force_plaintext()
-            && (e2ee_guaranteed || encrypt_helper.should_encrypt(context, &peerstates).await?);
         let is_securejoin_message = if let Loaded::Message { msg, .. } = &self.loaded {
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         } else {
@@ -902,7 +1014,7 @@ impl MimeFactory {
             }
         }
 
-        let outer_message = if is_encrypted {
+        let outer_message = if let Some(encryption_keys) = self.encryption_keys {
             // Store protected headers in the inner message.
             let message = protected_headers
                 .into_iter()
@@ -919,7 +1031,7 @@ impl MimeFactory {
 
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
-                peerstates.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
+                encryption_keys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
 
             let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
             let now = time();
@@ -927,11 +1039,7 @@ impl MimeFactory {
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
                     if chat.typ != Chattype::Broadcast {
-                        for peerstate in peerstates.iter().filter_map(|(state, _)| state.as_ref()) {
-                            let Some(key) = peerstate.peek_key(verified) else {
-                                continue;
-                            };
-
+                        for (addr, key) in &encryption_keys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
                             let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
@@ -963,7 +1071,7 @@ impl MimeFactory {
                             }
 
                             let header = Aheader::new(
-                                peerstate.addr.clone(),
+                                addr.clone(),
                                 key.clone(),
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
@@ -1013,8 +1121,10 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            let (encryption_keyring, missing_key_addresses) =
-                encrypt_helper.encryption_keyring(context, verified, &peerstates)?;
+            // Encrypt to self unconditionally,
+            // even for a single-device setup.
+            let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
+            encryption_keyring.extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
 
             // XXX: additional newline is needed
             // to pass filtermail at
@@ -1023,12 +1133,6 @@ impl MimeFactory {
                 .encrypt(context, encryption_keyring, message, compress)
                 .await?
                 + "\n";
-
-            // Remove recipients for which the key is missing.
-            if !missing_key_addresses.is_empty() {
-                self.recipients
-                    .retain(|addr| !missing_key_addresses.contains(addr));
-            }
 
             // Set the appropriate Content-Type for the outer message
             MimePart::new(
@@ -1255,6 +1359,8 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
+                    // TODO: lookup the contact by ID rather than email address.
+                    // We are adding PGP contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     placeholdertext =
                         Some(stock_str::msg_add_member_remote(context, email_to_add).await);
@@ -1559,7 +1665,7 @@ impl MimeFactory {
 
         // we do not piggyback sync-files to other self-sent-messages
         // to not risk files becoming too larger and being skipped by download-on-demand.
-        if command == SystemMessage::MultiDeviceSync && self.is_e2ee_guaranteed() {
+        if command == SystemMessage::MultiDeviceSync {
             let json = msg.param.get(Param::Arg).unwrap_or_default();
             let ids = msg.param.get(Param::Arg2).unwrap_or_default();
             parts.push(context.build_sync_part(json.to_string()));

@@ -30,6 +30,12 @@ pub enum ChatListItemFetchResult {
         /// showing preview if last chat message is image
         summary_preview_image: Option<String>,
         is_protected: bool,
+
+        /// True if the chat is encrypted.
+        ///
+        /// False e.g. for 1:1 chats with email-contacts
+        /// and ad hoc groups.
+        is_encrypted: bool,
         is_group: bool,
         fresh_message_counter: usize,
         is_self_talk: bool,
@@ -137,6 +143,7 @@ pub(crate) async fn get_chat_list_item_by_id(
         summary_status: summary.state.to_u32().expect("impossible"), // idea and a function to transform the constant to strings? or return string enum
         summary_preview_image,
         is_protected: chat.is_protected(),
+        is_encrypted: chat.is_encrypted(ctx).await?,
         is_group: chat.get_type() == Chattype::Group,
         fresh_message_counter,
         is_self_talk: chat.is_self_talk(),
