@@ -1,4 +1,6 @@
 //! # Key transfer via Autocrypt Setup Message.
+use std::io::BufReader;
+
 use rand::{thread_rng, Rng};
 
 use anyhow::{bail, ensure, Result};
@@ -71,7 +73,7 @@ pub async fn continue_key_transfer(
     if let Some(filename) = msg.get_file(context) {
         let file = open_file_std(context, filename)?;
         let sc = normalize_setup_code(setup_code);
-        let armored_key = decrypt_setup_file(&sc, file).await?;
+        let armored_key = decrypt_setup_file(&sc, BufReader::new(file)).await?;
         set_self_key(context, &armored_key).await?;
         context.set_config_bool(Config::BccSelf, true).await?;
 
@@ -96,7 +98,7 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
         true => Some(("Autocrypt-Prefer-Encrypt", "mutual")),
     };
     let private_key_asc = private_key.to_asc(ac_headers);
-    let encr = pgp::symm_encrypt(passphrase, private_key_asc.as_bytes())
+    let encr = pgp::symm_encrypt(passphrase, private_key_asc.into_bytes())
         .await?
         .replace('\n', "\r\n");
 
@@ -155,7 +157,7 @@ fn create_setup_code(_context: &Context) -> String {
     ret
 }
 
-async fn decrypt_setup_file<T: std::io::Read + std::io::Seek>(
+async fn decrypt_setup_file<T: std::fmt::Debug + std::io::BufRead + Send + 'static>(
     passphrase: &str,
     file: T,
 ) -> Result<String> {
@@ -258,11 +260,10 @@ mod tests {
 
         assert!(!base64.is_empty());
 
-        let setup_file = S_EM_SETUPFILE.to_string();
-        let decrypted =
-            decrypt_setup_file(S_EM_SETUPCODE, std::io::Cursor::new(setup_file.as_bytes()))
-                .await
-                .unwrap();
+        let setup_file = S_EM_SETUPFILE;
+        let decrypted = decrypt_setup_file(S_EM_SETUPCODE, setup_file.as_bytes())
+            .await
+            .unwrap();
 
         let (typ, headers, _base64) = split_armored_data(decrypted.as_bytes()).unwrap();
 
@@ -278,14 +279,13 @@ mod tests {
     /// "Implementations MUST NOT use plaintext in Symmetrically Encrypted Data packets".
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_decrypt_plaintext_autocrypt_setup_message() {
-        let setup_file = S_PLAINTEXT_SETUPFILE.to_string();
+        let setup_file = S_PLAINTEXT_SETUPFILE;
         let incorrect_setupcode = "0000-0000-0000-0000-0000-0000-0000-0000-0000";
-        assert!(decrypt_setup_file(
-            incorrect_setupcode,
-            std::io::Cursor::new(setup_file.as_bytes()),
-        )
-        .await
-        .is_err());
+        assert!(
+            decrypt_setup_file(incorrect_setupcode, setup_file.as_bytes(),)
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -11,9 +11,8 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use base64::Engine as _;
-use pgp::crypto::aead::AeadAlgorithm;
+use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::ser::Serialize;
 use rand::thread_rng;
 use tokio::sync::RwLock;
 
@@ -81,18 +80,17 @@ pub(crate) fn encrypt_device_token(device_token: &str) -> Result<String> {
         .first()
         .context("No encryption subkey found")?;
     let padded_device_token = pad_device_token(device_token);
-    let literal_message = pgp::composed::Message::new_literal("", &padded_device_token);
     let mut rng = thread_rng();
-    let chunk_size = 8;
 
-    let encrypted_message = literal_message.encrypt_to_keys_seipdv2(
+    let mut msg = pgp::composed::MessageBuilder::from_bytes("", padded_device_token).seipd_v2(
         &mut rng,
         SymmetricKeyAlgorithm::AES128,
         AeadAlgorithm::Ocb,
-        chunk_size,
-        &[&encryption_subkey],
-    )?;
-    let encoded_message = encrypted_message.to_bytes()?;
+        ChunkSize::C8KiB,
+    );
+    msg.encrypt_to_key(&mut rng, &encryption_subkey)?;
+    let encoded_message = msg.to_vec(&mut rng)?;
+
     Ok(format!(
         "openpgp:{}",
         base64::engine::general_purpose::STANDARD.encode(encoded_message)

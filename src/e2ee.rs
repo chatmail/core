@@ -143,7 +143,7 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        let ctext = pgp::pk_encrypt(&raw_message, keyring, Some(sign_key), compress).await?;
+        let ctext = pgp::pk_encrypt(raw_message, keyring, Some(sign_key), compress).await?;
 
         Ok(ctext)
     }
@@ -153,9 +153,8 @@ impl EncryptHelper {
     pub async fn sign(self, context: &Context, mail: &MimePart<'static>) -> Result<String> {
         let sign_key = load_self_secret_key(context).await?;
         let mut buffer = Vec::new();
-        let cursor = Cursor::new(&mut buffer);
-        mail.clone().write_part(cursor).ok();
-        let signature = pgp::pk_calc_signature(&buffer, &sign_key)?;
+        mail.clone().write_part(&mut buffer).ok(); // TODO: why is this error ignored?
+        let signature = pgp::pk_calc_signature(buffer, &sign_key)?;
         Ok(signature)
     }
 }
