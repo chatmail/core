@@ -15,16 +15,14 @@ use deltachat_derive::{FromSql, ToSql};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
-use tokio::task;
 
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
 use crate::color::str_to_color;
 use crate::config::Config;
 use crate::constants::{
-    self, Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK,
-    DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH, DC_RESEND_USER_AVATAR_DAYS, EDITED_PREFIX,
-    TIMESTAMP_SENT_TOLERANCE,
+    Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK, DC_CHAT_ID_LAST_SPECIAL,
+    DC_CHAT_ID_TRASH, DC_RESEND_USER_AVATAR_DAYS, EDITED_PREFIX, TIMESTAMP_SENT_TOLERANCE,
 };
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
@@ -1450,18 +1448,6 @@ impl ChatId {
 
         Ok(sort_timestamp)
     }
-
-    /// Spawns a task checking after a timeout whether the SecureJoin has finished for the 1:1 chat
-    /// and otherwise notifying the user accordingly.
-    pub(crate) fn spawn_securejoin_wait(self, context: &Context, timeout: u64) {
-        let context = context.clone();
-        task::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(timeout)).await;
-            let chat = Chat::load_from_db(&context, self).await?;
-            chat.check_securejoin_wait(&context, 0).await?;
-            Result::<()>::Ok(())
-        });
-    }
 }
 
 impl std::fmt::Display for ChatId {
@@ -1695,73 +1681,6 @@ impl Chat {
     /// This function can be used by the UI to decide whether to display the input box.
     pub async fn can_send(&self, context: &Context) -> Result<bool> {
         Ok(self.why_cant_send(context).await?.is_none())
-    }
-
-    /// Returns the remaining timeout for the 1:1 chat in-progress SecureJoin.
-    ///
-    /// If the timeout has expired, adds an info message with additional information.
-    pub(crate) async fn check_securejoin_wait(
-        &self,
-        context: &Context,
-        timeout: u64,
-    ) -> Result<u64> {
-        if self.typ != Chattype::Single || self.protected != ProtectionStatus::Unprotected {
-            return Ok(0);
-        }
-
-        // chat is single and unprotected:
-        // get last info message of type SecurejoinWait or SecurejoinWaitTimeout
-        let (mut param_wait, mut param_timeout) = (Params::new(), Params::new());
-        param_wait.set_cmd(SystemMessage::SecurejoinWait);
-        param_timeout.set_cmd(SystemMessage::SecurejoinWaitTimeout);
-        let (param_wait, param_timeout) = (param_wait.to_string(), param_timeout.to_string());
-        let Some((param, ts_sort, ts_start)) = context
-            .sql
-            .query_row_optional(
-                "SELECT param, timestamp, timestamp_sent FROM msgs WHERE id=\
-                 (SELECT MAX(id) FROM msgs WHERE chat_id=? AND param IN (?, ?))",
-                (self.id, &param_wait, &param_timeout),
-                |row| {
-                    let param: String = row.get(0)?;
-                    let ts_sort: i64 = row.get(1)?;
-                    let ts_start: i64 = row.get(2)?;
-                    Ok((param, ts_sort, ts_start))
-                },
-            )
-            .await?
-        else {
-            return Ok(0);
-        };
-        if param == param_timeout {
-            return Ok(0);
-        }
-
-        let now = time();
-        // Don't await SecureJoin if the clock was set back.
-        if ts_start <= now {
-            let timeout = ts_start
-                .saturating_add(timeout.try_into()?)
-                .saturating_sub(now);
-            if timeout > 0 {
-                return Ok(timeout as u64);
-            }
-        }
-        add_info_msg_with_cmd(
-            context,
-            self.id,
-            &stock_str::securejoin_takes_longer(context).await,
-            SystemMessage::SecurejoinWaitTimeout,
-            // Use the sort timestamp of the "please wait" message, this way the added message is
-            // never sorted below the protection message if the SecureJoin finishes in parallel.
-            ts_sort,
-            Some(now),
-            None,
-            None,
-            None,
-        )
-        .await?;
-        context.emit_event(EventType::ChatModified(self.id));
-        Ok(0)
     }
 
     /// Checks if the user is part of a chat
@@ -2600,34 +2519,6 @@ pub(crate) async fn update_special_chat_names(context: &Context) -> Result<()> {
     Ok(())
 }
 
-/// Checks if there is a 1:1 chat in-progress SecureJoin for Bob and, if necessary, schedules a task
-/// unblocking the chat and notifying the user accordingly.
-pub(crate) async fn resume_securejoin_wait(context: &Context) -> Result<()> {
-    let chat_ids: Vec<ChatId> = context
-        .sql
-        .query_map(
-            "SELECT chat_id FROM bobstate",
-            (),
-            |row| {
-                let chat_id: ChatId = row.get(0)?;
-                Ok(chat_id)
-            },
-            |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
-        )
-        .await?;
-
-    for chat_id in chat_ids {
-        let chat = Chat::load_from_db(context, chat_id).await?;
-        let timeout = chat
-            .check_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT)
-            .await?;
-        if timeout > 0 {
-            chat_id.spawn_securejoin_wait(context, timeout);
-        }
-    }
-    Ok(())
-}
-
 /// Handle a [`ChatId`] and its [`Blocked`] status at once.
 ///
 /// This struct is an optimisation to read a [`ChatId`] and its [`Blocked`] status at once
@@ -2948,8 +2839,7 @@ async fn prepare_send_msg(
     let mut chat = Chat::load_from_db(context, chat_id).await?;
 
     let skip_fn = |reason: &CantSendReason| match reason {
-        CantSendReason::ProtectionBroken
-        | CantSendReason::ContactRequest => {
+        CantSendReason::ProtectionBroken | CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage

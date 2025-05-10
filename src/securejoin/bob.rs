@@ -5,7 +5,7 @@ use anyhow::{Context as _, Result};
 use super::qrinvite::QrInvite;
 use super::HandshakeMessage;
 use crate::chat::{self, is_contact_in_chat, ChatId, ProtectionStatus};
-use crate::constants::{self, Blocked, Chattype};
+use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
@@ -136,7 +136,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                     None,
                 )
                 .await?;
-                chat_id.spawn_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT);
             }
             Ok(chat_id)
         }
