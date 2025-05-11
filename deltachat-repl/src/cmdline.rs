@@ -496,7 +496,10 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(poke_spec(&context, Some(arg1)).await, "Poke failed");
         }
         "reset" => {
-            ensure!(!arg1.is_empty(), "Argument <bits> missing: 1=jobs, 2=peerstates, 4=private keys, 8=rest but server config");
+            ensure!(
+                !arg1.is_empty(),
+                "Argument <bits> missing: 4=private keys, 8=rest but server config"
+            );
             let bits: i32 = arg1.parse()?;
             ensure!(bits < 16, "<bits> must be lower than 16.");
             reset_tables(&context, bits).await;

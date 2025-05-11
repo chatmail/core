@@ -82,9 +82,9 @@ pub(crate) struct MimeMessage {
     /// If a message is not encrypted or the signature is not valid,
     /// this set is empty.
     pub signatures: HashSet<Fingerprint>,
-    /// The mail recipient addresses for which gossip headers were applied
-    /// and their respective gossiped keys,
-    /// regardless of whether they modified any peerstates.
+
+    /// The addresses for which there was a gossip header
+    /// and their respective gossiped keys.
     pub gossiped_keys: HashMap<String, SignedPublicKey>,
 
     /// Fingerprint of the key in the Autocrypt header.
@@ -493,8 +493,7 @@ impl MimeMessage {
                 // encryption here, but let's follow the standard.
                 let gossip_headers = mail.headers.get_all_values("Autocrypt-Gossip");
                 gossiped_keys =
-                    update_gossip_peerstates(context, &from.addr, &recipients, gossip_headers)
-                        .await?;
+                    parse_gossip_headers(context, &from.addr, &recipients, gossip_headers).await?;
             }
 
             if let Some(inner_from) = inner_from {
@@ -1892,12 +1891,12 @@ fn remove_header(
     }
 }
 
-/// Parses `Autocrypt-Gossip` headers from the email and applies them to peerstates.
-/// Params:
-/// from: The address which sent the message currently being parsed
+/// Parses `Autocrypt-Gossip` headers from the email,
+/// saves the keys into the `public_keys` table,
+/// and returns them in a HashMap<address, public key>.
 ///
-/// Returns the set of mail recipient addresses for which valid gossip headers were found.
-async fn update_gossip_peerstates(
+/// * `from`: The address which sent the message currently being parsed
+async fn parse_gossip_headers(
     context: &Context,
     from: &str,
     recipients: &[SingleInfo],
@@ -1926,7 +1925,7 @@ async fn update_gossip_peerstates(
             continue;
         }
         if addr_cmp(from, &header.addr) {
-            // Non-standard, but anyway we can't update the cached peerstate here.
+            // Non-standard, might not be necessary to have this check here
             warn!(
                 context,
                 "Ignoring gossiped \"{}\" as it equals the From address", &header.addr,

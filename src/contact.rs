@@ -1078,13 +1078,12 @@ impl Contact {
                 .sql
                 .query_map(
                     "SELECT c.id, c.addr FROM contacts c
-                 LEFT JOIN acpeerstates ps ON c.addr=ps.addr  \
                  WHERE c.id>?
                  AND c.fingerprint!='' \
                  AND c.origin>=? \
                  AND c.blocked=0 \
                  AND (iif(c.name='',c.authname,c.name) LIKE ? OR c.addr LIKE ?) \
-                 AND (1=? OR LENGTH(ps.verified_key_fingerprint)!=0)  \
+                 AND (1=? OR c.verifier!=0)  \
                  ORDER BY c.last_seen DESC, c.id DESC;",
                     (
                         ContactId::LAST_SPECIAL,

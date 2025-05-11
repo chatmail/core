@@ -7,6 +7,7 @@ use crate::chat::{
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
+use crate::key::{load_self_public_key, DcKey};
 use crate::message::Message;
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -173,17 +174,23 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_missing_peerstate_reexecute_securejoin() -> Result<()> {
+async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
     let bob = &tcm.bob().await;
     enable_verified_oneonone_chats(&[alice, bob]).await;
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
     assert!(chat.is_protected());
     bob.sql
-        .execute("DELETE FROM acpeerstates WHERE addr=?", (&alice_addr,))
+        .execute(
+            "DELETE FROM public_keys WHERE fingerprint=?",
+            (&load_self_public_key(alice)
+                .await
+                .unwrap()
+                .dc_fingerprint()
+                .hex(),),
+        )
         .await?;
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;

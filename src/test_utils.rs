@@ -626,9 +626,9 @@ impl TestContext {
     /// Parses a message.
     ///
     /// Parsing a message does not run the entire receive pipeline, but is not without
-    /// side-effects either.  E.g. if the message includes autocrypt headers the relevant
-    /// peerstates will be updated.  Later receiving the message using [Self.recv_msg()] is
-    /// unlikely to be affected as the peerstate would be processed again in exactly the
+    /// side-effects either.  E.g. if the message includes autocrypt headers,
+    /// gossiped public keys will be saved.  Later receiving the message using [Self.recv_msg()] is
+    /// unlikely to be affected as the message would be processed again in exactly the
     /// same way.
     pub(crate) async fn parse_msg(&self, msg: &SentMessage<'_>) -> MimeMessage {
         MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes(), None)
@@ -1367,7 +1367,6 @@ fn print_logevent(logevent: &LogEvent) {
 }
 
 /// Saves the other account's public key as verified
-/// and peerstate as backwards verified.
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
     let contact_id = this.add_or_lookup_contact_id(other).await;
     mark_contact_id_as_verified(this, contact_id, ContactId::SELF)

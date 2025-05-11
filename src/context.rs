@@ -811,7 +811,7 @@ impl Context {
 
         let pub_key_cnt = self
             .sql
-            .count("SELECT COUNT(*) FROM acpeerstates;", ())
+            .count("SELECT COUNT(*) FROM public_keys;", ())
             .await?;
         let fingerprint_str = match load_self_public_key(self).await {
             Ok(key) => key.dc_fingerprint().hex(),

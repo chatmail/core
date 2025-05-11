@@ -988,7 +988,7 @@ async fn test_verified_by_none() -> Result<()> {
     let contact = Contact::get_by_id(&alice, contact_id).await?;
     assert!(contact.get_verifier_id(&alice).await?.is_none());
 
-    // Receive a message from Bob to create a peerstate.
+    // Receive a message from Bob to save the public key.
     let chat = bob.create_chat(&alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
     alice.recv_msg(&sent_msg).await;
