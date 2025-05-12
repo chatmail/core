@@ -374,14 +374,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 );
                 return Ok(HandshakeMessage::Ignore);
             }
-            if !verify_sender_by_fingerprint(context, &fingerprint, contact_id).await? {
-                warn!(
-                    context,
-                    "Ignoring {step} message because of fingerprint mismatch."
-                );
-                return Ok(HandshakeMessage::Ignore);
-            }
-            info!(context, "Fingerprint verified.",);
             // verify that the `Secure-Join-Auth:`-header matches the secret written to the QR code
             let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
                 warn!(
@@ -408,6 +400,14 @@ pub(crate) async fn handle_securejoin_handshake(
                 }
             };
 
+            if !verify_sender_by_fingerprint(context, &fingerprint, contact_id).await? {
+                warn!(
+                    context,
+                    "Ignoring {step} message because of fingerprint mismatch."
+                );
+                return Ok(HandshakeMessage::Ignore);
+            }
+
             let contact_addr = Contact::get_by_id(context, contact_id)
                 .await?
                 .get_addr()
@@ -427,6 +427,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 );
                 return Ok(HandshakeMessage::Ignore);
             }
+            info!(context, "Fingerprint verified via Auth code.",);
             contact_id.regossip_keys(context).await?;
             ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
@@ -434,7 +435,6 @@ pub(crate) async fn handle_securejoin_handshake(
             if !join_vg {
                 ChatId::create_for_contact(context, contact_id).await?;
             }
-            info!(context, "Auth verified.",);
             context.emit_event(EventType::ContactsChanged(Some(contact_id)));
             inviter_progress(context, contact_id, 600);
             if let Some(group_chat_id) = group_chat_id {
