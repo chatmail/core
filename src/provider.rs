@@ -4,8 +4,8 @@ pub(crate) mod data;
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
-use hickory_resolver::{config, Resolver, TokioResolver};
 use hickory_resolver::name_server::TokioConnectionProvider;
+use hickory_resolver::{config, Resolver, TokioResolver};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -185,7 +185,7 @@ fn get_resolver() -> Result<TokioResolver> {
     }
     let resolver = Resolver::builder_with_config(
         config::ResolverConfig::default(),
-        TokioConnectionProvider::default()
+        TokioConnectionProvider::default(),
     );
     Ok(resolver.build())
 }
