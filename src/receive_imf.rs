@@ -761,7 +761,9 @@ async fn add_parts(
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
     let allow_creation;
-    if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
+    if mime_parser.decrypting_failed {
+        allow_creation = false;
+    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
         && !context.get_config_bool(Config::IsChatmail).await?
     {

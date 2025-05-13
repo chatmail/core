@@ -987,13 +987,10 @@ async fn test_verified_lost_member_added() -> Result<()> {
     assert_eq!(sent_msg.get_showpadlock(), true);
 
     // The message will not be sent to Fiona.
-    // Test that Fiona will not be able to decrypt it.
-    let fiona_rcvd = fiona.recv_msg(&sent).await;
-    assert_eq!(fiona_rcvd.get_showpadlock(), false);
-    assert_eq!(
-        fiona_rcvd.get_text(),
-        "[...] – [This message was encrypted for another setup.]"
-    );
+    // Test that Fiona will not be able to decrypt it
+    // and the message is trashed because
+    // we don't create groups from undecipherable messages.
+    fiona.recv_msg_trash(&sent).await;
 
     // Advance the time so Alice does not leave at the same second
     // as the group was created.
