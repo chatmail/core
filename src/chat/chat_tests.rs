@@ -3868,8 +3868,10 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
     alice.recv_msg(&bob_sent_text).await;
     fiona.recv_msg(&bob_sent_text).await;
 
+    // Alice did not knew that Charlie is not part of the group
+    // when sending a message, so sent it to Charlie.
     bob.recv_msg(&alice_sent_text).await;
-    fiona.recv_msg(&alice_sent_text).await;
+    charlie.recv_msg(&alice_sent_text).await;
 
     // Alice should have learned about Charlie not being part of the group
     // by receiving Bob's message.
