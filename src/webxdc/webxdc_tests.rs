@@ -2210,6 +2210,7 @@ async fn test_self_addr_consistency() -> Result<()> {
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
     )?;
     alice_chat.set_draft(alice, Some(&mut instance)).await?;
+    let mut instance = alice_chat.get_draft(alice).await?.unwrap();
     let self_addr = instance.get_webxdc_self_addr(alice).await?;
     let sent = alice.send_msg(alice_chat, &mut instance).await;
     let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
