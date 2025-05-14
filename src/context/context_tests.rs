@@ -595,18 +595,15 @@ async fn test_get_next_msgs() -> Result<()> {
 async fn test_draft_self_report() -> Result<()> {
     let alice = TestContext::new_alice().await;
 
-    let chat_id = alice.draft_self_report().await?;
-    let msg = get_chat_msg(&alice, chat_id, 0, 1).await;
+    let chat_id = alice.send_self_report().await?;
+    let msg = get_chat_msg(&alice, chat_id, 0, 2).await;
     assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
 
     let chat = Chat::load_from_db(&alice, chat_id).await?;
     assert!(chat.is_protected());
 
-    let mut draft = chat_id.get_draft(&alice).await?.unwrap();
-    assert!(draft.text.starts_with("core_version"));
-
-    // Test that sending into the protected chat works:
-    let _sent = alice.send_msg(chat_id, &mut draft).await;
+    let statistics_msg = get_chat_msg(&alice, chat_id, 1, 2).await;
+    assert_eq!(statistics_msg.get_filename().unwrap(), "statistics.txt");
 
     Ok(())
 }

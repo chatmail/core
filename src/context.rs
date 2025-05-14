@@ -13,10 +13,11 @@ use async_channel::{self as channel, Receiver, Sender};
 use pgp::types::PublicKeyTrait;
 use pgp::SignedPublicKey;
 use ratelimit::Ratelimit;
+use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::aheader::EncryptPreference;
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{self, get_chat_cnt, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
@@ -28,8 +29,9 @@ use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::log::LogExt;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
-use crate::message::{self, Message, MessageState, MsgId};
+use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
 use crate::peerstate::Peerstate;
@@ -1032,6 +1034,18 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "self_reporting",
+            self.get_config_bool(Config::SelfReporting)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "last_self_report_sent",
+            self.get_config_i64(Config::LastSelfReportSent)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
@@ -1040,7 +1054,17 @@ impl Context {
     }
 
     async fn get_self_report(&self) -> Result<String> {
-        #[derive(Default)]
+        #[derive(Serialize)]
+        struct Statistics {
+            core_version: String,
+            num_msgs: u32,
+            num_chats: u32,
+            db_size: u64,
+            key_created: i64,
+            chat_numbers: ChatNumbers,
+            self_reporting_id: String,
+        }
+        #[derive(Default, Serialize)]
         struct ChatNumbers {
             protected: u32,
             protection_broken: u32,
@@ -1050,9 +1074,6 @@ impl Context {
             unencrypted_mua: u32,
         }
 
-        let mut res = String::new();
-        res += &format!("core_version {}\n", get_version_str());
-
         let num_msgs: u32 = self
             .sql
             .query_get_value(
@@ -1061,21 +1082,20 @@ impl Context {
             )
             .await?
             .unwrap_or_default();
-        res += &format!("num_msgs {}\n", num_msgs);
 
         let num_chats: u32 = self
             .sql
             .query_get_value("SELECT COUNT(*) FROM chats WHERE id>9 AND blocked!=1", ())
             .await?
             .unwrap_or_default();
-        res += &format!("num_chats {}\n", num_chats);
 
         let db_size = tokio::fs::metadata(&self.sql.dbfile).await?.len();
-        res += &format!("db_size_bytes {}\n", db_size);
 
-        let secret_key = &load_self_secret_key(self).await?.primary_key;
-        let key_created = secret_key.created_at().timestamp();
-        res += &format!("key_created {}\n", key_created);
+        let key_created = load_self_secret_key(self)
+            .await?
+            .primary_key
+            .created_at()
+            .timestamp();
 
         // how many of the chats active in the last months are:
         // - protected
@@ -1085,7 +1105,7 @@ impl Context {
         // - unencrypted and the contact uses Delta Chat
         // - unencrypted and the contact uses a classical MUA
         let three_months_ago = time().saturating_sub(3600 * 24 * 30 * 3);
-        let chats = self
+        let chat_numbers = self
             .sql
             .query_map(
                 "SELECT c.protected, m.param, m.msgrmsg
@@ -1140,24 +1160,27 @@ impl Context {
                 },
             )
             .await?;
-        res += &format!("chats_protected {}\n", chats.protected);
-        res += &format!("chats_protection_broken {}\n", chats.protection_broken);
-        res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
-        res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
-        res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);
-        res += &format!("chats_unencrypted_mua {}\n", chats.unencrypted_mua);
 
         let self_reporting_id = match self.get_config(Config::SelfReportingId).await? {
             Some(id) => id,
             None => {
                 let id = create_id();
-                self.set_config(Config::SelfReportingId, Some(&id)).await?;
+                self.set_config_internal(Config::SelfReportingId, Some(&id))
+                    .await?;
                 id
             }
         };
-        res += &format!("self_reporting_id {}", self_reporting_id);
+        let statistics = Statistics {
+            core_version: get_version_str().to_string(),
+            num_msgs,
+            num_chats,
+            db_size,
+            key_created,
+            chat_numbers,
+            self_reporting_id,
+        };
 
-        Ok(res)
+        Ok(serde_json::to_string_pretty(&statistics)?)
     }
 
     /// Drafts a message with statistics about the usage of Delta Chat.
@@ -1165,11 +1188,29 @@ impl Context {
     ///
     /// On the other end, a bot will receive the message and make it available
     /// to Delta Chat's developers.
-    pub async fn draft_self_report(&self) -> Result<ChatId> {
+    pub async fn send_self_report(&self) -> Result<ChatId> {
+        info!(self, "Sending self report.");
+        // Setting `Config::LastHousekeeping` at the beginning avoids endless loops when things do not
+        // work out for whatever reason or are interrupted by the OS.
+        self.set_config_internal(Config::LastSelfReportSent, Some(&time().to_string()))
+            .await
+            .log_err(self)
+            .ok();
+
         const SELF_REPORTING_BOT: &str = "self_reporting@testrun.org";
 
         let contact_id = Contact::create(self, "Statistics bot", SELF_REPORTING_BOT).await?;
-        let chat_id = ChatId::create_for_contact(self, contact_id).await?;
+        let chat_id = if let Some(res) = ChatId::lookup_by_contact(self, contact_id).await? {
+            // Already exists, no need to create.
+            res
+        } else {
+            let chat_id = ChatId::get_for_contact(self, contact_id).await?;
+            chat_id
+                .set_visibility(self, ChatVisibility::Archived)
+                .await?;
+            chat::set_muted(self, chat_id, MuteDuration::Forever).await?;
+            chat_id
+        };
 
         // We're including the bot's public key in Delta Chat
         // so that the first message to the bot can directly be encrypted:
@@ -1196,9 +1237,26 @@ impl Context {
             .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
             .await?;
 
-        let mut msg = Message::new_text(self.get_self_report().await?);
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_text(
+            "The attachment contains anonymous usage statistics, \
+because you enabled this in the settings. \
+This helps us improve the security of Delta Chat. \
+See TODO[blog post] for more information."
+                .to_string(),
+        );
+        msg.set_file_from_bytes(
+            self,
+            "statistics.txt",
+            self.get_self_report().await?.as_bytes(),
+            Some("text/plain"),
+        )?;
 
-        chat_id.set_draft(self, Some(&mut msg)).await?;
+        crate::chat::send_msg(self, chat_id, &mut msg)
+            .await
+            .context("Failed to send self_reporting message")
+            .log_err(self)
+            .ok();
 
         Ok(chat_id)
     }
