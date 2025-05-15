@@ -1886,7 +1886,7 @@ async fn should_move_out_of_spam(
         };
         // No chat found.
         let (from_id, blocked_contact, _origin) =
-            match from_field_to_contact_id(context, &from, None, true, false)
+            match from_field_to_contact_id(context, &from, None, true, true)
                 .await
                 .context("from_field_to_contact_id")?
             {
