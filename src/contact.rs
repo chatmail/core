@@ -425,7 +425,9 @@ pub struct Contact {
     /// E-Mail-Address of the contact. It is recommended to use `Contact::get_addr` to access this field.
     addr: String,
 
-    /// OpenPGP fingerprint.
+    /// OpenPGP key fingerprint.
+    /// Non-empty iff the contact is a pgp-contact,
+    /// identified by this fingerprint.
     fingerprint: Option<String>,
 
     /// Blocked state. Use contact_is_blocked to access this field.
