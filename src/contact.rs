@@ -809,9 +809,9 @@ impl Contact {
     }
 
     /// Lookup a contact and create it if it does not exist yet.
-/// If `fingerprint` is non-empty, a PGP-contact with this fingerprint is added / looked up.
-/// Otherwise, an email-contact with `addr` is added / looked up.
-/// A name and an "origin" can be given.
+    /// If `fingerprint` is non-empty, a PGP-contact with this fingerprint is added / looked up.
+    /// Otherwise, an email-contact with `addr` is added / looked up.
+    /// A name and an "origin" can be given.
     ///
     /// The "origin" is where the address comes from -
     /// from-header, cc-header, addressbook, qr, manual-edit etc.
