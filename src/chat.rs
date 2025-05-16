@@ -4827,7 +4827,7 @@ async fn set_contacts_by_fingerprints(
 /// A cross-device chat id used for synchronisation.
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) enum SyncId {
-    // E-mail address of the contact.
+    /// E-mail address of the contact.
     ContactAddr(String),
 
     /// OpenPGP key fingerprint of the contact.
