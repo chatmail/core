@@ -3309,6 +3309,7 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
         }
     }
 
+    debug_assert_eq!(contact_ids.len(), address_list.len());
     Ok(contact_ids)
 }
 
