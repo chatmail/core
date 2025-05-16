@@ -322,6 +322,23 @@ pub(crate) async fn receive_imf_inner(
         }
     };
 
+    // Lookup parent message.
+    //
+    // This may be useful to assign the message to
+    // group chats without Chat-Group-ID
+    // when a message is sent by Thunderbird.
+    //
+    // This can be also used to lookup
+    // PGP-contact by email address
+    // when receiving a private 1:1 reply
+    // to a group chat message.
+    let parent_message = get_parent_message(
+        context,
+        mime_parser.get_header(HeaderDef::References),
+        mime_parser.get_header(HeaderDef::InReplyTo),
+    )
+    .await?;
+
     // ID of the chat to look up the addresses in.
     //
     // Note that this is not necessarily the chat we want to assign the message to.
@@ -506,6 +523,7 @@ pub(crate) async fn receive_imf_inner(
             replace_msg_id,
             prevent_rename,
             verified_encryption,
+            parent_message,
         )
         .await
         .context("add_parts error")?
@@ -832,6 +850,7 @@ async fn add_parts(
     mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
+    parent_message: Option<Message>,
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
     let rfc724_mid_orig = &mime_parser
@@ -847,18 +866,12 @@ async fn add_parts(
         better_msg = Some(stock_str::msg_location_enabled_by(context, from_id).await);
     }
 
-    let parent = get_parent_message(
-        context,
-        mime_parser.get_header(HeaderDef::References),
-        mime_parser.get_header(HeaderDef::InReplyTo),
-    )
-    .await?
-    .filter(|p| Some(p.id) != replace_msg_id);
+    let parent_message = parent_message.filter(|p| Some(p.id) != replace_msg_id);
 
     let is_dc_message = if mime_parser.has_chat_version() {
         MessengerMessage::Yes
-    } else if let Some(parent) = &parent {
-        match parent.is_dc_message {
+    } else if let Some(parent_message) = &parent_message {
+        match parent_message.is_dc_message {
             MessengerMessage::No => MessengerMessage::No,
             MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
         }
@@ -988,7 +1001,7 @@ async fn add_parts(
             if let Some((new_chat_id, new_chat_id_blocked)) = lookup_chat_or_create_adhoc_group(
                 context,
                 mime_parser,
-                &parent,
+                &parent_message,
                 to_ids,
                 from_id,
                 allow_creation || test_normal_chat.is_some(),
@@ -1094,7 +1107,7 @@ async fn add_parts(
                     if chat_id_blocked != create_blocked {
                         chat_id.set_blocked(context, create_blocked).await?;
                     }
-                    if create_blocked == Blocked::Request && parent.is_some() {
+                    if create_blocked == Blocked::Request && parent_message.is_some() {
                         // we do not want any chat to be created implicitly.  Because of the origin-scale-up,
                         // the contact requests will pop up and this should be just fine.
                         ContactId::scaleup_origin(context, &[from_id], Origin::IncomingReplyTo)
@@ -1251,7 +1264,7 @@ async fn add_parts(
             if let Some((new_chat_id, new_chat_id_blocked)) = lookup_chat_or_create_adhoc_group(
                 context,
                 mime_parser,
-                &parent,
+                &parent_message,
                 to_ids,
                 from_id,
                 allow_creation,
