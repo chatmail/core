@@ -95,9 +95,10 @@ jobs:
       fail-fast: false
       matrix:
         installable:
-          - deltachat-rpc-server-aarch64-darwin
+          - deltachat-rpc-server
 
           # Fails to bulid
+          # - deltachat-rpc-server-aarch64-darwin
           # - deltachat-rpc-server-x86_64-darwin
     steps:
       - uses: actions/checkout@v4
