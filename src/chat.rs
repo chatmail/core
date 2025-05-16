@@ -4830,7 +4830,7 @@ pub(crate) enum SyncId {
     // E-mail address of the contact.
     ContactAddr(String),
 
-    // OpenPGP fingerprint of the contact.
+    /// OpenPGP key fingerprint of the contact.
     ContactFingerprint(String),
 
     Grpid(String),
