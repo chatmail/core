@@ -20,10 +20,10 @@ permissions: {}
 
 env:
   RUSTFLAGS: -Dwarnings
-  RUST_VERSION: 1.86.0
+  RUST_VERSION: 1.87.0
 
   # Minimum Supported Rust Version
-  MSRV: 1.82.0
+  MSRV: 1.85.0
 
 jobs:
   lint_rust:

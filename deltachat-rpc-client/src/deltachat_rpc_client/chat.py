@@ -1,3 +1,5 @@
+"""Chat module."""
+
 from __future__ import annotations
 
 import calendar
@@ -89,7 +91,8 @@ class Chat:
     def set_ephemeral_timer(self, timer: int) -> None:
         """Set ephemeral timer of this chat in seconds.
 
-        0 means the timer is disabled, use 1 for immediate deletion."""
+        0 means the timer is disabled, use 1 for immediate deletion.
+        """
         self._rpc.set_chat_ephemeral_timer(self.account.id, self.id, timer)
 
     def get_encryption_info(self) -> str:
@@ -199,12 +202,12 @@ class Chat:
         return snapshot
 
     def get_messages(self, info_only: bool = False, add_daymarker: bool = False) -> list[Message]:
-        """get the list of messages in this chat."""
+        """Get the list of messages in this chat."""
         msgs = self._rpc.get_message_ids(self.account.id, self.id, info_only, add_daymarker)
         return [Message(self.account, msg_id) for msg_id in msgs]
 
     def get_fresh_message_count(self) -> int:
-        """Get number of fresh messages in this chat"""
+        """Get number of fresh messages in this chat."""
         return self._rpc.get_fresh_msg_cnt(self.account.id, self.id)
 
     def mark_noticed(self) -> None:

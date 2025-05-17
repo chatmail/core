@@ -4,6 +4,7 @@ pub(crate) mod data;
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
+use hickory_resolver::name_server::TokioConnectionProvider;
 use hickory_resolver::{config, Resolver, TokioResolver};
 use serde::{Deserialize, Serialize};
 
@@ -179,14 +180,14 @@ impl ProviderOptions {
 /// This does not work at least on some Androids, therefore we fallback
 /// to the default `ResolverConfig` which uses eg. to google's `8.8.8.8` or `8.8.4.4`.
 fn get_resolver() -> Result<TokioResolver> {
-    if let Ok(resolver) = Resolver::tokio_from_system_conf() {
-        return Ok(resolver);
+    if let Ok(resolver) = TokioResolver::builder_tokio() {
+        return Ok(resolver.build());
     }
-    let resolver = Resolver::tokio(
+    let resolver = Resolver::builder_with_config(
         config::ResolverConfig::default(),
-        config::ResolverOpts::default(),
+        TokioConnectionProvider::default(),
     );
-    Ok(resolver)
+    Ok(resolver.build())
 }
 
 /// Returns provider for the given an e-mail address.

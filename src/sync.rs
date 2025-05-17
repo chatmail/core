@@ -612,7 +612,7 @@ mod tests {
 
         // the same sync message sent to bob must not be executed
         let bob = TestContext::new_bob().await;
-        bob.recv_msg(&sent_msg).await;
+        bob.recv_msg_trash(&sent_msg).await;
         assert!(!token::exists(&bob, token::Namespace::Auth, "testtoken").await?);
 
         Ok(())

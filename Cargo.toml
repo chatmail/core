@@ -1,9 +1,9 @@
 [package]
 name = "deltachat"
-version = "1.159.3"
+version = "1.159.5"
 edition = "2021"
 license = "MPL-2.0"
-rust-version = "1.82"
+rust-version = "1.85"
 repository = "https://github.com/chatmail/core"
 
 [profile.dev]
@@ -43,7 +43,7 @@ async-broadcast = "0.7.2"
 async-channel = { workspace = true }
 async-imap = { version = "0.10.4", default-features = false, features = ["runtime-tokio", "compress"] }
 async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
-async-smtp = { version = "0.10", default-features = false, features = ["runtime-tokio"] }
+async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
 brotli = { version = "8", default-features=false, features = ["std"] }
@@ -56,14 +56,14 @@ fd-lock = "4"
 futures-lite = { workspace = true }
 futures = { workspace = true }
 hex = "0.4.0"
-hickory-resolver = "=0.25.0-alpha.5"
+hickory-resolver = "0.25.2"
 http-body-util = "0.1.3"
 humansize = "2"
 hyper = "1"
 hyper-util = "0.1.11"
 image = { version = "0.25.6", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
-iroh-gossip = { version = "0.33", default-features = false, features = ["net"] }
-iroh = { version = "0.33", default-features = false }
+iroh-gossip = { version = "0.35", default-features = false, features = ["net"] }
+iroh = { version = "0.35", default-features = false }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
 mail-builder = { version = "0.4.2", default-features = false }
@@ -91,7 +91,7 @@ serde_urlencoded = "0.7.1"
 serde = { workspace = true, features = ["derive"] }
 sha-1 = "0.10"
 sha2 = "0.10"
-shadowsocks = { version = "1.22.0", default-features = false, features = ["aead-cipher", "aead-cipher-2022"] }
+shadowsocks = { version = "1.23.1", default-features = false, features = ["aead-cipher", "aead-cipher-2022"] }
 smallvec = "1.15.0"
 strum = "0.27"
 strum_macros = "0.27"

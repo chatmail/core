@@ -1,14 +1,20 @@
+"""Constants module."""
+
 from enum import Enum, IntEnum
 
 COMMAND_PREFIX = "/"
 
 
 class ContactFlag(IntEnum):
+    """Bit flags for get_contacts() method."""
+
     VERIFIED_ONLY = 0x01
     ADD_SELF = 0x02
 
 
 class ChatlistFlag(IntEnum):
+    """Bit flags for get_chatlist() method."""
+
     ARCHIVED_ONLY = 0x01
     NO_SPECIALS = 0x02
     ADD_ALLDONE_HINT = 0x04
@@ -16,6 +22,8 @@ class ChatlistFlag(IntEnum):
 
 
 class SpecialContactId(IntEnum):
+    """Special contact IDs."""
+
     SELF = 1
     INFO = 2  # centered messages as "member added", used in all chats
     DEVICE = 5  #  messages "update info" in the device-chat
@@ -23,7 +31,7 @@ class SpecialContactId(IntEnum):
 
 
 class EventType(str, Enum):
-    """Core event types"""
+    """Core event types."""
 
     INFO = "Info"
     SMTP_CONNECTED = "SmtpConnected"
@@ -71,7 +79,7 @@ class EventType(str, Enum):
 
 
 class ChatId(IntEnum):
-    """Special chat ids"""
+    """Special chat IDs."""
 
     TRASH = 3
     ARCHIVED_LINK = 6
@@ -80,7 +88,7 @@ class ChatId(IntEnum):
 
 
 class ChatType(IntEnum):
-    """Chat types"""
+    """Chat type."""
 
     UNDEFINED = 0
     SINGLE = 100
@@ -90,7 +98,7 @@ class ChatType(IntEnum):
 
 
 class ChatVisibility(str, Enum):
-    """Chat visibility types"""
+    """Chat visibility types."""
 
     NORMAL = "Normal"
     ARCHIVED = "Archived"
@@ -98,7 +106,7 @@ class ChatVisibility(str, Enum):
 
 
 class DownloadState(str, Enum):
-    """Message download state"""
+    """Message download state."""
 
     DONE = "Done"
     AVAILABLE = "Available"
@@ -159,14 +167,14 @@ class MessageState(IntEnum):
 
 
 class MessageId(IntEnum):
-    """Special message ids"""
+    """Special message IDs."""
 
     DAYMARKER = 9
     LAST_SPECIAL = 9
 
 
 class CertificateChecks(IntEnum):
-    """Certificate checks mode"""
+    """Certificate checks mode."""
 
     AUTOMATIC = 0
     STRICT = 1
@@ -174,7 +182,7 @@ class CertificateChecks(IntEnum):
 
 
 class Connectivity(IntEnum):
-    """Connectivity states"""
+    """Connectivity states."""
 
     NOT_CONNECTED = 1000
     CONNECTING = 2000
@@ -183,7 +191,7 @@ class Connectivity(IntEnum):
 
 
 class KeyGenType(IntEnum):
-    """Type of the key to generate"""
+    """Type of the key to generate."""
 
     DEFAULT = 0
     RSA2048 = 1
@@ -193,21 +201,21 @@ class KeyGenType(IntEnum):
 
 # "Lp" means "login parameters"
 class LpAuthFlag(IntEnum):
-    """Authorization flags"""
+    """Authorization flags."""
 
     OAUTH2 = 0x2
     NORMAL = 0x4
 
 
 class MediaQuality(IntEnum):
-    """Media quality setting"""
+    """Media quality setting."""
 
     BALANCED = 0
     WORSE = 1
 
 
 class ProviderStatus(IntEnum):
-    """Provider status according to manual testing"""
+    """Provider status according to manual testing."""
 
     OK = 1
     PREPARATION = 2
@@ -215,7 +223,7 @@ class ProviderStatus(IntEnum):
 
 
 class PushNotifyState(IntEnum):
-    """Push notifications state"""
+    """Push notifications state."""
 
     NOT_CONNECTED = 0
     HEARTBEAT = 1
@@ -223,7 +231,7 @@ class PushNotifyState(IntEnum):
 
 
 class ShowEmails(IntEnum):
-    """Show emails mode"""
+    """Show emails mode."""
 
     OFF = 0
     ACCEPTED_CONTACTS = 1
@@ -231,7 +239,7 @@ class ShowEmails(IntEnum):
 
 
 class SocketSecurity(IntEnum):
-    """Socket security"""
+    """Socket security."""
 
     AUTOMATIC = 0
     SSL = 1
@@ -240,7 +248,7 @@ class SocketSecurity(IntEnum):
 
 
 class VideochatType(IntEnum):
-    """Video chat URL type"""
+    """Video chat URL type."""
 
     UNKNOWN = 0
     BASICWEBRTC = 1
