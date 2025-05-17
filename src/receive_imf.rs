@@ -665,6 +665,7 @@ pub(crate) async fn receive_imf_inner(
             prevent_rename,
             verified_encryption,
             parent_message,
+            chat_assignment,
         )
         .await
         .context("add_parts error")?
@@ -992,6 +993,7 @@ async fn add_parts(
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
     parent_message: Option<Message>,
+    chat_assignment: ChatAssignment
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
     let rfc724_mid_orig = &mime_parser
