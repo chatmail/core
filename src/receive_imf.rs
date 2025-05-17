@@ -867,7 +867,7 @@ async fn add_parts(
                 &parent,
                 to_ids,
                 from_id,
-                allow_creation || test_normal_chat.is_some(),
+                allow_creation,
                 create_blocked,
                 is_partial_download.is_some(),
             )
