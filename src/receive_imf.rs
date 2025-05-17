@@ -912,7 +912,7 @@ async fn add_parts(
     // (of course, the user can add other chats manually later)
     let to_id: ContactId;
     let state: MessageState;
-    let mut hidden = is_reaction;
+    let hidden = is_reaction;
     let mut needs_delete_job = false;
     let mut restore_protection = false;
 
