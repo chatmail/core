@@ -20,7 +20,6 @@ use deltachat::log::LogExt;
 use deltachat::message::{self, Message, MessageState, MsgId, Viewtype};
 use deltachat::mimeparser::SystemMessage;
 use deltachat::peer_channels::{send_webxdc_realtime_advertisement, send_webxdc_realtime_data};
-use deltachat::peerstate::*;
 use deltachat::qr::*;
 use deltachat::qr_code_generator::create_qr_svg;
 use deltachat::reaction::send_reaction;
@@ -35,14 +34,6 @@ use tokio::fs;
 /// e.g. bitmask 7 triggers actions defined with bits 1, 2 and 4.
 async fn reset_tables(context: &Context, bits: i32) {
     println!("Resetting tables ({bits})...");
-    if 0 != bits & 2 {
-        context
-            .sql()
-            .execute("DELETE FROM acpeerstates;", ())
-            .await
-            .unwrap();
-        println!("(2) Peerstates reset.");
-    }
     if 0 != bits & 4 {
         context
             .sql()
@@ -277,7 +268,7 @@ async fn log_msglist(context: &Context, msglist: &[MsgId]) -> Result<()> {
 
 async fn log_contactlist(context: &Context, contacts: &[ContactId]) -> Result<()> {
     for contact_id in contacts {
-        let mut line2 = "".to_string();
+        let line2 = "".to_string();
         let contact = Contact::get_by_id(context, *contact_id).await?;
         let name = contact.get_display_name();
         let addr = contact.get_addr();
@@ -296,15 +287,6 @@ async fn log_contactlist(context: &Context, contacts: &[ContactId]) -> Result<()
             verified_str,
             if !addr.is_empty() { addr } else { "addr unset" }
         );
-        let peerstate = Peerstate::from_addr(context, addr)
-            .await
-            .expect("peerstate error");
-        if peerstate.is_some() && *contact_id != ContactId::SELF {
-            line2 = format!(
-                ", prefer-encrypt={}",
-                peerstate.as_ref().unwrap().prefer_encrypt
-            );
-        }
 
         println!("Contact#{}: {}{}", *contact_id, line, line2);
     }
@@ -514,7 +496,10 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(poke_spec(&context, Some(arg1)).await, "Poke failed");
         }
         "reset" => {
-            ensure!(!arg1.is_empty(), "Argument <bits> missing: 1=jobs, 2=peerstates, 4=private keys, 8=rest but server config");
+            ensure!(
+                !arg1.is_empty(),
+                "Argument <bits> missing: 4=private keys, 8=rest but server config"
+            );
             let bits: i32 = arg1.parse()?;
             ensure!(bits < 16, "<bits> must be lower than 16.");
             reset_tables(&context, bits).await;

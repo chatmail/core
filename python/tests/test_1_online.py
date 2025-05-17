@@ -767,7 +767,7 @@ def test_mdn_asymmetric(acfactory, lp):
     assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
 
 
-def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
+def test_send_receive_encrypt(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
     ac1.get_device_chat().mark_noticed()
@@ -798,12 +798,11 @@ def test_send_and_receive_will_encrypt_decrypt(acfactory, lp):
     msg3.mark_seen()
     assert not list(ac1.get_fresh_messages())
 
-    lp.sec("create group chat with two members, one of which has no encrypt state")
+    lp.sec("create group chat with two members")
     chat = ac1.create_group_chat("encryption test")
     chat.add_contact(ac2)
-    chat.add_contact(ac1.create_contact("notexisting@testrun.org"))
     msg = chat.send_text("test not encrypt")
-    assert not msg.is_encrypted()
+    assert msg.is_encrypted()
     ac1._evtracker.get_matching("DC_EVENT_SMTP_MESSAGE_SENT")
 
 
@@ -1139,9 +1138,9 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
 
     lp.sec("create some chat content")
     some1_addr = some1.get_config("addr")
-    chat1 = ac1.create_contact(some1_addr, name="some1").create_chat()
+    chat1 = ac1.create_contact(some1).create_chat()
     chat1.send_text("msg1")
-    assert len(ac1.get_contacts(query="some1")) == 1
+    assert len(ac1.get_contacts()) == 1
 
     original_image_path = data.get_path("d.png")
     chat1.send_image(original_image_path)
@@ -1153,7 +1152,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
     chat1.send_file(str(path))
 
     def assert_account_is_proper(ac):
-        contacts = ac.get_contacts(query="some1")
+        contacts = ac.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
         assert contact2.addr == some1_addr
@@ -1286,79 +1285,6 @@ def test_set_get_contact_avatar(acfactory, data, lp):
     lp.sec("ac2: wait for message along with avatar deletion of ac1")
     msg6 = ac2._evtracker.wait_next_incoming_message()
     assert msg6.get_sender_contact().get_profile_image() is None
-
-
-def test_add_remove_member_remote_events(acfactory, lp):
-    ac1, ac2, ac3 = acfactory.get_online_accounts(3)
-    ac1_addr = ac1.get_config("addr")
-    ac3_addr = ac3.get_config("addr")
-    # activate local plugin for ac2
-    in_list = queue.Queue()
-
-    class EventHolder:
-        def __init__(self, **kwargs) -> None:
-            self.__dict__.update(kwargs)
-
-    class InPlugin:
-        @account_hookimpl
-        def ac_incoming_message(self, message):
-            # we immediately accept the sender because
-            # otherwise we won't see member_added contacts
-            message.create_chat()
-
-        @account_hookimpl
-        def ac_chat_modified(self, chat):
-            in_list.put(EventHolder(action="chat-modified", chat=chat))
-
-        @account_hookimpl
-        def ac_member_added(self, chat, contact, message):
-            in_list.put(EventHolder(action="added", chat=chat, contact=contact, message=message))
-
-        @account_hookimpl
-        def ac_member_removed(self, chat, contact, message):
-            in_list.put(EventHolder(action="removed", chat=chat, contact=contact, message=message))
-
-    ac2.add_account_plugin(InPlugin())
-
-    lp.sec("ac1: create group chat with ac2")
-    chat = ac1.create_group_chat("hello", contacts=[ac2])
-
-    lp.sec("ac1: send a message to group chat to promote the group")
-    chat.send_text("afterwards promoted")
-    ev = in_list.get()
-    assert ev.action == "chat-modified"
-    assert chat.is_promoted()
-    assert sorted(x.addr for x in chat.get_contacts()) == sorted(x.addr for x in ev.chat.get_contacts())
-
-    lp.sec("ac1: add address2")
-    # note that if the above create_chat() would not
-    # happen we would not receive a proper member_added event
-    contact2 = chat.add_contact(ac3)
-    ev = in_list.get()
-    assert ev.action == "chat-modified"
-    ev = in_list.get()
-    assert ev.action == "chat-modified"
-    ev = in_list.get()
-    assert ev.action == "added"
-    assert ev.message.get_sender_contact().addr == ac1_addr
-    assert ev.contact.addr == ac3_addr
-
-    lp.sec("ac1: remove address2")
-    chat.remove_contact(contact2)
-    ev = in_list.get()
-    assert ev.action == "chat-modified"
-    ev = in_list.get()
-    assert ev.action == "removed"
-    assert ev.contact.addr == contact2.addr
-    assert ev.message.get_sender_contact().addr == ac1_addr
-
-    lp.sec("ac1: remove ac2 contact from chat")
-    chat.remove_contact(ac2)
-    ev = in_list.get()
-    assert ev.action == "chat-modified"
-    ev = in_list.get()
-    assert ev.action == "removed"
-    assert ev.message.get_sender_contact().addr == ac1_addr
 
 
 def test_system_group_msg_from_blocked_user(acfactory, lp):
@@ -1758,44 +1684,6 @@ def test_configure_error_msgs_invalid_server(acfactory):
     assert ev.data2.count("connect") == 1
     # The users do not know what "configuration" is
     assert "configuration" not in ev.data2.lower()
-
-
-def test_name_changes(acfactory):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("displayname", "Account 1")
-
-    chat12 = acfactory.get_accepted_chat(ac1, ac2)
-    contact = None
-
-    def update_name():
-        """Send a message from ac1 to ac2 to update the name"""
-        nonlocal contact
-        chat12.send_text("Hello")
-        msg = ac2._evtracker.wait_next_incoming_message()
-        contact = msg.get_sender_contact()
-        return contact.name
-
-    assert update_name() == "Account 1"
-
-    ac1.set_config("displayname", "Account 1 revision 2")
-    assert update_name() == "Account 1 revision 2"
-
-    # Explicitly rename contact on ac2 to "Renamed"
-    ac2.create_contact(contact, name="Renamed")
-    assert contact.name == "Renamed"
-    ev = ac2._evtracker.get_matching("DC_EVENT_CONTACTS_CHANGED")
-    assert ev.data1 == contact.id
-
-    # ac1 also renames itself into "Renamed"
-    assert update_name() == "Renamed"
-    ac1.set_config("displayname", "Renamed")
-    assert update_name() == "Renamed"
-
-    # Contact name was set to "Renamed" explicitly before,
-    # so it should not be changed.
-    ac1.set_config("displayname", "Renamed again")
-    updated_name = update_name()
-    assert updated_name == "Renamed"
 
 
 def test_status(acfactory):

@@ -3838,6 +3838,21 @@ int             dc_chat_is_protected         (const dc_chat_t* chat);
 
 
 /**
+ * Check if the chat is encrypted.
+ *
+ * 1:1 chats with PGP-contacts and group chats with PGP-contacts
+ * are encrypted.
+ * 1:1 chats with emails contacts and ad-hoc groups
+ * created for email threads are not encrypted.
+ *
+ * @memberof dc_chat_t
+ * @param chat The chat object.
+ * @return 1=chat is encrypted, 0=chat is not encrypted.
+ */
+int             dc_chat_is_encrypted         (const dc_chat_t *chat);
+
+
+/**
  * Checks if the chat was protected, and then an incoming message broke this protection.
  *
  * This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
