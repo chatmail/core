@@ -1885,20 +1885,19 @@ async fn should_move_out_of_spam(
             None => return Ok(false),
         };
         // No chat found.
-        let (from_id, blocked_contact, _origin) =
-            match from_field_to_contact_id(context, &from, true)
-                .await
-                .context("from_field_to_contact_id")?
-            {
-                Some(res) => res,
-                None => {
-                    warn!(
-                        context,
-                        "Contact with From address {:?} cannot exist, not moving out of spam", from
-                    );
-                    return Ok(false);
-                }
-            };
+        let (from_id, blocked_contact) = match from_field_to_contact_id(context, &from, true)
+            .await
+            .context("from_field_to_contact_id")?
+        {
+            Some(res) => res,
+            None => {
+                warn!(
+                    context,
+                    "Contact with From address {:?} cannot exist, not moving out of spam", from
+                );
+                return Ok(false);
+            }
+        };
         if blocked_contact {
             // Contact is blocked, leave the message in spam.
             return Ok(false);
@@ -2243,11 +2242,10 @@ pub(crate) async fn prefetch_should_download(
         Some(f) => f,
         None => return Ok(false),
     };
-    let (_from_id, blocked_contact, origin) =
-        match from_field_to_contact_id(context, &from, true).await? {
-            Some(res) => res,
-            None => return Ok(false),
-        };
+    let (_from_id, blocked_contact) = match from_field_to_contact_id(context, &from, true).await? {
+        Some(res) => res,
+        None => return Ok(false),
+    };
     // prevent_rename=true as this might be a mailing list message and in this case it would be bad if we rename the contact.
     // (prevent_rename is the last argument of from_field_to_contact_id())
 
@@ -2257,7 +2255,6 @@ pub(crate) async fn prefetch_should_download(
     }
 
     let is_chat_message = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    let accepted_contact = origin.is_known();
     let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
         .await?
         .map(|parent| match parent.is_dc_message {
@@ -2272,10 +2269,7 @@ pub(crate) async fn prefetch_should_download(
     let show = is_autocrypt_setup_message
         || match show_emails {
             ShowEmails::Off => is_chat_message || is_reply_to_chat_message,
-            ShowEmails::AcceptedContacts => {
-                is_chat_message || is_reply_to_chat_message || accepted_contact
-            }
-            ShowEmails::All => true,
+            ShowEmails::All | ShowEmails::All1 => true,
         };
 
     let should_download = (show && !blocked_contact) || maybe_ndn;

@@ -234,7 +234,6 @@ class ShowEmails(IntEnum):
     """Show emails mode."""
 
     OFF = 0
-    ACCEPTED_CONTACTS = 1
     ALL = 2
 
 

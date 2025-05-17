@@ -436,10 +436,10 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    0=watch all folders normally (default)
  * - `show_emails`  = DC_SHOW_EMAILS_OFF (0)=
  *                    show direct replies to chats only,
- *                    DC_SHOW_EMAILS_ACCEPTED_CONTACTS (1)=
- *                    also show all mails of confirmed contacts,
+ *                    DC_SHOW_EMAILS_ALL1 (1)=
+ *                    deprecated, same as DC_SHOW_EMAILS_ALL,
  *                    DC_SHOW_EMAILS_ALL (2)=
- *                    also show mails of unconfirmed contacts (default).
+ *                    show all mails (default).
  * - `delete_device_after` = 0=do not delete messages from device automatically (default),
  *                    >=1=seconds, after which messages are deleted automatically from the device.
  *                    Messages in the "saved messages" chat (see dc_chat_is_self_talk()) are skipped.
@@ -6582,7 +6582,7 @@ void dc_event_unref(dc_event_t* event);
  * Values for dc_get|set_config("show_emails")
  */
 #define DC_SHOW_EMAILS_OFF               0
-#define DC_SHOW_EMAILS_ACCEPTED_CONTACTS 1
+#define DC_SHOW_EMAILS_ALL1              1
 #define DC_SHOW_EMAILS_ALL               2
 
 
