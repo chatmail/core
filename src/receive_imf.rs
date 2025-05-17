@@ -1200,6 +1200,33 @@ async fn add_parts(
             chat_id = Some(DC_CHAT_ID_TRASH);
         }
 
+        if mime_parser.decrypting_failed {
+            chat_id = Some(DC_CHAT_ID_TRASH);
+            let last_time = context
+                .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
+                .await?;
+            let now = tools::time();
+            let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
+                let mut msg =
+                    Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
+                chat::add_device_msg(context, None, Some(&mut msg))
+                    .await
+                    .log_err(context)
+                    .ok();
+                true
+            } else {
+                last_time > now
+            };
+            if update_config {
+                context
+                    .set_config_internal(
+                        Config::LastCantDecryptOutgoingMsgs,
+                        Some(&now.to_string()),
+                    )
+                    .await?;
+            }
+        }
+
         // Try to assign to a chat based on Chat-Group-ID.
         if chat_id.is_none() {
             if let Some(grpid) = mime_parser.get_chat_group_id().map(|s| s.to_string()) {
@@ -1226,37 +1253,6 @@ async fn add_parts(
                         chat_id_blocked = new_chat_id_blocked;
                     }
                 }
-            }
-        }
-
-        if mime_parser.decrypting_failed {
-            if chat_id.is_none() {
-                chat_id = Some(DC_CHAT_ID_TRASH);
-            } else {
-                hidden = true;
-            }
-            let last_time = context
-                .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
-                .await?;
-            let now = tools::time();
-            let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
-                let mut msg =
-                    Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
-                chat::add_device_msg(context, None, Some(&mut msg))
-                    .await
-                    .log_err(context)
-                    .ok();
-                true
-            } else {
-                last_time > now
-            };
-            if update_config {
-                context
-                    .set_config_internal(
-                        Config::LastCantDecryptOutgoingMsgs,
-                        Some(&now.to_string()),
-                    )
-                    .await?;
             }
         }
 
