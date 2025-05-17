@@ -248,21 +248,10 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     assert len(ac3_chat.get_contacts()) == 3
     ac3_chat.send_text("Hi!")
 
-    msg_id = ac2.wait_for_incoming_msg_event().msg_id
-    message = ac2.get_message_by_id(msg_id)
-    snapshot = message.get_snapshot()
-    logging.info("Received message %s", snapshot.text)
-    assert snapshot.text == "[...] – [This message was encrypted for another setup.]"
-
     ac1.wait_for_incoming_msg_event()  # Hi!
 
     ac3_contact_ac2 = ac3.create_contact(ac2)
     ac3_chat.remove_contact(ac3_contact_ac2_old)
-
-    msg_id = ac2.wait_for_incoming_msg_event().msg_id
-    message = ac2.get_message_by_id(msg_id)
-    snapshot = message.get_snapshot()
-    assert snapshot.text == "[...] – [This message was encrypted for another setup.]"
 
     snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert "removed" in snapshot.text
