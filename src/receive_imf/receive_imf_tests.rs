@@ -1416,7 +1416,7 @@ async fn test_mailing_list_with_mimepart_footer_signed() {
 }
 
 /// Test that the changes from apply_mailinglist_changes() are also applied
-/// if the message is assigned to the chat by In-Reply-To
+/// if the message is a reply.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_apply_mailinglist_changes_assigned_by_reply() {
     let t = TestContext::new_alice().await;
@@ -1435,10 +1435,6 @@ async fn test_apply_mailinglist_changes_assigned_by_reply() {
         t.get_last_msg().await.in_reply_to.unwrap(),
         "3333@example.org"
     );
-    // `Assigning message to Chat#... as it's a reply to 3333@example.org`
-    t.evtracker
-        .get_info_contains("as it's a reply to 3333@example.org")
-        .await;
 
     let chat = Chat::load_from_db(&t, chat_id).await.unwrap();
     assert!(!chat.can_send(&t).await.unwrap());

@@ -993,7 +993,7 @@ async fn add_parts(
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
     parent_message: Option<Message>,
-    chat_assignment: ChatAssignment
+    chat_assignment: ChatAssignment,
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
     let rfc724_mid_orig = &mime_parser
@@ -1113,25 +1113,62 @@ async fn add_parts(
             create_blocked_default
         };
 
-        // Try to assign to a chat based on Chat-Group-ID.
         if chat_id.is_none() {
-            if let Some(grpid) = mime_parser.get_chat_group_id().map(|s| s.to_string()) {
-                if let Some((id, _protected, blocked)) =
-                    chat::get_chat_id_by_grpid(context, &grpid).await?
-                {
-                    chat_id = Some(id);
-                    chat_id_blocked = blocked;
-                } else if allow_creation || test_normal_chat.is_some() {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
+            match &chat_assignment {
+                ChatAssignment::GroupChat { grpid } => {
+                    // Try to assign to a chat based on Chat-Group-ID.
+                    if let Some((id, _protected, blocked)) =
+                        chat::get_chat_id_by_grpid(context, &grpid).await?
+                    {
+                        chat_id = Some(id);
+                        chat_id_blocked = blocked;
+                    } else if allow_creation || test_normal_chat.is_some() {
+                        if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
+                            context,
+                            mime_parser,
+                            is_partial_download.is_some(),
+                            create_blocked,
+                            from_id,
+                            to_ids,
+                            past_ids,
+                            &verified_encryption,
+                            &grpid,
+                        )
+                        .await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+                        }
+                    }
+                }
+                ChatAssignment::MailingList { .. } => {
+                    if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
+                        if let Some((new_chat_id, new_chat_id_blocked)) =
+                            create_or_lookup_mailinglist(
+                                context,
+                                allow_creation,
+                                mailinglist_header,
+                                mime_parser,
+                            )
+                            .await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+
+                            apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
+                        }
+                    }
+                }
+                ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
+                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_chat_or_create_adhoc_group(
                         context,
                         mime_parser,
-                        is_partial_download.is_some(),
-                        create_blocked,
-                        from_id,
+                        &parent_message,
                         to_ids,
-                        past_ids,
-                        &verified_encryption,
-                        &grpid,
+                        from_id,
+                        allow_creation || test_normal_chat.is_some(),
+                        create_blocked,
+                        is_partial_download.is_some(),
                     )
                     .await?
                     {
@@ -1142,27 +1179,12 @@ async fn add_parts(
             }
         }
 
-        if chat_id.is_none() {
-            if let Some((new_chat_id, new_chat_id_blocked)) = lookup_chat_or_create_adhoc_group(
-                context,
-                mime_parser,
-                &parent_message,
-                to_ids,
-                from_id,
-                allow_creation || test_normal_chat.is_some(),
-                create_blocked,
-                is_partial_download.is_some(),
-            )
-            .await?
-            {
-                chat_id = Some(new_chat_id);
-                chat_id_blocked = new_chat_id_blocked;
-            }
-        }
-
         // if the chat is somehow blocked but we want to create a non-blocked chat,
         // unblock the chat
-        if chat_id_blocked != Blocked::Not && create_blocked != Blocked::Yes {
+        if chat_id_blocked != Blocked::Not
+            && create_blocked != Blocked::Yes
+            && !matches!(chat_assignment, ChatAssignment::MailingList { .. })
+        {
             if let Some(chat_id) = chat_id {
                 chat_id.set_blocked(context, create_blocked).await?;
                 chat_id_blocked = create_blocked;
@@ -1204,27 +1226,6 @@ async fn add_parts(
                 &verified_encryption,
             )
             .await?;
-        }
-
-        if chat_id.is_none() {
-            // check if the message belongs to a mailing list
-            if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                if let Some((new_chat_id, new_chat_id_blocked)) = create_or_lookup_mailinglist(
-                    context,
-                    allow_creation,
-                    mailinglist_header,
-                    mime_parser,
-                )
-                .await?
-                {
-                    chat_id = Some(new_chat_id);
-                    chat_id_blocked = new_chat_id_blocked;
-                }
-            }
-        }
-
-        if let Some(chat_id) = chat_id {
-            apply_mailinglist_changes(context, mime_parser, chat_id).await?;
         }
 
         if chat_id.is_none() {
