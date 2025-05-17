@@ -544,10 +544,9 @@ pub(crate) async fn receive_imf_inner(
             .await?;
         }
         ChatAssignment::OneOneChat => {
-            if pgp_to_ids.len() == 1
-                && pgp_to_ids
-                    .first()
-                    .is_some_and(|contact_id| contact_id.is_some())
+            if pgp_to_ids
+                .first()
+                .is_some_and(|contact_id| contact_id.is_some())
             {
                 // There is a single recipient and we have
                 // mapped it to a PGP contact.
