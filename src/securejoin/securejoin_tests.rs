@@ -137,12 +137,12 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         "vc-auth-required"
     );
 
-    let bob_chat = bob.get_pgp_chat(&alice).await;
+    let bob_chat = bob.get_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
 
     tcm.section("Step 4: Bob receives vc-auth-required, sends vc-request-with-auth");
     bob.recv_msg_trash(&sent).await;
-    let bob_chat = bob.get_pgp_chat(&alice).await;
+    let bob_chat = bob.get_chat(&alice).await;
     assert_eq!(bob_chat.why_cant_send(&bob).await.unwrap(), None);
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
 
@@ -230,7 +230,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_bob.is_bot(), false);
 
     // exactly one one-to-one chat should be visible for both now
-    // (check this before calling alice.get_pgp_chat() explicitly below)
+    // (check this before calling alice.get_chat() explicitly below)
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
             .await
@@ -245,7 +245,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Alice got the verified message in her 1:1 chat.
     {
-        let chat = alice.get_pgp_chat(&bob).await;
+        let chat = alice.get_chat(&bob).await;
         let msg = get_chat_msg(&alice, chat.get_id(), 0, 1).await;
         assert!(msg.is_info());
         let expected_text = chat_protection_enabled(&alice).await;
@@ -530,7 +530,7 @@ async fn test_secure_join() -> Result<()> {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
 
-        let chat = alice.get_pgp_chat(&bob).await;
+        let chat = alice.get_chat(&bob).await;
         assert_eq!(
             chat.blocked,
             Blocked::Yes,
@@ -556,7 +556,7 @@ async fn test_secure_join() -> Result<()> {
     {
         // Bob has Alice verified, message shows up in the group chat.
         assert_eq!(contact_alice.is_verified(&bob).await?, true);
-        let chat = bob.get_pgp_chat(&alice).await;
+        let chat = bob.get_chat(&alice).await;
         assert_eq!(
             chat.blocked,
             Blocked::Yes,

@@ -126,7 +126,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Alice should have a hidden protected chat with Fiona
     {
-        let chat = alice.get_pgp_chat(&fiona).await;
+        let chat = alice.get_chat(&fiona).await;
         assert!(chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
@@ -136,7 +136,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Fiona should have a hidden protected chat with Alice
     {
-        let chat = fiona.get_pgp_chat(&alice).await;
+        let chat = fiona.get_chat(&alice).await;
         assert!(chat.is_protected());
 
         let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
@@ -157,7 +157,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     // Alice gets a new unprotected chat with new Fiona contact.
     {
-        let chat = alice.get_pgp_chat(&fiona_new).await;
+        let chat = alice.get_chat(&fiona_new).await;
         assert!(!chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
@@ -413,10 +413,7 @@ async fn test_outgoing_mua_msg() -> Result<()> {
         .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
         .await;
     alice
-        .golden_test_chat(
-            alice.get_pgp_chat(&bob).await.id,
-            "test_outgoing_mua_msg_pgp",
-        )
+        .golden_test_chat(alice.get_chat(&bob).await.id, "test_outgoing_mua_msg_pgp")
         .await;
 
     Ok(())
@@ -509,7 +506,7 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     // The outdated Bob's Autocrypt header isn't applied
     // and the message goes to another chat, so the verification preserves.
     assert!(contact.is_verified(alice).await.unwrap());
-    let chat = alice.get_pgp_chat(bob).await;
+    let chat = alice.get_chat(bob).await;
     assert!(chat.is_protected());
     assert_eq!(chat.is_protection_broken(), false);
     Ok(())
@@ -726,7 +723,7 @@ async fn assert_verified(this: &TestContext, other: &TestContext, protected: Pro
         assert_eq!(contact.is_verified(this).await.unwrap(), true);
     }
 
-    let chat = this.get_pgp_chat(other).await;
+    let chat = this.get_chat(other).await;
     let (expect_protected, expect_broken) = match protected {
         ProtectionStatus::Unprotected => (false, false),
         ProtectionStatus::Protected => (true, false),

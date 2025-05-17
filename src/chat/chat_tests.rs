@@ -2325,7 +2325,7 @@ async fn test_saved_msgs_not_added_to_shared_chats() -> Result<()> {
     assert_eq!(shared_chats.len(), 1);
     assert_eq!(
         shared_chats.get_chat_id(0).unwrap(),
-        bob.get_pgp_chat(&alice).await.id
+        bob.get_chat(&alice).await.id
     );
 
     Ok(())
@@ -2943,16 +2943,16 @@ async fn test_sync_blocked() -> Result<()> {
     alice1.recv_msg(&sent_msg).await;
     let a0b_contact_id = alice0.add_or_lookup_contact_id(bob).await;
 
-    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Request);
+    assert_eq!(alice1.get_chat(bob).await.blocked, Blocked::Request);
     a0b_chat_id.accept(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_chat(bob).await.blocked, Blocked::Not);
     a0b_chat_id.block(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Yes);
+    assert_eq!(alice1.get_chat(bob).await.blocked, Blocked::Yes);
     a0b_chat_id.unblock(alice0).await?;
     sync(alice0, alice1).await;
-    assert_eq!(alice1.get_pgp_chat(bob).await.blocked, Blocked::Not);
+    assert_eq!(alice1.get_chat(bob).await.blocked, Blocked::Not);
 
     // Unblocking a 1:1 chat doesn't unblock the contact currently.
     Contact::unblock(alice0, a0b_contact_id).await?;
@@ -3016,7 +3016,7 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     a0b_chat_id.accept(alice0).await?;
     let a0b_contact = Contact::get_by_id(alice0, a0b_contact_id).await?;
     assert_eq!(a0b_contact.origin, Origin::CreateChat);
-    assert_eq!(alice0.get_pgp_chat(bob).await.blocked, Blocked::Not);
+    assert_eq!(alice0.get_chat(bob).await.blocked, Blocked::Not);
 
     sync(alice0, alice1).await;
     let alice1_contacts = Contact::get_all(alice1, 0, None).await?;
@@ -3025,7 +3025,7 @@ async fn test_sync_accept_before_first_msg() -> Result<()> {
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.get_addr(), "");
     assert_eq!(a1b_contact.origin, Origin::CreateChat);
-    let a1b_chat = alice1.get_pgp_chat(bob).await;
+    let a1b_chat = alice1.get_chat(bob).await;
     assert_eq!(a1b_chat.blocked, Blocked::Not);
     let chats = Chatlist::try_load(alice1, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
@@ -3238,7 +3238,7 @@ async fn test_sync_muted() -> Result<()> {
     alice1.create_chat(&bob).await;
 
     assert_eq!(
-        alice1.get_pgp_chat(&bob).await.mute_duration,
+        alice1.get_chat(&bob).await.mute_duration,
         MuteDuration::NotMuted
     );
     let mute_durations = [
@@ -3256,7 +3256,7 @@ async fn test_sync_muted() -> Result<()> {
             ),
             _ => m,
         };
-        assert_eq!(alice1.get_pgp_chat(&bob).await.mute_duration, m);
+        assert_eq!(alice1.get_chat(&bob).await.mute_duration, m);
     }
     Ok(())
 }

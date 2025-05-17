@@ -800,7 +800,7 @@ impl TestContext {
             .map(|chat_id_blocked| chat_id_blocked.id)
             .expect(
                 "There is no chat with this contact. \
-                Hint: Use create_chat() instead of get_chat() if this is expected.",
+                Hint: Use create_email_chat() instead of get_email_chat() if this is expected.",
             );
 
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
@@ -812,7 +812,7 @@ impl TestContext {
     /// This first creates a contact, but does not import the key,
     /// so may create a PGP-contact with a fingerprint
     /// but without the key.
-    pub async fn get_pgp_chat(&self, other: &TestContext) -> Chat {
+    pub async fn get_chat(&self, other: &TestContext) -> Chat {
         let contact = self.add_or_lookup_contact_id(other).await;
 
         let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact)
@@ -821,7 +821,7 @@ impl TestContext {
             .map(|chat_id_blocked| chat_id_blocked.id)
             .expect(
                 "There is no chat with this contact. \
-                 Hint: Use create_chat() instead of get_pgp_chat() if this is expected.",
+                 Hint: Use create_chat() instead of get_chat() if this is expected.",
             );
 
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()

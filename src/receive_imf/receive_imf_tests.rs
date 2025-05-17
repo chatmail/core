@@ -2978,7 +2978,7 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
     let received = alice2.get_last_msg().await;
 
     // That's a regression test for https://github.com/chatmail/core/issues/2949:
-    assert_eq!(received.chat_id, alice2.get_pgp_chat(&bob).await.id);
+    assert_eq!(received.chat_id, alice2.get_chat(&bob).await.id);
 
     let alice2_bob_contact = alice2.add_or_lookup_contact(&bob).await;
     assert_eq!(received.from_id, ContactId::SELF);
@@ -4767,7 +4767,7 @@ async fn test_prefer_references_to_downloaded_msgs() -> Result<()> {
     let received = bob.recv_msg(&sent).await;
     assert_eq!(received.download_state, DownloadState::Available);
     assert_ne!(received.chat_id, bob_chat_id);
-    assert_eq!(received.chat_id, bob.get_pgp_chat(alice).await.id);
+    assert_eq!(received.chat_id, bob.get_chat(alice).await.id);
 
     let mut msg = Message::new(Viewtype::File);
     msg.set_file_from_bytes(alice, "file", file_bytes, None)?;
