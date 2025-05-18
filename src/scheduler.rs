@@ -386,7 +386,7 @@ async fn inbox_loop(
 ) {
     use futures::future::FutureExt;
 
-    info!(ctx, "starting inbox loop");
+    info!(ctx, "Starting inbox loop.");
     let ImapConnectionHandlers {
         mut connection,
         stop_receiver,
@@ -396,7 +396,7 @@ async fn inbox_loop(
     let fut = async move {
         let ctx = ctx1;
         if let Err(()) = started.send(()) {
-            warn!(ctx, "inbox loop, missing started receiver");
+            warn!(ctx, "Inbox loop, missing started receiver.");
             return;
         };
 
@@ -405,9 +405,10 @@ async fn inbox_loop(
             let session = if let Some(session) = old_session.take() {
                 session
             } else {
+                info!(ctx, "Preparing new IMAP session for inbox.");
                 match connection.prepare(&ctx).await {
                     Err(err) => {
-                        warn!(ctx, "Failed to prepare INBOX connection: {:#}.", err);
+                        warn!(ctx, "Failed to prepare inbox connection: {err:#}.");
                         continue;
                     }
                     Ok(session) => session,
@@ -415,8 +416,12 @@ async fn inbox_loop(
             };
 
             match inbox_fetch_idle(&ctx, &mut connection, session).await {
-                Err(err) => warn!(ctx, "Failed fetch_idle: {err:#}"),
+                Err(err) => warn!(ctx, "Failed inbox fetch_idle: {err:#}."),
                 Ok(session) => {
+                    info!(
+                        ctx,
+                        "IMAP loop iteration for inbox finished, keeping the session."
+                    );
                     old_session = Some(session);
                 }
             }
@@ -426,7 +431,7 @@ async fn inbox_loop(
     stop_receiver
         .recv()
         .map(|_| {
-            info!(ctx, "shutting down inbox loop");
+            info!(ctx, "Shutting down inbox loop.");
         })
         .race(fut)
         .await;
@@ -695,7 +700,7 @@ async fn simple_imap_loop(
 ) {
     use futures::future::FutureExt;
 
-    info!(ctx, "starting simple loop for {}", folder_meaning);
+    info!(ctx, "Starting simple loop for {folder_meaning}.");
     let ImapConnectionHandlers {
         mut connection,
         stop_receiver,
@@ -706,7 +711,10 @@ async fn simple_imap_loop(
     let fut = async move {
         let ctx = ctx1;
         if let Err(()) = started.send(()) {
-            warn!(&ctx, "simple imap loop, missing started receiver");
+            warn!(
+                ctx,
+                "Simple imap loop for {folder_meaning}, missing started receiver."
+            );
             return;
         }
 
@@ -715,6 +723,7 @@ async fn simple_imap_loop(
             let session = if let Some(session) = old_session.take() {
                 session
             } else {
+                info!(ctx, "Preparing new IMAP session for {folder_meaning}.");
                 match connection.prepare(&ctx).await {
                     Err(err) => {
                         warn!(
@@ -730,6 +739,10 @@ async fn simple_imap_loop(
             match fetch_idle(&ctx, &mut connection, session, folder_meaning).await {
                 Err(err) => warn!(ctx, "Failed fetch_idle: {err:#}"),
                 Ok(session) => {
+                    info!(
+                        ctx,
+                        "IMAP loop iteration for {folder_meaning} finished, keeping the session"
+                    );
                     old_session = Some(session);
                 }
             }
@@ -739,7 +752,7 @@ async fn simple_imap_loop(
     stop_receiver
         .recv()
         .map(|_| {
-            info!(ctx, "shutting down simple loop");
+            info!(ctx, "Shutting down IMAP loop for {folder_meaning}.");
         })
         .race(fut)
         .await;

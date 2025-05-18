@@ -324,7 +324,7 @@ impl Imap {
             }
         }
 
-        info!(context, "Connecting to IMAP server");
+        info!(context, "Connecting to IMAP server.");
         self.connectivity.set_connecting(context).await;
 
         self.conn_last_try = tools::Time::now();
@@ -409,7 +409,7 @@ impl Imap {
                         lp.user
                     )));
                     self.connectivity.set_preparing(context).await;
-                    info!(context, "Successfully logged into IMAP server");
+                    info!(context, "Successfully logged into IMAP server.");
                     return Ok(session);
                 }
 
@@ -1046,7 +1046,7 @@ impl Session {
         // Expunge folder if needed, e.g. if some jobs have
         // deleted messages on the server.
         if let Err(err) = self.maybe_close_folder(context).await {
-            warn!(context, "failed to close folder: {:?}", err);
+            warn!(context, "Failed to close folder: {err:#}.");
         }
 
         Ok(())
