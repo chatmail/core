@@ -285,9 +285,7 @@ impl Imap {
         Ok(imap)
     }
 
-    /// Connects or reconnects if needed.
-    ///
-    /// It is safe to call this function if already connected, actions are performed only as needed.
+    /// Connects to IMAP server and returns a new IMAP session.
     ///
     /// Calling this function is not enough to perform IMAP operations. Use [`Imap::prepare`]
     /// instead if you are going to actually use connection rather than trying connection
