@@ -1870,7 +1870,7 @@ impl MimeMessage {
         if let Some(header) = self.get_header(HeaderDef::ChatGroupMemberFpr) {
             header
                 .split_ascii_whitespace()
-                .filter_map(|fpr| fpr.parse::<Fingerprint>().ok())
+                .filter_map(|fpr| Fingerprint::from_str(fpr).ok())
                 .collect()
         } else {
             Vec::new()
