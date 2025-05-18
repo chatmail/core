@@ -3140,10 +3140,6 @@ async fn has_verified_encryption(
         return Ok(Verified);
     }
 
-    // ensure, the contact is verified
-    // and the message is signed with a verified key of the sender.
-    // this check is skipped for SELF as there is no proper SELF-peerstate
-    // and results in group-splits otherwise.
     let from_contact = Contact::get_by_id(context, from_id).await?;
 
     let Some(fingerprint) = from_contact.fingerprint() else {
