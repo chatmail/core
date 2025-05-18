@@ -3307,6 +3307,10 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
     Ok(contact_ids)
 }
 
+/// Looks up a PGP-contact by email address.
+///
+/// Provided `chat_id` must be an encrypted
+/// chat ID that has PGP-contacts inside.
 async fn lookup_pgp_contact_by_address(
     context: &Context,
     addr: &str,
@@ -3331,7 +3335,9 @@ async fn lookup_pgp_contact_by_address(
              WHERE contacts.addr=?
              AND EXISTS (SELECT 1 FROM chats_contacts
                          WHERE contact_id=contacts.id
-                         AND chat_id=?)",
+                         AND chat_id=?)
+             AND fingerprint<>'' -- Should always be true
+             ",
             (addr, chat_id),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
