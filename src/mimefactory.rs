@@ -284,7 +284,7 @@ impl MimeFactory {
                         for row in rows {
                             let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
 
-                            let public_key_opt = if let Some(ref public_key_bytes) = public_key_bytes_opt {
+                            let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
                                 Some(SignedPublicKey::from_slice(public_key_bytes)?)
                             } else {
                                 None
