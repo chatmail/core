@@ -457,10 +457,10 @@ impl Imap {
         Err(first_error.unwrap_or_else(|| format_err!("No IMAP connection candidates provided")))
     }
 
-    /// Prepare for IMAP operation.
+    /// Prepare a new IMAP session.
     ///
-    /// Ensure that IMAP client is connected, folders are created and IMAP capabilities are
-    /// determined.
+    /// This creates a new IMAP connection and ensures
+    /// that folders are created and IMAP capabilities are determined.
     pub(crate) async fn prepare(&mut self, context: &Context) -> Result<Session> {
         let configuring = false;
         let mut session = match self.connect(context, configuring).await {
