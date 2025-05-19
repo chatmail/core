@@ -419,6 +419,23 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_encrypted_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    enable_verified_oneonone_chats(&[alice]).await;
+
+    mark_as_verified(alice, bob).await;
+    let chat_id = alice.create_chat(bob).await.id;
+    let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
+    receive_imf(alice, raw, false).await?;
+    alice
+        .golden_test_chat(chat_id, "test_outgoing_encrypted_msg")
+        .await;
+    Ok(())
+}
+
 /// If Bob answers unencrypted from another address with a classical MUA,
 /// the message is under some circumstances still assigned to the original
 /// chat (see lookup_chat_by_reply()); this is meant to make aliases
