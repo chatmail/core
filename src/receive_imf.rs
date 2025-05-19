@@ -412,7 +412,7 @@ pub(crate) async fn receive_imf_inner(
                 context,
                 &mime_parser.past_members,
                 past_member_fingerprints,
-                chat_id,
+                Some(chat_id),
             )
             .await?;
         } else {
@@ -435,27 +435,42 @@ pub(crate) async fn receive_imf_inner(
             // mapped it to a PGP contact.
             // This is a 1:1 PGP-chat.
             to_ids = pgp_to_ids
-        } else if let Some(chat_id) = chat_id {
-            to_ids = lookup_pgp_contacts_by_address_list(
-                context,
-                &mime_parser.recipients,
-                to_member_fingerprints,
-                chat_id,
-            )
-            .await?;
         } else {
-            to_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.recipients,
-                if !mime_parser.incoming {
-                    Origin::OutgoingTo
-                } else if incoming_origin.is_known() {
-                    Origin::IncomingTo
-                } else {
-                    Origin::IncomingUnknownTo
-                },
-            )
-            .await?;
+            let ids = match mime_parser.was_encrypted() {
+                true => {
+                    lookup_pgp_contacts_by_address_list(
+                        context,
+                        &mime_parser.recipients,
+                        to_member_fingerprints,
+                        chat_id,
+                    )
+                    .await?
+                }
+                false => vec![],
+            };
+            if chat_id.is_some()
+                || (mime_parser.was_encrypted() && !ids.contains(&None))
+                // Prefer creating PGP chats if there are any PGP contacts. At least this prevents
+                // from replying unencrypted.
+                || ids
+                    .iter()
+                    .any(|&c| c.is_some() && c != Some(ContactId::SELF))
+            {
+                to_ids = ids;
+            } else {
+                to_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.recipients,
+                    if !mime_parser.incoming {
+                        Origin::OutgoingTo
+                    } else if incoming_origin.is_known() {
+                        Origin::IncomingTo
+                    } else {
+                        Origin::IncomingUnknownTo
+                    },
+                )
+                .await?;
+            }
         }
 
         past_ids = add_or_lookup_contacts_by_address_list(
@@ -2523,7 +2538,7 @@ async fn apply_group_changes(
     }
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        removed_id = lookup_pgp_contact_by_address(context, removed_addr, chat_id).await?;
+        removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat_id)).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
@@ -3309,12 +3324,12 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
 
 /// Looks up a PGP-contact by email address.
 ///
-/// Provided `chat_id` must be an encrypted
-/// chat ID that has PGP-contacts inside.
+/// If provided, `chat_id` must be an encrypted chat ID that has PGP-contacts inside.
+/// Otherwise the function searches in all contacts, returning the recently seen one.
 async fn lookup_pgp_contact_by_address(
     context: &Context,
     addr: &str,
-    chat_id: ChatId,
+    chat_id: Option<ChatId>,
 ) -> Result<Option<ContactId>> {
     if context.is_self_addr(addr).await? {
         let is_self_in_chat = context
@@ -3328,23 +3343,44 @@ async fn lookup_pgp_contact_by_address(
             return Ok(Some(ContactId::SELF));
         }
     }
-    let contact_id: Option<ContactId> = context
-        .sql
-        .query_row_optional(
-            "SELECT id FROM contacts
-             WHERE contacts.addr=?
-             AND EXISTS (SELECT 1 FROM chats_contacts
-                         WHERE contact_id=contacts.id
-                         AND chat_id=?)
-             AND fingerprint<>'' -- Should always be true
-             ",
-            (addr, chat_id),
-            |row| {
-                let contact_id: ContactId = row.get(0)?;
-                Ok(contact_id)
-            },
-        )
-        .await?;
+    let contact_id: Option<ContactId> = match chat_id {
+        Some(chat_id) => {
+            context
+                .sql
+                .query_row_optional(
+                    "SELECT id FROM contacts
+                     WHERE contacts.addr=?
+                     AND EXISTS (SELECT 1 FROM chats_contacts
+                                 WHERE contact_id=contacts.id
+                                 AND chat_id=?)
+                     AND fingerprint<>'' -- Should always be true
+                     ",
+                    (addr, chat_id),
+                    |row| {
+                        let contact_id: ContactId = row.get(0)?;
+                        Ok(contact_id)
+                    },
+                )
+                .await?
+        }
+        None => {
+            context
+                .sql
+                .query_row_optional(
+                    "SELECT id FROM contacts
+                     WHERE contacts.addr=?1
+                     AND fingerprint<>''
+                     ORDER BY last_seen DESC, id DESC
+                     ",
+                    (addr,),
+                    |row| {
+                        let contact_id: ContactId = row.get(0)?;
+                        Ok(contact_id)
+                    },
+                )
+                .await?
+        }
+    };
     Ok(contact_id)
 }
 
@@ -3396,7 +3432,7 @@ async fn lookup_pgp_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
     fingerprints: &[Fingerprint],
-    chat_id: ChatId,
+    chat_id: Option<ChatId>,
 ) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
