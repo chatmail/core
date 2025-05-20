@@ -4,6 +4,8 @@
 
 use crate::context::Context;
 
+mod logging_stream;
+
 #[macro_export]
 macro_rules! info {
     ($ctx:expr,  $msg:expr) => {
