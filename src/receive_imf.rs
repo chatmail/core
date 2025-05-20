@@ -82,12 +82,12 @@ pub struct ReceivedMsg {
 /// group after looking up PGP-contacts
 /// or vice versa.
 enum ChatAssignment {
-    // Group chat with a Group ID.
-    //
-    // Lookup PGP contacts and
-    // assign to encrypted group
-    // even if the message itself
-    // is not encrypted.
+    /// Group chat with a Group ID.
+    ///
+    /// Lookup PGP contacts and
+    /// assign to encrypted group
+    /// even if the message itself
+    /// is not encrypted.
     GroupChat {
         grpid: String,
     },
