@@ -1162,17 +1162,8 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let reaction = arg2;
             send_reaction(&context, msg_id, reaction).await?;
         }
-        "listcontacts" | "contacts" | "listverified" => {
-            let contacts = Contact::get_all(
-                &context,
-                if arg0 == "listverified" {
-                    DC_GCL_VERIFIED_ONLY | DC_GCL_ADD_SELF
-                } else {
-                    DC_GCL_ADD_SELF
-                },
-                Some(arg1),
-            )
-            .await?;
+        "listcontacts" | "contacts" => {
+            let contacts = Contact::get_all(&context, DC_GCL_ADD_SELF, Some(arg1)).await?;
             log_contactlist(&context, &contacts).await?;
             println!("{} contacts.", contacts.len());
         }

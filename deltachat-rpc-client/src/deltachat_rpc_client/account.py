@@ -211,8 +211,8 @@ class Account:
     def get_contacts(
         self,
         query: Optional[str] = None,
+        *,
         with_self: bool = False,
-        verified_only: bool = False,
         snapshot: bool = False,
     ) -> Union[list[Contact], list[AttrDict]]:
         """Get a filtered list of contacts.
@@ -220,12 +220,9 @@ class Account:
         :param query: if a string is specified, only return contacts
                       whose name or e-mail matches query.
         :param with_self: if True the self-contact is also included if it matches the query.
-        :param only_verified: if True only return verified contacts.
         :param snapshot: If True return a list of contact snapshots instead of Contact instances.
         """
         flags = 0
-        if verified_only:
-            flags |= ContactFlag.VERIFIED_ONLY
         if with_self:
             flags |= ContactFlag.ADD_SELF
 

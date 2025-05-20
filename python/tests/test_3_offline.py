@@ -184,7 +184,6 @@ class TestOfflineContact:
 
         assert not ac1.get_contacts(query="some2")
         assert ac1.get_contacts(query="some1")
-        assert not ac1.get_contacts(only_verified=True)
         assert len(ac1.get_contacts(with_self=True)) == 2
 
         assert ac1.delete_contact(contact1)

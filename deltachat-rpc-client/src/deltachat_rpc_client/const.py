@@ -8,7 +8,6 @@ COMMAND_PREFIX = "/"
 class ContactFlag(IntEnum):
     """Bit flags for get_contacts() method."""
 
-    VERIFIED_ONLY = 0x01
     ADD_SELF = 0x02
 
 

@@ -355,20 +355,16 @@ class Account:
         self,
         query: Optional[str] = None,
         with_self: bool = False,
-        only_verified: bool = False,
     ) -> List[Contact]:
         """get a (filtered) list of contacts.
 
         :param query: if a string is specified, only return contacts
                       whose name or e-mail matches query.
-        :param only_verified: if true only return verified contacts.
         :param with_self: if true the self-contact is also returned.
         :returns: list of :class:`deltachat.contact.Contact` objects.
         """
         flags = 0
         query_c = as_dc_charpointer(query)
-        if only_verified:
-            flags |= const.DC_GCL_VERIFIED_ONLY
         if with_self:
             flags |= const.DC_GCL_ADD_SELF
         dc_array = ffi.gc(lib.dc_get_contacts(self._dc_context, flags, query_c), lib.dc_array_unref)
