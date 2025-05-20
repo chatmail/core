@@ -255,7 +255,7 @@ impl MimeMessage {
         );
         headers.retain(|k, _| {
             !is_hidden(k) || {
-                headers_removed.insert(k.clone());
+                headers_removed.insert(k.to_string());
                 false
             }
         });

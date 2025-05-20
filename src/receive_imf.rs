@@ -25,7 +25,7 @@ use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
-use crate::key::load_self_public_key_opt;
+use crate::key::self_fingerprint_opt;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::message::{
@@ -3366,8 +3366,8 @@ async fn lookup_pgp_contact_by_fingerprint(
         .await?
     {
         Ok(Some(contact_id))
-    } else if let Some(self_public_key) = load_self_public_key_opt(context).await? {
-        if self_public_key.dc_fingerprint().hex() == fingerprint {
+    } else if let Some(self_fp) = self_fingerprint_opt(context).await? {
+        if self_fp == fingerprint {
             Ok(Some(ContactId::SELF))
         } else {
             Ok(None)

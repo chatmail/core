@@ -23,7 +23,7 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
-use crate::key::load_self_public_key;
+use crate::key::self_fingerprint;
 use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
 use crate::message::{self, Message, MsgId, Viewtype};
@@ -204,8 +204,7 @@ impl MimeFactory {
 
         let encryption_keys;
 
-        let self_public_key = load_self_public_key(context).await?;
-        let self_fingerprint = self_public_key.dc_fingerprint().hex();
+        let self_fingerprint = self_fingerprint(context).await?;
 
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
@@ -311,7 +310,7 @@ impl MimeFactory {
                                             if !fingerprint.is_empty() {
                                                 member_fingerprints.push(fingerprint);
                                             } else if id == ContactId::SELF {
-                                                member_fingerprints.push(self_fingerprint.clone());
+                                                member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
                                                 debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
                                             }
@@ -362,7 +361,7 @@ impl MimeFactory {
                                             } else if id == ContactId::SELF {
                                                 // It's fine to have self in past members
                                                 // if we are leaving the group.
-                                                past_member_fingerprints.push(self_fingerprint.clone());
+                                                past_member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
                                                 debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
                                             }

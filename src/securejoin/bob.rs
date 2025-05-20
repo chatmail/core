@@ -9,7 +9,7 @@ use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::{load_self_public_key, DcKey};
+use crate::key::self_fingerprint;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -273,8 +273,8 @@ pub(crate) async fn send_handshake_message(
             msg.param.set_int(Param::GuaranteeE2ee, 1);
 
             // Sends our own fingerprint in the Secure-Join-Fingerprint header.
-            let bob_fp = load_self_public_key(context).await?.dc_fingerprint();
-            msg.param.set(Param::Arg3, bob_fp.hex());
+            let bob_fp = self_fingerprint(context).await?;
+            msg.param.set(Param::Arg3, bob_fp);
 
             // Sends the grpid in the Secure-Join-Group header.
             //
