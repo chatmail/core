@@ -1032,7 +1032,12 @@ async fn add_parts(
     if is_mdn {
         chat_id = Some(DC_CHAT_ID_TRASH);
         allow_creation = false;
-        info!(context, "Message is an MDN (TRASH).",);
+        info!(context, "Message is an MDN (TRASH).");
+    } else if mime_parser.delivery_report.is_some() {
+        chat_id = Some(DC_CHAT_ID_TRASH);
+        allow_creation = false;
+        info!(context, "Message is a DSN (TRASH).");
+        markseen_on_imap_table(context, rfc724_mid).await.ok();
     } else if mime_parser.decrypting_failed {
         allow_creation = false;
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
@@ -1074,12 +1079,6 @@ async fn add_parts(
         to_id = ContactId::SELF;
 
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
-
-        if chat_id.is_none() && mime_parser.delivery_report.is_some() {
-            chat_id = Some(DC_CHAT_ID_TRASH);
-            info!(context, "Message is a DSN (TRASH).",);
-            markseen_on_imap_table(context, rfc724_mid).await.ok();
-        }
 
         let create_blocked_default = if is_bot {
             Blocked::Not
