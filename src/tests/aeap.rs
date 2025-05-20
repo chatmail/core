@@ -1,3 +1,12 @@
+//! "AEAP" means "Automatic Email Address Porting"
+//! and was the predecessor of PGP-contacts
+//! (i.e. identifying contacts via the PGP fingerprint,
+//! while allowing the email address to change).
+//!
+//! These tests still pass because PGP-contacts
+//! allows messaging to continue after an email address change,
+//! just as AEAP did. Some other tests had to be removed.
+
 use anyhow::Result;
 
 use crate::chat::{self, Chat, ChatId, ProtectionStatus};
