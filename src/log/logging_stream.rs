@@ -5,32 +5,41 @@
 //! that occur are logged before
 //! they are processed.
 
-use std::task::{Context, Poll};
 use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 
 use pin_project::pin_project;
 
+use crate::events::{Event, EventType, Events};
 use crate::net::session::SessionStream;
 
-use tokio::io::{AsyncWrite, AsyncRead, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// Stream that logs errors to the event channel.
 #[derive(Debug)]
 #[pin_project]
-pub struct LoggingStream<S: SessionStream> {
+pub(crate) struct LoggingStream<S: SessionStream> {
     #[pin]
     inner: S,
 
     /// Name of the stream to distinguish log messages produced by it.
-    name: String
+    tag: String,
+
+    /// Account ID for logging.
+    account_id: u32,
+
+    /// Event channel.
+    events: Events,
 }
 
 impl<S: SessionStream> LoggingStream<S> {
-    pub fn new(inner: S, name: String) -> Self {
+    pub fn new(inner: S, tag: String, account_id: u32, events: Events) -> Self {
         Self {
             inner,
-            name
+            tag,
+            account_id,
+            events,
         }
     }
 }
@@ -51,7 +60,15 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        self.project().inner.poll_write(cx, buf)
+        let log_message = format!("WRITING {}", buf.len());
+
+        let projected = self.project();
+        projected.events.emit(Event {
+            id: 0,
+            typ: EventType::Info(log_message),
+        });
+
+        projected.inner.poll_write(cx, buf)
     }
 
     fn poll_flush(
