@@ -393,7 +393,8 @@ pub(crate) async fn receive_imf_inner(
         mime_parser.get_header(HeaderDef::References),
         mime_parser.get_header(HeaderDef::InReplyTo),
     )
-    .await?;
+    .await?
+    .filter(|p| Some(p.id) != replace_msg_id);
 
     // Decide on the type of chat we assign the message to.
     //
@@ -1009,8 +1010,6 @@ async fn add_parts(
         better_msg = Some(stock_str::msg_location_enabled_by(context, from_id).await);
     }
 
-    let parent_message = parent_message.filter(|p| Some(p.id) != replace_msg_id);
-
     let is_dc_message = if mime_parser.has_chat_version() {
         MessengerMessage::Yes
     } else if let Some(parent_message) = &parent_message {
@@ -1400,19 +1399,20 @@ async fn add_parts(
                             chat_id_blocked = new_chat_id_blocked;
                         }
                     }
-                },
+                }
                 _ => {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_chat_or_create_adhoc_group(
-                        context,
-                        mime_parser,
-                        &parent_message,
-                        to_ids,
-                        from_id,
-                        allow_creation,
-                        Blocked::Not,
-                        is_partial_download.is_some(),
-                    )
-                    .await?
+                    if let Some((new_chat_id, new_chat_id_blocked)) =
+                        lookup_chat_or_create_adhoc_group(
+                            context,
+                            mime_parser,
+                            &parent_message,
+                            to_ids,
+                            from_id,
+                            allow_creation,
+                            Blocked::Not,
+                            is_partial_download.is_some(),
+                        )
+                        .await?
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
