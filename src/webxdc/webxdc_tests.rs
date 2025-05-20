@@ -129,7 +129,6 @@ async fn test_set_draft_invalid_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
 
-    // sending invalid .xdc as file is possible, but must not result in Viewtype::Webxdc
     let mut instance = create_webxdc_instance(
         &t,
         "invalid-no-zip-but-7z.xdc",
@@ -137,7 +136,7 @@ async fn test_set_draft_invalid_webxdc() -> Result<()> {
     )?;
 
     chat_id.set_draft(&t, Some(&mut instance)).await?;
-    let _draft = chat_id.get_draft(&t).await.unwrap();
+    chat_id.get_draft(&t).await.unwrap();
     Ok(())
 }
 
