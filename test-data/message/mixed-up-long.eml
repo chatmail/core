@@ -1,6 +1,3 @@
-From - Tue, 29 Aug 2023 20:24:31 GMT
-X-Mozilla-Status: 0801
-X-Mozilla-Status2: 00000000
 Message-ID: <05eae88e-35c9-5e5e-405f-11e8a3b44513@example.org>
 Date: Tue, 29 Aug 2023 17:24:31 -0300
 MIME-Version: 1.0
@@ -9,10 +6,6 @@ User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:102.0) Gecko/20100101
 Content-Language: en-US
 To: bob@example.net
 From: Alice <alice@example.org>
-X-Mozilla-Draft-Info: internal/draft; vcard=0; receipt=0; DSN=0; uuencode=0;
- attachmentreminder=0; deliveryformat=0
-X-Identity-Key: id3
-Fcc: imap://alice%40example.org@in.example.org/Sent
 Subject: ...
 Content-Type: multipart/mixed;
  boundary="------------2IZJ0SaOTFMF25fU1nsH7bxg"

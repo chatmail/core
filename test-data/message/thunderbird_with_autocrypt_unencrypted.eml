@@ -1,6 +1,3 @@
-From - Wed, 14 Dec 2022 18:53:03 GMT
-X-Mozilla-Status: 0801
-X-Mozilla-Status2: 00000000
 Message-ID: <87d75c7e-0f52-1335-e437-af605c09f954@example.org>
 Date: Wed, 14 Dec 2022 15:53:03 -0300
 MIME-Version: 1.0
@@ -44,10 +41,6 @@ Autocrypt: addr=alice@example.org; keydata=
  MGDpk/1NVuMnIHJESRg/SSFV6sElgq38k9wAT2oUqLcYvYI07nHmnuciaGygkCcGt+l2PvAa
  j4mkQQvMU0cNRDBybk5aKi820oGIJjT7e+5RnD2mYZQdOAbQhDVCHvrfS1I60bsHT1MHqyAa
  /qMLjKwBpKEd/w==
-X-Mozilla-Draft-Info: internal/draft; vcard=0; receipt=0; DSN=0; uuencode=0;
- attachmentreminder=0; deliveryformat=0
-X-Identity-Key: id3
-Fcc: imap://alice%40example.org@in.example.org/Sent
 Content-Type: multipart/signed; micalg=pgp-sha256;
  protocol="application/pgp-signature";
  boundary="------------x6XEHrf0vHmVgEo6f9bMGGUy"

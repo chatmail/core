@@ -1025,19 +1025,37 @@ async fn add_parts(
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
+    let should_trash = if is_mdn {
+        info!(context, "Message is an MDN (TRASH).");
+        true
+    } else if mime_parser.delivery_report.is_some() {
+        info!(context, "Message is a DSN (TRASH).");
+        markseen_on_imap_table(context, rfc724_mid).await.ok();
+        true
+    } else if mime_parser.sync_items.is_some() {
+        true
+    } else if mime_parser
+        .get_header(HeaderDef::XMozillaDraftInfo)
+        .is_some()
+    {
+        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
+        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
+        // created by Thunderbird.
+
+        // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
+        info!(context, "Email is probably just a draft (TRASH).");
+        true
+    } else {
+        false
+    };
+
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
     let allow_creation;
 
-    if is_mdn {
+    if should_trash {
         chat_id = Some(DC_CHAT_ID_TRASH);
         allow_creation = false;
-        info!(context, "Message is an MDN (TRASH).");
-    } else if mime_parser.delivery_report.is_some() {
-        chat_id = Some(DC_CHAT_ID_TRASH);
-        allow_creation = false;
-        info!(context, "Message is a DSN (TRASH).");
-        markseen_on_imap_table(context, rfc724_mid).await.ok();
     } else if mime_parser.decrypting_failed {
         allow_creation = false;
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
@@ -1322,23 +1340,6 @@ async fn add_parts(
         // New Delta Chat versions may use empty `To` field
         // with only a single `hidden-recipients` group in this case.
         let self_sent = to_ids.len() <= 1 && to_id == ContactId::SELF;
-
-        if mime_parser.sync_items.is_some() && self_sent {
-            chat_id = Some(DC_CHAT_ID_TRASH);
-        }
-
-        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
-        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
-        // created by Thunderbird.
-        let is_draft = mime_parser
-            .get_header(HeaderDef::XMozillaDraftInfo)
-            .is_some();
-
-        if is_draft {
-            // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
-            info!(context, "Email is probably just a draft (TRASH).");
-            chat_id = Some(DC_CHAT_ID_TRASH);
-        }
 
         if mime_parser.decrypting_failed {
             chat_id = Some(DC_CHAT_ID_TRASH);
