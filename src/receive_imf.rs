@@ -82,15 +82,16 @@ pub struct ReceivedMsg {
 /// group after looking up PGP-contacts
 /// or vice versa.
 enum ChatAssignment {
+    /// Trash the message.
+    Trash,
+
     /// Group chat with a Group ID.
     ///
     /// Lookup PGP contacts and
     /// assign to encrypted group
     /// even if the message itself
     /// is not encrypted.
-    GroupChat {
-        grpid: String,
-    },
+    GroupChat { grpid: String },
 
     /// Mailing list or broadcast list.
     ///
@@ -106,9 +107,7 @@ enum ChatAssignment {
     /// up except the `from_id`
     /// which may be an email address contact
     /// or a PGP-contact.
-    MailingList {
-        listid: String,
-    },
+    MailingList { listid: String },
 
     /// Group chat without a Group ID.
     ///
@@ -396,11 +395,71 @@ pub(crate) async fn receive_imf_inner(
     .await?
     .filter(|p| Some(p.id) != replace_msg_id);
 
+    let should_trash = if !mime_parser.mdn_reports.is_empty() {
+        info!(context, "Message is an MDN (TRASH).");
+        true
+    } else if mime_parser.delivery_report.is_some() {
+        info!(context, "Message is a DSN (TRASH).");
+        markseen_on_imap_table(context, rfc724_mid).await.ok();
+        true
+    } else if mime_parser.sync_items.is_some() {
+        true
+    } else if mime_parser.decrypting_failed && !mime_parser.incoming {
+        // Outgoing undecryptable message.
+        let last_time = context
+            .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
+            .await?;
+        let now = tools::time();
+        let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
+            let mut msg = Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
+            chat::add_device_msg(context, None, Some(&mut msg))
+                .await
+                .log_err(context)
+                .ok();
+            true
+        } else {
+            last_time > now
+        };
+        if update_config {
+            context
+                .set_config_internal(Config::LastCantDecryptOutgoingMsgs, Some(&now.to_string()))
+                .await?;
+        }
+        true
+    } else if mime_parser
+        .get_header(HeaderDef::XMozillaDraftInfo)
+        .is_some()
+    {
+        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
+        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
+        // created by Thunderbird.
+
+        // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
+        info!(context, "Email is probably just a draft (TRASH).");
+        true
+    } else if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
+        if let Some(part) = mime_parser.parts.first() {
+            if part.typ == Viewtype::Text && part.msg.is_empty() {
+                info!(context, "Message is a status update only (TRASH).");
+                markseen_on_imap_table(context, rfc724_mid).await.ok();
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     // Decide on the type of chat we assign the message to.
     //
     // The chat may not exist yet, i.e. there may be
     // no database row and ChatId yet.
-    let chat_assignment = if let Some(grpid) = mime_parser.get_chat_group_id() {
+    let chat_assignment = if should_trash {
+        ChatAssignment::Trash
+    } else if let Some(grpid) = mime_parser.get_chat_group_id() {
         if mime_parser.was_encrypted() {
             ChatAssignment::GroupChat {
                 grpid: grpid.to_string(),
@@ -431,6 +490,7 @@ pub(crate) async fn receive_imf_inner(
     // lookup the address of receipient in the list of addresses used in the group,
     // but want to assign the message to 1:1 chat.
     let chat_id = match chat_assignment {
+        ChatAssignment::Trash => None,
         ChatAssignment::GroupChat { ref grpid } => {
             if let Some((chat_id, _protected, _blocked)) =
                 chat::get_chat_id_by_grpid(context, grpid).await?
@@ -519,7 +579,7 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
             }
         }
-        ChatAssignment::MailingList { .. } => {
+        ChatAssignment::Trash | ChatAssignment::MailingList { .. } => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -1025,67 +1085,7 @@ async fn add_parts(
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
-    let should_trash = if is_mdn {
-        info!(context, "Message is an MDN (TRASH).");
-        true
-    } else if mime_parser.delivery_report.is_some() {
-        info!(context, "Message is a DSN (TRASH).");
-        markseen_on_imap_table(context, rfc724_mid).await.ok();
-        true
-    } else if mime_parser.sync_items.is_some() {
-        true
-    } else if mime_parser.decrypting_failed && !mime_parser.incoming {
-        // Outgoing undecryptable message.
-        let last_time = context
-            .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
-            .await?;
-        let now = tools::time();
-        let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
-            let mut msg =
-                Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
-            chat::add_device_msg(context, None, Some(&mut msg))
-                .await
-                .log_err(context)
-                .ok();
-            true
-        } else {
-            last_time > now
-        };
-        if update_config {
-            context
-                .set_config_internal(
-                    Config::LastCantDecryptOutgoingMsgs,
-                    Some(&now.to_string()),
-                )
-                .await?;
-        }
-        true
-    } else if mime_parser
-        .get_header(HeaderDef::XMozillaDraftInfo)
-        .is_some()
-    {
-        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
-        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
-        // created by Thunderbird.
-
-        // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
-        info!(context, "Email is probably just a draft (TRASH).");
-        true
-    } else if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
-        if let Some(part) = mime_parser.parts.first() {
-            if part.typ == Viewtype::Text && part.msg.is_empty() {
-                info!(context, "Message is a status update only (TRASH).");
-                markseen_on_imap_table(context, rfc724_mid).await.ok();
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
+    let should_trash = matches!(chat_assignment, ChatAssignment::Trash);
 
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
@@ -1164,6 +1164,9 @@ async fn add_parts(
 
         if chat_id.is_none() {
             match &chat_assignment {
+                ChatAssignment::Trash => {
+                    chat_id = Some(DC_CHAT_ID_TRASH);
+                }
                 ChatAssignment::GroupChat { grpid } => {
                     // Try to assign to a chat based on Chat-Group-ID.
                     if let Some((id, _protected, blocked)) =
