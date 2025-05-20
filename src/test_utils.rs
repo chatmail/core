@@ -32,7 +32,7 @@ use crate::contact::{
 };
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, load_self_public_key, DcKey, DcSecretKey};
+use crate::key::{self, self_fingerprint, DcKey, DcSecretKey};
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::KeyPair;
@@ -770,18 +770,12 @@ impl TestContext {
     pub async fn add_or_lookup_pgp_contact(&self, other: &TestContext) -> Contact {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
-        let public_key = load_self_public_key(other).await.unwrap();
-        let fingerprint = public_key.dc_fingerprint();
+        let fingerprint = self_fingerprint(other).await.unwrap();
 
-        let (contact_id, _modified) = Contact::add_or_lookup_ex(
-            self,
-            "",
-            &addr,
-            &fingerprint.hex(),
-            Origin::MailinglistAddress,
-        )
-        .await
-        .expect("add_or_lookup");
+        let (contact_id, _modified) =
+            Contact::add_or_lookup_ex(self, "", &addr, fingerprint, Origin::MailinglistAddress)
+                .await
+                .expect("add_or_lookup");
         Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
     }
 

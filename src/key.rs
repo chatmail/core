@@ -186,6 +186,38 @@ pub(crate) async fn load_self_public_keyring(context: &Context) -> Result<Vec<Si
     Ok(keys)
 }
 
+/// Returns own public key fingerprint in (not human-readable) hex representation.
+/// This is the fingerprint format that is used in the database.
+///
+/// If no key is generated yet, generates a new one.
+///
+/// For performance reasons, the fingerprint is cached after the first invocation.
+pub(crate) async fn self_fingerprint(context: &Context) -> Result<&str> {
+    if let Some(fp) = context.self_fingerprint.get() {
+        Ok(fp)
+    } else {
+        let fp = load_self_public_key(context).await?.dc_fingerprint().hex();
+        Ok(context.self_fingerprint.get_or_init(|| fp))
+    }
+}
+
+/// Returns own public key fingerprint in (not human-readable) hex representation.
+/// This is the fingerprint format that is used in the database.
+///
+/// Returns `None` if no key is generated yet.
+///
+/// For performance reasons, the fingerprint is cached after the first invocation.
+pub(crate) async fn self_fingerprint_opt(context: &Context) -> Result<Option<&str>> {
+    if let Some(fp) = context.self_fingerprint.get() {
+        Ok(Some(fp))
+    } else if let Some(key) = load_self_public_key_opt(context).await? {
+        let fp = key.dc_fingerprint().hex();
+        Ok(Some(context.self_fingerprint.get_or_init(|| fp)))
+    } else {
+        Ok(None)
+    }
+}
+
 pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecretKey> {
     let private_key = context
         .sql

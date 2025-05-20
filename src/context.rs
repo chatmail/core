@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::{bail, ensure, Context as _, Result};
@@ -25,7 +25,7 @@ use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::key::{load_self_secret_key, self_fingerprint};
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};
@@ -297,6 +297,11 @@ pub struct InnerContext {
 
     /// Iroh for realtime peer channels.
     pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
+
+    /// The own fingerprint, if it was computed already.
+    /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
+    /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
+    pub(crate) self_fingerprint: OnceLock<String>,
 }
 
 /// The state of ongoing process.
@@ -456,6 +461,7 @@ impl Context {
             push_subscriber,
             push_subscribed: AtomicBool::new(false),
             iroh: Arc::new(RwLock::new(None)),
+            self_fingerprint: OnceLock::new(),
         };
 
         let ctx = Context {
@@ -813,8 +819,8 @@ impl Context {
             .sql
             .count("SELECT COUNT(*) FROM public_keys;", ())
             .await?;
-        let fingerprint_str = match load_self_public_key(self).await {
-            Ok(key) => key.dc_fingerprint().hex(),
+        let fingerprint_str = match self_fingerprint(self).await {
+            Ok(fp) => fp.to_string(),
             Err(err) => format!("<key failure: {err}>"),
         };
 

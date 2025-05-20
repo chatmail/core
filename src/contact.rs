@@ -28,7 +28,8 @@ use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF, DC_GCL_VERIFIED_ONLY}
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{
-    load_self_public_key, load_self_public_key_opt, DcKey, Fingerprint, SignedPublicKey,
+    load_self_public_key, self_fingerprint, self_fingerprint_opt, DcKey, Fingerprint,
+    SignedPublicKey,
 };
 use crate::log::LogExt;
 use crate::message::MessageState;
@@ -623,8 +624,8 @@ impl Contact {
                     .get_config(Config::ConfiguredAddr)
                     .await?
                     .unwrap_or_default();
-                if let Some(public_key) = load_self_public_key_opt(context).await? {
-                    contact.fingerprint = Some(public_key.dc_fingerprint().hex());
+                if let Some(self_fp) = self_fingerprint_opt(context).await? {
+                    contact.fingerprint = Some(self_fp.to_string());
                 }
                 contact.status = context
                     .get_config(Config::Selfstatus)
@@ -855,7 +856,7 @@ impl Contact {
         }
 
         if !fingerprint.is_empty() {
-            let fingerprint_self = load_self_public_key(context).await?.dc_fingerprint().hex();
+            let fingerprint_self = self_fingerprint(context).await?;
             if fingerprint == fingerprint_self {
                 return Ok((ContactId::SELF, sth_modified));
             }
