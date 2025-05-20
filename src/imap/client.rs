@@ -8,7 +8,7 @@ use tokio::io::BufWriter;
 
 use super::capabilities::Capabilities;
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::{info, warn, LoggingStream};
 use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
@@ -126,12 +126,12 @@ impl Client {
         );
         let res = match security {
             ConnectionSecurity::Tls => {
-                Client::connect_secure(resolved_addr, host, strict_tls).await
+                Client::connect_secure(&context, resolved_addr, host, strict_tls).await
             }
             ConnectionSecurity::Starttls => {
                 Client::connect_starttls(resolved_addr, host, strict_tls).await
             }
-            ConnectionSecurity::Plain => Client::connect_insecure(resolved_addr).await,
+            ConnectionSecurity::Plain => Client::connect_insecure(&context, resolved_addr).await,
         };
         match res {
             Ok(client) => {
@@ -202,9 +202,22 @@ impl Client {
         }
     }
 
-    async fn connect_secure(addr: SocketAddr, hostname: &str, strict_tls: bool) -> Result<Self> {
+    async fn connect_secure(
+        context: &Context,
+        addr: SocketAddr,
+        hostname: &str,
+        strict_tls: bool,
+    ) -> Result<Self> {
         let tls_stream = connect_tls_inner(addr, hostname, strict_tls, alpn(addr.port())).await?;
-        let buffered_stream = BufWriter::new(tls_stream);
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let logging_stream = LoggingStream::new(
+            tls_stream,
+            "some IMAP TLS stream".to_string(),
+            account_id,
+            events,
+        );
+        let buffered_stream = BufWriter::new(logging_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
         let _greeting = client
@@ -214,9 +227,17 @@ impl Client {
         Ok(client)
     }
 
-    async fn connect_insecure(addr: SocketAddr) -> Result<Self> {
+    async fn connect_insecure(context: &Context, addr: SocketAddr) -> Result<Self> {
         let tcp_stream = connect_tcp_inner(addr).await?;
-        let buffered_stream = BufWriter::new(tcp_stream);
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let logging_stream = LoggingStream::new(
+            tcp_stream,
+            "some IMAP insecure TLS stream".to_string(),
+            account_id,
+            events,
+        );
+        let buffered_stream = BufWriter::new(logging_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
         let _greeting = client
