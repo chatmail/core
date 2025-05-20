@@ -1001,9 +1001,6 @@ async fn add_parts(
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
 
-    let mut chat_id = None;
-    let mut chat_id_blocked = Blocked::Not;
-
     let mut better_msg = None;
     let mut group_changes = GroupChangesInfo::default();
     if mime_parser.is_system_message == SystemMessage::LocationStreamingEnabled {
@@ -1027,6 +1024,14 @@ async fn add_parts(
     let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
+
+    let mut chat_id = None;
+    let mut chat_id_blocked = Blocked::Not;
+
+    if is_mdn {
+        chat_id = Some(DC_CHAT_ID_TRASH);
+        info!(context, "Message is an MDN (TRASH).",);
+    }
 
     let allow_creation;
     if mime_parser.decrypting_failed {
@@ -1068,11 +1073,6 @@ async fn add_parts(
                 part.param.set(Param::OverrideSenderDisplayname, name);
             }
         }
-    }
-
-    if chat_id.is_none() && is_mdn {
-        chat_id = Some(DC_CHAT_ID_TRASH);
-        info!(context, "Message is an MDN (TRASH).",);
     }
 
     if mime_parser.incoming {
