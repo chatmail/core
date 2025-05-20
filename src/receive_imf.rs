@@ -1045,6 +1045,18 @@ async fn add_parts(
         // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
         info!(context, "Email is probably just a draft (TRASH).");
         true
+    } else if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
+        if let Some(part) = mime_parser.parts.first() {
+            if part.typ == Viewtype::Text && part.msg.is_empty() {
+                info!(context, "Message is a status update only (TRASH).");
+                markseen_on_imap_table(context, rfc724_mid).await.ok();
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     } else {
         false
     };
@@ -1076,6 +1088,7 @@ async fn add_parts(
     } else {
         allow_creation = !is_reaction;
     }
+
 
     let to_id: ContactId;
     let state: MessageState;
@@ -1489,16 +1502,6 @@ async fn add_parts(
 
             if Blocked::Not != chat.blocked {
                 chat.id.unblock_ex(context, Nosync).await?;
-            }
-        }
-    }
-
-    if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
-        if let Some(part) = mime_parser.parts.first() {
-            if part.typ == Viewtype::Text && part.msg.is_empty() {
-                chat_id = Some(DC_CHAT_ID_TRASH);
-                info!(context, "Message is a status update only (TRASH).");
-                markseen_on_imap_table(context, rfc724_mid).await.ok();
             }
         }
     }
