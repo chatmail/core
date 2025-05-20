@@ -2367,7 +2367,7 @@ async fn handle_ndn(
         let aggregated_error = message
             .error
             .as_ref()
-            .map(|err| format!("{}\n\n{}", err, err_msg));
+            .map(|err| format!("{err}\n\n{err_msg}"));
         set_msg_failed(
             context,
             &mut message,

@@ -649,7 +649,7 @@ impl ChatId {
     ) -> Result<()> {
         let chat_id = ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Yes)
             .await
-            .with_context(|| format!("can't create chat for {}", contact_id))?;
+            .with_context(|| format!("can't create chat for {contact_id}"))?;
         chat_id
             .set_protection(
                 context,

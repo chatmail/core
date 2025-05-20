@@ -1066,21 +1066,21 @@ impl Context {
             )
             .await?
             .unwrap_or_default();
-        res += &format!("num_msgs {}\n", num_msgs);
+        res += &format!("num_msgs {num_msgs}\n");
 
         let num_chats: u32 = self
             .sql
             .query_get_value("SELECT COUNT(*) FROM chats WHERE id>9 AND blocked!=1", ())
             .await?
             .unwrap_or_default();
-        res += &format!("num_chats {}\n", num_chats);
+        res += &format!("num_chats {num_chats}\n");
 
         let db_size = tokio::fs::metadata(&self.sql.dbfile).await?.len();
-        res += &format!("db_size_bytes {}\n", db_size);
+        res += &format!("db_size_bytes {db_size}\n");
 
         let secret_key = &load_self_secret_key(self).await?.primary_key;
         let key_created = secret_key.created_at().timestamp();
-        res += &format!("key_created {}\n", key_created);
+        res += &format!("key_created {key_created}\n");
 
         // how many of the chats active in the last months are:
         // - protected
@@ -1160,7 +1160,7 @@ impl Context {
                 id
             }
         };
-        res += &format!("self_reporting_id {}", self_reporting_id);
+        res += &format!("self_reporting_id {self_reporting_id}");
 
         Ok(res)
     }

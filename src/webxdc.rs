@@ -965,7 +965,7 @@ impl Message {
         let fingerprint = load_self_public_key(context).await?.dc_fingerprint().hex();
         let data = format!("{}-{}", fingerprint, self.rfc724_mid);
         let hash = Sha256::digest(data.as_bytes());
-        Ok(format!("{:x}", hash))
+        Ok(format!("{hash:x}"))
     }
 
     /// Get link attached to an info message.
