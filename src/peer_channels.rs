@@ -555,9 +555,9 @@ mod tests {
     use super::*;
     use crate::{
         EventType,
-        chat::send_msg,
         message::{Message, Viewtype},
-        test_utils::TestContextManager,
+        chat::{self, add_contact_to_chat, resend_msgs, send_msg, ChatId, ProtectionStatus},
+        test_utils::{TestContext, TestContextManager},
     };
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -924,8 +924,8 @@ mod tests {
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
 
-        // Alice sends webxdc to bob
-        let alice_chat = alice.create_chat(bob).await;
+        let chat = alice.create_chat(&bob).await.id;
+
         let mut instance = Message::new(Viewtype::File);
         instance
             .set_file_from_bytes(
@@ -935,7 +935,80 @@ mod tests {
                 None,
             )
             .unwrap();
-        send_msg(alice, alice_chat.id, &mut instance).await.unwrap();
+        connect_alice_bob(alice, bob, chat, &mut instance).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_webxdc_resend() {
+        let mut tcm = TestContextManager::new();
+        let alice = &mut tcm.alice().await;
+        let bob = &mut tcm.bob().await;
+        let group = chat::create_group_chat(&alice, ProtectionStatus::Unprotected, "")
+            .await
+            .unwrap();
+
+        // Alice sends webxdc to bob
+        let mut instance = Message::new(Viewtype::File);
+        instance
+            .set_file_from_bytes(
+                alice,
+                "minimal.xdc",
+                include_bytes!("../test-data/webxdc/minimal.xdc"),
+                None,
+            )
+            .unwrap();
+
+        connect_alice_bob(alice, bob, group, &mut instance).await;
+
+        // fiona joins late
+        let fiona = &mut tcm.fiona().await;
+        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&bob).await)
+            .await
+            .unwrap();
+
+        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&fiona).await)
+            .await
+            .unwrap();
+
+        resend_msgs(&alice, &[instance.id]).await.unwrap();
+        let msg = alice.pop_sent_msg().await;
+        let fiona_instance = fiona.recv_msg(&msg).await.id;
+
+        let fiona_connect_future = send_webxdc_realtime_advertisement(&fiona, fiona_instance)
+            .await
+            .unwrap()
+            .unwrap();
+        let fiona_advert = fiona.pop_sent_msg().await;
+        alice.recv_msg_trash(&fiona_advert).await;
+
+        fiona_connect_future.await.unwrap();
+        send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
+            .await
+            .unwrap();
+
+        eprintln!("Waiting for ephemeral message");
+        loop {
+            let event = fiona.evtracker.recv().await.unwrap();
+            if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
+                if data == b"alice -> bob & fiona" {
+                    break;
+                } else {
+                    panic!(
+                        "Unexpected status update: {}",
+                        String::from_utf8_lossy(&data)
+                    );
+                }
+            }
+        }
+    }
+
+    async fn connect_alice_bob(
+        alice: &mut TestContext,
+        bob: &mut TestContext,
+        chat: ChatId,
+        instance: &mut Message,
+    ) {
+        send_msg(alice, chat, instance).await.unwrap();
         let alice_webxdc = alice.get_last_msg().await;
 
         let webxdc = alice.pop_sent_msg().await;
