@@ -1027,14 +1027,13 @@ async fn add_parts(
 
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
+    let allow_creation;
 
     if is_mdn {
         chat_id = Some(DC_CHAT_ID_TRASH);
+        allow_creation = false;
         info!(context, "Message is an MDN (TRASH).",);
-    }
-
-    let allow_creation;
-    if mime_parser.decrypting_failed {
+    } else if mime_parser.decrypting_failed {
         allow_creation = false;
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
@@ -1049,10 +1048,10 @@ async fn add_parts(
                 allow_creation = false;
             }
             ShowEmails::AcceptedContacts => allow_creation = false,
-            ShowEmails::All => allow_creation = !is_mdn,
+            ShowEmails::All => allow_creation = true,
         }
     } else {
-        allow_creation = !is_mdn && !is_reaction;
+        allow_creation = !is_reaction;
     }
 
     // check if the message introduces a new chat:
