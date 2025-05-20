@@ -6,6 +6,8 @@ use crate::context::Context;
 
 mod logging_stream;
 
+pub(crate) use logging_stream::LoggingStream;
+
 #[macro_export]
 macro_rules! info {
     ($ctx:expr,  $msg:expr) => {
