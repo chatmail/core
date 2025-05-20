@@ -1054,10 +1054,6 @@ async fn add_parts(
         allow_creation = !is_reaction;
     }
 
-    // check if the message introduces a new chat:
-    // - outgoing messages introduce a chat with the first to: address if they are sent by a messenger
-    // - incoming messages introduce a chat only for known contacts if they are sent by a messenger
-    // (of course, the user can add other chats manually later)
     let to_id: ContactId;
     let state: MessageState;
     let hidden = is_reaction;
