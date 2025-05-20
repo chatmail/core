@@ -125,6 +125,23 @@ async fn test_send_invalid_webxdc() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_set_draft_invalid_webxdc() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+
+    // sending invalid .xdc as file is possible, but must not result in Viewtype::Webxdc
+    let mut instance = create_webxdc_instance(
+        &t,
+        "invalid-no-zip-but-7z.xdc",
+        include_bytes!("../../test-data/webxdc/invalid-no-zip-but-7z.xdc"),
+    )?;
+
+    chat_id.set_draft(&t, Some(&mut instance)).await?;
+    let _draft = chat_id.get_draft(&t).await.unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_special_webxdc_format() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;

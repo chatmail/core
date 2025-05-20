@@ -143,7 +143,9 @@ impl MessageObject {
         let override_sender_name = message.get_override_sender_name();
 
         let webxdc_info = if message.get_viewtype() == Viewtype::Webxdc {
-            Some(WebxdcMessageInfo::get_for_message(context, msg_id).await?)
+            WebxdcMessageInfo::get_for_message(context, msg_id)
+                .await
+                .ok()
         } else {
             None
         };
