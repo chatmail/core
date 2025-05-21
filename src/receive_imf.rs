@@ -1089,7 +1089,6 @@ async fn add_parts(
     let mut chat_id_blocked = Blocked::Not;
 
     let allow_creation = if matches!(chat_assignment, ChatAssignment::Trash) {
-        chat_id = Some(DC_CHAT_ID_TRASH);
         false
     } else if mime_parser.decrypting_failed {
         false
@@ -1381,6 +1380,9 @@ async fn add_parts(
 
         if chat_id.is_none() {
             match &chat_assignment {
+                ChatAssignment::Trash => {
+                    chat_id = Some(DC_CHAT_ID_TRASH);
+                }
                 ChatAssignment::GroupChat { grpid } => {
                     if let Some((id, _protected, blocked)) =
                         chat::get_chat_id_by_grpid(context, &grpid).await?
