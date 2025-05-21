@@ -107,7 +107,7 @@ enum ChatAssignment {
     /// up except the `from_id`
     /// which may be an email address contact
     /// or a PGP-contact.
-    MailingList { listid: String },
+    MailingList,
 
     /// Group chat without a Group ID.
     ///
@@ -475,8 +475,8 @@ pub(crate) async fn receive_imf_inner(
             ChatAssignment::AdHocGroup
         }
     } else if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-        let listid = mailinglist_header_listid(mailinglist_header)?;
-        ChatAssignment::MailingList { listid }
+        let _listid = mailinglist_header_listid(mailinglist_header)?;
+        ChatAssignment::MailingList
     } else if mime_parser.recipients.len() == 1 {
         ChatAssignment::OneOneChat
     } else {
