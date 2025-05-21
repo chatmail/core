@@ -1085,17 +1085,14 @@ async fn add_parts(
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
-    let should_trash = matches!(chat_assignment, ChatAssignment::Trash);
-
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
-    let allow_creation;
 
-    if should_trash {
+    let allow_creation = if matches!(chat_assignment, ChatAssignment::Trash) {
         chat_id = Some(DC_CHAT_ID_TRASH);
-        allow_creation = false;
+        false
     } else if mime_parser.decrypting_failed {
-        allow_creation = false;
+        false
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
         && !context.get_config_bool(Config::IsChatmail).await?
@@ -1106,14 +1103,14 @@ async fn add_parts(
             ShowEmails::Off => {
                 info!(context, "Classical email not shown (TRASH).");
                 chat_id = Some(DC_CHAT_ID_TRASH);
-                allow_creation = false;
+                false
             }
-            ShowEmails::AcceptedContacts => allow_creation = false,
-            ShowEmails::All => allow_creation = true,
+            ShowEmails::AcceptedContacts => false,
+            ShowEmails::All => true,
         }
     } else {
-        allow_creation = !is_reaction;
-    }
+        !is_reaction
+    };
 
     let to_id: ContactId;
     let state: MessageState;
