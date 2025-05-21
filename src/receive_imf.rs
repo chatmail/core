@@ -1088,9 +1088,7 @@ async fn add_parts(
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
 
-    let allow_creation = if matches!(chat_assignment, ChatAssignment::Trash) {
-        false
-    } else if mime_parser.decrypting_failed {
+    let allow_creation = if mime_parser.decrypting_failed {
         false
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && is_dc_message == MessengerMessage::No
