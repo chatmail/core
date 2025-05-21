@@ -510,11 +510,7 @@ pub(crate) async fn receive_imf_inner(
         ChatAssignment::MailingList { .. } => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
-                if let Some(parent_message) = &parent_message {
-                    Some(parent_message.chat_id)
-                } else {
-                    None
-                }
+                parent_message.as_ref().map(|m| m.chat_id)
             } else {
                 None
             }
@@ -1164,7 +1160,7 @@ async fn add_parts(
                 ChatAssignment::GroupChat { grpid } => {
                     // Try to assign to a chat based on Chat-Group-ID.
                     if let Some((id, _protected, blocked)) =
-                        chat::get_chat_id_by_grpid(context, &grpid).await?
+                        chat::get_chat_id_by_grpid(context, grpid).await?
                     {
                         chat_id = Some(id);
                         chat_id_blocked = blocked;
@@ -1397,7 +1393,7 @@ async fn add_parts(
                             to_ids,
                             past_ids,
                             &verified_encryption,
-                            &grpid,
+                            grpid,
                         )
                         .await?
                         {
