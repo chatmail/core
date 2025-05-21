@@ -3220,8 +3220,8 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     receive_imf(alice, raw, false).await?;
 
     // Undecryptable message does not even create a contact.
-    let bob_contact_id = Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo)
-        .await?;
+    let bob_contact_id =
+        Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo).await?;
     assert!(bob_contact_id.is_none());
 
     let dev_chat_id = ChatId::lookup_by_contact(alice, ContactId::DEVICE)
@@ -3236,8 +3236,8 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     receive_imf(alice, raw, false).await?;
 
-    let bob_contact_id = Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo)
-        .await?;
+    let bob_contact_id =
+        Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo).await?;
     assert!(bob_contact_id.is_none());
     // The device message mustn't be added too frequently.
     assert_eq!(alice.get_last_msg_in(dev_chat_id).await.id, dev_msg.id);
