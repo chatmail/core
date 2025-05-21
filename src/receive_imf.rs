@@ -507,7 +507,7 @@ pub(crate) async fn receive_imf_inner(
             // to lookup PGP-contacts.
             None
         }
-        ChatAssignment::MailingList { .. } => None,
+        ChatAssignment::MailingList => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
@@ -575,7 +575,7 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
             }
         }
-        ChatAssignment::Trash | ChatAssignment::MailingList { .. } => {
+        ChatAssignment::Trash | ChatAssignment::MailingList => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -1174,7 +1174,7 @@ async fn add_parts(
                             to_ids,
                             past_ids,
                             &verified_encryption,
-                            &grpid,
+                            grpid,
                         )
                         .await?
                         {
@@ -1183,7 +1183,7 @@ async fn add_parts(
                         }
                     }
                 }
-                ChatAssignment::MailingList { .. } => {
+                ChatAssignment::MailingList => {
                     if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                         if let Some((new_chat_id, new_chat_id_blocked)) =
                             create_or_lookup_mailinglist(
@@ -1226,7 +1226,7 @@ async fn add_parts(
         // unblock the chat
         if chat_id_blocked != Blocked::Not
             && create_blocked != Blocked::Yes
-            && !matches!(chat_assignment, ChatAssignment::MailingList { .. })
+            && !matches!(chat_assignment, ChatAssignment::MailingList)
         {
             if let Some(chat_id) = chat_id {
                 chat_id.set_blocked(context, create_blocked).await?;
@@ -1379,7 +1379,7 @@ async fn add_parts(
                 }
                 ChatAssignment::GroupChat { grpid } => {
                     if let Some((id, _protected, blocked)) =
-                        chat::get_chat_id_by_grpid(context, &grpid).await?
+                        chat::get_chat_id_by_grpid(context, grpid).await?
                     {
                         chat_id = Some(id);
                         chat_id_blocked = blocked;
