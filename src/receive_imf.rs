@@ -2337,6 +2337,11 @@ async fn is_probably_private_reply(
     mime_parser: &MimeMessage,
     parent_chat_id: ChatId,
 ) -> Result<bool> {
+    // Message cannot be a private reply if it has an explicit Chat-Group-ID header.
+    //
+    // This function should not even be called in this case.
+    debug_assert!(mime_parser.get_chat_group_id().is_none());
+
     // Usually we don't want to show private replies in the parent chat, but in the
     // 1:1 chat with the sender.
     //
@@ -2347,11 +2352,6 @@ async fn is_probably_private_reply(
     let private_message =
         (to_ids == [ContactId::SELF]) || (from_id == ContactId::SELF && to_ids.len() == 1);
     if !private_message {
-        return Ok(false);
-    }
-
-    // Message cannot be a private reply if it has an explicit Chat-Group-ID header.
-    if mime_parser.get_chat_group_id().is_some() {
         return Ok(false);
     }
 
