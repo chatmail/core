@@ -1832,17 +1832,21 @@ async fn check_alias_reply(from_dc: bool, chat_request: bool, group_request: boo
         "bob@example.net"
     ); // Bob is not part of the group, so override-sender-name should be set
 
-    // Check that Claire also gets the message in the same chat.
+    // Claire gets the reply as ad hoc group.
     let request = claire.get_last_msg().await;
     receive_imf(&claire, reply.as_bytes(), false).await.unwrap();
     let answer = claire.get_last_msg().await;
     assert_eq!(answer.get_subject(), "Re: i have a question");
     assert!(answer.get_text().contains("the version is 1.0"));
-    assert_eq!(answer.chat_id, request.chat_id);
-    assert_eq!(
-        answer.get_override_sender_name().unwrap(),
-        "bob@example.net"
-    );
+    if group_request {
+        assert_eq!(answer.chat_id, request.chat_id);
+        assert_eq!(
+            answer.get_override_sender_name().unwrap(),
+            "bob@example.net"
+        );
+    } else {
+        assert_ne!(answer.chat_id, request.chat_id);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

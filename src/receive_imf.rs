@@ -2181,7 +2181,6 @@ async fn lookup_chat_by_reply(
     context: &Context,
     mime_parser: &MimeMessage,
     parent: &Option<Message>,
-    to_ids: &[ContactId],
 ) -> Result<Option<(ChatId, Blocked)>> {
     // Try to assign message to the same chat as the parent message.
 
@@ -2203,11 +2202,7 @@ async fn lookup_chat_by_reply(
     // a new person to TO/CC, then the message should not go to the 1:1 chat, but to a
     // newly created ad-hoc group.
     if parent_chat.typ == Chattype::Single && mime_parser.recipients.len() > 1 {
-        let mut chat_contacts = chat::get_chat_contacts(context, parent_chat.id).await?;
-        chat_contacts.push(ContactId::SELF);
-        if to_ids.iter().any(|id| !chat_contacts.contains(id)) {
-            return Ok(None);
-        }
+        return Ok(None);
     }
 
     // Do not assign unencrypted messages to encrypted chats.
@@ -2237,7 +2232,7 @@ async fn lookup_chat_or_create_adhoc_group(
 
     if let Some((new_chat_id, new_chat_id_blocked)) =
         // Try to assign to a chat based on In-Reply-To/References.
-        lookup_chat_by_reply(context, mime_parser, parent, &to_ids).await?
+        lookup_chat_by_reply(context, mime_parser, parent).await?
     {
         return Ok(Some((new_chat_id, new_chat_id_blocked)));
     }
