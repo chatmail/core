@@ -21,8 +21,7 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
-use crate::key::self_fingerprint;
-use crate::key::{DcKey, SignedPublicKey};
+use crate::key::{DcKey, self_fingerprint, SignedPublicKey};
 use crate::location;
 use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
@@ -1492,7 +1491,7 @@ impl MimeFactory {
             }
             SystemMessage::IrohNodeAddr => {
                 headers.push((
-                    "Iroh-Node-Addr",
+                    HeaderDef::IrohNodeAddr.into(),
                     mail_builder::headers::text::Text::new(serde_json::to_string(
                         &context
                             .get_or_try_init_peer_channel()
@@ -1674,7 +1673,7 @@ impl MimeFactory {
             parts.push(context.build_status_update_part(json));
         } else if msg.viewtype == Viewtype::Webxdc {
             headers.push((
-                "Iroh-Gossip-Topic",
+                HeaderDef::IrohGossipTopic.into(),
                 mail_builder::headers::raw::Raw::new(create_iroh_header(context, msg.id).await?)
                     .into(),
             ));
