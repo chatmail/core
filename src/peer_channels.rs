@@ -193,7 +193,7 @@ impl Iroh {
     }
 
     /// Leave the realtime channel for a given topic.
-    pub(crate) async fn leave_realtime(&self, topic: TopicId) -> Result<()> {
+    pub async fn leave_realtime(&self, topic: TopicId) -> Result<()> {
         if let Some(channel) = self.iroh_channels.write().await.remove(&topic) {
             // Dropping the last GossipTopic results in quitting the topic.
             // It is split into GossipReceiver and GossipSender.
@@ -322,7 +322,7 @@ impl Context {
 }
 
 /// Cache a peers [NodeId] for one topic.
-pub(crate) async fn iroh_add_peer_for_topic(
+pub async fn iroh_add_peer_for_topic(
     ctx: &Context,
     msg_id: MsgId,
     topic: TopicId,
@@ -380,7 +380,7 @@ pub async fn add_gossip_peer_from_header(
 }
 
 /// Insert topicId into the database so that we can use it to retrieve the topic.
-pub(crate) async fn insert_topic_stub(ctx: &Context, msg_id: MsgId, topic: TopicId) -> Result<()> {
+pub async fn insert_topic_stub(ctx: &Context, msg_id: MsgId, topic: TopicId) -> Result<()> {
     ctx.sql
         .execute(
             "INSERT OR REPLACE INTO iroh_gossip_peers (msg_id, public_key, topic, relay_server) VALUES (?, ?, ?, ?)",
