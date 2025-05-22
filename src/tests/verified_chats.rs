@@ -479,11 +479,7 @@ async fn test_reply() -> Result<()> {
         let unencrypted_msg = Message::load_from_db(&alice, unencrypted_msg.msg_ids[0]).await?;
         assert_eq!(unencrypted_msg.text, "Weird reply");
 
-        if verified {
-            assert_ne!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
-        } else {
-            assert_eq!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
-        }
+        assert_ne!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
     }
 
     Ok(())
