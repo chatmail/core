@@ -48,13 +48,13 @@ use crate::mimeparser::SystemMessage;
 const PUBLIC_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
 
-/// Store iroh peer channels for the context.
+/// Store Iroh peer channels for the context.
 #[derive(Debug)]
 pub struct Iroh {
-    /// iroh router  needed for iroh peer channels.
+    /// Iroh router  needed for Iroh peer channels.
     pub(crate) router: iroh::protocol::Router,
 
-    /// [Gossip] needed for iroh peer channels.
+    /// [Gossip] needed for Iroh peer channels.
     pub(crate) gossip: Gossip,
 
     /// Sequence numbers for gossip channels.
