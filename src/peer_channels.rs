@@ -138,17 +138,13 @@ impl Iroh {
         Ok(Some(join_rx))
     }
 
-    /// Add gossip peers to realtime channel if it is already active.
-    pub async fn maybe_add_gossip_peers(&self, topic: TopicId, peers: Vec<NodeAddr>) -> Result<()> {
+    /// Add gossip peer to realtime channel if it is already active.
+    pub async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
         if self.iroh_channels.read().await.get(&topic).is_some() {
-            for peer in &peers {
-                self.router.endpoint().add_node_addr(peer.clone())?;
-            }
+            self.router.endpoint().add_node_addr(peer.clone())?;
 
-            self.gossip.subscribe_with_opts(
-                topic,
-                JoinOptions::with_bootstrap(peers.into_iter().map(|peer| peer.node_id)),
-            );
+            self.gossip
+                .subscribe_with_opts(topic, JoinOptions::with_bootstrap(vec![peer.node_id]));
         }
         Ok(())
     }
@@ -316,6 +312,14 @@ impl Context {
             }
         }
     }
+
+    pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
+        if let Some(iroh) = &*self.iroh.read().await {
+            info!(self, "Adding (maybe existing) peer to gossip: {peer:?}");
+            iroh.maybe_add_gossip_peer(topic, peer).await?;
+        }
+        Ok(())
+    }
 }
 
 /// Cache a peers [NodeId] for one topic.
@@ -336,6 +340,7 @@ pub(crate) async fn iroh_add_peer_for_topic(
 }
 
 /// Add gossip peer from `Iroh-Node-Addr` header to WebXDC message identified by `instance_id`.
+/// This should not start iroh, because receiving a NodeAddr does not mean you want to participate.
 pub async fn add_gossip_peer_from_header(
     context: &Context,
     instance_id: MsgId,
@@ -371,8 +376,7 @@ pub async fn add_gossip_peer_from_header(
     let relay_server = node_addr.relay_url().map(|relay| relay.as_str());
     iroh_add_peer_for_topic(context, instance_id, topic, node_id, relay_server).await?;
 
-    let iroh = context.get_or_try_init_peer_channel().await?;
-    iroh.maybe_add_gossip_peers(topic, vec![node_addr]).await?;
+    context.maybe_add_gossip_peer(topic, node_addr).await?;
     Ok(())
 }
 
