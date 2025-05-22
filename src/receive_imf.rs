@@ -2199,10 +2199,10 @@ async fn lookup_chat_by_reply(
         return Ok(None);
     }
 
-    // If the parent chat is a 1:1 chat, and the sender is a classical MUA and added
+    // If the parent chat is a 1:1 chat, and the sender added
     // a new person to TO/CC, then the message should not go to the 1:1 chat, but to a
     // newly created ad-hoc group.
-    if parent_chat.typ == Chattype::Single && !mime_parser.has_chat_version() && to_ids.len() > 1 {
+    if parent_chat.typ == Chattype::Single && mime_parser.recipients.len() > 1 {
         let mut chat_contacts = chat::get_chat_contacts(context, parent_chat.id).await?;
         chat_contacts.push(ContactId::SELF);
         if to_ids.iter().any(|id| !chat_contacts.contains(id)) {
