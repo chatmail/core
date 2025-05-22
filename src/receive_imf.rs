@@ -2182,7 +2182,6 @@ async fn lookup_chat_by_reply(
     mime_parser: &MimeMessage,
     parent: &Option<Message>,
     to_ids: &[ContactId],
-    from_id: ContactId,
 ) -> Result<Option<(ChatId, Blocked)>> {
     // Try to assign message to the same chat as the parent message.
 
@@ -2196,7 +2195,7 @@ async fn lookup_chat_by_reply(
 
     // If this was a private message just to self, it was probably a private reply.
     // It should not go into the group then, but into the private chat.
-    if is_probably_private_reply(context, to_ids, from_id, mime_parser, parent_chat.id).await? {
+    if is_probably_private_reply(context, mime_parser, parent_chat.id).await? {
         return Ok(None);
     }
 
@@ -2238,7 +2237,7 @@ async fn lookup_chat_or_create_adhoc_group(
 
     if let Some((new_chat_id, new_chat_id_blocked)) =
         // Try to assign to a chat based on In-Reply-To/References.
-        lookup_chat_by_reply(context, mime_parser, parent, &to_ids, from_id).await?
+        lookup_chat_by_reply(context, mime_parser, parent, &to_ids).await?
     {
         return Ok(Some((new_chat_id, new_chat_id_blocked)));
     }
@@ -2332,8 +2331,6 @@ async fn lookup_chat_or_create_adhoc_group(
 /// If it returns false, it shall be assigned to the parent chat.
 async fn is_probably_private_reply(
     context: &Context,
-    to_ids: &[ContactId],
-    from_id: ContactId,
     mime_parser: &MimeMessage,
     parent_chat_id: ChatId,
 ) -> Result<bool> {
@@ -2349,9 +2346,7 @@ async fn is_probably_private_reply(
     // should be assigned to the group chat. We restrict this exception to classical emails, as chat-group-messages
     // contain a Chat-Group-Id header and can be sorted into the correct chat this way.
 
-    let private_message =
-        (to_ids == [ContactId::SELF]) || (from_id == ContactId::SELF && to_ids.len() == 1);
-    if !private_message {
+    if mime_parser.recipients.len() != 1 {
         return Ok(false);
     }
 
@@ -2390,8 +2385,7 @@ async fn create_group(
     // they belong to the group because of the Chat-Group-Id or Message-Id header
     if let Some(chat_id) = chat_id {
         if !mime_parser.has_chat_version()
-            && is_probably_private_reply(context, &to_ids_flat, from_id, mime_parser, chat_id)
-                .await?
+            && is_probably_private_reply(context, mime_parser, chat_id).await?
         {
             return Ok(None);
         }
