@@ -96,3 +96,12 @@ Format anyhow errors with `{:#}` to print all the contexts like this:
 ```
 error!(context, "Failed to set selfavatar timestamp: {err:#}.");
 ```
+
+## Documentation comments
+
+Follow Rust guidelines for the documentation comments:
+<https://rust-lang.github.io/rfcs/1574-more-api-documentation-conventions.html#summary-sentence>
+
+## `.except` message style
+
+<https://doc.rust-lang.org/core/error/index.html#common-message-styles>
