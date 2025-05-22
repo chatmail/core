@@ -315,7 +315,10 @@ impl Context {
 
     pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
         if let Some(iroh) = &*self.iroh.read().await {
-            info!(self, "Adding (maybe existing) peer to gossip: {peer:?}");
+            info!(
+                self,
+                "Adding (maybe existing) peer with id {} to gossip", peer.node_id
+            );
             iroh.maybe_add_gossip_peer(topic, peer).await?;
         }
         Ok(())
@@ -353,12 +356,13 @@ pub async fn add_gossip_peer_from_header(
         return Ok(());
     }
 
-    info!(
-        context,
-        "Adding iroh peer with address {node_addr:?} to the topic of {instance_id}."
-    );
     let node_addr =
         serde_json::from_str::<NodeAddr>(node_addr).context("Failed to parse node address")?;
+
+    info!(
+        context,
+        "Adding iroh peer with node id {} to the topic of {instance_id}.", node_addr.node_id
+    );
 
     context.emit_event(EventType::WebxdcRealtimeAdvertisementReceived {
         msg_id: instance_id,
