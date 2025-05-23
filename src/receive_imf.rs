@@ -2182,22 +2182,23 @@ async fn lookup_chat_by_reply(
     mime_parser: &MimeMessage,
     parent: &Message,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    // Try to assign message to the same chat as the parent message.
+    debug_assert!(mime_parser.get_chat_group_id().is_none());
 
+    // Try to assign message to the same chat as the parent message.
     let Some(parent_chat_id) = ChatId::lookup_by_message(parent) else {
         return Ok(None);
     };
-    let parent_chat = Chat::load_from_db(context, parent_chat_id).await?;
 
     // If this was a private message just to self, it was probably a private reply.
     // It should not go into the group then, but into the private chat.
-    if is_probably_private_reply(context, mime_parser, parent_chat.id).await? {
+    if is_probably_private_reply(context, mime_parser, parent_chat_id).await? {
         return Ok(None);
     }
 
     // If the parent chat is a 1:1 chat, and the sender added
     // a new person to TO/CC, then the message should not go to the 1:1 chat, but to a
     // newly created ad-hoc group.
+    let parent_chat = Chat::load_from_db(context, parent_chat_id).await?;
     if parent_chat.typ == Chattype::Single && mime_parser.recipients.len() > 1 {
         return Ok(None);
     }
@@ -2209,7 +2210,7 @@ async fn lookup_chat_by_reply(
 
     info!(
         context,
-        "Assigning message to {} as it's a reply to {}.", parent_chat.id, parent.rfc724_mid
+        "Assigning message to {parent_chat_id} as it's a reply to {}.", parent.rfc724_mid
     );
     Ok(Some((parent_chat.id, parent_chat.blocked)))
 }
