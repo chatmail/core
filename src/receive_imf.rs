@@ -114,6 +114,11 @@ enum ChatAssignment {
     /// This is not encrypted.
     AdHocGroup,
 
+    ExistingChat {
+        chat_id: ChatId,
+        chat_id_blocked: Blocked,
+    },
+
     /// 1:1 chat with a single contact.
     ///
     /// The chat may be encrypted or not,
@@ -464,6 +469,19 @@ pub(crate) async fn receive_imf_inner(
             ChatAssignment::GroupChat {
                 grpid: grpid.to_string(),
             }
+        } else if let Some(parent) = &parent_message {
+            if let Some((chat_id, chat_id_blocked)) =
+                // Try to assign to a chat based on In-Reply-To/References.
+                lookup_chat_by_reply(context, &mime_parser, parent).await?
+            {
+                // Try to assign to a chat based on In-Reply-To/References.
+                ChatAssignment::ExistingChat {
+                    chat_id,
+                    chat_id_blocked,
+                }
+            } else {
+                ChatAssignment::AdHocGroup
+            }
         } else {
             // Could be a message from old version
             // with opportunistic encryption.
@@ -477,6 +495,21 @@ pub(crate) async fn receive_imf_inner(
     } else if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
         let _listid = mailinglist_header_listid(mailinglist_header)?;
         ChatAssignment::MailingList
+    } else if let Some(parent) = &parent_message {
+        if let Some((chat_id, chat_id_blocked)) =
+            // Try to assign to a chat based on In-Reply-To/References.
+            lookup_chat_by_reply(context, &mime_parser, parent).await?
+        {
+            // Try to assign to a chat based on In-Reply-To/References.
+            ChatAssignment::ExistingChat {
+                chat_id,
+                chat_id_blocked,
+            }
+        } else if mime_parser.recipients.len() == 1 {
+            ChatAssignment::OneOneChat
+        } else {
+            ChatAssignment::AdHocGroup
+        }
     } else if mime_parser.recipients.len() == 1 {
         ChatAssignment::OneOneChat
     } else {
@@ -507,6 +540,7 @@ pub(crate) async fn receive_imf_inner(
             // to lookup PGP-contacts.
             None
         }
+        ChatAssignment::ExistingChat { chat_id, .. } => Some(chat_id),
         ChatAssignment::MailingList => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
@@ -579,7 +613,10 @@ pub(crate) async fn receive_imf_inner(
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
-        ChatAssignment::AdHocGroup => {
+        ChatAssignment::ExistingChat { .. } | ChatAssignment::AdHocGroup => {
+            // TODO separate ExistingChat and lookup PGP contacts
+            // if chat is encrypted.
+
             to_ids = add_or_lookup_contacts_by_address_list(
                 context,
                 &mime_parser.recipients,
@@ -1201,33 +1238,27 @@ async fn add_parts(
                         }
                     }
                 }
+                ChatAssignment::ExistingChat {
+                    chat_id: new_chat_id,
+                    chat_id_blocked: new_chat_id_blocked,
+                } => {
+                    chat_id = Some(*new_chat_id);
+                    chat_id_blocked = *new_chat_id_blocked;
+                }
                 ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
-                    if let Some(parent) = &parent_message {
-                        if let Some((new_chat_id, new_chat_id_blocked)) =
-                            // Try to assign to a chat based on In-Reply-To/References.
-                            lookup_chat_by_reply(context, mime_parser, parent).await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
-                    }
-
-                    if chat_id.is_none() {
-                        if let Some((new_chat_id, new_chat_id_blocked)) =
-                            lookup_or_create_adhoc_group(
-                                context,
-                                mime_parser,
-                                to_ids,
-                                from_id,
-                                allow_creation || test_normal_chat.is_some(),
-                                create_blocked,
-                                is_partial_download.is_some(),
-                            )
-                            .await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
+                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        from_id,
+                        allow_creation || test_normal_chat.is_some(),
+                        create_blocked,
+                        is_partial_download.is_some(),
+                    )
+                    .await?
+                    {
+                        chat_id = Some(new_chat_id);
+                        chat_id_blocked = new_chat_id_blocked;
                     }
                 }
             }
@@ -1413,33 +1444,27 @@ async fn add_parts(
                         }
                     }
                 }
+                ChatAssignment::ExistingChat {
+                    chat_id: new_chat_id,
+                    chat_id_blocked: new_chat_id_blocked,
+                } => {
+                    chat_id = Some(*new_chat_id);
+                    chat_id_blocked = *new_chat_id_blocked;
+                }
                 _ => {
-                    if let Some(parent) = &parent_message {
-                        if let Some((new_chat_id, new_chat_id_blocked)) =
-                            // Try to assign to a chat based on In-Reply-To/References.
-                            lookup_chat_by_reply(context, mime_parser, parent).await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
-                    }
-
-                    if chat_id.is_none() {
-                        if let Some((new_chat_id, new_chat_id_blocked)) =
-                            lookup_or_create_adhoc_group(
-                                context,
-                                mime_parser,
-                                to_ids,
-                                from_id,
-                                allow_creation,
-                                Blocked::Not,
-                                is_partial_download.is_some(),
-                            )
-                            .await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
+                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        from_id,
+                        allow_creation,
+                        Blocked::Not,
+                        is_partial_download.is_some(),
+                    )
+                    .await?
+                    {
+                        chat_id = Some(new_chat_id);
+                        chat_id_blocked = new_chat_id_blocked;
                     }
                 }
             }
