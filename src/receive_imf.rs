@@ -2375,16 +2375,6 @@ async fn create_group(
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
 
-    // For chat messages, we don't have to guess (is_*probably*_private_reply()) but we know for sure that
-    // they belong to the group because of the Chat-Group-Id or Message-Id header
-    if let Some(chat_id) = chat_id {
-        if !mime_parser.has_chat_version()
-            && is_probably_private_reply(context, mime_parser, chat_id).await?
-        {
-            return Ok(None);
-        }
-    }
-
     let create_protected = if mime_parser.get_header(HeaderDef::ChatVerified).is_some() {
         if let VerifiedEncryption::NotVerified(err) = verified_encryption {
             warn!(context, "Verification problem: {err:#}.");
