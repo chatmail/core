@@ -2180,13 +2180,10 @@ async fn save_locations(
 async fn lookup_chat_by_reply(
     context: &Context,
     mime_parser: &MimeMessage,
-    parent: &Option<Message>,
+    parent: &Message,
 ) -> Result<Option<(ChatId, Blocked)>> {
     // Try to assign message to the same chat as the parent message.
 
-    let Some(parent) = parent else {
-        return Ok(None);
-    };
     let Some(parent_chat_id) = ChatId::lookup_by_message(parent) else {
         return Ok(None);
     };
@@ -2230,11 +2227,13 @@ async fn lookup_chat_or_create_adhoc_group(
 ) -> Result<Option<(ChatId, Blocked)>> {
     let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
 
-    if let Some((new_chat_id, new_chat_id_blocked)) =
-        // Try to assign to a chat based on In-Reply-To/References.
-        lookup_chat_by_reply(context, mime_parser, parent).await?
-    {
-        return Ok(Some((new_chat_id, new_chat_id_blocked)));
+    if let Some(parent) = parent {
+        if let Some((new_chat_id, new_chat_id_blocked)) =
+            // Try to assign to a chat based on In-Reply-To/References.
+            lookup_chat_by_reply(context, mime_parser, parent).await?
+        {
+            return Ok(Some((new_chat_id, new_chat_id_blocked)));
+        }
     }
     // Partial download may be an encrypted message with protected Subject header. We do not want to
     // create a group with "..." or "Encrypted message" as a subject. The same is for undecipherable
