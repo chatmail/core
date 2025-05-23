@@ -2237,7 +2237,6 @@ async fn lookup_chat_by_reply(
     Ok(Some((parent_chat.id, parent_chat.blocked)))
 }
 
-#[expect(clippy::too_many_arguments)]
 async fn lookup_or_create_adhoc_group(
     context: &Context,
     mime_parser: &MimeMessage,
