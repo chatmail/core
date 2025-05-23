@@ -1202,21 +1202,32 @@ async fn add_parts(
                     }
                 }
                 ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
-                    if let Some((new_chat_id, new_chat_id_blocked)) =
-                        lookup_chat_or_create_adhoc_group(
-                            context,
-                            mime_parser,
-                            &parent_message,
-                            to_ids,
-                            from_id,
-                            allow_creation || test_normal_chat.is_some(),
-                            create_blocked,
-                            is_partial_download.is_some(),
-                        )
-                        .await?
-                    {
-                        chat_id = Some(new_chat_id);
-                        chat_id_blocked = new_chat_id_blocked;
+                    if let Some(parent) = &parent_message {
+                        if let Some((new_chat_id, new_chat_id_blocked)) =
+                            // Try to assign to a chat based on In-Reply-To/References.
+                            lookup_chat_by_reply(context, mime_parser, parent).await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+                        }
+                    }
+
+                    if chat_id.is_none() {
+                        if let Some((new_chat_id, new_chat_id_blocked)) =
+                            lookup_or_create_adhoc_group(
+                                context,
+                                mime_parser,
+                                to_ids,
+                                from_id,
+                                allow_creation || test_normal_chat.is_some(),
+                                create_blocked,
+                                is_partial_download.is_some(),
+                            )
+                            .await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+                        }
                     }
                 }
             }
@@ -1403,21 +1414,32 @@ async fn add_parts(
                     }
                 }
                 _ => {
-                    if let Some((new_chat_id, new_chat_id_blocked)) =
-                        lookup_chat_or_create_adhoc_group(
-                            context,
-                            mime_parser,
-                            &parent_message,
-                            to_ids,
-                            from_id,
-                            allow_creation,
-                            Blocked::Not,
-                            is_partial_download.is_some(),
-                        )
-                        .await?
-                    {
-                        chat_id = Some(new_chat_id);
-                        chat_id_blocked = new_chat_id_blocked;
+                    if let Some(parent) = &parent_message {
+                        if let Some((new_chat_id, new_chat_id_blocked)) =
+                            // Try to assign to a chat based on In-Reply-To/References.
+                            lookup_chat_by_reply(context, mime_parser, parent).await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+                        }
+                    }
+
+                    if chat_id.is_none() {
+                        if let Some((new_chat_id, new_chat_id_blocked)) =
+                            lookup_or_create_adhoc_group(
+                                context,
+                                mime_parser,
+                                to_ids,
+                                from_id,
+                                allow_creation,
+                                Blocked::Not,
+                                is_partial_download.is_some(),
+                            )
+                            .await?
+                        {
+                            chat_id = Some(new_chat_id);
+                            chat_id_blocked = new_chat_id_blocked;
+                        }
                     }
                 }
             }
@@ -2216,26 +2238,15 @@ async fn lookup_chat_by_reply(
 }
 
 #[expect(clippy::too_many_arguments)]
-async fn lookup_chat_or_create_adhoc_group(
+async fn lookup_or_create_adhoc_group(
     context: &Context,
     mime_parser: &MimeMessage,
-    parent: &Option<Message>,
     to_ids: &[Option<ContactId>],
     from_id: ContactId,
     allow_creation: bool,
     create_blocked: Blocked,
     is_partial_download: bool,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
-
-    if let Some(parent) = parent {
-        if let Some((new_chat_id, new_chat_id_blocked)) =
-            // Try to assign to a chat based on In-Reply-To/References.
-            lookup_chat_by_reply(context, mime_parser, parent).await?
-        {
-            return Ok(Some((new_chat_id, new_chat_id_blocked)));
-        }
-    }
     // Partial download may be an encrypted message with protected Subject header. We do not want to
     // create a group with "..." or "Encrypted message" as a subject. The same is for undecipherable
     // messages. Instead, assign the message to 1:1 chat with the sender.
@@ -2258,6 +2269,7 @@ async fn lookup_chat_or_create_adhoc_group(
         .get_subject()
         .map(|s| remove_subject_prefix(&s))
         .unwrap_or_else(|| "👥📧".to_string());
+    let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     let mut contact_ids = Vec::with_capacity(to_ids.len() + 1);
     contact_ids.extend(&to_ids);
     if !contact_ids.contains(&from_id) {
