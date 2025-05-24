@@ -1090,67 +1090,26 @@ pub async fn from_field_to_contact_id(
     }
 }
 
-/// Creates a `ReceivedMsg` from given parts which might consist of
-/// multiple messages (if there are multiple attachments).
-/// Every entry in `mime_parser.parts` produces a new row in the `msgs` table.
-#[expect(clippy::too_many_arguments)]
-async fn add_parts(
+/// Assigns the message to a chat.
+///
+/// Creates a new the chat if necessary.
+async fn do_chat_assignment(
     context: &Context,
-    mime_parser: &mut MimeMessage,
-    imf_raw: &[u8],
+    chat_assignment: ChatAssignment,
+    from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
-    rfc724_mid: &str,
-    from_id: ContactId,
-    seen: bool,
+    to_id: ContactId,
+    allow_creation: bool,
+    mime_parser: &mut MimeMessage,
     is_partial_download: Option<u32>,
-    mut replace_msg_id: Option<MsgId>,
-    prevent_rename: bool,
-    verified_encryption: VerifiedEncryption,
+    verified_encryption: &VerifiedEncryption,
     parent_message: Option<Message>,
-    chat_assignment: ChatAssignment,
-) -> Result<ReceivedMsg> {
+) -> Result<(ChatId, Blocked)> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
-
-    let is_dc_message = if mime_parser.has_chat_version() {
-        MessengerMessage::Yes
-    } else if let Some(parent_message) = &parent_message {
-        match parent_message.is_dc_message {
-            MessengerMessage::No => MessengerMessage::No,
-            MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
-        }
-    } else {
-        MessengerMessage::No
-    };
-
-    let show_emails =
-        ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
-
-    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
-    let allow_creation = if mime_parser.decrypting_failed {
-        false
-    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-        && is_dc_message == MessengerMessage::No
-        && !context.get_config_bool(Config::IsChatmail).await?
-    {
-        // the message is a classic email in a classic profile
-        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
-        match show_emails {
-            ShowEmails::Off | ShowEmails::AcceptedContacts => false,
-            ShowEmails::All => true,
-        }
-    } else {
-        !is_reaction
-    };
-
-    let to_id = if mime_parser.incoming {
-        ContactId::SELF
-    } else {
-        to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
-    };
 
     if mime_parser.incoming {
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
@@ -1472,6 +1431,80 @@ async fn add_parts(
         info!(context, "No chat id for message (TRASH).");
         DC_CHAT_ID_TRASH
     });
+    Ok((chat_id, chat_id_blocked))
+}
+
+/// Creates a `ReceivedMsg` from given parts which might consist of
+/// multiple messages (if there are multiple attachments).
+/// Every entry in `mime_parser.parts` produces a new row in the `msgs` table.
+#[expect(clippy::too_many_arguments)]
+async fn add_parts(
+    context: &Context,
+    mime_parser: &mut MimeMessage,
+    imf_raw: &[u8],
+    to_ids: &[Option<ContactId>],
+    past_ids: &[Option<ContactId>],
+    rfc724_mid: &str,
+    from_id: ContactId,
+    seen: bool,
+    is_partial_download: Option<u32>,
+    mut replace_msg_id: Option<MsgId>,
+    prevent_rename: bool,
+    verified_encryption: VerifiedEncryption,
+    parent_message: Option<Message>,
+    chat_assignment: ChatAssignment,
+) -> Result<ReceivedMsg> {
+    let is_dc_message = if mime_parser.has_chat_version() {
+        MessengerMessage::Yes
+    } else if let Some(parent_message) = &parent_message {
+        match parent_message.is_dc_message {
+            MessengerMessage::No => MessengerMessage::No,
+            MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
+        }
+    } else {
+        MessengerMessage::No
+    };
+
+    let show_emails =
+        ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
+
+    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
+    let allow_creation = if mime_parser.decrypting_failed {
+        false
+    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
+        && is_dc_message == MessengerMessage::No
+        && !context.get_config_bool(Config::IsChatmail).await?
+    {
+        // the message is a classic email in a classic profile
+        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
+        match show_emails {
+            ShowEmails::Off | ShowEmails::AcceptedContacts => false,
+            ShowEmails::All => true,
+        }
+    } else {
+        !is_reaction
+    };
+
+    let to_id = if mime_parser.incoming {
+        ContactId::SELF
+    } else {
+        to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
+    };
+
+    let (chat_id, chat_id_blocked) = do_chat_assignment(
+        context,
+        chat_assignment,
+        from_id,
+        to_ids,
+        past_ids,
+        to_id,
+        allow_creation,
+        mime_parser,
+        is_partial_download,
+        &verified_encryption,
+        parent_message,
+    )
+    .await?;
 
     // if contact renaming is prevented (for mailinglists and bots),
     // we use name from From:-header as override name
