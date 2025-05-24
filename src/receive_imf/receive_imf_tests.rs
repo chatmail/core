@@ -5142,7 +5142,7 @@ async fn test_no_email_contact_added_into_group() -> Result<()> {
     );
 
     // Unencrypted message should not even be assigned to encrypted chat.
-    assert_eq!(msg.chat_id, alice_chat_id);
+    assert_ne!(msg.chat_id, alice_chat_id);
 
     Ok(())
 }
