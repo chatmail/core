@@ -1152,8 +1152,6 @@ async fn add_parts(
         to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
     };
 
-    let mut restore_protection = false;
-
     if mime_parser.incoming {
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
 
@@ -1341,8 +1339,6 @@ async fn add_parts(
                             )
                             .await?;
                     }
-                    restore_protection = new_protection != ProtectionStatus::Protected
-                        && contact.is_verified(context).await?;
                 }
             }
         }
@@ -2031,16 +2027,6 @@ RETURNING id
     let needs_delete_job =
         !mime_parser.incoming && is_mdn && is_dc_message == MessengerMessage::Yes;
 
-    if restore_protection {
-        chat_id
-            .set_protection(
-                context,
-                ProtectionStatus::Protected,
-                mime_parser.timestamp_rcvd,
-                Some(from_id),
-            )
-            .await?;
-    }
     Ok(ReceivedMsg {
         chat_id,
         state,
