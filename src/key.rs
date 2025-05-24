@@ -130,8 +130,11 @@ pub(crate) trait DcKey: Serialize + Deserializable + PublicKeyTrait + Clone {
     fn is_private() -> bool;
 }
 
-pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPublicKey> {
-    let public_key = context
+/// Attempts to load own public key.
+///
+/// Returns `None` if no key is generated yet.
+pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
+    let Some(public_key_bytes) = context
         .sql
         .query_row_optional(
             "SELECT public_key
@@ -143,9 +146,20 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
                 Ok(bytes)
             },
         )
-        .await?;
-    match public_key {
-        Some(bytes) => SignedPublicKey::from_slice(&bytes),
+        .await?
+    else {
+        return Ok(None);
+    };
+    let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+    Ok(Some(public_key))
+}
+
+/// Loads own public key.
+///
+/// If no key is generated yet, generates a new one.
+pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPublicKey> {
+    match load_self_public_key_opt(context).await? {
+        Some(public_key) => Ok(public_key),
         None => {
             let keypair = generate_keypair(context).await?;
             Ok(keypair.public)
