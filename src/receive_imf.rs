@@ -1468,7 +1468,7 @@ async fn add_parts(
                     chat_id_blocked = chat.blocked;
                 }
             }
-            if chat_id.is_none() && is_dc_message == MessengerMessage::Yes {
+            if chat_id.is_none() && mime_parser.has_chat_version() {
                 if let Some(chat) = ChatIdBlocked::lookup_by_contact(context, to_id).await? {
                     chat_id = Some(chat.id);
                     chat_id_blocked = chat.blocked;
