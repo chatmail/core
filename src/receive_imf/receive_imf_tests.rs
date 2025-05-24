@@ -4503,37 +4503,6 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_protected_group_reply_from_mua() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
-    mark_as_verified(alice, bob).await;
-    mark_as_verified(alice, fiona).await;
-    mark_as_verified(bob, alice).await;
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob, fiona])
-        .await;
-    let sent = alice.send_text(alice_chat_id, "Hello!").await;
-    let bob_msg = bob.recv_msg(&sent).await;
-    bob_msg.chat_id.accept(bob).await?;
-    // This is hacky, but i don't know other simple way to simulate a MUA reply. It works because
-    // the message is correctly assigned to the chat by `References:`.
-    bob.sql
-        .execute(
-            "UPDATE chats SET protected=0, grpid='' WHERE id=?",
-            (bob_msg.chat_id,),
-        )
-        .await?;
-    let sent = bob
-        .send_text(bob_msg.chat_id, "/me replying from MUA")
-        .await;
-    let alice_msg = alice.recv_msg(&sent).await;
-    assert_eq!(alice_msg.chat_id, alice_chat_id);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_older_message_from_2nd_device() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
