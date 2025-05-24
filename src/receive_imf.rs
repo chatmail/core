@@ -434,9 +434,13 @@ pub(crate) async fn receive_imf_inner(
         true
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && !mime_parser.has_chat_version()
-        && parent_message.as_ref().is_none_or(|p| p.is_dc_message == MessengerMessage::No)
+        && parent_message
+            .as_ref()
+            .is_none_or(|p| p.is_dc_message == MessengerMessage::No)
         && !context.get_config_bool(Config::IsChatmail).await?
-        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default() == ShowEmails::Off 
+        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
+            .unwrap_or_default()
+            == ShowEmails::Off
     {
         info!(context, "Classical email not shown (TRASH).");
         // the message is a classic email in a classic profile
@@ -1101,15 +1105,8 @@ async fn add_parts(
     chat_assignment: ChatAssignment,
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
-    let rfc724_mid_orig = &mime_parser
-        .get_rfc724_mid()
-        .unwrap_or(rfc724_mid.to_string());
 
-    let mut better_msg = None;
     let mut group_changes = GroupChangesInfo::default();
-    if mime_parser.is_system_message == SystemMessage::LocationStreamingEnabled {
-        better_msg = Some(stock_str::msg_location_enabled_by(context, from_id).await);
-    }
 
     let is_dc_message = if mime_parser.has_chat_version() {
         MessengerMessage::Yes
@@ -1149,8 +1146,6 @@ async fn add_parts(
     };
 
     let to_id: ContactId;
-    let state: MessageState;
-    let hidden = is_reaction;
     let mut needs_delete_job = false;
     let mut restore_protection = false;
 
@@ -1227,14 +1222,13 @@ async fn add_parts(
             }
             ChatAssignment::MailingList => {
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                    if let Some((new_chat_id, new_chat_id_blocked)) =
-                        create_or_lookup_mailinglist(
-                            context,
-                            allow_creation,
-                            mailinglist_header,
-                            mime_parser,
-                        )
-                        .await?
+                    if let Some((new_chat_id, new_chat_id_blocked)) = create_or_lookup_mailinglist(
+                        context,
+                        allow_creation,
+                        mailinglist_header,
+                        mime_parser,
+                    )
+                    .await?
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
@@ -1395,20 +1389,9 @@ async fn add_parts(
             )
             .await?;
         }
-
-        state = if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
-        // No check for `hidden` because only reactions are such and they should be `InFresh`.
-        {
-            MessageState::InSeen
-        } else {
-            MessageState::InFresh
-        };
     } else {
         // Outgoing
 
-        // the mail is on the IMAP server, probably it is also delivered.
-        // We cannot recreate other states (read, error).
-        state = MessageState::OutDelivered;
         to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
 
         // Older Delta Chat versions with core <=1.152.2 only accepted
@@ -1458,7 +1441,8 @@ async fn add_parts(
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
                     chat_id = Some(
-                        if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+                        if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await?
+                        {
                             id
                         } else {
                             let name =
@@ -1547,6 +1531,10 @@ async fn add_parts(
         }
     }
 
+    let rfc724_mid_orig = &mime_parser
+        .get_rfc724_mid()
+        .unwrap_or(rfc724_mid.to_string());
+
     let orig_chat_id = chat_id;
     let mut chat_id = chat_id.unwrap_or_else(|| {
         info!(context, "No chat id for message (TRASH).");
@@ -1568,7 +1556,19 @@ async fn add_parts(
         EphemeralTimer::Disabled
     };
 
+    let state = if !mime_parser.incoming {
+        // the mail is on the IMAP server, probably it is also delivered.
+        // We cannot recreate other states (read, error).
+        MessageState::OutDelivered
+    } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
+    // No check for `hidden` because only reactions are such and they should be `InFresh`.
+    {
+        MessageState::InSeen
+    } else {
+        MessageState::InFresh
+    };
     let in_fresh = state == MessageState::InFresh;
+
     let sort_to_bottom = false;
     let received = true;
     let sort_timestamp = chat_id
@@ -1657,9 +1657,10 @@ async fn add_parts(
         }
     }
 
-    if mime_parser.is_system_message == SystemMessage::EphemeralTimerChanged {
-        better_msg = Some(stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await);
-
+    let mut better_msg = if mime_parser.is_system_message == SystemMessage::LocationStreamingEnabled
+    {
+        Some(stock_str::msg_location_enabled_by(context, from_id).await)
+    } else if mime_parser.is_system_message == SystemMessage::EphemeralTimerChanged {
         // Do not delete the system message itself.
         //
         // This prevents confusion when timer is changed
@@ -1667,7 +1668,11 @@ async fn add_parts(
         // hour, only the message about the change to 1
         // week is left.
         ephemeral_timer = EphemeralTimer::Disabled;
-    }
+
+        Some(stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await)
+    } else {
+        None
+    };
 
     // if a chat is protected and the message is fully downloaded, check additional properties
     if !chat_id.is_special() && is_partial_download.is_none() {
@@ -1795,6 +1800,7 @@ async fn add_parts(
         info!(context, "Message edits/deletes existing message (TRASH).");
     }
 
+    let hidden = is_reaction;
     let mut parts = mime_parser.parts.iter().peekable();
     while let Some(part) = parts.next() {
         if part.is_reaction {
