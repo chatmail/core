@@ -633,10 +633,40 @@ pub(crate) async fn receive_imf_inner(
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
-        ChatAssignment::ExistingChat { .. } | ChatAssignment::AdHocGroup => {
-            // TODO separate ExistingChat and lookup PGP contacts
-            // if chat is encrypted.
+        ChatAssignment::ExistingChat { chat_id, .. } => {
+            let chat = Chat::load_from_db(context, chat_id).await?;
+            if chat.is_encrypted(context).await? {
+                to_ids = pgp_to_ids;
+                past_ids = lookup_pgp_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    past_member_fingerprints,
+                    Some(chat_id),
+                )
+                .await?;
+            } else {
+                to_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.recipients,
+                    if !mime_parser.incoming {
+                        Origin::OutgoingTo
+                    } else if incoming_origin.is_known() {
+                        Origin::IncomingTo
+                    } else {
+                        Origin::IncomingUnknownTo
+                    },
+                )
+                .await?;
 
+                past_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    Origin::Hidden,
+                )
+                .await?;
+            }
+        }
+        ChatAssignment::AdHocGroup => {
             to_ids = add_or_lookup_contacts_by_address_list(
                 context,
                 &mime_parser.recipients,
