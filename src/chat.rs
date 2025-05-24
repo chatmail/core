@@ -2943,7 +2943,10 @@ async fn prepare_send_msg(
     if chat.typ != Chattype::Single && !context.get_config_bool(Config::Bot).await? {
         if let Some(quoted_message) = msg.quoted_message(context).await? {
             if quoted_message.chat_id != chat_id {
-                bail!("Bad quote reply");
+                bail!(
+                    "Quote of message from {} cannot be sent to {chat_id}",
+                    quoted_message.chat_id
+                );
             }
         }
     }
