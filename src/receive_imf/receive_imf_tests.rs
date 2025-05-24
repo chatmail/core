@@ -5087,3 +5087,64 @@ PGh0bWw+PGJvZHk+dGV4dDwvYm9keT5kYXRh
 
     Ok(())
 }
+
+/// Tests that email contacts are not added into a group
+/// with PGP-contacts by a plaintext reply.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_email_contact_added_into_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice
+        .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[bob])
+        .await;
+    let bob_received_msg = bob
+        .recv_msg(&alice.send_text(alice_chat_id, "Message").await)
+        .await;
+    let rfc724_mid = bob_received_msg.rfc724_mid;
+
+    // Alice leaves the group so message from email address contact bob@example.com
+    // does not fail the test for being non-member and is allowed to
+    // modify the chat.
+    remove_contact_from_chat(alice, alice_chat_id, ContactId::SELF).await?;
+
+    // Wait 60 days so chatlist is stale.
+    SystemTime::shift(Duration::from_secs(60 * 24 * 60 * 60 + 1));
+
+    // Only Bob is the chat member.
+    assert_eq!(
+        chat::get_chat_contacts(alice, alice_chat_id).await?.len(),
+        1
+    );
+
+    let msg = receive_imf(
+        alice,
+        format!(
+            "From: bob@example.com\n\
+          To: alice@example.net, charlie@example.net, fiona@example.net\n\
+          Subject: foo\n\
+          Message-ID: <something@example.com>\n\
+          Chat-Version: 1.0\n\
+          In-Reply-To: {rfc724_mid}\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          Hello\n"
+        )
+        .as_bytes(),
+        false,
+    )
+    .await?
+    .unwrap();
+
+    // Unencrypted message should not modify the chat member list.
+    assert_eq!(
+        chat::get_chat_contacts(alice, alice_chat_id).await?.len(),
+        1
+    );
+
+    // Unencrypted message should not even be assigned to encrypted chat.
+    assert_eq!(msg.chat_id, alice_chat_id);
+
+    Ok(())
+}
