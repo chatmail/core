@@ -1154,16 +1154,6 @@ async fn add_parts(
 
     let mut restore_protection = false;
 
-    // if contact renaming is prevented (for mailinglists and bots),
-    // we use name from From:-header as override name
-    if prevent_rename {
-        if let Some(name) = &mime_parser.from.display_name {
-            for part in &mut mime_parser.parts {
-                part.param.set(Param::OverrideSenderDisplayname, name);
-            }
-        }
-    }
-
     if mime_parser.incoming {
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
 
@@ -1278,7 +1268,7 @@ async fn add_parts(
         }
 
         if chat_id.is_none() {
-            // try to create a normal chat
+            // Try to create a 1:1 chat.
             let contact = Contact::get_by_id(context, from_id).await?;
             let create_blocked = match contact.is_blocked() {
                 true => Blocked::Yes,
@@ -1486,6 +1476,16 @@ async fn add_parts(
         info!(context, "No chat id for message (TRASH).");
         DC_CHAT_ID_TRASH
     });
+
+    // if contact renaming is prevented (for mailinglists and bots),
+    // we use name from From:-header as override name
+    if prevent_rename {
+        if let Some(name) = &mime_parser.from.display_name {
+            for part in &mut mime_parser.parts {
+                part.param.set(Param::OverrideSenderDisplayname, name);
+            }
+        }
+    }
 
     if mime_parser.incoming && !chat_id.is_trash() {
         // It can happen that the message is put into a chat
