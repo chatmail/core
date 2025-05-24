@@ -763,6 +763,58 @@ pub(crate) async fn receive_imf_inner(
     let received_msg = if let Some(received_msg) = received_msg {
         received_msg
     } else {
+        let is_dc_message = if mime_parser.has_chat_version() {
+            MessengerMessage::Yes
+        } else if let Some(parent_message) = &parent_message {
+            match parent_message.is_dc_message {
+                MessengerMessage::No => MessengerMessage::No,
+                MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
+            }
+        } else {
+            MessengerMessage::No
+        };
+
+        let show_emails = ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
+            .unwrap_or_default();
+
+        let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
+        let allow_creation = if mime_parser.decrypting_failed {
+            false
+        } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
+            && is_dc_message == MessengerMessage::No
+            && !context.get_config_bool(Config::IsChatmail).await?
+        {
+            // the message is a classic email in a classic profile
+            // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
+            match show_emails {
+                ShowEmails::Off | ShowEmails::AcceptedContacts => false,
+                ShowEmails::All => true,
+            }
+        } else {
+            !is_reaction
+        };
+
+        let to_id = if mime_parser.incoming {
+            ContactId::SELF
+        } else {
+            to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
+        };
+
+        let (chat_id, chat_id_blocked) = do_chat_assignment(
+            context,
+            chat_assignment,
+            from_id,
+            &to_ids,
+            &past_ids,
+            to_id,
+            allow_creation,
+            &mut mime_parser,
+            is_partial_download,
+            &verified_encryption,
+            parent_message,
+        )
+        .await?;
+
         // Add parts
         add_parts(
             context,
@@ -777,8 +829,9 @@ pub(crate) async fn receive_imf_inner(
             replace_msg_id,
             prevent_rename,
             verified_encryption,
-            parent_message,
-            chat_assignment,
+            chat_id,
+            chat_id_blocked,
+            is_dc_message,
         )
         .await
         .context("add_parts error")?
@@ -1449,60 +1502,15 @@ async fn add_parts(
     mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
     verified_encryption: VerifiedEncryption,
-    parent_message: Option<Message>,
-    chat_assignment: ChatAssignment,
+    chat_id: ChatId,
+    chat_id_blocked: Blocked,
+    is_dc_message: MessengerMessage,
 ) -> Result<ReceivedMsg> {
-    let is_dc_message = if mime_parser.has_chat_version() {
-        MessengerMessage::Yes
-    } else if let Some(parent_message) = &parent_message {
-        match parent_message.is_dc_message {
-            MessengerMessage::No => MessengerMessage::No,
-            MessengerMessage::Yes | MessengerMessage::Reply => MessengerMessage::Reply,
-        }
-    } else {
-        MessengerMessage::No
-    };
-
-    let show_emails =
-        ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
-
-    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
-    let allow_creation = if mime_parser.decrypting_failed {
-        false
-    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-        && is_dc_message == MessengerMessage::No
-        && !context.get_config_bool(Config::IsChatmail).await?
-    {
-        // the message is a classic email in a classic profile
-        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
-        match show_emails {
-            ShowEmails::Off | ShowEmails::AcceptedContacts => false,
-            ShowEmails::All => true,
-        }
-    } else {
-        !is_reaction
-    };
-
     let to_id = if mime_parser.incoming {
         ContactId::SELF
     } else {
         to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
     };
-
-    let (chat_id, chat_id_blocked) = do_chat_assignment(
-        context,
-        chat_assignment,
-        from_id,
-        to_ids,
-        past_ids,
-        to_id,
-        allow_creation,
-        mime_parser,
-        is_partial_download,
-        &verified_encryption,
-        parent_message,
-    )
-    .await?;
 
     // if contact renaming is prevented (for mailinglists and bots),
     // we use name from From:-header as override name
@@ -1820,6 +1828,7 @@ async fn add_parts(
 
     handle_edit_delete(context, mime_parser, from_id).await?;
 
+    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
     let hidden = is_reaction;
     let mut parts = mime_parser.parts.iter().peekable();
     while let Some(part) = parts.next() {
