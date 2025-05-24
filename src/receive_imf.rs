@@ -1454,6 +1454,21 @@ async fn add_parts(
                 chat_id = Some(*new_chat_id);
                 chat_id_blocked = *new_chat_id_blocked;
             }
+            ChatAssignment::MailingList => {
+                // Check if the message belongs to a broadcast list.
+                if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
+                    let listid = mailinglist_header_listid(mailinglist_header)?;
+                    chat_id = Some(
+                        if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+                            id
+                        } else {
+                            let name =
+                                compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
+                            chat::create_broadcast_list_ex(context, Nosync, listid, name).await?
+                        },
+                    );
+                }
+            }
             _ => {
                 if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
                     context,
@@ -1515,22 +1530,6 @@ async fn add_parts(
                 &verified_encryption,
             )
             .await?;
-        }
-
-        if chat_id.is_none() {
-            // Check if the message belongs to a broadcast list.
-            if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                let listid = mailinglist_header_listid(mailinglist_header)?;
-                chat_id = Some(
-                    if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await? {
-                        id
-                    } else {
-                        let name =
-                            compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                        chat::create_broadcast_list_ex(context, Nosync, listid, name).await?
-                    },
-                );
-            }
         }
 
         if chat_id.is_none() && self_sent {
