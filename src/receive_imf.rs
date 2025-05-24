@@ -534,6 +534,7 @@ pub(crate) async fn receive_imf_inner(
     } else {
         ChatAssignment::AdHocGroup
     };
+    info!(context, "Chat assignment is {chat_assignment:?}.");
 
     // ID of the chat to look up the addresses in.
     //
