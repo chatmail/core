@@ -432,6 +432,16 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
         }
         true
+    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
+        && !mime_parser.has_chat_version()
+        && parent_message.as_ref().is_none_or(|p| p.is_dc_message == MessengerMessage::No)
+        && !context.get_config_bool(Config::IsChatmail).await?
+        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default() == ShowEmails::Off 
+    {
+        info!(context, "Classical email not shown (TRASH).");
+        // the message is a classic email in a classic profile
+        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
+        true
     } else if mime_parser
         .get_header(HeaderDef::XMozillaDraftInfo)
         .is_some()
