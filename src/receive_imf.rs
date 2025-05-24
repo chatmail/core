@@ -1141,12 +1141,7 @@ async fn add_parts(
         // the message is a classic email in a classic profile
         // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
         match show_emails {
-            ShowEmails::Off => {
-                info!(context, "Classical email not shown (TRASH).");
-                chat_id = Some(DC_CHAT_ID_TRASH);
-                false
-            }
-            ShowEmails::AcceptedContacts => false,
+            ShowEmails::Off | ShowEmails::AcceptedContacts => false,
             ShowEmails::All => true,
         }
     } else {
@@ -1200,77 +1195,75 @@ async fn add_parts(
             create_blocked_default
         };
 
-        if chat_id.is_none() {
-            match &chat_assignment {
-                ChatAssignment::Trash => {
-                    chat_id = Some(DC_CHAT_ID_TRASH);
-                }
-                ChatAssignment::GroupChat { grpid } => {
-                    // Try to assign to a chat based on Chat-Group-ID.
-                    if let Some((id, _protected, blocked)) =
-                        chat::get_chat_id_by_grpid(context, grpid).await?
-                    {
-                        chat_id = Some(id);
-                        chat_id_blocked = blocked;
-                    } else if allow_creation || test_normal_chat.is_some() {
-                        if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
-                            context,
-                            mime_parser,
-                            is_partial_download.is_some(),
-                            create_blocked,
-                            from_id,
-                            to_ids,
-                            past_ids,
-                            &verified_encryption,
-                            grpid,
-                        )
-                        .await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
-                    }
-                }
-                ChatAssignment::MailingList => {
-                    if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                        if let Some((new_chat_id, new_chat_id_blocked)) =
-                            create_or_lookup_mailinglist(
-                                context,
-                                allow_creation,
-                                mailinglist_header,
-                                mime_parser,
-                            )
-                            .await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-
-                            apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
-                        }
-                    }
-                }
-                ChatAssignment::ExistingChat {
-                    chat_id: new_chat_id,
-                    chat_id_blocked: new_chat_id_blocked,
-                } => {
-                    chat_id = Some(*new_chat_id);
-                    chat_id_blocked = *new_chat_id_blocked;
-                }
-                ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+        match &chat_assignment {
+            ChatAssignment::Trash => {
+                chat_id = Some(DC_CHAT_ID_TRASH);
+            }
+            ChatAssignment::GroupChat { grpid } => {
+                // Try to assign to a chat based on Chat-Group-ID.
+                if let Some((id, _protected, blocked)) =
+                    chat::get_chat_id_by_grpid(context, grpid).await?
+                {
+                    chat_id = Some(id);
+                    chat_id_blocked = blocked;
+                } else if allow_creation || test_normal_chat.is_some() {
+                    if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
-                        to_ids,
-                        from_id,
-                        allow_creation || test_normal_chat.is_some(),
-                        create_blocked,
                         is_partial_download.is_some(),
+                        create_blocked,
+                        from_id,
+                        to_ids,
+                        past_ids,
+                        &verified_encryption,
+                        grpid,
                     )
                     .await?
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
                     }
+                }
+            }
+            ChatAssignment::MailingList => {
+                if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
+                    if let Some((new_chat_id, new_chat_id_blocked)) =
+                        create_or_lookup_mailinglist(
+                            context,
+                            allow_creation,
+                            mailinglist_header,
+                            mime_parser,
+                        )
+                        .await?
+                    {
+                        chat_id = Some(new_chat_id);
+                        chat_id_blocked = new_chat_id_blocked;
+
+                        apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
+                    }
+                }
+            }
+            ChatAssignment::ExistingChat {
+                chat_id: new_chat_id,
+                chat_id_blocked: new_chat_id_blocked,
+            } => {
+                chat_id = Some(*new_chat_id);
+                chat_id_blocked = *new_chat_id_blocked;
+            }
+            ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
+                if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+                    context,
+                    mime_parser,
+                    to_ids,
+                    from_id,
+                    allow_creation || test_normal_chat.is_some(),
+                    create_blocked,
+                    is_partial_download.is_some(),
+                )
+                .await?
+                {
+                    chat_id = Some(new_chat_id);
+                    chat_id_blocked = new_chat_id_blocked;
                 }
             }
         }
@@ -1425,58 +1418,56 @@ async fn add_parts(
         // with only a single `hidden-recipients` group in this case.
         let self_sent = to_ids.len() <= 1 && to_id == ContactId::SELF;
 
-        if chat_id.is_none() {
-            match &chat_assignment {
-                ChatAssignment::Trash => {
-                    chat_id = Some(DC_CHAT_ID_TRASH);
-                }
-                ChatAssignment::GroupChat { grpid } => {
-                    if let Some((id, _protected, blocked)) =
-                        chat::get_chat_id_by_grpid(context, grpid).await?
-                    {
-                        chat_id = Some(id);
-                        chat_id_blocked = blocked;
-                    } else if allow_creation {
-                        if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
-                            context,
-                            mime_parser,
-                            is_partial_download.is_some(),
-                            Blocked::Not,
-                            from_id,
-                            to_ids,
-                            past_ids,
-                            &verified_encryption,
-                            grpid,
-                        )
-                        .await?
-                        {
-                            chat_id = Some(new_chat_id);
-                            chat_id_blocked = new_chat_id_blocked;
-                        }
-                    }
-                }
-                ChatAssignment::ExistingChat {
-                    chat_id: new_chat_id,
-                    chat_id_blocked: new_chat_id_blocked,
-                } => {
-                    chat_id = Some(*new_chat_id);
-                    chat_id_blocked = *new_chat_id_blocked;
-                }
-                _ => {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+        match &chat_assignment {
+            ChatAssignment::Trash => {
+                chat_id = Some(DC_CHAT_ID_TRASH);
+            }
+            ChatAssignment::GroupChat { grpid } => {
+                if let Some((id, _protected, blocked)) =
+                    chat::get_chat_id_by_grpid(context, grpid).await?
+                {
+                    chat_id = Some(id);
+                    chat_id_blocked = blocked;
+                } else if allow_creation {
+                    if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
-                        to_ids,
-                        from_id,
-                        allow_creation,
-                        Blocked::Not,
                         is_partial_download.is_some(),
+                        Blocked::Not,
+                        from_id,
+                        to_ids,
+                        past_ids,
+                        &verified_encryption,
+                        grpid,
                     )
                     .await?
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
                     }
+                }
+            }
+            ChatAssignment::ExistingChat {
+                chat_id: new_chat_id,
+                chat_id_blocked: new_chat_id_blocked,
+            } => {
+                chat_id = Some(*new_chat_id);
+                chat_id_blocked = *new_chat_id_blocked;
+            }
+            _ => {
+                if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
+                    context,
+                    mime_parser,
+                    to_ids,
+                    from_id,
+                    allow_creation,
+                    Blocked::Not,
+                    is_partial_download.is_some(),
+                )
+                .await?
+                {
+                    chat_id = Some(new_chat_id);
+                    chat_id_blocked = new_chat_id_blocked;
                 }
             }
         }
