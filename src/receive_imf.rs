@@ -408,13 +408,11 @@ pub(crate) async fn receive_imf_inner(
         info!(context, "Message is a DSN (TRASH).");
         markseen_on_imap_table(context, rfc724_mid).await.ok();
         true
-    } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some() {
-        true
-    } else if mime_parser.get_header(HeaderDef::ChatDelete).is_some() {
-        true
-    } else if mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some() {
-        true
-    } else if mime_parser.sync_items.is_some() {
+    } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some()
+        || mime_parser.get_header(HeaderDef::ChatDelete).is_some()
+        || mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some()
+        || mime_parser.sync_items.is_some()
+    {
         true
     } else if mime_parser.decrypting_failed && !mime_parser.incoming {
         // Outgoing undecryptable message.
