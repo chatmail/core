@@ -1303,19 +1303,6 @@ async fn add_parts(
             }
         }
 
-        if let Some(chat_id) = chat_id {
-            group_changes = apply_group_changes(
-                context,
-                mime_parser,
-                chat_id,
-                from_id,
-                to_ids,
-                past_ids,
-                &verified_encryption,
-            )
-            .await?;
-        }
-
         if chat_id.is_none() {
             // try to create a normal chat
             let contact = Contact::get_by_id(context, from_id).await?;
@@ -1394,6 +1381,19 @@ async fn add_parts(
                         && contact.is_verified(context).await?;
                 }
             }
+        }
+
+        if let Some(chat_id) = chat_id {
+            group_changes = apply_group_changes(
+                context,
+                mime_parser,
+                chat_id,
+                from_id,
+                to_ids,
+                past_ids,
+                &verified_encryption,
+            )
+            .await?;
         }
 
         state = if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
