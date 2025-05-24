@@ -1106,8 +1106,6 @@ async fn add_parts(
 ) -> Result<ReceivedMsg> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
 
-    let mut group_changes = GroupChangesInfo::default();
-
     let is_dc_message = if mime_parser.has_chat_version() {
         MessengerMessage::Yes
     } else if let Some(parent_message) = &parent_message {
@@ -1118,17 +1116,14 @@ async fn add_parts(
     } else {
         MessengerMessage::No
     };
-    // incoming non-chat messages may be discarded
 
-    let is_location_kml = mime_parser.location_kml.is_some();
-    let is_mdn = !mime_parser.mdn_reports.is_empty();
-    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
 
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
 
+    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
     let allow_creation = if mime_parser.decrypting_failed {
         false
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
@@ -1376,19 +1371,6 @@ async fn add_parts(
                 }
             }
         }
-
-        if let Some(chat_id) = chat_id {
-            group_changes = apply_group_changes(
-                context,
-                mime_parser,
-                chat_id,
-                from_id,
-                to_ids,
-                past_ids,
-                &verified_encryption,
-            )
-            .await?;
-        }
     } else {
         // Outgoing
 
@@ -1516,20 +1498,25 @@ async fn add_parts(
                 // Not assigning `chat_id_blocked = Blocked::Not` to avoid unused_assignments warning.
             }
         }
-
-        if let Some(chat_id) = chat_id {
-            group_changes = apply_group_changes(
-                context,
-                mime_parser,
-                chat_id,
-                from_id,
-                to_ids,
-                past_ids,
-                &verified_encryption,
-            )
-            .await?;
-        }
     }
+
+    let is_location_kml = mime_parser.location_kml.is_some();
+    let is_mdn = !mime_parser.mdn_reports.is_empty();
+
+    let mut group_changes = if let Some(chat_id) = chat_id {
+        apply_group_changes(
+            context,
+            mime_parser,
+            chat_id,
+            from_id,
+            to_ids,
+            past_ids,
+            &verified_encryption,
+        )
+        .await?
+    } else {
+        GroupChangesInfo::default()
+    };
 
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
