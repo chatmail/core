@@ -1146,14 +1146,12 @@ async fn add_parts(
         !is_reaction
     };
 
-
     let to_id = if mime_parser.incoming {
         ContactId::SELF
     } else {
         to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
     };
 
-    let mut needs_delete_job = false;
     let mut restore_protection = false;
 
     // if contact renaming is prevented (for mailinglists and bots),
@@ -1516,15 +1514,15 @@ async fn add_parts(
     let is_mdn = !mime_parser.mdn_reports.is_empty();
 
     let mut group_changes = apply_group_changes(
-            context,
-            mime_parser,
-            chat_id,
-            from_id,
-            to_ids,
-            past_ids,
-            &verified_encryption,
-        )
-        .await?;
+        context,
+        mime_parser,
+        chat_id,
+        from_id,
+        to_ids,
+        past_ids,
+        &verified_encryption,
+    )
+    .await?;
 
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
@@ -1741,9 +1739,12 @@ async fn add_parts(
             }
         }
     }
-    
-    let chat_id = if better_msg.as_ref().is_some_and(|better_msg| better_msg.is_empty())
-        && is_partial_download.is_none() {
+
+    let chat_id = if better_msg
+        .as_ref()
+        .is_some_and(|better_msg| better_msg.is_empty())
+        && is_partial_download.is_none()
+    {
         DC_CHAT_ID_TRASH
     } else {
         chat_id
@@ -2024,12 +2025,12 @@ RETURNING id
         }
     }
 
-    if !mime_parser.incoming && is_mdn && is_dc_message == MessengerMessage::Yes {
-        // Normally outgoing MDNs sent by us never appear in mailboxes, but Gmail saves all
-        // outgoing messages, including MDNs, to the Sent folder. If we detect such saved MDN,
-        // delete it.
-        needs_delete_job = true;
-    }
+    // Normally outgoing MDNs sent by us never appear in mailboxes, but Gmail saves all
+    // outgoing messages, including MDNs, to the Sent folder. If we detect such saved MDN,
+    // delete it.
+    let needs_delete_job =
+        !mime_parser.incoming && is_mdn && is_dc_message == MessengerMessage::Yes;
+
     if restore_protection {
         chat_id
             .set_protection(
