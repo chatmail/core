@@ -1285,23 +1285,19 @@ async fn add_parts(
         if let Some(nonopt_chat_id) = chat_id {
             if !chat::is_contact_in_chat(context, nonopt_chat_id, from_id).await? {
                 let chat = Chat::load_from_db(context, nonopt_chat_id).await?;
-                if chat.typ == Chattype::Single {
-                    // Just assign the message to the 1:1 chat with the actual sender instead.
-                    chat_id = None;
-                } else {
-                    // Mark the sender as overridden.
-                    // The UI will prepend `~` to the sender's name,
-                    // indicating that the sender is not part of the group.
-                    let from = &mime_parser.from;
-                    let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
-                    for part in &mut mime_parser.parts {
-                        part.param.set(Param::OverrideSenderDisplayname, name);
 
-                        if chat.is_protected() {
-                            // In protected chat, also mark the message with an error.
-                            let s = stock_str::unknown_sender_for_chat(context).await;
-                            part.error = Some(s);
-                        }
+                // Mark the sender as overridden.
+                // The UI will prepend `~` to the sender's name,
+                // indicating that the sender is not part of the group.
+                let from = &mime_parser.from;
+                let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
+                for part in &mut mime_parser.parts {
+                    part.param.set(Param::OverrideSenderDisplayname, name);
+
+                    if chat.is_protected() {
+                        // In protected chat, also mark the message with an error.
+                        let s = stock_str::unknown_sender_for_chat(context).await;
+                        part.error = Some(s);
                     }
                 }
             }
