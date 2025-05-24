@@ -2089,6 +2089,11 @@ async fn lookup_chat_by_reply(
         }
     }
 
+    // Do not assign unencrypted messages to encrypted chats.
+    if parent_chat.is_encrypted(context).await? && !mime_parser.was_encrypted() {
+        return Ok(None);
+    }
+
     info!(
         context,
         "Assigning message to {} as it's a reply to {}.", parent_chat.id, parent.rfc724_mid
