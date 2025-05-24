@@ -1509,13 +1509,13 @@ async fn add_parts(
                     chat_id_blocked = chat.blocked;
                 }
             }
+        }
 
-            // automatically unblock chat when the user sends a message
-            if chat_id_blocked != Blocked::Not {
-                if let Some(chat_id) = chat_id {
-                    chat_id.unblock_ex(context, Nosync).await?;
-                    // Not assigning `chat_id_blocked = Blocked::Not` to avoid unused_assignments warning.
-                }
+        // automatically unblock chat when the user sends a message
+        if chat_id_blocked != Blocked::Not {
+            if let Some(chat_id) = chat_id {
+                chat_id.unblock_ex(context, Nosync).await?;
+                // Not assigning `chat_id_blocked = Blocked::Not` to avoid unused_assignments warning.
             }
         }
 
