@@ -408,6 +408,12 @@ pub(crate) async fn receive_imf_inner(
         info!(context, "Message is a DSN (TRASH).");
         markseen_on_imap_table(context, rfc724_mid).await.ok();
         true
+    } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some() {
+        true
+    } else if mime_parser.get_header(HeaderDef::ChatDelete).is_some() {
+        true
+    } else if mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some() {
+        true
     } else if mime_parser.sync_items.is_some() {
         true
     } else if mime_parser.decrypting_failed && !mime_parser.incoming {
@@ -1140,7 +1146,13 @@ async fn add_parts(
         !is_reaction
     };
 
-    let to_id: ContactId;
+
+    let to_id = if mime_parser.incoming {
+        ContactId::SELF
+    } else {
+        to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
+    };
+
     let mut needs_delete_job = false;
     let mut restore_protection = false;
 
@@ -1155,8 +1167,6 @@ async fn add_parts(
     }
 
     if mime_parser.incoming {
-        to_id = ContactId::SELF;
-
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
 
         let create_blocked_default = if is_bot {
@@ -1374,8 +1384,6 @@ async fn add_parts(
     } else {
         // Outgoing
 
-        to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
-
         // Older Delta Chat versions with core <=1.152.2 only accepted
         // self-sent messages in Saved Messages with own address in the `To` field.
         // New Delta Chat versions may use empty `To` field
@@ -1522,7 +1530,6 @@ async fn add_parts(
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
 
-    let orig_chat_id = chat_id;
     let mut chat_id = chat_id.unwrap_or_else(|| {
         info!(context, "No chat id for message (TRASH).");
         DC_CHAT_ID_TRASH
@@ -1756,7 +1763,6 @@ async fn add_parts(
     }
 
     if let Some(node_addr) = mime_parser.get_header(HeaderDef::IrohNodeAddr) {
-        chat_id = DC_CHAT_ID_TRASH;
         match mime_parser.get_header(HeaderDef::InReplyTo) {
             Some(in_reply_to) => match rfc724_mid_exists(context, in_reply_to).await? {
                 Some((instance_id, _ts_sent)) => {
@@ -1782,10 +1788,7 @@ async fn add_parts(
         }
     }
 
-    if handle_edit_delete(context, mime_parser, from_id).await? {
-        chat_id = DC_CHAT_ID_TRASH;
-        info!(context, "Message edits/deletes existing message (TRASH).");
-    }
+    handle_edit_delete(context, mime_parser, from_id).await?;
 
     let hidden = is_reaction;
     let mut parts = mime_parser.parts.iter().peekable();
@@ -1796,7 +1799,7 @@ async fn add_parts(
             set_msg_reaction(
                 context,
                 mime_in_reply_to,
-                orig_chat_id.unwrap_or_default(),
+                chat_id,
                 from_id,
                 sort_timestamp,
                 Reaction::from(reaction_str.as_str()),
@@ -2056,7 +2059,7 @@ async fn handle_edit_delete(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
-) -> Result<bool> {
+) -> Result<()> {
     if let Some(rfc724_mid) = mime_parser.get_header(HeaderDef::ChatEdit) {
         if let Some((original_msg_id, _)) = rfc724_mid_exists(context, rfc724_mid).await? {
             if let Some(mut original_msg) =
@@ -2089,8 +2092,6 @@ async fn handle_edit_delete(
                 "Edit message: rfc724_mid {rfc724_mid:?} not found."
             );
         }
-
-        Ok(true)
     } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete) {
         if let Some(part) = mime_parser.parts.first() {
             // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
@@ -2124,11 +2125,8 @@ async fn handle_edit_delete(
                 warn!(context, "Delete message: Not encrypted.");
             }
         }
-
-        Ok(true)
-    } else {
-        Ok(false)
     }
+    Ok(())
 }
 
 async fn tweak_sort_timestamp(
