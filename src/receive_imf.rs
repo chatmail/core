@@ -1282,7 +1282,7 @@ async fn add_parts(
         if let Some(group_chat_id) = chat_id {
             if !chat::is_contact_in_chat(context, group_chat_id, from_id).await? {
                 let chat = Chat::load_from_db(context, group_chat_id).await?;
-                if chat.is_protected() && chat.typ == Chattype::Single {
+                if chat.typ == Chattype::Single {
                     // Just assign the message to the 1:1 chat with the actual sender instead.
                     chat_id = None;
                 } else {
