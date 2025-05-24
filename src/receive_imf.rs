@@ -1511,6 +1511,21 @@ async fn add_parts(
             }
         }
 
+        if chat_id.is_none() && self_sent {
+            // from_id==to_id==ContactId::SELF - this is a self-sent messages,
+            // maybe an Autocrypt Setup Message
+            let chat = ChatIdBlocked::get_for_contact(context, ContactId::SELF, Blocked::Not)
+                .await
+                .context("Failed to get (new) chat for contact")?;
+
+            chat_id = Some(chat.id);
+            // Not assigning `chat_id_blocked = chat.blocked` to avoid unused_assignments warning.
+
+            if Blocked::Not != chat.blocked {
+                chat.id.unblock_ex(context, Nosync).await?;
+            }
+        }
+
         // automatically unblock chat when the user sends a message
         if chat_id_blocked != Blocked::Not {
             if let Some(chat_id) = chat_id {
@@ -1530,21 +1545,6 @@ async fn add_parts(
                 &verified_encryption,
             )
             .await?;
-        }
-
-        if chat_id.is_none() && self_sent {
-            // from_id==to_id==ContactId::SELF - this is a self-sent messages,
-            // maybe an Autocrypt Setup Message
-            let chat = ChatIdBlocked::get_for_contact(context, ContactId::SELF, Blocked::Not)
-                .await
-                .context("Failed to get (new) chat for contact")?;
-
-            chat_id = Some(chat.id);
-            // Not assigning `chat_id_blocked = chat.blocked` to avoid unused_assignments warning.
-
-            if Blocked::Not != chat.blocked {
-                chat.id.unblock_ex(context, Nosync).await?;
-            }
         }
     }
 
