@@ -1507,12 +1507,15 @@ async fn add_parts(
             }
         }
     }
+    let chat_id = chat_id.unwrap_or_else(|| {
+        info!(context, "No chat id for message (TRASH).");
+        DC_CHAT_ID_TRASH
+    });
 
     let is_location_kml = mime_parser.location_kml.is_some();
     let is_mdn = !mime_parser.mdn_reports.is_empty();
 
-    let mut group_changes = if let Some(chat_id) = chat_id {
-        apply_group_changes(
+    let mut group_changes = apply_group_changes(
             context,
             mime_parser,
             chat_id,
@@ -1521,19 +1524,11 @@ async fn add_parts(
             past_ids,
             &verified_encryption,
         )
-        .await?
-    } else {
-        GroupChangesInfo::default()
-    };
+        .await?;
 
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
-
-    let mut chat_id = chat_id.unwrap_or_else(|| {
-        info!(context, "No chat id for message (TRASH).");
-        DC_CHAT_ID_TRASH
-    });
 
     // Extract ephemeral timer from the message or use the existing timer if the message is not fully downloaded.
     let mut ephemeral_timer = if is_partial_download.is_some() {
@@ -1746,6 +1741,13 @@ async fn add_parts(
             }
         }
     }
+    
+    let chat_id = if better_msg.as_ref().is_some_and(|better_msg| better_msg.is_empty())
+        && is_partial_download.is_none() {
+        DC_CHAT_ID_TRASH
+    } else {
+        chat_id
+    };
 
     for (group_changes_msg, cmd, added_removed_id) in group_changes.extra_msgs {
         chat::add_info_msg_with_cmd(
@@ -1828,9 +1830,6 @@ async fn add_parts(
         }
 
         let (msg, typ): (&str, Viewtype) = if let Some(better_msg) = &better_msg {
-            if better_msg.is_empty() && is_partial_download.is_none() {
-                chat_id = DC_CHAT_ID_TRASH;
-            }
             (better_msg, Viewtype::Text)
         } else {
             (&part.msg, part.typ)
