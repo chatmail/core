@@ -1518,7 +1518,7 @@ async fn add_parts(
                 .context("Failed to get (new) chat for contact")?;
 
             chat_id = Some(chat.id);
-            // Not assigning `chat_id_blocked = chat.blocked` to avoid unused_assignments warning.
+            chat_id_blocked = chat.blocked;
 
             if Blocked::Not != chat.blocked {
                 chat.id.unblock_ex(context, Nosync).await?;
