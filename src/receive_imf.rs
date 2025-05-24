@@ -1469,7 +1469,7 @@ async fn add_parts(
                     );
                 }
             }
-            _ => {
+            ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
                 if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
                     context,
                     mime_parser,
