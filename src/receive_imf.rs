@@ -1356,29 +1356,6 @@ async fn add_parts(
                 }
             }
         }
-
-        // In lookup_chat_by_reply() and create_group(), it can happen that the message is put into a chat
-        // but the From-address is not a member of this chat.
-        if let Some(nonopt_chat_id) = chat_id {
-            if !chat::is_contact_in_chat(context, nonopt_chat_id, from_id).await? {
-                let chat = Chat::load_from_db(context, nonopt_chat_id).await?;
-
-                // Mark the sender as overridden.
-                // The UI will prepend `~` to the sender's name,
-                // indicating that the sender is not part of the group.
-                let from = &mime_parser.from;
-                let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
-                for part in &mut mime_parser.parts {
-                    part.param.set(Param::OverrideSenderDisplayname, name);
-
-                    if chat.is_protected() {
-                        // In protected chat, also mark the message with an error.
-                        let s = stock_str::unknown_sender_for_chat(context).await;
-                        part.error = Some(s);
-                    }
-                }
-            }
-        }
     } else {
         // Outgoing
 
@@ -1509,6 +1486,29 @@ async fn add_parts(
         info!(context, "No chat id for message (TRASH).");
         DC_CHAT_ID_TRASH
     });
+
+    if mime_parser.incoming && !chat_id.is_trash() {
+        // It can happen that the message is put into a chat
+        // but the From-address is not a member of this chat.
+        if !chat::is_contact_in_chat(context, chat_id, from_id).await? {
+            let chat = Chat::load_from_db(context, chat_id).await?;
+
+            // Mark the sender as overridden.
+            // The UI will prepend `~` to the sender's name,
+            // indicating that the sender is not part of the group.
+            let from = &mime_parser.from;
+            let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
+            for part in &mut mime_parser.parts {
+                part.param.set(Param::OverrideSenderDisplayname, name);
+
+                if chat.is_protected() {
+                    // In protected chat, also mark the message with an error.
+                    let s = stock_str::unknown_sender_for_chat(context).await;
+                    part.error = Some(s);
+                }
+            }
+        }
+    }
 
     let is_location_kml = mime_parser.location_kml.is_some();
     let is_mdn = !mime_parser.mdn_reports.is_empty();
