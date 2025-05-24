@@ -81,6 +81,7 @@ pub struct ReceivedMsg {
 /// don't assign the message to an encrypted
 /// group after looking up PGP-contacts
 /// or vice versa.
+#[derive(Debug)]
 enum ChatAssignment {
     /// Trash the message.
     Trash,
