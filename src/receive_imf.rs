@@ -491,7 +491,8 @@ pub(crate) async fn receive_imf_inner(
         } else if let Some(parent) = &parent_message {
             if let Some((chat_id, chat_id_blocked)) =
                 // Try to assign to a chat based on In-Reply-To/References.
-                lookup_chat_by_reply(context, &mime_parser, parent).await?
+                lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download)
+                        .await?
             {
                 // Try to assign to a chat based on In-Reply-To/References.
                 ChatAssignment::ExistingChat {
@@ -517,7 +518,7 @@ pub(crate) async fn receive_imf_inner(
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
             // Try to assign to a chat based on In-Reply-To/References.
-            lookup_chat_by_reply(context, &mime_parser, parent).await?
+            lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download).await?
         {
             // Try to assign to a chat based on In-Reply-To/References.
             ChatAssignment::ExistingChat {
@@ -2277,6 +2278,7 @@ async fn lookup_chat_by_reply(
     context: &Context,
     mime_parser: &MimeMessage,
     parent: &Message,
+    is_partial_download: &Option<u32>,
 ) -> Result<Option<(ChatId, Blocked)>> {
     debug_assert!(mime_parser.get_chat_group_id().is_none());
 
@@ -2300,7 +2302,10 @@ async fn lookup_chat_by_reply(
     }
 
     // Do not assign unencrypted messages to encrypted chats.
-    if parent_chat.is_encrypted(context).await? && !mime_parser.was_encrypted() {
+    if is_partial_download.is_none()
+        && parent_chat.is_encrypted(context).await?
+        && !mime_parser.was_encrypted()
+    {
         return Ok(None);
     }
 
