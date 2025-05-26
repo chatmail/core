@@ -2296,7 +2296,11 @@ async fn lookup_chat_by_reply(
     parent: &Message,
     is_partial_download: &Option<u32>,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    debug_assert!(mime_parser.get_chat_group_id().is_none());
+    // If the message is encrypted and has group ID,
+    // lookup by reply should never be needed
+    // as we can directly assign the message to the chat
+    // by its group ID.
+    debug_assert!(mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted());
 
     // Try to assign message to the same chat as the parent message.
     let Some(parent_chat_id) = ChatId::lookup_by_message(parent) else {
@@ -2436,9 +2440,9 @@ async fn is_probably_private_reply(
     parent_chat_id: ChatId,
 ) -> Result<bool> {
     // Message cannot be a private reply if it has an explicit Chat-Group-ID header.
-    //
-    // This function should not even be called in this case.
-    debug_assert!(mime_parser.get_chat_group_id().is_none());
+    if mime_parser.get_chat_group_id().is_some() {
+        return Ok(false);
+    }
 
     // Usually we don't want to show private replies in the parent chat, but in the
     // 1:1 chat with the sender.

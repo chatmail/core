@@ -1529,12 +1529,12 @@ impl MimeMessage {
         // Chat-Group-ID can only appear in encrypted messages
         // since PGP-contact migration.
         //
-        // Unencrypted ad hoc groups do not have group IDs.
-        //
-        // If we receive a Chat-Group-ID header in unencrypted message,
-        // it is likely sent by old version in opportunistically
-        // encrypted group that dropped to unencrypted.
-        remove_header(headers, "chat-group-id", removed);
+        // However, we do not remove `Chat-Group-ID` here.
+        // If we receive an unencrypted `Chat-Group-ID`
+        // from an older version which allowed
+        // unencrypted groups, we still want to assign
+        // a message to a group, but it will be an ad hoc group
+        // without a group ID.
 
         // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
         if let Some(secure_join) = remove_header(headers, "secure-join", removed) {
