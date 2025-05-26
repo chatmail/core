@@ -3547,7 +3547,7 @@ pub async fn get_chat_media(
                 AND chat_id != ?
                 AND type = ?
                 AND hidden=0
-              ORDER BY timestamp, id;",
+              ORDER BY max(timestamp, timestamp_rcvd), id;",
                 (
                     chat_id.is_none(),
                     chat_id.unwrap_or_else(|| ChatId::new(0)),
