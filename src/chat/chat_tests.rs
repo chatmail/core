@@ -2925,6 +2925,61 @@ async fn test_get_chat_media() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_chat_media_webxdc_order() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let chat = alice.create_chat(&bob).await;
+
+    let mut instance1 = Message::new(Viewtype::Webxdc);
+    instance1.set_file_from_bytes(
+        &alice,
+        "test1.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    let instance1_id = send_msg(&alice, chat.id, &mut instance1).await?;
+
+    let mut instance2 = Message::new(Viewtype::Webxdc);
+    instance2.set_file_from_bytes(
+        &alice,
+        "test2.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    let instance2_id = send_msg(&alice, chat.id, &mut instance2).await?;
+
+    // list is ordered oldest to newest, check that
+    let media = get_chat_media(
+        &alice,
+        Some(chat.id),
+        Viewtype::Webxdc,
+        Viewtype::Unknown,
+        Viewtype::Unknown,
+    )
+    .await?;
+    assert_eq!(media.get(0).unwrap(), &instance1_id);
+    assert_eq!(media.get(1).unwrap(), &instance2_id);
+
+    // add a status update for the oder instance; that resorts the list
+    alice
+        .send_webxdc_status_update(instance1_id, r#"{"payload": {"foo": "bar"}}"#)
+        .await?;
+    let media = get_chat_media(
+        &alice,
+        Some(chat.id),
+        Viewtype::Webxdc,
+        Viewtype::Unknown,
+        Viewtype::Unknown,
+    )
+    .await?;
+    assert_eq!(media.get(0).unwrap(), &instance2_id);
+    assert_eq!(media.get(1).unwrap(), &instance1_id);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_blob_renaming() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
