@@ -2958,7 +2958,7 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         Viewtype::Unknown,
     )
     .await?;
-    assert_eq!(media.get(0).unwrap(), &instance1_id);
+    assert_eq!(media.first().unwrap(), &instance1_id);
     assert_eq!(media.get(1).unwrap(), &instance2_id);
 
     // add a status update for the oder instance; that resorts the list
@@ -2973,7 +2973,7 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         Viewtype::Unknown,
     )
     .await?;
-    assert_eq!(media.get(0).unwrap(), &instance2_id);
+    assert_eq!(media.first().unwrap(), &instance2_id);
     assert_eq!(media.get(1).unwrap(), &instance1_id);
 
     Ok(())
