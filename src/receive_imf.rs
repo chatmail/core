@@ -530,10 +530,24 @@ pub(crate) async fn receive_imf_inner(
         } else {
             ChatAssignment::AdHocGroup
         }
-    } else if mime_parser.recipients.len() == 1 {
-        ChatAssignment::OneOneChat
     } else {
-        ChatAssignment::AdHocGroup
+        let mut num_recipients = mime_parser.recipients.len();
+        if from_id != ContactId::SELF {
+            let mut has_self_addr = false;
+            for recipient in &mime_parser.recipients {
+                if context.is_self_addr(&recipient.addr).await? {
+                    has_self_addr = true;
+                }
+            }
+            if !has_self_addr {
+                num_recipients += 1;
+            }
+        }
+        if num_recipients <= 1 {
+            ChatAssignment::OneOneChat
+        } else {
+            ChatAssignment::AdHocGroup
+        }
     };
     info!(context, "Chat assignment is {chat_assignment:?}.");
 
@@ -1278,7 +1292,7 @@ async fn do_chat_assignment(
                 chat_id = Some(*new_chat_id);
                 chat_id_blocked = *new_chat_id_blocked;
             }
-            ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
+            ChatAssignment::AdHocGroup => {
                 if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
                     context,
                     mime_parser,
@@ -1294,6 +1308,7 @@ async fn do_chat_assignment(
                     chat_id_blocked = new_chat_id_blocked;
                 }
             }
+            ChatAssignment::OneOneChat => {}
         }
 
         // if the chat is somehow blocked but we want to create a non-blocked chat,
