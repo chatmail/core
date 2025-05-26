@@ -543,12 +543,10 @@ pub(crate) async fn receive_imf_inner(
         } else {
             ChatAssignment::AdHocGroup
         }
+    } else if num_recipients <= 1 {
+        ChatAssignment::OneOneChat
     } else {
-        if num_recipients <= 1 {
-            ChatAssignment::OneOneChat
-        } else {
-            ChatAssignment::AdHocGroup
-        }
+        ChatAssignment::AdHocGroup
     };
     info!(context, "Chat assignment is {chat_assignment:?}.");
 
