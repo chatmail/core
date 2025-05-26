@@ -481,6 +481,19 @@ pub(crate) async fn receive_imf_inner(
     //
     // The chat may not exist yet, i.e. there may be
     // no database row and ChatId yet.
+    let mut num_recipients = mime_parser.recipients.len();
+    if from_id != ContactId::SELF {
+        let mut has_self_addr = false;
+        for recipient in &mime_parser.recipients {
+            if context.is_self_addr(&recipient.addr).await? {
+                has_self_addr = true;
+            }
+        }
+        if !has_self_addr {
+            num_recipients += 1;
+        }
+    }
+
     let chat_assignment = if should_trash {
         ChatAssignment::Trash
     } else if let Some(grpid) = mime_parser.get_chat_group_id() {
@@ -525,24 +538,12 @@ pub(crate) async fn receive_imf_inner(
                 chat_id,
                 chat_id_blocked,
             }
-        } else if mime_parser.recipients.len() == 1 {
+        } else if num_recipients <= 1 {
             ChatAssignment::OneOneChat
         } else {
             ChatAssignment::AdHocGroup
         }
     } else {
-        let mut num_recipients = mime_parser.recipients.len();
-        if from_id != ContactId::SELF {
-            let mut has_self_addr = false;
-            for recipient in &mime_parser.recipients {
-                if context.is_self_addr(&recipient.addr).await? {
-                    has_self_addr = true;
-                }
-            }
-            if !has_self_addr {
-                num_recipients += 1;
-            }
-        }
         if num_recipients <= 1 {
             ChatAssignment::OneOneChat
         } else {
