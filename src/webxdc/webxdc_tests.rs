@@ -135,6 +135,7 @@ async fn test_set_draft_invalid_webxdc() -> Result<()> {
         include_bytes!("../../test-data/webxdc/invalid-no-zip-but-7z.xdc"),
     )?;
 
+    // draft should not fail
     chat_id.set_draft(&t, Some(&mut instance)).await?;
     chat_id.get_draft(&t).await.unwrap();
     Ok(())
