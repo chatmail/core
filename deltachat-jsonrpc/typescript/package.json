@@ -3,6 +3,7 @@
   "dependencies": {
     "@deltachat/tiny-emitter": "3.0.0",
     "isomorphic-ws": "^4.0.1",
+    "tmp": "^0.2.3",
     "yerpc": "^0.6.2"
   },
   "devDependencies": {

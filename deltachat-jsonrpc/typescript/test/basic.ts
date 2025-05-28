@@ -1,6 +1,6 @@
-import { strictEqual } from "assert";
 import chai, { assert, expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
+import { fileSync } from "tmp";
 chai.use(chaiAsPromised);
 import { StdioDeltaChat as DeltaChat } from "../deltachat.js";
 
@@ -97,6 +97,32 @@ describe("basic tests", () => {
       expect((await dc.rpc.getContact(accountId, contactId)).isBlocked).to.be
         .false;
       expect(await dc.rpc.getBlockedContacts(accountId)).to.have.length(0);
+    });
+  });
+
+  describe("webxdc", function () {
+    let invalidXdcPath: string;
+    let accountId: number;
+
+    before(async () => {
+      const tmpFile = fileSync({ postfix: ".xdc" });
+      invalidXdcPath = tmpFile.name;
+      accountId = await dc.rpc.addAccount();
+    });
+
+    it("should be able to draft set an invalid xdc", async function () {
+      const chat = await dc.rpc.createGroupChat(accountId, "xdc", false);
+      await expect(
+        dc.rpc.miscSetDraft(
+          accountId,
+          chat,
+          "",
+          invalidXdcPath,
+          "invalid.xdc",
+          null,
+          null
+        )
+      ).to.be.eventually.rejectedWith("Invalid xdc");
     });
   });
 
