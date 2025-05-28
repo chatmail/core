@@ -1312,27 +1312,40 @@ fn print_logevent(logevent: &LogEvent) {
 }
 
 /// Saves the other account's public key as verified
-/// and peerstate as backwards verified.
-pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
+/// and peerstate as backwards verified / not verified.
+pub(crate) async fn mark_as_verified_ex(
+    this: &TestContext,
+    other: &TestContext,
+    last_seen: i64,
+    backward: bool,
+) {
     let mut peerstate = Peerstate::from_header(
         &EncryptHelper::new(other).await.unwrap().get_aheader(),
-        // We have to give 0 as the time, not the current time:
-        // The time is going to be saved in peerstate.last_seen.
-        // The code in `peerstate.rs` then compares `if message_time > self.last_seen`,
-        // and many similar checks in peerstate.rs, and doesn't allow changes otherwise.
-        // Giving the current time would mean that message_time == peerstate.last_seen,
-        // so changes would not be allowed.
-        // This might lead to flaky tests.
-        0,
+        last_seen,
     );
 
     peerstate.verified_key.clone_from(&peerstate.public_key);
     peerstate
         .verified_key_fingerprint
         .clone_from(&peerstate.public_key_fingerprint);
-    peerstate.backward_verified_key_id = Some(this.get_config_i64(Config::KeyId).await.unwrap());
-
+    peerstate.backward_verified_key_id = match backward {
+        true => Some(this.get_config_i64(Config::KeyId).await.unwrap()),
+        false => None,
+    };
     peerstate.save_to_db(&this.sql).await.unwrap();
+}
+
+/// Saves the other account's public key as verified
+/// and peerstate as backwards verified.
+pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
+    // We have to give 0 as the time, not the current time: The time is going to be saved in
+    // peerstate.last_seen. The code in `peerstate.rs` then compares `if message_time >
+    // self.last_seen`, and many similar checks in peerstate.rs, and doesn't allow changes
+    // otherwise. Giving the current time would mean that message_time == peerstate.last_seen, so
+    // changes would not be allowed. This might lead to flaky tests.
+    let last_seen = 0;
+    let backward = true;
+    mark_as_verified_ex(this, other, last_seen, backward).await
 }
 
 /// Pops a sync message from alice0 and receives it on alice1. Should be used after an action on
