@@ -24,6 +24,7 @@ use super::webxdc::WebxdcMessageInfo;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "kind")]
+#[expect(clippy::large_enum_variant)]
 pub enum MessageLoadResult {
     Message(MessageObject),
     LoadingError { error: String },

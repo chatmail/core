@@ -44,6 +44,7 @@ use crate::webxdc::StatusUpdateSerial;
 pub const RECOMMENDED_FILE_SIZE: u64 = 24 * 1024 * 1024 / 4 * 3;
 
 #[derive(Debug, Clone)]
+#[expect(clippy::large_enum_variant)]
 pub enum Loaded {
     Message {
         chat: Chat,
