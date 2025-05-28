@@ -23,10 +23,15 @@ pub enum Account {
     },
     #[serde(rename_all = "camelCase")]
     Unconfigured { id: u32 },
+    #[serde(rename_all = "camelCase")]
+    Locked { id: u32 },
 }
 
 impl Account {
     pub async fn from_context(ctx: &deltachat::context::Context, id: u32) -> Result<Self> {
+        if !ctx.is_open().await {
+            return Ok(Account::Locked { id });
+        }
         if ctx.is_configured().await? {
             let display_name = ctx.get_config(Config::Displayname).await?;
             let addr = ctx.get_config(Config::Addr).await?;
