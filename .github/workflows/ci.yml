@@ -36,6 +36,8 @@ jobs:
           persist-credentials: false
       - name: Install rustfmt and clippy
         run: rustup toolchain install $RUST_VERSION --profile minimal --component rustfmt --component clippy
+      - run: rustup override set $RUST_VERSION
+        shell: bash
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@v2
       - name: Run rustfmt
