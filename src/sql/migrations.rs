@@ -1672,12 +1672,13 @@ fn migrate_pgp_contacts(
                     }
                 }
 
-                // Mailinglist | Broadcast list
+                // Mailinglist
                 140 => {
                     keep_email_contacts("Mailinglist/Broadcast");
                     continue;
                 }
 
+                // Broadcast list
                 160 => retain_autocrypt_pgp_contacts(),
 
                 _ => {
