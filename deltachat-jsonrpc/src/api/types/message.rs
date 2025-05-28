@@ -8,6 +8,7 @@ use deltachat::chat::ChatVisibility;
 use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::download;
+use deltachat::log::LogExt as _;
 use deltachat::message::Message;
 use deltachat::message::MsgId;
 use deltachat::message::Viewtype;
@@ -145,6 +146,7 @@ impl MessageObject {
         let webxdc_info = if message.get_viewtype() == Viewtype::Webxdc {
             WebxdcMessageInfo::get_for_message(context, msg_id)
                 .await
+                .log_err(context)
                 .ok()
         } else {
             None
