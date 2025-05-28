@@ -1,3 +1,5 @@
+"""Account manager module."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -10,12 +12,13 @@ if TYPE_CHECKING:
 
 
 class DeltaChat:
-    """
-    Delta Chat accounts manager.
+    """Delta Chat accounts manager.
+
     This is the root of the object oriented API.
     """
 
     def __init__(self, rpc: "Rpc") -> None:
+        """Initialize account manager."""
         self.rpc = rpc
 
     def add_account(self) -> Account:
@@ -37,9 +40,7 @@ class DeltaChat:
         self.rpc.stop_io_for_all_accounts()
 
     def maybe_network(self) -> None:
-        """Indicate that the network likely has come back or just that the network
-        conditions might have changed.
-        """
+        """Indicate that the network conditions might have changed."""
         self.rpc.maybe_network()
 
     def get_system_info(self) -> AttrDict:

@@ -48,6 +48,7 @@ class Client:
         self.add_hooks(hooks or [])
 
     def add_hooks(self, hooks: Iterable[tuple[Callable, Union[type, EventFilter]]]) -> None:
+        """Register multiple hooks."""
         for hook, event in hooks:
             self.add_hook(hook, event)
 
@@ -77,9 +78,11 @@ class Client:
         self._hooks.get(type(event), set()).remove((hook, event))
 
     def is_configured(self) -> bool:
+        """Return True if the client is configured."""
         return self.account.is_configured()
 
     def configure(self, email: str, password: str, **kwargs) -> None:
+        """Configure the client."""
         self.account.set_config("addr", email)
         self.account.set_config("mail_pw", password)
         for key, value in kwargs.items():
@@ -198,5 +201,6 @@ class Bot(Client):
     """Simple bot implementation that listens to events of a single account."""
 
     def configure(self, email: str, password: str, **kwargs) -> None:
+        """Configure the bot."""
         kwargs.setdefault("bot", "1")
         super().configure(email, password, **kwargs)

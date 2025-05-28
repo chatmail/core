@@ -2132,7 +2132,10 @@ uint32_t        dc_lookup_contact_id_by_addr (dc_context_t* context, const char*
 uint32_t        dc_create_contact            (dc_context_t* context, const char* name, const char* addr);
 
 
-#define         DC_GCL_VERIFIED_ONLY         0x01
+
+// Deprecated 2025-05-20, setting this flag is a no-op.
+#define         DC_GCL_DEPRECATED_VERIFIED_ONLY         0x01
+
 #define         DC_GCL_ADD_SELF              0x02
 
 
@@ -2194,8 +2197,6 @@ dc_array_t*     dc_import_vcard              (dc_context_t* context, const char*
  * @param context The context object.
  * @param flags A combination of flags:
  *     - if the flag DC_GCL_ADD_SELF is set, SELF is added to the list unless filtered by other parameters
- *     - if the flag DC_GCL_VERIFIED_ONLY is set, only verified contacts are returned.
- *       if DC_GCL_VERIFIED_ONLY is not set, verified and unverified contacts are returned.
  * @param query A string to filter the list. Typically used to implement an
  *     incremental search. NULL for no filtering.
  * @return An array containing all contact IDs. Must be dc_array_unref()'d

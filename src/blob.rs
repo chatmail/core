@@ -93,7 +93,7 @@ impl<'a> BlobObject<'a> {
                 if let Some(extension) = original_name.extension().filter(|e| e.len() <= 32) {
                     let extension = extension.to_string_lossy().to_lowercase();
                     let extension = sanitize_filename(&extension);
-                    format!("$BLOBDIR/{hash}.{}", extension)
+                    format!("$BLOBDIR/{hash}.{extension}")
                 } else {
                     format!("$BLOBDIR/{hash}")
                 };

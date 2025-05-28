@@ -1617,7 +1617,7 @@ def test_immediate_autodelete(acfactory, lp):
 
     lp.sec("ac2: wait for close/expunge on autodelete")
     ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
-    ac2._evtracker.get_info_contains("close/expunge succeeded")
+    ac2._evtracker.get_info_contains("Close/expunge succeeded.")
 
     lp.sec("ac2: check that message was autodeleted on server")
     assert len(ac2.direct_imap.get_all_messages()) == 0
@@ -1653,7 +1653,7 @@ def test_delete_multiple_messages(acfactory, lp):
     lp.sec("ac2: test that only one message is left")
     while 1:
         ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
-        ac2._evtracker.get_info_contains("close/expunge succeeded")
+        ac2._evtracker.get_info_contains("Close/expunge succeeded.")
         ac2.direct_imap.select_config_folder("inbox")
         nr_msgs = len(ac2.direct_imap.get_all_messages())
         assert nr_msgs > 0

@@ -36,7 +36,7 @@ class EventFilter(ABC):
 
     @abstractmethod
     def __hash__(self) -> int:
-        """Object's unique hash"""
+        """Object's unique hash."""
 
     @abstractmethod
     def __eq__(self, other) -> bool:
@@ -52,9 +52,7 @@ class EventFilter(ABC):
 
     @abstractmethod
     def filter(self, event):
-        """Return True-like value if the event passed the filter and should be
-        used, or False-like value otherwise.
-        """
+        """Return True-like value if the event passed the filter."""
 
 
 class RawEvent(EventFilter):
@@ -82,31 +80,17 @@ class RawEvent(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
+        """Filter an event.
+
+        Return true if the event should be processed.
+        """
         if self.types and event.kind not in self.types:
             return False
         return self._call_func(event)
 
 
 class NewMessage(EventFilter):
-    """Matches whenever a new message arrives.
-
-    Warning: registering a handler for this event will cause the messages
-    to be marked as read. Its usage is mainly intended for bots.
-
-    :param pattern: if set, this Pattern will be used to filter the message by its text
-                    content.
-    :param command: If set, only match messages with the given command (ex. /help).
-                    Setting this property implies `is_info==False`.
-    :param is_bot: If set to True only match messages sent by bots, if set to None
-                   match messages from bots and users. If omitted or set to False
-                   only messages from users will be matched.
-    :param is_info: If set to True only match info/system messages, if set to False
-                    only match messages that are not info/system messages. If omitted
-                    info/system messages as well as normal messages will be matched.
-    :param func: A Callable function that should accept the event as input
-                 parameter, and return a bool value indicating whether the event
-                 should be dispatched or not.
-    """
+    """Matches whenever a new message arrives."""
 
     def __init__(
         self,
@@ -121,6 +105,25 @@ class NewMessage(EventFilter):
         is_info: Optional[bool] = None,
         func: Optional[Callable[["AttrDict"], bool]] = None,
     ) -> None:
+        """Initialize a new message filter.
+
+        Warning: registering a handler for this event will cause the messages
+        to be marked as read. Its usage is mainly intended for bots.
+
+        :param pattern: if set, this Pattern will be used to filter the message by its text
+                    content.
+        :param command: If set, only match messages with the given command (ex. /help).
+                    Setting this property implies `is_info==False`.
+        :param is_bot: If set to True only match messages sent by bots, if set to None
+                   match messages from bots and users. If omitted or set to False
+                   only messages from users will be matched.
+        :param is_info: If set to True only match info/system messages, if set to False
+                    only match messages that are not info/system messages. If omitted
+                    info/system messages as well as normal messages will be matched.
+        :param func: A Callable function that should accept the event as input
+                 parameter, and return a bool value indicating whether the event
+                 should be dispatched or not.
+        """
         super().__init__(func=func)
         self.is_bot = is_bot
         self.is_info = is_info
@@ -159,6 +162,7 @@ class NewMessage(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
+        """Return true if if the event is a new message event."""
         if self.is_bot is not None and self.is_bot != event.message_snapshot.is_bot:
             return False
         if self.is_info is not None and self.is_info != event.message_snapshot.is_info:
@@ -199,6 +203,7 @@ class MemberListChanged(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
+        """Return true if if the event is a member addition event."""
         if self.added is not None and self.added != event.member_added:
             return False
         return self._call_func(event)
@@ -231,6 +236,7 @@ class GroupImageChanged(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
+        """Return True if event is matched."""
         if self.deleted is not None and self.deleted != event.image_deleted:
             return False
         return self._call_func(event)
@@ -256,13 +262,12 @@ class GroupNameChanged(EventFilter):
         return False
 
     def filter(self, event: "AttrDict") -> bool:
+        """Return True if event is matched."""
         return self._call_func(event)
 
 
 class HookCollection:
-    """
-    Helper class to collect event hooks that can later be added to a Delta Chat client.
-    """
+    """Helper class to collect event hooks that can later be added to a Delta Chat client."""
 
     def __init__(self) -> None:
         self._hooks: set[tuple[Callable, Union[type, EventFilter]]] = set()

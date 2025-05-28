@@ -951,3 +951,34 @@ async fn test_parallel_setup_contact() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_wrong_auth_token() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Bob should already have Alice's key
+    // so that he can directly send vc-request-with-auth
+    tcm.send_recv(alice, bob, "hi").await;
+
+    let alice_qr = get_securejoin_qr(alice, None).await?;
+    println!("{}", &alice_qr);
+    let invalid_alice_qr = alice_qr.replace("&s=", "&s=INVALIDAUTHTOKEN&someotherkey=");
+
+    join_securejoin(bob, &invalid_alice_qr).await?;
+    let sent = bob.pop_sent_msg().await;
+
+    let msg = alice.parse_msg(&sent).await;
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        "vc-request-with-auth"
+    );
+
+    alice.recv_msg_trash(&sent).await;
+
+    let alice_bob_contact = alice.add_or_lookup_contact(bob).await;
+    assert!(!alice_bob_contact.is_forward_verified(alice).await?);
+
+    Ok(())
+}
