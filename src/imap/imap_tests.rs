@@ -56,8 +56,7 @@ fn test_build_sequence_sets() {
     }
 
     let has_number = |(uids, s): &(Vec<u32>, String), number| {
-        uids.iter().any(|&n| n == number)
-            && s.split(',').any(|n| n.parse::<u32>().unwrap() == number)
+        uids.contains(&number) && s.split(',').any(|n| n.parse::<u32>().unwrap() == number)
     };
 
     let numbers: Vec<_> = (2..=500).step_by(2).collect();
