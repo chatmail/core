@@ -1,3 +1,5 @@
+"""Account module."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -34,7 +36,10 @@ class Account:
                 return next_event
 
     def clear_all_events(self):
-        """Removes all queued-up events for a given account. Useful for tests."""
+        """Remove all queued-up events for a given account.
+
+        Useful for tests.
+        """
         self._rpc.clear_all_events(self.id)
 
     def remove(self) -> None:
@@ -43,7 +48,9 @@ class Account:
 
     def clone(self) -> "Account":
         """Clone given account.
-        This uses backup-transfer via iroh, i.e. the 'Add second device' feature."""
+
+        This uses backup-transfer via iroh, i.e. the 'Add second device' feature.
+        """
         future = self._rpc.provide_backup.future(self.id)
         qr = self._rpc.get_backup_qr(self.id)
         new_account = self.manager.add_account()
@@ -80,7 +87,7 @@ class Account:
         return self._rpc.get_config(self.id, key)
 
     def update_config(self, **kwargs) -> None:
-        """update config values."""
+        """Update config values."""
         for key, value in kwargs.items():
             self.set_config(key, value)
 
@@ -99,10 +106,12 @@ class Account:
         """Parse QR code contents.
 
         This function takes the raw text scanned
-        and checks what can be done with it."""
+        and checks what can be done with it.
+        """
         return self._rpc.check_qr(self.id, qr)
 
     def set_config_from_qr(self, qr: str):
+        """Set configuration values from a QR code."""
         self._rpc.set_config_from_qr(self.id, qr)
 
     @futuremethod
@@ -117,7 +126,7 @@ class Account:
 
     @futuremethod
     def list_transports(self):
-        """Returns the list of all email accounts that are used as a transport in the current profile."""
+        """Return the list of all email accounts that are used as a transport in the current profile."""
         transports = yield self._rpc.list_transports.future(self.id)
         return transports
 
@@ -158,7 +167,8 @@ class Account:
     def import_vcard(self, vcard: str) -> list[Contact]:
         """Import vCard.
 
-        Return created or modified contacts in the order they appear in vCard."""
+        Return created or modified contacts in the order they appear in vCard.
+        """
         contact_ids = self._rpc.import_vcard_contents(self.id, vcard)
         return [Contact(self, contact_id) for contact_id in contact_ids]
 
@@ -201,8 +211,8 @@ class Account:
     def get_contacts(
         self,
         query: Optional[str] = None,
+        *,
         with_self: bool = False,
-        verified_only: bool = False,
         snapshot: bool = False,
     ) -> Union[list[Contact], list[AttrDict]]:
         """Get a filtered list of contacts.
@@ -210,12 +220,9 @@ class Account:
         :param query: if a string is specified, only return contacts
                       whose name or e-mail matches query.
         :param with_self: if True the self-contact is also included if it matches the query.
-        :param only_verified: if True only return verified contacts.
         :param snapshot: If True return a list of contact snapshots instead of Contact instances.
         """
         flags = 0
-        if verified_only:
-            flags |= ContactFlag.VERIFIED_ONLY
         if with_self:
             flags |= ContactFlag.ADD_SELF
 
@@ -227,12 +234,12 @@ class Account:
 
     @property
     def self_contact(self) -> Contact:
-        """This account's identity as a Contact."""
+        """Account's identity as a Contact."""
         return Contact(self, SpecialContactId.SELF)
 
     @property
     def device_contact(self) -> Chat:
-        """This account's device contact."""
+        """Account's device contact."""
         return Contact(self, SpecialContactId.DEVICE)
 
     def get_chatlist(
@@ -290,8 +297,7 @@ class Account:
         return Chat(self, chat_id)
 
     def secure_join(self, qrdata: str) -> Chat:
-        """Continue a Setup-Contact or Verified-Group-Invite protocol started on
-        another device.
+        """Continue a Setup-Contact or Verified-Group-Invite protocol started on another device.
 
         The function returns immediately and the handshake runs in background, sending
         and receiving several messages.
@@ -361,22 +367,26 @@ class Account:
     def wait_for_incoming_msg(self):
         """Wait for incoming message and return it.
 
-        Consumes all events before the next incoming message event."""
+        Consumes all events before the next incoming message event.
+        """
         return self.get_message_by_id(self.wait_for_incoming_msg_event().msg_id)
 
     def wait_for_securejoin_inviter_success(self):
+        """Wait until SecureJoin process finishes successfully on the inviter side."""
         while True:
             event = self.wait_for_event()
             if event["kind"] == "SecurejoinInviterProgress" and event["progress"] == 1000:
                 break
 
     def wait_for_securejoin_joiner_success(self):
+        """Wait until SecureJoin process finishes successfully on the joiner side."""
         while True:
             event = self.wait_for_event()
             if event["kind"] == "SecurejoinJoinerProgress" and event["progress"] == 1000:
                 break
 
     def wait_for_reactions_changed(self):
+        """Wait for reaction change event."""
         return self.wait_for_event(EventType.REACTIONS_CHANGED)
 
     def get_fresh_messages_in_arrival_order(self) -> list[Message]:

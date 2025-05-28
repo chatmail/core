@@ -241,7 +241,6 @@ pub(crate) async fn maybe_network_lost(context: &Context, stores: Vec<Connectivi
         ) {
             *connectivity_lock = DetailedConnectivity::Error("Connection lost".to_string());
         }
-        drop(connectivity_lock);
     }
     context.emit_event(EventType::ConnectivityChanged);
 }

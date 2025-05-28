@@ -904,7 +904,7 @@ async fn test_concat_multiple_ndns() -> Result<()> {
     let raw = include_str!("../../test-data/message/posteo_ndn.eml");
     let raw = raw.replace(
         "Message-ID: <04422840-f884-3e37-5778-8192fe22d8e1@posteo.de>",
-        &format!("Message-ID: <{}>", mid),
+        &format!("Message-ID: <{mid}>"),
     );
     receive_imf(&t, raw.as_bytes(), false).await?;
 

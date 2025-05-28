@@ -322,7 +322,7 @@ impl Chatlist {
                     (chat_id, MessageState::OutDraft),
                 )
                 .await
-                .with_context(|| format!("failed to get msg ID for chat {}", chat_id))?;
+                .with_context(|| format!("failed to get msg ID for chat {chat_id}"))?;
             ids.push((chat_id, msg_id));
         }
         Ok(Chatlist { ids })

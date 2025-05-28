@@ -125,6 +125,23 @@ async fn test_send_invalid_webxdc() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_set_draft_invalid_webxdc() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+
+    let mut instance = create_webxdc_instance(
+        &t,
+        "invalid-no-zip-but-7z.xdc",
+        include_bytes!("../../test-data/webxdc/invalid-no-zip-but-7z.xdc"),
+    )?;
+
+    // draft should not fail
+    chat_id.set_draft(&t, Some(&mut instance)).await?;
+    chat_id.get_draft(&t).await.unwrap();
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_special_webxdc_format() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
@@ -2210,6 +2227,7 @@ async fn test_self_addr_consistency() -> Result<()> {
         include_bytes!("../../test-data/webxdc/minimal.xdc"),
     )?;
     alice_chat.set_draft(alice, Some(&mut instance)).await?;
+    let mut instance = alice_chat.get_draft(alice).await?.unwrap();
     let self_addr = instance.get_webxdc_self_addr(alice).await?;
     let sent = alice.send_msg(alice_chat, &mut instance).await;
     let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;

@@ -26,7 +26,7 @@
 use anyhow::{anyhow, bail, Context as _, Result};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
-use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMap, RelayMode, RelayUrl, SecretKey};
+use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
 use iroh_gossip::net::{Event, Gossip, GossipEvent, JoinOptions, GOSSIP_ALPN};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex;
@@ -245,7 +245,7 @@ impl Context {
             .as_ref()
             .and_then(|conf| conf.iroh_relay.clone())
         {
-            RelayMode::Custom(RelayMap::from_url(RelayUrl::from(relay_url)))
+            RelayMode::Custom(RelayUrl::from(relay_url).into())
         } else {
             // FIXME: this should be RelayMode::Disabled instead.
             // Currently using default relays because otherwise Rust tests fail.
@@ -253,6 +253,7 @@ impl Context {
         };
 
         let endpoint = Endpoint::builder()
+            .tls_x509() // For compatibility with iroh <0.34.0
             .secret_key(secret_key)
             .alpns(vec![GOSSIP_ALPN.to_vec()])
             .relay_mode(relay_mode)
@@ -271,8 +272,7 @@ impl Context {
 
         let router = iroh::protocol::Router::builder(endpoint)
             .accept(GOSSIP_ALPN, gossip.clone())
-            .spawn()
-            .await?;
+            .spawn();
 
         Ok(Iroh {
             router,

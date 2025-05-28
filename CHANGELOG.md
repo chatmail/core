@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.159.5] - 2025-05-14
+
+### Fixes
+
+- Don't change webxdc self-addr when saving and loading draft ([#6854](https://github.com/chatmail/core/pull/6854)).
+
+### Miscellaneous Tasks
+
+- Remove duplicate miniz_oxide dependency.
+- Update async-smtp to 0.10.2.
+
+## [1.159.4] - 2025-05-13
+
+### Documentation
+
+- Add missing documentation to deltachat-rpc-client.
+
+### Features / Changes
+
+- Better avatar quality ([#6822](https://github.com/chatmail/core/pull/6822)).
+- Update iroh from 0.33.0 to 0.35.0 ([#6687](https://github.com/chatmail/core/pull/6687)).
+- Other dependency updates.
+
+### Fixes
+
+- Emit progress(0) in case AEAP is tried.
+- Replace `FuturesUnordered` from `futures` with `JoinSet` from `tokio`.
+- Fix order of operations when handling "vc-request-with-auth" ([#6850](https://github.com/chatmail/core/pull/6850)).
+- Generate rfc724_mid when creating Message ([#6704](https://github.com/chatmail/core/pull/6704))
+
+### Tests
+
+- Profile data is attached to group leave messages.
+
 ## [1.159.3] - 2025-04-24
 
 ### CI
@@ -6267,3 +6301,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [1.159.1]: https://github.com/chatmail/core/compare/v1.159.0..v1.159.1
 [1.159.2]: https://github.com/chatmail/core/compare/v1.159.1..v1.159.2
 [1.159.3]: https://github.com/chatmail/core/compare/v1.159.2..v1.159.3
+[1.159.4]: https://github.com/chatmail/core/compare/v1.159.3..v1.159.4
+[1.159.5]: https://github.com/chatmail/core/compare/v1.159.4..v1.159.5

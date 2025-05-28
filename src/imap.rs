@@ -285,9 +285,7 @@ impl Imap {
         Ok(imap)
     }
 
-    /// Connects or reconnects if needed.
-    ///
-    /// It is safe to call this function if already connected, actions are performed only as needed.
+    /// Connects to IMAP server and returns a new IMAP session.
     ///
     /// Calling this function is not enough to perform IMAP operations. Use [`Imap::prepare`]
     /// instead if you are going to actually use connection rather than trying connection
@@ -326,7 +324,7 @@ impl Imap {
             }
         }
 
-        info!(context, "Connecting to IMAP server");
+        info!(context, "Connecting to IMAP server.");
         self.connectivity.set_connecting(context).await;
 
         self.conn_last_try = tools::Time::now();
@@ -411,7 +409,7 @@ impl Imap {
                         lp.user
                     )));
                     self.connectivity.set_preparing(context).await;
-                    info!(context, "Successfully logged into IMAP server");
+                    info!(context, "Successfully logged into IMAP server.");
                     return Ok(session);
                 }
 
@@ -459,10 +457,10 @@ impl Imap {
         Err(first_error.unwrap_or_else(|| format_err!("No IMAP connection candidates provided")))
     }
 
-    /// Prepare for IMAP operation.
+    /// Prepare a new IMAP session.
     ///
-    /// Ensure that IMAP client is connected, folders are created and IMAP capabilities are
-    /// determined.
+    /// This creates a new IMAP connection and ensures
+    /// that folders are created and IMAP capabilities are determined.
     pub(crate) async fn prepare(&mut self, context: &Context) -> Result<Session> {
         let configuring = false;
         let mut session = match self.connect(context, configuring).await {
@@ -1048,7 +1046,7 @@ impl Session {
         // Expunge folder if needed, e.g. if some jobs have
         // deleted messages on the server.
         if let Err(err) = self.maybe_close_folder(context).await {
-            warn!(context, "failed to close folder: {:?}", err);
+            warn!(context, "Failed to close folder: {err:#}.");
         }
 
         Ok(())

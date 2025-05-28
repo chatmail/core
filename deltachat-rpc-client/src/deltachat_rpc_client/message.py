@@ -1,3 +1,5 @@
+"""Message module."""
+
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Union
@@ -45,6 +47,7 @@ class Message:
         return None
 
     def get_sender_contact(self) -> Contact:
+        """Return sender contact."""
         from_id = self.get_snapshot().from_id
         return self.account.get_contact_by_id(from_id)
 
@@ -53,6 +56,11 @@ class Message:
         self._rpc.markseen_msgs(self.account.id, [self.id])
 
     def continue_autocrypt_key_transfer(self, setup_code: str) -> None:
+        """Continue the Autocrypt Setup Message key transfer.
+
+        This function can be called on received Autocrypt Setup Message
+        to import the key encrypted with the provided setup code.
+        """
         self._rpc.continue_autocrypt_key_transfer(self.account.id, self.id, setup_code)
 
     def send_webxdc_status_update(self, update: Union[dict, str], description: str) -> None:
@@ -62,6 +70,7 @@ class Message:
         self._rpc.send_webxdc_status_update(self.account.id, self.id, update, description)
 
     def get_webxdc_status_updates(self, last_known_serial: int = 0) -> list:
+        """Return a list of Webxdc status updates for Webxdc instance message."""
         return json.loads(self._rpc.get_webxdc_status_updates(self.account.id, self.id, last_known_serial))
 
     def get_info(self) -> str:
@@ -69,6 +78,7 @@ class Message:
         return self._rpc.get_message_info(self.account.id, self.id)
 
     def get_webxdc_info(self) -> dict:
+        """Get info from a Webxdc message in JSON format."""
         return self._rpc.get_webxdc_info(self.account.id, self.id)
 
     def wait_until_delivered(self) -> None:
@@ -80,8 +90,10 @@ class Message:
 
     @futuremethod
     def send_webxdc_realtime_advertisement(self):
+        """Send an advertisement to join the realtime channel."""
         yield self._rpc.send_webxdc_realtime_advertisement.future(self.account.id, self.id)
 
     @futuremethod
     def send_webxdc_realtime_data(self, data) -> None:
+        """Send data to the realtime channel."""
         yield self._rpc.send_webxdc_realtime_data.future(self.account.id, self.id, list(data))
