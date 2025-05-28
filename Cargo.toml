@@ -124,16 +124,16 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 
 [workspace]
 members = [
-    "deltachat-ffi",
-    "deltachat_derive",
-    "deltachat-jsonrpc",
-    "deltachat-rpc-server",
-    "deltachat-ratelimit",
-    "deltachat-repl",
-    "deltachat-time",
-    "format-flowed",
-    "deltachat-contact-tools",
-    "fuzz",
+  "deltachat-ffi",
+  "deltachat_derive",
+  "deltachat-jsonrpc",
+  "deltachat-rpc-server",
+  "deltachat-ratelimit",
+  "deltachat-repl",
+  "deltachat-time",
+  "format-flowed",
+  "deltachat-contact-tools",
+  "fuzz",
 ]
 
 [[bench]]
@@ -201,7 +201,7 @@ yerpc = "0.6.4"
 default = ["vendored"]
 internals = []
 vendored = [
-    "rusqlite/bundled-sqlcipher-vendored-openssl"
+  "rusqlite/bundled-sqlcipher-vendored-openssl"
 ]
 
 [lints.rust]
