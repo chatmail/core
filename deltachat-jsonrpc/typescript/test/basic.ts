@@ -1,6 +1,5 @@
 import chai, { assert, expect } from "chai";
 import chaiAsPromised from "chai-as-promised";
-import { fileSync } from "tmp";
 chai.use(chaiAsPromised);
 import { StdioDeltaChat as DeltaChat } from "../deltachat.js";
 
