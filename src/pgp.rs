@@ -16,10 +16,7 @@ use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
-use pgp::types::{
-    CompressionAlgorithm, KeyDetails, KeyVersion, Password, PublicKeyTrait, SecretKeyTrait,
-    StringToKey,
-};
+use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
 use rand::thread_rng;
 use tokio::runtime::Handle;
 
@@ -205,20 +202,11 @@ pub fn pk_calc_signature(
 ) -> Result<String> {
     let rng = thread_rng();
 
-    let mut config = match private_key_for_signing.version() {
-        KeyVersion::V4 => SignatureConfig::v4(
-            SignatureType::Binary,
-            private_key_for_signing.algorithm(),
-            private_key_for_signing.hash_alg(),
-        ),
-        KeyVersion::V6 => SignatureConfig::v6(
-            rng,
-            SignatureType::Binary,
-            private_key_for_signing.algorithm(),
-            private_key_for_signing.hash_alg(),
-        )?,
-        v => anyhow::bail!("unsupported key version {:?}", v),
-    };
+    let mut config = SignatureConfig::from_key(
+        rng,
+        &private_key_for_signing.primary_key,
+        SignatureType::Binary,
+    )?;
 
     config.hashed_subpackets = vec![
         Subpacket::regular(SubpacketData::IssuerFingerprint(
