@@ -1674,7 +1674,7 @@ fn migrate_pgp_contacts(
 
                 // Mailinglist
                 140 => {
-                    keep_email_contacts("Mailinglist/Broadcast");
+                    keep_email_contacts("Mailinglist");
                     continue;
                 }
 
