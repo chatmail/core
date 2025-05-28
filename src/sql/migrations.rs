@@ -1598,8 +1598,30 @@ fn migrate_pgp_contacts(
                     orphaned_contacts.remove(m);
                 }
             };
+            let retain_autocrypt_pgp_contacts = || {
+                old_members
+                    .iter()
+                    .map(|original| {
+                        (
+                            *original,
+                            autocrypt_pgp_contacts
+                                .get(original)
+                                // TODO it's unclear whether we want to do this:
+                                // We could also make the group unencrypted
+                                // if any peerstate is reset.
+                                // Also, right now, if we have no key at all,
+                                // the member will be silently removed from the group;
+                                // maybe we should at least post an info message?
+                                .or_else(|| {
+                                    autocrypt_pgp_contacts_with_reset_peerstate.get(original)
+                                })
+                                .copied(),
+                        )
+                    })
+                    .collect::<Vec<(u32, Option<u32>)>>()
+            };
 
-            let old_and_new_members = match typ {
+            let old_and_new_members: Vec<(u32, Option<u32>)> = match typ {
                 // 1:1 chats retain:
                 // - email-contact if peerstate is in the "reset" state,
                 //   or if there is no PGP-contact that has the right email address.
@@ -1646,35 +1668,18 @@ fn migrate_pgp_contacts(
                             })
                             .collect()
                     } else {
-                        old_members
-                            .iter()
-                            .map(|original| {
-                                (
-                                    *original,
-                                    autocrypt_pgp_contacts
-                                        .get(original)
-                                        // TODO it's unclear whether we want to do this:
-                                        // We could also make the group unencrypted
-                                        // if any peerstate is reset.
-                                        // Also, right now, if we have no key at all,
-                                        // the member will be silently removed from the group;
-                                        // maybe we should at least post an info message?
-                                        .or_else(|| {
-                                            autocrypt_pgp_contacts_with_reset_peerstate
-                                                .get(original)
-                                        })
-                                        .copied(),
-                                )
-                            })
-                            .collect()
+                        retain_autocrypt_pgp_contacts()
                     }
                 }
 
-                // Mailinglist | Broadcast list
-                140 | 160 => {
+                // Mailinglist
+                140 => {
                     keep_email_contacts("Mailinglist/Broadcast");
                     continue;
                 }
+
+                // Broadcast list
+                160 => retain_autocrypt_pgp_contacts(),
 
                 _ => {
                     warn!(context, "Invalid chat type {typ}");
