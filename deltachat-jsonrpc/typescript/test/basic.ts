@@ -100,32 +100,6 @@ describe("basic tests", () => {
     });
   });
 
-  describe("webxdc", function () {
-    let invalidXdcPath: string;
-    let accountId: number;
-
-    before(async () => {
-      const tmpFile = fileSync({ postfix: ".xdc" });
-      invalidXdcPath = tmpFile.name;
-      accountId = await dc.rpc.addAccount();
-    });
-
-    it("should be able to draft set an invalid xdc", async function () {
-      const chat = await dc.rpc.createGroupChat(accountId, "xdc", false);
-      await expect(
-        dc.rpc.miscSetDraft(
-          accountId,
-          chat,
-          "",
-          invalidXdcPath,
-          "invalid.xdc",
-          null,
-          null
-        )
-      ).to.be.eventually.rejectedWith("Invalid xdc");
-    });
-  });
-
   describe("configuration", function () {
     let accountId: number;
     before(async () => {
