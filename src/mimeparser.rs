@@ -334,10 +334,10 @@ impl MimeMessage {
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
 
-        let (mail, encrypted) =
+        let (mail, is_encrypted) =
             match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
-                Ok(Some(msg)) => {
-                    mail_raw = msg.get_content()?.unwrap_or_default();
+                Ok(Some(mut msg)) => {
+                    mail_raw = msg.as_data_vec().unwrap_or_default();
 
                     let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
                     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
@@ -444,7 +444,7 @@ impl MimeMessage {
             signatures.extend(signatures_detached);
             content
         });
-        if let (Ok(mail), true) = (mail, encrypted) {
+        if let (Ok(mail), true) = (mail, is_encrypted) {
             if !signatures.is_empty() {
                 // Remove unsigned opportunistically protected headers from messages considered
                 // Autocrypt-encrypted / displayed with padlock.
@@ -523,7 +523,7 @@ impl MimeMessage {
         if signatures.is_empty() {
             Self::remove_secured_headers(&mut headers, &mut headers_removed);
         }
-        if !encrypted {
+        if !is_encrypted {
             signatures.clear();
         }
 

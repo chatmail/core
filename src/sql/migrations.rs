@@ -7,7 +7,7 @@ use std::time::Instant;
 use anyhow::{ensure, Context as _, Result};
 use deltachat_contact_tools::addr_cmp;
 use deltachat_contact_tools::EmailAddress;
-use pgp::SignedPublicKey;
+use pgp::composed::SignedPublicKey;
 use rusqlite::OptionalExtension;
 
 use crate::config::Config;

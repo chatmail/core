@@ -17,12 +17,12 @@ describe("online tests", function () {
       if (process.env.COVERAGE && !process.env.COVERAGE_OFFLINE) {
         console.error(
           "CAN NOT RUN COVERAGE correctly: Missing CHATMAIL_DOMAIN environment variable!\n\n",
-          "You can set COVERAGE_OFFLINE=1 to circumvent this check and skip the online tests, but those coverage results will be wrong, because some functions can only be tested in the online test"
+          "You can set COVERAGE_OFFLINE=1 to circumvent this check and skip the online tests, but those coverage results will be wrong, because some functions can only be tested in the online test",
         );
         process.exit(1);
       }
       console.log(
-        "Missing CHATMAIL_DOMAIN environment variable!, skip integration tests"
+        "Missing CHATMAIL_DOMAIN environment variable!, skip integration tests",
       );
       this.skip();
     }
@@ -36,7 +36,7 @@ describe("online tests", function () {
     account1 = createTempUser(process.env.CHATMAIL_DOMAIN);
     if (!account1 || !account1.email || !account1.password) {
       console.log(
-        "We didn't got back an account from the api, skip integration tests"
+        "We didn't got back an account from the api, skip integration tests",
       );
       this.skip();
     }
@@ -44,7 +44,7 @@ describe("online tests", function () {
     account2 = createTempUser(process.env.CHATMAIL_DOMAIN);
     if (!account2 || !account2.email || !account2.password) {
       console.log(
-        "We didn't got back an account2 from the api, skip integration tests"
+        "We didn't got back an account2 from the api, skip integration tests",
       );
       this.skip();
     }
@@ -92,7 +92,7 @@ describe("online tests", function () {
       accountId2,
       chatIdOnAccountB,
       false,
-      false
+      false,
     );
 
     expect(messageList).have.length(1);
@@ -124,11 +124,11 @@ describe("online tests", function () {
       accountId2,
       chatIdOnAccountB,
       false,
-      false
+      false,
     );
     const message = await dc.rpc.getMessage(
       accountId2,
-      messageList.reverse()[0]
+      messageList.reverse()[0],
     );
     expect(message.text).equal("Hello2");
     // Send message back from B to A
@@ -150,7 +150,7 @@ describe("online tests", function () {
     const info = await dc.rpc.getProviderInfo(acc, "example.com");
     expect(info).to.be.not.null;
     expect(info?.overviewPage).to.equal(
-      "https://providers.delta.chat/example-com"
+      "https://providers.delta.chat/example-com",
     );
     expect(info?.status).to.equal(3);
   });
@@ -167,12 +167,12 @@ async function waitForEvent<T extends DcEvent["kind"]>(
   dc: DeltaChat,
   eventType: T,
   accountId: number,
-  timeout: number = EVENT_TIMEOUT
+  timeout: number = EVENT_TIMEOUT,
 ): Promise<Extract<DcEvent, { kind: T }>> {
   return new Promise((resolve, reject) => {
     const rejectTimeout = setTimeout(
       () => reject(new Error("Timeout reached before event came in")),
-      timeout
+      timeout,
     );
     const callback = (contextId: number, event: DcEvent) => {
       if (contextId == accountId) {
