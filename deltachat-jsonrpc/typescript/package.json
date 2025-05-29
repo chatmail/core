@@ -2,31 +2,31 @@
   "author": "Delta Chat Developers (ML) <delta@codespeak.net>",
   "dependencies": {
     "@deltachat/tiny-emitter": "3.0.0",
-    "isomorphic-ws": "^4.0.1",
+    "isomorphic-ws": "^5.0.0",
     "yerpc": "^0.6.2"
   },
   "devDependencies": {
-    "@types/chai": "^4.2.21",
-    "@types/chai-as-promised": "^7.1.5",
-    "@types/mocha": "^9.0.0",
-    "@types/ws": "^7.2.4",
-    "c8": "^7.10.0",
+    "@types/chai": "^4.3.10",
+    "@types/chai-as-promised": "^7.1.8",
+    "@types/mocha": "^10.0.4",
+    "@types/ws": "^8.5.9",
+    "c8": "^8.0.1",
     "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
-    "esbuild": "^0.17.9",
+    "esbuild": "^0.25.5",
     "http-server": "^14.1.1",
-    "mocha": "^9.1.1",
+    "mocha": "^10.2.0",
     "npm-run-all": "^4.1.5",
-    "prettier": "^2.6.2",
-    "typedoc": "^0.23.2",
-    "typescript": "^4.5.5",
+    "prettier": "^3.5.3",
+    "typedoc": "^0.28.5",
+    "typescript": "^5.8.3",
     "ws": "^8.5.0"
   },
   "exports": {
     ".": {
+      "types": "./dist/deltachat.d.ts",
       "import": "./dist/deltachat.js",
-      "require": "./dist/deltachat.cjs",
-      "types": "./dist/deltachat.d.ts"
+      "require": "./dist/deltachat.cjs"
     }
   },
   "license": "MPL-2.0",

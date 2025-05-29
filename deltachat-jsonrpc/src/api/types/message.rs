@@ -8,6 +8,7 @@ use deltachat::chat::ChatVisibility;
 use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::download;
+use deltachat::log::LogExt as _;
 use deltachat::message::Message;
 use deltachat::message::MsgId;
 use deltachat::message::Viewtype;
@@ -23,6 +24,7 @@ use super::webxdc::WebxdcMessageInfo;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "kind")]
+#[expect(clippy::large_enum_variant)]
 pub enum MessageLoadResult {
     Message(MessageObject),
     LoadingError { error: String },
@@ -143,7 +145,10 @@ impl MessageObject {
         let override_sender_name = message.get_override_sender_name();
 
         let webxdc_info = if message.get_viewtype() == Viewtype::Webxdc {
-            Some(WebxdcMessageInfo::get_for_message(context, msg_id).await?)
+            WebxdcMessageInfo::get_for_message(context, msg_id)
+                .await
+                .log_err(context)
+                .ok()
         } else {
             None
         };

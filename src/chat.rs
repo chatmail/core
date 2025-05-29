@@ -3456,37 +3456,62 @@ pub async fn get_chat_media(
     msg_type2: Viewtype,
     msg_type3: Viewtype,
 ) -> Result<Vec<MsgId>> {
-    // TODO This query could/should be converted to `AND type IN (?, ?, ?)`.
-    let list = context
-        .sql
-        .query_map(
-            "SELECT id
+    let list = if msg_type == Viewtype::Webxdc
+        && msg_type2 == Viewtype::Unknown
+        && msg_type3 == Viewtype::Unknown
+    {
+        context
+            .sql
+            .query_map(
+                "SELECT id
                FROM msgs
               WHERE (1=? OR chat_id=?)
                 AND chat_id != ?
-                AND (type=? OR type=? OR type=?)
+                AND type = ?
+                AND hidden=0
+              ORDER BY max(timestamp, timestamp_rcvd), id;",
+                (
+                    chat_id.is_none(),
+                    chat_id.unwrap_or_else(|| ChatId::new(0)),
+                    DC_CHAT_ID_TRASH,
+                    Viewtype::Webxdc,
+                ),
+                |row| row.get::<_, MsgId>(0),
+                |ids| Ok(ids.flatten().collect()),
+            )
+            .await?
+    } else {
+        context
+            .sql
+            .query_map(
+                "SELECT id
+               FROM msgs
+              WHERE (1=? OR chat_id=?)
+                AND chat_id != ?
+                AND type IN (?, ?, ?)
                 AND hidden=0
               ORDER BY timestamp, id;",
-            (
-                chat_id.is_none(),
-                chat_id.unwrap_or_else(|| ChatId::new(0)),
-                DC_CHAT_ID_TRASH,
-                msg_type,
-                if msg_type2 != Viewtype::Unknown {
-                    msg_type2
-                } else {
-                    msg_type
-                },
-                if msg_type3 != Viewtype::Unknown {
-                    msg_type3
-                } else {
-                    msg_type
-                },
-            ),
-            |row| row.get::<_, MsgId>(0),
-            |ids| Ok(ids.flatten().collect()),
-        )
-        .await?;
+                (
+                    chat_id.is_none(),
+                    chat_id.unwrap_or_else(|| ChatId::new(0)),
+                    DC_CHAT_ID_TRASH,
+                    msg_type,
+                    if msg_type2 != Viewtype::Unknown {
+                        msg_type2
+                    } else {
+                        msg_type
+                    },
+                    if msg_type3 != Viewtype::Unknown {
+                        msg_type3
+                    } else {
+                        msg_type
+                    },
+                ),
+                |row| row.get::<_, MsgId>(0),
+                |ids| Ok(ids.flatten().collect()),
+            )
+            .await?
+    };
     Ok(list)
 }
 

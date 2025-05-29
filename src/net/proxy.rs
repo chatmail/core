@@ -158,6 +158,7 @@ impl Socks5Config {
 /// (except for iroh p2p connections)
 /// will be sent.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[expect(clippy::large_enum_variant)]
 pub enum ProxyConfig {
     /// HTTP proxy.
     Http(HttpConfig),
