@@ -31,14 +31,14 @@ describe("basic tests", () => {
 
     expect(
       await Promise.all(
-        validAddresses.map((email) => dc.rpc.checkEmailValidity(email))
-      )
+        validAddresses.map((email) => dc.rpc.checkEmailValidity(email)),
+      ),
     ).to.not.contain(false);
 
     expect(
       await Promise.all(
-        invalidAddresses.map((email) => dc.rpc.checkEmailValidity(email))
-      )
+        invalidAddresses.map((email) => dc.rpc.checkEmailValidity(email)),
+      ),
     ).to.not.contain(true);
   });
 
@@ -84,7 +84,7 @@ describe("basic tests", () => {
       const contactId = await dc.rpc.createContact(
         accountId,
         "example@delta.chat",
-        null
+        null,
       );
       expect((await dc.rpc.getContact(accountId, contactId)).isBlocked).to.be
         .false;
@@ -126,7 +126,7 @@ describe("basic tests", () => {
       await dc.rpc.batchSetConfig(accountId, config);
       const retrieved = await dc.rpc.batchGetConfig(
         accountId,
-        Object.keys(config)
+        Object.keys(config),
       );
       expect(retrieved).to.deep.equal(config);
     });
@@ -138,7 +138,7 @@ describe("basic tests", () => {
       await dc.rpc.batchSetConfig(accountId, config);
       const retrieved = await dc.rpc.batchGetConfig(
         accountId,
-        Object.keys(config)
+        Object.keys(config),
       );
       expect(retrieved).to.deep.equal(config);
     });
@@ -152,7 +152,7 @@ describe("basic tests", () => {
       await dc.rpc.batchSetConfig(accountId, config);
       const retrieved = await dc.rpc.batchGetConfig(
         accountId,
-        Object.keys(config)
+        Object.keys(config),
       );
       expect(retrieved).to.deep.equal(config);
     });

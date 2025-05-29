@@ -14,7 +14,7 @@ export async function startServer(): Promise<RpcServerHandle> {
   const tmpDir = await mkdtemp(join(tmpdir(), "deltachat-jsonrpc-test"));
 
   const pathToServerBinary = resolve(
-    join(await getTargetDir(), "debug/deltachat-rpc-server")
+    join(await getTargetDir(), "debug/deltachat-rpc-server"),
   );
 
   const server = spawn(pathToServerBinary, {
@@ -29,7 +29,7 @@ export async function startServer(): Promise<RpcServerHandle> {
     throw new Error(
       "Failed to start server executable " +
         pathToServerBinary +
-        ", make sure you built it first."
+        ", make sure you built it first.",
     );
   });
   let shouldClose = false;
@@ -83,7 +83,7 @@ function getTargetDir(): Promise<string> {
             reject(error);
           }
         }
-      }
+      },
     );
   });
 }

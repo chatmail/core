@@ -8,13 +8,13 @@ import { TinyEmitter } from "@deltachat/tiny-emitter";
 type Events = { ALL: (accountId: number, event: EventType) => void } & {
   [Property in EventType["kind"]]: (
     accountId: number,
-    event: Extract<EventType, { kind: Property }>
+    event: Extract<EventType, { kind: Property }>,
   ) => void;
 };
 
 type ContextEvents = { ALL: (event: EventType) => void } & {
   [Property in EventType["kind"]]: (
-    event: Extract<EventType, { kind: Property }>
+    event: Extract<EventType, { kind: Property }>,
   ) => void;
 };
 
@@ -25,7 +25,7 @@ export type DcEventType<T extends EventType["kind"]> = Extract<
 >;
 
 export class BaseDeltaChat<
-  Transport extends BaseTransport<any>
+  Transport extends BaseTransport<any>,
 > extends TinyEmitter<Events> {
   rpc: RawClient;
   account?: T.Account;
@@ -34,7 +34,10 @@ export class BaseDeltaChat<
   //@ts-ignore
   private eventTask: Promise<void>;
 
-  constructor(public transport: Transport, startEventLoop: boolean) {
+  constructor(
+    public transport: Transport,
+    startEventLoop: boolean,
+  ) {
     super();
     this.rpc = new RawClient(this.transport);
     if (startEventLoop) {
@@ -53,7 +56,7 @@ export class BaseDeltaChat<
         this.contextEmitters[event.contextId].emit(
           event.event.kind,
           //@ts-ignore
-          event.event as any
+          event.event as any,
         );
         this.contextEmitters[event.contextId].emit("ALL", event.event as any);
       }
@@ -83,7 +86,10 @@ export class StdioDeltaChat extends BaseDeltaChat<StdioTransport> {
 }
 
 export class StdioTransport extends BaseTransport {
-  constructor(public input: any, public output: any) {
+  constructor(
+    public input: any,
+    public output: any,
+  ) {
     super();
 
     var buffer = "";

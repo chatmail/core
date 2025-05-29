@@ -24,7 +24,7 @@ while (null != (match = regex.exec(header_data))) {
 
 const constants = data
   .filter(
-    ({ key }) => key.toUpperCase()[0] === key[0] // check if define name is uppercase
+    ({ key }) => key.toUpperCase()[0] === key[0], // check if define name is uppercase
   )
   .sort((lhs, rhs) => {
     if (lhs.key < rhs.key) return -1;
@@ -50,5 +50,5 @@ const constants = data
 
 writeFileSync(
   resolve(__dirname, "../generated/constants.ts"),
-  `// Generated!\n\nexport enum C {\n${constants.replace(/:/g, " =")},\n}\n`
+  `// Generated!\n\nexport enum C {\n${constants.replace(/:/g, " =")},\n}\n`,
 );
