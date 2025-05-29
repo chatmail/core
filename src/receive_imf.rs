@@ -413,6 +413,7 @@ pub(crate) async fn receive_imf_inner(
         || mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some()
         || mime_parser.sync_items.is_some()
     {
+        info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
     } else if mime_parser.decrypting_failed && !mime_parser.incoming {
         // Outgoing undecryptable message.
