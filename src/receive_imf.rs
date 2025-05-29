@@ -530,7 +530,6 @@ pub(crate) async fn receive_imf_inner(
         ChatAssignment::MailingList
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
-            // Try to assign to a chat based on In-Reply-To/References.
             lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download).await?
         {
             // Try to assign to a chat based on In-Reply-To/References.
