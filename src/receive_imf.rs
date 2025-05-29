@@ -435,6 +435,7 @@ pub(crate) async fn receive_imf_inner(
                 .set_config_internal(Config::LastCantDecryptOutgoingMsgs, Some(&now.to_string()))
                 .await?;
         }
+        info!(context, "Outgoing undecryptable message (TRASH).");
         true
     } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
         && !mime_parser.has_chat_version()
