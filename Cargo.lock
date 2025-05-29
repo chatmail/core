@@ -4155,9 +4155,9 @@ dependencies = [
 
 [[package]]
 name = "pgp"
-version = "0.16.0-alpha.3"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf25145474f8bfd7437018fe26569e74845b2e5410a0b0eb3893772ec77cd541"
+checksum = "f91d320242d9b686612b15526fe38711afdf856e112eaa4775ce25b0d9b12b11"
 dependencies = [
  "aead",
  "aes",
