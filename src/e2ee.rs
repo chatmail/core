@@ -153,7 +153,7 @@ impl EncryptHelper {
     pub async fn sign(self, context: &Context, mail: &MimePart<'static>) -> Result<String> {
         let sign_key = load_self_secret_key(context).await?;
         let mut buffer = Vec::new();
-        mail.clone().write_part(&mut buffer).ok(); // TODO: why is this error ignored?
+        mail.clone().write_part(&mut buffer)?;
         let signature = pgp::pk_calc_signature(buffer, &sign_key)?;
         Ok(signature)
     }
