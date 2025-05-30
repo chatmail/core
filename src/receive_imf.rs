@@ -411,154 +411,15 @@ pub(crate) async fn receive_imf_inner(
     .await?
     .filter(|p| Some(p.id) != replace_msg_id);
 
-    let should_trash = if !mime_parser.mdn_reports.is_empty() {
-        info!(context, "Message is an MDN (TRASH).");
-        true
-    } else if mime_parser.delivery_report.is_some() {
-        info!(context, "Message is a DSN (TRASH).");
-        markseen_on_imap_table(context, rfc724_mid).await.ok();
-        true
-    } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some()
-        || mime_parser.get_header(HeaderDef::ChatDelete).is_some()
-        || mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some()
-        || mime_parser.sync_items.is_some()
-    {
-        info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
-        true
-    } else if mime_parser.decrypting_failed && !mime_parser.incoming {
-        // Outgoing undecryptable message.
-        let last_time = context
-            .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
-            .await?;
-        let now = tools::time();
-        let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
-            let mut msg = Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
-            chat::add_device_msg(context, None, Some(&mut msg))
-                .await
-                .log_err(context)
-                .ok();
-            true
-        } else {
-            last_time > now
-        };
-        if update_config {
-            context
-                .set_config_internal(Config::LastCantDecryptOutgoingMsgs, Some(&now.to_string()))
-                .await?;
-        }
-        info!(context, "Outgoing undecryptable message (TRASH).");
-        true
-    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-        && !mime_parser.has_chat_version()
-        && parent_message
-            .as_ref()
-            .is_none_or(|p| p.is_dc_message == MessengerMessage::No)
-        && !context.get_config_bool(Config::IsChatmail).await?
-        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
-            .unwrap_or_default()
-            == ShowEmails::Off
-    {
-        info!(context, "Classical email not shown (TRASH).");
-        // the message is a classic email in a classic profile
-        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
-        true
-    } else if mime_parser
-        .get_header(HeaderDef::XMozillaDraftInfo)
-        .is_some()
-    {
-        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
-        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
-        // created by Thunderbird.
-
-        // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
-        info!(context, "Email is probably just a draft (TRASH).");
-        true
-    } else if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
-        if let Some(part) = mime_parser.parts.first() {
-            if part.typ == Viewtype::Text && part.msg.is_empty() {
-                info!(context, "Message is a status update only (TRASH).");
-                markseen_on_imap_table(context, rfc724_mid).await.ok();
-                true
-            } else {
-                false
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-
-    // Decide on the type of chat we assign the message to.
-    //
-    // The chat may not exist yet, i.e. there may be
-    // no database row and ChatId yet.
-    let mut num_recipients = mime_parser.recipients.len();
-    if from_id != ContactId::SELF {
-        let mut has_self_addr = false;
-        for recipient in &mime_parser.recipients {
-            if context.is_self_addr(&recipient.addr).await? {
-                has_self_addr = true;
-            }
-        }
-        if !has_self_addr {
-            num_recipients += 1;
-        }
-    }
-
-    let chat_assignment = if should_trash {
-        ChatAssignment::Trash
-    } else if let Some(grpid) = mime_parser.get_chat_group_id() {
-        if mime_parser.was_encrypted() {
-            ChatAssignment::GroupChat {
-                grpid: grpid.to_string(),
-            }
-        } else if let Some(parent) = &parent_message {
-            if let Some((chat_id, chat_id_blocked)) =
-                // Try to assign to a chat based on In-Reply-To/References.
-                lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download)
-                        .await?
-            {
-                // Try to assign to a chat based on In-Reply-To/References.
-                ChatAssignment::ExistingChat {
-                    chat_id,
-                    chat_id_blocked,
-                }
-            } else {
-                ChatAssignment::AdHocGroup
-            }
-        } else {
-            // Could be a message from old version
-            // with opportunistic encryption.
-            //
-            // We still want to assign this to a group
-            // even if it had only two members.
-            //
-            // Group ID is ignored, however.
-            ChatAssignment::AdHocGroup
-        }
-    } else if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-        let _listid = mailinglist_header_listid(mailinglist_header)?;
-        ChatAssignment::MailingList
-    } else if let Some(parent) = &parent_message {
-        if let Some((chat_id, chat_id_blocked)) =
-            lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download).await?
-        {
-            // Try to assign to a chat based on In-Reply-To/References.
-            ChatAssignment::ExistingChat {
-                chat_id,
-                chat_id_blocked,
-            }
-        } else if num_recipients <= 1 {
-            ChatAssignment::OneOneChat
-        } else {
-            ChatAssignment::AdHocGroup
-        }
-    } else if num_recipients <= 1 {
-        ChatAssignment::OneOneChat
-    } else {
-        ChatAssignment::AdHocGroup
-    };
+    let chat_assignment = decide_chat_assignment(
+        context,
+        &mime_parser,
+        &parent_message,
+        &rfc724_mid,
+        from_id,
+        &is_partial_download,
+    )
+    .await?;
     info!(context, "Chat assignment is {chat_assignment:?}.");
 
     // ID of the chat to look up the addresses in.
@@ -1195,6 +1056,165 @@ pub async fn from_field_to_contact_id(
 
         Ok(Some((from_id, from_id_blocked, incoming_origin)))
     }
+}
+
+async fn decide_chat_assignment(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    parent_message: &Option<Message>,
+    rfc724_mid: &str,
+    from_id: ContactId,
+    is_partial_download: &Option<u32>,
+) -> Result<ChatAssignment> {
+    let should_trash = if !mime_parser.mdn_reports.is_empty() {
+        info!(context, "Message is an MDN (TRASH).");
+        true
+    } else if mime_parser.delivery_report.is_some() {
+        info!(context, "Message is a DSN (TRASH).");
+        markseen_on_imap_table(context, rfc724_mid).await.ok();
+        true
+    } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some()
+        || mime_parser.get_header(HeaderDef::ChatDelete).is_some()
+        || mime_parser.get_header(HeaderDef::IrohNodeAddr).is_some()
+        || mime_parser.sync_items.is_some()
+    {
+        info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
+        true
+    } else if mime_parser.decrypting_failed && !mime_parser.incoming {
+        // Outgoing undecryptable message.
+        let last_time = context
+            .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
+            .await?;
+        let now = tools::time();
+        let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
+            let mut msg = Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
+            chat::add_device_msg(context, None, Some(&mut msg))
+                .await
+                .log_err(context)
+                .ok();
+            true
+        } else {
+            last_time > now
+        };
+        if update_config {
+            context
+                .set_config_internal(Config::LastCantDecryptOutgoingMsgs, Some(&now.to_string()))
+                .await?;
+        }
+        info!(context, "Outgoing undecryptable message (TRASH).");
+        true
+    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
+        && !mime_parser.has_chat_version()
+        && parent_message
+            .as_ref()
+            .is_none_or(|p| p.is_dc_message == MessengerMessage::No)
+        && !context.get_config_bool(Config::IsChatmail).await?
+        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
+            .unwrap_or_default()
+            == ShowEmails::Off
+    {
+        info!(context, "Classical email not shown (TRASH).");
+        // the message is a classic email in a classic profile
+        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
+        true
+    } else if mime_parser
+        .get_header(HeaderDef::XMozillaDraftInfo)
+        .is_some()
+    {
+        // Mozilla Thunderbird does not set \Draft flag on "Templates", but sets
+        // X-Mozilla-Draft-Info header, which can be used to detect both drafts and templates
+        // created by Thunderbird.
+
+        // Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them
+        info!(context, "Email is probably just a draft (TRASH).");
+        true
+    } else if mime_parser.webxdc_status_update.is_some() && mime_parser.parts.len() == 1 {
+        if let Some(part) = mime_parser.parts.first() {
+            if part.typ == Viewtype::Text && part.msg.is_empty() {
+                info!(context, "Message is a status update only (TRASH).");
+                markseen_on_imap_table(context, rfc724_mid).await.ok();
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    // Decide on the type of chat we assign the message to.
+    //
+    // The chat may not exist yet, i.e. there may be
+    // no database row and ChatId yet.
+    let mut num_recipients = mime_parser.recipients.len();
+    if from_id != ContactId::SELF {
+        let mut has_self_addr = false;
+        for recipient in &mime_parser.recipients {
+            if context.is_self_addr(&recipient.addr).await? {
+                has_self_addr = true;
+            }
+        }
+        if !has_self_addr {
+            num_recipients += 1;
+        }
+    }
+
+    let chat_assignment = if should_trash {
+        ChatAssignment::Trash
+    } else if let Some(grpid) = mime_parser.get_chat_group_id() {
+        if mime_parser.was_encrypted() {
+            ChatAssignment::GroupChat {
+                grpid: grpid.to_string(),
+            }
+        } else if let Some(parent) = &parent_message {
+            if let Some((chat_id, chat_id_blocked)) =
+                // Try to assign to a chat based on In-Reply-To/References.
+                lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download)
+                        .await?
+            {
+                // Try to assign to a chat based on In-Reply-To/References.
+                ChatAssignment::ExistingChat {
+                    chat_id,
+                    chat_id_blocked,
+                }
+            } else {
+                ChatAssignment::AdHocGroup
+            }
+        } else {
+            // Could be a message from old version
+            // with opportunistic encryption.
+            //
+            // We still want to assign this to a group
+            // even if it had only two members.
+            //
+            // Group ID is ignored, however.
+            ChatAssignment::AdHocGroup
+        }
+    } else if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
+        let _listid = mailinglist_header_listid(mailinglist_header)?;
+        ChatAssignment::MailingList
+    } else if let Some(parent) = &parent_message {
+        if let Some((chat_id, chat_id_blocked)) =
+            lookup_chat_by_reply(context, &mime_parser, parent, &is_partial_download).await?
+        {
+            // Try to assign to a chat based on In-Reply-To/References.
+            ChatAssignment::ExistingChat {
+                chat_id,
+                chat_id_blocked,
+            }
+        } else if num_recipients <= 1 {
+            ChatAssignment::OneOneChat
+        } else {
+            ChatAssignment::AdHocGroup
+        }
+    } else if num_recipients <= 1 {
+        ChatAssignment::OneOneChat
+    } else {
+        ChatAssignment::AdHocGroup
+    };
+    Ok(chat_assignment)
 }
 
 /// Assigns the message to a chat.
@@ -3321,7 +3341,10 @@ async fn create_adhoc_group(
         return Ok(Some((DC_CHAT_ID_TRASH, Blocked::Not)));
     }
     if member_ids.len() < 2 {
-        info!(context, "Not creating ad hoc group with less than 2 members.");
+        info!(
+            context,
+            "Not creating ad hoc group with less than 2 members."
+        );
         return Ok(None);
     }
 
