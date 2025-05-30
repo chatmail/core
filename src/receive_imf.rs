@@ -1192,7 +1192,6 @@ async fn decide_chat_assignment(
             ChatAssignment::AdHocGroup
         }
     } else if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-        let _listid = mailinglist_header_listid(mailinglist_header)?;
         ChatAssignment::MailingList
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
