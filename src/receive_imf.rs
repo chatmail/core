@@ -1199,7 +1199,7 @@ pub async fn from_field_to_contact_id(
 
 /// Assigns the message to a chat.
 ///
-/// Creates a new the chat if necessary.
+/// Creates a new chat if necessary.
 #[expect(clippy::too_many_arguments)]
 async fn do_chat_assignment(
     context: &Context,
