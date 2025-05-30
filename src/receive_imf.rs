@@ -1170,7 +1170,6 @@ async fn decide_chat_assignment(
             }
         } else if let Some(parent) = &parent_message {
             if let Some((chat_id, chat_id_blocked)) =
-                // Try to assign to a chat based on In-Reply-To/References.
                 lookup_chat_by_reply(context, mime_parser, parent, is_partial_download)
                         .await?
             {
