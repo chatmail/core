@@ -89,9 +89,7 @@ enum ChatAssignment {
     /// Group chat with a Group ID.
     ///
     /// Lookup PGP contacts and
-    /// assign to encrypted group
-    /// even if the message itself
-    /// is not encrypted.
+    /// assign to encrypted group.
     GroupChat { grpid: String },
 
     /// Mailing list or broadcast list.
