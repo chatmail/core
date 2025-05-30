@@ -1416,7 +1416,7 @@ async fn test_mailing_list_with_mimepart_footer_signed() {
 }
 
 /// Test that the changes from apply_mailinglist_changes() are also applied
-/// if the message is assigned to the chat by In-Reply-To
+/// if the message is a reply.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_apply_mailinglist_changes_assigned_by_reply() {
     let t = TestContext::new_alice().await;
@@ -1435,10 +1435,6 @@ async fn test_apply_mailinglist_changes_assigned_by_reply() {
         t.get_last_msg().await.in_reply_to.unwrap(),
         "3333@example.org"
     );
-    // `Assigning message to Chat#... as it's a reply to 3333@example.org`
-    t.evtracker
-        .get_info_contains("as it's a reply to 3333@example.org")
-        .await;
 
     let chat = Chat::load_from_db(&t, chat_id).await.unwrap();
     assert!(!chat.can_send(&t).await.unwrap());
@@ -1836,17 +1832,21 @@ async fn check_alias_reply(from_dc: bool, chat_request: bool, group_request: boo
         "bob@example.net"
     ); // Bob is not part of the group, so override-sender-name should be set
 
-    // Check that Claire also gets the message in the same chat.
+    // Claire gets the reply as ad hoc group.
     let request = claire.get_last_msg().await;
     receive_imf(&claire, reply.as_bytes(), false).await.unwrap();
     let answer = claire.get_last_msg().await;
     assert_eq!(answer.get_subject(), "Re: i have a question");
     assert!(answer.get_text().contains("the version is 1.0"));
-    assert_eq!(answer.chat_id, request.chat_id);
-    assert_eq!(
-        answer.get_override_sender_name().unwrap(),
-        "bob@example.net"
-    );
+    if group_request {
+        assert_eq!(answer.chat_id, request.chat_id);
+        assert_eq!(
+            answer.get_override_sender_name().unwrap(),
+            "bob@example.net"
+        );
+    } else {
+        assert_ne!(answer.chat_id, request.chat_id);
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -3223,12 +3223,10 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     receive_imf(alice, raw, false).await?;
 
-    let bob_contact_id = Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo)
-        .await?
-        .unwrap();
-    assert!(ChatId::lookup_by_contact(alice, bob_contact_id)
-        .await?
-        .is_none());
+    // Undecryptable message does not even create a contact.
+    let bob_contact_id =
+        Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo).await?;
+    assert!(bob_contact_id.is_none());
 
     let dev_chat_id = ChatId::lookup_by_contact(alice, ContactId::DEVICE)
         .await?
@@ -3242,9 +3240,9 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     receive_imf(alice, raw, false).await?;
 
-    assert!(ChatId::lookup_by_contact(alice, bob_contact_id)
-        .await?
-        .is_none());
+    let bob_contact_id =
+        Contact::lookup_id_by_addr(alice, "bob@example.net", Origin::OutgoingTo).await?;
+    assert!(bob_contact_id.is_none());
     // The device message mustn't be added too frequently.
     assert_eq!(alice.get_last_msg_in(dev_chat_id).await.id, dev_msg.id);
 
@@ -4505,37 +4503,6 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_protected_group_reply_from_mua() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    let fiona = &tcm.fiona().await;
-    mark_as_verified(alice, bob).await;
-    mark_as_verified(alice, fiona).await;
-    mark_as_verified(bob, alice).await;
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob, fiona])
-        .await;
-    let sent = alice.send_text(alice_chat_id, "Hello!").await;
-    let bob_msg = bob.recv_msg(&sent).await;
-    bob_msg.chat_id.accept(bob).await?;
-    // This is hacky, but i don't know other simple way to simulate a MUA reply. It works because
-    // the message is correctly assigned to the chat by `References:`.
-    bob.sql
-        .execute(
-            "UPDATE chats SET protected=0, grpid='' WHERE id=?",
-            (bob_msg.chat_id,),
-        )
-        .await?;
-    let sent = bob
-        .send_text(bob_msg.chat_id, "/me replying from MUA")
-        .await;
-    let alice_msg = alice.recv_msg(&sent).await;
-    assert_eq!(alice_msg.chat_id, alice_chat_id);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_older_message_from_2nd_device() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -5144,7 +5111,41 @@ async fn test_no_email_contact_added_into_group() -> Result<()> {
     );
 
     // Unencrypted message should not even be assigned to encrypted chat.
-    assert_eq!(msg.chat_id, alice_chat_id);
+    assert_ne!(msg.chat_id, alice_chat_id);
+
+    Ok(())
+}
+
+/// Tests that message is assigned to an ad hoc group
+/// if the message has a `Chat-Group-ID` even
+/// if there are only two members in a group.
+///
+/// Since PGP-contacts introduction all groups are encrypted,
+/// but old versions running on other devices might still
+/// create unencrypted groups.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let msg = receive_imf(
+        alice,
+        b"From: alice@example.org\n\
+          To: bob@example.net\n\
+          Subject: foo\n\
+          Message-ID: <something@example.com>\n\
+          Chat-Version: 1.0\n\
+          Chat-Group-ID: 8ud29aridt29arid\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          Hello\n",
+        false,
+    )
+    .await?
+    .unwrap();
+
+    let chat = Chat::load_from_db(alice, msg.chat_id).await?;
+    assert_eq!(chat.typ, Chattype::Group);
 
     Ok(())
 }
