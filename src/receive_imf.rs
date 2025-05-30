@@ -2381,12 +2381,17 @@ async fn apply_group_changes(
 
     if mime_parser.get_header(HeaderDef::ChatVerified).is_some() {
         if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-            warn!(context, "Verification problem: {err:#}.");
-            let s = format!("{err}. See 'Info' for more details");
-            mime_parser.replace_msg_by_error(&s);
-        }
-
-        if !chat.is_protected() {
+            if chat.is_protected() {
+                warn!(context, "Verification problem: {err:#}.");
+                let s = format!("{err}. See 'Info' for more details");
+                mime_parser.replace_msg_by_error(&s);
+            } else {
+                warn!(
+                    context,
+                    "Not marking chat {chat_id} as protected due to verification problem: {err:#}."
+                );
+            }
+        } else if !chat.is_protected() {
             chat_id
                 .set_protection(
                     context,

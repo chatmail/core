@@ -1,6 +1,7 @@
 use anyhow::Result;
 use pretty_assertions::assert_eq;
 
+use crate::chat::resend_msgs;
 use crate::chat::{
     self, add_contact_to_chat, remove_contact_from_chat, send_msg, Chat, ProtectionStatus,
 };
@@ -8,10 +9,11 @@ use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Chattype, DC_GCL_FOR_FORWARDING};
 use crate::contact::{Contact, ContactId, Origin};
-use crate::message::Message;
+use crate::message::{Message, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
+use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str;
 use crate::test_utils::{get_chat_msg, mark_as_verified, TestContext, TestContextManager};
 use crate::tools::SystemTime;
@@ -1012,6 +1014,77 @@ async fn test_verified_lost_member_added() -> Result<()> {
     let mut msg = Message::new_text("No key for Fiona".to_string());
     let result = send_msg(bob, bob_chat_id, &mut msg).await;
     assert!(result.is_err());
+
+    Ok(())
+}
+
+/// Tests handling of resent .xdc arriving before "Member added"
+/// in a verified group
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_verified_chat_editor_reordering() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    tcm.execute_securejoin(alice, bob).await;
+
+    tcm.section("Alice creates a protected group with Bob");
+    let alice_chat_id = alice
+        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
+        .await;
+    let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
+    let bob_chat_id = bob.recv_msg(&alice_sent).await.chat_id;
+
+    tcm.section("Bob sends an .xdc to the chat");
+
+    let mut webxdc_instance = Message::new(Viewtype::File);
+    webxdc_instance.set_file_from_bytes(
+        bob,
+        "editor.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+        None,
+    )?;
+    let bob_instance_msg_id = send_msg(bob, bob_chat_id, &mut webxdc_instance).await?;
+    let bob_sent_instance_msg = bob.pop_sent_msg().await;
+
+    tcm.section("Alice receives .xdc");
+    alice.recv_msg(&bob_sent_instance_msg).await;
+
+    tcm.section("Alice creates a group QR code");
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+
+    tcm.section("Charlie scans SecureJoin QR code");
+    join_securejoin(charlie, &qr).await?;
+
+    // vg-request
+    alice.recv_msg_trash(&charlie.pop_sent_msg().await).await;
+
+    // vg-auth-required
+    charlie.recv_msg_trash(&alice.pop_sent_msg().await).await;
+
+    // vg-request-with-auth
+    alice.recv_msg_trash(&charlie.pop_sent_msg().await).await;
+
+    // vg-member-added
+    let sent_member_added_msg = alice.pop_sent_msg().await;
+
+    tcm.section("Bob receives member added message");
+    bob.recv_msg(&sent_member_added_msg).await;
+
+    tcm.section("Bob resends webxdc");
+    resend_msgs(bob, &[bob_instance_msg_id]).await?;
+
+    tcm.section("Charlie receives resent webxdc before member added");
+    let charlie_received_xdc = charlie.recv_msg(&bob.pop_sent_msg().await).await;
+
+    // The message should not be replaced with
+    // "The message was sent with non-verified encryption." text
+    // just because it was reordered.
+    assert_eq!(charlie_received_xdc.viewtype, Viewtype::Webxdc);
+
+    tcm.section("Charlie receives member added message");
+    charlie.recv_msg(&sent_member_added_msg).await;
 
     Ok(())
 }
