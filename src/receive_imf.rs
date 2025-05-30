@@ -115,8 +115,20 @@ enum ChatAssignment {
     /// This is not encrypted.
     AdHocGroup,
 
+    /// Assign the message to existing chat
+    /// with a known `chat_id`.
     ExistingChat {
+        /// ID of existing chat
+        /// which the message should be assigned to.
         chat_id: ChatId,
+
+        /// Whether existing chat is blocked.
+        /// This is loaded together with a chat ID
+        /// reduce the number of database calls.
+        ///
+        /// We may want to unblock the chat
+        /// after adding the message there
+        /// if the chat is currently blocked.
         chat_id_blocked: Blocked,
     },
 
