@@ -5115,3 +5115,37 @@ async fn test_no_email_contact_added_into_group() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that message is assigned to an ad hoc group
+/// if the message has a `Chat-Group-ID` even
+/// if there are only two members in a group.
+///
+/// Since PGP-contacts introduction all groups are encrypted,
+/// but old versions running on other devices might still
+/// create unencrypted groups.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let msg = receive_imf(
+        alice,
+        b"From: alice@example.org\n\
+          To: bob@example.net\n\
+          Subject: foo\n\
+          Message-ID: <something@example.com>\n\
+          Chat-Version: 1.0\n\
+          Chat-Group-ID: 8ud29aridt29arid\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          Hello\n",
+        false,
+    )
+    .await?
+    .unwrap();
+
+    let chat = Chat::load_from_db(alice, msg.chat_id).await?;
+    assert_eq!(chat.typ, Chattype::Group);
+
+    Ok(())
+}

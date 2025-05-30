@@ -1473,7 +1473,7 @@ async fn do_chat_assignment(
                     );
                 }
             }
-            ChatAssignment::AdHocGroup | ChatAssignment::OneOneChat => {
+            ChatAssignment::AdHocGroup => {
                 if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
                     context,
                     mime_parser,
@@ -1489,6 +1489,7 @@ async fn do_chat_assignment(
                     chat_id_blocked = new_chat_id_blocked;
                 }
             }
+            ChatAssignment::OneOneChat => {}
         }
 
         if !to_ids.is_empty() {
@@ -3323,7 +3324,8 @@ async fn create_adhoc_group(
         );
         return Ok(Some((DC_CHAT_ID_TRASH, Blocked::Not)));
     }
-    if member_ids.len() < 3 {
+    if member_ids.len() < 2 {
+        info!(context, "Not creating ad hoc group with less than 2 members.");
         return Ok(None);
     }
 

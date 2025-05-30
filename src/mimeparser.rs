@@ -1526,16 +1526,6 @@ impl MimeMessage {
         remove_header(headers, "chat-verified", removed);
         remove_header(headers, "autocrypt-gossip", removed);
 
-        // Chat-Group-ID can only appear in encrypted messages
-        // since PGP-contact migration.
-        //
-        // However, we do not remove `Chat-Group-ID` here.
-        // If we receive an unencrypted `Chat-Group-ID`
-        // from an older version which allowed
-        // unencrypted groups, we still want to assign
-        // a message to a group, but it will be an ad hoc group
-        // without a group ID.
-
         // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
         if let Some(secure_join) = remove_header(headers, "secure-join", removed) {
             if secure_join == "vc-request" || secure_join == "vg-request" {
