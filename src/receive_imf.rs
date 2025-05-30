@@ -1535,7 +1535,7 @@ async fn do_chat_assignment(
         if chat_id_blocked != Blocked::Not {
             if let Some(chat_id) = chat_id {
                 chat_id.unblock_ex(context, Nosync).await?;
-                // Not assigning `chat_id_blocked = Blocked::Not` to avoid unused_assignments warning.
+                chat_id_blocked = Blocked::Not;
             }
         }
     }
