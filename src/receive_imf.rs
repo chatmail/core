@@ -1640,8 +1640,6 @@ async fn add_parts(
     };
 
     let state = if !mime_parser.incoming {
-        // the mail is on the IMAP server, probably it is also delivered.
-        // We cannot recreate other states (read, error).
         MessageState::OutDelivered
     } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
