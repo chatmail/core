@@ -7,6 +7,15 @@ Content-Language: en-US
 To: Bob <bob@example.net>
 From: Alice <alice@example.org>
 Subject: ...
+Autocrypt: addr=alice@example.org; keydata=
+ xjMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5DN
+ GUFsaWNlIDxhbGljZUBleGFtcGxlLm9yZz7CkAQTFggAOBYhBC5vossjtTLXKGNLWGSwj2Gp
+ 7ZRDBQJeWHXdAhsDBQsJCAcCBhUKCQgLAgQWAgMBAh4BAheAAAoJEGSwj2Gp7ZRDE3oA/i4M
+ CyDMTsjWqDZoQwX/A/GoTO2/V0wKPhjJJy/8m2pMAPkBjOnGOtx2SZpQvJGTa9h804RY6iDr
+ RuI8A/8tEEXAA844BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp
+ 01JrRe6Xqy22HQMBCAfCeAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsM
+ AAoJEGSwj2Gp7ZRDLo8BAObE8GnsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIy
+ VfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp3jsMAg==
 Content-Type: multipart/encrypted;
  protocol="application/pgp-encrypted";
  boundary="------------68Kl9HSVGFVUMdZIowLUKskt"

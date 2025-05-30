@@ -571,7 +571,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_sort_self_talk_up_on_forward() {
-        let t = TestContext::new().await;
+        let t = TestContext::new_alice().await;
         t.update_device_chats().await.unwrap();
         create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
             .await
@@ -604,7 +604,7 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_search_special_chat_names() {
-        let t = TestContext::new().await;
+        let t = TestContext::new_alice().await;
         t.update_device_chats().await.unwrap();
 
         let chats = Chatlist::try_load(&t, 0, Some("t-1234-s"), None)
