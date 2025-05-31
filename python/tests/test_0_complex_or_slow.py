@@ -434,9 +434,10 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     - First device of the user downloads "member added" from the group.
     - First device removes "member added" from the server.
     - Some new messages are sent to the group.
-    - Second device comes online, receives these new messages. The result is a verified group with unverified members.
+    - Second device comes online, receives these new messages.
+      The result is an unverified group with unverified members.
     - First device re-gossips Autocrypt keys to the group.
-    - Now the seconds device has all members verified.
+    - Now the second device has all members and group verified.
     """
     ac1, ac2 = acfactory.get_online_accounts(2)
     acfactory.remove_preconfigured_keys()
@@ -474,12 +475,12 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ac2_offl.start_io()
     msg_in = ac2_offl._evtracker.wait_next_incoming_message()
     assert not msg_in.is_system_message()
-    assert msg_in.text.startswith("[The message was sent with non-verified encryption")
+    assert msg_in.text == "hi"
     ac2_offl_ac1_contact = msg_in.get_sender_contact()
     assert ac2_offl_ac1_contact.addr == ac1.get_config("addr")
     assert not ac2_offl_ac1_contact.is_verified()
     chat2_offl = msg_in.chat
-    assert chat2_offl.is_protected()
+    assert not chat2_offl.is_protected()
 
     lp.sec("ac2: sending message re-gossiping Autocrypt keys")
     chat2.send_text("hi2")
@@ -500,6 +501,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     assert msg_in.text == "hi2"
     assert msg_in.chat == chat2_offl
     assert msg_in.get_sender_contact().addr == ac2.get_config("addr")
+    assert msg_in.chat.is_protected()
     assert ac2_offl_ac1_contact.is_verified()
 
 

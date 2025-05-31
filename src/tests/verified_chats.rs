@@ -918,12 +918,18 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let bob_sent_message = bob.send_text(bob_chat_id, "Hi").await;
 
     // Fiona receives message from Bob before receiving
-    // "Member added" message.
+    // "Member added" message, so unverified group is created.
     let fiona_received_message = fiona.recv_msg(&bob_sent_message).await;
-    assert_eq!(
-        fiona_received_message.get_text(),
-        "[The message was sent with non-verified encryption. See 'Info' for more details]"
-    );
+    let fiona_chat = Chat::load_from_db(fiona, fiona_received_message.chat_id).await?;
+
+    assert_eq!(fiona_received_message.get_text(), "Hi");
+    assert_eq!(fiona_chat.is_protected(), false);
+
+    // Fiona receives late "Member added" message
+    // and the chat becomes protected.
+    fiona.recv_msg(&alice_sent_member_added).await;
+    let fiona_chat = Chat::load_from_db(fiona, fiona_received_message.chat_id).await?;
+    assert_eq!(fiona_chat.is_protected(), true);
 
     Ok(())
 }

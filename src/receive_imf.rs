@@ -2138,11 +2138,14 @@ async fn create_group(
 
     let create_protected = if mime_parser.get_header(HeaderDef::ChatVerified).is_some() {
         if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-            warn!(context, "Verification problem: {err:#}.");
-            let s = format!("{err}. See 'Info' for more details");
-            mime_parser.replace_msg_by_error(&s);
+            warn!(
+                context,
+                "Creating unprotected group because of the verification problem: {err:#}."
+            );
+            ProtectionStatus::Unprotected
+        } else {
+            ProtectionStatus::Protected
         }
-        ProtectionStatus::Protected
     } else {
         ProtectionStatus::Unprotected
     };
