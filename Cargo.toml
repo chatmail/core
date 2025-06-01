@@ -69,7 +69,7 @@ libc = { workspace = true }
 mail-builder = { version = "0.4.2", default-features = false }
 mailparse = { workspace = true }
 mime = "0.3.17"
-num_cpus = "1.16"
+num_cpus = "1.17"
 num-derive = "0.4"
 num-traits = { workspace = true }
 parking_lot = "0.12"
