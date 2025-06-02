@@ -115,7 +115,7 @@ blake3 = "1.8.2"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
-criterion = { version = "0.5.1", features = ["async_tokio"] }
+criterion = { version = "0.6.0", features = ["async_tokio"] }
 futures-lite = { workspace = true }
 log = { workspace = true }
 nu-ansi-term = { workspace = true }
