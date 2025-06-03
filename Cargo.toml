@@ -18,6 +18,9 @@ opt-level = 1
 debug = 1
 opt-level = 0
 
+[profile.fuzz]
+inherits = "test"
+
 # Always optimize dependencies.
 # This does not apply to crates in the workspace.
 # <https://doc.rust-lang.org/cargo/reference/profiles.html#overrides>

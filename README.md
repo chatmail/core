@@ -156,24 +156,19 @@ $ cargo test -- --ignored
 
 Install [`cargo-bolero`](https://github.com/camshaft/bolero) with
 ```sh
-$ cargo install cargo-bolero@0.8.0
+$ cargo install cargo-bolero
 ```
 
 Run fuzzing tests with
 ```sh
 $ cd fuzz
-$ cargo bolero test fuzz_mailparse --release=false -s NONE
+$ cargo bolero test fuzz_mailparse -s NONE
 ```
 
 Corpus is created at `fuzz/fuzz_targets/corpus`,
 you can add initial inputs there.
 For `fuzz_mailparse` target corpus can be populated with
 `../test-data/message/*.eml`.
-
-To run with AFL instead of libFuzzer:
-```sh
-$ cargo bolero test fuzz_format_flowed --release=false -e afl -s NONE
-```
 
 ## Features
 
