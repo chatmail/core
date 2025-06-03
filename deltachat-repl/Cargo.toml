@@ -13,7 +13,7 @@ log = { workspace = true }
 nu-ansi-term = { workspace = true }
 qr2term = "0.3.3"
 rusqlite = { workspace = true }
-rustyline = "15"
+rustyline = "16"
 tokio = { workspace = true, features = ["fs", "rt-multi-thread", "macros"] }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 

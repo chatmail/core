@@ -60,16 +60,16 @@ hickory-resolver = "0.25.2"
 http-body-util = "0.1.3"
 humansize = "2"
 hyper = "1"
-hyper-util = "0.1.11"
+hyper-util = "0.1.13"
 image = { version = "0.25.6", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
 iroh-gossip = { version = "0.35", default-features = false, features = ["net"] }
 iroh = { version = "0.35", default-features = false }
 kamadak-exif = "0.6.1"
 libc = { workspace = true }
-mail-builder = { version = "0.4.2", default-features = false }
+mail-builder = { version = "0.4.3", default-features = false }
 mailparse = { workspace = true }
 mime = "0.3.17"
-num_cpus = "1.16"
+num_cpus = "1.17"
 num-derive = "0.4"
 num-traits = { workspace = true }
 parking_lot = "0.12"
@@ -83,7 +83,7 @@ rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
 rust-hsluv = "0.1"
-rustls-pki-types = "1.11.0"
+rustls-pki-types = "1.12.0"
 rustls = { version = "0.23.22", default-features = false }
 sanitize-filename = { workspace = true }
 serde_json = { workspace = true }
@@ -190,7 +190,7 @@ rusqlite = "0.32"
 sanitize-filename = "0.5"
 serde = "1.0"
 serde_json = "1"
-tempfile = "3.19.1"
+tempfile = "3.20.0"
 thiserror = "2"
 tokio = "1"
 tokio-util = "0.7.14"
