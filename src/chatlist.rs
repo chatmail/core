@@ -409,7 +409,7 @@ impl Chatlist {
             if lastmsg.from_id == ContactId::SELF {
                 None
             } else if chat.typ == Chattype::Group
-                || chat.typ == Chattype::Broadcast
+                || chat.typ == Chattype::OutBroadcastChannel
                 || chat.typ == Chattype::Mailinglist
                 || chat.is_self_talk()
             {

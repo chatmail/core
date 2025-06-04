@@ -178,7 +178,7 @@ impl MimeFactory {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
         let attach_profile_data = Self::should_attach_profile_data(&msg);
-        let undisclosed_recipients = chat.typ == Chattype::Broadcast;
+        let undisclosed_recipients = chat.typ == Chattype::OutBroadcastChannel;
 
         let from_addr = context.get_primary_self_addr().await?;
         let config_displayname = context
@@ -599,7 +599,7 @@ impl MimeFactory {
                     return Ok(msg.subject.clone());
                 }
 
-                if (chat.typ == Chattype::Group || chat.typ == Chattype::Broadcast)
+                if (chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcastChannel)
                     && quoted_msg_subject.is_none_or_empty()
                 {
                     let re = if self.in_reply_to.is_empty() {
@@ -791,7 +791,7 @@ impl MimeFactory {
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
-            if chat.typ == Chattype::Broadcast {
+            if chat.typ == Chattype::OutBroadcastChannel {
                 headers.push((
                     "List-ID",
                     mail_builder::headers::text::Text::new(format!(
@@ -1035,7 +1035,7 @@ impl MimeFactory {
 
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
-                    if chat.typ != Chattype::Broadcast {
+                    if chat.typ != Chattype::OutBroadcastChannel {
                         for (addr, key) in &encryption_keys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
@@ -1300,9 +1300,9 @@ impl MimeFactory {
         let send_verified_headers = match chat.typ {
             Chattype::Single => true,
             Chattype::Group => true,
-            // Mailinglists and broadcast lists can actually never be verified:
+            // Mailinglists and broadcast channels can actually never be verified:
             Chattype::Mailinglist => false,
-            Chattype::Broadcast => false,
+            Chattype::OutBroadcastChannel | Chattype::InBroadcastChannel => false,
         };
         if chat.is_protected() && send_verified_headers {
             headers.push((
