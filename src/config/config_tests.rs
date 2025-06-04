@@ -185,6 +185,15 @@ async fn test_delete_server_after_default() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_should_move_to_mvbox() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    assert!(alice.should_move_to_mvbox().await?);
+    alice.set_config_bool(Config::IsChatmail, true).await?;
+    assert!(!alice.should_move_to_mvbox().await?);
+    Ok(())
+}
+
 const SAVED_MESSAGES_DEDUPLICATED_FILE: &str = "969142cb84015bc135767bc2370934a.png";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
