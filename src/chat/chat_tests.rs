@@ -2632,7 +2632,7 @@ async fn test_broadcast() -> Result<()> {
     set_chat_name(&alice, broadcast_id, "Broadcast list").await?;
     {
         let chat = Chat::load_from_db(&alice, broadcast_id).await?;
-        assert_eq!(chat.typ, Chattype::Broadcast);
+        assert_eq!(chat.typ, Chattype::OutBroadcastChannel);
         assert_eq!(chat.name, "Broadcast list");
         assert!(!chat.is_self_talk());
 
@@ -2692,7 +2692,7 @@ async fn test_broadcast_multidev() -> Result<()> {
         .0;
     assert_eq!(msg.chat_id, a1_broadcast_id);
     let a1_broadcast_chat = Chat::load_from_db(&alices[1], a1_broadcast_id).await?;
-    assert_eq!(a1_broadcast_chat.get_type(), Chattype::Broadcast);
+    assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcastChannel);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast list 42");
     assert!(
         get_chat_contacts(&alices[1], a1_broadcast_id)
@@ -2706,7 +2706,7 @@ async fn test_broadcast_multidev() -> Result<()> {
     let msg = alices[0].recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, a0_broadcast_id);
     let a0_broadcast_chat = Chat::load_from_db(&alices[0], a0_broadcast_id).await?;
-    assert_eq!(a0_broadcast_chat.get_type(), Chattype::Broadcast);
+    assert_eq!(a0_broadcast_chat.get_type(), Chattype::OutBroadcastChannel);
     assert_eq!(a0_broadcast_chat.get_name(), "Broadcast list 42");
     assert!(
         get_chat_contacts(&alices[0], a0_broadcast_id)
@@ -3422,7 +3422,7 @@ async fn test_sync_broadcast() -> Result<()> {
         .unwrap()
         .0;
     let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
-    assert_eq!(a1_broadcast_chat.get_type(), Chattype::Broadcast);
+    assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcastChannel);
     assert_eq!(a1_broadcast_chat.get_name(), a0_broadcast_chat.get_name());
     assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
     add_contact_to_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
@@ -3475,7 +3475,7 @@ async fn test_sync_name() -> Result<()> {
         .unwrap()
         .0;
     let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
-    assert_eq!(a1_broadcast_chat.get_type(), Chattype::Broadcast);
+    assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcastChannel);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast list 42");
     Ok(())
 }

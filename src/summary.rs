@@ -103,7 +103,7 @@ impl Summary {
                 Some(SummaryPrefix::Me(stock_str::self_msg(context).await))
             }
         } else if chat.typ == Chattype::Group
-            || chat.typ == Chattype::Broadcast
+            || chat.typ == Chattype::OutBroadcastChannel
             || chat.typ == Chattype::Mailinglist
             || chat.is_self_talk()
         {

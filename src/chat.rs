@@ -123,6 +123,9 @@ pub(crate) enum CantSendReason {
     /// Mailing list without known List-Post header.
     ReadOnlyMailingList,
 
+    /// Incoming broadcast channel where the user can't send messages.
+    ReadOnlyBroadcastChannel,
+
     /// Not a member of the chat.
     NotAMember,
 
@@ -145,6 +148,9 @@ impl fmt::Display for CantSendReason {
             ),
             Self::ReadOnlyMailingList => {
                 write!(f, "mailing list does not have a know post address")
+            }
+            Self::ReadOnlyBroadcastChannel => {
+                write!(f, "Broadcast channel is read-only")
             }
             Self::NotAMember => write!(f, "not a member of the chat"),
             Self::MissingKey => write!(f, "key is missing"),
@@ -395,7 +401,7 @@ impl ChatId {
         let mut delete = false;
 
         match chat.typ {
-            Chattype::Broadcast => {
+            Chattype::OutBroadcastChannel => {
                 bail!("Can't block chat of type {:?}", chat.typ)
             }
             Chattype::Single => {
@@ -413,7 +419,7 @@ impl ChatId {
                 info!(context, "Can't block groups yet, deleting the chat.");
                 delete = true;
             }
-            Chattype::Mailinglist => {
+            Chattype::Mailinglist | Chattype::InBroadcastChannel => {
                 if self.set_blocked(context, Blocked::Yes).await? {
                     context.emit_event(EventType::ChatModified(self));
                 }
@@ -479,7 +485,10 @@ impl ChatId {
                     .inner_set_protection(context, ProtectionStatus::Unprotected)
                     .await?;
             }
-            Chattype::Single | Chattype::Group | Chattype::Broadcast => {
+            Chattype::Single
+            | Chattype::Group
+            | Chattype::OutBroadcastChannel
+            | Chattype::InBroadcastChannel => {
                 // User has "created a chat" with all these contacts.
                 //
                 // Previously accepting a chat literally created a chat because unaccepted chats
@@ -529,7 +538,10 @@ impl ChatId {
 
         match protect {
             ProtectionStatus::Protected => match chat.typ {
-                Chattype::Single | Chattype::Group | Chattype::Broadcast => {}
+                Chattype::Single
+                | Chattype::Group
+                | Chattype::OutBroadcastChannel
+                | Chattype::InBroadcastChannel => {}
                 Chattype::Mailinglist => bail!("Cannot protect mailing lists"),
             },
             ProtectionStatus::Unprotected | ProtectionStatus::ProtectionBroken => {}
@@ -1659,6 +1671,12 @@ impl Chat {
                 return Ok(Some(reason));
             }
         }
+        if self.typ == Chattype::InBroadcastChannel {
+            let reason = ReadOnlyBroadcastChannel;
+            if !skip_fn(&reason) {
+                return Ok(Some(reason));
+            }
+        }
 
         // Do potentially slow checks last and after calls to `skip_fn` which should be fast.
         let reason = NotAMember;
@@ -1692,8 +1710,9 @@ impl Chat {
     /// The function does not check if the chat type allows editing of concrete elements.
     pub(crate) async fn is_self_in_chat(&self, context: &Context) -> Result<bool> {
         match self.typ {
-            Chattype::Single | Chattype::Broadcast | Chattype::Mailinglist => Ok(true),
+            Chattype::Single | Chattype::OutBroadcastChannel | Chattype::Mailinglist => Ok(true),
             Chattype::Group => is_contact_in_chat(context, self.id, ContactId::SELF).await,
+            Chattype::InBroadcastChannel => Ok(false),
         }
     }
 
@@ -1758,7 +1777,7 @@ impl Chat {
             if !image_rel.is_empty() {
                 return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
             }
-        } else if self.typ == Chattype::Broadcast {
+        } else if self.typ == Chattype::OutBroadcastChannel {
             return Ok(Some(get_broadcast_icon(context).await?));
         }
         Ok(None)
@@ -1872,7 +1891,7 @@ impl Chat {
                     !self.grpid.is_empty()
                 }
                 Chattype::Mailinglist => false,
-                Chattype::Broadcast => true,
+                Chattype::OutBroadcastChannel | Chattype::InBroadcastChannel => true,
             };
         Ok(is_encrypted)
     }
@@ -2291,7 +2310,10 @@ impl Chat {
                 }
                 Ok(r)
             }
-            Chattype::Broadcast | Chattype::Group | Chattype::Mailinglist => {
+            Chattype::OutBroadcastChannel
+            | Chattype::InBroadcastChannel
+            | Chattype::Group
+            | Chattype::Mailinglist => {
                 if !self.grpid.is_empty() {
                     return Ok(Some(SyncId::Grpid(self.grpid.clone())));
                 }
@@ -3614,7 +3636,11 @@ pub async fn create_group_chat(
     Ok(chat_id)
 }
 
-/// Creates a new broadcast list.
+/// Create a new **broadcast channel** (or just **channel** for short).
+///
+/// Channels are similar to groups on the sending device,
+/// however, recipients get the messages in a read-only chat
+/// and will not see who the other members are.
 pub async fn create_broadcast_channel(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
     create_broadcast_channel_ex(context, Sync, grpid, chat_name).await
@@ -3635,7 +3661,7 @@ pub(crate) async fn create_broadcast_channel_ex(
             if cnt == 1 {
                 return Ok(t.query_row(
                     "SELECT id FROM chats WHERE grpid=? AND type=?",
-                    (grpid, Chattype::Broadcast),
+                    (grpid, Chattype::OutBroadcastChannel),
                     |row| {
                         let id: isize = row.get(0)?;
                         Ok(id)
@@ -3647,7 +3673,7 @@ pub(crate) async fn create_broadcast_channel_ex(
                 (type, name, grpid, param, created_timestamp) \
                 VALUES(?, ?, ?, \'U=1\', ?);",
                 (
-                    Chattype::Broadcast,
+                    Chattype::OutBroadcastChannel,
                     &chat_name,
                     &grpid,
                     create_smeared_timestamp(context),
@@ -3785,7 +3811,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     // this also makes sure, no contacts are added to special or normal chats
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group || chat.typ == Chattype::Broadcast,
+        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcastChannel,
         "{} is not a group/broadcast where one can add members",
         chat_id
     );
@@ -3796,7 +3822,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     );
     ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
     ensure!(
-        chat.typ != Chattype::Broadcast || contact_id != ContactId::SELF,
+        chat.typ != Chattype::OutBroadcastChannel || contact_id != ContactId::SELF,
         "Cannot add SELF to broadcast."
     );
     ensure!(
@@ -4016,7 +4042,7 @@ pub async fn remove_contact_from_chat(
     let mut msg = Message::new(Viewtype::default());
 
     let chat = Chat::load_from_db(context, chat_id).await?;
-    if chat.typ == Chattype::Group || chat.typ == Chattype::Broadcast {
+    if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcastChannel {
         if !chat.is_self_in_chat(context).await? {
             let err_msg = format!(
                 "Cannot remove contact {contact_id} from chat {chat_id}: self not in group."
@@ -4124,7 +4150,7 @@ async fn rename_ex(
 
     if chat.typ == Chattype::Group
         || chat.typ == Chattype::Mailinglist
-        || chat.typ == Chattype::Broadcast
+        || chat.typ == Chattype::OutBroadcastChannel
     {
         if chat.name == new_name {
             success = true;
@@ -4142,7 +4168,7 @@ async fn rename_ex(
                 .await?;
             if chat.is_promoted()
                 && !chat.is_mailing_list()
-                && chat.typ != Chattype::Broadcast
+                && chat.typ != Chattype::OutBroadcastChannel
                 && sanitize_single_line(&chat.name) != new_name
             {
                 msg.viewtype = Viewtype::Text;
@@ -4763,7 +4789,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
         "Cannot add address-contacts to encrypted chat {id}"
     );
     ensure!(
-        chat.typ == Chattype::Broadcast,
+        chat.typ == Chattype::OutBroadcastChannel,
         "{id} is not a broadcast list",
     );
     let mut contacts = HashSet::new();
@@ -4811,7 +4837,7 @@ async fn set_contacts_by_fingerprints(
         "Cannot add key-contacts to unencrypted chat {id}"
     );
     ensure!(
-        chat.typ == Chattype::Broadcast,
+        chat.typ == Chattype::OutBroadcastChannel,
         "{id} is not a broadcast list",
     );
     let mut contacts = HashSet::new();
