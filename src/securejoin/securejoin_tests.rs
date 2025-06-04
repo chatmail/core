@@ -4,6 +4,7 @@ use super::*;
 use crate::chat::{remove_contact_from_chat, CantSendReason};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
+use crate::key::self_fingerprint;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
@@ -177,13 +178,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         "vc-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
-    let bob_fp = load_self_public_key(&bob.ctx)
-        .await
-        .unwrap()
-        .dc_fingerprint();
+    let bob_fp = self_fingerprint(&bob).await.unwrap();
     assert_eq!(
-        *msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
-        bob_fp.hex()
+        msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
+        bob_fp
     );
 
     if case == SetupContactCase::WrongAliceGossip {
@@ -498,10 +496,10 @@ async fn test_secure_join() -> Result<()> {
         "vg-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
-    let bob_fp = load_self_public_key(&bob).await?.dc_fingerprint();
+    let bob_fp = self_fingerprint(&bob).await?;
     assert_eq!(
-        *msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
-        bob_fp.hex()
+        msg.get_header(HeaderDef::SecureJoinFingerprint).unwrap(),
+        bob_fp
     );
 
     // Alice should not yet have Bob verified
