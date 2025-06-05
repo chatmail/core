@@ -92,7 +92,7 @@ enum ChatAssignment {
     /// assign to encrypted group.
     GroupChat { grpid: String },
 
-    /// Mailing list or broadcast list.
+    /// Mailing list or channel.
     ///
     /// Mailing lists don't have members.
     /// Broadcast lists have members
@@ -106,7 +106,7 @@ enum ChatAssignment {
     /// up except the `from_id`
     /// which may be an email address contact
     /// or a PGP-contact.
-    MailingList,
+    MailingListOrChannel,
 
     /// Group chat without a Group ID.
     ///
@@ -447,7 +447,7 @@ pub(crate) async fn receive_imf_inner(
             None
         }
         ChatAssignment::ExistingChat { chat_id, .. } => Some(chat_id),
-        ChatAssignment::MailingList => None,
+        ChatAssignment::MailingListOrChannel => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
@@ -515,7 +515,7 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
             }
         }
-        ChatAssignment::Trash | ChatAssignment::MailingList => {
+        ChatAssignment::Trash | ChatAssignment::MailingListOrChannel => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -1191,7 +1191,7 @@ async fn decide_chat_assignment(
             ChatAssignment::AdHocGroup
         }
     } else if mime_parser.get_mailinglist_header().is_some() {
-        ChatAssignment::MailingList
+        ChatAssignment::MailingListOrChannel
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
             lookup_chat_by_reply(context, mime_parser, parent, is_partial_download).await?
@@ -1295,12 +1295,15 @@ async fn do_chat_assignment(
                     }
                 }
             }
-            ChatAssignment::MailingList => {
+            ChatAssignment::MailingListOrChannel => {
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
+                    if mime_parser.has_chat_version() {}
+
                     if let Some((new_chat_id, new_chat_id_blocked)) = create_or_lookup_mailinglist(
                         context,
                         allow_creation,
                         mailinglist_header,
+                        from_id,
                         mime_parser,
                     )
                     .await?
@@ -1342,7 +1345,7 @@ async fn do_chat_assignment(
         // unblock the chat
         if chat_id_blocked != Blocked::Not
             && create_blocked != Blocked::Yes
-            && !matches!(chat_assignment, ChatAssignment::MailingList)
+            && !matches!(chat_assignment, ChatAssignment::MailingListOrChannel)
         {
             if let Some(chat_id) = chat_id {
                 chat_id.set_blocked(context, create_blocked).await?;
@@ -1472,7 +1475,7 @@ async fn do_chat_assignment(
                 chat_id = Some(*new_chat_id);
                 chat_id_blocked = *new_chat_id_blocked;
             }
-            ChatAssignment::MailingList => {
+            ChatAssignment::MailingListOrChannel => {
                 // Check if the message belongs to a broadcast list.
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
@@ -3121,6 +3124,7 @@ async fn create_or_lookup_mailinglist(
     context: &Context,
     allow_creation: bool,
     list_id_header: &str,
+    from_id: ContactId,
     mime_parser: &MimeMessage,
 ) -> Result<Option<(ChatId, Blocked)>> {
     let listid = mailinglist_header_listid(list_id_header)?;
@@ -3129,7 +3133,17 @@ async fn create_or_lookup_mailinglist(
         return Ok(Some((chat_id, blocked)));
     }
 
-    let name = compute_mailinglist_name(list_id_header, &listid, mime_parser);
+    let name = if let Some(name) = mime_parser.get_header(HeaderDef::ChatGroupName) {
+        name.trim()
+    } else {
+        &compute_mailinglist_name(list_id_header, &listid, mime_parser)
+    };
+
+    let chattype = if mime_parser.was_encrypted() {
+        Chattype::InBroadcastChannel
+    } else {
+        Chattype::Mailinglist
+    };
 
     if allow_creation {
         // list does not exist but should be created
@@ -3147,7 +3161,7 @@ async fn create_or_lookup_mailinglist(
         };
         let chat_id = ChatId::create_multiuser_record(
             context,
-            Chattype::Mailinglist,
+            chattype,
             &listid,
             &name,
             blocked,
@@ -3170,6 +3184,15 @@ async fn create_or_lookup_mailinglist(
             &[ContactId::SELF],
         )
         .await?;
+        if chattype == Chattype::InBroadcastChannel {
+            chat::add_to_chat_contacts_table(
+                context,
+                mime_parser.timestamp_sent,
+                chat_id,
+                &[from_id],
+            )
+            .await?;
+        }
         Ok(Some((chat_id, blocked)))
     } else {
         info!(context, "Creating list forbidden by caller.");
