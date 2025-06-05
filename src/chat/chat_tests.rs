@@ -2287,6 +2287,40 @@ async fn test_save_msgs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_save_msgs_order() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
+    for a in [alice, alice1] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    let chat_id = create_group_chat(alice, ProtectionStatus::Protected, "grp").await?;
+    let sent = [
+        alice.send_text(chat_id, "0").await,
+        alice.send_text(chat_id, "1").await,
+    ];
+    // NB: This doesn't work if sync messages are fetched earlier than the referenced ones.
+    for msg in &sent {
+        alice1.recv_msg(msg).await;
+    }
+    save_msgs(alice, &[sent[1].sender_msg_id, sent[0].sender_msg_id]).await?;
+    sync(alice, alice1).await;
+
+    for a in [alice, alice1] {
+        let self_chat = a.get_self_chat().await;
+        let msgs = get_chat_msgs(a, self_chat.id).await?;
+        for i in [0, 1] {
+            let ChatItem::Message { msg_id } = msgs[msgs.len() - 2 + i] else {
+                panic!("Wrong item type");
+            };
+            let msg = Message::load_from_db(a, msg_id).await.unwrap();
+            assert_eq!(msg.get_text(), format!("{i}"));
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_saved_msgs_not_added_to_shared_chats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;

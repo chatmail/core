@@ -4343,7 +4343,7 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
             .sql
             .query_get_value("SELECT timestamp FROM msgs WHERE id=?", (id,))
             .await?
-            .context("No message {id}")?;
+            .with_context(|| format!("No message {id}"))?;
         msgs.push((ts, *id));
     }
     msgs.sort_unstable();
@@ -4398,7 +4398,17 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
 /// Save a copy of the message in "Saved Messages"
 /// and send a sync messages so that other devices save the message as well, unless deleted there.
 pub async fn save_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
-    for src_msg_id in msg_ids {
+    let mut msgs = Vec::with_capacity(msg_ids.len());
+    for id in msg_ids {
+        let ts: i64 = context
+            .sql
+            .query_get_value("SELECT timestamp FROM msgs WHERE id=?", (id,))
+            .await?
+            .with_context(|| format!("No message {id}"))?;
+        msgs.push((ts, *id));
+    }
+    msgs.sort_unstable();
+    for (_, src_msg_id) in msgs {
         let dest_rfc724_mid = create_outgoing_rfc724_mid();
         let src_rfc724_mid = save_copy_in_self_talk(context, src_msg_id, &dest_rfc724_mid).await?;
         context
@@ -4419,11 +4429,11 @@ pub async fn save_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// Returns data needed to add a `SaveMessage` sync item.
 pub(crate) async fn save_copy_in_self_talk(
     context: &Context,
-    src_msg_id: &MsgId,
+    src_msg_id: MsgId,
     dest_rfc724_mid: &String,
 ) -> Result<String> {
     let dest_chat_id = ChatId::create_for_contact(context, ContactId::SELF).await?;
-    let mut msg = Message::load_from_db(context, *src_msg_id).await?;
+    let mut msg = Message::load_from_db(context, src_msg_id).await?;
     msg.param.remove(Param::Cmd);
     msg.param.remove(Param::WebxdcDocument);
     msg.param.remove(Param::WebxdcDocumentTimestamp);
@@ -4461,7 +4471,7 @@ pub(crate) async fn save_copy_in_self_talk(
         .await?;
     let dest_msg_id = MsgId::new(row_id.try_into()?);
 
-    context.emit_msgs_changed(msg.chat_id, *src_msg_id);
+    context.emit_msgs_changed(msg.chat_id, src_msg_id);
     context.emit_msgs_changed(dest_chat_id, dest_msg_id);
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, dest_chat_id);

@@ -298,7 +298,7 @@ impl Context {
 
     async fn save_message(&self, src_rfc724_mid: &str, dest_rfc724_mid: &String) -> Result<()> {
         if let Some((src_msg_id, _)) = message::rfc724_mid_exists(self, src_rfc724_mid).await? {
-            chat::save_copy_in_self_talk(self, &src_msg_id, dest_rfc724_mid).await?;
+            chat::save_copy_in_self_talk(self, src_msg_id, dest_rfc724_mid).await?;
         }
         Ok(())
     }
