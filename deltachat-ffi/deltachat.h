@@ -6901,6 +6901,7 @@ void dc_event_unref(dc_event_t* event);
 /// "End-to-end encryption preferred."
 ///
 /// Used to build the string returned by dc_get_contact_encrinfo().
+/// @deprecated 2025-06-05
 #define DC_STR_E2E_PREFERRED              34
 
 /// "%1$s verified"

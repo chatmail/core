@@ -80,9 +80,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
 
-    #[strum(props(fallback = "End-to-end encryption preferred"))]
-    E2ePreferred = 34,
-
     #[strum(props(fallback = "%1$s verified."))]
     ContactVerified = 35,
 
