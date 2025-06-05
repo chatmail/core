@@ -83,12 +83,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "%1$s verified."))]
     ContactVerified = 35,
 
-    #[strum(props(fallback = "Cannot establish guaranteed end-to-end encryption with %1$s"))]
-    ContactNotVerified = 36,
-
-    #[strum(props(fallback = "Changed setup for %1$s"))]
-    ContactSetupChanged = 37,
-
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
 
@@ -265,9 +259,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Not connected"))]
     NotConnected = 121,
 
-    #[strum(props(fallback = "%1$s changed their address from %2$s to %3$s"))]
-    AeapAddrChanged = 122,
-
     #[strum(props(
         fallback = "You changed your email address from %1$s to %2$s.\n\nIf you now send a message to a verified group, contacts there will automatically replace the old with your new address.\n\nIt's highly advised to set up your old email provider to forward all emails to your new email address. Otherwise you might miss messages of contacts who did not get your new address yet."
     ))]
@@ -425,11 +416,6 @@ pub enum StockMessage {
 
     #[strum(props(fallback = "Establishing guaranteed end-to-end encryption, please wait…"))]
     SecurejoinWait = 190,
-
-    #[strum(props(
-        fallback = "The contact must be online to proceed.\n\nThis process will continue automatically in background."
-    ))]
-    SecurejoinTakesLonger = 192,
 }
 
 impl StockMessage {

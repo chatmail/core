@@ -6914,12 +6914,14 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used in status messages.
 /// - %1$s will be replaced by the name of the contact that cannot be verified
+/// @deprecated 2025-06-05
 #define DC_STR_CONTACT_NOT_VERIFIED       36
 
 /// "Changed setup for %1$s."
 ///
 /// Used in status messages.
 /// - %1$s will be replaced by the name of the contact with the changed setup
+/// @deprecated 2025-06-05
 #define DC_STR_CONTACT_SETUP_CHANGED      37
 
 /// "Archived chats"
@@ -7309,6 +7311,7 @@ void dc_event_unref(dc_event_t* event);
 /// "%1$s changed their address from %2$s to %3$s"
 ///
 /// Used as an info message to chats with contacts that changed their address.
+/// @deprecated 2025-06-05
 #define DC_STR_AEAP_ADDR_CHANGED          122
 
 /// "You changed your email address from %1$s to %2$s.
@@ -7615,6 +7618,7 @@ void dc_event_unref(dc_event_t* event);
 /// "The contact must be online to proceed. This process will continue automatically in background."
 ///
 /// Used as info message.
+/// @deprecated 2025-06-05
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
 /// "Contact". Deprecated, currently unused.
