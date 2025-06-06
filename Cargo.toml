@@ -204,7 +204,8 @@ yerpc = "0.6.4"
 default = ["vendored"]
 internals = []
 vendored = [
-  "rusqlite/bundled-sqlcipher-vendored-openssl"
+  "rusqlite/bundled-sqlcipher-vendored-openssl",
+  "async-native-tls/vendored"
 ]
 
 [lints.rust]
