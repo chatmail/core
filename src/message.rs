@@ -1592,7 +1592,7 @@ pub(crate) fn guess_msgtype_from_path_suffix(path: &Path) -> Option<(Viewtype, &
         "rtf" => (Viewtype::File, "application/rtf"),
         "spx" => (Viewtype::File, "audio/ogg"), // Ogg Speex Profile
         "svg" => (Viewtype::File, "image/svg+xml"),
-        "tgs" => (Viewtype::Sticker, "application/x-tgsticker"),
+        "tgs" => (Viewtype::File, "application/x-tgsticker"),
         "tiff" => (Viewtype::File, "image/tiff"),
         "tif" => (Viewtype::File, "image/tiff"),
         "ttf" => (Viewtype::File, "font/ttf"),
