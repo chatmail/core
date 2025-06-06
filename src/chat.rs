@@ -4214,15 +4214,15 @@ pub async fn set_chat_profile_image(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group,
-        "Can only set profile image for group chats"
+        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcastChannel,
+        "Can only set profile image for groups / broadcasts"
     );
     ensure!(
         !chat.grpid.is_empty(),
         "Cannot set profile image for ad hoc groups"
     );
     /* we should respect this - whatever we send to the group, it gets discarded anyway! */
-    if !is_contact_in_chat(context, chat_id, ContactId::SELF).await? {
+    if !chat.is_self_in_chat(context).await? {
         context.emit_event(EventType::ErrorSelfNotInGroup(
             "Cannot set chat profile image; self not in group.".into(),
         ));
