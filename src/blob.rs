@@ -21,6 +21,7 @@ use crate::constants::{self, MediaQuality};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{LogExt, error, info, warn};
+use crate::message::Viewtype;
 use crate::tools::sanitize_filename;
 
 /// Represents a file in the blob directory.
@@ -263,15 +264,11 @@ impl<'a> BlobObject<'a> {
                 }
             };
 
-        let maybe_sticker = &mut false;
+        let viewtype = &mut Viewtype::Image;
         let is_avatar = true;
         self.recode_to_size(
-            context,
-            None, // The name of an avatar doesn't matter
-            maybe_sticker,
-            img_wh,
-            max_bytes,
-            is_avatar,
+            context, None, // The name of an avatar doesn't matter
+            viewtype, img_wh, max_bytes, is_avatar,
         )?;
 
         Ok(())
@@ -280,15 +277,14 @@ impl<'a> BlobObject<'a> {
     /// Recodes an image pointed by a [BlobObject] so that it fits into limits on the image width,
     /// height and file size specified by the config.
     ///
-    /// On some platforms images are passed to the core as [`crate::message::Viewtype::Sticker`] in
-    /// which case `maybe_sticker` flag should be set. We recheck if an image is a true sticker
-    /// assuming that it must have at least one fully transparent corner, otherwise this flag is
-    /// reset.
+    /// On some platforms images are passed to Core as [`Viewtype::Sticker`]. We recheck if the
+    /// image is a true sticker assuming that it must have at least one fully transparent corner,
+    /// otherwise `*viewtype` is set to `Viewtype::Image`.
     pub async fn recode_to_image_size(
         &mut self,
         context: &Context,
         name: Option<String>,
-        maybe_sticker: &mut bool,
+        viewtype: &mut Viewtype,
     ) -> Result<String> {
         let (img_wh, max_bytes) =
             match MediaQuality::from_i32(context.get_config_int(Config::MediaQuality).await?)
@@ -301,10 +297,7 @@ impl<'a> BlobObject<'a> {
                 MediaQuality::Worse => (constants::WORSE_IMAGE_SIZE, constants::WORSE_IMAGE_BYTES),
             };
         let is_avatar = false;
-        let new_name =
-            self.recode_to_size(context, name, maybe_sticker, img_wh, max_bytes, is_avatar)?;
-
-        Ok(new_name)
+        self.recode_to_size(context, name, viewtype, img_wh, max_bytes, is_avatar)
     }
 
     /// Recodes the image so that it fits into limits on width/height and byte size.
@@ -322,7 +315,7 @@ impl<'a> BlobObject<'a> {
         &mut self,
         context: &Context,
         name: Option<String>,
-        maybe_sticker: &mut bool,
+        viewtype: &mut Viewtype,
         mut img_wh: u32,
         max_bytes: usize,
         is_avatar: bool,
@@ -333,6 +326,7 @@ impl<'a> BlobObject<'a> {
         let no_exif_ref = &mut no_exif;
         let mut name = name.unwrap_or_else(|| self.name.clone());
         let original_name = name.clone();
+        let vt = &mut *viewtype;
         let res: Result<String> = tokio::task::block_in_place(move || {
             let mut file = std::fs::File::open(self.to_abs_path())?;
             let (nr_bytes, exif) = image_metadata(&file)?;
@@ -351,21 +345,24 @@ impl<'a> BlobObject<'a> {
                     )
                 }
             };
-            let fmt = imgreader.format().context("No format??")?;
+            let fmt = imgreader.format().context("Unknown format")?;
             let mut img = imgreader.decode().context("image decode failure")?;
             let orientation = exif.as_ref().map(|exif| exif_orientation(exif, context));
             let mut encoded = Vec::new();
 
-            if *maybe_sticker {
+            if *vt == Viewtype::Sticker {
                 let x_max = img.width().saturating_sub(1);
                 let y_max = img.height().saturating_sub(1);
-                *maybe_sticker = img.in_bounds(x_max, y_max)
-                    && (img.get_pixel(0, 0).0[3] == 0
+                if !img.in_bounds(x_max, y_max)
+                    || !(img.get_pixel(0, 0).0[3] == 0
                         || img.get_pixel(x_max, 0).0[3] == 0
                         || img.get_pixel(0, y_max).0[3] == 0
-                        || img.get_pixel(x_max, y_max).0[3] == 0);
+                        || img.get_pixel(x_max, y_max).0[3] == 0)
+                {
+                    *vt = Viewtype::Image;
+                }
             }
-            if *maybe_sticker && exif.is_none() {
+            if *vt == Viewtype::Sticker && exif.is_none() {
                 return Ok(name);
             }
 
@@ -500,10 +497,11 @@ impl<'a> BlobObject<'a> {
             Ok(_) => res,
             Err(err) => {
                 if !is_avatar && no_exif {
-                    warn!(
+                    error!(
                         context,
-                        "Cannot recode image, using original data: {err:#}.",
+                        "Cannot recode image, using original data and file name: {err:#}.",
                     );
+                    *viewtype = Viewtype::File;
                     Ok(original_name)
                 } else {
                     Err(err)

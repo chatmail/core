@@ -3723,6 +3723,28 @@ async fn test_jpeg_with_png_ext() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_nonimage_with_png_ext() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat = alice.create_chat(bob).await;
+
+    let bytes = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
+    let file = alice.get_blobdir().join("screenshot.png");
+    tokio::fs::write(&file, bytes).await?;
+
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_and_deduplicate(alice, &file, Some("screenshot.png"), None)?;
+    let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
+    assert_eq!(msg.viewtype, Viewtype::File);
+    assert_eq!(msg.get_filemime().unwrap(), "application/octet-stream");
+    let msg_bob = bob.recv_msg(&sent_msg).await;
+    assert_eq!(msg_bob.viewtype, Viewtype::File);
+    assert_eq!(msg_bob.get_filemime().unwrap(), "application/octet-stream");
+    Ok(())
+}
+
 /// Tests that info message is ignored when constructing `In-Reply-To`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_info_not_referenced() -> Result<()> {

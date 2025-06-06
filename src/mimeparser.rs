@@ -1001,7 +1001,12 @@ impl MimeMessage {
         is_related: bool,
     ) -> Result<bool> {
         let mut any_part_added = false;
-        let mimetype = get_mime_type(mail, &get_attachment_filename(context, mail)?)?.0;
+        let mimetype = get_mime_type(
+            mail,
+            &get_attachment_filename(context, mail)?,
+            self.has_chat_version(),
+        )?
+        .0;
         match (mimetype.type_(), mimetype.subtype().as_str()) {
             /* Most times, multipart/alternative contains true alternatives
             as text/plain and text/html.  If we find a multipart/mixed
@@ -1009,8 +1014,12 @@ impl MimeMessage {
             apple mail: "plaintext" as an alternative to "html+PDF attachment") */
             (mime::MULTIPART, "alternative") => {
                 for cur_data in &mail.subparts {
-                    let mime_type =
-                        get_mime_type(cur_data, &get_attachment_filename(context, cur_data)?)?.0;
+                    let mime_type = get_mime_type(
+                        cur_data,
+                        &get_attachment_filename(context, cur_data)?,
+                        self.has_chat_version(),
+                    )?
+                    .0;
                     if mime_type == "multipart/mixed" || mime_type == "multipart/related" {
                         any_part_added = self
                             .parse_mime_recursive(context, cur_data, is_related)
@@ -1021,9 +1030,13 @@ impl MimeMessage {
                 if !any_part_added {
                     /* search for text/plain and add this */
                     for cur_data in &mail.subparts {
-                        if get_mime_type(cur_data, &get_attachment_filename(context, cur_data)?)?
-                            .0
-                            .type_()
+                        if get_mime_type(
+                            cur_data,
+                            &get_attachment_filename(context, cur_data)?,
+                            self.has_chat_version(),
+                        )?
+                        .0
+                        .type_()
                             == mime::TEXT
                         {
                             any_part_added = self
@@ -1155,7 +1168,7 @@ impl MimeMessage {
     ) -> Result<bool> {
         // return true if a part was added
         let filename = get_attachment_filename(context, mail)?;
-        let (mime_type, msg_type) = get_mime_type(mail, &filename)?;
+        let (mime_type, msg_type) = get_mime_type(mail, &filename, self.has_chat_version())?;
         let raw_mime = mail.ctype.mimetype.to_lowercase();
 
         let old_part_count = self.parts.len();
@@ -2068,6 +2081,7 @@ pub struct Part {
 fn get_mime_type(
     mail: &mailparse::ParsedMail<'_>,
     filename: &Option<String>,
+    is_chat_msg: bool,
 ) -> Result<(Mime, Viewtype)> {
     let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
 
@@ -2101,13 +2115,13 @@ fn get_mime_type(
         }
         mime::APPLICATION => match mimetype.subtype() {
             mime::OCTET_STREAM => match filename {
-                Some(filename) => {
+                Some(filename) if !is_chat_msg => {
                     match message::guess_msgtype_from_path_suffix(Path::new(&filename)) {
                         Some((viewtype, _)) => viewtype,
                         None => Viewtype::File,
                     }
                 }
-                None => Viewtype::File,
+                _ => Viewtype::File,
             },
             _ => Viewtype::File,
         },
