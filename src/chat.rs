@@ -2791,26 +2791,26 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
         if msg.viewtype == Viewtype::Vcard {
             msg.try_set_vcard(context, &blob.to_abs_path()).await?;
         }
-
-        let mut maybe_sticker = msg.viewtype == Viewtype::Sticker;
         if !send_as_is
             && (msg.viewtype == Viewtype::Image
-                || maybe_sticker && !msg.param.exists(Param::ForceSticker))
+                || msg.viewtype == Viewtype::Sticker && !msg.param.exists(Param::ForceSticker))
         {
             let new_name = blob
-                .recode_to_image_size(context, msg.get_filename(), &mut maybe_sticker)
+                .recode_to_image_size(context, msg.get_filename(), &mut msg.viewtype)
                 .await?;
             msg.param.set(Param::Filename, new_name);
             msg.param.set(Param::File, blob.as_name());
-
-            if !maybe_sticker {
-                msg.viewtype = Viewtype::Image;
-            }
         }
 
         if !msg.param.exists(Param::MimeType) {
-            if let Some((_, mime)) = message::guess_msgtype_from_suffix(msg) {
-                msg.param.set(Param::MimeType, mime);
+            if let Some((viewtype, mime)) = message::guess_msgtype_from_suffix(msg) {
+                // If we unexpectedly didn't recognize the file as image, don't send it as such,
+                // either the format is unsupported or the image is corrupted.
+                if viewtype != Viewtype::Image
+                    || matches!(msg.viewtype, Viewtype::Image | Viewtype::Sticker)
+                {
+                    msg.param.set(Param::MimeType, mime);
+                }
             }
         }
 
