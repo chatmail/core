@@ -98,6 +98,11 @@ pub enum Param {
     Cmd = b'S',
 
     /// For Messages
+    ///
+    /// For "MemberRemovedFromGroup" this is the email address
+    /// removed from the group.
+    ///
+    /// For "MemberAddedToGroup" this is the email address added to the group.
     Arg = b'E',
 
     /// For Messages

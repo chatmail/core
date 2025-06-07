@@ -30,6 +30,29 @@ pub struct FullChat {
     /// in the contact profile
     /// if 1:1 chat with this contact exists and is protected.
     is_protected: bool,
+    /// True if the chat is encrypted.
+    /// This means that all messages in the chat are encrypted,
+    /// and all contacts in the chat are "pgp-contacts",
+    /// i.e. identified by the PGP key fingerprint.
+    ///
+    /// False if the chat is unencrypted.
+    /// This means that all messages in the chat are unencrypted,
+    /// and all contacts in the chat are "email-contacts",
+    /// i.e. identified by the email address.
+    /// The UI should mark this chat e.g. with a mail-letter icon.
+    ///
+    /// Unencrypted groups are called "ad-hoc groups"
+    /// and the user can't add/remove members,
+    /// create a QR invite code,
+    /// or set an avatar.
+    /// These options should therefore be disabled in the UI.
+    ///
+    /// Note that it can happen that an encrypted chat
+    /// contains unencrypted messages that were received in core <= v1.159.*
+    /// and vice versa.
+    ///
+    /// See also `is_pgp_contact` on `Contact`.
+    is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
@@ -108,6 +131,7 @@ impl FullChat {
             id: chat_id,
             name: chat.name.clone(),
             is_protected: chat.is_protected(),
+            is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,
@@ -159,6 +183,30 @@ pub struct BasicChat {
     /// in the contact profile
     /// if 1:1 chat with this contact exists and is protected.
     is_protected: bool,
+
+    /// True if the chat is encrypted.
+    /// This means that all messages in the chat are encrypted,
+    /// and all contacts in the chat are "pgp-contacts",
+    /// i.e. identified by the PGP key fingerprint.
+    ///
+    /// False if the chat is unencrypted.
+    /// This means that all messages in the chat are unencrypted,
+    /// and all contacts in the chat are "email-contacts",
+    /// i.e. identified by the email address.
+    /// The UI should mark this chat e.g. with a mail-letter icon.
+    ///
+    /// Unencrypted groups are called "ad-hoc groups"
+    /// and the user can't add/remove members,
+    /// create a QR invite code,
+    /// or set an avatar.
+    /// These options should therefore be disabled in the UI.
+    ///
+    /// Note that it can happen that an encrypted chat
+    /// contains unencrypted messages that were received in core <= v1.159.*
+    /// and vice versa.
+    ///
+    /// See also `is_pgp_contact` on `Contact`.
+    is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
@@ -187,6 +235,7 @@ impl BasicChat {
             id: chat_id,
             name: chat.name.clone(),
             is_protected: chat.is_protected(),
+            is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,

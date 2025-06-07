@@ -170,7 +170,7 @@ def test_account(acfactory) -> None:
     assert alice.get_size()
     assert alice.is_configured()
     assert not alice.get_avatar()
-    assert alice.get_contact_by_addr(bob_addr) == alice_contact_bob
+    assert alice.get_contact_by_addr(bob_addr) is None  # There is no email-contact, only PGP-contact
     assert alice.get_contacts()
     assert alice.get_contacts(snapshot=True)
     assert alice.self_contact
@@ -287,7 +287,6 @@ def test_contact(acfactory) -> None:
     assert repr(alice_contact_bob)
     alice_contact_bob.block()
     alice_contact_bob.unblock()
-    alice_contact_bob.reset_encryption()
     alice_contact_bob.set_name("new name")
     alice_contact_bob.get_encryption_info()
     snapshot = alice_contact_bob.get_snapshot()

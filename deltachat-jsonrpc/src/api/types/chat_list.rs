@@ -30,6 +30,30 @@ pub enum ChatListItemFetchResult {
         /// showing preview if last chat message is image
         summary_preview_image: Option<String>,
         is_protected: bool,
+
+        /// True if the chat is encrypted.
+        /// This means that all messages in the chat are encrypted,
+        /// and all contacts in the chat are "pgp-contacts",
+        /// i.e. identified by the PGP key fingerprint.
+        ///
+        /// False if the chat is unencrypted.
+        /// This means that all messages in the chat are unencrypted,
+        /// and all contacts in the chat are "email-contacts",
+        /// i.e. identified by the email address.
+        /// The UI should mark this chat e.g. with a mail-letter icon.
+        ///
+        /// Unencrypted groups are called "ad-hoc groups"
+        /// and the user can't add/remove members,
+        /// create a QR invite code,
+        /// or set an avatar.
+        /// These options should therefore be disabled in the UI.
+        ///
+        /// Note that it can happen that an encrypted chat
+        /// contains unencrypted messages that were received in core <= v1.159.*
+        /// and vice versa.
+        ///
+        /// See also `is_pgp_contact` on `Contact`.
+        is_encrypted: bool,
         is_group: bool,
         fresh_message_counter: usize,
         is_self_talk: bool,
@@ -137,6 +161,7 @@ pub(crate) async fn get_chat_list_item_by_id(
         summary_status: summary.state.to_u32().expect("impossible"), // idea and a function to transform the constant to strings? or return string enum
         summary_preview_image,
         is_protected: chat.is_protected(),
+        is_encrypted: chat.is_encrypted(ctx).await?,
         is_group: chat.get_type() == Chattype::Group,
         fresh_message_counter,
         is_self_talk: chat.is_self_talk(),
