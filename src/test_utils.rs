@@ -767,7 +767,7 @@ impl TestContext {
     ///
     /// If the contact does not exist yet, a new contact will be created
     /// with the correct fingerprint, but without the public key.
-    pub async fn add_or_lookup_pgp_contact(&self, other: &TestContext) -> Contact {
+    pub async fn add_or_lookup_contact_no_key(&self, other: &TestContext) -> Contact {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         let fingerprint = self_fingerprint(other).await.unwrap();

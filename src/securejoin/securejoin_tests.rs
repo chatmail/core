@@ -108,7 +108,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         bob_chat.why_cant_send(&bob).await.unwrap(),
         Some(CantSendReason::MissingKey)
     );
-    let contact_alice_id = bob.add_or_lookup_pgp_contact(&alice).await.id;
+    let contact_alice_id = bob.add_or_lookup_contact_no_key(&alice).await.id;
     let sent = bob.pop_sent_msg().await;
     assert!(!sent.payload.contains("Bob Examplenet"));
     assert_eq!(sent.recipient(), EmailAddress::new(alice_addr).unwrap());
@@ -190,7 +190,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
             .gossiped_keys
             .insert(alice_addr.to_string(), wrong_pubkey)
             .unwrap();
-        let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
+        let contact_bob = alice.add_or_lookup_contact_no_key(&bob).await;
         let handshake_msg = handle_securejoin_handshake(&alice, &mut msg, contact_bob.id)
             .await
             .unwrap();
@@ -209,7 +209,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     }
 
     // Alice should not yet have Bob verified
-    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
+    let contact_bob = alice.add_or_lookup_contact_no_key(&bob).await;
     let contact_bob_id = contact_bob.id;
     assert_eq!(contact_bob.is_pgp_contact(), true);
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), false);
@@ -354,7 +354,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     );
 
     // Alice should not yet have Bob verified
-    let contact_bob = alice.add_or_lookup_pgp_contact(bob).await;
+    let contact_bob = alice.add_or_lookup_contact_no_key(bob).await;
     assert_eq!(contact_bob.is_verified(alice).await?, false);
 
     tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
@@ -370,7 +370,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     );
 
     // Bob has verified Alice already.
-    let contact_alice = bob.add_or_lookup_pgp_contact(alice).await;
+    let contact_alice = bob.add_or_lookup_contact_no_key(alice).await;
     assert_eq!(contact_alice.is_verified(bob).await?, true);
 
     // Alice confirms that Bob is now verified.
@@ -469,7 +469,7 @@ async fn test_secure_join() -> Result<()> {
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
-    let contact_alice_id = bob.add_or_lookup_pgp_contact(&alice).await.id;
+    let contact_alice_id = bob.add_or_lookup_contact_no_key(&alice).await.id;
 
     // Check Bob emitted the JoinerProgress event.
     let event = bob
@@ -503,7 +503,7 @@ async fn test_secure_join() -> Result<()> {
     );
 
     // Alice should not yet have Bob verified
-    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
+    let contact_bob = alice.add_or_lookup_contact_no_key(&bob).await;
     assert_eq!(contact_bob.is_verified(&alice).await?, false);
 
     tcm.section("Step 5+6: Alice receives vg-request-with-auth, sends vg-member-added");
@@ -546,7 +546,7 @@ async fn test_secure_join() -> Result<()> {
     // Bob has verified Alice already.
     //
     // Alice may not have verified Bob yet.
-    let contact_alice = bob.add_or_lookup_pgp_contact(&alice).await;
+    let contact_alice = bob.add_or_lookup_contact_no_key(&alice).await;
     assert_eq!(contact_alice.is_verified(&bob).await?, true);
 
     tcm.section("Step 7: Bob receives vg-member-added");
@@ -670,14 +670,14 @@ async fn test_lost_contact_confirm() {
     alice.recv_msg_trash(&sent).await;
 
     // Alice has Bob verified now.
-    let contact_bob = alice.add_or_lookup_pgp_contact(&bob).await;
+    let contact_bob = alice.add_or_lookup_contact_no_key(&bob).await;
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), true);
 
     // Alice sends vc-contact-confirm, but it gets lost.
     let _sent_vc_contact_confirm = alice.pop_sent_msg().await;
 
     // Bob has alice as verified too, even though vc-contact-confirm is lost.
-    let contact_alice = bob.add_or_lookup_pgp_contact(&alice).await;
+    let contact_alice = bob.add_or_lookup_contact_no_key(&alice).await;
     assert_eq!(contact_alice.is_verified(&bob).await.unwrap(), true);
 }
 
