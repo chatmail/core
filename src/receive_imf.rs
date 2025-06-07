@@ -379,7 +379,11 @@ pub(crate) async fn receive_imf_inner(
         &mime_parser.from,
         fingerprint,
         prevent_rename,
-        is_partial_download.is_some(),
+        is_partial_download.is_some()
+            && mime_parser
+                .get_header(HeaderDef::ContentType)
+                .unwrap_or_default()
+                .starts_with("multipart/encrypted"),
     )
     .await?
     {
