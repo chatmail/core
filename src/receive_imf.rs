@@ -968,9 +968,10 @@ pub(crate) async fn receive_imf_inner(
 ///   display names. We don't want the display name to change every time the user gets a new email from
 ///   a mailing list.
 ///
-/// * `is_partial_download`: the message is partially downloaded.
-///   We only know the email address and not the contact fingerprint,
-///   but try to assign the message to some PGP-contact.
+/// * `find_pgp_contact_by_addr`: if true, we only know the e-mail address
+///   of the contact, but not the fingerprint,
+///   yet want to assign the message to some PGP-contact.
+///   This can happen during prefetch or when the message is partially downloaded.
 ///   If we get it wrong, the message will be placed into the correct
 ///   chat after downloading.
 ///
@@ -980,7 +981,7 @@ pub async fn from_field_to_contact_id(
     from: &SingleInfo,
     fingerprint: Option<&Fingerprint>,
     prevent_rename: bool,
-    is_partial_download: bool,
+    find_pgp_contact_by_addr: bool,
 ) -> Result<Option<(ContactId, bool, Origin)>> {
     let fingerprint = fingerprint.as_ref().map(|fp| fp.hex()).unwrap_or_default();
     let display_name = if prevent_rename {
@@ -999,7 +1000,7 @@ pub async fn from_field_to_contact_id(
         }
     };
 
-    if fingerprint.is_empty() && is_partial_download {
+    if fingerprint.is_empty() && find_pgp_contact_by_addr {
         let addr_normalized = addr_normalize(&from_addr);
 
         // Try to assign to some PGP-contact.
