@@ -1924,7 +1924,6 @@ async fn parse_gossip_headers(
         }
 
         let fingerprint = header.public_key.dc_fingerprint().hex();
-        // TODO: header.public_key.verify() ?
         context
             .sql
             .execute(
