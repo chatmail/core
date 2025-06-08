@@ -2765,6 +2765,22 @@ async fn test_chat_get_encryption_info() -> Result<()> {
         "No encryption"
     );
 
+    alice.sql.execute("DELETE FROM public_keys", ()).await?;
+    assert_eq!(
+        chat_id.get_encryption_info(alice).await?,
+        "End-to-end encryption available\n\
+         \n\
+         fiona@example.net\n\
+         (key missing)\n\
+         C8BA 50BF 4AC1 2FAF 38D7\n\
+         F657 DDFC 8E9F 3C79 9195\n\
+         \n\
+         bob@example.net\n\
+         (key missing)\n\
+         CCCB 5AA9 F6E1 141C 9431\n\
+         65F1 DB18 B18C BCF7 0487"
+    );
+
     Ok(())
 }
 

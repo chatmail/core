@@ -1340,7 +1340,11 @@ impl ChatId {
             let fingerprint = contact
                 .fingerprint()
                 .context("Contact does not have a fingerprint in encrypted chat")?;
-            ret += &format!("\n{addr}\n{fingerprint}\n");
+            if contact.public_key(context).await?.is_some() {
+                ret += &format!("\n{addr}\n{fingerprint}\n");
+            } else {
+                ret += &format!("\n{addr}\n(key missing)\n{fingerprint}\n");
+            }
         }
 
         Ok(ret.trim().to_string())
