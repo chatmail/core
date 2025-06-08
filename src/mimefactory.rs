@@ -213,7 +213,7 @@ impl MimeFactory {
             encryption_keys = if msg
                 .param
                 .get_bool(Param::ForcePlaintext)
-                .unwrap_or_default()
+                .unwrap_or(false)
             {
                 None
             } else {
