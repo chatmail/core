@@ -5149,3 +5149,38 @@ async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that large messages are assigned
+/// to non-PGP contacts if the type is not `multipart/encrypted`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_partial_download_pgp_contact_lookup() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Create two chats with Alice, both with PGP-contact and email address contact.
+    let encrypted_chat = bob.create_chat(alice).await;
+    let unencrypted_chat = bob.create_email_chat(alice).await;
+
+    let seen = false;
+    let is_partial_download = Some(9999);
+    let received = receive_imf_from_inbox(
+        bob,
+        "3333@example.org",
+        b"From: alice@example.org\n\
+        To: bob@example.net\n\
+        Message-ID: <3333@example.org>\n\
+        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+        \n\
+        hello\n",
+        seen,
+        is_partial_download,
+    )
+    .await?
+    .unwrap();
+
+    assert_ne!(received.chat_id, encrypted_chat.id);
+    assert_eq!(received.chat_id, unencrypted_chat.id);
+
+    Ok(())
+}
