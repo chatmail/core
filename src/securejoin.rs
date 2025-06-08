@@ -307,15 +307,12 @@ pub(crate) async fn handle_securejoin_handshake(
             inviter_progress(context, contact_id, 300);
 
             let from_addr = ContactAddress::new(&mime_message.from.addr)?;
-            let autocrypt_fingerprint = mime_message
-                .autocrypt_fingerprint
-                .clone()
-                .unwrap_or_default();
+            let autocrypt_fingerprint = mime_message.autocrypt_fingerprint.as_deref().unwrap_or("");
             let (autocrypt_contact_id, _) = Contact::add_or_lookup_ex(
                 context,
                 "",
                 &from_addr,
-                &autocrypt_fingerprint,
+                autocrypt_fingerprint,
                 Origin::IncomingUnknownFrom,
             )
             .await?;
