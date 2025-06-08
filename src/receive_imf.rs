@@ -3646,11 +3646,16 @@ async fn lookup_pgp_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
+    debug_assert!(!fingerprint.is_empty());
+    if fingerprint.is_empty() {
+        // Avoid accidentally looking up a non-PGP contact.
+        return Ok(None);
+    }
     if let Some(contact_id) = context
         .sql
         .query_row_optional(
             "SELECT id FROM contacts
-             WHERE contacts.fingerprint=?",
+             WHERE fingerprint=? AND fingerprint!=''",
             (fingerprint,),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
