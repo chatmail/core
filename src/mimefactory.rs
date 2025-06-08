@@ -210,11 +210,7 @@ impl MimeFactory {
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            encryption_keys = if msg
-                .param
-                .get_bool(Param::ForcePlaintext)
-                .unwrap_or(false)
-            {
+            encryption_keys = if msg.param.get_bool(Param::ForcePlaintext).unwrap_or(false) {
                 None
             } else {
                 // Encrypt, but only to self.
