@@ -84,6 +84,13 @@ This allows to run `RUST_BACKTRACE=1 cargo test`
 and get a backtrace with line numbers in resultified tests
 which return `anyhow::Result`.
 
+`unwrap` and `expect` are not used in the library
+because panics are difficult to debug on user devices.
+However, in the tests `.expect` may be used.
+Follow
+<https://doc.rust-lang.org/core/error/index.html#common-message-styles>
+for `.expect` message style.
+
 ## Logging
 
 For logging, use `info!`, `warn!` and `error!` macros.
@@ -96,3 +103,17 @@ Format anyhow errors with `{:#}` to print all the contexts like this:
 ```
 error!(context, "Failed to set selfavatar timestamp: {err:#}.");
 ```
+
+## Documentation comments
+
+All public modules, methods and fields should be documented.
+This is checked by [`missing_docs`](https://doc.rust-lang.org/rustdoc/lints.html#missing_docs) lint.
+
+Private items do not have to be documented,
+but CI uses `cargo doc --document-private-items`
+to build the documentation,
+so it is preferred that new items
+are documented.
+
+Follow Rust guidelines for the documentation comments:
+<https://rust-lang.github.io/rfcs/1574-more-api-documentation-conventions.html#summary-sentence>

@@ -18,6 +18,9 @@ opt-level = 1
 debug = 1
 opt-level = 0
 
+[profile.fuzz]
+inherits = "test"
+
 # Always optimize dependencies.
 # This does not apply to crates in the workspace.
 # <https://doc.rust-lang.org/cargo/reference/profiles.html#overrides>
@@ -72,7 +75,7 @@ mime = "0.3.17"
 num_cpus = "1.17"
 num-derive = "0.4"
 num-traits = { workspace = true }
-parking_lot = "0.12"
+parking_lot = "0.12.4"
 percent-encoding = "2.3"
 pgp = { version = "0.16.0", default-features = false }
 pin-project = "1"
@@ -112,7 +115,7 @@ blake3 = "1.8.2"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
-criterion = { version = "0.5.1", features = ["async_tokio"] }
+criterion = { version = "0.6.0", features = ["async_tokio"] }
 futures-lite = { workspace = true }
 log = { workspace = true }
 nu-ansi-term = { workspace = true }

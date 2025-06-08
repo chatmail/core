@@ -1,5 +1,7 @@
 #![recursion_limit = "256"]
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+
+use criterion::{criterion_group, criterion_main, Criterion};
 use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;

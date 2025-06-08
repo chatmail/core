@@ -1,7 +1,8 @@
 #![recursion_limit = "256"]
+use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use deltachat::chat::{self, ChatId};
 use deltachat::chatlist::Chatlist;
 use deltachat::context::Context;
