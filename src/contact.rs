@@ -1265,7 +1265,11 @@ impl Contact {
         };
         let fingerprint_other = fingerprint_other.to_string();
 
-        let stock_message = stock_str::e2e_available(context).await;
+        let stock_message = if contact.public_key(context).await?.is_some() {
+            stock_str::e2e_available(context).await
+        } else {
+            stock_str::encr_none(context).await
+        };
 
         let finger_prints = stock_str::finger_prints(context).await;
         let mut ret = format!("{stock_message}.\n{finger_prints}:");
