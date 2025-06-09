@@ -142,7 +142,7 @@ async fn test_add_white_bg() {
         let img_wh = 128;
         let viewtype = &mut Viewtype::Image;
         let strict_limits = true;
-        blob.recode_to_size(&t, None, viewtype, img_wh, 20_000, strict_limits)
+        blob.check_or_recode_to_size(&t, None, viewtype, img_wh, 20_000, strict_limits)
             .unwrap();
         tokio::task::block_in_place(move || {
             let img = ImageReader::open(blob.to_abs_path())
@@ -190,7 +190,7 @@ async fn test_selfavatar_outside_blobdir() {
     let mut blob = BlobObject::create_and_deduplicate(&t, avatar_path, avatar_path).unwrap();
     let viewtype = &mut Viewtype::Image;
     let strict_limits = true;
-    blob.recode_to_size(&t, None, viewtype, 1000, 3000, strict_limits)
+    blob.check_or_recode_to_size(&t, None, viewtype, 1000, 3000, strict_limits)
         .unwrap();
     let new_file_size = file_size(&blob.to_abs_path()).await;
     assert!(new_file_size <= 3000);
@@ -399,7 +399,7 @@ async fn test_recode_image_balanced_png() {
     .await
     .unwrap();
 
-    // This will be sent as Image, see [`BlobObject::recode_to_image_size()`] for explanation.
+    // This will be sent as Image, see [`BlobObject::check_or_recode_image()`] for explanation.
     SendImageCheckMediaquality {
         viewtype: Viewtype::Sticker,
         media_quality_config: "0",

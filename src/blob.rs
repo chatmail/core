@@ -266,7 +266,7 @@ impl<'a> BlobObject<'a> {
 
         let viewtype = &mut Viewtype::Image;
         let is_avatar = true;
-        self.recode_to_size(
+        self.check_or_recode_to_size(
             context, None, // The name of an avatar doesn't matter
             viewtype, img_wh, max_bytes, is_avatar,
         )?;
@@ -274,13 +274,16 @@ impl<'a> BlobObject<'a> {
         Ok(())
     }
 
-    /// Recodes an image pointed by a [BlobObject] so that it fits into limits on the image width,
-    /// height and file size specified by the config.
+    /// Checks or recodes an image pointed by the [BlobObject] so that it fits into limits on the
+    /// image width, height and file size specified by the config.
+    ///
+    /// Recoding is only done for [`Viewtype::Image`]. For [`Viewtype::File`], if it's a correct
+    /// image, `*viewtype` is set to [`Viewtype::Image`].
     ///
     /// On some platforms images are passed to Core as [`Viewtype::Sticker`]. We recheck if the
     /// image is a true sticker assuming that it must have at least one fully transparent corner,
-    /// otherwise `*viewtype` is set to `Viewtype::Image`.
-    pub async fn recode_to_image_size(
+    /// otherwise `*viewtype` is set to [`Viewtype::Image`].
+    pub async fn check_or_recode_image(
         &mut self,
         context: &Context,
         name: Option<String>,
@@ -297,10 +300,10 @@ impl<'a> BlobObject<'a> {
                 MediaQuality::Worse => (constants::WORSE_IMAGE_SIZE, constants::WORSE_IMAGE_BYTES),
             };
         let is_avatar = false;
-        self.recode_to_size(context, name, viewtype, img_wh, max_bytes, is_avatar)
+        self.check_or_recode_to_size(context, name, viewtype, img_wh, max_bytes, is_avatar)
     }
 
-    /// Recodes the image so that it fits into limits on width/height and byte size.
+    /// Checks or recodes the image so that it fits into limits on width/height and byte size.
     ///
     /// If `!is_avatar`, then if `max_bytes` is exceeded, reduces the image to `img_wh` and proceeds
     /// with the result without rechecking.
@@ -311,7 +314,7 @@ impl<'a> BlobObject<'a> {
     /// then the updated user-visible filename will be returned;
     /// this may be necessary because the format may be changed to JPG,
     /// i.e. "image.png" -> "image.jpg".
-    fn recode_to_size(
+    fn check_or_recode_to_size(
         &mut self,
         context: &Context,
         name: Option<String>,
@@ -346,6 +349,10 @@ impl<'a> BlobObject<'a> {
                 }
             };
             let fmt = imgreader.format().context("Unknown format")?;
+            if *vt == Viewtype::File {
+                *vt = Viewtype::Image;
+                return Ok(name);
+            }
             let mut img = imgreader.decode().context("image decode failure")?;
             let orientation = exif.as_ref().map(|exif| exif_orientation(exif, context));
             let mut encoded = Vec::new();
@@ -499,7 +506,7 @@ impl<'a> BlobObject<'a> {
                 if !is_avatar && no_exif {
                     error!(
                         context,
-                        "Cannot recode image, using original data: {err:#}.",
+                        "Cannot check/recode image, using original data: {err:#}.",
                     );
                     *viewtype = Viewtype::File;
                     Ok(original_name)

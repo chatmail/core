@@ -2686,7 +2686,7 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
             .param
             .get_file_blob(context)?
             .with_context(|| format!("attachment missing for message of type #{}", msg.viewtype))?;
-        let send_as_is = msg.viewtype == Viewtype::File;
+        let mut maybe_image = false;
 
         if msg.viewtype == Viewtype::File
             || msg.viewtype == Viewtype::Image
@@ -2704,6 +2704,8 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
                         // UIs don't want conversions of `Sticker` to anything other than `Image`.
                         msg.param.set_int(Param::ForceSticker, 1);
                     }
+                } else if better_type == Viewtype::Image {
+                    maybe_image = true;
                 } else if better_type != Viewtype::Webxdc
                     || context
                         .ensure_sendable_webxdc_file(&blob.to_abs_path())
@@ -2722,12 +2724,12 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
         if msg.viewtype == Viewtype::Vcard {
             msg.try_set_vcard(context, &blob.to_abs_path()).await?;
         }
-        if !send_as_is
-            && (msg.viewtype == Viewtype::Image
-                || msg.viewtype == Viewtype::Sticker && !msg.param.exists(Param::ForceSticker))
+        if msg.viewtype == Viewtype::File && maybe_image
+            || msg.viewtype == Viewtype::Image
+            || msg.viewtype == Viewtype::Sticker && !msg.param.exists(Param::ForceSticker)
         {
             let new_name = blob
-                .recode_to_image_size(context, msg.get_filename(), &mut msg.viewtype)
+                .check_or_recode_image(context, msg.get_filename(), &mut msg.viewtype)
                 .await?;
             msg.param.set(Param::Filename, new_name);
             msg.param.set(Param::File, blob.as_name());
