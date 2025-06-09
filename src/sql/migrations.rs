@@ -1559,6 +1559,7 @@ fn migrate_pgp_contacts(
         .context("Step 20")?
         .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
         .context("Step 21")?;
+
     {
         let mut stmt = transaction
             .prepare(
@@ -1578,6 +1579,37 @@ fn migrate_pgp_contacts(
             .context("Step 23")?;
         let mut load_chat_contacts_stmt = transaction
             .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
+        let is_chatmail: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM config WHERE keyname='is_chatmail'",
+                (),
+                |row| row.get(0),
+            )
+            .optional()
+            .context("Step 23.1")?;
+        let is_chatmail = is_chatmail
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or_default()
+            != 0;
+        let map_to_pgp_contact = |old_member: &u32| {
+            (
+                *old_member,
+                autocrypt_pgp_contacts
+                    .get(old_member)
+                    .or_else(|| {
+                        // For chatmail servers,
+                        // we send encrypted even if the peerstate is reset,
+                        // because an unencrypted message likely won't arrive.
+                        // This is the same behavior as before PGP-contacts migration.
+                        if is_chatmail {
+                            autocrypt_pgp_contacts_with_reset_peerstate.get(old_member)
+                        } else {
+                            None
+                        }
+                    })
+                    .copied(),
+            )
+        };
 
         let mut update_member_stmt = transaction
             .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
@@ -1611,7 +1643,8 @@ fn migrate_pgp_contacts(
                         info!(context, "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat");
                         continue;
                     };
-                    let Some(&new_contact) = autocrypt_pgp_contacts.get(old_member) else {
+
+                    let (_, Some(new_contact)) = map_to_pgp_contact(old_member) else {
                         keep_email_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
@@ -1647,9 +1680,7 @@ fn migrate_pgp_contacts(
                     } else {
                         old_members
                             .iter()
-                            .map(|old_member| {
-                                (*old_member, autocrypt_pgp_contacts.get(old_member).copied())
-                            })
+                            .map(map_to_pgp_contact)
                             .collect::<Vec<(u32, Option<u32>)>>()
                     }
                 }
