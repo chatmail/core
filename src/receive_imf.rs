@@ -493,6 +493,17 @@ pub(crate) async fn receive_imf_inner(
     )
     .await?;
 
+    // `None` means that the chat is encrypted,
+    // but we were not able to convert the address
+    // to PGP-contact, e.g.
+    // because there wase no corresponding
+    // Autocrypt-Gossip header.
+    //
+    // This way we still preserve remaining
+    // contact number and positions
+    // so we can match them contacts to
+    // e.g. Chat-Group-Member-Timestamps
+    // header.
     let to_ids: Vec<Option<ContactId>>;
     let past_ids: Vec<Option<ContactId>>;
 
