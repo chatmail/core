@@ -3511,16 +3511,18 @@ async fn test_nonimage_with_png_ext() -> Result<()> {
 
     let bytes = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     let file = alice.get_blobdir().join("screenshot.png");
-    tokio::fs::write(&file, bytes).await?;
 
-    let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_and_deduplicate(&alice, &file, Some("screenshot.png"), None)?;
-    let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
-    assert_eq!(msg.viewtype, Viewtype::File);
-    assert_eq!(msg.get_filemime().unwrap(), "application/octet-stream");
-    let msg_bob = bob.recv_msg(&sent_msg).await;
-    assert_eq!(msg_bob.viewtype, Viewtype::File);
-    assert_eq!(msg_bob.get_filemime().unwrap(), "application/octet-stream");
+    for vt in [Viewtype::Image, Viewtype::File] {
+        tokio::fs::write(&file, bytes).await?;
+        let mut msg = Message::new(vt);
+        msg.set_file_and_deduplicate(&alice, &file, Some("screenshot.png"), None)?;
+        let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
+        assert_eq!(msg.viewtype, Viewtype::File);
+        assert_eq!(msg.get_filemime().unwrap(), "application/octet-stream");
+        let msg_bob = bob.recv_msg(&sent_msg).await;
+        assert_eq!(msg_bob.viewtype, Viewtype::File);
+        assert_eq!(msg_bob.get_filemime().unwrap(), "application/octet-stream");
+    }
     Ok(())
 }
 
