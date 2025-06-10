@@ -11,6 +11,7 @@ use rand::Rng;
 use tokio::sync::{oneshot, RwLock, RwLockWriteGuard};
 use tokio::task;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
@@ -989,16 +990,26 @@ impl Scheduler {
 
         // Actually shutdown tasks.
         let timeout_duration = std::time::Duration::from_secs(30);
+
+        let tracker = TaskTracker::new();
         for b in once(self.inbox).chain(self.oboxes) {
-            tokio::time::timeout(timeout_duration, b.handle)
-                .await
-                .log_err(context)
-                .ok();
+            let context = context.clone();
+            tracker.spawn(async move {
+                tokio::time::timeout(timeout_duration, b.handle)
+                    .await
+                    .log_err(&context)
+            });
         }
-        tokio::time::timeout(timeout_duration, self.smtp_handle)
-            .await
-            .log_err(context)
-            .ok();
+        {
+            let context = context.clone();
+            tracker.spawn(async move {
+                tokio::time::timeout(timeout_duration, self.smtp_handle)
+                    .await
+                    .log_err(&context)
+            });
+        }
+        tracker.close();
+        tracker.wait().await;
 
         // Abort tasks, then await them to ensure the `Future` is dropped.
         // Just aborting the task may keep resources such as `Context` clone
