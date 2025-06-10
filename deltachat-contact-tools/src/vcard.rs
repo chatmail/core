@@ -20,6 +20,8 @@ pub struct VcardContact {
     pub key: Option<String>,
     /// The contact's profile image (=avatar) in Base64, vcard property `photo`
     pub profile_image: Option<String>,
+    /// The biography, stored in the vcard property `note`
+    pub biography: Option<String>,
     /// The timestamp when the vcard was created / last updated, vcard property `rev`
     pub timestamp: Result<i64>,
 }
@@ -59,6 +61,9 @@ pub fn make_vcard(contacts: &[VcardContact]) -> String {
         }
         if let Some(profile_image) = &c.profile_image {
             res += &format!("PHOTO:data:image/jpeg;base64,{profile_image}\r\n");
+        }
+        if let Some(biography) = &c.biography {
+            res += &format!("NOTE:{biography}\r\n");
         }
         if let Some(timestamp) = format_timestamp(c) {
             res += &format!("REV:{timestamp}\r\n");
@@ -186,6 +191,7 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
         let mut addr = None;
         let mut key = None;
         let mut photo = None;
+        let mut biography = None;
         let mut datetime = None;
 
         for mut line in lines.by_ref() {
@@ -205,6 +211,8 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
                 key.get_or_insert(k);
             } else if let Some(p) = base64_photo(line) {
                 photo.get_or_insert(p);
+            } else if let Some((_params, bio)) = vcard_property(line, "note") {
+                biography.get_or_insert(bio);
             } else if let Some((_params, rev)) = vcard_property(line, "rev") {
                 datetime.get_or_insert(rev);
             } else if line.eq_ignore_ascii_case("END:VCARD") {
@@ -216,6 +224,7 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
                     addr,
                     key: key.map(|s| s.to_string()),
                     profile_image: photo.map(|s| s.to_string()),
+                    biography: biography.map(|b| b.to_owned()),
                     timestamp: datetime
                         .context("No timestamp in vcard")
                         .and_then(parse_datetime),

@@ -287,6 +287,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
             authname: c.authname,
             key,
             profile_image,
+            biography: Some(c.status).filter(|s| !s.is_empty()),
             // Use the current time to not reveal our or contact's online time.
             timestamp: Ok(now),
         });
@@ -420,6 +421,14 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             warn!(
                 context,
                 "import_vcard_contact: Could not set avatar for {}: {e:#}.", contact.addr
+            );
+        }
+    }
+    if let Some(biography) = &contact.biography {
+        if let Err(e) = set_status(context, id, biography.to_owned(), true, true).await {
+            warn!(
+                context,
+                "import_vcard_contact: Could biography for {}: {e:#}.", contact.addr
             );
         }
     }

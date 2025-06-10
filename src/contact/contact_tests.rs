@@ -1054,6 +1054,8 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     bob.set_config(Config::Displayname, Some("Bob")).await?;
+    bob.set_config(Config::Selfstatus, Some("It's me, bob"))
+        .await?;
     let avatar_path = bob.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     let avatar_base64 = base64::engine::general_purpose::STANDARD.encode(avatar_bytes);
@@ -1061,6 +1063,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     bob.set_config(Config::Selfavatar, Some(avatar_path.to_str().unwrap()))
         .await?;
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
+    let bob_biography = bob.get_config(Config::Selfstatus).await?.unwrap();
     let chat = bob.create_chat(alice).await;
     let sent_msg = bob.send_text(chat.id, "moin").await;
     alice.recv_msg(&sent_msg).await;
@@ -1086,12 +1089,14 @@ async fn test_make_n_import_vcard() -> Result<()> {
     assert_eq!(contacts[0].authname, "Bob".to_string());
     assert_eq!(*contacts[0].key.as_ref().unwrap(), key_base64);
     assert_eq!(*contacts[0].profile_image.as_ref().unwrap(), avatar_base64);
+    assert_eq!(*contacts[0].biography.as_ref().unwrap(), bob_biography);
     let timestamp = *contacts[0].timestamp.as_ref().unwrap();
     assert!(t0 <= timestamp && timestamp <= t1);
     assert_eq!(contacts[1].addr, "fiona@example.net".to_string());
     assert_eq!(contacts[1].authname, "".to_string());
     assert_eq!(contacts[1].key, None);
     assert_eq!(contacts[1].profile_image, None);
+    assert_eq!(contacts[1].biography, None);
     let timestamp = *contacts[1].timestamp.as_ref().unwrap();
     assert!(t0 <= timestamp && timestamp <= t1);
 
@@ -1114,6 +1119,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     assert_eq!(contacts[0].authname, "Bob".to_string());
     assert_eq!(*contacts[0].key.as_ref().unwrap(), key_base64);
     assert_eq!(*contacts[0].profile_image.as_ref().unwrap(), avatar_base64);
+    assert_eq!(*contacts[0].biography.as_ref().unwrap(), bob_biography);
     assert!(contacts[0].timestamp.is_ok());
     assert_eq!(contacts[1].addr, "fiona@example.net".to_string());
 
@@ -1145,6 +1151,7 @@ async fn test_make_n_import_vcard() -> Result<()> {
     assert_eq!(contacts[0].authname, "".to_string());
     assert_eq!(contacts[0].key, None);
     assert_eq!(contacts[0].profile_image, None);
+    assert_eq!(contacts[0].biography, None);
     assert!(contacts[0].timestamp.is_ok());
 
     Ok(())
