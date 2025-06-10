@@ -1559,6 +1559,7 @@ fn migrate_pgp_contacts(
         .context("Step 20")?
         .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
         .context("Step 21")?;
+
     {
         let mut stmt = transaction
             .prepare(
@@ -1578,6 +1579,37 @@ fn migrate_pgp_contacts(
             .context("Step 23")?;
         let mut load_chat_contacts_stmt = transaction
             .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
+        let is_chatmail: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM config WHERE keyname='is_chatmail'",
+                (),
+                |row| row.get(0),
+            )
+            .optional()
+            .context("Step 23.1")?;
+        let is_chatmail = is_chatmail
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or_default()
+            != 0;
+        let map_to_pgp_contact = |old_member: &u32| {
+            (
+                *old_member,
+                autocrypt_pgp_contacts
+                    .get(old_member)
+                    .or_else(|| {
+                        // For chatmail servers,
+                        // we send encrypted even if the peerstate is reset,
+                        // because an unencrypted message likely won't arrive.
+                        // This is the same behavior as before PGP-contacts migration.
+                        if is_chatmail {
+                            autocrypt_pgp_contacts_with_reset_peerstate.get(old_member)
+                        } else {
+                            None
+                        }
+                    })
+                    .copied(),
+            )
+        };
 
         let mut update_member_stmt = transaction
             .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
@@ -1598,29 +1630,6 @@ fn migrate_pgp_contacts(
                     orphaned_contacts.remove(m);
                 }
             };
-            let retain_autocrypt_pgp_contacts = || {
-                old_members
-                    .iter()
-                    .map(|original| {
-                        (
-                            *original,
-                            autocrypt_pgp_contacts
-                                .get(original)
-                                // TODO it's unclear whether we want to do this:
-                                // We could also make the group unencrypted
-                                // if any peerstate is reset.
-                                // Also, right now, if we have no key at all,
-                                // the member will be silently removed from the group;
-                                // maybe we should at least post an info message?
-                                .or_else(|| {
-                                    autocrypt_pgp_contacts_with_reset_peerstate.get(original)
-                                })
-                                .copied(),
-                        )
-                    })
-                    .collect::<Vec<(u32, Option<u32>)>>()
-            };
-
             let old_and_new_members: Vec<(u32, Option<u32>)> = match typ {
                 // 1:1 chats retain:
                 // - email-contact if peerstate is in the "reset" state,
@@ -1634,7 +1643,8 @@ fn migrate_pgp_contacts(
                         info!(context, "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat");
                         continue;
                     };
-                    let Some(&new_contact) = autocrypt_pgp_contacts.get(old_member) else {
+
+                    let (_, Some(new_contact)) = map_to_pgp_contact(old_member) else {
                         keep_email_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
@@ -1668,7 +1678,10 @@ fn migrate_pgp_contacts(
                             })
                             .collect()
                     } else {
-                        retain_autocrypt_pgp_contacts()
+                        old_members
+                            .iter()
+                            .map(map_to_pgp_contact)
+                            .collect::<Vec<(u32, Option<u32>)>>()
                     }
                 }
 
@@ -1679,16 +1692,36 @@ fn migrate_pgp_contacts(
                 }
 
                 // Broadcast list
-                160 => retain_autocrypt_pgp_contacts(),
-
+                160 => old_members
+                    .iter()
+                    .map(|original| {
+                        (
+                            *original,
+                            autocrypt_pgp_contacts
+                                .get(original)
+                                // There will be no unencrypted broadcast lists anymore,
+                                // so, if a peerstate is reset,
+                                // the best we can do is encrypting to this key regardless.
+                                .or_else(|| {
+                                    autocrypt_pgp_contacts_with_reset_peerstate.get(original)
+                                })
+                                .copied(),
+                        )
+                    })
+                    .collect::<Vec<(u32, Option<u32>)>>(),
                 _ => {
                     warn!(context, "Invalid chat type {typ}");
                     continue;
                 }
             };
 
-            if old_and_new_members.iter().all(|(_old, new)| new.is_none()) {
-                keep_email_contacts("All contacts in chat are e-mail contacts");
+            // If a group contains a contact without a key or with 'reset' peerstate,
+            // downgrade to unencrypted Ad-Hoc group.
+            if typ == 120 && old_and_new_members.iter().any(|(_old, new)| new.is_none()) {
+                transaction
+                    .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
+                    .context("Step 26.1")?;
+                keep_email_contacts("Group contains contact without peerstate");
                 continue;
             }
 
