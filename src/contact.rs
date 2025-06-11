@@ -428,7 +428,7 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         if let Err(e) = set_status(context, id, biography.to_owned(), true, true).await {
             warn!(
                 context,
-                "import_vcard_contact: Could biography for {}: {e:#}.", contact.addr
+                "import_vcard_contact: Could not set biography for {}: {e:#}.", contact.addr
             );
         }
     }
