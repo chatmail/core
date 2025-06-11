@@ -2718,6 +2718,68 @@ async fn test_broadcast_multidev() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_channels() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+
+    tcm.section("Create a channel");
+    let alice_chat_id = create_broadcast_channel(alice, "My Channel".to_string()).await?;
+    let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+    assert_eq!(alice_chat.typ, Chattype::OutBroadcastChannel);
+
+    let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+    assert_eq!(alice_chat.is_promoted(), false);
+    let sent = alice.send_text(alice_chat_id, "Hi nobody").await;
+    let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+    assert_eq!(alice_chat.is_promoted(), true);
+    assert_eq!(sent.recipients, "alice@example.org");
+
+    tcm.section("Add a contact to the chat and send a message");
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    let sent = alice.send_text(alice_chat_id, "Hi somebody").await;
+
+    assert_eq!(sent.recipients, "bob@example.net alice@example.org");
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.text, "Hi somebody");
+    let bob_chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
+    assert_eq!(bob_chat.typ, Chattype::InBroadcastChannel);
+    assert_eq!(bob_chat.name, "My Channel");
+    assert_eq!(bob_chat.get_profile_image(bob).await?, None);
+
+    tcm.section("Change channel name, and check that receivers see it after sending a message");
+    set_chat_name(alice, alice_chat_id, "New Channel name").await?;
+    let sent = alice.pop_sent_msg().await;
+    let rcvd = bob.recv_msg(&sent).await;
+    dbg!(&rcvd);
+    assert_eq!(rcvd.get_info_type(), SystemMessage::GroupNameChanged);
+    assert_eq!(
+        rcvd.text,
+        r#"Group name changed from "My Channel" to "New Channel name" by alice@example.org."#
+    );
+    let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
+    assert_eq!(bob_chat.name, "New Channel name");
+
+    // tcm.section("Set a channel avatar, and check that receivers see it after sending a message");
+    // let file = alice.get_blobdir().join("avatar.png");
+    // let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
+    // tokio::fs::write(&file, bytes).await?;
+    // set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
+    // let sent = alice.pop_sent_msg().await;
+    // let rcvd = bob.recv_msg(&sent).await;
+    // assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
+    // assert_eq!(rcvd.text, "Group image changed by alice@example.org.");
+    // let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
+    // assert_eq!(
+    //     bob_chat.get_profile_image(bob).await?,
+    //     Some("<hash of the avatar file>.png".into())
+    // );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_for_contact_with_blocked() -> Result<()> {
     let t = TestContext::new().await;
     let (contact_id, _) = Contact::add_or_lookup(
