@@ -6,7 +6,10 @@ use crate::headerdef::HeaderDef;
 use crate::imex::{has_backup, imex, ImexMode};
 use crate::message::{delete_msgs, MessengerMessage};
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{sync, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
+use crate::test_utils::{
+    sync, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+    TimeShiftFalsePositiveNote,
+};
 use strum::IntoEnumIterator;
 use tokio::fs;
 
@@ -2690,20 +2693,25 @@ async fn test_broadcast_channels() -> Result<()> {
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
     assert_eq!(bob_chat.name, "New Channel name");
 
-    // tcm.section("Set a channel avatar, and check that receivers see it after sending a message");
-    // let file = alice.get_blobdir().join("avatar.png");
-    // let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    // tokio::fs::write(&file, bytes).await?;
-    // set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
-    // let sent = alice.pop_sent_msg().await;
-    // let rcvd = bob.recv_msg(&sent).await;
-    // assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
-    // assert_eq!(rcvd.text, "Group image changed by alice@example.org.");
-    // let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
-    // assert_eq!(
-    //     bob_chat.get_profile_image(bob).await?,
-    //     Some("<hash of the avatar file>.png".into())
-    // );
+    tcm.section("Set a channel avatar, and check that receivers see it after sending a message");
+    let file = alice.get_blobdir().join("avatar.png");
+    tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
+    set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
+    let sent = alice.pop_sent_msg().await;
+
+    let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
+    assert_eq!(bob_chat.get_profile_image(bob).await?, None);
+
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
+    assert_eq!(rcvd.text, "Group image changed by alice@example.org.");
+
+    let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
+    let avatar = bob_chat.get_profile_image(bob).await?.unwrap();
+    assert_eq!(
+        avatar.file_name().unwrap().to_str().unwrap(),
+        AVATAR_64x64_DEDUPLICATED
+    );
 
     Ok(())
 }
