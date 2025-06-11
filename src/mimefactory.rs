@@ -1311,7 +1311,7 @@ impl MimeFactory {
             ));
         }
 
-        if chat.typ == Chattype::Group {
+        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcastChannel {
             // Send group ID unless it is an ad hoc group that has no ID.
             if !chat.grpid.is_empty() {
                 headers.push((
