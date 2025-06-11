@@ -2652,7 +2652,7 @@ async fn test_broadcast() -> Result<()> {
         assert_eq!(msg.subject, "Broadcast list");
         assert!(msg.get_showpadlock());
         let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
-        assert_eq!(chat.typ, Chattype::Mailinglist);
+        assert_eq!(chat.typ, Chattype::InBroadcastChannel);
         assert_ne!(chat.id, chat_bob.id);
         assert_eq!(chat.name, "Broadcast list");
         assert!(!chat.is_self_talk());
@@ -3502,7 +3502,7 @@ async fn test_sync_broadcast() -> Result<()> {
     let sent_msg = alice1.send_text(a1_broadcast_id, "hi").await;
     let msg = bob.recv_msg(&sent_msg).await;
     let chat = Chat::load_from_db(bob, msg.chat_id).await?;
-    assert_eq!(chat.get_type(), Chattype::Mailinglist);
+    assert_eq!(chat.get_type(), Chattype::InBroadcastChannel);
     let msg = alice0.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, a0_broadcast_id);
     remove_contact_from_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
