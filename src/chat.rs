@@ -1777,8 +1777,6 @@ impl Chat {
             if !image_rel.is_empty() {
                 return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
             }
-        } else if self.typ == Chattype::OutBroadcastChannel {
-            return Ok(Some(get_broadcast_icon(context).await?));
         }
         Ok(None)
     }
@@ -2483,15 +2481,6 @@ pub(crate) async fn get_device_icon(context: &Context) -> Result<PathBuf> {
         context,
         "icon-device",
         include_bytes!("../assets/icon-device.png"),
-    )
-    .await
-}
-
-pub(crate) async fn get_broadcast_icon(context: &Context) -> Result<PathBuf> {
-    get_asset_icon(
-        context,
-        "icon-broadcast",
-        include_bytes!("../assets/icon-broadcast.png"),
     )
     .await
 }
