@@ -809,20 +809,14 @@ impl ConfiguredLoginParam {
         entered_param: &EnteredLoginParam,
     ) -> Result<()> {
         let addr = addr_normalize(&self.addr);
+        let provider_id = self.provider.map(|provider| provider.id);
         let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-        if let Some(configured_addr) = configured_addr {
+        if let Some(configured_addr) = &configured_addr {
             ensure!(
-                addr_cmp(&configured_addr, &addr,),
+                addr_cmp(configured_addr, &addr),
                 "Adding a second transport is not supported right now."
             );
         }
-        context
-            .sql
-            .set_raw_config(
-                Config::ConfiguredProvider.as_ref(),
-                self.provider.map(|provider| provider.id),
-            )
-            .await?;
         context
             .sql
             .execute(
@@ -837,10 +831,17 @@ impl ConfiguredLoginParam {
                 ),
             )
             .await?;
-        context
-            .sql
-            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
-            .await?;
+        if configured_addr.is_none() {
+            // If there is no transport yet, set the new transport as the primary one
+            context
+                .sql
+                .set_raw_config(Config::ConfiguredProvider.as_ref(), provider_id)
+                .await?;
+            context
+                .sql
+                .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
+                .await?;
+        }
         Ok(())
     }
 
