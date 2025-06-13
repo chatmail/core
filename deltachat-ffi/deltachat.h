@@ -3839,6 +3839,21 @@ int             dc_chat_is_protected         (const dc_chat_t* chat);
 
 
 /**
+ * Check if the chat is encrypted.
+ *
+ * 1:1 chats with PGP-contacts and group chats with PGP-contacts
+ * are encrypted.
+ * 1:1 chats with emails contacts and ad-hoc groups
+ * created for email threads are not encrypted.
+ *
+ * @memberof dc_chat_t
+ * @param chat The chat object.
+ * @return 1=chat is encrypted, 0=chat is not encrypted.
+ */
+int             dc_chat_is_encrypted         (const dc_chat_t *chat);
+
+
+/**
  * Checks if the chat was protected, and then an incoming message broke this protection.
  *
  * This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
@@ -6886,6 +6901,7 @@ void dc_event_unref(dc_event_t* event);
 /// "End-to-end encryption preferred."
 ///
 /// Used to build the string returned by dc_get_contact_encrinfo().
+/// @deprecated 2025-06-05
 #define DC_STR_E2E_PREFERRED              34
 
 /// "%1$s verified"
@@ -6898,12 +6914,14 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used in status messages.
 /// - %1$s will be replaced by the name of the contact that cannot be verified
+/// @deprecated 2025-06-05
 #define DC_STR_CONTACT_NOT_VERIFIED       36
 
 /// "Changed setup for %1$s."
 ///
 /// Used in status messages.
 /// - %1$s will be replaced by the name of the contact with the changed setup
+/// @deprecated 2025-06-05
 #define DC_STR_CONTACT_SETUP_CHANGED      37
 
 /// "Archived chats"
@@ -7293,6 +7311,7 @@ void dc_event_unref(dc_event_t* event);
 /// "%1$s changed their address from %2$s to %3$s"
 ///
 /// Used as an info message to chats with contacts that changed their address.
+/// @deprecated 2025-06-05
 #define DC_STR_AEAP_ADDR_CHANGED          122
 
 /// "You changed your email address from %1$s to %2$s.
@@ -7599,6 +7618,7 @@ void dc_event_unref(dc_event_t* event);
 /// "The contact must be online to proceed. This process will continue automatically in background."
 ///
 /// Used as info message.
+/// @deprecated 2025-06-05
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
 /// "Contact". Deprecated, currently unused.

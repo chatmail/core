@@ -293,6 +293,8 @@ class Account:
         return Contact(self, contact_id)
 
     def get_contact(self, obj) -> Optional[Contact]:
+        if isinstance(obj, Account):
+            return self.create_contact(obj)
         if isinstance(obj, Contact):
             return obj
         (_, addr) = self.get_contact_addr_and_name(obj)

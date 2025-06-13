@@ -1,8 +1,0 @@
-Single#Chat#10: bob@example.net [bob@example.net] 🛡️
---------------------------------------------------------------------------------
-Msg#10: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
-Msg#11🔒:  (Contact#Contact#10): Now i have it! [FRESH]
-Msg#12: info (Contact#Contact#Info): bob@example.net sent a message from another device. [NOTICED][INFO 🛡️❌]
-Msg#13:  (Contact#Contact#10): Soon i'll have a new device [FRESH]
-Msg#14: info (Contact#Contact#Info): Messages are guaranteed to be end-to-end encrypted from now on. [NOTICED][INFO 🛡️]
---------------------------------------------------------------------------------

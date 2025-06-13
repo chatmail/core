@@ -339,39 +339,31 @@ async fn test_subject_in_group() -> Result<()> {
     }
 
     // 6. Test that in a group, replies also take the quoted message's subject, while non-replies use the group title as subject
-    let t = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
-    let group_id = chat::create_group_chat(&t, chat::ProtectionStatus::Unprotected, "groupname") // TODO encodings, ä
+    let mut tcm = TestContextManager::new();
+    let t = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let group_id = chat::create_group_chat(&t, chat::ProtectionStatus::Unprotected, "groupname")
         .await
         .unwrap();
     let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
     chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
-    let subject = send_msg_get_subject(&t, group_id, None).await?;
-    assert_eq!(subject, "groupname");
+    let sent_message = t.send_text(group_id, "Hello!").await;
+    let bob_received_message = bob.recv_msg(&sent_message).await;
+    let bob_group_id = bob_received_message.chat_id;
+    bob_group_id.accept(&bob).await.unwrap();
+    assert_eq!(get_subject(&t, sent_message).await?, "groupname");
 
     let subject = send_msg_get_subject(&t, group_id, None).await?;
     assert_eq!(subject, "Re: groupname");
 
-    receive_imf(
-        &t,
-        format!(
-            "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
-                From: bob@example.com\n\
-                To: alice@example.org\n\
-                Subject: Different subject\n\
-                In-Reply-To: {}\n\
-                Message-ID: <2893@example.com>\n\
-                Date: Sun, 22 Mar 2020 22:37:56 +0000\n\
-                \n\
-                hello\n",
-            t.get_last_msg().await.rfc724_mid
-        )
-        .as_bytes(),
-        false,
-    )
-    .await?;
-    let message_from_bob = t.get_last_msg().await;
+    let subject = send_msg_get_subject(&t, group_id, None).await?;
+    assert_eq!(subject, "Re: groupname");
+
+    let mut msg = Message::new(Viewtype::Text);
+    msg.set_subject("Different subject".to_string());
+    let bob_sent_msg = bob.send_msg(bob_group_id, &mut msg).await;
+    let message_from_bob = t.recv_msg(&bob_sent_msg).await;
 
     let subject = send_msg_get_subject(&t, group_id, None).await?;
     assert_eq!(subject, "Re: groupname");
@@ -620,43 +612,6 @@ async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
 
     assert_eq!(body.match_indices("this is the text!").count(), 1);
 
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_group_avatar_unencrypted() -> anyhow::Result<()> {
-    let t = &TestContext::new_alice().await;
-    let group_id = chat::create_group_chat(t, chat::ProtectionStatus::Unprotected, "Group")
-        .await
-        .unwrap();
-    let bob = Contact::create(t, "", "bob@example.org").await?;
-    chat::add_contact_to_chat(t, group_id, bob).await?;
-
-    let file = t.dir.path().join("avatar.png");
-    let bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    tokio::fs::write(&file, bytes).await?;
-    chat::set_chat_profile_image(t, group_id, file.to_str().unwrap()).await?;
-
-    // Send message to bob: that should get multipart/mixed because of the avatar moved to inner header.
-    let mut msg = Message::new_text("this is the text!".to_string());
-    let sent_msg = t.send_msg(group_id, &mut msg).await;
-    let mut payload = sent_msg.payload().splitn(3, "\r\n\r\n");
-
-    let outer = payload.next().unwrap();
-    let inner = payload.next().unwrap();
-    let body = payload.next().unwrap();
-
-    assert_eq!(outer.match_indices("multipart/mixed").count(), 1);
-    assert_eq!(outer.match_indices("Message-ID:").count(), 1);
-    assert_eq!(outer.match_indices("Subject:").count(), 1);
-    assert_eq!(outer.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(outer.match_indices("Chat-Group-Avatar:").count(), 0);
-
-    assert_eq!(inner.match_indices("text/plain").count(), 1);
-    assert_eq!(inner.match_indices("Message-ID:").count(), 1);
-    assert_eq!(inner.match_indices("Chat-Group-Avatar:").count(), 1);
-
-    assert_eq!(body.match_indices("this is the text!").count(), 1);
     Ok(())
 }
 
