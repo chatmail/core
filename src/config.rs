@@ -369,11 +369,8 @@ pub enum Config {
     #[strum(props(default = "0"))]
     DisableIdle,
 
-    /// Timestamp of the last check for donation request need.
+    /// Timestamp of the next check for donation request need.
     DonationRequestTs,
-
-    /// Number of outgoing encrypted messages at the time of the last donation request.
-    DonationRequestMsgCnt,
 
     /// Defines the max. size (in bytes) of messages downloaded automatically.
     /// 0 = no limit.

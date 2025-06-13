@@ -3231,36 +3231,32 @@ pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Re
 }
 
 async fn donation_request_maybe(context: &Context) -> Result<()> {
-    let request_ts = context.get_config_i64(Config::DonationRequestTs).await?;
+    let period_check = 14 * 24 * 60 * 60;
+    let period_msg = 60 * 24 * 60 * 60;
     let now = time();
-    let update_config = if request_ts.saturating_add(14 * 24 * 60 * 60) <= now {
-        let msg_cnt_prev = context
-            .get_config_parsed(Config::DonationRequestMsgCnt)
-            .await?
-            .unwrap_or(0);
+    let ts = context.get_config_i64(Config::DonationRequestTs).await?;
+    let ts_new = if ts <= now {
         let msg_cnt = context
             .sql
             .count(
-                "SELECT COUNT(*) FROM msgs
-                WHERE state>=? AND hidden=0 AND chat_id!=? AND param GLOB \"*c=*\"",
-                (MessageState::OutDelivered, DC_CHAT_ID_TRASH),
+                "SELECT COUNT(*) FROM msgs WHERE state>=? AND hidden=0 AND param GLOB \"*c=*\"",
+                (MessageState::OutDelivered,),
             )
             .await?;
-        // 10, 30, 70...
-        if msg_cnt_prev < msg_cnt.saturating_sub(8) / 2 {
-            context
-                .set_config_internal(Config::DonationRequestMsgCnt, Some(&msg_cnt.to_string()))
-                .await?;
+        if msg_cnt < 10 {
+            // New users go here, so they won't get the message immediately.
+            now.saturating_add(period_check)
+        } else {
             let mut msg = Message::new_text(stock_str::donation_request(context).await);
             add_device_msg(context, None, Some(&mut msg)).await?;
+            now.saturating_add(period_msg)
         }
-        true
     } else {
-        request_ts > now
+        cmp::min(ts, now.saturating_add(period_msg))
     };
-    if update_config {
+    if ts_new != ts {
         context
-            .set_config_internal(Config::DonationRequestTs, Some(&now.to_string()))
+            .set_config_internal(Config::DonationRequestTs, Some(&ts_new.to_string()))
             .await?;
     }
     Ok(())
