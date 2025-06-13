@@ -416,6 +416,16 @@ pub enum StockMessage {
 
     #[strum(props(fallback = "Establishing guaranteed end-to-end encryption, please wait…"))]
     SecurejoinWait = 190,
+
+    #[strum(props(fallback = "❤️ Seems you're enjoying Delta Chat!
+
+Please consider donating to help that Delta Chat stays free for everyone.
+
+While Delta Chat is free to use and open source, development costs money.
+Help keeping us to keep Delta Chat independent and make it more awesome in the future.
+
+https://delta.chat/donate"))]
+    DonationRequest = 193,
 }
 
 impl StockMessage {
@@ -786,6 +796,11 @@ pub(crate) async fn secure_join_replies(context: &Context, contact_id: ContactId
 /// Stock string: `Establishing guaranteed end-to-end encryption, please wait…`.
 pub(crate) async fn securejoin_wait(context: &Context) -> String {
     translated(context, StockMessage::SecurejoinWait).await
+}
+
+/// Stock string: `❤️ Seems you're enjoying Delta Chat!`…
+pub(crate) async fn donation_request(context: &Context) -> String {
+    translated(context, StockMessage::DonationRequest).await
 }
 
 /// Stock string: `Scan to chat with %1$s`.
