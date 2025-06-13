@@ -268,7 +268,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
     for id in contacts {
         let c = Contact::get_by_id(context, *id).await?;
         let key = c.public_key(context).await?.map(|k| k.to_base64());
-        let profile_image = match c.get_profile_image(context).await? {
+        let profile_image = match c.get_profile_image_ex(context, false).await? {
             None => None,
             Some(path) => tokio::fs::read(path)
                 .await
@@ -1489,11 +1489,29 @@ impl Contact {
     /// This is the image set by each remote user on their own
     /// using set_config(context, "selfavatar", image).
     pub async fn get_profile_image(&self, context: &Context) -> Result<Option<PathBuf>> {
+        self.get_profile_image_ex(context, true).await
+    }
+
+    /// Get the contact's profile image.
+    /// This is the image set by each remote user on their own
+    /// using set_config(context, "selfavatar", image).
+    async fn get_profile_image_ex(
+        &self,
+        context: &Context,
+        show_fallback_icon: bool,
+    ) -> Result<Option<PathBuf>> {
         if self.id == ContactId::SELF {
             if let Some(p) = context.get_config(Config::Selfavatar).await? {
                 return Ok(Some(PathBuf::from(p))); // get_config() calls get_abs_path() internally already
             }
-        } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
+        }
+        if show_fallback_icon && !self.id.is_special() && !self.is_pgp_contact() {
+            return Ok(Some(get_abs_path(
+                context,
+                Path::new(&chat::get_email_contact_icon(context).await?),
+            )));
+        }
+        if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             if !image_rel.is_empty() {
                 return Ok(Some(get_abs_path(context, Path::new(image_rel))));
             }

@@ -1726,25 +1726,34 @@ impl Chat {
 
     /// Returns profile image path for the chat.
     pub async fn get_profile_image(&self, context: &Context) -> Result<Option<PathBuf>> {
-        if let Some(image_rel) = self.param.get(Param::ProfileImage) {
+        if self.id.is_archived_link() {
+            // This is not a real chat, but the "Archive" button
+            // that is shown at the top of the chats list
+            let image_rel = get_archive_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+        } else if self.typ == Chattype::Single && !self.is_device_talk() && !self.is_self_talk() {
+            // For 1:1 chats, we always use the same avatar as for the contact
+            // This is before the `self.is_encrypted()` check, because that function
+            // has two database calls, i.e. it's slow
+            let contacts = get_chat_contacts(context, self.id).await?;
+            if let Some(contact_id) = contacts.first() {
+                let contact = Contact::get_by_id(context, *contact_id).await?;
+                return contact.get_profile_image(context).await;
+            }
+        } else if !self.is_encrypted(context).await? {
+            // This is an email-contact chat, show a special avatar that marks it as such
+            return Ok(Some(get_abs_path(
+                context,
+                Path::new(&get_email_contact_icon(context).await?),
+            )));
+        } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
+            // Load the group avatar, or the device-chat / saved-messages icon
             if !image_rel.is_empty() {
                 return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
             }
-        } else if self.id.is_archived_link() {
-            if let Ok(image_rel) = get_archive_icon(context).await {
-                return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
-            }
-        } else if self.typ == Chattype::Single {
-            let contacts = get_chat_contacts(context, self.id).await?;
-            if let Some(contact_id) = contacts.first() {
-                if let Ok(contact) = Contact::get_by_id(context, *contact_id).await {
-                    return contact.get_profile_image(context).await;
-                }
-            }
         } else if self.typ == Chattype::Broadcast {
-            if let Ok(image_rel) = get_broadcast_icon(context).await {
-                return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
-            }
+            let image_rel = get_broadcast_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
         }
         Ok(None)
     }
@@ -2479,6 +2488,22 @@ pub(crate) async fn get_archive_icon(context: &Context) -> Result<String> {
     context
         .sql
         .set_raw_config("icon-archive", Some(&icon))
+        .await?;
+    Ok(icon)
+}
+
+pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<String> {
+    if let Some(icon) = context.sql.get_raw_config("icon-email-contact").await? {
+        return Ok(icon);
+    }
+
+    let icon = include_bytes!("../assets/icon-email-contact.png");
+    let blob =
+        BlobObject::create_and_deduplicate_from_bytes(context, icon, "icon-email-contact.png")?;
+    let icon = blob.as_name().to_string();
+    context
+        .sql
+        .set_raw_config("icon-email-contact", Some(&icon))
         .await?;
     Ok(icon)
 }
