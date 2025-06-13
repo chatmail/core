@@ -2983,6 +2983,9 @@ async fn prepare_send_msg(
     let row_ids = create_send_msg_jobs(context, msg)
         .await
         .context("Failed to create send jobs")?;
+    if !row_ids.is_empty() {
+        donation_request_maybe(context).await.log_err(context).ok();
+    }
     Ok(row_ids)
 }
 
@@ -3225,6 +3228,42 @@ pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Re
         stock_str::videochat_invite_msg_body(context, &Message::parse_webrtc_instance(&instance).1)
             .await;
     send_msg(context, chat_id, &mut msg).await
+}
+
+async fn donation_request_maybe(context: &Context) -> Result<()> {
+    let request_ts = context.get_config_i64(Config::DonationRequestTs).await?;
+    let now = time();
+    let update_config = if request_ts.saturating_add(14 * 24 * 60 * 60) <= now {
+        let msg_cnt_prev = context
+            .get_config_parsed(Config::DonationRequestMsgCnt)
+            .await?
+            .unwrap_or(0);
+        let msg_cnt = context
+            .sql
+            .count(
+                "SELECT COUNT(*) FROM msgs
+                WHERE state>=? AND hidden=0 AND chat_id!=? AND param GLOB \"*c=*\"",
+                (MessageState::OutDelivered, DC_CHAT_ID_TRASH),
+            )
+            .await?;
+        // 10, 30, 70...
+        if msg_cnt_prev < msg_cnt.saturating_sub(8) / 2 {
+            context
+                .set_config_internal(Config::DonationRequestMsgCnt, Some(&msg_cnt.to_string()))
+                .await?;
+            let mut msg = Message::new_text(stock_str::donation_request(context).await);
+            add_device_msg(context, None, Some(&mut msg)).await?;
+        }
+        true
+    } else {
+        request_ts > now
+    };
+    if update_config {
+        context
+            .set_config_internal(Config::DonationRequestTs, Some(&now.to_string()))
+            .await?;
+    }
+    Ok(())
 }
 
 /// Chat message list request options.
