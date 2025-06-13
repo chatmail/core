@@ -108,9 +108,9 @@ fn test_make_and_parse_vcard() {
              VERSION:4.0\r\n\
              EMAIL:alice@example.org\r\n\
              FN:Alice Wonderland\r\n\
-             KEY:data:application/pgp-keys;base64,[base64-data]\r\n\
-             PHOTO:data:image/jpeg;base64,image in Base64\r\n\
-             NOTE:Hi, I'm Alice\r\n\
+             KEY:data:application/pgp-keys;base64\\,[base64-data]\r\n\
+             PHOTO:data:image/jpeg;base64\\,image in Base64\r\n\
+             NOTE:Hi\\, I'm Alice\r\n\
              REV:20240418T184242Z\r\n\
              END:VCARD\r\n",
         "BEGIN:VCARD\r\n\
@@ -249,7 +249,8 @@ END:VCARD",
     assert_eq!(contacts[0].profile_image, None);
 }
 
-/// Proton at some point slightly changed the format of their vcards
+/// Proton at some point slightly changed the format of their vcards.
+/// This also tests unescaped commas in PHOTO and KEY (old Delta Chat format).
 #[test]
 fn test_protonmail_vcard2() {
     let contacts = parse_vcard(
