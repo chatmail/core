@@ -29,7 +29,7 @@ async fn test_chat_info() {
                 "gossiped_timestamp": 0,
                 "is_sending_locations": false,
                 "color": 35391,
-                "profile_image": "",
+                "profile_image": "$BLOBDIR/9a17b32ad5ff71df91f7cfda9a62bb2.png",
                 "draft": "",
                 "is_muted": false,
                 "ephemeral_timer": "Disabled"

@@ -1497,7 +1497,14 @@ impl Contact {
             if let Some(p) = context.get_config(Config::Selfavatar).await? {
                 return Ok(Some(PathBuf::from(p))); // get_config() calls get_abs_path() internally already
             }
-        } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
+        }
+        if !self.is_pgp_contact() {
+            return Ok(Some(get_abs_path(
+                context,
+                Path::new(&chat::get_email_contact_icon(context).await?),
+            )));
+        }
+        if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             if !image_rel.is_empty() {
                 return Ok(Some(get_abs_path(context, Path::new(image_rel))));
             }
