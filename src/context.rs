@@ -1055,6 +1055,12 @@ impl Context {
                 .to_string(),
         );
         res.insert(
+            "donation_request_next_check",
+            self.get_config_i64(Config::DonationRequestNextCheck)
+                .await?
+                .to_string(),
+        );
+        res.insert(
             "first_key_contacts_msg_id",
             self.sql
                 .get_raw_config("first_key_contacts_msg_id")

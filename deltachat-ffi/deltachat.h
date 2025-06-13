@@ -7667,6 +7667,9 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated 2025-06-05
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
+/// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
+#define DC_STR_DONATION_REQUEST 193
+
 /// "Contact". Deprecated, currently unused.
 #define DC_STR_CONTACT 200
 

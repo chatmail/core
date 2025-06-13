@@ -369,6 +369,9 @@ pub enum Config {
     #[strum(props(default = "0"))]
     DisableIdle,
 
+    /// Timestamp of the next check for donation request need.
+    DonationRequestNextCheck,
+
     /// Defines the max. size (in bytes) of messages downloaded automatically.
     /// 0 = no limit.
     #[strum(props(default = "0"))]
