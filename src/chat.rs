@@ -1737,9 +1737,8 @@ impl Chat {
             // has two database calls, i.e. it's slow
             let contacts = get_chat_contacts(context, self.id).await?;
             if let Some(contact_id) = contacts.first() {
-                if let Ok(contact) = Contact::get_by_id(context, *contact_id).await {
-                    return contact.get_profile_image(context).await;
-                }
+                let contact = Contact::get_by_id(context, *contact_id).await?;
+                return contact.get_profile_image(context).await;
             }
         } else if !self.is_encrypted(context).await? {
             // This is an email-contact chat, show a special avatar that marks it as such
@@ -1753,9 +1752,8 @@ impl Chat {
                 return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
             }
         } else if self.typ == Chattype::Broadcast {
-            if let Ok(image_rel) = get_broadcast_icon(context).await {
-                return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
-            }
+            let image_rel = get_broadcast_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
         }
         Ok(None)
     }
@@ -2494,7 +2492,6 @@ pub(crate) async fn get_archive_icon(context: &Context) -> Result<String> {
     Ok(icon)
 }
 
-// TODO rename?
 pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<String> {
     if let Some(icon) = context.sql.get_raw_config("icon-email-contact").await? {
         return Ok(icon);
