@@ -1742,7 +1742,6 @@ impl Chat {
             }
         } else if !self.is_encrypted(context).await? {
             // This is an email-contact chat, show a special avatar that marks it as such
-            info!(context, "dbg email chat {}", &self.name);
             return Ok(Some(get_abs_path(
                 context,
                 Path::new(&get_email_contact_icon(context).await?),

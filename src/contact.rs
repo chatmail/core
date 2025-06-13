@@ -1495,13 +1495,10 @@ impl Contact {
             }
         }
         if !self.is_pgp_contact() {
-            info!(context, "dbg email contact {}", &self.name);
             return Ok(Some(get_abs_path(
                 context,
                 Path::new(&chat::get_email_contact_icon(context).await?),
             )));
-        } else {
-            info!(context, "dbg is pgp");
         }
         if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             if !image_rel.is_empty() {
