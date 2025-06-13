@@ -1038,12 +1038,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert(
-            "donation_request_msg_cnt",
-            self.get_config_u64(Config::DonationRequestMsgCnt)
-                .await?
-                .to_string(),
-        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
