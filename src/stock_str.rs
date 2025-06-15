@@ -433,6 +433,16 @@ pub enum StockMessage {
         fallback = "The contact must be online to proceed.\n\nThis process will continue automatically in background."
     ))]
     SecurejoinTakesLonger = 192,
+
+    #[strum(props(fallback = "❤️ Seems you're using Delta Chat!
+
+Please consider donating to help that Delta Chat stays free for everyone.
+
+While Delta Chat is free to use and open source, development costs time and developers need money.
+Help keeping us to keep Delta Chat independent and make it more awesome in the future.
+
+https://delta.chat/donate"))]
+    DonationRequest = 193,
 }
 
 impl StockMessage {
@@ -827,6 +837,11 @@ pub(crate) async fn securejoin_wait(context: &Context) -> String {
 /// Stock string: `The contact must be online to proceed. This process will continue automatically in background.`.
 pub(crate) async fn securejoin_takes_longer(context: &Context) -> String {
     translated(context, StockMessage::SecurejoinTakesLonger).await
+}
+
+/// Stock string: `❤️ Seems you're using Delta Chat!`…
+pub(crate) async fn donation_request(context: &Context) -> String {
+    translated(context, StockMessage::DonationRequest).await
 }
 
 /// Stock string: `Scan to chat with %1$s`.

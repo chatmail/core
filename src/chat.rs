@@ -2983,6 +2983,9 @@ async fn prepare_send_msg(
     let row_ids = create_send_msg_jobs(context, msg)
         .await
         .context("Failed to create send jobs")?;
+    if !row_ids.is_empty() {
+        donation_request_maybe(context).await.log_err(context).ok();
+    }
     Ok(row_ids)
 }
 
@@ -3225,6 +3228,40 @@ pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Re
         stock_str::videochat_invite_msg_body(context, &Message::parse_webrtc_instance(&instance).1)
             .await;
     send_msg(context, chat_id, &mut msg).await
+}
+
+async fn donation_request_maybe(context: &Context) -> Result<()> {
+    let secs_between_checks = 14 * 24 * 60 * 60;
+    let secs_between_requests = 60 * 24 * 60 * 60;
+    let now = time();
+    let ts = context
+        .get_config_i64(Config::DonationRequestNextCheck)
+        .await?;
+    let ts_new = if ts <= now {
+        let msg_cnt = context
+            .sql
+            .count(
+                "SELECT COUNT(*) FROM msgs WHERE state>=? AND hidden=0",
+                (MessageState::OutDelivered,),
+            )
+            .await?;
+        if msg_cnt < 50 {
+            // New users go here, so they won't get the message immediately.
+            now.saturating_add(secs_between_checks)
+        } else {
+            let mut msg = Message::new_text(stock_str::donation_request(context).await);
+            add_device_msg(context, None, Some(&mut msg)).await?;
+            now.saturating_add(secs_between_requests)
+        }
+    } else {
+        cmp::min(ts, now.saturating_add(secs_between_requests))
+    };
+    if ts_new != ts {
+        context
+            .set_config_internal(Config::DonationRequestNextCheck, Some(&ts_new.to_string()))
+            .await?;
+    }
+    Ok(())
 }
 
 /// Chat message list request options.
