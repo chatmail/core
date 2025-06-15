@@ -1729,14 +1729,11 @@ impl Chat {
         if self.id.is_archived_link() {
             // This is not a real chat, but the "Archive" button
             // that is shown at the top of the chats list
-            let image_rel = get_archive_icon(context).await?;
-            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+            return Ok(Some(get_archive_icon(context).await?));
         } else if self.is_device_talk() {
-            let image_rel = get_device_icon(context).await?;
-            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+            return Ok(Some(get_device_icon(context).await?));
         } else if self.is_self_talk() {
-            let image_rel = get_saved_messages_icon(context).await?;
-            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+            return Ok(Some(get_saved_messages_icon(context).await?));
         } else if self.typ == Chattype::Single {
             // For 1:1 chats, we always use the same avatar as for the contact
             // This is before the `self.is_encrypted()` check, because that function
@@ -1758,8 +1755,7 @@ impl Chat {
                 return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
             }
         } else if self.typ == Chattype::Broadcast {
-            let image_rel = get_broadcast_icon(context).await?;
-            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+            return Ok(Some(get_broadcast_icon(context).await?));
         }
         Ok(None)
     }
@@ -2433,20 +2429,21 @@ pub struct ChatInfo {
     // - [ ] email
 }
 
-async fn get_asset_icon(context: &Context, name: &str, bytes: &[u8]) -> Result<String> {
+async fn get_asset_icon(context: &Context, name: &str, bytes: &[u8]) -> Result<PathBuf> {
     ensure!(name.starts_with("icon-"));
     if let Some(icon) = context.sql.get_raw_config(name).await? {
-        return Ok(icon);
+        return Ok(get_abs_path(context, Path::new(&icon)));
     }
 
     let blob =
         BlobObject::create_and_deduplicate_from_bytes(context, bytes, &format!("{name}.png"))?;
     let icon = blob.as_name().to_string();
     context.sql.set_raw_config(name, Some(&icon)).await?;
-    Ok(icon)
+
+    Ok(get_abs_path(context, Path::new(&icon)))
 }
 
-pub(crate) async fn get_saved_messages_icon(context: &Context) -> Result<String> {
+pub(crate) async fn get_saved_messages_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
         "icon-saved-messages",
@@ -2455,7 +2452,7 @@ pub(crate) async fn get_saved_messages_icon(context: &Context) -> Result<String>
     .await
 }
 
-pub(crate) async fn get_device_icon(context: &Context) -> Result<String> {
+pub(crate) async fn get_device_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
         "icon-device",
@@ -2464,7 +2461,7 @@ pub(crate) async fn get_device_icon(context: &Context) -> Result<String> {
     .await
 }
 
-pub(crate) async fn get_broadcast_icon(context: &Context) -> Result<String> {
+pub(crate) async fn get_broadcast_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
         "icon-broadcast",
@@ -2473,7 +2470,7 @@ pub(crate) async fn get_broadcast_icon(context: &Context) -> Result<String> {
     .await
 }
 
-pub(crate) async fn get_archive_icon(context: &Context) -> Result<String> {
+pub(crate) async fn get_archive_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
         "icon-archive",
@@ -2482,7 +2479,7 @@ pub(crate) async fn get_archive_icon(context: &Context) -> Result<String> {
     .await
 }
 
-pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<String> {
+pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
         "icon-email-contact",
