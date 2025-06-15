@@ -9,6 +9,7 @@ use mailparse::ParsedMail;
 use crate::aheader::Aheader;
 use crate::context::Context;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey, SignedSecretKey};
+use crate::log::info;
 use crate::peerstate::Peerstate;
 use crate::pgp;
 

@@ -40,13 +40,13 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{load_self_public_key, DcKey};
+use crate::log::{info, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::param::Params;
-use crate::tools::create_id;
-use crate::tools::{create_smeared_timestamp, get_abs_path};
+use crate::tools::{create_id, create_smeared_timestamp, get_abs_path};
 
 /// The current API version.
 /// If `min_api` in manifest.toml is set to a larger value,

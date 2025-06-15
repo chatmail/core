@@ -5,7 +5,6 @@
 //! Usage:  cargo run --example repl --release -- <databasefile>
 //! All further options can be set using the set-command (type ? for help).
 
-#[macro_use]
 extern crate deltachat;
 
 use std::borrow::Cow::{self, Borrowed, Owned};

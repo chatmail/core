@@ -50,6 +50,7 @@ use tokio::time::timeout;
 
 use super::load_connection_timestamp;
 use crate::context::Context;
+use crate::log::{info, warn};
 use crate::tools::time;
 
 /// Inserts entry into DNS cache

@@ -26,6 +26,7 @@ use crate::chatlist_events;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::info;
 use crate::message::{rfc724_mid_exists, Message, MsgId};
 use crate::param::Param;
 

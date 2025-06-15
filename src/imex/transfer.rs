@@ -41,6 +41,7 @@ use tokio_util::sync::CancellationToken;
 use crate::chat::add_device_msg;
 use crate::context::Context;
 use crate::imex::BlobDirContents;
+use crate::log::{info, warn};
 use crate::message::Message;
 use crate::qr::Qr;
 use crate::stock_str::backup_transfer_msg_body;

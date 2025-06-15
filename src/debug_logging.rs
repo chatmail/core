@@ -3,6 +3,7 @@ use crate::chat::ChatId;
 use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::{error, info};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::param::Param;
 use crate::tools::time;

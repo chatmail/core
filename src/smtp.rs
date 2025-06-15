@@ -13,6 +13,7 @@ use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::{error, info, warn};
 use crate::login_param::prioritize_server_login_params;
 use crate::login_param::{ConfiguredLoginParam, ConfiguredServerLoginParam};
 use crate::message::Message;

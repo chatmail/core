@@ -14,6 +14,7 @@ use crate::e2ee::ensure_secret_key_exists;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::key::{load_self_public_key, DcKey, Fingerprint};
+use crate::log::{error, info, warn};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;

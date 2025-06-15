@@ -29,7 +29,7 @@ use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{load_self_public_key, DcKey, SignedPublicKey};
-use crate::log::LogExt;
+use crate::log::{info, warn, LogExt};
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};

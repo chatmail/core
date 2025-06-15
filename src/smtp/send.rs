@@ -6,6 +6,7 @@ use super::Smtp;
 use crate::config::Config;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::{info, warn};
 use crate::tools;
 
 pub type Result<T> = std::result::Result<T, Error>;

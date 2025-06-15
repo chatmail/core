@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::constants::{self, MediaQuality};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::tools::sanitize_filename;
 
 /// Represents a file in the blob directory.

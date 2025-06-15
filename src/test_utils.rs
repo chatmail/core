@@ -33,6 +33,7 @@ use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, DcSecretKey};
+use crate::log::warn;
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::peerstate::Peerstate;

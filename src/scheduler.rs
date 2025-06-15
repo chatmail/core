@@ -21,7 +21,7 @@ use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
 use crate::imap::{session::Session, FolderMeaning, Imap};
 use crate::location;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::MsgId;
 use crate::smtp::{send_smtp_messages, Smtp};
 use crate::sql;

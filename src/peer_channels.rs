@@ -39,6 +39,7 @@ use url::Url;
 use crate::chat::send_msg;
 use crate::config::Config;
 use crate::context::Context;
+use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::EventType;

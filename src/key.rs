@@ -15,7 +15,7 @@ use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
-use crate::log::LogExt;
+use crate::log::{info, LogExt};
 use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
 

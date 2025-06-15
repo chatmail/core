@@ -9,6 +9,7 @@ use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
 use crate::context::Context;
 use crate::imap;
+use crate::log::{info, warn};
 use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_by_domain;

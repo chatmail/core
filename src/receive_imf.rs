@@ -26,6 +26,7 @@ use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
 use crate::key::DcKey;
 use crate::log::LogExt;
+use crate::log::{info, warn};
 use crate::message::{
     self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
 };

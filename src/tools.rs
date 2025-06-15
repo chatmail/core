@@ -41,6 +41,7 @@ use crate::config::Config;
 use crate::constants::{self, DC_ELLIPSIS, DC_OUTDATED_WARNING_DAYS};
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::warn;
 use crate::message::{Message, Viewtype};
 use crate::stock_str;
 

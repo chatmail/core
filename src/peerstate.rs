@@ -15,6 +15,7 @@ use crate::contact::{Contact, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
+use crate::log::{info, warn};
 use crate::message::Message;
 use crate::mimeparser::SystemMessage;
 use crate::sql::Sql;

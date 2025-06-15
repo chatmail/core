@@ -26,6 +26,7 @@ use crate::ephemeral::{start_ephemeral_timers_msgids, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::imap::markseen_on_imap_table;
 use crate::location::delete_poi_location;
+use crate::log::{error, info, warn};
 use crate::mimeparser::{parse_message_id, SystemMessage};
 use crate::param::{Param, Params};
 use crate::pgp::split_armored_data;

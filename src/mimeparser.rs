@@ -29,14 +29,14 @@ use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, load_self_secret_keyring, DcKey, Fingerprint, SignedPublicKey};
+use crate::log::{error, info, warn};
 use crate::message::{self, get_vcard_summary, set_msg_failed, Message, MsgId, Viewtype};
 use crate::param::{Param, Params};
 use crate::peerstate::Peerstate;
 use crate::simplify::{simplify, SimplifiedText};
 use crate::sync::SyncItems;
-use crate::tools::time;
 use crate::tools::{
-    get_filemeta, parse_receive_headers, smeared_time, truncate_msg_text, validate_id,
+    get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, stock_str, tools};
 

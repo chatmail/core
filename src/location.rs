@@ -22,6 +22,7 @@ use crate::constants::DC_CHAT_ID_TRASH;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::tools::{duration_to_str, time};

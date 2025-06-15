@@ -9,6 +9,7 @@ use quick_xml::events::{BytesStart, Event};
 
 use super::{Error, ServerParams};
 use crate::context::Context;
+use crate::log::warn;
 use crate::net::read_url;
 use crate::provider::{Protocol, Socket};
 

@@ -11,6 +11,7 @@ use crate::aheader::{Aheader, EncryptPreference};
 use crate::config::Config;
 use crate::context::Context;
 use crate::key::{load_self_public_key, load_self_secret_key, SignedPublicKey};
+use crate::log::warn;
 use crate::peerstate::Peerstate;
 use crate::pgp;
 

@@ -7,6 +7,7 @@ use async_smtp::{SmtpClient, SmtpTransport};
 use tokio::io::{AsyncBufRead, AsyncWrite, BufStream};
 
 use crate::context::Context;
+use crate::log::{info, warn};
 use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;

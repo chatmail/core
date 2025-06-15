@@ -4,7 +4,6 @@
 
 use crate::context::Context;
 
-#[macro_export]
 macro_rules! info {
     ($ctx:expr,  $msg:expr) => {
         info!($ctx, $msg,)
@@ -19,22 +18,30 @@ macro_rules! info {
     }};
 }
 
-#[macro_export]
-macro_rules! warn {
-    ($ctx:expr, $msg:expr) => {
-        warn!($ctx, $msg,)
-    };
-    ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
-        let formatted = format!($msg, $($args),*);
-        let full = format!("{file}:{line}: {msg}",
-                           file = file!(),
-                           line = line!(),
-                           msg = &formatted);
-        $ctx.emit_event($crate::EventType::Warning(full));
-    }};
+pub(crate) use info;
+
+// Workaround for <https://github.com/rust-lang/rust/issues/133708>.
+#[macro_use]
+mod warn_macro_mod {
+    macro_rules! warn_macro {
+        ($ctx:expr, $msg:expr) => {
+            warn_macro!($ctx, $msg,)
+        };
+        ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
+            let formatted = format!($msg, $($args),*);
+            let full = format!("{file}:{line}: {msg}",
+                               file = file!(),
+                               line = line!(),
+                               msg = &formatted);
+            $ctx.emit_event($crate::EventType::Warning(full));
+        }};
+    }
+
+    pub(crate) use warn_macro;
 }
 
-#[macro_export]
+pub(crate) use warn_macro_mod::warn_macro as warn;
+
 macro_rules! error {
     ($ctx:expr, $msg:expr) => {
         error!($ctx, $msg,)
@@ -45,6 +52,8 @@ macro_rules! error {
         $ctx.emit_event($crate::EventType::Error(formatted));
     }};
 }
+
+pub(crate) use error;
 
 impl Context {
     /// Set last error string.
@@ -102,6 +111,8 @@ impl<T, E: std::fmt::Display> LogExt<T, E> for Result<T, E> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use anyhow::Result;
 
     use crate::test_utils::TestContext;

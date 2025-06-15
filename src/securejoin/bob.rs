@@ -10,6 +10,7 @@ use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{load_self_public_key, DcKey};
+use crate::log::info;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;

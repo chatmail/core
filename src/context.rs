@@ -28,6 +28,7 @@ use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::log::{info, warn};
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};

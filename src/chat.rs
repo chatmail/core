@@ -34,7 +34,7 @@ use crate::download::DownloadState;
 use crate::ephemeral::{start_chat_ephemeral_timers, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::location;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;

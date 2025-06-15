@@ -41,6 +41,7 @@ use crate::message::{Message, MsgId};
 use crate::chat::ChatId;
 use crate::color::color_int_to_hex_string;
 use crate::contact::{Contact, ContactId};
+use crate::log::warn;
 use crate::tools::time;
 use crate::webxdc::{StatusUpdateItem, StatusUpdateItemAndSerial, StatusUpdateSerial};
 use anyhow::Result;

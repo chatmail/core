@@ -10,6 +10,7 @@ use crate::constants::Blocked;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::log::LogExt;
+use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;

@@ -81,7 +81,7 @@ use crate::context::Context;
 use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
 use crate::location;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;
