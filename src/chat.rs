@@ -1731,7 +1731,13 @@ impl Chat {
             // that is shown at the top of the chats list
             let image_rel = get_archive_icon(context).await?;
             return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
-        } else if self.typ == Chattype::Single && !self.is_device_talk() && !self.is_self_talk() {
+        } else if self.is_device_talk() {
+            let image_rel = get_device_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+        } else if self.is_self_talk() {
+            let image_rel = get_saved_messages_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
+        } else if self.typ == Chattype::Single {
             // For 1:1 chats, we always use the same avatar as for the contact
             // This is before the `self.is_encrypted()` check, because that function
             // has two database calls, i.e. it's slow
@@ -2427,85 +2433,62 @@ pub struct ChatInfo {
     // - [ ] email
 }
 
-pub(crate) async fn update_saved_messages_icon(context: &Context) -> Result<()> {
-    if let Some(ChatIdBlocked { id: chat_id, .. }) =
-        ChatIdBlocked::lookup_by_contact(context, ContactId::SELF).await?
-    {
-        let icon = include_bytes!("../assets/icon-saved-messages.png");
-        let blob =
-            BlobObject::create_and_deduplicate_from_bytes(context, icon, "saved-messages.png")?;
-        let icon = blob.as_name().to_string();
-
-        let mut chat = Chat::load_from_db(context, chat_id).await?;
-        chat.param.set(Param::ProfileImage, icon);
-        chat.update_param(context).await?;
+async fn get_asset_icon(context: &Context, name: &str, bytes: &[u8]) -> Result<String> {
+    ensure!(name.starts_with("icon-"));
+    if let Some(icon) = context.sql.get_raw_config(name).await? {
+        return Ok(icon);
     }
-    Ok(())
+
+    let blob =
+        BlobObject::create_and_deduplicate_from_bytes(context, bytes, &format!("{name}.png"))?;
+    let icon = blob.as_name().to_string();
+    context.sql.set_raw_config(name, Some(&icon)).await?;
+    Ok(icon)
 }
 
-pub(crate) async fn update_device_icon(context: &Context) -> Result<()> {
-    if let Some(ChatIdBlocked { id: chat_id, .. }) =
-        ChatIdBlocked::lookup_by_contact(context, ContactId::DEVICE).await?
-    {
-        let icon = include_bytes!("../assets/icon-device.png");
-        let blob = BlobObject::create_and_deduplicate_from_bytes(context, icon, "device.png")?;
-        let icon = blob.as_name().to_string();
+pub(crate) async fn get_saved_messages_icon(context: &Context) -> Result<String> {
+    get_asset_icon(
+        context,
+        "icon-saved-messages",
+        include_bytes!("../assets/icon-saved-messages.png"),
+    )
+    .await
+}
 
-        let mut chat = Chat::load_from_db(context, chat_id).await?;
-        chat.param.set(Param::ProfileImage, &icon);
-        chat.update_param(context).await?;
-
-        let mut contact = Contact::get_by_id(context, ContactId::DEVICE).await?;
-        contact.param.set(Param::ProfileImage, icon);
-        contact.update_param(context).await?;
-    }
-    Ok(())
+pub(crate) async fn get_device_icon(context: &Context) -> Result<String> {
+    get_asset_icon(
+        context,
+        "icon-device",
+        include_bytes!("../assets/icon-device.png"),
+    )
+    .await
 }
 
 pub(crate) async fn get_broadcast_icon(context: &Context) -> Result<String> {
-    if let Some(icon) = context.sql.get_raw_config("icon-broadcast").await? {
-        return Ok(icon);
-    }
-
-    let icon = include_bytes!("../assets/icon-broadcast.png");
-    let blob = BlobObject::create_and_deduplicate_from_bytes(context, icon, "broadcast.png")?;
-    let icon = blob.as_name().to_string();
-    context
-        .sql
-        .set_raw_config("icon-broadcast", Some(&icon))
-        .await?;
-    Ok(icon)
+    get_asset_icon(
+        context,
+        "icon-broadcast",
+        include_bytes!("../assets/icon-broadcast.png"),
+    )
+    .await
 }
 
 pub(crate) async fn get_archive_icon(context: &Context) -> Result<String> {
-    if let Some(icon) = context.sql.get_raw_config("icon-archive").await? {
-        return Ok(icon);
-    }
-
-    let icon = include_bytes!("../assets/icon-archive.png");
-    let blob = BlobObject::create_and_deduplicate_from_bytes(context, icon, "archive.png")?;
-    let icon = blob.as_name().to_string();
-    context
-        .sql
-        .set_raw_config("icon-archive", Some(&icon))
-        .await?;
-    Ok(icon)
+    get_asset_icon(
+        context,
+        "icon-archive",
+        include_bytes!("../assets/icon-archive.png"),
+    )
+    .await
 }
 
 pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<String> {
-    if let Some(icon) = context.sql.get_raw_config("icon-email-contact").await? {
-        return Ok(icon);
-    }
-
-    let icon = include_bytes!("../assets/icon-email-contact.png");
-    let blob =
-        BlobObject::create_and_deduplicate_from_bytes(context, icon, "icon-email-contact.png")?;
-    let icon = blob.as_name().to_string();
-    context
-        .sql
-        .set_raw_config("icon-email-contact", Some(&icon))
-        .await?;
-    Ok(icon)
+    get_asset_icon(
+        context,
+        "icon-email-contact",
+        include_bytes!("../assets/icon-email-contact.png"),
+    )
+    .await
 }
 
 async fn update_special_chat_name(
@@ -2677,12 +2660,6 @@ impl ChatIdBlocked {
                     smeared_time,
                 )
                 .await?;
-        }
-
-        match contact_id {
-            ContactId::SELF => update_saved_messages_icon(context).await?,
-            ContactId::DEVICE => update_device_icon(context).await?,
-            _ => (),
         }
 
         Ok(Self {

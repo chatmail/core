@@ -1504,6 +1504,9 @@ impl Contact {
             if let Some(p) = context.get_config(Config::Selfavatar).await? {
                 return Ok(Some(PathBuf::from(p))); // get_config() calls get_abs_path() internally already
             }
+        } else if self.id == ContactId::DEVICE {
+            let image_rel = chat::get_device_icon(context).await?;
+            return Ok(Some(get_abs_path(context, Path::new(&image_rel))));
         }
         if show_fallback_icon && !self.id.is_special() && !self.is_pgp_contact() {
             return Ok(Some(get_abs_path(
