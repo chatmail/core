@@ -1033,8 +1033,8 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "donation_request_ts",
-            self.get_config_i64(Config::DonationRequestTs)
+            "donation_request_next_check",
+            self.get_config_i64(Config::DonationRequestNextCheck)
                 .await?
                 .to_string(),
         );

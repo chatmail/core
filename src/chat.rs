@@ -3231,32 +3231,34 @@ pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Re
 }
 
 async fn donation_request_maybe(context: &Context) -> Result<()> {
-    let period_check = 14 * 24 * 60 * 60;
-    let period_msg = 60 * 24 * 60 * 60;
+    let secs_between_checks = 14 * 24 * 60 * 60;
+    let secs_between_requests = 60 * 24 * 60 * 60;
     let now = time();
-    let ts = context.get_config_i64(Config::DonationRequestTs).await?;
+    let ts = context
+        .get_config_i64(Config::DonationRequestNextCheck)
+        .await?;
     let ts_new = if ts <= now {
         let msg_cnt = context
             .sql
             .count(
-                "SELECT COUNT(*) FROM msgs WHERE state>=? AND hidden=0 AND param GLOB \"*c=*\"",
+                "SELECT COUNT(*) FROM msgs WHERE state>=? AND hidden=0",
                 (MessageState::OutDelivered,),
             )
             .await?;
-        if msg_cnt < 10 {
+        if msg_cnt < 50 {
             // New users go here, so they won't get the message immediately.
-            now.saturating_add(period_check)
+            now.saturating_add(secs_between_checks)
         } else {
             let mut msg = Message::new_text(stock_str::donation_request(context).await);
             add_device_msg(context, None, Some(&mut msg)).await?;
-            now.saturating_add(period_msg)
+            now.saturating_add(secs_between_requests)
         }
     } else {
-        cmp::min(ts, now.saturating_add(period_msg))
+        cmp::min(ts, now.saturating_add(secs_between_requests))
     };
     if ts_new != ts {
         context
-            .set_config_internal(Config::DonationRequestTs, Some(&ts_new.to_string()))
+            .set_config_internal(Config::DonationRequestNextCheck, Some(&ts_new.to_string()))
             .await?;
     }
     Ok(())

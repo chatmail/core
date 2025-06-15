@@ -370,7 +370,7 @@ pub enum Config {
     DisableIdle,
 
     /// Timestamp of the next check for donation request need.
-    DonationRequestTs,
+    DonationRequestNextCheck,
 
     /// Defines the max. size (in bytes) of messages downloaded automatically.
     /// 0 = no limit.
