@@ -53,6 +53,14 @@ impl Accounts {
         Accounts::open(dir, writable).await
     }
 
+    /// Get the ID used to log events.
+    ///
+    /// Account manager logs events with ID 0
+    /// which is not used by any accounts.
+    fn get_id(&self) -> u32 {
+        0
+    }
+
     /// Creates a new default structure.
     async fn create(dir: &Path) -> Result<()> {
         fs::create_dir_all(dir)

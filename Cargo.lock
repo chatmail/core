@@ -1367,6 +1367,7 @@ dependencies = [
  "tokio-tar",
  "tokio-util",
  "toml",
+ "tracing",
  "url",
  "uuid",
  "webpki-roots",
