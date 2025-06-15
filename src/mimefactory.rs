@@ -25,7 +25,7 @@ use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::key::DcKey;
 use crate::location;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{is_hidden, SystemMessage};
 use crate::param::Param;
 use crate::peer_channels::create_iroh_header;
@@ -1725,18 +1725,11 @@ async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'s
         _ => file_name,
     };
 
-    /* check mimetype */
-    let mimetype = match msg.param.get(Param::MimeType) {
-        Some(mtype) => mtype.to_string(),
-        None => {
-            if let Some((_viewtype, res)) = message::guess_msgtype_from_suffix(msg) {
-                res.to_string()
-            } else {
-                "application/octet-stream".to_string()
-            }
-        }
-    };
-
+    let mimetype = msg
+        .param
+        .get(Param::MimeType)
+        .unwrap_or("application/octet-stream")
+        .to_string();
     let body = fs::read(blob.to_abs_path()).await?;
 
     // create mime part, for Content-Disposition, see RFC 2183.
