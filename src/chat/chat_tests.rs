@@ -19,8 +19,9 @@ async fn test_chat_info() {
     // Ensure we can serialize this.
     println!("{}", serde_json::to_string_pretty(&info).unwrap());
 
-    let expected = r#"
-            {
+    let expected = format!(
+        r#"
+            {{
                 "id": 10,
                 "type": 100,
                 "name": "bob",
@@ -29,15 +30,17 @@ async fn test_chat_info() {
                 "gossiped_timestamp": 0,
                 "is_sending_locations": false,
                 "color": 35391,
-                "profile_image": "",
+                "profile_image": "{}/9a17b32ad5ff71df91f7cfda9a62bb2.png",
                 "draft": "",
                 "is_muted": false,
                 "ephemeral_timer": "Disabled"
-            }
-        "#;
+            }}
+        "#,
+        t.get_blobdir().to_str().unwrap()
+    );
 
     // Ensure we can deserialize this.
-    let loaded: ChatInfo = serde_json::from_str(expected).unwrap();
+    let loaded: ChatInfo = serde_json::from_str(&expected).unwrap();
     assert_eq!(info, loaded);
 }
 
@@ -907,7 +910,11 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     assert!(chat.why_cant_send(&t).await? == Some(CantSendReason::DeviceChat));
 
     assert_eq!(chat.name, stock_str::device_messages(&t).await);
-    assert!(chat.get_profile_image(&t).await?.is_some());
+    let device_msg_icon = chat.get_profile_image(&t).await?.unwrap();
+    assert_eq!(
+        device_msg_icon.metadata()?.len(),
+        include_bytes!("../../assets/icon-device.png").len() as u64
+    );
 
     // delete device message, make sure it is not added again
     message::delete_msgs(&t, &[*msg1_id.as_ref().unwrap()]).await?;

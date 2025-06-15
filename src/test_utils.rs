@@ -976,7 +976,7 @@ impl TestContext {
                 ""
             },
             match sel_chat.get_profile_image(self).await.unwrap() {
-                Some(icon) => match icon.to_str() {
+                Some(icon) => match icon.strip_prefix(self.get_blobdir()).unwrap().to_str() {
                     Some(icon) => format!(" Icon: {icon}"),
                     _ => " Icon: Err".to_string(),
                 },
