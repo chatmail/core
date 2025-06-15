@@ -40,6 +40,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{load_self_public_key, DcKey};
+use crate::log::LogExt as _;
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::mimeparser::SystemMessage;
@@ -898,7 +899,10 @@ impl Message {
     /// Return info from manifest.toml or from fallbacks.
     pub async fn get_webxdc_info(&self, context: &Context) -> Result<WebxdcInfo> {
         ensure!(self.viewtype == Viewtype::Webxdc, "No webxdc instance.");
-        let mut archive = self.get_webxdc_archive(context).await?;
+        let mut archive = self
+            .get_webxdc_archive(context)
+            .await
+            .context("Failed to open Webxdc archive")?;
 
         let mut manifest = get_blob(&mut archive, "manifest.toml")
             .await
@@ -959,6 +963,14 @@ impl Message {
             send_update_interval: context.ratelimit.read().await.update_interval(),
             send_update_max_size: RECOMMENDED_FILE_SIZE as usize,
         })
+    }
+
+    /// Return info from manifest.toml, ignoring errors.
+    ///
+    /// If there is an error during reading the file,
+    /// returns `None` and logs the error.
+    pub async fn get_webxdc_info_or_log_err(&self, context: &Context) -> Option<WebxdcInfo> {
+        self.get_webxdc_info(context).await.log_err(context).ok()
     }
 
     async fn get_webxdc_self_addr(&self, context: &Context) -> Result<String> {
