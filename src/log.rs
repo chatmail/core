@@ -15,6 +15,7 @@ macro_rules! info {
                            file = file!(),
                            line = line!(),
                            msg = &formatted);
+        ::tracing::event!(::tracing::Level::INFO, account_id = $ctx.get_id(), "{}", &formatted);
         $ctx.emit_event($crate::EventType::Info(full));
     }};
 }
@@ -30,6 +31,7 @@ macro_rules! warn {
                            file = file!(),
                            line = line!(),
                            msg = &formatted);
+        ::tracing::event!(::tracing::Level::WARN, account_id = $ctx.get_id(), "{}", &formatted);
         $ctx.emit_event($crate::EventType::Warning(full));
     }};
 }
@@ -41,6 +43,7 @@ macro_rules! error {
     };
     ($ctx:expr, $msg:expr, $($args:expr),* $(,)?) => {{
         let formatted = format!($msg, $($args),*);
+        ::tracing::event!(::tracing::Level::ERROR, account_id = $ctx.get_id(), "{}", &formatted);
         $ctx.set_last_error(&formatted);
         $ctx.emit_event($crate::EventType::Error(formatted));
     }};
