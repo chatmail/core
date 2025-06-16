@@ -7,6 +7,7 @@ use crate::imex::{has_backup, imex, ImexMode};
 use crate::message::{delete_msgs, MessengerMessage};
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{sync, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
+use pretty_assertions::assert_eq;
 use strum::IntoEnumIterator;
 use tokio::fs;
 
@@ -20,28 +21,33 @@ async fn test_chat_info() {
     println!("{}", serde_json::to_string_pretty(&info).unwrap());
 
     let expected = format!(
-        r#"
-            {{
-                "id": 10,
-                "type": 100,
-                "name": "bob",
-                "archived": false,
-                "param": "",
-                "gossiped_timestamp": 0,
-                "is_sending_locations": false,
-                "color": 35391,
-                "profile_image": "{}/9a17b32ad5ff71df91f7cfda9a62bb2.png",
-                "draft": "",
-                "is_muted": false,
-                "ephemeral_timer": "Disabled"
-            }}
-        "#,
-        t.get_blobdir().to_str().unwrap()
+        r#"{{
+  "id": 10,
+  "type": 100,
+  "name": "bob",
+  "archived": false,
+  "param": "",
+  "is_sending_locations": false,
+  "color": 35391,
+  "profile_image": {},
+  "draft": "",
+  "is_muted": false,
+  "ephemeral_timer": "Disabled"
+}}"#,
+        // We need to do it like this so that the test passes on Windows:
+        serde_json::to_string(
+            t.get_blobdir()
+                .join("9a17b32ad5ff71df91f7cfda9a62bb2.png")
+                .to_str()
+                .unwrap()
+        )
+        .unwrap()
     );
 
     // Ensure we can deserialize this.
-    let loaded: ChatInfo = serde_json::from_str(&expected).unwrap();
-    assert_eq!(info, loaded);
+    serde_json::from_str::<ChatInfo>(&expected).unwrap();
+
+    assert_eq!(serde_json::to_string_pretty(&info).unwrap(), expected);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
