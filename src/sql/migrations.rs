@@ -1240,7 +1240,11 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         let start = Instant::now();
         sql.execute_migration_transaction(|t| migrate_pgp_contacts(context, t), migration_version)
             .await?;
-        info!(context, "PGP contacts migration took {:?}", start.elapsed());
+        info!(
+            context,
+            "PGP contacts migration took {:?} in total",
+            start.elapsed()
+        );
     }
 
     let new_version = sql
@@ -1322,7 +1326,7 @@ fn migrate_pgp_contacts(
     // Create up to 3 new contacts for every contact that has a peerstate:
     // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
     // one from the secondary verified key fingerprint.
-    // In the process, build two maps from old contact id to new contact id:
+    // In the process, build maps from old contact id to new contact id:
     // one that maps to Autocrypt PGP-contact, one that maps to verified PGP-contact.
     let mut autocrypt_pgp_contacts: BTreeMap<u32, u32> = BTreeMap::new();
     let mut autocrypt_pgp_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
@@ -1787,17 +1791,71 @@ fn migrate_pgp_contacts(
     }
 
     // ======================= Step 4: =======================
-    info!(
-        context,
-        "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
-    );
-    let mut mark_as_hidden_stmt = transaction
-        .prepare("UPDATE contacts SET origin=? WHERE id=?")
-        .context("Step 30")?;
-    for contact in orphaned_contacts {
-        mark_as_hidden_stmt
-            .execute((0x8, contact))
-            .context("Step 31")?;
+    {
+        info!(
+            context,
+            "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
+        );
+        let mut mark_as_hidden_stmt = transaction
+            .prepare("UPDATE contacts SET origin=? WHERE id=?")
+            .context("Step 30")?;
+        for contact in orphaned_contacts {
+            mark_as_hidden_stmt
+                .execute((0x8, contact))
+                .context("Step 31")?;
+        }
+    }
+
+    // ======================= Step 5: =======================
+    // Rewrite `from_id` in messages
+    {
+        let start = Instant::now();
+        let mut encrypted_msgs_stmt = transaction
+            .prepare(
+                "SELECT id, from_id, to_id
+        FROM msgs
+        WHERE id>9 AND param LIKE '%\nc=1%' OR param LIKE 'c=1%'",
+            )
+            .context("Step 32")?;
+        let mut rewrite_msg_stmt = transaction
+            .prepare("UPDATE msgs SET from_id=?, to_id=? WHERE id=?")
+            .context("Step 32")?;
+        struct LoadedMsg {
+            id: u32,
+            from_id: u32,
+            to_id: u32,
+        }
+        let encrypted_msgs = encrypted_msgs_stmt
+            .query_map((), |row| {
+                let id: u32 = row.get(0)?;
+                let from_id: u32 = row.get(1)?;
+                let to_id: u32 = row.get(2)?;
+                Ok(LoadedMsg { id, from_id, to_id })
+            })
+            .context("Step 33")?;
+
+        for msg in encrypted_msgs {
+            let msg = msg.context("Step 34")?;
+
+            let new_from_id = *autocrypt_pgp_contacts
+                .get(&msg.from_id)
+                .or_else(|| autocrypt_pgp_contacts_with_reset_peerstate.get(&msg.from_id))
+                .unwrap_or(&msg.from_id);
+
+            let new_to_id = *autocrypt_pgp_contacts
+                .get(&msg.to_id)
+                .or_else(|| autocrypt_pgp_contacts_with_reset_peerstate.get(&msg.to_id))
+                .unwrap_or(&msg.to_id);
+
+            rewrite_msg_stmt
+                .execute((new_from_id, new_to_id, msg.id))
+                .context("Step 35")?;
+        }
+        info!(
+            context,
+            "Rewriting msgs for PGP contacts took {:?}",
+            start.elapsed()
+        );
     }
 
     Ok(())
