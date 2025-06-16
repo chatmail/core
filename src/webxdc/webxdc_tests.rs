@@ -137,7 +137,12 @@ async fn test_set_draft_invalid_webxdc() -> Result<()> {
 
     // draft should not fail
     chat_id.set_draft(&t, Some(&mut instance)).await?;
-    chat_id.get_draft(&t).await.unwrap();
+    let draft_msg = chat_id.get_draft(&t).await?.expect("draft should exist");
+
+    // Loading info fails because webxdc is invalid.
+    assert!(draft_msg.get_webxdc_info(&t).await.is_err());
+    assert!(draft_msg.get_webxdc_info_or_log_err(&t).await.is_none());
+
     Ok(())
 }
 

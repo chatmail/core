@@ -49,8 +49,12 @@ impl WebxdcMessageInfo {
     pub async fn get_for_message(
         context: &Context,
         instance_message_id: MsgId,
-    ) -> anyhow::Result<Self> {
+    ) -> anyhow::Result<Option<Self>> {
         let message = Message::load_from_db(context, instance_message_id).await?;
+        let Some(webxdc_info) = message.get_webxdc_info_or_log_err(context).await else {
+            return Ok(None);
+        };
+
         let WebxdcInfo {
             name,
             icon,
@@ -62,9 +66,9 @@ impl WebxdcMessageInfo {
             self_addr,
             send_update_interval,
             send_update_max_size,
-        } = message.get_webxdc_info(context).await?;
+        } = webxdc_info;
 
-        Ok(Self {
+        Ok(Some(Self {
             name,
             icon,
             document: maybe_empty_string_to_option(document),
@@ -74,6 +78,6 @@ impl WebxdcMessageInfo {
             self_addr,
             send_update_interval,
             send_update_max_size,
-        })
+        }))
     }
 }

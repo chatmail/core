@@ -37,7 +37,7 @@ extern crate rusqlite;
 extern crate strum_macros;
 
 #[macro_use]
-pub mod log;
+mod log;
 
 #[cfg(feature = "internals")]
 #[macro_use]
