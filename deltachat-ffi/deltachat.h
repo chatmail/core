@@ -1237,6 +1237,8 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * - callee ends the call using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED
  * - caller ends the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED
  *
+ * The call URL is avauilable at dc_msg_get_videochat_url().
+ *
  * Note, that the events are for updating the call screen,
  * possible status messages are added and updated as usual, including the known events.
  * In the UI, the sorted chatlist is used as an overview about calls as well as messages.
@@ -6736,7 +6738,8 @@ void dc_event_unref(dc_event_t* event);
  * Otherwise, ringing should end on #DC_EVENT_CALL_ENDED
  * or #DC_EVENT_INCOMING_CALL_ACCEPTED
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call
+ * @param data1 (int) msg_id ID of the info-message referring to the call.
+ *    The call URL is avauilable at dc_msg_get_videochat_url().
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 

@@ -1578,6 +1578,9 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
             ));
+        }
+
+        if msg.param.exists(Param::WebrtcRoom) {
             headers.push((
                 "Chat-Webrtc-Room",
                 mail_builder::headers::raw::Raw::new(

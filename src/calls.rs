@@ -5,6 +5,7 @@
 //! So, no database changes are needed at this stage.
 //! When it comes to relay calls over iroh, we may need a dedicated table, and this may change.
 use crate::chat::{send_msg, Chat, ChatId};
+use crate::config::Config;
 use crate::constants::Chattype;
 use crate::context::Context;
 use crate::events::EventType;
@@ -12,8 +13,8 @@ use crate::message::{self, rfc724_mid_exists, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
-use crate::tools::time;
-use anyhow::{ensure, Result};
+use crate::tools::{create_id, time};
+use anyhow::{bail, ensure, Result};
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -71,12 +72,24 @@ impl Context {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
 
+        let instance = if let Some(instance) = self.get_config(Config::WebrtcInstance).await? {
+            if !instance.is_empty() {
+                instance
+            } else {
+                bail!("webrtc_instance is empty");
+            }
+        } else {
+            bail!("webrtc_instance not set");
+        };
+        let instance = Message::create_webrtc_instance(&instance, &create_id());
+
         let mut call = Message {
             viewtype: Viewtype::Text,
             text: "Calling...".into(),
             ..Default::default()
         };
         call.param.set_cmd(SystemMessage::OutgoingCall);
+        call.param.set(Param::WebrtcRoom, &instance);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
@@ -284,6 +297,8 @@ mod tests {
         let bob2 = tcm.bob().await;
         for t in [&alice, &alice2, &bob, &bob2] {
             t.set_config_bool(Config::SyncMsgs, true).await?;
+            t.set_config(Config::WebrtcInstance, Some("https://foo.bar"))
+                .await?;
         }
 
         // Alice creates a chat with Bob and places an outgoing call there.
@@ -295,12 +310,17 @@ mod tests {
         assert_eq!(sent1.sender_msg_id, test_msg_id);
         assert!(alice_call.is_info());
         assert_eq!(alice_call.get_info_type(), SystemMessage::OutgoingCall);
+        let alice_url = alice_call.get_videochat_url().unwrap();
+        assert!(alice_url.starts_with("https://foo.bar/"));
         let info = alice.load_call_by_root_id(alice_call.id).await?;
         assert!(!info.accepted);
 
         let alice2_call = alice2.recv_msg(&sent1).await;
         assert!(alice2_call.is_info());
         assert_eq!(alice2_call.get_info_type(), SystemMessage::OutgoingCall);
+        let alice2_url = alice2_call.get_videochat_url().unwrap();
+        assert!(alice2_url.starts_with("https://foo.bar/"));
+        assert_eq!(alice_url, alice2_url);
         let info = alice2.load_call_by_root_id(alice2_call.id).await?;
         assert!(!info.accepted);
 
@@ -312,6 +332,9 @@ mod tests {
             .await;
         assert!(bob_call.is_info());
         assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
+        let bob_url = bob_call.get_videochat_url().unwrap();
+        assert!(bob_url.starts_with("https://foo.bar/"));
+        assert_eq!(alice_url, bob_url);
 
         let bob2_call = bob2.recv_msg(&sent1).await;
         assert!(bob2_call.is_info());
