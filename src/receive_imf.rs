@@ -42,7 +42,7 @@ use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{self, buf_compress, remove_subject_prefix};
-use crate::{chatlist_events, location};
+use crate::{chatlist_events, debug_ensure, debug_ensure_eq, location};
 use crate::{contact, imap};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
@@ -1435,7 +1435,7 @@ async fn do_chat_assignment(
                     false => None,
                 };
                 if let Some(chat) = chat {
-                    debug_assert!(chat.typ == Chattype::Single);
+                    debug_ensure!(chat.typ == Chattype::Single);
                     let mut new_protection = match verified_encryption {
                         VerifiedEncryption::Verified => ProtectionStatus::Protected,
                         VerifiedEncryption::NotVerified(_) => ProtectionStatus::Unprotected,
@@ -2105,7 +2105,7 @@ RETURNING id
         // afterwards insert additional parts.
         replace_msg_id = None;
 
-        debug_assert!(!row_id.is_special());
+        debug_ensure!(!row_id.is_special());
         created_db_entries.push(row_id);
     }
 
@@ -2368,7 +2368,7 @@ async fn lookup_chat_by_reply(
     // lookup by reply should never be needed
     // as we can directly assign the message to the chat
     // by its group ID.
-    debug_assert!(mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted());
+    debug_ensure!(mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted());
 
     // Try to assign message to the same chat as the parent message.
     let Some(parent_chat_id) = ChatId::lookup_by_message(parent) else {
@@ -3628,7 +3628,7 @@ async fn add_or_lookup_key_contacts_by_address_list(
         }
     }
 
-    debug_assert_eq!(contact_ids.len(), address_list.len());
+    debug_ensure_eq!(contact_ids.len(), address_list.len(),);
     Ok(contact_ids)
 }
 
@@ -3782,7 +3782,7 @@ async fn lookup_key_contacts_by_address_list(
             contact_ids.push(contact_id);
         }
     }
-    debug_assert_eq!(address_list.len(), contact_ids.len());
+    debug_ensure_eq!(address_list.len(), contact_ids.len(),);
     Ok(contact_ids)
 }
 
