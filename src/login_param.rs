@@ -233,6 +233,11 @@ impl EnteredLoginParam {
 
     /// Saves entered account settings,
     /// so that they can be prefilled if the user wants to configure the server again.
+    ///
+    /// This is needed because all the UIs still use `get_config("mail_pw")` etc.
+    /// in order to prefill the entered account settings.
+    /// This will change when the UIs get a screen to list all available transports;
+    /// afterwards, we can then remove `save_legacy()` and the corresponding configs.
     pub(crate) async fn save_legacy(&self, context: &Context) -> Result<()> {
         context.set_config(Config::Addr, Some(&self.addr)).await?;
 

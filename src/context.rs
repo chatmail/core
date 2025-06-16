@@ -774,8 +774,8 @@ impl Context {
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
         let unset = "0";
-        let l = self.list_transports().await?;
-        let l2 = ConfiguredLoginParam::load(self)
+        let entered_account_settings = self.list_transports().await?;
+        let used_account_settings = ConfiguredLoginParam::load(self)
             .await?
             .map_or_else(|| "Not configured".to_string(), |param| param.to_string());
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
@@ -869,12 +869,13 @@ impl Context {
         res.insert("proxy_enabled", proxy_enabled.to_string());
         res.insert(
             "entered_account_settings",
-            l.iter()
+            entered_account_settings
+                .iter()
                 .map(|l| l.to_string())
                 .collect::<Vec<_>>()
                 .join("; "),
         );
-        res.insert("used_account_settings", l2);
+        res.insert("used_account_settings", used_account_settings);
 
         if let Some(server_id) = &*self.server_id.read().await {
             res.insert("imap_server_id", format!("{server_id:?}"));
