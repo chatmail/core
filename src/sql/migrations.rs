@@ -1,5 +1,6 @@
 //! Migrations module.
 
+use std::cmp::max;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Instant;
@@ -1810,21 +1811,27 @@ fn migrate_pgp_contacts(
     // Rewrite `from_id` in messages
     {
         let start = Instant::now();
+
         let mut encrypted_msgs_stmt = transaction
             .prepare(
                 "SELECT id, from_id, to_id
-        FROM msgs
-        WHERE id>9 AND param LIKE '%\nc=1%' OR param LIKE 'c=1%'",
+                FROM msgs
+                WHERE id>9
+                AND (param LIKE '%\nc=1%' OR param LIKE 'c=1%')
+                AND chat_id>9
+                ORDER BY id DESC LIMIT 10000",
             )
             .context("Step 32")?;
         let mut rewrite_msg_stmt = transaction
             .prepare("UPDATE msgs SET from_id=?, to_id=? WHERE id=?")
-            .context("Step 32")?;
+            .context("Step 32.1")?;
+
         struct LoadedMsg {
             id: u32,
             from_id: u32,
             to_id: u32,
         }
+
         let encrypted_msgs = encrypted_msgs_stmt
             .query_map((), |row| {
                 let id: u32 = row.get(0)?;
