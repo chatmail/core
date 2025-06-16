@@ -6736,7 +6736,7 @@ void dc_event_unref(dc_event_t* event);
  * Otherwise, ringing should end on #DC_EVENT_CALL_ENDED
  * or #DC_EVENT_INCOMING_CALL_ACCEPTED
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call,
+ * @param data1 (int) msg_id ID of the info-message referring to the call
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 
@@ -6746,6 +6746,8 @@ void dc_event_unref(dc_event_t* event);
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ *
+ * @param data1 (int) msg_id ID of the info-message referring to the call
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 
@@ -6754,6 +6756,8 @@ void dc_event_unref(dc_event_t* event);
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ *
+ * @param data1 (int) msg_id ID of the info-message referring to the call
  */
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
 
@@ -6762,6 +6766,8 @@ void dc_event_unref(dc_event_t* event);
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ *
+ * @param data1 (int) msg_id ID of the info-message referring to the call
  */
 #define DC_EVENT_CALL_ENDED                               2580
 
