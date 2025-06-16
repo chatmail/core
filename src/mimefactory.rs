@@ -20,6 +20,7 @@ use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::e2ee::EncryptHelper;
+use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::key::self_fingerprint;
 use crate::key::{DcKey, SignedPublicKey};
@@ -308,7 +309,7 @@ impl MimeFactory {
                                             } else if id == ContactId::SELF {
                                                 member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                debug_assert!(member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
+                                                ensure_and_debug_assert!(member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
                                             }
                                         }
                                         member_timestamps.push(add_timestamp);
@@ -359,7 +360,7 @@ impl MimeFactory {
                                                 // if we are leaving the group.
                                                 past_member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
+                                                ensure_and_debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
                                             }
                                         }
                                     }
@@ -367,8 +368,8 @@ impl MimeFactory {
                             }
                         }
 
-                        debug_assert!(member_timestamps.len() >= to.len());
-                        debug_assert!(member_fingerprints.is_empty() || member_fingerprints.len() >= to.len());
+                        ensure_and_debug_assert!(member_timestamps.len() >= to.len());
+                        ensure_and_debug_assert!(member_fingerprints.is_empty() || member_fingerprints.len() >= to.len());
 
                         if to.len() > 1 {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
@@ -445,7 +446,7 @@ impl MimeFactory {
         };
         let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await;
 
-        debug_assert!(
+        ensure_and_debug_assert!(
             member_timestamps.is_empty()
                 || to.len() + past_members.len() == member_timestamps.len()
         );
@@ -668,7 +669,7 @@ impl MimeFactory {
             ));
         }
 
-        debug_assert!(
+        ensure_and_debug_assert!(
             self.member_timestamps.is_empty()
                 || to.len() + past_members.len() == self.member_timestamps.len()
         );

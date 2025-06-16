@@ -763,5 +763,43 @@ pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
     Ok(())
 }
 
+/// Return early with an error if a condition is not satisfied.
+/// In non-optimized builds, panics instead if so.
+#[macro_export]
+macro_rules! ensure_and_debug_assert {
+    ($($arg:tt)*) => {
+        debug_assert!($($arg)*);
+        anyhow::ensure!($($arg)*);
+    };
+}
+
+/// Return early with an error on two expressions inequality.
+/// In non-optimized builds, panics instead if so.
+#[macro_export]
+macro_rules! ensure_and_debug_assert_eq {
+    ($left:expr, $right:expr, $($arg:tt)*) => {
+        match (&$left, &$right) {
+            (left_val, right_val) => {
+                debug_assert_eq!(left_val, right_val, $($arg)*);
+                anyhow::ensure!(left_val == right_val, $($arg)*);
+            }
+        }
+    };
+}
+
+/// Return early with an error on two expressions equality.
+/// In non-optimized builds, panics instead if so.
+#[macro_export]
+macro_rules! ensure_and_debug_assert_ne {
+    ($left:expr, $right:expr, $($arg:tt)*) => {
+        match (&$left, &$right) {
+            (left_val, right_val) => {
+                debug_assert_ne!(left_val, right_val, $($arg)*);
+                anyhow::ensure!(left_val != right_val, $($arg)*);
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tools_tests;

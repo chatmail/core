@@ -37,7 +37,7 @@ use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
 use crate::sync::{self, Sync::*};
 use crate::tools::{SystemTime, duration_to_str, get_abs_path, time};
-use crate::{chat, chatlist_events, stock_str};
+use crate::{chat, chatlist_events, ensure_and_debug_assert_ne, stock_str};
 
 /// Time during which a contact is considered as seen recently.
 const SEEN_RECENTLY_SECONDS: i64 = 600;
@@ -1922,9 +1922,10 @@ pub(crate) async fn mark_contact_id_as_verified(
     contact_id: ContactId,
     verifier_id: ContactId,
 ) -> Result<()> {
-    debug_assert_ne!(
-        contact_id, verifier_id,
-        "Contact cannot be verified by self"
+    ensure_and_debug_assert_ne!(
+        contact_id,
+        verifier_id,
+        "Contact cannot be verified by self",
     );
     context
         .sql
