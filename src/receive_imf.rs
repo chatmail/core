@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
-use anyhow::{Context as _, Result};
+use anyhow::{ensure, Context as _, Result};
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::{
     addr_cmp, addr_normalize, may_be_valid_addr, sanitize_single_line, ContactAddress,
@@ -92,7 +92,7 @@ enum ChatAssignment {
     /// assign to encrypted group.
     GroupChat { grpid: String },
 
-    /// Mailing list or broadcast list.
+    /// Mailing list or channel.
     ///
     /// Mailing lists don't have members.
     /// Broadcast lists have members
@@ -106,7 +106,7 @@ enum ChatAssignment {
     /// up except the `from_id`
     /// which may be an email address contact
     /// or a PGP-contact.
-    MailingList,
+    MailingListOrChannel,
 
     /// Group chat without a Group ID.
     ///
@@ -359,8 +359,8 @@ pub(crate) async fn receive_imf_inner(
         return Ok(None);
     };
 
-    let prevent_rename =
-        mime_parser.is_mailinglist_message() || mime_parser.get_header(HeaderDef::Sender).is_some();
+    let prevent_rename = (mime_parser.is_mailinglist_message() && !mime_parser.has_chat_version())
+        || mime_parser.get_header(HeaderDef::Sender).is_some();
 
     // get From: (it can be an address list!) and check if it is known (for known From:'s we add
     // the other To:/Cc: in the 3rd pass)
@@ -451,7 +451,7 @@ pub(crate) async fn receive_imf_inner(
             None
         }
         ChatAssignment::ExistingChat { chat_id, .. } => Some(chat_id),
-        ChatAssignment::MailingList => None,
+        ChatAssignment::MailingListOrChannel => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
@@ -530,7 +530,7 @@ pub(crate) async fn receive_imf_inner(
                 .await?;
             }
         }
-        ChatAssignment::Trash | ChatAssignment::MailingList => {
+        ChatAssignment::Trash | ChatAssignment::MailingListOrChannel => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -1179,6 +1179,8 @@ async fn decide_chat_assignment(
 
     let chat_assignment = if should_trash {
         ChatAssignment::Trash
+    } else if mime_parser.get_mailinglist_header().is_some() {
+        ChatAssignment::MailingListOrChannel
     } else if let Some(grpid) = mime_parser.get_chat_group_id() {
         if mime_parser.was_encrypted() {
             ChatAssignment::GroupChat {
@@ -1206,8 +1208,6 @@ async fn decide_chat_assignment(
             // Group ID is ignored, however.
             ChatAssignment::AdHocGroup
         }
-    } else if mime_parser.get_mailinglist_header().is_some() {
-        ChatAssignment::MailingList
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
             lookup_chat_by_reply(context, mime_parser, parent, is_partial_download).await?
@@ -1311,15 +1311,17 @@ async fn do_chat_assignment(
                     }
                 }
             }
-            ChatAssignment::MailingList => {
+            ChatAssignment::MailingListOrChannel => {
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = create_or_lookup_mailinglist(
-                        context,
-                        allow_creation,
-                        mailinglist_header,
-                        mime_parser,
-                    )
-                    .await?
+                    if let Some((new_chat_id, new_chat_id_blocked)) =
+                        create_or_lookup_mailinglist_or_channel(
+                            context,
+                            allow_creation,
+                            mailinglist_header,
+                            from_id,
+                            mime_parser,
+                        )
+                        .await?
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
@@ -1358,7 +1360,7 @@ async fn do_chat_assignment(
         // unblock the chat
         if chat_id_blocked != Blocked::Not
             && create_blocked != Blocked::Yes
-            && !matches!(chat_assignment, ChatAssignment::MailingList)
+            && !matches!(chat_assignment, ChatAssignment::MailingListOrChannel)
         {
             if let Some(chat_id) = chat_id {
                 chat_id.set_blocked(context, create_blocked).await?;
@@ -1488,7 +1490,7 @@ async fn do_chat_assignment(
                 chat_id = Some(*new_chat_id);
                 chat_id_blocked = *new_chat_id_blocked;
             }
-            ChatAssignment::MailingList => {
+            ChatAssignment::MailingListOrChannel => {
                 // Check if the message belongs to a broadcast list.
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
@@ -1499,7 +1501,7 @@ async fn do_chat_assignment(
                         } else {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_list_ex(context, Nosync, listid, name).await?
+                            chat::create_broadcast_channel_ex(context, Nosync, listid, name).await?
                         },
                     );
                 }
@@ -1640,16 +1642,29 @@ async fn add_parts(
     let is_location_kml = mime_parser.location_kml.is_some();
     let is_mdn = !mime_parser.mdn_reports.is_empty();
 
-    let mut group_changes = apply_group_changes(
-        context,
-        mime_parser,
-        chat_id,
-        from_id,
-        to_ids,
-        past_ids,
-        &verified_encryption,
-    )
-    .await?;
+    let mut chat = Chat::load_from_db(context, chat_id).await?;
+    let mut group_changes = match chat.typ {
+        // Do not apply group changes to the trash chat:
+        _ if chat.id.is_special() => GroupChangesInfo::default(),
+        Chattype::Single => GroupChangesInfo::default(),
+        Chattype::Mailinglist => GroupChangesInfo::default(),
+        Chattype::OutBroadcastChannel => GroupChangesInfo::default(),
+        Chattype::Group => {
+            apply_group_changes(
+                context,
+                mime_parser,
+                &mut chat,
+                from_id,
+                to_ids,
+                past_ids,
+                &verified_encryption,
+            )
+            .await?
+        }
+        Chattype::InBroadcastChannel => {
+            apply_broadcast_channel_changes(context, mime_parser, &mut chat, from_id).await?
+        }
+    };
 
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
@@ -2744,19 +2759,15 @@ struct GroupChangesInfo {
 async fn apply_group_changes(
     context: &Context,
     mime_parser: &mut MimeMessage,
-    chat_id: ChatId,
+    chat: &mut Chat,
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
     verified_encryption: &VerifiedEncryption,
 ) -> Result<GroupChangesInfo> {
     let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
-    if chat_id.is_special() {
-        // Do not apply group changes to the trash chat.
-        return Ok(GroupChangesInfo::default());
-    }
-    let mut chat = Chat::load_from_db(context, chat_id).await?;
-    if chat.typ != Chattype::Group {
+    ensure!(chat.typ == Chattype::Group);
+    if chat.id.is_special() {
         return Ok(GroupChangesInfo::default());
     }
 
@@ -2774,7 +2785,7 @@ async fn apply_group_changes(
         };
 
     let chat_contacts =
-        HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat_id).await?);
+        HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
     let is_from_in_chat =
         !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
@@ -2787,11 +2798,12 @@ async fn apply_group_changes(
             } else {
                 warn!(
                     context,
-                    "Not marking chat {chat_id} as protected due to verification problem: {err:#}."
+                    "Not marking chat {} as protected due to verification problem: {err:#}.",
+                    chat.id
                 );
             }
         } else if !chat.is_protected() {
-            chat_id
+            chat.id
                 .set_protection(
                     context,
                     ProtectionStatus::Protected,
@@ -2803,7 +2815,7 @@ async fn apply_group_changes(
     }
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat_id)).await?;
+        removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat.id)).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
@@ -2831,70 +2843,15 @@ async fn apply_group_changes(
         }
     }
 
-    let group_name_timestamp = mime_parser
-        .get_header(HeaderDef::ChatGroupNameTimestamp)
-        .and_then(|s| s.parse::<i64>().ok());
-    if let Some(old_name) = mime_parser
-        .get_header(HeaderDef::ChatGroupNameChanged)
-        .map(|s| s.trim())
-        .or(match group_name_timestamp {
-            Some(0) => None,
-            Some(_) => Some(chat.name.as_str()),
-            None => None,
-        })
-    {
-        if let Some(grpname) = mime_parser
-            .get_header(HeaderDef::ChatGroupName)
-            .map(|grpname| grpname.trim())
-            .filter(|grpname| grpname.len() < 200)
-        {
-            let grpname = &sanitize_single_line(grpname);
-
-            let chat_group_name_timestamp =
-                chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
-            let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
-            // To provide group name consistency, compare names if timestamps are equal.
-            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
-                && chat_id
-                    .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
-                    .await?
-                && grpname != &chat.name
-            {
-                info!(context, "Updating grpname for chat {chat_id}.");
-                context
-                    .sql
-                    .execute("UPDATE chats SET name=? WHERE id=?;", (grpname, chat_id))
-                    .await?;
-                send_event_chat_modified = true;
-            }
-            if mime_parser
-                .get_header(HeaderDef::ChatGroupNameChanged)
-                .is_some()
-            {
-                let old_name = &sanitize_single_line(old_name);
-                better_msg.get_or_insert(
-                    stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
-                );
-            }
-        }
-    }
-
-    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg) {
-        if value == "group-avatar-changed" {
-            if let Some(avatar_action) = &mime_parser.group_avatar {
-                // this is just an explicit message containing the group-avatar,
-                // apart from that, the group-avatar is send along with various other messages
-                better_msg = match avatar_action {
-                    AvatarAction::Delete => {
-                        Some(stock_str::msg_grp_img_deleted(context, from_id).await)
-                    }
-                    AvatarAction::Change(_) => {
-                        Some(stock_str::msg_grp_img_changed(context, from_id).await)
-                    }
-                };
-            }
-        }
-    }
+    apply_chat_name_and_avatar_changes(
+        context,
+        mime_parser,
+        from_id,
+        chat,
+        &mut send_event_chat_modified,
+        &mut better_msg,
+    )
+    .await?;
 
     if is_from_in_chat {
         if chat.member_list_is_stale(context).await? {
@@ -2913,7 +2870,7 @@ async fn apply_group_changes(
                     transaction.execute(
                         "DELETE FROM chats_contacts
                          WHERE chat_id=?",
-                        (chat_id,),
+                        (chat.id,),
                     )?;
 
                     // Insert contacts with default timestamps of 0.
@@ -2922,7 +2879,7 @@ async fn apply_group_changes(
                          VALUES                     (?,       ?)",
                     )?;
                     for contact_id in &new_members {
-                        statement.execute((chat_id, contact_id))?;
+                        statement.execute((chat.id, contact_id))?;
                     }
 
                     Ok(())
@@ -2934,7 +2891,7 @@ async fn apply_group_changes(
         {
             send_event_chat_modified |= update_chats_contacts_timestamps(
                 context,
-                chat_id,
+                chat.id,
                 Some(from_id),
                 to_ids,
                 past_ids,
@@ -2974,7 +2931,7 @@ async fn apply_group_changes(
                 chat::update_chat_contacts_table(
                     context,
                     mime_parser.timestamp_sent,
-                    chat_id,
+                    chat.id,
                     &new_members,
                 )
                 .await?;
@@ -2982,7 +2939,7 @@ async fn apply_group_changes(
             }
         }
 
-        chat_id
+        chat.id
             .update_timestamp(
                 context,
                 Param::MemberListTimestamp,
@@ -2992,7 +2949,7 @@ async fn apply_group_changes(
     }
 
     let new_chat_contacts = HashSet::<ContactId>::from_iter(
-        chat::get_chat_contacts(context, chat_id)
+        chat::get_chat_contacts(context, chat.id)
             .await?
             .iter()
             .copied(),
@@ -3022,43 +2979,12 @@ async fn apply_group_changes(
     let group_changes_msgs = if self_added {
         Vec::new()
     } else {
-        group_changes_msgs(context, &added_ids, &removed_ids, chat_id).await?
+        group_changes_msgs(context, &added_ids, &removed_ids, chat.id).await?
     };
 
-    if let Some(avatar_action) = &mime_parser.group_avatar {
-        if !new_chat_contacts.contains(&ContactId::SELF) {
-            warn!(
-                context,
-                "Received group avatar update for group chat {chat_id} we are not a member of."
-            );
-        } else if !new_chat_contacts.contains(&from_id) {
-            warn!(
-                context,
-                "Contact {from_id} attempts to modify group chat {chat_id} avatar without being a member.",
-            );
-        } else {
-            info!(context, "Group-avatar change for {chat_id}.");
-            if chat
-                .param
-                .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
-            {
-                match avatar_action {
-                    AvatarAction::Change(profile_image) => {
-                        chat.param.set(Param::ProfileImage, profile_image);
-                    }
-                    AvatarAction::Delete => {
-                        chat.param.remove(Param::ProfileImage);
-                    }
-                };
-                chat.update_param(context).await?;
-                send_event_chat_modified = true;
-            }
-        }
-    }
-
     if send_event_chat_modified {
-        context.emit_event(EventType::ChatModified(chat_id));
-        chatlist_events::emit_chatlist_item_changed(context, chat_id);
+        context.emit_event(EventType::ChatModified(chat.id));
+        chatlist_events::emit_chatlist_item_changed(context, chat.id);
     }
     Ok(GroupChangesInfo {
         better_msg,
@@ -3070,6 +2996,111 @@ async fn apply_group_changes(
         silent,
         extra_msgs: group_changes_msgs,
     })
+}
+
+/// Applies incoming changes to the group's or broadcast channel's name and avatar.
+///
+/// - `send_event_chat_modified` is set to `true` if ChatModified event should be sent
+/// - `better_msg` is filled with an info message about name change, if necessary
+async fn apply_chat_name_and_avatar_changes(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    from_id: ContactId,
+    chat: &mut Chat,
+    send_event_chat_modified: &mut bool,
+    better_msg: &mut Option<String>,
+) -> Result<()> {
+    // ========== Apply chat name changes ==========
+
+    let group_name_timestamp = mime_parser
+        .get_header(HeaderDef::ChatGroupNameTimestamp)
+        .and_then(|s| s.parse::<i64>().ok());
+
+    if let Some(old_name) = mime_parser
+        .get_header(HeaderDef::ChatGroupNameChanged)
+        .map(|s| s.trim())
+        .or(match group_name_timestamp {
+            Some(0) => None,
+            Some(_) => Some(chat.name.as_str()),
+            None => None,
+        })
+    {
+        if let Some(grpname) = mime_parser
+            .get_header(HeaderDef::ChatGroupName)
+            .map(|grpname| grpname.trim())
+            .filter(|grpname| grpname.len() < 200)
+        {
+            let grpname = &sanitize_single_line(grpname);
+
+            let chat_group_name_timestamp =
+                chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
+            let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
+            // To provide group name consistency, compare names if timestamps are equal.
+            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
+                && chat
+                    .id
+                    .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
+                    .await?
+                && grpname != &chat.name
+            {
+                info!(context, "Updating grpname for chat {}.", chat.id);
+                context
+                    .sql
+                    .execute("UPDATE chats SET name=? WHERE id=?;", (grpname, chat.id))
+                    .await?;
+                *send_event_chat_modified = true;
+            }
+            if mime_parser
+                .get_header(HeaderDef::ChatGroupNameChanged)
+                .is_some()
+            {
+                let old_name = &sanitize_single_line(old_name);
+                better_msg.get_or_insert(
+                    stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
+                );
+            }
+        }
+    }
+
+    // ========== Apply chat avatar changes ==========
+
+    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg) {
+        if value == "group-avatar-changed" {
+            if let Some(avatar_action) = &mime_parser.group_avatar {
+                // this is just an explicit message containing the group-avatar,
+                // apart from that, the group-avatar is send along with various other messages
+                *better_msg = match avatar_action {
+                    AvatarAction::Delete => {
+                        Some(stock_str::msg_grp_img_deleted(context, from_id).await)
+                    }
+                    AvatarAction::Change(_) => {
+                        Some(stock_str::msg_grp_img_changed(context, from_id).await)
+                    }
+                };
+            }
+        }
+    }
+
+    if let Some(avatar_action) = &mime_parser.group_avatar {
+        info!(context, "Group-avatar change for {}.", chat.id);
+        if chat
+            .param
+            .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
+        {
+            match avatar_action {
+                AvatarAction::Change(profile_image) => {
+                    chat.param.set(Param::ProfileImage, profile_image);
+                }
+                AvatarAction::Delete => {
+                    chat.param.remove(Param::ProfileImage);
+                }
+            };
+            chat.update_param(context).await?;
+            *send_event_chat_modified = true;
+        }
+    }
+
+    Ok(())
 }
 
 /// Returns a list of strings that should be shown as info messages, informing about group membership changes.
@@ -3124,7 +3155,7 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
     .to_string())
 }
 
-/// Create or lookup a mailing list chat.
+/// Create or lookup a mailing list or incoming channel chat.
 ///
 /// `list_id_header` contains the Id that must be used for the mailing list
 /// and has the form `Name <Id>`, `<Id>` or just `Id`.
@@ -3133,10 +3164,11 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
 ///
 /// `mime_parser` is the corresponding message
 /// and is used to figure out the mailing list name from different header fields.
-async fn create_or_lookup_mailinglist(
+async fn create_or_lookup_mailinglist_or_channel(
     context: &Context,
     allow_creation: bool,
     list_id_header: &str,
+    from_id: ContactId,
     mime_parser: &MimeMessage,
 ) -> Result<Option<(ChatId, Blocked)>> {
     let listid = mailinglist_header_listid(list_id_header)?;
@@ -3145,7 +3177,17 @@ async fn create_or_lookup_mailinglist(
         return Ok(Some((chat_id, blocked)));
     }
 
-    let name = compute_mailinglist_name(list_id_header, &listid, mime_parser);
+    let name = if let Some(name) = mime_parser.get_header(HeaderDef::ChatGroupName) {
+        name.trim()
+    } else {
+        &compute_mailinglist_name(list_id_header, &listid, mime_parser)
+    };
+
+    let chattype = if mime_parser.was_encrypted() {
+        Chattype::InBroadcastChannel
+    } else {
+        Chattype::Mailinglist
+    };
 
     if allow_creation {
         // list does not exist but should be created
@@ -3163,9 +3205,9 @@ async fn create_or_lookup_mailinglist(
         };
         let chat_id = ChatId::create_multiuser_record(
             context,
-            Chattype::Mailinglist,
+            chattype,
             &listid,
-            &name,
+            name,
             blocked,
             ProtectionStatus::Unprotected,
             param,
@@ -3186,6 +3228,15 @@ async fn create_or_lookup_mailinglist(
             &[ContactId::SELF],
         )
         .await?;
+        if chattype == Chattype::InBroadcastChannel {
+            chat::add_to_chat_contacts_table(
+                context,
+                mime_parser.timestamp_sent,
+                chat_id,
+                &[from_id],
+            )
+            .await?;
+        }
         Ok(Some((chat_id, blocked)))
     } else {
         info!(context, "Creating list forbidden by caller.");
@@ -3329,6 +3380,39 @@ async fn apply_mailinglist_changes(
     }
 
     Ok(())
+}
+
+async fn apply_broadcast_channel_changes(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    chat: &mut Chat,
+    from_id: ContactId,
+) -> Result<GroupChangesInfo> {
+    ensure!(chat.typ == Chattype::InBroadcastChannel);
+
+    let mut send_event_chat_modified = false;
+    let mut better_msg = None;
+
+    apply_chat_name_and_avatar_changes(
+        context,
+        mime_parser,
+        from_id,
+        chat,
+        &mut send_event_chat_modified,
+        &mut better_msg,
+    )
+    .await?;
+
+    if send_event_chat_modified {
+        context.emit_event(EventType::ChatModified(chat.id));
+        chatlist_events::emit_chatlist_item_changed(context, chat.id);
+    }
+    Ok(GroupChangesInfo {
+        better_msg,
+        added_removed_id: None,
+        silent: false,
+        extra_msgs: vec![],
+    })
 }
 
 /// Creates ad-hoc group and returns chat ID on success.
