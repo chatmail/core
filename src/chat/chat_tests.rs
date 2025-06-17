@@ -2776,6 +2776,7 @@ async fn test_broadcast_channels() -> Result<()> {
     let rcvd = bob.recv_msg(&sent).await;
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
     assert_eq!(rcvd.text, "Group image changed by alice@example.org.");
+    assert_eq!(rcvd.chat_id, bob_chat.id);
 
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
     let avatar = bob_chat.get_profile_image(bob).await?.unwrap();
@@ -2783,6 +2784,14 @@ async fn test_broadcast_channels() -> Result<()> {
         avatar.file_name().unwrap().to_str().unwrap(),
         AVATAR_64x64_DEDUPLICATED
     );
+
+    tcm.section("Check that Bob can't modify the channel");
+    set_chat_profile_image(&bob, bob_chat.id, file.to_str().unwrap())
+        .await
+        .unwrap_err();
+    set_chat_name(bob, bob_chat.id, "Bob Channel name")
+        .await
+        .unwrap_err();
 
     Ok(())
 }
