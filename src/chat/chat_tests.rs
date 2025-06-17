@@ -2721,7 +2721,7 @@ async fn test_broadcast_multidev() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_broadcast_channels() -> Result<()> {
+async fn test_broadcast_channels_name_and_avatar() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -2814,9 +2814,14 @@ async fn test_block_broadcast_channel() -> Result<()> {
     assert_eq!(chats.get_chat_id(0)?, rcvd.chat_id);
 
     assert_eq!(rcvd.chat_blocked, Blocked::Request);
+    let blocked = Contact::get_all_blocked(bob).await.unwrap();
+    assert_eq!(blocked.len(), 0);
+
     rcvd.chat_id.block(bob).await?;
     let chat = Chat::load_from_db(&bob, rcvd.chat_id).await?;
     assert_eq!(chat.blocked, Blocked::Yes);
+    let blocked = Contact::get_all_blocked(bob).await.unwrap();
+    assert_eq!(blocked.len(), 1);
 
     let sent = alice.send_text(alice_chat_id, "Second message").await;
     let rcvd2 = bob.recv_msg(&sent).await;

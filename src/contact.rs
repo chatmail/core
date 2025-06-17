@@ -1188,13 +1188,21 @@ impl Contact {
         context
             .sql
             .transaction(move |transaction| {
-                let mut stmt = transaction
-                    .prepare("SELECT name, grpid FROM chats WHERE type=? AND blocked=?")?;
-                let rows = stmt.query_map((Chattype::Mailinglist, Blocked::Yes), |row| {
-                    let name: String = row.get(0)?;
-                    let grpid: String = row.get(1)?;
-                    Ok((name, grpid))
-                })?;
+                let mut stmt = transaction.prepare(
+                    "SELECT name, grpid FROM chats WHERE (type=? OR type=?) AND blocked=?",
+                )?;
+                let rows = stmt.query_map(
+                    (
+                        Chattype::Mailinglist,
+                        Chattype::InBroadcastChannel,
+                        Blocked::Yes,
+                    ),
+                    |row| {
+                        let name: String = row.get(0)?;
+                        let grpid: String = row.get(1)?;
+                        Ok((name, grpid))
+                    },
+                )?;
                 let blocked_mailinglists = rows.collect::<std::result::Result<Vec<_>, _>>()?;
                 for (name, grpid) in blocked_mailinglists {
                     let count = transaction.query_row(
