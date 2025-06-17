@@ -2788,6 +2788,39 @@ async fn test_broadcast_channels() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_block_broadcast_channel() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+
+    tcm.section("Create a channel with Bob, and send a message");
+    let alice_chat_id = create_broadcast_channel(alice, "My Channel".to_string()).await?;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    let sent = alice.send_text(alice_chat_id, "Hi somebody").await;
+    let rcvd = bob.recv_msg(&sent).await;
+
+    let chats = Chatlist::try_load(bob, DC_GCL_NO_SPECIALS, None, None).await?;
+    assert_eq!(chats.len(), 1);
+    assert_eq!(chats.get_chat_id(0)?, rcvd.chat_id);
+
+    assert_eq!(rcvd.chat_blocked, Blocked::Request);
+    rcvd.chat_id.block(bob).await?;
+    let chat = Chat::load_from_db(&bob, rcvd.chat_id).await?;
+    assert_eq!(chat.blocked, Blocked::Yes);
+
+    let sent = alice.send_text(alice_chat_id, "Second message").await;
+    let rcvd2 = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd2.chat_id, rcvd.chat_id);
+    assert_eq!(rcvd2.chat_blocked, Blocked::Yes);
+
+    let chats = Chatlist::try_load(bob, DC_GCL_NO_SPECIALS, None, None).await?;
+    assert_eq!(chats.len(), 0);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_for_contact_with_blocked() -> Result<()> {
     let t = TestContext::new().await;
     let (contact_id, _) = Contact::add_or_lookup(
