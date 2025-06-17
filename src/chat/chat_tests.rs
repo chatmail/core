@@ -2654,6 +2654,7 @@ async fn test_broadcast() -> Result<()> {
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast list");
         assert!(msg.get_showpadlock());
+        assert!(msg.get_override_sender_name().is_none());
         let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
         assert_eq!(chat.typ, Chattype::InBroadcastChannel);
         assert_ne!(chat.id, chat_bob.id);
@@ -2724,6 +2725,7 @@ async fn test_broadcast_multidev() -> Result<()> {
 async fn test_broadcast_channels_name_and_avatar() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
+    alice.set_config(Config::Displayname, Some("Alice")).await?;
     let bob = &tcm.bob().await;
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
@@ -2745,6 +2747,7 @@ async fn test_broadcast_channels_name_and_avatar() -> Result<()> {
 
     assert_eq!(sent.recipients, "bob@example.net alice@example.org");
     let rcvd = bob.recv_msg(&sent).await;
+    assert!(rcvd.get_override_sender_name().is_none());
     assert_eq!(rcvd.text, "Hi somebody");
     let bob_chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
     assert_eq!(bob_chat.typ, Chattype::InBroadcastChannel);
@@ -2755,11 +2758,11 @@ async fn test_broadcast_channels_name_and_avatar() -> Result<()> {
     set_chat_name(alice, alice_chat_id, "New Channel name").await?;
     let sent = alice.pop_sent_msg().await;
     let rcvd = bob.recv_msg(&sent).await;
-    dbg!(&rcvd);
+    assert!(rcvd.get_override_sender_name().is_none());
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupNameChanged);
     assert_eq!(
         rcvd.text,
-        r#"Group name changed from "My Channel" to "New Channel name" by alice@example.org."#
+        r#"Group name changed from "My Channel" to "New Channel name" by Alice."#
     );
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
     assert_eq!(bob_chat.name, "New Channel name");
@@ -2774,8 +2777,9 @@ async fn test_broadcast_channels_name_and_avatar() -> Result<()> {
     assert_eq!(bob_chat.get_profile_image(bob).await?, None);
 
     let rcvd = bob.recv_msg(&sent).await;
+    assert!(rcvd.get_override_sender_name().is_none());
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
-    assert_eq!(rcvd.text, "Group image changed by alice@example.org.");
+    assert_eq!(rcvd.text, "Group image changed by Alice.");
     assert_eq!(rcvd.chat_id, bob_chat.id);
 
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
