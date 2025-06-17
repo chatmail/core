@@ -2163,7 +2163,7 @@ pub(crate) fn get_folder_meaning(folder: &Name) -> FolderMeaning {
 }
 
 /// Parses the headers from the FETCH result.
-fn get_fetch_headers(prefetch_msg: &Fetch) -> Result<Vec<mailparse::MailHeader>> {
+fn get_fetch_headers(prefetch_msg: &Fetch) -> Result<Vec<mailparse::MailHeader<'_>>> {
     match prefetch_msg.header() {
         Some(header_bytes) => {
             let (headers, _) = mailparse::parse_headers(header_bytes)?;

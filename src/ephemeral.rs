@@ -146,7 +146,7 @@ impl FromStr for Timer {
 }
 
 impl rusqlite::types::ToSql for Timer {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(match self {
             Self::Disabled => 0,
             Self::Enabled { duration } => i64::from(*duration),

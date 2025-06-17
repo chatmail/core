@@ -361,7 +361,7 @@ impl std::fmt::Display for MsgId {
 /// This **does** ensure that no special message IDs are written into
 /// the database and the conversion will fail if this is not the case.
 impl rusqlite::types::ToSql for MsgId {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         if self.0 <= DC_MSG_ID_LAST_SPECIAL {
             return Err(rusqlite::Error::ToSqlConversionFailure(
                 format_err!("Invalid MsgId {}", self.0).into(),

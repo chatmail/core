@@ -493,7 +493,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "send-backup" => {
             let provider = BackupProvider::prepare(&context).await?;
             let qr = format_backup(&provider.qr())?;
-            println!("QR code: {}", qr);
+            println!("QR code: {qr}");
             qr2term::print_qr(qr.as_str())?;
             provider.await?;
         }

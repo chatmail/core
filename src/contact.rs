@@ -243,7 +243,7 @@ impl fmt::Display for ContactId {
 
 /// Allow converting [`ContactId`] to an SQLite type.
 impl rusqlite::types::ToSql for ContactId {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(i64::from(self.0));
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)

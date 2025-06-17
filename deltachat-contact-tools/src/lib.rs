@@ -76,7 +76,7 @@ impl ContactAddress {
 
 /// Allow converting [`ContactAddress`] to an SQLite type.
 impl rusqlite::types::ToSql for ContactAddress {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Text(self.0.to_string());
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)
@@ -282,7 +282,7 @@ impl EmailAddress {
 }
 
 impl rusqlite::types::ToSql for EmailAddress {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Text(self.to_string());
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)

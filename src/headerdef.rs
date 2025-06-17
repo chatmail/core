@@ -134,14 +134,14 @@ pub trait HeaderDefMap {
     fn get_header_value(&self, headerdef: HeaderDef) -> Option<String>;
 
     /// Returns requested header if it exists.
-    fn get_header(&self, headerdef: HeaderDef) -> Option<&MailHeader>;
+    fn get_header(&self, headerdef: HeaderDef) -> Option<&MailHeader<'_>>;
 }
 
 impl HeaderDefMap for [MailHeader<'_>] {
     fn get_header_value(&self, headerdef: HeaderDef) -> Option<String> {
         self.get_first_value(headerdef.get_headername())
     }
-    fn get_header(&self, headerdef: HeaderDef) -> Option<&MailHeader> {
+    fn get_header(&self, headerdef: HeaderDef) -> Option<&MailHeader<'_>> {
         self.get_first_header(headerdef.get_headername())
     }
 }

@@ -34,7 +34,7 @@ pub enum Meaning {
 }
 
 impl Lot {
-    pub fn get_text1(&self) -> Option<Cow<str>> {
+    pub fn get_text1(&self) -> Option<Cow<'_, str>> {
         match self {
             Self::Summary(summary) => match &summary.prefix {
                 None => None,
@@ -66,7 +66,7 @@ impl Lot {
         }
     }
 
-    pub fn get_text2(&self) -> Option<Cow<str>> {
+    pub fn get_text2(&self) -> Option<Cow<'_, str>> {
         match self {
             Self::Summary(summary) => Some(summary.truncated_text(160)),
             Self::Qr(_) => None,
