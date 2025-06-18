@@ -86,6 +86,7 @@ pub enum HeaderDef {
 
     ChatDispositionNotificationTo,
     ChatWebrtcRoom,
+    ChatWebrtcAccepted,
 
     /// This message deletes the messages listed in the value by rfc724_mid.
     ChatDelete,
