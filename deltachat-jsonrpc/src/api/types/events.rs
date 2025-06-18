@@ -418,14 +418,23 @@ pub enum EventType {
     },
 
     /// Incoming call.
-    IncomingCall { msg_id: u32 },
+    IncomingCall {
+        msg_id: u32,
+        place_call_info: String,
+    },
 
     /// Incoming call accepted.
     /// This is esp. interesting to stop ringing on other devices.
-    IncomingCallAccepted { msg_id: u32 },
+    IncomingCallAccepted {
+        msg_id: u32,
+        accept_call_info: String,
+    },
 
     /// Outgoing call accepted.
-    OutgoingCallAccepted { msg_id: u32 },
+    OutgoingCallAccepted {
+        msg_id: u32,
+        accept_call_info: String,
+    },
 
     /// Call ended.
     CallEnded { msg_id: u32 },
@@ -579,14 +588,26 @@ impl From<CoreEventType> for EventType {
             CoreEventType::EventChannelOverflow { n } => EventChannelOverflow { n },
             CoreEventType::AccountsChanged => AccountsChanged,
             CoreEventType::AccountsItemChanged => AccountsItemChanged,
-            CoreEventType::IncomingCall { msg_id } => IncomingCall {
+            CoreEventType::IncomingCall {
+                msg_id,
+                place_call_info,
+            } => IncomingCall {
                 msg_id: msg_id.to_u32(),
+                place_call_info,
             },
-            CoreEventType::IncomingCallAccepted { msg_id } => IncomingCallAccepted {
+            CoreEventType::IncomingCallAccepted {
+                msg_id,
+                accept_call_info,
+            } => IncomingCallAccepted {
                 msg_id: msg_id.to_u32(),
+                accept_call_info,
             },
-            CoreEventType::OutgoingCallAccepted { msg_id } => OutgoingCallAccepted {
+            CoreEventType::OutgoingCallAccepted {
+                msg_id,
+                accept_call_info,
+            } => OutgoingCallAccepted {
                 msg_id: msg_id.to_u32(),
+                accept_call_info,
             },
             CoreEventType::CallEnded { msg_id } => CallEnded {
                 msg_id: msg_id.to_u32(),

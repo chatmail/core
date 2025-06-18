@@ -1237,8 +1237,6 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * - callee ends the call using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED
  * - caller ends the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED
  *
- * The call URL is avauilable at dc_msg_get_videochat_url().
- *
  * Note, that the events are for updating the call screen,
  * possible status messages are added and updated as usual, including the known events.
  * In the UI, the sorted chatlist is used as an overview about calls as well as messages.
@@ -1251,9 +1249,11 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * @param context The context object.
  * @param chat_id The chat to place a call for.
  *     This needs to be a one-to-one chat.
+ * @param place_call_info any data that other devices receives
+ *     in #DC_EVENT_INCOMING_CALL.
  * @return ID of the system message announcing the call.
  */
-uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id);
+uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id, const char* place_call_info);
 
 
 /**
@@ -1268,9 +1268,11 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  * @param msg_id The ID of the call to accept.
  *     This is the ID reported by #DC_EVENT_INCOMING_CALL
  *     and equal to the ID of the corresponding info message.
+ * @param accept_call_info any data that other devices receives
+ *     in #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
  * @return 1=success, 0=error
  */
- int            dc_accept_incoming_call      (dc_context_t* context, uint32_t msg_id);
+ int            dc_accept_incoming_call      (dc_context_t* context, uint32_t msg_id, const char* accept_call_info);
 
 
  /**
@@ -6739,7 +6741,7 @@ void dc_event_unref(dc_event_t* event);
  * or #DC_EVENT_INCOMING_CALL_ACCEPTED
  *
  * @param data1 (int) msg_id ID of the info-message referring to the call.
- *    The call URL is avauilable at dc_msg_get_videochat_url().
+ * @param data2 (char*) place_call_info, text passed to dc_place_outgoing_call()
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 
@@ -6751,6 +6753,7 @@ void dc_event_unref(dc_event_t* event);
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the info-message referring to the call
+ * @param data2 (char*) accept_call_info, text passed to dc_place_outgoing_call()
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 
@@ -6761,6 +6764,7 @@ void dc_event_unref(dc_event_t* event);
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the info-message referring to the call
+ * @param data2 (char*) accept_call_info, text passed to dc_accept_incoming_call()
  */
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
 

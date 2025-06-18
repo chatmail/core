@@ -780,11 +780,22 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
-        | EventType::IncomingCall { .. }
-        | EventType::IncomingCallAccepted { .. }
-        | EventType::OutgoingCallAccepted { .. }
-        | EventType::CallEnded { .. }
-        | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
+        | EventType::IncomingCall {
+            place_call_info, ..
+        } => {
+            let data2 = place_call_info.to_c_string().unwrap_or_default();
+            data2.into_raw()
+        }
+        EventType::IncomingCallAccepted {
+            accept_call_info, ..
+        }
+        | EventType::OutgoingCallAccepted {
+            accept_call_info, ..
+        } => {
+            let data2 = accept_call_info.to_c_string().unwrap_or_default();
+            data2.into_raw()
+        }
+        EventType::CallEnded { .. } | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
         EventType::ConfigureProgress { comment, .. } => {
             if let Some(comment) = comment {
                 comment.to_c_string().unwrap_or_default().into_raw()
@@ -1184,15 +1195,20 @@ pub unsafe extern "C" fn dc_init_webxdc_integration(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_place_outgoing_call(context: *mut dc_context_t, chat_id: u32) -> u32 {
+pub unsafe extern "C" fn dc_place_outgoing_call(
+    context: *mut dc_context_t,
+    chat_id: u32,
+    place_call_info: *const libc::c_char,
+) -> u32 {
     if context.is_null() || chat_id == 0 {
         eprintln!("ignoring careless call to dc_place_outgoing_call()");
         return 0;
     }
     let ctx = &*context;
     let chat_id = ChatId::new(chat_id);
+    let place_call_info = to_string_lossy(place_call_info);
 
-    block_on(ctx.place_outgoing_call(chat_id))
+    block_on(ctx.place_outgoing_call(chat_id, place_call_info))
         .map(|msg_id| msg_id.to_u32())
         .unwrap_or_log_default(ctx, "Failed to place call")
 }
@@ -1201,6 +1217,7 @@ pub unsafe extern "C" fn dc_place_outgoing_call(context: *mut dc_context_t, chat
 pub unsafe extern "C" fn dc_accept_incoming_call(
     context: *mut dc_context_t,
     msg_id: u32,
+    accept_call_info: *const libc::c_char,
 ) -> libc::c_int {
     if context.is_null() || msg_id == 0 {
         eprintln!("ignoring careless call to dc_accept_incoming_call()");
@@ -1208,8 +1225,9 @@ pub unsafe extern "C" fn dc_accept_incoming_call(
     }
     let ctx = &*context;
     let msg_id = MsgId::new(msg_id);
+    let accept_call_info = to_string_lossy(accept_call_info);
 
-    block_on(ctx.accept_incoming_call(msg_id)).is_ok() as libc::c_int
+    block_on(ctx.accept_incoming_call(msg_id, accept_call_info)).is_ok() as libc::c_int
 }
 
 #[no_mangle]

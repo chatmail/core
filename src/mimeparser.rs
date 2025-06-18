@@ -724,18 +724,24 @@ impl MimeMessage {
     }
 
     fn parse_videochat_headers(&mut self) {
-        let is_videochat_invite =
-            self.get_header(HeaderDef::ChatContent).unwrap_or_default() == "videochat-invitation";
-        let instance = self
+        let content = self
+            .get_header(HeaderDef::ChatContent)
+            .unwrap_or_default()
+            .to_string();
+        let room = self
             .get_header(HeaderDef::ChatWebrtcRoom)
             .map(|s| s.to_string());
+        let accepted = self
+            .get_header(HeaderDef::ChatWebrtcAccepted)
+            .map(|s| s.to_string());
         if let Some(part) = self.parts.first_mut() {
-            //
-            if let Some(instance) = instance {
-                if is_videochat_invite {
+            if let Some(room) = room {
+                if content == "videochat-invitation" {
                     part.typ = Viewtype::VideochatInvitation;
                 }
-                part.param.set(Param::WebrtcRoom, instance);
+                part.param.set(Param::WebrtcRoom, room);
+            } else if let Some(accepted) = accepted {
+                part.param.set(Param::WebrtcAccepted, accepted);
             }
         }
     }

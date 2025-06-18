@@ -380,18 +380,24 @@ pub enum EventType {
     IncomingCall {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// User-defined info as passed to place_outgoing_call()
+        place_call_info: String,
     },
 
     /// Incoming call accepted.
     IncomingCallAccepted {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// User-defined info as passed to accept_incoming_call()
+        accept_call_info: String,
     },
 
     /// Outgoing call accepted.
     OutgoingCallAccepted {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// User-defined info as passed to accept_incoming_call()
+        accept_call_info: String,
     },
 
     /// Call ended.

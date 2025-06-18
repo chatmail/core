@@ -1591,6 +1591,17 @@ impl MimeFactory {
                 )
                 .into(),
             ));
+        } else if msg.param.exists(Param::WebrtcAccepted) {
+            headers.push((
+                "Chat-Webrtc-Accepted",
+                mail_builder::headers::raw::Raw::new(
+                    msg.param
+                        .get(Param::WebrtcAccepted)
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+                .into(),
+            ));
         }
 
         if msg.viewtype == Viewtype::Voice
