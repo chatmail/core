@@ -1078,8 +1078,10 @@ impl Message {
 
     /// Returns videochat URL if the message is a videochat invitation.
     pub fn get_videochat_url(&self) -> Option<String> {
-        if let Some(instance) = self.param.get(Param::WebrtcRoom) {
-            return Some(Message::parse_webrtc_instance(instance).1);
+        if self.viewtype == Viewtype::VideochatInvitation {
+            if let Some(instance) = self.param.get(Param::WebrtcRoom) {
+                return Some(Message::parse_webrtc_instance(instance).1);
+            }
         }
         None
     }
