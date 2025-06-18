@@ -5,16 +5,16 @@
 //! So, no database changes are needed at this stage.
 //! When it comes to relay calls over iroh, we may need a dedicated table, and this may change.
 use crate::chat::{send_msg, Chat, ChatId};
-use crate::config::Config;
 use crate::constants::Chattype;
 use crate::context::Context;
 use crate::events::EventType;
+use crate::headerdef::HeaderDef;
 use crate::message::{self, rfc724_mid_exists, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
-use crate::tools::{create_id, time};
-use anyhow::{bail, ensure, Result};
+use crate::tools::time;
+use anyhow::{ensure, Result};
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -39,6 +39,12 @@ pub struct CallInfo {
     /// Was an incoming call accepted on this device?
     /// On other devices, this is never set and for outgoing calls, this is never set.
     pub accepted: bool,
+
+    /// User-defined text as given to place_outgoing_call()
+    pub place_call_info: String,
+
+    /// User-defined text as given to accept_incoming_call()
+    pub accept_call_info: String,
 
     /// Info message referring to the call.
     pub msg: Message,
@@ -68,20 +74,13 @@ impl CallInfo {
 
 impl Context {
     /// Start an outgoing call.
-    pub async fn place_outgoing_call(&self, chat_id: ChatId) -> Result<MsgId> {
+    pub async fn place_outgoing_call(
+        &self,
+        chat_id: ChatId,
+        place_call_info: String,
+    ) -> Result<MsgId> {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
-
-        let instance = if let Some(instance) = self.get_config(Config::WebrtcInstance).await? {
-            if !instance.is_empty() {
-                instance
-            } else {
-                bail!("webrtc_instance is empty");
-            }
-        } else {
-            bail!("webrtc_instance not set");
-        };
-        let instance = Message::create_webrtc_instance(&instance, &create_id());
 
         let mut call = Message {
             viewtype: Viewtype::Text,
@@ -89,7 +88,7 @@ impl Context {
             ..Default::default()
         };
         call.param.set_cmd(SystemMessage::OutgoingCall);
-        call.param.set(Param::WebrtcRoom, &instance);
+        call.param.set(Param::WebrtcRoom, &place_call_info);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
@@ -103,7 +102,11 @@ impl Context {
     }
 
     /// Accept an incoming call.
-    pub async fn accept_incoming_call(&self, call_id: MsgId) -> Result<()> {
+    pub async fn accept_incoming_call(
+        &self,
+        call_id: MsgId,
+        accept_call_info: String,
+    ) -> Result<()> {
         let call: CallInfo = self.load_call_by_root_id(call_id).await?;
         ensure!(call.incoming);
 
@@ -112,7 +115,10 @@ impl Context {
             chat.id.accept(self).await?;
         }
 
-        call.msg.clone().mark_call_as_accepted(self).await?;
+        call.msg
+            .clone()
+            .mark_call_as_accepted(self, accept_call_info.to_string())
+            .await?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -121,10 +127,13 @@ impl Context {
             ..Default::default()
         };
         msg.param.set_cmd(SystemMessage::CallAccepted);
+        msg.param
+            .set(Param::WebrtcAccepted, accept_call_info.to_string());
         msg.set_quote(self, Some(&call.msg)).await?;
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
+            accept_call_info,
         });
         Ok(())
     }
@@ -188,6 +197,7 @@ impl Context {
                         self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
                         self.emit_event(EventType::IncomingCall {
                             msg_id: call.msg.id,
+                            place_call_info: call.place_call_info.to_string(),
                         });
                         let wait = call.remaining_ring_seconds();
                         task::spawn(Context::emit_end_call_if_unaccepted(
@@ -206,11 +216,19 @@ impl Context {
                 if call.incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
                         msg_id: call.msg.id,
+                        accept_call_info: call.accept_call_info,
                     });
                 } else {
-                    call.msg.clone().mark_call_as_accepted(self).await?;
+                    let accept_call_info = mime_message
+                        .get_header(HeaderDef::ChatWebrtcAccepted)
+                        .unwrap_or_default();
+                    call.msg
+                        .clone()
+                        .mark_call_as_accepted(self, accept_call_info.to_string())
+                        .await?;
                     self.emit_event(EventType::OutgoingCallAccepted {
                         msg_id: call.msg.id,
+                        accept_call_info: accept_call_info.to_string(),
                     });
                 }
             }
@@ -250,18 +268,33 @@ impl Context {
         Ok(CallInfo {
             incoming: call.get_info_type() == SystemMessage::IncomingCall,
             accepted: call.is_call_accepted()?,
+            place_call_info: call
+                .param
+                .get(Param::WebrtcRoom)
+                .unwrap_or_default()
+                .to_string(),
+            accept_call_info: call
+                .param
+                .get(Param::WebrtcAccepted)
+                .unwrap_or_default()
+                .to_string(),
             msg: call,
         })
     }
 }
 
 impl Message {
-    async fn mark_call_as_accepted(&mut self, context: &Context) -> Result<()> {
+    async fn mark_call_as_accepted(
+        &mut self,
+        context: &Context,
+        accept_call_info: String,
+    ) -> Result<()> {
         ensure!(
             self.get_info_type() == SystemMessage::IncomingCall
                 || self.get_info_type() == SystemMessage::OutgoingCall
         );
         self.param.set_int(Param::Arg, 1);
+        self.param.set(Param::WebrtcAccepted, accept_call_info);
         self.update_param(context).await?;
         Ok(())
     }
@@ -297,32 +330,29 @@ mod tests {
         let bob2 = tcm.bob().await;
         for t in [&alice, &alice2, &bob, &bob2] {
             t.set_config_bool(Config::SyncMsgs, true).await?;
-            t.set_config(Config::WebrtcInstance, Some("https://foo.bar"))
-                .await?;
         }
 
         // Alice creates a chat with Bob and places an outgoing call there.
         // Alice's other device sees the same message as an outgoing call.
         let alice_chat = alice.create_chat(&bob).await;
-        let test_msg_id = alice.place_outgoing_call(alice_chat.id).await?;
+        let test_msg_id = alice
+            .place_outgoing_call(alice_chat.id, "place_info".to_string())
+            .await?;
         let sent1 = alice.pop_sent_msg().await;
         let alice_call = Message::load_from_db(&alice, sent1.sender_msg_id).await?;
         assert_eq!(sent1.sender_msg_id, test_msg_id);
         assert!(alice_call.is_info());
         assert_eq!(alice_call.get_info_type(), SystemMessage::OutgoingCall);
-        let alice_url = alice_call.get_videochat_url().unwrap();
-        assert!(alice_url.starts_with("https://foo.bar/"));
         let info = alice.load_call_by_root_id(alice_call.id).await?;
         assert!(!info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
 
         let alice2_call = alice2.recv_msg(&sent1).await;
         assert!(alice2_call.is_info());
         assert_eq!(alice2_call.get_info_type(), SystemMessage::OutgoingCall);
-        let alice2_url = alice2_call.get_videochat_url().unwrap();
-        assert!(alice2_url.starts_with("https://foo.bar/"));
-        assert_eq!(alice_url, alice2_url);
         let info = alice2.load_call_by_root_id(alice2_call.id).await?;
         assert!(!info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
 
         // Bob receives the message referring to the call on two devices;
         // it is an incoming call from the view of Bob
@@ -332,13 +362,16 @@ mod tests {
             .await;
         assert!(bob_call.is_info());
         assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
-        let bob_url = bob_call.get_videochat_url().unwrap();
-        assert!(bob_url.starts_with("https://foo.bar/"));
-        assert_eq!(alice_url, bob_url);
+        let info = bob.load_call_by_root_id(bob_call.id).await?;
+        assert!(!info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
 
         let bob2_call = bob2.recv_msg(&sent1).await;
         assert!(bob2_call.is_info());
         assert_eq!(bob2_call.get_info_type(), SystemMessage::IncomingCall);
+        let info = bob2.load_call_by_root_id(bob2_call.id).await?;
+        assert!(!info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
 
         Ok((alice, alice2, alice_call, bob, bob2, bob_call, bob2_call))
     }
@@ -354,13 +387,16 @@ mod tests {
         let (alice, alice2, alice_call, bob, bob2, bob_call, bob2_call) = setup_call().await?;
 
         // Bob accepts the incoming call, this does not add an additional message to the chat
-        bob.accept_incoming_call(bob_call.id).await?;
+        bob.accept_incoming_call(bob_call.id, "accepted_info".to_string())
+            .await?;
         bob.evtracker
             .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
             .await;
         let sent2 = bob.pop_sent_msg().await;
         let info = bob.load_call_by_root_id(bob_call.id).await?;
         assert!(info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
+        assert_eq!(info.accept_call_info, "accepted_info");
 
         bob2.recv_msg(&sent2).await;
         bob2.evtracker
@@ -375,12 +411,17 @@ mod tests {
             .evtracker
             .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
             .await;
+        let info = alice.load_call_by_root_id(alice_call.id).await?;
+        assert!(info.accepted);
+        assert_eq!(info.place_call_info, "place_info");
+        assert_eq!(info.accept_call_info, "accepted_info");
 
         alice2.recv_msg(&sent2).await;
         alice2
             .evtracker
             .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
             .await;
+
         Ok((alice, alice2, alice_call, bob, bob2, bob_call))
     }
 
@@ -549,7 +590,9 @@ mod tests {
 
         let mut alice_call = Message::load_from_db(&alice, alice_call.id).await?;
         assert!(!alice_call.is_call_accepted()?);
-        alice_call.mark_call_as_accepted(&alice).await?;
+        alice_call
+            .mark_call_as_accepted(&alice, "accepted_info".to_string())
+            .await?;
         assert!(alice_call.is_call_accepted()?);
 
         let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
