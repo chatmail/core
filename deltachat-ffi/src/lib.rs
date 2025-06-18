@@ -779,7 +779,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
-        | EventType::WebxdcRealtimeAdvertisementReceived { .. }
+        | EventType::WebxdcRealtimeAdvertisementReceived { .. } => ptr::null_mut(),
         | EventType::IncomingCall {
             place_call_info, ..
         } => {
