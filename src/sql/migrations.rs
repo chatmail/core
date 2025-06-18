@@ -1678,7 +1678,7 @@ fn migrate_pgp_contacts(
                     continue;
                 }
 
-                // Broadcast list
+                // Broadcast channel
                 160 => retain_autocrypt_pgp_contacts(),
 
                 _ => {

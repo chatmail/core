@@ -926,7 +926,7 @@ impl CommandApi {
     ///   explicitly as it may happen that oneself gets removed from a still existing
     ///   group
     ///
-    /// - for broadcasts, all recipients are returned, DC_CONTACT_ID_SELF is not included
+    /// - for broadcast channels, all recipients are returned, DC_CONTACT_ID_SELF is not included
     ///
     /// - for mailing lists, the behavior is not documented currently, we will decide on that later.
     ///   for now, the UI should not show the list for mailing lists.
