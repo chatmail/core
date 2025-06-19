@@ -7,7 +7,7 @@
 
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use pin_project::pin_project;
 
@@ -31,6 +31,22 @@ pub(crate) struct LoggingStream<S: SessionStream> {
 
     /// Event channel.
     events: Events,
+
+    /// Total number of bytes read.
+    total_read: usize,
+
+    /// Number of bytes read since the last flush.
+    span_read: usize,
+
+    /// First timestamp of successful non-zero read.
+    ///
+    /// Reset on flush.
+    first_read_timestamp: Option<Instant>,
+
+    /// Last non-zero read.
+    last_read_timestamp: Instant,
+
+    total_duration: Duration,
 }
 
 impl<S: SessionStream> LoggingStream<S> {
@@ -40,6 +56,11 @@ impl<S: SessionStream> LoggingStream<S> {
             tag,
             account_id,
             events,
+            total_read: 0,
+            span_read: 0,
+            first_read_timestamp: None,
+            last_read_timestamp: Instant::now(),
+            total_duration: Duration::ZERO,
         }
     }
 }
@@ -56,12 +77,21 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let res = projected.inner.poll_read(cx, buf);
 
         let n = old_remaining - buf.remaining();
-        let log_message = format!("{}: READING {}", projected.tag, n);
-        projected.events.emit(Event {
-            id: 0,
-            typ: EventType::Info(log_message),
-        });
+        if n > 0 {
+            let now = Instant::now();
+            if projected.first_read_timestamp.is_none() {
+                *projected.first_read_timestamp = Some(now);
+            }
+            *projected.last_read_timestamp = now;
 
+            *projected.span_read = projected.span_read.saturating_add(n);
+
+            let log_message = format!("{}: READING {}", projected.tag, n);
+            projected.events.emit(Event {
+                id: 0,
+                typ: EventType::Info(log_message),
+            });
+        }
 
         res
     }
@@ -88,13 +118,29 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<std::io::Result<()>> {
-        let log_message = format!("{}: FLUSH", self.tag);
-
         let projected = self.project();
-        projected.events.emit(Event {
-            id: 0,
-            typ: EventType::Info(log_message),
-        });
+
+        if let Some(first_read_timestamp) = projected.first_read_timestamp.take() {
+            let duration = projected.last_read_timestamp.duration_since(first_read_timestamp);
+
+            *projected.total_read = projected.total_read.saturating_add(*projected.span_read);
+            *projected.span_read = 0;
+            *projected.total_duration = projected.total_duration.saturating_add(duration);
+
+            let total_duration_secs = projected.total_duration.as_secs_f64();
+            let throughput = if total_duration_secs > 0.0 {
+                (*projected.total_read as f64) / total_duration_secs
+            } else {
+                0.0
+            };
+
+            let log_message = format!("{}: FLUSH: read={}, duration={}, {} kbps", projected.tag, *projected.total_read, total_duration_secs, throughput * 8e-3);
+
+            projected.events.emit(Event {
+                id: 0,
+                typ: EventType::Info(log_message),
+            });
+        }
 
         projected.inner.poll_flush(cx)
     }
