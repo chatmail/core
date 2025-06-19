@@ -129,7 +129,7 @@ impl Client {
                 Client::connect_secure(&context, resolved_addr, host, strict_tls).await
             }
             ConnectionSecurity::Starttls => {
-                Client::connect_starttls(resolved_addr, host, strict_tls).await
+                Client::connect_starttls(&context, resolved_addr, host, strict_tls).await
             }
             ConnectionSecurity::Plain => Client::connect_insecure(&context, resolved_addr).await,
         };
@@ -247,7 +247,12 @@ impl Client {
         Ok(client)
     }
 
-    async fn connect_starttls(addr: SocketAddr, host: &str, strict_tls: bool) -> Result<Self> {
+    async fn connect_starttls(
+        context: &Context,
+        addr: SocketAddr,
+        host: &str,
+        strict_tls: bool,
+    ) -> Result<Self> {
         let tcp_stream = connect_tcp_inner(addr).await?;
 
         // Run STARTTLS command and convert the client back into a stream.
@@ -268,7 +273,15 @@ impl Client {
             .await
             .context("STARTTLS upgrade failed")?;
 
-        let buffered_stream = BufWriter::new(tls_stream);
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let logging_stream = LoggingStream::new(
+            tls_stream,
+            format!("STARTTLS IMAP stream {host} ({addr})"),
+            account_id,
+            events,
+        );
+        let buffered_stream = BufWriter::new(logging_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let client = Client::new(session_stream);
         Ok(client)
