@@ -25,6 +25,7 @@ use crate::imap::{FolderMeaning, Imap, session::Session};
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::message::MsgId;
+use crate::self_reporting::maybe_send_self_report;
 use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
@@ -509,20 +510,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
-    //#[cfg(target_os = "android")] TODO
-    if ctx.get_config_bool(Config::SelfReporting).await? {
-        match ctx.get_config_i64(Config::LastSelfReportSent).await {
-            Ok(last_selfreport_time) => {
-                let next_selfreport_time = last_selfreport_time.saturating_add(30); // TODO increase to 1 day or 1 week
-                if next_selfreport_time <= time() {
-                    ctx.send_self_report().await?;
-                }
-            }
-            Err(err) => {
-                warn!(ctx, "Failed to get last self_reporting time: {}", err);
-            }
-        }
-    }
+    maybe_send_self_report(ctx).await?;
     match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
         Ok(fetched_existing_msgs) => {
             if !fetched_existing_msgs {
