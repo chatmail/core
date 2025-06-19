@@ -47,6 +47,12 @@ pub(crate) struct LoggingStream<S: SessionStream> {
     last_read_timestamp: Instant,
 
     total_duration: Duration,
+
+    /// Whether to collect throughput statistics or not.
+    ///
+    /// Disabled when read timeout is disabled,
+    /// i.e. when we are in IMAP IDLE.
+    enable_stats: bool,
 }
 
 impl<S: SessionStream> LoggingStream<S> {
@@ -61,6 +67,7 @@ impl<S: SessionStream> LoggingStream<S> {
             first_read_timestamp: None,
             last_read_timestamp: Instant::now(),
             total_duration: Duration::ZERO,
+            enable_stats: true
         }
     }
 }
@@ -77,7 +84,7 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let res = projected.inner.poll_read(cx, buf);
 
         let n = old_remaining - buf.remaining();
-        if n > 0 {
+        if n > 0 && *projected.enable_stats {
             let now = Instant::now();
             if projected.first_read_timestamp.is_none() {
                 *projected.first_read_timestamp = Some(now);
@@ -167,6 +174,8 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
 
 impl<S: SessionStream> SessionStream for LoggingStream<S> {
     fn set_read_timeout(&mut self, timeout: Option<Duration>) {
+        self.enable_stats = timeout.is_some();
+
         self.inner.set_read_timeout(timeout)
     }
 }
