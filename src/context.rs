@@ -15,7 +15,7 @@ use ratelimit::Ratelimit;
 use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{self, get_chat_cnt, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
@@ -1215,7 +1215,18 @@ impl Context {
             .context("Self reporting bot vCard does not contain a contact")?;
         mark_contact_id_as_verified(self, contact_id, ContactId::SELF).await?;
 
-        let chat_id = ChatId::create_for_contact(self, contact_id).await?;
+        let chat_id = if let Some(res) = ChatId::lookup_by_contact(self, contact_id).await? {
+            // Already exists, no need to create.
+            res
+        } else {
+            let chat_id = ChatId::get_for_contact(self, contact_id).await?;
+            chat_id
+                .set_visibility(self, ChatVisibility::Archived)
+                .await?;
+            chat::set_muted(self, chat_id, MuteDuration::Forever).await?;
+            chat_id
+        };
+
         chat_id
             .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
             .await?;
