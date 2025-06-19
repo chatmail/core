@@ -15,23 +15,21 @@ use ratelimit::Ratelimit;
 use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{self, get_chat_cnt, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
+use crate::chat::{get_chat_cnt, ChatId};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
-    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
+    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR,
 };
-use crate::contact::{import_vcard, mark_contact_id_as_verified, Contact, ContactId};
+use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
-use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{load_self_public_key, load_self_secret_key, self_fingerprint, DcKey as _};
+use crate::key::{self_fingerprint, DcKey as _};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
-use crate::message::{self, Message, MessageState, MsgId, Viewtype};
-use crate::param::{Param, Params};
+use crate::message::{self, MessageState, MsgId};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
@@ -39,7 +37,7 @@ use crate::scheduler::{convert_folder_meaning, SchedulerState};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
-use crate::tools::{self, create_id, duration_to_str, time, time_elapsed};
+use crate::tools::{self, duration_to_str, time, time_elapsed};
 
 /// Builder for the [`Context`].
 ///
