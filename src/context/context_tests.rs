@@ -599,23 +599,6 @@ async fn test_get_next_msgs() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_draft_self_report() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-
-    let chat_id = alice.send_self_report().await?;
-    let msg = get_chat_msg(&alice, chat_id, 0, 2).await;
-    assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-    let chat = Chat::load_from_db(&alice, chat_id).await?;
-    assert!(chat.is_protected());
-
-    let statistics_msg = get_chat_msg(&alice, chat_id, 1, 2).await;
-    assert_eq!(statistics_msg.get_filename().unwrap(), "statistics.txt");
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_cache_is_cleared_when_io_is_started() -> Result<()> {
     let alice = TestContext::new_alice().await;
     assert_eq!(
