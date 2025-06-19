@@ -1,45 +1,21 @@
 //! TODO doc comment
 
-use std::collections::{BTreeMap, HashMap};
-use std::ffi::OsString;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
 
-use anyhow::{bail, ensure, Context as _, Result};
-use async_channel::{self as channel, Receiver, Sender};
+use anyhow::{Context as _, Result};
 use pgp::types::PublicKeyTrait;
-use ratelimit::Ratelimit;
 use serde::Serialize;
-use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{self, get_chat_cnt, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
-use crate::chatlist_events;
+use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::config::Config;
-use crate::constants::{
-    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
-};
-use crate::contact::{import_vcard, mark_contact_id_as_verified, Contact, ContactId};
+use crate::constants::DC_CHAT_ID_TRASH;
+use crate::contact::{import_vcard, mark_contact_id_as_verified, ContactId};
 use crate::context::{get_version_str, Context};
-use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
-use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::key::load_self_public_key;
 use crate::log::LogExt;
-use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
-use crate::message::{self, Message, MessageState, MsgId, Viewtype};
+use crate::message::{Message, Viewtype};
 use crate::param::{Param, Params};
-use crate::peer_channels::Iroh;
-use crate::push::PushSubscriber;
-use crate::quota::QuotaInfo;
-use crate::scheduler::{convert_folder_meaning, SchedulerState};
-use crate::sql::Sql;
-use crate::stock_str::StockStrings;
-use crate::timesmearing::SmearedTimestamp;
-use crate::tools::{self, create_id, duration_to_str, time, time_elapsed};
+use crate::tools::{create_id, time};
 
 #[derive(Serialize)]
 struct Statistics {
@@ -167,7 +143,8 @@ async fn get_self_report(context: &Context) -> Result<String> {
     let key_created = load_self_public_key(context)
         .await?
         .primary_key
-        .created_at();
+        .created_at()
+        .timestamp();
 
     // how many of the chats active in the last months are:
     // - protected
