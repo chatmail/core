@@ -49,17 +49,17 @@ impl ThroughputStats {
             first_read_timestamp: None,
             last_read_timestamp: Instant::now(),
             total_duration: Duration::ZERO,
-            enabled: false
+            enabled: false,
         }
     }
 
     /// Returns throughput in bps.
-    pub fn throughput(&self) -> f64 {
+    pub fn throughput(&self) -> Option<f64> {
         let total_duration_secs = self.total_duration.as_secs_f64();
         if total_duration_secs > 0.0 {
-            (self.total_read as f64) / total_duration_secs
+            Some((self.total_read as f64) / total_duration_secs)
         } else {
-            0.0
+            None
         }
     }
 }
@@ -104,15 +104,16 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let projected = self.project();
         let old_remaining = buf.remaining();
 
+        let now = Instant::now();
+        if projected.throughput.first_read_timestamp.is_none() && projected.throughput.enabled {
+            projected.throughput.first_read_timestamp = Some(now);
+        }
+
         let res = projected.inner.poll_read(cx, buf);
 
         let n = old_remaining - buf.remaining();
         if n > 0 {
             if projected.throughput.enabled {
-                let now = Instant::now();
-                if projected.throughput.first_read_timestamp.is_none() {
-                    projected.throughput.first_read_timestamp = Some(now);
-                }
                 projected.throughput.last_read_timestamp = now;
 
                 projected.throughput.span_read = projected.throughput.span_read.saturating_add(n);
@@ -144,20 +145,35 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
     ) -> Poll<std::io::Result<()>> {
         let projected = self.project();
         if let Some(first_read_timestamp) = projected.throughput.first_read_timestamp.take() {
-            let duration = projected.throughput.last_read_timestamp.duration_since(first_read_timestamp);
+            let duration = projected
+                .throughput
+                .last_read_timestamp
+                .duration_since(first_read_timestamp);
 
-            projected.throughput.total_read = projected.throughput.total_read.saturating_add(projected.throughput.span_read);
+            projected.throughput.total_read = projected
+                .throughput
+                .total_read
+                .saturating_add(projected.throughput.span_read);
             projected.throughput.span_read = 0;
-            projected.throughput.total_duration = projected.throughput.total_duration.saturating_add(duration);
+            projected.throughput.total_duration =
+                projected.throughput.total_duration.saturating_add(duration);
         }
 
-        let throughput = projected.throughput.throughput();
-        let log_message = format!("{}: FLUSH: {} kbps", projected.tag, throughput * 8e-3);
+        if let Some(throughput) = projected.throughput.throughput() {
+            let log_message = format!("{}: FLUSH: {} kbps", projected.tag, throughput * 8e-3);
 
-        projected.events.emit(Event {
-            id: 0,
-            typ: EventType::Info(log_message),
-        });
+            projected.events.emit(Event {
+                id: 0,
+                typ: EventType::Info(log_message),
+            });
+        } else {
+            let log_message = format!("{}: FLUSH: unknown throughput", projected.tag);
+
+            projected.events.emit(Event {
+                id: 0,
+                typ: EventType::Info(log_message),
+            });
+        }
 
         projected.inner.poll_flush(cx)
     }
