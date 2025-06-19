@@ -213,7 +213,7 @@ impl Client {
         let events = context.events.clone();
         let logging_stream = LoggingStream::new(
             tls_stream,
-            "some IMAP TLS stream".to_string(),
+            format!("TLS IMAP stream {hostname} ({addr})"),
             account_id,
             events,
         );

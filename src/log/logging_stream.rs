@@ -50,7 +50,20 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
-        self.project().inner.poll_read(cx, buf)
+        let projected = self.project();
+        let old_remaining = buf.remaining();
+
+        let res = projected.inner.poll_read(cx, buf);
+
+        let n = old_remaining - buf.remaining();
+        let log_message = format!("{}: READING {}", projected.tag, n);
+        projected.events.emit(Event {
+            id: 0,
+            typ: EventType::Info(log_message),
+        });
+
+
+        res
     }
 }
 
@@ -60,7 +73,7 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        let log_message = format!("WRITING {}", buf.len());
+        let log_message = format!("{}: WRITING {}", self.tag, buf.len());
 
         let projected = self.project();
         projected.events.emit(Event {
@@ -75,7 +88,15 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<std::io::Result<()>> {
-        self.project().inner.poll_flush(cx)
+        let log_message = format!("{}: FLUSH", self.tag);
+
+        let projected = self.project();
+        projected.events.emit(Event {
+            id: 0,
+            typ: EventType::Info(log_message),
+        });
+
+        projected.inner.poll_flush(cx)
     }
 
     fn poll_shutdown(
