@@ -70,6 +70,16 @@ impl<S: SessionStream> LoggingStream<S> {
             enable_stats: true
         }
     }
+
+    /// Returns throughput in bps.
+    pub fn throughput(&self) -> f64 {
+        let total_duration_secs = self.total_duration.as_secs_f64();
+        if total_duration_secs > 0.0 {
+            (self.total_read as f64) / total_duration_secs
+        } else {
+            0.0
+        }
+    }
 }
 
 impl<S: SessionStream> AsyncRead for LoggingStream<S> {
@@ -110,23 +120,16 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> Poll<std::io::Result<usize>> {
-        let log_message = format!("{}: WRITING {}", self.tag, buf.len());
-
-        let projected = self.project();
-        projected.events.emit(Event {
-            id: 0,
-            typ: EventType::Info(log_message),
-        });
-
-        projected.inner.poll_write(cx, buf)
+        self.project().inner.poll_write(cx, buf)
     }
 
     fn poll_flush(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<std::io::Result<()>> {
-        let projected = self.project();
+        let throughput = self.throughput();
 
+        let projected = self.project();
         if let Some(first_read_timestamp) = projected.first_read_timestamp.take() {
             let duration = projected.last_read_timestamp.duration_since(first_read_timestamp);
 
@@ -134,14 +137,7 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
             *projected.span_read = 0;
             *projected.total_duration = projected.total_duration.saturating_add(duration);
 
-            let total_duration_secs = projected.total_duration.as_secs_f64();
-            let throughput = if total_duration_secs > 0.0 {
-                (*projected.total_read as f64) / total_duration_secs
-            } else {
-                0.0
-            };
-
-            let log_message = format!("{}: FLUSH: read={}, duration={}, {} kbps", projected.tag, *projected.total_read, total_duration_secs, throughput * 8e-3);
+            let log_message = format!("{}: FLUSH: {} kbps", projected.tag, throughput * 8e-3);
 
             projected.events.emit(Event {
                 id: 0,
