@@ -16,6 +16,54 @@ use crate::net::session::SessionStream;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+#[derive(Debug)]
+struct ThroughputStats {
+    /// Total number of bytes read.
+    pub total_read: usize,
+
+    /// Number of bytes read since the last flush.
+    pub span_read: usize,
+
+    /// First timestamp of successful non-zero read.
+    ///
+    /// Reset on flush.
+    pub first_read_timestamp: Option<Instant>,
+
+    /// Last non-zero read.
+    pub last_read_timestamp: Instant,
+
+    pub total_duration: Duration,
+
+    /// Whether to collect throughput statistics or not.
+    ///
+    /// Disabled when read timeout is disabled,
+    /// i.e. when we are in IMAP IDLE.
+    pub enabled: bool,
+}
+
+impl ThroughputStats {
+    fn new() -> Self {
+        Self {
+            total_read: 0,
+            span_read: 0,
+            first_read_timestamp: None,
+            last_read_timestamp: Instant::now(),
+            total_duration: Duration::ZERO,
+            enabled: false
+        }
+    }
+
+    /// Returns throughput in bps.
+    pub fn throughput(&self) -> f64 {
+        let total_duration_secs = self.total_duration.as_secs_f64();
+        if total_duration_secs > 0.0 {
+            (self.total_read as f64) / total_duration_secs
+        } else {
+            0.0
+        }
+    }
+}
+
 /// Stream that logs errors to the event channel.
 #[derive(Debug)]
 #[pin_project]
@@ -32,27 +80,7 @@ pub(crate) struct LoggingStream<S: SessionStream> {
     /// Event channel.
     events: Events,
 
-    /// Total number of bytes read.
-    total_read: usize,
-
-    /// Number of bytes read since the last flush.
-    span_read: usize,
-
-    /// First timestamp of successful non-zero read.
-    ///
-    /// Reset on flush.
-    first_read_timestamp: Option<Instant>,
-
-    /// Last non-zero read.
-    last_read_timestamp: Instant,
-
-    total_duration: Duration,
-
-    /// Whether to collect throughput statistics or not.
-    ///
-    /// Disabled when read timeout is disabled,
-    /// i.e. when we are in IMAP IDLE.
-    enable_stats: bool,
+    throughput: ThroughputStats,
 }
 
 impl<S: SessionStream> LoggingStream<S> {
@@ -62,22 +90,7 @@ impl<S: SessionStream> LoggingStream<S> {
             tag,
             account_id,
             events,
-            total_read: 0,
-            span_read: 0,
-            first_read_timestamp: None,
-            last_read_timestamp: Instant::now(),
-            total_duration: Duration::ZERO,
-            enable_stats: true
-        }
-    }
-
-    /// Returns throughput in bps.
-    pub fn throughput(&self) -> f64 {
-        let total_duration_secs = self.total_duration.as_secs_f64();
-        if total_duration_secs > 0.0 {
-            (self.total_read as f64) / total_duration_secs
-        } else {
-            0.0
+            throughput: ThroughputStats::new(),
         }
     }
 }
@@ -94,14 +107,16 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let res = projected.inner.poll_read(cx, buf);
 
         let n = old_remaining - buf.remaining();
-        if n > 0 && *projected.enable_stats {
-            let now = Instant::now();
-            if projected.first_read_timestamp.is_none() {
-                *projected.first_read_timestamp = Some(now);
-            }
-            *projected.last_read_timestamp = now;
+        if n > 0 {
+            if projected.throughput.enabled {
+                let now = Instant::now();
+                if projected.throughput.first_read_timestamp.is_none() {
+                    projected.throughput.first_read_timestamp = Some(now);
+                }
+                projected.throughput.last_read_timestamp = now;
 
-            *projected.span_read = projected.span_read.saturating_add(n);
+                projected.throughput.span_read = projected.throughput.span_read.saturating_add(n);
+            }
 
             let log_message = format!("{}: READING {}", projected.tag, n);
             projected.events.emit(Event {
@@ -127,23 +142,22 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<std::io::Result<()>> {
-        let throughput = self.throughput();
-
         let projected = self.project();
-        if let Some(first_read_timestamp) = projected.first_read_timestamp.take() {
-            let duration = projected.last_read_timestamp.duration_since(first_read_timestamp);
+        if let Some(first_read_timestamp) = projected.throughput.first_read_timestamp.take() {
+            let duration = projected.throughput.last_read_timestamp.duration_since(first_read_timestamp);
 
-            *projected.total_read = projected.total_read.saturating_add(*projected.span_read);
-            *projected.span_read = 0;
-            *projected.total_duration = projected.total_duration.saturating_add(duration);
-
-            let log_message = format!("{}: FLUSH: {} kbps", projected.tag, throughput * 8e-3);
-
-            projected.events.emit(Event {
-                id: 0,
-                typ: EventType::Info(log_message),
-            });
+            projected.throughput.total_read = projected.throughput.total_read.saturating_add(projected.throughput.span_read);
+            projected.throughput.span_read = 0;
+            projected.throughput.total_duration = projected.throughput.total_duration.saturating_add(duration);
         }
+
+        let throughput = projected.throughput.throughput();
+        let log_message = format!("{}: FLUSH: {} kbps", projected.tag, throughput * 8e-3);
+
+        projected.events.emit(Event {
+            id: 0,
+            typ: EventType::Info(log_message),
+        });
 
         projected.inner.poll_flush(cx)
     }
@@ -170,7 +184,7 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
 
 impl<S: SessionStream> SessionStream for LoggingStream<S> {
     fn set_read_timeout(&mut self, timeout: Option<Duration>) {
-        self.enable_stats = timeout.is_some();
+        self.throughput.enabled = timeout.is_some();
 
         self.inner.set_read_timeout(timeout)
     }
