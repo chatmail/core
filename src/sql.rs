@@ -8,7 +8,7 @@ use rusqlite::{config::DbConfig, types::ValueRef, Connection, OpenFlags, Row};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::{add_device_msg, update_device_icon, update_saved_messages_icon};
+use crate::chat::add_device_msg;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -213,17 +213,13 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        let (update_icons, disable_server_delete, recode_avatar) = migrations::run(context, self)
+        // `update_icons` is not used anymore, since it's not necessary anymore to "update" icons:
+        let (_update_icons, disable_server_delete, recode_avatar) = migrations::run(context, self)
             .await
             .context("failed to run migrations")?;
 
         // (2) updates that require high-level objects
         // the structure is complete now and all objects are usable
-
-        if update_icons {
-            update_saved_messages_icon(context).await?;
-            update_device_icon(context).await?;
-        }
 
         if disable_server_delete {
             // We now always watch all folders and delete messages there if delete_server is enabled.
