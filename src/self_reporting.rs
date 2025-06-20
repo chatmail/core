@@ -1,6 +1,5 @@
 //! TODO doc comment
 
-
 use anyhow::{Context as _, Result};
 use pgp::types::PublicKeyTrait;
 use serde::Serialize;
@@ -37,7 +36,7 @@ struct ChatNumbers {
     unencrypted_mua: u32,
 }
 
-pub(crate) async fn maybe_send_self_report(context: &Context) -> Result<()> {
+pub async fn maybe_send_self_report(context: &Context) -> Result<()> {
     //#[cfg(target_os = "android")] TODO
     if context.get_config_bool(Config::SelfReporting).await? {
         match context.get_config_i64(Config::LastSelfReportSent).await {
