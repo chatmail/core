@@ -1242,7 +1242,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
             .await?;
         info!(
             context,
-            "PGP contacts migration took {:?} in total",
+            "PGP contacts migration took {:?} in total.",
             start.elapsed()
         );
     }
