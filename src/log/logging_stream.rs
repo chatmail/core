@@ -105,19 +105,38 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let old_remaining = buf.remaining();
 
         let now = Instant::now();
-        if projected.throughput.first_read_timestamp.is_none() && projected.throughput.enabled {
-            projected.throughput.first_read_timestamp = Some(now);
-        }
-
         let res = projected.inner.poll_read(cx, buf);
 
-        let n = old_remaining - buf.remaining();
-        if n > 0 {
-            if projected.throughput.enabled {
-                projected.throughput.last_read_timestamp = now;
+        if projected.throughput.enabled {
+            let first_read_timestamp =
+                if let Some(first_read_timestamp) = projected.throughput.first_read_timestamp {
+                    first_read_timestamp
+                } else {
+                    projected.throughput.first_read_timestamp = Some(now);
+                    now
+                };
 
+            let n = old_remaining - buf.remaining();
+            if n > 0 {
+                projected.throughput.last_read_timestamp = now;
                 projected.throughput.span_read = projected.throughput.span_read.saturating_add(n);
             }
+
+            let duration = projected
+                .throughput
+                .last_read_timestamp
+                .duration_since(first_read_timestamp);
+
+            let log_message = format!(
+                "{}: SPAN: {} {}",
+                projected.tag,
+                duration.as_secs_f64(),
+                projected.throughput.span_read
+            );
+            projected.events.emit(Event {
+                id: 0,
+                typ: EventType::Info(log_message),
+            });
 
             let log_message = format!("{}: READING {}", projected.tag, n);
             projected.events.emit(Event {
@@ -150,13 +169,19 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
                 .last_read_timestamp
                 .duration_since(first_read_timestamp);
 
-            projected.throughput.total_read = projected
-                .throughput
-                .total_read
-                .saturating_add(projected.throughput.span_read);
+            // Only measure when more than about 2 MTU is transferred.
+            // We cannot measure throughput on small responses
+            // like `A1000 OK`.
+            if projected.throughput.span_read > 3000 {
+                projected.throughput.total_read = projected
+                    .throughput
+                    .total_read
+                    .saturating_add(projected.throughput.span_read);
+                projected.throughput.total_duration =
+                    projected.throughput.total_duration.saturating_add(duration);
+            }
+
             projected.throughput.span_read = 0;
-            projected.throughput.total_duration =
-                projected.throughput.total_duration.saturating_add(duration);
         }
 
         if let Some(throughput) = projected.throughput.throughput() {
