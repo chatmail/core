@@ -36,6 +36,12 @@ struct ChatNumbers {
     unencrypted_mua: u32,
 }
 
+/// Sends a message with statistics about the usage of Delta Chat,
+/// if the last time such a message was sent
+/// was more than a week ago.
+///
+/// On the other end, a bot will receive the message and make it available
+/// to Delta Chat's developers.
 pub async fn maybe_send_self_report(context: &Context) -> Result<()> {
     //#[cfg(target_os = "android")] TODO
     if context.get_config_bool(Config::SelfReporting).await? {
@@ -54,11 +60,6 @@ pub async fn maybe_send_self_report(context: &Context) -> Result<()> {
     Ok(())
 }
 
-/// Drafts a message with statistics about the usage of Delta Chat.
-/// The user can inspect the message if they want, and then hit "Send".
-///
-/// On the other end, a bot will receive the message and make it available
-/// to Delta Chat's developers.
 async fn send_self_report(context: &Context) -> Result<ChatId> {
     info!(context, "Sending self report.");
     // Setting `Config::LastHousekeeping` at the beginning avoids endless loops when things do not
