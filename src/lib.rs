@@ -98,7 +98,7 @@ pub mod html;
 pub mod net;
 pub mod plaintext;
 mod push;
-mod self_reporting;
+pub mod self_reporting;
 pub mod summary;
 
 mod debug_logging;
