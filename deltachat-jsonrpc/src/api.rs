@@ -375,12 +375,6 @@ impl CommandApi {
         Ok(BlobObject::create_and_deduplicate(&ctx, file, file)?.to_abs_path())
     }
 
-    /// Deprecated 2025-04. Use the "self_reporting" config instead.
-    async fn draft_self_report(&self, account_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        Ok(ctx.send_self_report().await?.to_u32())
-    }
-
     /// Sets the given configuration key.
     async fn set_config(&self, account_id: u32, key: String, value: Option<String>) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
