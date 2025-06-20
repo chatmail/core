@@ -428,6 +428,13 @@ pub enum Config {
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
 
+    /// Send statistics to Delta Chat's developers.
+    /// Can be exposed to the user as a setting.
+    SelfReporting,
+
+    /// Last time statistics were sent to Delta Chat's developers
+    LastSelfReportSent,
+
     /// This key is sent to the self_reporting bot so that the bot can recognize the user
     /// without storing the email address
     SelfReportingId,

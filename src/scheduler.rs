@@ -22,6 +22,7 @@ use crate::imap::{session::Session, FolderMeaning, Imap};
 use crate::location;
 use crate::log::LogExt;
 use crate::message::MsgId;
+use crate::self_reporting::maybe_send_self_report;
 use crate::smtp::{send_smtp_messages, Smtp};
 use crate::sql;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
@@ -505,6 +506,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
+    maybe_send_self_report(ctx).await?;
     match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
         Ok(fetched_existing_msgs) => {
             if !fetched_existing_msgs {

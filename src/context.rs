@@ -12,23 +12,23 @@ use anyhow::{bail, ensure, Context as _, Result};
 use async_channel::{self as channel, Receiver, Sender};
 use pgp::types::PublicKeyTrait;
 use ratelimit::Ratelimit;
+use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{get_chat_cnt, ChatId};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
-    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
+    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR,
 };
-use crate::contact::{import_vcard, mark_contact_id_as_verified, Contact, ContactId};
+use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
-use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{load_self_secret_key, self_fingerprint};
+use crate::key::{self_fingerprint, DcKey as _};
+use crate::log::LogExt;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
-use crate::message::{self, Message, MessageState, MsgId};
-use crate::param::{Param, Params};
+use crate::message::{self, MessageState, MsgId};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
@@ -36,7 +36,7 @@ use crate::scheduler::{convert_folder_meaning, SchedulerState};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
-use crate::tools::{self, create_id, duration_to_str, time, time_elapsed};
+use crate::tools::{self, duration_to_str, time, time_elapsed};
 
 /// Builder for the [`Context`].
 ///
@@ -1043,157 +1043,23 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "self_reporting",
+            self.get_config_bool(Config::SelfReporting)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "last_self_report_sent",
+            self.get_config_i64(Config::LastSelfReportSent)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
 
         Ok(res)
-    }
-
-    async fn get_self_report(&self) -> Result<String> {
-        #[derive(Default)]
-        struct ChatNumbers {
-            protected: u32,
-            protection_broken: u32,
-            opportunistic_dc: u32,
-            opportunistic_mua: u32,
-            unencrypted_dc: u32,
-            unencrypted_mua: u32,
-        }
-
-        let mut res = String::new();
-        res += &format!("core_version {}\n", get_version_str());
-
-        let num_msgs: u32 = self
-            .sql
-            .query_get_value(
-                "SELECT COUNT(*) FROM msgs WHERE hidden=0 AND chat_id!=?",
-                (DC_CHAT_ID_TRASH,),
-            )
-            .await?
-            .unwrap_or_default();
-        res += &format!("num_msgs {num_msgs}\n");
-
-        let num_chats: u32 = self
-            .sql
-            .query_get_value("SELECT COUNT(*) FROM chats WHERE id>9 AND blocked!=1", ())
-            .await?
-            .unwrap_or_default();
-        res += &format!("num_chats {num_chats}\n");
-
-        let db_size = tokio::fs::metadata(&self.sql.dbfile).await?.len();
-        res += &format!("db_size_bytes {db_size}\n");
-
-        let secret_key = &load_self_secret_key(self).await?.primary_key;
-        let key_created = secret_key.public_key().created_at().timestamp();
-        res += &format!("key_created {key_created}\n");
-
-        // how many of the chats active in the last months are:
-        // - protected
-        // - protection-broken
-        // - opportunistic-encrypted and the contact uses Delta Chat
-        // - opportunistic-encrypted and the contact uses a classical MUA
-        // - unencrypted and the contact uses Delta Chat
-        // - unencrypted and the contact uses a classical MUA
-        let three_months_ago = time().saturating_sub(3600 * 24 * 30 * 3);
-        let chats = self
-            .sql
-            .query_map(
-                "SELECT c.protected, m.param, m.msgrmsg
-                    FROM chats c
-                    JOIN msgs m
-                        ON c.id=m.chat_id
-                        AND m.id=(
-                                SELECT id
-                                FROM msgs
-                                WHERE chat_id=c.id
-                                AND hidden=0
-                                AND download_state=?
-                                AND to_id!=?
-                                ORDER BY timestamp DESC, id DESC LIMIT 1)
-                    WHERE c.id>9
-                    AND (c.blocked=0 OR c.blocked=2)
-                    AND IFNULL(m.timestamp,c.created_timestamp) > ?
-                    GROUP BY c.id",
-                (DownloadState::Done, ContactId::INFO, three_months_ago),
-                |row| {
-                    let protected: ProtectionStatus = row.get(0)?;
-                    let message_param: Params =
-                        row.get::<_, String>(1)?.parse().unwrap_or_default();
-                    let is_dc_message: bool = row.get(2)?;
-                    Ok((protected, message_param, is_dc_message))
-                },
-                |rows| {
-                    let mut chats = ChatNumbers::default();
-                    for row in rows {
-                        let (protected, message_param, is_dc_message) = row?;
-                        let encrypted = message_param
-                            .get_bool(Param::GuaranteeE2ee)
-                            .unwrap_or(false);
-
-                        if protected == ProtectionStatus::Protected {
-                            chats.protected += 1;
-                        } else if protected == ProtectionStatus::ProtectionBroken {
-                            chats.protection_broken += 1;
-                        } else if encrypted {
-                            if is_dc_message {
-                                chats.opportunistic_dc += 1;
-                            } else {
-                                chats.opportunistic_mua += 1;
-                            }
-                        } else if is_dc_message {
-                            chats.unencrypted_dc += 1;
-                        } else {
-                            chats.unencrypted_mua += 1;
-                        }
-                    }
-                    Ok(chats)
-                },
-            )
-            .await?;
-        res += &format!("chats_protected {}\n", chats.protected);
-        res += &format!("chats_protection_broken {}\n", chats.protection_broken);
-        res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
-        res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
-        res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);
-        res += &format!("chats_unencrypted_mua {}\n", chats.unencrypted_mua);
-
-        let self_reporting_id = match self.get_config(Config::SelfReportingId).await? {
-            Some(id) => id,
-            None => {
-                let id = create_id();
-                self.set_config(Config::SelfReportingId, Some(&id)).await?;
-                id
-            }
-        };
-        res += &format!("self_reporting_id {self_reporting_id}");
-
-        Ok(res)
-    }
-
-    /// Drafts a message with statistics about the usage of Delta Chat.
-    /// The user can inspect the message if they want, and then hit "Send".
-    ///
-    /// On the other end, a bot will receive the message and make it available
-    /// to Delta Chat's developers.
-    pub async fn draft_self_report(&self) -> Result<ChatId> {
-        const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bot.vcf");
-        let contact_id: ContactId = *import_vcard(self, SELF_REPORTING_BOT_VCARD)
-            .await?
-            .first()
-            .context("Self reporting bot vCard does not contain a contact")?;
-        mark_contact_id_as_verified(self, contact_id, ContactId::SELF).await?;
-
-        let chat_id = ChatId::create_for_contact(self, contact_id).await?;
-        chat_id
-            .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
-            .await?;
-
-        let mut msg = Message::new_text(self.get_self_report().await?);
-
-        chat_id.set_draft(self, Some(&mut msg)).await?;
-
-        Ok(chat_id)
     }
 
     /// Get a list of fresh, unmuted messages in unblocked chats.
