@@ -1860,7 +1860,7 @@ fn migrate_pgp_contacts(
         }
         info!(
             context,
-            "Rewriting msgs for PGP contacts took {:?}",
+            "Rewriting msgs to PGP contacts took {:?}.",
             start.elapsed()
         );
     }
