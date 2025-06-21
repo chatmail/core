@@ -59,6 +59,13 @@ pub struct MessageObject {
 
     // summary - use/create another function if you need it
     subject: String,
+
+    /// True if the message was correctly encrypted&signed, false otherwise.
+    /// Historically, UIs showed a small padlock on the message then.
+    ///
+    /// Today, the UIs should instead show a small email-icon on the message
+    /// if `show_padlock` is `false`,
+    /// and nothing if it is `true`.
     show_padlock: bool,
     is_setupmessage: bool,
     is_info: bool,
