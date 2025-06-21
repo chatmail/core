@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use base64::Engine as _;
 use chrono::TimeZone;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -1400,6 +1400,27 @@ impl MimeFactory {
                     .into(),
                 ));
             }
+            SystemMessage::OutgoingCall => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call").into(),
+                ));
+            }
+            SystemMessage::IncomingCall => {
+                return Err(anyhow!("Unexpected incoming call rendering."));
+            }
+            SystemMessage::CallAccepted => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-accepted").into(),
+                ));
+            }
+            SystemMessage::CallEnded => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-ended").into(),
+                ));
+            }
             _ => {}
         }
 
@@ -1424,11 +1445,25 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
             ));
+        }
+
+        if msg.param.exists(Param::WebrtcRoom) {
             headers.push((
                 "Chat-Webrtc-Room",
                 mail_builder::headers::raw::Raw::new(
                     msg.param
                         .get(Param::WebrtcRoom)
+                        .unwrap_or_default()
+                        .to_string(),
+                )
+                .into(),
+            ));
+        } else if msg.param.exists(Param::WebrtcAccepted) {
+            headers.push((
+                "Chat-Webrtc-Accepted",
+                mail_builder::headers::raw::Raw::new(
+                    msg.param
+                        .get(Param::WebrtcAccepted)
                         .unwrap_or_default()
                         .to_string(),
                 )
