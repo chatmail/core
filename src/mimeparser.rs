@@ -13,7 +13,7 @@ use format_flowed::unformat_flowed;
 use mailparse::{addrparse_header, DispositionType, MailHeader, MailHeaderMap, SingleInfo};
 use mime::Mime;
 
-use crate::aheader::{Aheader, EncryptPreference};
+use crate::aheader::Aheader;
 use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
@@ -21,10 +21,7 @@ use crate::config::Config;
 use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{
-    get_autocrypt_peerstate, get_encrypted_mime, keyring_from_peerstate, try_decrypt,
-    validate_detached_signature,
-};
+use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -32,7 +29,6 @@ use crate::key::{self, load_self_secret_keyring, DcKey, Fingerprint, SignedPubli
 use crate::log::{error, info, warn};
 use crate::message::{self, get_vcard_summary, set_msg_failed, Message, MsgId, Viewtype};
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::simplify::{simplify, SimplifiedText};
 use crate::sync::SyncItems;
 use crate::tools::{
@@ -72,17 +68,12 @@ pub(crate) struct MimeMessage {
     /// `From:` address.
     pub from: SingleInfo,
 
-    /// Whether the From address was repeated in the signed part
-    /// (and we know that the signer intended to send from this address)
-    pub from_is_signed: bool,
     /// Whether the message is incoming or outgoing (self-sent).
     pub incoming: bool,
     /// The List-Post address is only set for mailing lists. Users can send
     /// messages to this address to post them to the list.
     pub list_post: Option<String>,
     pub chat_disposition_notification_to: Option<SingleInfo>,
-    pub autocrypt_header: Option<Aheader>,
-    pub peerstate: Option<Peerstate>,
     pub decrypting_failed: bool,
 
     /// Set of valid signature fingerprints if a message is an
@@ -91,10 +82,15 @@ pub(crate) struct MimeMessage {
     /// If a message is not encrypted or the signature is not valid,
     /// this set is empty.
     pub signatures: HashSet<Fingerprint>,
-    /// The mail recipient addresses for which gossip headers were applied
-    /// and their respective gossiped keys,
-    /// regardless of whether they modified any peerstates.
+
+    /// The addresses for which there was a gossip header
+    /// and their respective gossiped keys.
     pub gossiped_keys: HashMap<String, SignedPublicKey>,
+
+    /// Fingerprint of the key in the Autocrypt header.
+    ///
+    /// It is not verified that the sender can use this key.
+    pub autocrypt_fingerprint: Option<String>,
 
     /// True if the message is a forwarded message.
     pub is_forwarded: bool,
@@ -118,8 +114,7 @@ pub(crate) struct MimeMessage {
     /// MIME message in this case.
     pub is_mime_modified: bool,
 
-    /// Decrypted, raw MIME structure. Nonempty iff `is_mime_modified` and the message was actually
-    /// encrypted.
+    /// Decrypted raw MIME structure.
     pub decoded_data: Vec<u8>,
 
     /// Hop info for debugging.
@@ -260,7 +255,7 @@ impl MimeMessage {
         );
         headers.retain(|k, _| {
             !is_hidden(k) || {
-                headers_removed.insert(k.clone());
+                headers_removed.insert(k.to_string());
                 false
             }
         });
@@ -326,12 +321,9 @@ impl MimeMessage {
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
 
-        let allow_aeap = get_encrypted_mime(&mail).is_some();
-
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
         let mut gossiped_keys = Default::default();
-        let mut from_is_signed = false;
         hop_info += "\n\n";
         hop_info += &dkim_results.to_string();
 
@@ -407,19 +399,37 @@ impl MimeMessage {
             None
         };
 
-        // The peerstate that will be used to validate the signatures.
-        let mut peerstate = get_autocrypt_peerstate(
-            context,
-            &from.addr,
-            autocrypt_header.as_ref(),
-            timestamp_sent,
-            allow_aeap,
-        )
-        .await?;
+        let autocrypt_fingerprint = if let Some(autocrypt_header) = &autocrypt_header {
+            let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
+            let inserted = context
+                .sql
+                .execute(
+                    "INSERT INTO public_keys (fingerprint, public_key)
+                                 VALUES (?, ?)
+                                 ON CONFLICT (fingerprint)
+                                 DO NOTHING",
+                    (&fingerprint, autocrypt_header.public_key.to_bytes()),
+                )
+                .await?;
+            if inserted > 0 {
+                info!(
+                    context,
+                    "Saved key with fingerprint {fingerprint} from the Autocrypt header"
+                );
+            }
+            Some(fingerprint)
+        } else {
+            None
+        };
 
-        let public_keyring = match peerstate.is_none() && !incoming {
-            true => key::load_self_public_keyring(context).await?,
-            false => keyring_from_peerstate(peerstate.as_ref()),
+        let public_keyring = if incoming {
+            if let Some(autocrypt_header) = autocrypt_header {
+                vec![autocrypt_header.public_key]
+            } else {
+                vec![]
+            }
+        } else {
+            key::load_self_public_keyring(context).await?
         };
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
@@ -482,14 +492,8 @@ impl MimeMessage {
                 // but only if the mail was correctly signed. Probably it's ok to not require
                 // encryption here, but let's follow the standard.
                 let gossip_headers = mail.headers.get_all_values("Autocrypt-Gossip");
-                gossiped_keys = update_gossip_peerstates(
-                    context,
-                    timestamp_sent,
-                    &from.addr,
-                    &recipients,
-                    gossip_headers,
-                )
-                .await?;
+                gossiped_keys =
+                    parse_gossip_headers(context, &from.addr, &recipients, gossip_headers).await?;
             }
 
             if let Some(inner_from) = inner_from {
@@ -514,29 +518,13 @@ impl MimeMessage {
                     bail!("From header is forged");
                 }
                 from = inner_from;
-                from_is_signed = !signatures.is_empty();
             }
         }
         if signatures.is_empty() {
             Self::remove_secured_headers(&mut headers, &mut headers_removed);
-
-            // If it is not a read receipt, degrade encryption.
-            if let (Some(peerstate), Ok(mail)) = (&mut peerstate, mail) {
-                if timestamp_sent > peerstate.last_seen_autocrypt
-                    && mail.ctype.mimetype != "multipart/report"
-                {
-                    peerstate.degrade_encryption(timestamp_sent);
-                }
-            }
         }
         if !is_encrypted {
             signatures.clear();
-        }
-        if let Some(peerstate) = &mut peerstate {
-            if peerstate.prefer_encrypt != EncryptPreference::Mutual && !signatures.is_empty() {
-                peerstate.prefer_encrypt = EncryptPreference::Mutual;
-                peerstate.save_to_db(&context.sql).await?;
-            }
         }
 
         let mut parser = MimeMessage {
@@ -549,15 +537,13 @@ impl MimeMessage {
             past_members,
             list_post,
             from,
-            from_is_signed,
             incoming,
             chat_disposition_notification_to,
-            autocrypt_header,
-            peerstate,
             decrypting_failed: mail.is_err(),
 
             // only non-empty if it was a valid autocrypt message
             signatures,
+            autocrypt_fingerprint,
             gossiped_keys,
             is_forwarded: false,
             mdn_reports: Vec::new(),
@@ -620,10 +606,7 @@ impl MimeMessage {
         parser.maybe_remove_inline_mailinglist_footer();
         parser.heuristically_parse_ndn(context).await;
         parser.parse_headers(context).await?;
-
-        if parser.is_mime_modified {
-            parser.decoded_data = mail_raw;
-        }
+        parser.decoded_data = mail_raw;
 
         Ok(parser)
     }
@@ -1338,14 +1321,13 @@ impl MimeMessage {
         if decoded_data.is_empty() {
             return Ok(());
         }
-        if let Some(peerstate) = &mut self.peerstate {
-            if peerstate.prefer_encrypt != EncryptPreference::Mutual
-                && mime_type.type_() == mime::APPLICATION
-                && mime_type.subtype().as_str() == "pgp-keys"
-                && Self::try_set_peer_key_from_file_part(context, peerstate, decoded_data).await?
-            {
-                return Ok(());
-            }
+
+        // Process attached PGP keys.
+        if mime_type.type_() == mime::APPLICATION
+            && mime_type.subtype().as_str() == "pgp-keys"
+            && Self::try_set_peer_key_from_file_part(context, decoded_data).await?
+        {
+            return Ok(());
         }
         let mut part = Part::default();
         let msg_type = if context
@@ -1438,10 +1420,9 @@ impl MimeMessage {
         Ok(())
     }
 
-    /// Returns whether a key from the attachment was set as peer's pubkey.
+    /// Returns whether a key from the attachment was saved.
     async fn try_set_peer_key_from_file_part(
         context: &Context,
-        peerstate: &mut Peerstate,
         decoded_data: &[u8],
     ) -> Result<bool> {
         let key = match str::from_utf8(decoded_data) {
@@ -1455,45 +1436,30 @@ impl MimeMessage {
             Err(err) => {
                 warn!(
                     context,
-                    "PGP key attachment is not an ASCII-armored file: {:#}", err
+                    "PGP key attachment is not an ASCII-armored file: {err:#}."
                 );
                 return Ok(false);
             }
             Ok((key, _)) => key,
         };
         if let Err(err) = key.verify() {
-            warn!(context, "attached PGP key verification failed: {}", err);
+            warn!(context, "Attached PGP key verification failed: {err:#}.");
             return Ok(false);
         }
-        if !key.details.users.iter().any(|user| {
-            user.id
-                .id()
-                .ends_with((String::from("<") + &peerstate.addr + ">").as_bytes())
-        }) {
-            return Ok(false);
-        }
-        if let Some(curr_key) = &peerstate.public_key {
-            if key != *curr_key && peerstate.prefer_encrypt != EncryptPreference::Reset {
-                // We don't want to break the existing Autocrypt setup. Yes, it's unlikely that a
-                // user have an Autocrypt-capable MUA and also attaches a key, but if that's the
-                // case, let 'em first disable Autocrypt and then change the key by attaching it.
-                warn!(
-                    context,
-                    "not using attached PGP key for peer '{}' because another one is already set \
-                    with prefer-encrypt={}",
-                    peerstate.addr,
-                    peerstate.prefer_encrypt,
-                );
-                return Ok(false);
-            }
-        }
-        peerstate.public_key = Some(key);
-        info!(
-            context,
-            "using attached PGP key for peer '{}' with prefer-encrypt=mutual", peerstate.addr,
-        );
-        peerstate.prefer_encrypt = EncryptPreference::Mutual;
-        peerstate.save_to_db(&context.sql).await?;
+
+        let fingerprint = key.dc_fingerprint().hex();
+        context
+            .sql
+            .execute(
+                "INSERT INTO public_keys (fingerprint, public_key)
+                 VALUES (?, ?)
+                 ON CONFLICT (fingerprint)
+                 DO NOTHING",
+                (&fingerprint, key.to_bytes()),
+            )
+            .await?;
+
+        info!(context, "Imported PGP key {fingerprint} from attachment.");
         Ok(true)
     }
 
@@ -1887,6 +1853,19 @@ impl MimeMessage {
                     .collect()
             })
     }
+
+    /// Returns list of fingerprints from
+    /// `Chat-Group-Member-Fpr` header.
+    pub fn chat_group_member_fingerprints(&self) -> Vec<Fingerprint> {
+        if let Some(header) = self.get_header(HeaderDef::ChatGroupMemberFpr) {
+            header
+                .split_ascii_whitespace()
+                .filter_map(|fpr| Fingerprint::from_str(fpr).ok())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 fn remove_header(
@@ -1902,14 +1881,13 @@ fn remove_header(
     }
 }
 
-/// Parses `Autocrypt-Gossip` headers from the email and applies them to peerstates.
-/// Params:
-/// from: The address which sent the message currently being parsed
+/// Parses `Autocrypt-Gossip` headers from the email,
+/// saves the keys into the `public_keys` table,
+/// and returns them in a HashMap<address, public key>.
 ///
-/// Returns the set of mail recipient addresses for which valid gossip headers were found.
-async fn update_gossip_peerstates(
+/// * `from`: The address which sent the message currently being parsed
+async fn parse_gossip_headers(
     context: &Context,
-    message_time: i64,
     from: &str,
     recipients: &[SingleInfo],
     gossip_headers: Vec<String>,
@@ -1937,7 +1915,7 @@ async fn update_gossip_peerstates(
             continue;
         }
         if addr_cmp(from, &header.addr) {
-            // Non-standard, but anyway we can't update the cached peerstate here.
+            // Non-standard, might not be necessary to have this check here
             warn!(
                 context,
                 "Ignoring gossiped \"{}\" as it equals the From address", &header.addr,
@@ -1945,18 +1923,16 @@ async fn update_gossip_peerstates(
             continue;
         }
 
-        let peerstate;
-        if let Some(mut p) = Peerstate::from_addr(context, &header.addr).await? {
-            p.apply_gossip(&header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = p;
-        } else {
-            let p = Peerstate::from_gossip(&header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = p;
-        };
-        peerstate
-            .handle_fingerprint_change(context, message_time)
+        let fingerprint = header.public_key.dc_fingerprint().hex();
+        context
+            .sql
+            .execute(
+                "INSERT INTO public_keys (fingerprint, public_key)
+                             VALUES (?, ?)
+                             ON CONFLICT (fingerprint)
+                             DO NOTHING",
+                (&fingerprint, header.public_key.to_bytes()),
+            )
             .await?;
 
         gossiped_keys.insert(header.addr.to_lowercase(), header.public_key);

@@ -80,17 +80,8 @@ pub enum StockMessage {
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
 
-    #[strum(props(fallback = "End-to-end encryption preferred"))]
-    E2ePreferred = 34,
-
     #[strum(props(fallback = "%1$s verified."))]
     ContactVerified = 35,
-
-    #[strum(props(fallback = "Cannot establish guaranteed end-to-end encryption with %1$s"))]
-    ContactNotVerified = 36,
-
-    #[strum(props(fallback = "Changed setup for %1$s"))]
-    ContactSetupChanged = 37,
 
     #[strum(props(fallback = "Archived chats"))]
     ArchivedChats = 40,
@@ -268,9 +259,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Not connected"))]
     NotConnected = 121,
 
-    #[strum(props(fallback = "%1$s changed their address from %2$s to %3$s"))]
-    AeapAddrChanged = 122,
-
     #[strum(props(
         fallback = "You changed your email address from %1$s to %2$s.\n\nIf you now send a message to a verified group, contacts there will automatically replace the old with your new address.\n\nIt's highly advised to set up your old email provider to forward all emails to your new email address. Otherwise you might miss messages of contacts who did not get your new address yet."
     ))]
@@ -428,11 +416,6 @@ pub enum StockMessage {
 
     #[strum(props(fallback = "Establishing guaranteed end-to-end encryption, please wait…"))]
     SecurejoinWait = 190,
-
-    #[strum(props(
-        fallback = "The contact must be online to proceed.\n\nThis process will continue automatically in background."
-    ))]
-    SecurejoinTakesLonger = 192,
 }
 
 impl StockMessage {
@@ -636,29 +619,22 @@ pub(crate) async fn msg_add_member_remote(context: &Context, added_member_addr: 
 /// contacts to combine with the display name.
 pub(crate) async fn msg_add_member_local(
     context: &Context,
-    added_member_addr: &str,
+    added_member: ContactId,
     by_contact: ContactId,
 ) -> String {
-    let addr = added_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_display_name().to_string())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
+    let whom = added_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
         translated(context, StockMessage::MsgAddMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouAddMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else {
         translated(context, StockMessage::MsgAddMemberBy)
             .await
-            .replace1(whom)
+            .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
 }
@@ -687,29 +663,22 @@ pub(crate) async fn msg_del_member_remote(context: &Context, removed_member_addr
 /// the contacts to combine with the display name.
 pub(crate) async fn msg_del_member_local(
     context: &Context,
-    removed_member_addr: &str,
+    removed_member: ContactId,
     by_contact: ContactId,
 ) -> String {
-    let addr = removed_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_display_name().to_string())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
+    let whom = removed_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
         translated(context, StockMessage::MsgDelMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouDelMember)
             .await
-            .replace1(whom)
+            .replace1(&whom)
     } else {
         translated(context, StockMessage::MsgDelMemberBy)
             .await
-            .replace1(whom)
+            .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
 }
@@ -792,11 +761,6 @@ pub(crate) async fn msg_grp_img_deleted(context: &Context, by_contact: ContactId
     }
 }
 
-/// Stock string: `End-to-end encryption preferred.`.
-pub(crate) async fn e2e_preferred(context: &Context) -> String {
-    translated(context, StockMessage::E2ePreferred).await
-}
-
 /// Stock string: `%1$s invited you to join this group. Waiting for the device of %2$s to reply…`.
 pub(crate) async fn secure_join_started(
     context: &Context,
@@ -822,11 +786,6 @@ pub(crate) async fn secure_join_replies(context: &Context, contact_id: ContactId
 /// Stock string: `Establishing guaranteed end-to-end encryption, please wait…`.
 pub(crate) async fn securejoin_wait(context: &Context) -> String {
     translated(context, StockMessage::SecurejoinWait).await
-}
-
-/// Stock string: `The contact must be online to proceed. This process will continue automatically in background.`.
-pub(crate) async fn securejoin_takes_longer(context: &Context) -> String {
-    translated(context, StockMessage::SecurejoinTakesLonger).await
 }
 
 /// Stock string: `Scan to chat with %1$s`.
@@ -859,21 +818,6 @@ pub(crate) async fn contact_verified(context: &Context, contact: &Contact) -> St
     translated(context, StockMessage::ContactVerified)
         .await
         .replace1(addr)
-}
-
-/// Stock string: `Cannot establish guaranteed end-to-end encryption with %1$s`.
-pub(crate) async fn contact_not_verified(context: &Context, contact: &Contact) -> String {
-    let addr = contact.get_display_name();
-    translated(context, StockMessage::ContactNotVerified)
-        .await
-        .replace1(addr)
-}
-
-/// Stock string: `Changed setup for %1$s`.
-pub(crate) async fn contact_setup_changed(context: &Context, contact_addr: &str) -> String {
-    translated(context, StockMessage::ContactSetupChanged)
-        .await
-        .replace1(contact_addr)
 }
 
 /// Stock string: `Archived chats`.
@@ -1281,20 +1225,6 @@ pub(crate) async fn part_of_total_used(context: &Context, part: &str, total: &st
 /// Used as the default name for broadcast lists; a number may be added.
 pub(crate) async fn broadcast_list(context: &Context) -> String {
     translated(context, StockMessage::BroadcastList).await
-}
-
-/// Stock string: `%1$s changed their address from %2$s to %3$s`.
-pub(crate) async fn aeap_addr_changed(
-    context: &Context,
-    contact_name: &str,
-    old_addr: &str,
-    new_addr: &str,
-) -> String {
-    translated(context, StockMessage::AeapAddrChanged)
-        .await
-        .replace1(contact_name)
-        .replace2(old_addr)
-        .replace3(new_addr)
 }
 
 /// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.

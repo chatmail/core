@@ -981,10 +981,11 @@ Here's my footer -- bob@example.net"
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_send_reaction_multidevice() -> Result<()> {
-        let alice0 = TestContext::new_alice().await;
-        let alice1 = TestContext::new_alice().await;
-        let bob_id = Contact::create(&alice0, "", "bob@example.net").await?;
-        let chat_id = ChatId::create_for_contact(&alice0, bob_id).await?;
+        let mut tcm = TestContextManager::new();
+        let alice0 = tcm.alice().await;
+        let alice1 = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let chat_id = alice0.create_chat(&bob).await.id;
 
         let alice0_msg_id = send_text_msg(&alice0, chat_id, "foo".to_string()).await?;
         let alice1_msg = alice1.recv_msg(&alice0.pop_sent_msg().await).await;

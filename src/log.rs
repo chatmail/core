@@ -68,6 +68,16 @@ impl Context {
         let last_error = &*self.last_error.read();
         last_error.clone()
     }
+
+    pub fn set_migration_error(&self, error: &str) {
+        let mut migration_error = self.migration_error.write();
+        *migration_error = Some(error.to_string());
+    }
+
+    pub fn get_migration_error(&self) -> Option<String> {
+        let migration_error = &*self.migration_error.read();
+        migration_error.clone()
+    }
 }
 
 pub trait LogExt<T, E>

@@ -5,11 +5,11 @@ use anyhow::{Context as _, Result};
 use super::qrinvite::QrInvite;
 use super::HandshakeMessage;
 use crate::chat::{self, is_contact_in_chat, ChatId, ProtectionStatus};
-use crate::constants::{self, Blocked, Chattype};
+use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::key::{load_self_public_key, DcKey};
+use crate::key::self_fingerprint;
 use crate::log::info;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
@@ -57,11 +57,18 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
     // Now start the protocol and initialise the state.
     {
-        let peer_verified =
-            verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
-                .await?;
+        let has_key = context
+            .sql
+            .exists(
+                "SELECT COUNT(*) FROM public_keys WHERE fingerprint=?",
+                (invite.fingerprint().hex(),),
+            )
+            .await?;
 
-        if peer_verified {
+        if has_key
+            && verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
+                .await?
+        {
             // The scanned fingerprint matches Alice's key, we can proceed to step 4b.
             info!(context, "Taking securejoin protocol shortcut");
             send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth)
@@ -130,7 +137,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                     None,
                 )
                 .await?;
-                chat_id.spawn_securejoin_wait(context, constants::SECUREJOIN_WAIT_TIMEOUT);
             }
             Ok(chat_id)
         }
@@ -268,8 +274,8 @@ pub(crate) async fn send_handshake_message(
             msg.param.set_int(Param::GuaranteeE2ee, 1);
 
             // Sends our own fingerprint in the Secure-Join-Fingerprint header.
-            let bob_fp = load_self_public_key(context).await?.dc_fingerprint();
-            msg.param.set(Param::Arg3, bob_fp.hex());
+            let bob_fp = self_fingerprint(context).await?;
+            msg.param.set(Param::Arg3, bob_fp);
 
             // Sends the grpid in the Secure-Join-Group header.
             //

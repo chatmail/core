@@ -5,10 +5,10 @@ use crate::chat::resend_msgs;
 use crate::chat::{
     self, add_contact_to_chat, remove_contact_from_chat, send_msg, Chat, ProtectionStatus,
 };
-use crate::chatlist::Chatlist;
 use crate::config::Config;
-use crate::constants::{Chattype, DC_GCL_FOR_FORWARDING};
-use crate::contact::{Contact, ContactId, Origin};
+use crate::constants::Chattype;
+use crate::contact::{Contact, ContactId};
+use crate::key::{load_self_public_key, DcKey};
 use crate::message::{Message, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -20,16 +20,16 @@ use crate::tools::SystemTime;
 use crate::{e2ee, message};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_classical() {
-    check_verified_oneonone_chat(true).await;
+async fn test_verified_oneonone_chat_not_broken_by_classical() {
+    check_verified_oneonone_chat_protection_not_broken(true).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_broken_by_device_change() {
-    check_verified_oneonone_chat(false).await;
+async fn test_verified_oneonone_chat_not_broken_by_device_change() {
+    check_verified_oneonone_chat_protection_not_broken(false).await;
 }
 
-async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
+async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_email: bool) {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -59,19 +59,19 @@ async fn check_verified_oneonone_chat(broken_by_classical_email: bool) {
         // Bob's contact is still verified, but the chat isn't marked as protected anymore
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     } else {
         tcm.section("Bob sets up another Delta Chat device");
-        let bob2 = TestContext::new().await;
+        let bob2 = tcm.unconfigured().await;
         bob2.set_name("bob2");
         bob2.configure_addr("bob@example.net").await;
 
         SystemTime::shift(std::time::Duration::from_secs(3600));
         tcm.send_recv(&bob2, &alice, "Using another device now")
             .await;
-        let contact = alice.add_or_lookup_contact(&bob).await;
+        let contact = alice.add_or_lookup_contact(&bob2).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), false);
-        assert_verified(&alice, &bob, ProtectionStatus::ProtectionBroken).await;
+        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     }
 
     tcm.section("Bob sends another message from DC");
@@ -157,44 +157,42 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
     tcm.send_recv(&fiona_new, &alice, "I have a new device")
         .await;
 
-    // The chat should be and stay unprotected
+    // Alice gets a new unprotected chat with new Fiona contact.
     {
         let chat = alice.get_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(chat.is_protection_broken());
 
-        let msg1 = get_chat_msg(&alice, chat.id, 0, 3).await;
-        assert_eq!(msg1.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 1, 3).await;
-        assert_eq!(msg2.get_info_type(), SystemMessage::ChatProtectionDisabled);
-
-        let msg2 = get_chat_msg(&alice, chat.id, 2, 3).await;
-        assert_eq!(msg2.text, "I have a new device");
+        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
+        assert_eq!(msg.text, "I have a new device");
 
         // After recreating the chat, it should still be unprotected
         chat.id.delete(&alice).await?;
 
         let chat = alice.create_chat(&fiona_new).await;
         assert!(!chat.is_protected());
-        assert!(!chat.is_protection_broken());
     }
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_missing_peerstate_reexecute_securejoin() -> Result<()> {
+async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
     let bob = &tcm.bob().await;
     enable_verified_oneonone_chats(&[alice, bob]).await;
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
     assert!(chat.is_protected());
     bob.sql
-        .execute("DELETE FROM acpeerstates WHERE addr=?", (&alice_addr,))
+        .execute(
+            "DELETE FROM public_keys WHERE fingerprint=?",
+            (&load_self_public_key(alice)
+                .await
+                .unwrap()
+                .dc_fingerprint()
+                .hex(),),
+        )
         .await?;
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
@@ -242,6 +240,10 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     Ok(())
 }
 
+/// Tests that receiving unencrypted message
+/// does not disable protection of 1:1 chat.
+///
+/// Instead, an email-chat is created.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -265,211 +267,16 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     )
     .await?;
 
-    let contact_id = Contact::lookup_id_by_addr(&alice, "bob@example.net", Origin::Hidden)
-        .await?
-        .unwrap();
-
-    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 3).await;
+    let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
     let enabled = stock_str::chat_protection_enabled(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 
-    let msg1 = get_chat_msg(&alice, alice_chat.id, 1, 3).await;
-    let disabled = stock_str::chat_protection_disabled(&alice, contact_id).await;
-    assert_eq!(msg1.text, disabled);
-    assert_eq!(msg1.param.get_cmd(), SystemMessage::ChatProtectionDisabled);
-
-    let msg2 = get_chat_msg(&alice, alice_chat.id, 2, 3).await;
-    assert_eq!(msg2.text, "hello".to_string());
-    assert!(!msg2.is_system_message());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_verified_oneonone_chat_enable_disable() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    // Alice & Bob verify each other
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
-
-    let chat = alice.create_chat(&bob).await;
-    assert!(chat.is_protected());
-
-    for alice_accepts_breakage in [true, false] {
-        SystemTime::shift(std::time::Duration::from_secs(300));
-        // Bob uses Thunderbird to send a message
-        receive_imf(
-            &alice,
-            format!(
-                "From: Bob <bob@example.net>\n\
-              To: alice@example.org\n\
-              Message-ID: <1234-2{alice_accepts_breakage}@example.org>\n\
-              \n\
-              Message from Thunderbird\n"
-            )
-            .as_bytes(),
-            false,
-        )
-        .await?;
-
-        let chat = alice.get_chat(&bob).await;
-        assert!(!chat.is_protected());
-        assert!(chat.is_protection_broken());
-
-        if alice_accepts_breakage {
-            tcm.section("Alice clicks 'Accept' on the input-bar-dialog");
-            chat.id.accept(&alice).await?;
-            let chat = alice.get_chat(&bob).await;
-            assert!(!chat.is_protected());
-            assert!(!chat.is_protection_broken());
-        }
-
-        // Bob sends a message from DC again
-        tcm.send_recv(&bob, &alice, "Hello from DC").await;
-        let chat = alice.get_chat(&bob).await;
-        assert!(chat.is_protected());
-        assert!(!chat.is_protection_broken());
-    }
-
-    alice
-        .golden_test_chat(chat.id, "test_verified_oneonone_chat_enable_disable")
-        .await;
-
-    Ok(())
-}
-
-/// Messages with old timestamps are difficult for verified chats:
-/// - They must not be sorted over a protection-changed info message.
-///   That's what `test_old_message_2` tests
-/// - If they change the protection, then they must not be sorted over existing other messages,
-///   because then the protection-changed info message would also be above these existing messages.
-///   That's what `test_old_message_3` tests.
-///
-/// `test_old_message_1` tests the case where both the old and the new message
-/// change verification
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_old_message_1() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    mark_as_verified(&alice, &bob).await;
-
-    let chat = alice.create_chat(&bob).await; // This creates a protection-changed info message
-    assert!(chat.is_protected());
-
-    // This creates protection-changed info message #2;
-    // even though the date is old, info message and email must be sorted below the original info message.
-    receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2-3@example.org>\n\
-          Date: Sat, 07 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Message from Thunderbird\n",
-        true,
-    )
-    .await?;
-
-    alice.golden_test_chat(chat.id, "test_old_message_1").await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_old_message_2() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    mark_as_verified(&alice, &bob).await;
-
-    // This creates protection-changed info message #1:
-    let chat = alice.create_chat(&bob).await;
-    assert!(chat.is_protected());
-    let protection_msg = alice.get_last_msg().await;
-    assert_eq!(
-        protection_msg.param.get_cmd(),
-        SystemMessage::ChatProtectionEnabled
-    );
-
-    // This creates protection-changed info message #2 with `timestamp_sort` greater by 1.
-    let first_email = receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2-3@example.org>\n\
-          Date: Sun, 08 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Somewhat old message\n",
-        false,
-    )
-    .await?
-    .unwrap();
-
-    // Both messages will get the same timestamp, so this one will be sorted under the previous one
-    // even though it has an older timestamp.
-    let second_email = receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <2319-2-3@example.org>\n\
-          Date: Sat, 07 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Even older message, that must NOT be shown before the info message\n",
-        true,
-    )
-    .await?
-    .unwrap();
-
-    assert_eq!(first_email.sort_timestamp, second_email.sort_timestamp);
-    assert_eq!(
-        first_email.sort_timestamp,
-        protection_msg.timestamp_sort + 1
-    );
-
-    alice.golden_test_chat(chat.id, "test_old_message_2").await;
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_old_message_3() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
-
-    tcm.send_recv_accept(&bob, &alice, "Heyho from my verified device!")
-        .await;
-
-    // This unverified message must not be sorted over the message sent in the previous line:
-    receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2-3@example.org>\n\
-          Date: Sat, 07 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Old, unverified message\n",
-        true,
-    )
-    .await?;
-
-    alice
-        .golden_test_chat(alice.get_chat(&bob).await.id, "test_old_message_3")
-        .await;
+    let email_chat = alice.get_email_chat(&bob).await;
+    assert!(!email_chat.is_encrypted(&alice).await?);
+    let email_msg = get_chat_msg(&alice, email_chat.id, 0, 1).await;
+    assert_eq!(email_msg.text, "hello".to_string());
+    assert!(!email_msg.is_system_message());
 
     Ok(())
 }
@@ -602,10 +409,32 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     .unwrap();
     tcm.send_recv(&alice, &bob, "Sending with DC again").await;
 
+    // Unencrypted message from MUA gets into a separate chat.
+    // PGP chat gets all encrypted messages.
     alice
         .golden_test_chat(sent.chat_id, "test_outgoing_mua_msg")
         .await;
+    alice
+        .golden_test_chat(alice.get_chat(&bob).await.id, "test_outgoing_mua_msg_pgp")
+        .await;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_encrypted_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    enable_verified_oneonone_chats(&[alice]).await;
+
+    mark_as_verified(alice, bob).await;
+    let chat_id = alice.create_chat(bob).await.id;
+    let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
+    receive_imf(alice, raw, false).await?;
+    alice
+        .golden_test_chat(chat_id, "test_outgoing_encrypted_msg")
+        .await;
     Ok(())
 }
 
@@ -652,96 +481,23 @@ async fn test_reply() -> Result<()> {
         let unencrypted_msg = Message::load_from_db(&alice, unencrypted_msg.msg_ids[0]).await?;
         assert_eq!(unencrypted_msg.text, "Weird reply");
 
-        if verified {
-            assert_ne!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
-        } else {
-            assert_eq!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
-        }
+        assert_ne!(unencrypted_msg.chat_id, encrypted_msg.chat_id);
     }
 
     Ok(())
 }
 
-/// Regression test for the following bug:
-///
-/// - Scan your chat partner's QR Code
-/// - They change devices
-/// - They send you a message
-/// - Without accepting the encryption downgrade, scan your chat partner's QR Code again
-///
-/// -> The re-verification fails.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_break_protection_then_verify_again() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    // Cave: Bob can't write a message to Alice here.
-    // If he did, alice would increase his peerstate's last_seen timestamp.
-    // Then, after Bob reinstalls DC, alice's `if message_time > last_seen*`
-    // checks would return false (there are many checks of this form in peerstate.rs).
-    // Therefore, during the securejoin, Alice wouldn't accept the new key
-    // and reject the securejoin.
-
-    mark_as_verified(&alice, &bob).await;
-    mark_as_verified(&bob, &alice).await;
-
-    alice.create_chat(&bob).await;
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
-    let chats = Chatlist::try_load(&alice, DC_GCL_FOR_FORWARDING, None, None).await?;
-    assert_eq!(chats.len(), 1);
-
-    tcm.section("Bob reinstalls DC");
-    drop(bob);
-    let bob_new = tcm.unconfigured().await;
-    enable_verified_oneonone_chats(&[&bob_new]).await;
-    bob_new.configure_addr("bob@example.net").await;
-    e2ee::ensure_secret_key_exists(&bob_new).await?;
-
-    tcm.send_recv(&bob_new, &alice, "I have a new device").await;
-
-    let contact = alice.add_or_lookup_contact(&bob_new).await;
-    assert_eq!(
-        contact.is_verified(&alice).await.unwrap(),
-        // Bob sent a message with a new key, so he most likely doesn't have
-        // the old key anymore. This means that Alice's device should show
-        // him as unverified:
-        false
-    );
-    let chat = alice.get_chat(&bob_new).await;
-    assert_eq!(chat.is_protected(), false);
-    assert_eq!(chat.is_protection_broken(), true);
-    let chats = Chatlist::try_load(&alice, DC_GCL_FOR_FORWARDING, None, None).await?;
-    assert_eq!(chats.len(), 1);
-
-    {
-        let alice_bob_chat = alice.get_chat(&bob_new).await;
-        assert!(!alice_bob_chat.can_send(&alice).await?);
-
-        // Alice's UI should still be able to save a draft, which Alice started to type right when she got Bob's message:
-        let mut msg = Message::new_text("Draftttt".to_string());
-        alice_bob_chat.id.set_draft(&alice, Some(&mut msg)).await?;
-        assert_eq!(
-            alice_bob_chat.id.get_draft(&alice).await?.unwrap().text,
-            "Draftttt"
-        );
-    }
-
-    tcm.execute_securejoin(&alice, &bob_new).await;
-    assert_verified(&alice, &bob_new, ProtectionStatus::Protected).await;
-
-    Ok(())
-}
-
+/// Tests that message from old DC setup does not break
+/// new verified chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_from_old_dc_setup() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob_old = &tcm.unconfigured().await;
+
     enable_verified_oneonone_chats(&[alice, bob_old]).await;
-    mark_as_verified(bob_old, alice).await;
     bob_old.configure_addr("bob@example.net").await;
+    mark_as_verified(bob_old, alice).await;
     let chat = bob_old.create_chat(alice).await;
     let sent_old = bob_old
         .send_text(chat.id, "Soon i'll have a new device")
@@ -759,22 +515,15 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     assert_verified(alice, bob, ProtectionStatus::Protected).await;
 
     let msg = alice.recv_msg(&sent_old).await;
-    assert!(!msg.get_showpadlock());
+    assert!(msg.get_showpadlock());
     let contact = alice.add_or_lookup_contact(bob).await;
-    // The outdated Bob's Autocrypt header isn't applied, so the verification preserves.
+
+    // The outdated Bob's Autocrypt header isn't applied
+    // and the message goes to another chat, so the verification preserves.
     assert!(contact.is_verified(alice).await.unwrap());
     let chat = alice.get_chat(bob).await;
     assert!(chat.is_protected());
     assert_eq!(chat.is_protection_broken(), false);
-    let protection_msg = alice.get_last_msg().await;
-    assert_eq!(
-        protection_msg.param.get_cmd(),
-        SystemMessage::ChatProtectionEnabled
-    );
-    assert!(protection_msg.timestamp_sort >= msg.timestamp_rcvd);
-    alice
-        .golden_test_chat(msg.chat_id, "verified_chats_message_from_old_dc_setup")
-        .await;
     Ok(())
 }
 
@@ -807,43 +556,6 @@ async fn test_verify_then_verify_again() -> Result<()> {
 
     tcm.execute_securejoin(&bob_new, &alice).await;
     assert_verified(&alice, &bob_new, ProtectionStatus::Protected).await;
-
-    Ok(())
-}
-
-/// Regression test:
-/// - Verify a contact
-/// - The contact stops using DC and sends a message from a classical MUA instead
-/// - Delete the 1:1 chat
-/// - Create a 1:1 chat
-/// - Check that the created chat is not marked as protected
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_oneonone_chat_with_former_verified_contact() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice]).await;
-
-    mark_as_verified(&alice, &bob).await;
-
-    receive_imf(
-        &alice,
-        b"Subject: Message from bob\r\n\
-          From: <bob@example.net>\r\n\
-          To: <alice@example.org>\r\n\
-          Date: Mon, 12 Dec 2022 14:33:39 +0000\r\n\
-          Message-ID: <abcd@example.net>\r\n\
-          \r\n\
-          Heyho!\r\n",
-        false,
-    )
-    .await
-    .unwrap()
-    .unwrap();
-
-    alice.create_chat(&bob).await;
-
-    assert_verified(&alice, &bob, ProtectionStatus::Unprotected).await;
 
     Ok(())
 }
@@ -893,7 +605,7 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     let fiona = &tcm.fiona().await;
     enable_verified_oneonone_chats(&[alice, bob, fiona]).await;
 
-    let alice_fiona_contact_id = Contact::create(alice, "Fiona", "fiona@example.net").await?;
+    let alice_fiona_contact_id = alice.add_or_lookup_contact_id(fiona).await;
 
     // Bob and Fiona scan Alice's QR code.
     tcm.execute_securejoin(bob, alice).await;

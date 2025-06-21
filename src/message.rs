@@ -835,6 +835,7 @@ impl Message {
     /// Returns true if padlock indicating message encryption should be displayed in the UI.
     pub fn get_showpadlock(&self) -> bool {
         self.param.get_int(Param::GuaranteeE2ee).unwrap_or_default() != 0
+            || self.from_id == ContactId::DEVICE
     }
 
     /// Returns true if message is auto-generated.

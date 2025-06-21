@@ -1,51 +1,11 @@
 import os
-import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
 import deltachat as dc
 from deltachat.tracker import ImexFailed
-from deltachat import Account, account_hookimpl, Message
-
-
-@pytest.mark.parametrize(
-    ("msgtext", "res"),
-    [
-        (
-            "Member Me (tmp1@x.org) removed by tmp2@x.org.",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by tmp2@x.org.",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by Another member (tmp2@x.org).",
-            ("removed", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        (
-            "Member With space (tmp1@x.org) removed by me",
-            ("removed", "tmp1@x.org", "me"),
-        ),
-        (
-            "Group left by some one (tmp1@x.org).",
-            ("removed", "tmp1@x.org", "tmp1@x.org"),
-        ),
-        ("Group left by tmp1@x.org.", ("removed", "tmp1@x.org", "tmp1@x.org")),
-        (
-            "Member tmp1@x.org added by tmp2@x.org.",
-            ("added", "tmp1@x.org", "tmp2@x.org"),
-        ),
-        ("Member nothing bla bla", None),
-        ("Another unknown system message", None),
-    ],
-)
-def test_parse_system_add_remove(msgtext, res):
-    from deltachat.message import parse_system_add_remove
-
-    out = parse_system_add_remove(msgtext)
-    assert out == res
+from deltachat import Account, Message
 
 
 class TestOfflineAccountBasic:
@@ -177,14 +137,15 @@ class TestOfflineContact:
 
     def test_get_contacts_and_delete(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
-        contact1 = ac1.create_contact("some1@example.org", name="some1")
+        ac2 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
         contacts = ac1.get_contacts()
         assert len(contacts) == 1
-        assert contact1 in contacts
 
         assert not ac1.get_contacts(query="some2")
-        assert ac1.get_contacts(query="some1")
+        assert not ac1.get_contacts(query="some1")
         assert len(ac1.get_contacts(with_self=True)) == 2
+        assert contact1 in ac1.get_contacts()
 
         assert ac1.delete_contact(contact1)
         assert contact1 not in ac1.get_contacts()
@@ -199,9 +160,9 @@ class TestOfflineContact:
     def test_create_chat_flexibility(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
         ac2 = acfactory.get_pseudo_configured_account()
-        chat1 = ac1.create_chat(ac2)
-        chat2 = ac1.create_chat(ac2.get_self_contact().addr)
-        assert chat1 == chat2
+        chat1 = ac1.create_chat(ac2)  # This creates a PGP-contact chat
+        chat2 = ac1.create_chat(ac2.get_self_contact().addr)  # This creates email-contact chat
+        assert chat1 != chat2
         ac3 = acfactory.get_unconfigured_account()
         with pytest.raises(ValueError):
             ac1.create_chat(ac3)
@@ -259,17 +220,18 @@ class TestOfflineChat:
         ac1 = acfactory.get_pseudo_configured_account()
         ac2 = acfactory.get_pseudo_configured_account()
         chat = ac1.create_group_chat(name="title1")
-        with pytest.raises(ValueError):
-            chat.add_contact(ac2.get_self_contact())
         contact = chat.add_contact(ac2)
         assert contact.addr == ac2.get_config("addr")
         assert contact.name == ac2.get_config("displayname")
         assert contact.account == ac1
         chat.remove_contact(ac2)
 
-    def test_group_chat_creation(self, ac1):
-        contact1 = ac1.create_contact("some1@example.org", name="some1")
-        contact2 = ac1.create_contact("some2@example.org", name="some2")
+    def test_group_chat_creation(self, acfactory):
+        ac1 = acfactory.get_pseudo_configured_account()
+        ac2 = acfactory.get_pseudo_configured_account()
+        ac3 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
+        contact2 = ac1.create_contact(ac3)
         chat = ac1.create_group_chat(name="title1", contacts=[contact1, contact2])
         assert chat.get_name() == "title1"
         assert contact1 in chat.get_contacts()
@@ -316,13 +278,14 @@ class TestOfflineChat:
         qr = chat.get_join_qr()
         assert ac2.check_qr(qr).is_ask_verifygroup
 
-    def test_removing_blocked_user_from_group(self, ac1, lp):
+    def test_removing_blocked_user_from_group(self, ac1, acfactory, lp):
         """
         Test that blocked contact is not unblocked when removed from a group.
         See https://github.com/deltachat/deltachat-core-rust/issues/2030
         """
         lp.sec("Create a group chat with a contact")
-        contact = ac1.create_contact("some1@example.org")
+        ac2 = acfactory.get_pseudo_configured_account()
+        contact = ac1.create_contact(ac2)
         group = ac1.create_group_chat("title", contacts=[contact])
         group.send_text("First group message")
 
@@ -333,10 +296,6 @@ class TestOfflineChat:
         lp.sec("ac1 removes contact from their group")
         group.remove_contact(contact)
         assert contact.is_blocked()
-
-        lp.sec("ac1 adding blocked contact unblocks it")
-        group.add_contact(contact)
-        assert not contact.is_blocked()
 
     def test_get_set_profile_image_simple(self, ac1, data):
         chat = ac1.create_group_chat(name="title1")
@@ -480,7 +439,8 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account()
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        ac_contact = acfactory.get_pseudo_configured_account()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -495,10 +455,10 @@ class TestOfflineChat:
         assert os.path.exists(path)
         ac2 = acfactory.get_unconfigured_account()
         ac2.import_all(path)
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -511,8 +471,9 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account(passphrase=passphrase1)
+        ac2 = acfactory.get_pseudo_configured_account()
 
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        chat = ac1.create_contact(ac2).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -533,10 +494,10 @@ class TestOfflineChat:
         ac2.import_all(path)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        contact2_addr = contact2.addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -550,10 +511,10 @@ class TestOfflineChat:
         ac2.open(passphrase2)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == contact2_addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -566,8 +527,9 @@ class TestOfflineChat:
         backupdir = tmp_path / "backup"
         backupdir.mkdir()
         ac1 = acfactory.get_pseudo_configured_account()
+        ac_contact = acfactory.get_pseudo_configured_account()
 
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -589,10 +551,10 @@ class TestOfflineChat:
         ac2.import_all(path, passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -611,7 +573,8 @@ class TestOfflineChat:
         backupdir.mkdir()
 
         ac1 = acfactory.get_pseudo_configured_account()
-        chat = ac1.create_contact("some1 <some1@example.org>").create_chat()
+        ac_contact = acfactory.get_pseudo_configured_account()
+        chat = ac1.create_contact(ac_contact).create_chat()
         # send a text message
         msg = chat.send_text("msg1")
         # send a binary file
@@ -634,10 +597,10 @@ class TestOfflineChat:
         ac2.import_all(path, bak_passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -651,10 +614,10 @@ class TestOfflineChat:
         ac2.open(acct_passphrase)
 
         # check data integrity
-        contacts = ac2.get_contacts(query="some1")
+        contacts = ac2.get_contacts()
         assert len(contacts) == 1
         contact2 = contacts[0]
-        assert contact2.addr == "some1@example.org"
+        assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
         assert len(messages) == 2
@@ -681,78 +644,10 @@ class TestOfflineChat:
         assert not res.is_ask_verifygroup()
         assert res.contact_id == 10
 
-    def test_group_chat_many_members_add_remove(self, ac1, lp):
-        lp.sec("ac1: creating group chat with 10 other members")
-        chat = ac1.create_group_chat(name="title1")
-        # promote chat
-        chat.send_text("hello")
-        assert chat.is_promoted()
+    def test_audit_log_view_without_daymarker(self, acfactory, lp):
+        ac1 = acfactory.get_pseudo_configured_account()
+        ac2 = acfactory.get_pseudo_configured_account()
 
-        # activate local plugin
-        in_list = []
-
-        class InPlugin:
-            @account_hookimpl
-            def ac_member_added(self, chat, contact, actor):
-                in_list.append(("added", chat, contact, actor))
-
-            @account_hookimpl
-            def ac_member_removed(self, chat, contact, actor):
-                in_list.append(("removed", chat, contact, actor))
-
-        ac1.add_account_plugin(InPlugin())
-
-        # perform add contact many times
-        contacts = []
-        for i in range(10):
-            lp.sec("create contact")
-            contact = ac1.create_contact(f"some{i}@example.org")
-            contacts.append(contact)
-            lp.sec("add contact")
-            chat.add_contact(contact)
-
-        assert chat.num_contacts() == 11
-
-        # let's make sure the events perform plugin hooks
-        def wait_events(cond):
-            now = time.time()
-            while time.time() < now + 5:
-                if cond():
-                    break
-                time.sleep(0.1)
-            else:
-                pytest.fail("failed to get events")
-
-        wait_events(lambda: len(in_list) == 10)
-
-        assert len(in_list) == 10
-        chat_contacts = chat.get_contacts()
-        for in_cmd, in_chat, in_contact, in_actor in in_list:
-            assert in_cmd == "added"
-            assert in_chat == chat
-            assert in_contact in chat_contacts
-            assert in_actor is None
-            chat_contacts.remove(in_contact)
-
-        assert chat_contacts[0].id == 1  # self contact
-
-        in_list[:] = []
-
-        lp.sec("ac1: removing two contacts and checking things are right")
-        chat.remove_contact(contacts[9])
-        chat.remove_contact(contacts[3])
-        assert chat.num_contacts() == 9
-
-        wait_events(lambda: len(in_list) == 2)
-        assert len(in_list) == 2
-        assert in_list[0][0] == "removed"
-        assert in_list[0][1] == chat
-        assert in_list[0][2] == contacts[9]
-        assert in_list[1][0] == "removed"
-        assert in_list[1][1] == chat
-        assert in_list[1][2] == contacts[3]
-
-    def test_audit_log_view_without_daymarker(self, ac1, lp):
         lp.sec("ac1: test audit log (show only system messages)")
         chat = ac1.create_group_chat(name="audit log sample data")
 
@@ -761,7 +656,7 @@ class TestOfflineChat:
         assert chat.is_promoted()
 
         lp.sec("create test data")
-        chat.add_contact(ac1.create_contact("some-1@example.org"))
+        chat.add_contact(ac2)
         chat.set_name("audit log test group")
         chat.send_text("a message in between")
 

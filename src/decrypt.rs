@@ -3,14 +3,9 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use deltachat_contact_tools::addr_cmp;
 use mailparse::ParsedMail;
 
-use crate::aheader::Aheader;
-use crate::context::Context;
-use crate::key::{DcKey, Fingerprint, SignedPublicKey, SignedSecretKey};
-use crate::log::info;
-use crate::peerstate::Peerstate;
+use crate::key::{Fingerprint, SignedPublicKey, SignedSecretKey};
 use crate::pgp;
 
 /// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
@@ -142,83 +137,6 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
     } else {
         None
     }
-}
-
-/// Returns public keyring for `peerstate`.
-pub(crate) fn keyring_from_peerstate(peerstate: Option<&Peerstate>) -> Vec<SignedPublicKey> {
-    let mut public_keyring_for_validate = Vec::new();
-    if let Some(peerstate) = peerstate {
-        if let Some(key) = &peerstate.public_key {
-            public_keyring_for_validate.push(key.clone());
-        } else if let Some(key) = &peerstate.gossip_key {
-            public_keyring_for_validate.push(key.clone());
-        }
-    }
-    public_keyring_for_validate
-}
-
-/// Applies Autocrypt header to Autocrypt peer state and saves it into the database.
-///
-/// If we already know this fingerprint from another contact's peerstate, return that
-/// peerstate in order to make AEAP work, but don't save it into the db yet.
-///
-/// Returns updated peerstate.
-pub(crate) async fn get_autocrypt_peerstate(
-    context: &Context,
-    from: &str,
-    autocrypt_header: Option<&Aheader>,
-    message_time: i64,
-    allow_aeap: bool,
-) -> Result<Option<Peerstate>> {
-    let allow_change = !context.is_self_addr(from).await?;
-    let mut peerstate;
-
-    // Apply Autocrypt header
-    if let Some(header) = autocrypt_header {
-        if allow_aeap {
-            // If we know this fingerprint from another addr,
-            // we may want to do a transition from this other addr
-            // (and keep its peerstate)
-            // For security reasons, for now, we only do a transition
-            // if the fingerprint is verified.
-            peerstate = Peerstate::from_verified_fingerprint_or_addr(
-                context,
-                &header.public_key.dc_fingerprint(),
-                from,
-            )
-            .await?;
-        } else {
-            peerstate = Peerstate::from_addr(context, from).await?;
-        }
-
-        if let Some(ref mut peerstate) = peerstate {
-            if addr_cmp(&peerstate.addr, from) {
-                if allow_change {
-                    peerstate.apply_header(context, header, message_time);
-                    peerstate.save_to_db(&context.sql).await?;
-                } else {
-                    info!(
-                        context,
-                        "Refusing to update existing peerstate of {}", &peerstate.addr
-                    );
-                }
-            }
-            // If `peerstate.addr` and `from` differ, this means that
-            // someone is using the same key but a different addr, probably
-            // because they made an AEAP transition.
-            // But we don't know if that's legit until we checked the
-            // signatures, so wait until then with writing anything
-            // to the database.
-        } else {
-            let p = Peerstate::from_header(header, message_time);
-            p.save_to_db(&context.sql).await?;
-            peerstate = Some(p);
-        }
-    } else {
-        peerstate = Peerstate::from_addr(context, from).await?;
-    }
-
-    Ok(peerstate)
 }
 
 #[cfg(test)]

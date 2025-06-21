@@ -37,10 +37,6 @@ class Contact:
         """Delete contact."""
         self._rpc.delete_contact(self.account.id, self.id)
 
-    def reset_encryption(self) -> None:
-        """Reset contact encryption."""
-        self._rpc.reset_contact_encryption(self.account.id, self.id)
-
     def set_name(self, name: str) -> None:
         """Change the name of this contact."""
         self._rpc.change_contact_name(self.account.id, self.id, name)

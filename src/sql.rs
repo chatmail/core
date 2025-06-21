@@ -8,7 +8,7 @@ use rusqlite::{config::DbConfig, types::ValueRef, Connection, OpenFlags, Row};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::{self, add_device_msg, update_device_icon, update_saved_messages_icon};
+use crate::chat::add_device_msg;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -22,7 +22,6 @@ use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
 use crate::param::{Param, Params};
-use crate::peerstate::Peerstate;
 use crate::stock_str;
 use crate::tools::{delete_file, time, SystemTime};
 
@@ -191,7 +190,19 @@ impl Sql {
     async fn try_open(&self, context: &Context, dbfile: &Path, passphrase: String) -> Result<()> {
         *self.pool.write().await = Some(Self::new_pool(dbfile, passphrase.to_string())?);
 
-        self.run_migrations(context).await?;
+        if let Err(e) = self.run_migrations(context).await {
+            error!(context, "Running migrations failed: {e:#}");
+            // Emiting an error event probably doesn't work
+            // because we are in the process of opening the context,
+            // so there is no event emitter yet.
+            // So, try to report the error in other ways:
+            eprintln!("Running migrations failed: {e:#}");
+            context.set_migration_error(&format!("Updating Delta Chat failed. Please send this message to the Delta Chat developers, either at delta@merlinux.eu or at https://support.delta.chat.\n\n{e:#}"));
+            // We can't simply close the db for two reasons:
+            // a. backup export would fail
+            // b. The UI would think that the account is unconfigured (because `is_configured()` fails)
+            // and remove the account when the user presses "Back"
+        }
 
         Ok(())
     }
@@ -202,40 +213,13 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        let (recalc_fingerprints, update_icons, disable_server_delete, recode_avatar) =
-            migrations::run(context, self)
-                .await
-                .context("failed to run migrations")?;
+        // `update_icons` is not used anymore, since it's not necessary anymore to "update" icons:
+        let (_update_icons, disable_server_delete, recode_avatar) = migrations::run(context, self)
+            .await
+            .context("failed to run migrations")?;
 
         // (2) updates that require high-level objects
         // the structure is complete now and all objects are usable
-
-        if recalc_fingerprints {
-            info!(context, "[migration] recalc fingerprints");
-            let addrs = self
-                .query_map(
-                    "SELECT addr FROM acpeerstates;",
-                    (),
-                    |row| row.get::<_, String>(0),
-                    |addrs| {
-                        addrs
-                            .collect::<std::result::Result<Vec<_>, _>>()
-                            .map_err(Into::into)
-                    },
-                )
-                .await?;
-            for addr in &addrs {
-                if let Some(ref mut peerstate) = Peerstate::from_addr(context, addr).await? {
-                    peerstate.recalc_fingerprint();
-                    peerstate.save_to_db(self).await?;
-                }
-            }
-        }
-
-        if update_icons {
-            update_saved_messages_icon(context).await?;
-            update_device_icon(context).await?;
-        }
 
         if disable_server_delete {
             // We now always watch all folders and delete messages there if delete_server is enabled.
@@ -287,10 +271,7 @@ impl Sql {
         }
 
         let passphrase_nonempty = !passphrase.is_empty();
-        if let Err(err) = self.try_open(context, &self.dbfile, passphrase).await {
-            self.close().await;
-            return Err(err);
-        }
+        self.try_open(context, &self.dbfile, passphrase).await?;
         info!(context, "Opened database {:?}.", self.dbfile);
         *self.is_encrypted.write().await = Some(passphrase_nonempty);
 
@@ -301,10 +282,6 @@ impl Sql {
         {
             set_debug_logging_xdc(context, Some(MsgId::new(xdc_id))).await?;
         }
-        chat::resume_securejoin_wait(context)
-            .await
-            .log_err(context)
-            .ok();
         Ok(())
     }
 
