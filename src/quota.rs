@@ -11,6 +11,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::imap::scan_folders::get_watched_folders;
 use crate::imap::session::Session as ImapSession;
+use crate::log::warn;
 use crate::message::Message;
 use crate::tools::{self, time_elapsed};
 use crate::{stock_str, EventType};

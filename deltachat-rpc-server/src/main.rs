@@ -73,7 +73,7 @@ async fn main_impl() -> Result<()> {
         .init();
 
     let path = std::env::var("DC_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts".to_string());
-    log::info!("Starting with accounts directory `{}`.", path);
+    log::info!("Starting with accounts directory `{path}`.");
     let writable = true;
     let accounts = Accounts::new(PathBuf::from(&path), writable).await?;
 
@@ -97,7 +97,7 @@ async fn main_impl() -> Result<()> {
                     Some(message) => serde_json::to_string(&message)?,
                 }
             };
-            log::trace!("RPC send {}", message);
+            log::trace!("RPC send {message}");
             println!("{message}");
         }
         Ok(())
@@ -141,7 +141,7 @@ async fn main_impl() -> Result<()> {
                     Some(message) => message,
                 }
             };
-            log::trace!("RPC recv {}", message);
+            log::trace!("RPC recv {message}");
             let session = session.clone();
             tokio::spawn(async move {
                 session.handle_incoming(&message).await;

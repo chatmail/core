@@ -5,7 +5,6 @@
 //! Usage:  cargo run --example repl --release -- <databasefile>
 //! All further options can be set using the set-command (type ? for help).
 
-#[macro_use]
 extern crate deltachat;
 
 use std::borrow::Cow::{self, Borrowed, Owned};
@@ -41,25 +40,25 @@ fn receive_event(event: EventType) {
     match event {
         EventType::Info(msg) => {
             /* do not show the event as this would fill the screen */
-            info!("{}", msg);
+            info!("{msg}");
         }
         EventType::SmtpConnected(msg) => {
-            info!("[SMTP_CONNECTED] {}", msg);
+            info!("[SMTP_CONNECTED] {msg}");
         }
         EventType::ImapConnected(msg) => {
-            info!("[IMAP_CONNECTED] {}", msg);
+            info!("[IMAP_CONNECTED] {msg}");
         }
         EventType::SmtpMessageSent(msg) => {
-            info!("[SMTP_MESSAGE_SENT] {}", msg);
+            info!("[SMTP_MESSAGE_SENT] {msg}");
         }
         EventType::Warning(msg) => {
-            warn!("{}", msg);
+            warn!("{msg}");
         }
         EventType::Error(msg) => {
-            error!("{}", msg);
+            error!("{msg}");
         }
         EventType::ErrorSelfNotInGroup(msg) => {
-            error!("[SELF_NOT_IN_GROUP] {}", msg);
+            error!("[SELF_NOT_IN_GROUP] {msg}");
         }
         EventType::MsgsChanged { chat_id, msg_id } => {
             info!(
@@ -124,7 +123,7 @@ fn receive_event(event: EventType) {
             );
         }
         _ => {
-            info!("Received {:?}", event);
+            info!("Received {event:?}");
         }
     }
 }

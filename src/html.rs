@@ -16,6 +16,7 @@ use mime::Mime;
 
 use crate::context::Context;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
+use crate::log::warn;
 use crate::message::{self, Message, MsgId};
 use crate::mimeparser::parse_message_id;
 use crate::param::Param::SendHtml;

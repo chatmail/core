@@ -26,15 +26,16 @@ use crate::ephemeral::Timer as EphemeralTimer;
 use crate::key::self_fingerprint;
 use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
+use crate::log::{info, warn};
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{is_hidden, SystemMessage};
 use crate::param::Param;
 use crate::peer_channels::create_iroh_header;
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
-use crate::tools::IsNoneOrEmpty;
 use crate::tools::{
     create_outgoing_rfc724_mid, create_smeared_timestamp, remove_subject_prefix, time,
+    IsNoneOrEmpty,
 };
 use crate::webxdc::StatusUpdateSerial;
 

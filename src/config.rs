@@ -17,7 +17,7 @@ use crate::configure::EnteredLoginParam;
 use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::LogExt;
+use crate::log::{info, LogExt};
 use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{get_provider_by_id, Provider};

@@ -111,7 +111,7 @@ async fn poke_spec(context: &Context, spec: Option<&str>) -> bool {
     } else {
         let rs = context.sql().get_raw_config("import_spec").await.unwrap();
         if rs.is_none() {
-            error!(context, "Import: No file or folder given.");
+            eprintln!("Import: No file or folder given.");
             return false;
         }
         real_spec = rs.unwrap();
@@ -140,7 +140,7 @@ async fn poke_spec(context: &Context, spec: Option<&str>) -> bool {
                 }
             }
         } else {
-            error!(context, "Import: Cannot open directory \"{}\".", &real_spec);
+            eprintln!("Import: Cannot open directory \"{}\".", &real_spec);
             return false;
         }
     }
@@ -475,7 +475,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "send-backup" => {
             let provider = BackupProvider::prepare(&context).await?;
             let qr = format_backup(&provider.qr())?;
-            println!("QR code: {}", qr);
+            println!("QR code: {qr}");
             qr2term::print_qr(qr.as_str())?;
             provider.await?;
         }

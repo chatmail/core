@@ -8,7 +8,6 @@ use deltachat::chat::ChatVisibility;
 use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::download;
-use deltachat::log::LogExt as _;
 use deltachat::message::Message;
 use deltachat::message::MsgId;
 use deltachat::message::Viewtype;
@@ -20,7 +19,6 @@ use typescript_type_def::TypeDef;
 use super::color_int_to_hex_string;
 use super::contact::ContactObject;
 use super::reactions::JSONRPCReactions;
-use super::webxdc::WebxdcMessageInfo;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "kind")]
@@ -92,8 +90,6 @@ pub struct MessageObject {
     file_bytes: u64,
     file_name: Option<String>,
 
-    webxdc_info: Option<WebxdcMessageInfo>,
-
     webxdc_href: Option<String>,
 
     download_state: DownloadState,
@@ -143,15 +139,6 @@ impl MessageObject {
             .context("failed to load sender contact object")?;
         let file_bytes = message.get_filebytes(context).await?.unwrap_or_default();
         let override_sender_name = message.get_override_sender_name();
-
-        let webxdc_info = if message.get_viewtype() == Viewtype::Webxdc {
-            WebxdcMessageInfo::get_for_message(context, msg_id)
-                .await
-                .log_err(context)
-                .ok()
-        } else {
-            None
-        };
 
         let parent_id = message.parent(context).await?.map(|m| m.get_id().to_u32());
 
@@ -266,7 +253,6 @@ impl MessageObject {
             file_mime: message.get_filemime(),
             file_bytes,
             file_name: message.get_filename(),
-            webxdc_info,
 
             // On a WebxdcInfoMessage this might include a hash holding
             // information about a specific position or state in a webxdc app

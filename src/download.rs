@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
+use crate::log::info;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, Part};
 use crate::tools::time;

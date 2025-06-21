@@ -33,6 +33,7 @@ use crate::contact::{
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, self_fingerprint, DcKey, DcSecretKey};
+use crate::log::warn;
 use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::KeyPair;

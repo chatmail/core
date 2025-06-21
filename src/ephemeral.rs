@@ -81,7 +81,7 @@ use crate::context::Context;
 use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
 use crate::location;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;
@@ -146,7 +146,7 @@ impl FromStr for Timer {
 }
 
 impl rusqlite::types::ToSql for Timer {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(match self {
             Self::Disabled => 0,
             Self::Enabled { duration } => i64::from(*duration),

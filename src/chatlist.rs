@@ -10,6 +10,7 @@ use crate::constants::{
 };
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
+use crate::log::warn;
 use crate::message::{Message, MessageState, MsgId};
 use crate::param::{Param, Params};
 use crate::stock_str;

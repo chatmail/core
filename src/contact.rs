@@ -31,7 +31,7 @@ use crate::key::{
     load_self_public_key, self_fingerprint, self_fingerprint_opt, DcKey, Fingerprint,
     SignedPublicKey,
 };
-use crate::log::LogExt;
+use crate::log::{info, warn, LogExt};
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
@@ -243,7 +243,7 @@ impl fmt::Display for ContactId {
 
 /// Allow converting [`ContactId`] to an SQLite type.
 impl rusqlite::types::ToSql for ContactId {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(i64::from(self.0));
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)
@@ -281,6 +281,7 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
             authname: c.authname,
             key,
             profile_image,
+            biography: Some(c.status).filter(|s| !s.is_empty()),
             // Use the current time to not reveal our or contact's online time.
             timestamp: Ok(now),
         });
@@ -390,6 +391,14 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             warn!(
                 context,
                 "import_vcard_contact: Could not set avatar for {}: {e:#}.", contact.addr
+            );
+        }
+    }
+    if let Some(biography) = &contact.biography {
+        if let Err(e) = set_status(context, id, biography.to_owned(), false, false).await {
+            warn!(
+                context,
+                "import_vcard_contact: Could not set biography for {}: {e:#}.", contact.addr
             );
         }
     }

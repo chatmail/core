@@ -66,6 +66,9 @@ lint.select = [
 
   "RUF006" # asyncio-dangling-task
 ]
+lint.ignore = [
+  "PLC0415" # `import` should be at the top-level of a file
+]
 line-length = 120
 
 [tool.isort]

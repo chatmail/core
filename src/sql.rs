@@ -16,7 +16,7 @@ use crate::debug_logging::set_debug_logging_xdc;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::BLOBS_BACKUP_NAME;
 use crate::location::delete_orphaned_poi_locations;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::{Message, MsgId};
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;

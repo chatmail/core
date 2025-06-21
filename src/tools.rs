@@ -41,12 +41,13 @@ use crate::config::Config;
 use crate::constants::{self, DC_ELLIPSIS, DC_OUTDATED_WARNING_DAYS};
 use crate::context::Context;
 use crate::events::EventType;
+use crate::log::warn;
 use crate::message::{Message, Viewtype};
 use crate::stock_str;
 
 /// Shortens a string to a specified length and adds "[...]" to the
 /// end of the shortened string.
-pub(crate) fn truncate(buf: &str, approx_chars: usize) -> Cow<str> {
+pub(crate) fn truncate(buf: &str, approx_chars: usize) -> Cow<'_, str> {
     let count = buf.chars().count();
     if count <= approx_chars + DC_ELLIPSIS.len() {
         return Cow::Borrowed(buf);

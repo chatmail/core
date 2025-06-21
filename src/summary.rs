@@ -146,7 +146,7 @@ impl Summary {
     }
 
     /// Returns the [`Summary::text`] attribute truncated to an approximate length.
-    pub fn truncated_text(&self, approx_chars: usize) -> Cow<str> {
+    pub fn truncated_text(&self, approx_chars: usize) -> Cow<'_, str> {
         truncate(&self.text, approx_chars)
     }
 }

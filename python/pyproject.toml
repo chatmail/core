@@ -47,6 +47,10 @@ line-length = 120
 
 [tool.ruff]
 lint.select = ["E", "F", "W", "YTT", "C4", "ISC", "ICN", "TID", "DTZ", "PLC", "PLE", "PLW", "PIE", "COM", "UP004", "UP010", "UP031", "UP032", "ANN204"]
+lint.ignore = [
+  "PLC0415", # `import` should be at the top-level of a file
+  "PLW1641" # Object does not implement `__hash__` method
+]
 line-length = 120
 
 [tool.isort]

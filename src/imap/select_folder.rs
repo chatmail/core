@@ -5,6 +5,7 @@ use anyhow::Context as _;
 use super::session::Session as ImapSession;
 use super::{get_uid_next, get_uidvalidity, set_modseq, set_uid_next, set_uidvalidity};
 use crate::context::Context;
+use crate::log::{info, warn};
 
 type Result<T> = std::result::Result<T, Error>;
 

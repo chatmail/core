@@ -31,7 +31,7 @@ use crate::download::DownloadState;
 use crate::ephemeral::{start_chat_ephemeral_timers, Timer as EphemeralTimer};
 use crate::events::EventType;
 use crate::location;
-use crate::log::LogExt;
+use crate::log::{error, info, warn, LogExt};
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -1477,7 +1477,7 @@ impl std::fmt::Display for ChatId {
 /// This allows you to directly store [ChatId] into the database as
 /// well as query for a [ChatId].
 impl rusqlite::types::ToSql for ChatId {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(i64::from(self.0));
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)
@@ -2348,7 +2348,7 @@ pub enum ChatVisibility {
 }
 
 impl rusqlite::types::ToSql for ChatVisibility {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let val = rusqlite::types::Value::Integer(*self as i64);
         let out = rusqlite::types::ToSqlOutput::Owned(val);
         Ok(out)
@@ -3955,7 +3955,7 @@ pub enum MuteDuration {
 }
 
 impl rusqlite::types::ToSql for MuteDuration {
-    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput> {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
         let duration: i64 = match &self {
             MuteDuration::NotMuted => 0,
             MuteDuration::Forever => -1,

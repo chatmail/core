@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
 use crate::context::Context;
+use crate::log::warn;
 use crate::provider::data::{PROVIDER_DATA, PROVIDER_IDS};
 
 /// Provider status according to manual testing.

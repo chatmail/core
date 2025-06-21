@@ -3,15 +3,15 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;
-use deltachat::{info, Event, EventType, Events};
+use deltachat::{Event, EventType, Events};
 use tempfile::tempdir;
 
 async fn send_events_benchmark(context: &Context) {
     let emitter = context.get_event_emitter();
     for _i in 0..1_000_000 {
-        info!(context, "interesting event...");
+        context.emit_event(EventType::Info("interesting event...".to_string()));
     }
-    info!(context, "DONE");
+    context.emit_event(EventType::Info("DONE".to_string()));
 
     loop {
         match emitter.recv().await.unwrap() {
