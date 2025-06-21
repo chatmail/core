@@ -15,7 +15,7 @@ use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_tls;
 use crate::net::{
-    connect_tcp_inner, connect_tls_inner, run_connection_attempts, update_connection_history,
+    connect_tcp_inner, run_connection_attempts, update_connection_history,
 };
 use crate::tools::time;
 
@@ -208,16 +208,17 @@ impl Client {
         hostname: &str,
         strict_tls: bool,
     ) -> Result<Self> {
-        let tls_stream = connect_tls_inner(addr, hostname, strict_tls, alpn(addr.port())).await?;
+        let tcp_stream = connect_tcp_inner(addr).await?;
         let account_id = context.get_id();
         let events = context.events.clone();
         let logging_stream = LoggingStream::new(
-            tls_stream,
+            tcp_stream,
             format!("TLS IMAP stream {hostname} ({addr})"),
             account_id,
             events,
         );
-        let buffered_stream = BufWriter::new(logging_stream);
+        let tls_stream = wrap_tls(strict_tls, hostname, alpn(addr.port()), logging_stream).await?;
+        let buffered_stream = BufWriter::new(tls_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
         let _greeting = client
@@ -255,6 +256,15 @@ impl Client {
     ) -> Result<Self> {
         let tcp_stream = connect_tcp_inner(addr).await?;
 
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let tcp_stream = LoggingStream::new(
+            tcp_stream,
+            format!("STARTTLS IMAP stream {host} ({addr})"),
+            account_id,
+            events,
+        );
+
         // Run STARTTLS command and convert the client back into a stream.
         let buffered_tcp_stream = BufWriter::new(tcp_stream);
         let mut client = async_imap::Client::new(buffered_tcp_stream);
@@ -272,16 +282,7 @@ impl Client {
         let tls_stream = wrap_tls(strict_tls, host, &[], tcp_stream)
             .await
             .context("STARTTLS upgrade failed")?;
-
-        let account_id = context.get_id();
-        let events = context.events.clone();
-        let logging_stream = LoggingStream::new(
-            tls_stream,
-            format!("STARTTLS IMAP stream {host} ({addr})"),
-            account_id,
-            events,
-        );
-        let buffered_stream = BufWriter::new(logging_stream);
+        let buffered_stream = BufWriter::new(tls_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let client = Client::new(session_stream);
         Ok(client)
