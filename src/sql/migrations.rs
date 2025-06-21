@@ -1,6 +1,5 @@
 //! Migrations module.
 
-use std::cmp::max;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Instant;
