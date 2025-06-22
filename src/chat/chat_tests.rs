@@ -4698,6 +4698,32 @@ async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
     Ok(())
 }
 
+/// Tests that key-contacts cannot be added to an unencrypted (ad hoc) group and the group and
+/// messages report that they are unencrypted.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_create_unencrypted_group_chat() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let chat_id = create_group_ex(alice, None, "Group chat").await?;
+    let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
+
+    let res = add_contact_to_chat(alice, chat_id, bob_key_contact_id).await;
+    assert!(res.is_err());
+
+    add_contact_to_chat(alice, chat_id, charlie_address_contact_id).await?;
+
+    let chat = Chat::load_from_db(alice, chat_id).await?;
+    assert!(!chat.is_encrypted(alice).await?);
+    let sent_msg = alice.send_text(chat_id, "Hello").await;
+    let msg = Message::load_from_db(alice, sent_msg.sender_msg_id).await?;
+    assert!(!msg.get_showpadlock());
+    Ok(())
+}
+
 /// Tests that avatar cannot be set in ad hoc groups.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_no_avatar_in_adhoc_chats() -> Result<()> {
