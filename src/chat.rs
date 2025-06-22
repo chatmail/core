@@ -3629,15 +3629,31 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
 }
 
 /// Creates a group chat with a given `name`.
+/// Deprecated on 2025-06-21, use `create_group_ex()`.
 pub async fn create_group_chat(
     context: &Context,
     protect: ProtectionStatus,
-    chat_name: &str,
+    name: &str,
 ) -> Result<ChatId> {
-    let chat_name = sanitize_single_line(chat_name);
+    create_group_ex(context, Some(protect), name).await
+}
+
+/// Creates a group chat.
+///
+/// * `encryption` - If `Some`, the chat is encrypted (with key-contacts) and can be protected.
+/// * `name` - Chat name.
+pub async fn create_group_ex(
+    context: &Context,
+    encryption: Option<ProtectionStatus>,
+    name: &str,
+) -> Result<ChatId> {
+    let chat_name = sanitize_single_line(name);
     ensure!(!chat_name.is_empty(), "Invalid chat name");
 
-    let grpid = create_id();
+    let grpid = match encryption {
+        Some(_) => create_id(),
+        None => String::new(),
+    };
 
     let timestamp = create_smeared_timestamp(context);
     let row_id = context
@@ -3657,7 +3673,8 @@ pub async fn create_group_chat(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    if protect == ProtectionStatus::Protected {
+    if encryption == Some(ProtectionStatus::Protected) {
+        let protect = ProtectionStatus::Protected;
         chat_id
             .set_protection_for_timestamp_sort(context, protect, timestamp, None)
             .await?;
