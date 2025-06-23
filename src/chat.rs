@@ -3945,7 +3945,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;
     }
-    if chat.typ == Chattype::Group && chat.is_promoted() {
+    if chat.typ == Chattype::Group && !chat.grpid.is_empty() && chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
@@ -4118,6 +4118,11 @@ pub async fn remove_contact_from_chat(
             );
             context.emit_event(EventType::ErrorSelfNotInGroup(err_msg.clone()));
             bail!("{}", err_msg);
+        } else if chat.typ == Chattype::Group
+            && chat.grpid.is_empty()
+            && contact_id == ContactId::SELF
+        {
+            bail!("Please ask other members to remove you from the thread");
         } else {
             let mut sync = Nosync;
 
@@ -4138,7 +4143,7 @@ pub async fn remove_contact_from_chat(
             // This allows to delete dangling references to deleted contacts
             // in case of the database becoming inconsistent due to a bug.
             if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
-                if chat.typ == Chattype::Group && chat.is_promoted() {
+                if chat.typ == Chattype::Group && !chat.grpid.is_empty() && chat.is_promoted() {
                     msg.viewtype = Viewtype::Text;
                     if contact_id == ContactId::SELF {
                         msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
