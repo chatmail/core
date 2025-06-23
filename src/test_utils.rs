@@ -44,6 +44,10 @@ use crate::tools::time;
 
 #[allow(non_upper_case_globals)]
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
+#[allow(non_upper_case_globals)]
+pub const AVATAR_64x64_BYTES: &[u8] = include_bytes!("../test-data/image/avatar64x64.png");
+#[allow(non_upper_case_globals)]
+pub const AVATAR_64x64_DEDUPLICATED: &str = "e9b6c7a78aa2e4f415644f55a553e73.png";
 
 /// Map of context IDs to names for [`TestContext`]s.
 static CONTEXT_NAMES: LazyLock<std::sync::RwLock<BTreeMap<u32, String>>> =
@@ -1144,7 +1148,7 @@ impl Drop for InnerLogSink {
 #[derive(Debug, Clone)]
 pub struct SentMessage<'a> {
     pub payload: String,
-    recipients: String,
+    pub recipients: String,
     pub sender_msg_id: MsgId,
     sender_context: &'a Context,
 }

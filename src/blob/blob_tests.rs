@@ -4,7 +4,7 @@ use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
 use crate::sql;
-use crate::test_utils::{self, TestContext};
+use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -241,9 +241,8 @@ async fn test_selfavatar_in_blobdir() {
 async fn test_selfavatar_copy_without_recode() {
     let t = TestContext::new().await;
     let avatar_src = t.dir.path().join("avatar.png");
-    let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
-    fs::write(&avatar_src, avatar_bytes).await.unwrap();
-    let avatar_blob = t.get_blobdir().join("e9b6c7a78aa2e4f415644f55a553e73.png");
+    fs::write(&avatar_src, AVATAR_64x64_BYTES).await.unwrap();
+    let avatar_blob = t.get_blobdir().join(AVATAR_64x64_DEDUPLICATED);
     assert!(!avatar_blob.exists());
     t.set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
         .await
@@ -251,7 +250,7 @@ async fn test_selfavatar_copy_without_recode() {
     assert!(avatar_blob.exists());
     assert_eq!(
         fs::metadata(&avatar_blob).await.unwrap().len(),
-        avatar_bytes.len() as u64
+        AVATAR_64x64_BYTES.len() as u64
     );
     let avatar_cfg = t.get_config(Config::Selfavatar).await.unwrap();
     assert_eq!(avatar_cfg, avatar_blob.to_str().map(|s| s.to_string()));

@@ -5,7 +5,7 @@ use serde_json::json;
 
 use super::*;
 use crate::chat::{
-    add_contact_to_chat, create_broadcast_list, create_group_chat, forward_msgs,
+    add_contact_to_chat, create_broadcast_channel, create_group_chat, forward_msgs,
     remove_contact_from_chat, resend_msgs, send_msg, send_text_msg, ChatId, ProtectionStatus,
 };
 use crate::chatlist::Chatlist;
@@ -1608,9 +1608,9 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
     let self_id = t.get_self_chat().await.id;
     let single_id = t.create_chat_with_contact("bob", "bob@e.com").await.id;
     let group_id = create_group_chat(&t, ProtectionStatus::Unprotected, "chat").await?;
-    let broadcast_id = create_broadcast_list(&t).await?;
+    let channel_id = create_broadcast_channel(&t, "Channel".to_string()).await?;
 
-    for chat_id in [self_id, single_id, group_id, broadcast_id] {
+    for chat_id in [self_id, single_id, group_id, channel_id] {
         for internet_xdc in [true, false] {
             let mut instance = create_webxdc_instance(
                 &t,

@@ -1696,7 +1696,7 @@ fn migrate_pgp_contacts(
                     continue;
                 }
 
-                // Broadcast list
+                // Broadcast channel
                 160 => old_members
                     .iter()
                     .map(|original| {
