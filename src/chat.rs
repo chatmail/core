@@ -4235,11 +4235,16 @@ async fn rename_ex(
                     (new_name.to_string(), chat_id),
                 )
                 .await?;
-            if chat.is_promoted()
-                && !chat.is_mailing_list()
-                && chat.typ != Chattype::Broadcast
-                && sanitize_single_line(&chat.name) != new_name
+            if !chat.is_promoted()
+                || chat.is_mailing_list()
+                || chat.typ == Chattype::Broadcast
+                || sanitize_single_line(&chat.name) == new_name
             {
+            } else if chat.grpid.is_empty() {
+                chat_id
+                    .update_timestamp(context, Param::GroupNameTimestamp, smeared_time(context))
+                    .await?;
+            } else {
                 msg.viewtype = Viewtype::Text;
                 msg.text =
                     stock_str::msg_grp_name(context, &chat.name, &new_name, ContactId::SELF).await;

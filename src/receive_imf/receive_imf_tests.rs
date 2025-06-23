@@ -4456,6 +4456,43 @@ async fn test_mua_can_readd() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rename_unencrypted_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for ctx in [alice, bob] {
+        receive_imf(
+            ctx,
+            b"Subject: Some thread\r\n\
+                From: alice@example.org\r\n\
+                To: <bob@example.net>, <claire@example.org> \r\n\
+                Date: Mon, 12 Dec 2022 14:30:39 +0000\r\n\
+                Message-ID: <Mr.alices_original_mail@example.org>\r\n\
+                Chat-Version: 1.0\r\n\
+                \r\n\
+                Hi!\r\n",
+            false,
+        )
+        .await?
+        .unwrap();
+    }
+    let msg = alice.get_last_msg().await;
+    let alice_chat = Chat::load_from_db(alice, msg.chat_id).await?;
+    assert_eq!(alice_chat.typ, Chattype::Group);
+
+    SystemTime::shift(Duration::from_secs(60));
+    chat::set_chat_name(alice, alice_chat.id, "Renamed thread").await?;
+    assert!(!alice.sql.exists("SELECT COUNT(*) FROM smtp", ()).await?);
+
+    let sent_msg = alice.send_text(alice_chat.id, "I renamed the thread").await;
+    let msg = bob.recv_msg(&sent_msg).await;
+    let bob_chat = Chat::load_from_db(bob, msg.chat_id).await?;
+    assert_eq!(bob_chat.get_name(), "Renamed thread");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_member_left_does_not_create_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
