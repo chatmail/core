@@ -4362,7 +4362,7 @@ pub async fn set_chat_profile_image(
         msg.text = stock_str::msg_grp_img_changed(context, ContactId::SELF).await;
     }
     chat.update_param(context).await?;
-    if chat.is_promoted() && !chat.is_mailing_list() {
+    if chat.is_promoted() {
         msg.id = send_msg(context, chat_id, &mut msg).await?;
         context.emit_msgs_changed(chat_id, msg.id);
     }
