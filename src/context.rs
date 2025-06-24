@@ -8,25 +8,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
-use pgp::types::PublicKeyTrait;
 use ratelimit::Ratelimit;
-use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{get_chat_cnt, ChatId};
+use crate::chat::{ChatId, get_chat_cnt};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{
-    self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR,
-};
+use crate::constants::{self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{self_fingerprint, DcKey as _};
-use crate::log::LogExt;
+use crate::key::self_fingerprint;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
@@ -34,7 +29,7 @@ use crate::message::{self, MessageState, MsgId};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
-use crate::scheduler::{convert_folder_meaning, SchedulerState};
+use crate::scheduler::{SchedulerState, convert_folder_meaning};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
