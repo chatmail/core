@@ -2011,3 +2011,51 @@ async fn test_protected_date() -> Result<()> {
     assert_eq!(alice_msg.get_timestamp(), bob_msg.get_timestamp());
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_huge_image_becomes_file() {
+    let t = TestContext::new_alice().await;
+    receive_imf(
+        &t.ctx,
+        include_bytes!("../../test-data/message/image_huge_36M.eml"),
+        false,
+    )
+    .await
+    .unwrap();
+    let chats = Chatlist::try_load(&t.ctx, 0, None, None).await.unwrap();
+    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    assert_eq!(msg.text, "Large image test – Here is a huge image");
+    assert_eq!(msg.viewtype, Viewtype::File); // Huge image should be treated as file
+    assert_eq!(msg.error(), None);
+    assert_eq!(msg.is_dc_message, MessengerMessage::No);
+    assert_eq!(msg.chat_blocked, Blocked::Request);
+    assert_eq!(msg.state, MessageState::InFresh);
+    assert!(msg.get_file(&t).is_some());
+    assert_eq!(msg.get_filename().unwrap(), "huge_image.png");
+    assert_eq!(msg.get_filemime().unwrap(), "image/png");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_4k_image_stays_image() {
+    let t = TestContext::new_alice().await;
+    receive_imf(
+        &t.ctx,
+        include_bytes!("../../test-data/message/image_4k.eml"),
+        false,
+    )
+    .await
+    .unwrap();
+    let chats = Chatlist::try_load(&t.ctx, 0, None, None).await.unwrap();
+    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    assert_eq!(msg.text, "Large image test – Here is a huge image");
+    assert_eq!(msg.viewtype, Viewtype::Image); // 4K image should still be treated as image
+    assert_eq!(msg.error(), None);
+    assert_eq!(msg.is_dc_message, MessengerMessage::No);
+    assert_eq!(msg.chat_blocked, Blocked::Request);
+    assert_eq!(msg.state, MessageState::InFresh);
+    assert!(msg.get_file(&t).is_some());
+    assert_eq!(msg.get_filename().unwrap(), "huge_image.png");
+    assert_eq!(msg.get_filemime().unwrap(), "image/png");
+}
