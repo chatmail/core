@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, ensure};
 use deltachat_contact_tools::EmailAddress;
@@ -1237,13 +1237,13 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
-        let start = Instant::now();
+        let start = Time::now();
         sql.execute_migration_transaction(|t| migrate_key_contacts(context, t), migration_version)
             .await?;
         info!(
             context,
             "key-contacts migration took {:?} in total.",
-            start.elapsed()
+            time_elapsed(&start),
         );
         // Schedule `msgs_to_key_contacts()`.
         context
