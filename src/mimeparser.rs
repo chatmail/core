@@ -1347,7 +1347,16 @@ impl MimeMessage {
                 return Ok(());
             }
         }
+
         let mut part = Part::default();
+
+        if msg_type == Viewtype::Image || msg_type == Viewtype::Gif {
+            if let Ok((width, height)) = get_filemeta(decoded_data) {
+                part.param.set_int(Param::Width, width as i32);
+                part.param.set_int(Param::Height, height as i32);
+            }
+        }
+
         let msg_type = if context
             .is_webxdc_file(filename, decoded_data)
             .await
@@ -1398,6 +1407,26 @@ impl MimeMessage {
             } else {
                 Viewtype::File
             }
+        } else if msg_type == Viewtype::Image || msg_type == Viewtype::Gif {
+            // Do not display huge incoming images (issue #6825)
+            // Also, do not display images of unknown size
+            match (
+                part.param.get_int(Param::Width),
+                part.param.get_int(Param::Height),
+            ) {
+                (Some(width), Some(height))
+                    if width * height <= constants::MAX_IMAGE_PIXELS as i32 =>
+                {
+                    // size is known and within limits,
+                    // keep original Image or Gif type:
+                    msg_type
+                }
+                _ => {
+                    // image is too big or size is unknown,
+                    // display as file:
+                    Viewtype::File
+                }
+            }
         } else {
             msg_type
         };
@@ -1417,13 +1446,6 @@ impl MimeMessage {
                 }
             };
         info!(context, "added blobfile: {:?}", blob.as_name());
-
-        if mime_type.type_() == mime::IMAGE {
-            if let Ok((width, height)) = get_filemeta(decoded_data) {
-                part.param.set_int(Param::Width, width as i32);
-                part.param.set_int(Param::Height, height as i32);
-            }
-        }
 
         part.typ = msg_type;
         part.org_filename = Some(filename.to_string());
