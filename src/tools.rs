@@ -14,7 +14,8 @@ use std::str::from_utf8;
 // `Instant` may use `libc::clock_gettime(CLOCK_MONOTONIC)`, e.g. on Android, and does not advance
 // while being in deep sleep mode, we use `SystemTime` instead, but add an alias for it to document
 // why `Instant` isn't used in those places. Also this can help to switch to another clock impl if
-// we find any.
+// we find any. Another reason is that `Instant` may reintroduce panics in the future versions:
+// https://doc.rust-lang.org/1.87.0/std/time/struct.Instant.html#method.elapsed.
 use std::time::Duration;
 pub use std::time::SystemTime as Time;
 #[cfg(not(test))]
