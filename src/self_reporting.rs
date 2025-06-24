@@ -1,13 +1,15 @@
 //! TODO doc comment
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use anyhow::{Context as _, Result};
 use pgp::types::PublicKeyTrait;
 use serde::Serialize;
 
 use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::config::Config;
-use crate::constants::DC_CHAT_ID_TRASH;
-use crate::contact::{import_vcard, mark_contact_id_as_verified, ContactId};
+use crate::constants::{Chattype, DC_CHAT_ID_TRASH};
+use crate::contact::{import_vcard, mark_contact_id_as_verified, ContactId, Origin};
 use crate::context::{get_version_str, Context};
 use crate::download::DownloadState;
 use crate::key::load_self_public_key;
@@ -15,6 +17,9 @@ use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
 use crate::param::{Param, Params};
 use crate::tools::{create_id, time};
+
+pub(crate) const SELF_REPORTING_BOT_EMAIL: &str = "self_reporting@testrun.org";
+const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bot.vcf");
 
 #[derive(Serialize)]
 struct Statistics {
@@ -25,6 +30,7 @@ struct Statistics {
     key_created: i64,
     chat_numbers: ChatNumbers,
     self_reporting_id: String,
+    contact_infos: Vec<ContactInfo>,
 }
 #[derive(Default, Serialize)]
 struct ChatNumbers {
@@ -34,6 +40,132 @@ struct ChatNumbers {
     opportunistic_mua: u32,
     unencrypted_dc: u32,
     unencrypted_mua: u32,
+}
+
+#[derive(Serialize, PartialEq)]
+enum VerifiedStatus {
+    Direct,
+    Transitive,
+    TransitiveViaBot,
+    Opportunistic,
+    Unencrypted,
+}
+
+#[derive(Serialize)]
+struct ContactInfo {
+    #[serde(skip_serializing)]
+    id: ContactId,
+
+    verified: VerifiedStatus,
+
+    #[serde(skip_serializing)]
+    verifier: ContactId, // TODO unused, could be removed
+    bot: bool,
+    direct_chat: bool,
+    last_seen: u64,
+    //new: bool, // TODO
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transitive_chain: Option<u32>,
+}
+
+async fn get_contact_infos(context: &Context) -> Result<Vec<ContactInfo>> {
+    let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
+    let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
+
+    let mut contacts: Vec<ContactInfo> = context
+        .sql
+        .query_map(
+            "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
+            WHERE id>9 AND origin>? AND addr<>?",
+            (Origin::Hidden, SELF_REPORTING_BOT_EMAIL),
+            |row| {
+                let id = row.get(0)?;
+                let is_encrypted: bool = row.get(1)?;
+                let verifier: ContactId = row.get(2)?;
+                let last_seen: u64 = row.get(3)?;
+                let bot: bool = row.get(4)?;
+
+                let verified = match (is_encrypted, verifier) {
+                    (true, ContactId::SELF) => VerifiedStatus::Direct,
+                    (true, ContactId::UNDEFINED) => VerifiedStatus::Opportunistic,
+                    (true, _) => VerifiedStatus::Transitive, // TransitiveViaBot will be filled later
+                    (false, _) => VerifiedStatus::Unencrypted,
+                };
+
+                if verifier != ContactId::UNDEFINED {
+                    verified_by_map.insert(id, verifier);
+                }
+
+                if bot {
+                    bot_ids.insert(id);
+                }
+
+                Ok(ContactInfo {
+                    id,
+                    verified,
+                    verifier,
+                    bot,
+                    direct_chat: false, // will be filled later
+                    last_seen,
+                    transitive_chain: None, // will be filled later
+                })
+            },
+            |rows| {
+                rows.collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(Into::into)
+            },
+        )
+        .await?;
+
+    // Fill TransitiveViaBot and transitive_chain
+    for contact in contacts.iter_mut() {
+        if contact.verified == VerifiedStatus::Transitive {
+            let mut transitive_chain: u32 = 0;
+            let mut has_bot = false;
+            let mut current_verifier_id = contact.id;
+
+            while current_verifier_id != ContactId::SELF {
+                current_verifier_id = match verified_by_map.get(&current_verifier_id) {
+                    Some(id) => *id,
+                    None => {
+                        // The chain ends here, probably because some verification was done
+                        // before we started recording verifiers.
+                        // It's unclear how long the chain really is.
+                        transitive_chain = 0;
+                        break;
+                    }
+                };
+                if bot_ids.contains(&current_verifier_id) {
+                    has_bot = true;
+                }
+                transitive_chain = transitive_chain.saturating_add(1);
+            }
+
+            if transitive_chain > 0 {
+                contact.transitive_chain = Some(transitive_chain);
+            }
+
+            if has_bot {
+                contact.verified = VerifiedStatus::TransitiveViaBot;
+            }
+        }
+    }
+
+    // Fill direct_chat
+    for contact in contacts.iter_mut() {
+        let direct_chat = context
+            .sql
+            .exists(
+                "SELECT COUNT(*)
+            FROM chats_contacts cc INNER JOIN chats
+            WHERE cc.contact_id=? AND chats.type=?",
+                (contact.id, Chattype::Single),
+            )
+            .await?;
+        contact.direct_chat = direct_chat;
+    }
+
+    Ok(contacts)
 }
 
 /// Sends a message with statistics about the usage of Delta Chat,
@@ -70,7 +202,6 @@ async fn send_self_report(context: &Context) -> Result<ChatId> {
         .log_err(context)
         .ok();
 
-    const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bot.vcf");
     let contact_id: ContactId = *import_vcard(context, SELF_REPORTING_BOT_VCARD)
         .await?
         .first()
@@ -227,40 +358,11 @@ async fn get_self_report(context: &Context) -> Result<String> {
         key_created,
         chat_numbers,
         self_reporting_id,
+        contact_infos: get_contact_infos(context).await?,
     };
 
     Ok(serde_json::to_string_pretty(&statistics)?)
 }
 
 #[cfg(test)]
-mod self_reporting_tests {
-    use anyhow::Context as _;
-    use strum::IntoEnumIterator;
-    use tempfile::tempdir;
-
-    use super::*;
-    use crate::chat::{get_chat_contacts, get_chat_msgs, send_msg, set_muted, Chat, MuteDuration};
-    use crate::chatlist::Chatlist;
-    use crate::constants::Chattype;
-    use crate::mimeparser::SystemMessage;
-    use crate::receive_imf::receive_imf;
-    use crate::test_utils::{get_chat_msg, TestContext};
-    use crate::tools::{create_outgoing_rfc724_mid, SystemTime};
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_draft_self_report() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-
-        let chat_id = send_self_report(&alice).await?;
-        let msg = get_chat_msg(&alice, chat_id, 0, 2).await;
-        assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-        let chat = Chat::load_from_db(&alice, chat_id).await?;
-        assert!(chat.is_protected());
-
-        let statistics_msg = get_chat_msg(&alice, chat_id, 1, 2).await;
-        assert_eq!(statistics_msg.get_filename().unwrap(), "statistics.txt");
-
-        Ok(())
-    }
-}
+mod self_reporting_tests;
