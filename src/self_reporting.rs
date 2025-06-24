@@ -57,12 +57,10 @@ struct ContactInfo {
     id: ContactId,
 
     verified: VerifiedStatus,
-
-    #[serde(skip_serializing)]
-    verifier: ContactId, // TODO unused, could be removed
     bot: bool,
     direct_chat: bool,
     last_seen: u64,
+
     //new: bool, // TODO
     #[serde(skip_serializing_if = "Option::is_none")]
     transitive_chain: Option<u32>,
@@ -103,7 +101,6 @@ async fn get_contact_infos(context: &Context) -> Result<Vec<ContactInfo>> {
                 Ok(ContactInfo {
                     id,
                     verified,
-                    verifier,
                     bot,
                     direct_chat: false, // will be filled later
                     last_seen,
