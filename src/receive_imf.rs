@@ -37,6 +37,7 @@ use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{set_msg_reaction, Reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
+use crate::self_reporting::SELF_REPORTING_BOT_EMAIL;
 use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
@@ -1676,7 +1677,7 @@ async fn add_parts(
         || is_mdn
         || chat_id_blocked == Blocked::Yes
         || group_changes.silent
-        || mime_parser.from.addr == "self_reporting@testrun.org"
+        || mime_parser.from.addr == SELF_REPORTING_BOT_EMAIL
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen

@@ -10,9 +10,7 @@ use std::time::Duration;
 
 use anyhow::{bail, ensure, Context as _, Result};
 use async_channel::{self as channel, Receiver, Sender};
-use pgp::types::PublicKeyTrait;
 use ratelimit::Ratelimit;
-use serde::Serialize;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::chat::{get_chat_cnt, ChatId};
@@ -25,8 +23,7 @@ use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{self_fingerprint, DcKey as _};
-use crate::log::LogExt;
+use crate::key::self_fingerprint;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, MessageState, MsgId};
 use crate::peer_channels::Iroh;
