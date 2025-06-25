@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.160.0] - 2025-06-22
+
+### API-Changes
+
+- [**breaking**] jsonrpc: remove webxdc info from MessageObject.
+  Users need to call `get_webxdc_info` separately now
+  and expect that the call may fail e.g. if WebXDC is not a valid ZIP archive.
+- [**breaking**] Deprecate `DC_GCL_VERIFIED_ONLY`.
+- [**breaking**] Make logging macros private.
+
+### Features / Changes
+
+- Add more IMAP logging.
+- Sort apps by recently-updated ([#6875](https://github.com/chatmail/core/pull/6875)).
+- Better error for quoting a message from another chat.
+- Put "biography" in the vCard ([#6819](https://github.com/chatmail/core/pull/6819)).
+
+### Fixes
+
+- Do not allow chat creation if decryption failed.
+- Remove faulty test ([#6880](https://github.com/chatmail/core/pull/6880)).
+- Reduce the scope of the last_full_folder_scan lock in scan_folders.
+- Ignore verification error if the chat is not protected yet.
+- Create group chats unprotected on verification error.
+- `fetch_url`: return err on non 2xx reponses.
+- Sort multiple saved messages by timestamp ([#6862](https://github.com/chatmail/core/pull/6862)).
+- contact-tools: Escape commas in vCards' FN, KEY, PHOTO, NOTE ([#6912](https://github.com/chatmail/core/pull/6912)).
+- Don't change ConfiguredAddr when adding a transport ([#6804](https://github.com/chatmail/core/pull/6804)).
+
+### Build system
+
+- Increase MSRV to 1.85.0.
+- Update Doxygen config and layout file.
+- Update to rPGP 0.16.0 ([#6719](https://github.com/chatmail/core/pull/6719)).
+- Enable async-native-tls/vendored feature.
+- Update rusqlite to 0.36.0.
+
+### CI
+
+- Update Rust to 1.87.0.
+- nix: Test build on macOS without cross-compilation.
+- Use installed toolchain to lint Rust.
+
+### Refactor
+
+- Remove explicit lock drop at the end of scope.
+- Use CancellationToken instead of a 1-message channel.
+
+### Documentation
+
+- Add more code style guide references.
+
 ## [1.159.5] - 2025-05-14
 
 ### Fixes
@@ -6303,3 +6355,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [1.159.3]: https://github.com/chatmail/core/compare/v1.159.2..v1.159.3
 [1.159.4]: https://github.com/chatmail/core/compare/v1.159.3..v1.159.4
 [1.159.5]: https://github.com/chatmail/core/compare/v1.159.4..v1.159.5
+[1.160.0]: https://github.com/chatmail/core/compare/v1.159.5..v1.160.0

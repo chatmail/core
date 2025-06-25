@@ -24,9 +24,9 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/deltachat.d.ts",
       "import": "./dist/deltachat.js",
-      "require": "./dist/deltachat.cjs"
+      "require": "./dist/deltachat.cjs",
+      "types": "./dist/deltachat.d.ts"
     }
   },
   "license": "MPL-2.0",
@@ -54,5 +54,5 @@
   },
   "type": "module",
   "types": "dist/deltachat.d.ts",
-  "version": "1.159.5"
+  "version": "1.160.0"
 }

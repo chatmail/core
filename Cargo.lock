@@ -1285,7 +1285,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat"
-version = "1.159.5"
+version = "1.160.0"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -1394,7 +1394,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-jsonrpc"
-version = "1.159.5"
+version = "1.160.0"
 dependencies = [
  "anyhow",
  "async-channel 2.3.1",
@@ -1416,7 +1416,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-repl"
-version = "1.159.5"
+version = "1.160.0"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1432,7 +1432,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-rpc-server"
-version = "1.159.5"
+version = "1.160.0"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1461,7 +1461,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat_ffi"
-version = "1.159.5"
+version = "1.160.0"
 dependencies = [
  "anyhow",
  "deltachat",

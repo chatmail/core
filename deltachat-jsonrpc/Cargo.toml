@@ -1,6 +1,6 @@
 [package]
 name = "deltachat-jsonrpc"
-version = "1.159.5"
+version = "1.160.0"
 description = "DeltaChat JSON-RPC API"
 edition = "2021"
 license = "MPL-2.0"
