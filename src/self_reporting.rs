@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use anyhow::{Context as _, Result};
+use anyhow::{ensure, Context as _, Result};
 use pgp::types::PublicKeyTrait;
 use serde::Serialize;
 
@@ -30,7 +30,8 @@ struct Statistics {
     key_created: i64,
     chat_numbers: ChatNumbers,
     self_reporting_id: String,
-    contact_infos: Vec<ContactInfo>,
+    contact_stats: Vec<ContactStat>,
+    message_stats: MessageStats,
 }
 #[derive(Default, Serialize)]
 struct ChatNumbers {
@@ -52,7 +53,7 @@ enum VerifiedStatus {
 }
 
 #[derive(Serialize)]
-struct ContactInfo {
+struct ContactStat {
     #[serde(skip_serializing)]
     id: ContactId,
 
@@ -61,16 +62,16 @@ struct ContactInfo {
     direct_chat: bool,
     last_seen: u64,
 
-    //new: bool, // TODO
     #[serde(skip_serializing_if = "Option::is_none")]
     transitive_chain: Option<u32>,
+    //new: bool, // TODO
 }
 
-async fn get_contact_infos(context: &Context) -> Result<Vec<ContactInfo>> {
+async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
     let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
     let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
 
-    let mut contacts: Vec<ContactInfo> = context
+    let mut contacts: Vec<ContactStat> = context
         .sql
         .query_map(
             "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
@@ -98,7 +99,7 @@ async fn get_contact_infos(context: &Context) -> Result<Vec<ContactInfo>> {
                     bot_ids.insert(id);
                 }
 
-                Ok(ContactInfo {
+                Ok(ContactStat {
                     id,
                     verified,
                     bot,
@@ -165,40 +166,133 @@ async fn get_contact_infos(context: &Context) -> Result<Vec<ContactInfo>> {
     Ok(contacts)
 }
 
+#[derive(Serialize)]
+struct MessageStats {
+    to_verified: u32,
+    unverified_encrypted: u32,
+    unencrypted: u32,
+}
+
+async fn get_message_stats(context: &Context) -> Result<MessageStats> {
+    let enabled_ts: i64 = context
+        .get_config_i64(Config::SelfReportingEnabledTimestamp)
+        .await?;
+    ensure!(enabled_ts > 0, "Enabled Timestamp missing");
+
+    let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
+
+    let trans_fn = |t: &mut rusqlite::Transaction| {
+        t.pragma_update(None, "query_only", "0")?;
+        t.execute(
+            "CREATE TEMP TABLE temp.verified_chats (
+                id INTEGER PRIMARY KEY
+            ) STRICT",
+            (),
+        )?;
+
+        t.execute(
+            "INSERT INTO temp.verified_chats
+            SELECT id FROM chats
+            WHERE protected=1 AND id>9",
+            (),
+        )?;
+
+        let to_verified = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id IN temp.verified_chats
+            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        let unverified_encrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.verified_chats
+            AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        let unencrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.verified_chats
+            AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND chat_id<>? AND id>9 AND timestamp_sent>=?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        t.execute("DROP TABLE temp.verified_chats", ())?;
+
+        Ok(MessageStats {
+            to_verified,
+            unverified_encrypted,
+            unencrypted,
+        })
+    };
+
+    let query_only = true;
+    let message_stats: MessageStats = context.sql.transaction_ex(query_only, trans_fn).await?;
+
+    Ok(message_stats)
+}
+
 /// Sends a message with statistics about the usage of Delta Chat,
 /// if the last time such a message was sent
 /// was more than a week ago.
 ///
 /// On the other end, a bot will receive the message and make it available
 /// to Delta Chat's developers.
-pub async fn maybe_send_self_report(context: &Context) -> Result<()> {
+pub async fn maybe_send_self_report(context: &Context) -> Result<Option<ChatId>> {
     //#[cfg(target_os = "android")] TODO
     if context.get_config_bool(Config::SelfReporting).await? {
-        match context.get_config_i64(Config::LastSelfReportSent).await {
-            Ok(last_selfreport_time) => {
-                let next_selfreport_time = last_selfreport_time.saturating_add(30); // TODO increase to 1 day or 1 week
-                if next_selfreport_time <= time() {
-                    send_self_report(context).await?;
-                }
-            }
-            Err(err) => {
-                warn!(context, "Failed to get last self_reporting time: {}", err);
-            }
+        let last_selfreport_time = context.get_config_i64(Config::LastSelfReportSent).await?;
+        let next_selfreport_time = last_selfreport_time.saturating_add(30); // TODO increase to 1 day or 1 week
+        if next_selfreport_time <= time() {
+            return Ok(Some(send_self_report(context).await?));
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 async fn send_self_report(context: &Context) -> Result<ChatId> {
     info!(context, "Sending self report.");
-    // Setting `Config::LastHousekeeping` at the beginning avoids endless loops when things do not
-    // work out for whatever reason or are interrupted by the OS.
+    // Setting this config at the beginning avoids endless loops when things do not
+    // work out for whatever reason.
     context
         .set_config_internal(Config::LastSelfReportSent, Some(&time().to_string()))
         .await
         .log_err(context)
         .ok();
 
+    let chat_id = get_selfreporting_bot(context).await?;
+
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_text(
+        "The attachment contains anonymous usage statistics, \
+because you enabled this in the settings. \
+This helps us improve the security of Delta Chat. \
+See TODO[blog post] for more information."
+            .to_string(),
+    );
+    msg.set_file_from_bytes(
+        context,
+        "statistics.txt",
+        get_self_report(context).await?.as_bytes(),
+        Some("text/plain"),
+    )?;
+
+    crate::chat::send_msg(context, chat_id, &mut msg)
+        .await
+        .context("Failed to send self_reporting message")
+        .log_err(context)
+        .ok();
+
+    Ok(chat_id)
+}
+
+async fn get_selfreporting_bot(context: &Context) -> Result<ChatId, anyhow::Error> {
     let contact_id: ContactId = *import_vcard(context, SELF_REPORTING_BOT_VCARD)
         .await?
         .first()
@@ -225,27 +319,6 @@ async fn send_self_report(context: &Context) -> Result<ChatId> {
             Some(contact_id),
         )
         .await?;
-
-    let mut msg = Message::new(Viewtype::File);
-    msg.set_text(
-        "The attachment contains anonymous usage statistics, \
-because you enabled this in the settings. \
-This helps us improve the security of Delta Chat. \
-See TODO[blog post] for more information."
-            .to_string(),
-    );
-    msg.set_file_from_bytes(
-        context,
-        "statistics.txt",
-        get_self_report(context).await?.as_bytes(),
-        Some("text/plain"),
-    )?;
-
-    crate::chat::send_msg(context, chat_id, &mut msg)
-        .await
-        .context("Failed to send self_reporting message")
-        .log_err(context)
-        .ok();
 
     Ok(chat_id)
 }
@@ -355,7 +428,8 @@ async fn get_self_report(context: &Context) -> Result<String> {
         key_created,
         chat_numbers,
         self_reporting_id,
-        contact_infos: get_contact_infos(context).await?,
+        contact_stats: get_contact_stats(context).await?,
+        message_stats: get_message_stats(context).await?,
     };
 
     Ok(serde_json::to_string_pretty(&statistics)?)

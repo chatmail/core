@@ -508,7 +508,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
-    maybe_send_self_report(ctx).await?;
+    maybe_send_self_report(ctx).await.log_err(ctx).ok();
     match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
         Ok(fetched_existing_msgs) => {
             if !fetched_existing_msgs {
