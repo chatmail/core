@@ -518,7 +518,10 @@ pub(crate) async fn observe_securejoin_on_other_device(
     };
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
-        warn!(context, "Observed SecureJoin message is not encrypted correctly.");
+        warn!(
+            context,
+            "Observed SecureJoin message is not encrypted correctly."
+        );
         return Ok(HandshakeMessage::Ignore);
     }
 
