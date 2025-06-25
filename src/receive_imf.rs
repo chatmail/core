@@ -2804,6 +2804,14 @@ async fn apply_group_changes(
     }
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
+        // TODO: if address "alice@example.org" is a member of the group twice,
+        // with old and new key,
+        // and someone (maybe Alice's new contact) just removed Alice's old contact,
+        // we may lookup the wrong contact because we only look up by the address.
+        // The result is that info message may contain the new Alice's display name
+        // rather than old display name.
+        // This could be fixed by looking up the contact with the highest
+        // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
         removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat_id)).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
@@ -2817,6 +2825,12 @@ async fn apply_group_changes(
         }
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
+            // TODO: if gossiped keys contain the same address multiple times,
+            // we may lookup the wrong contact.
+            // This could be fixed by looking up the contact with
+            // highest `add_timestamp` to disambiguate.
+            // The result of the error is that info message
+            // may contain display name of the wrong contact.
             let fingerprint = key.dc_fingerprint().hex();
             if let Some(contact_id) =
                 lookup_pgp_contact_by_fingerprint(context, &fingerprint).await?
