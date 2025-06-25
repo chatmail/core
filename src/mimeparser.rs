@@ -1398,12 +1398,15 @@ impl MimeMessage {
             } else {
                 Viewtype::File
             }
-        } else if msg_type == Viewtype::Image || msg_type == Viewtype::Gif {
+        } else if msg_type == Viewtype::Image
+            || msg_type == Viewtype::Gif
+            || msg_type == Viewtype::Sticker
+        {
             match get_filemeta(decoded_data) {
                 // image is not too big, display as image/gif:
                 Ok((width, height)) if width * height <= constants::MAX_IMAGE_PIXELS => {
-                    part.param.set_int(Param::Width, width as i32);
-                    part.param.set_int(Param::Height, height as i32);
+                    part.param.set_i64(Param::Width, width.into());
+                    part.param.set_i64(Param::Height, height.into());
                     msg_type
                 }
                 // image is too big or size is unknown, display as file:
