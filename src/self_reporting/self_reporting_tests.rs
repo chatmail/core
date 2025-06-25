@@ -1,13 +1,11 @@
 use super::*;
 use crate::chat::Chat;
 use crate::mimeparser::SystemMessage;
-use crate::test_utils::{get_chat_msg, TestContextManager};
+use crate::test_utils::{get_chat_msg, TestContext, TestContextManager};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_self_report() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
+    let alice = &TestContext::new_alice().await;
 
     alice.set_config_bool(Config::SelfReporting, true).await?;
 
@@ -35,12 +33,25 @@ async fn test_send_self_report() -> Result<()> {
 
     assert_eq!(maybe_send_self_report(alice).await?, None);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_report_one_contact() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config_bool(Config::SelfReporting, true).await?;
+
+    let report = get_self_report(alice).await?;
+    let r: serde_json::Value = serde_json::from_str(&report)?;
+
     tcm.send_recv_accept(bob, alice, "Hi!").await;
 
     let report = get_self_report(alice).await?;
-
     println!("\nWith Bob:\n{report}\n");
     let r2: serde_json::Value = serde_json::from_str(&report)?;
+
     assert_eq!(
         r.get("key_created").unwrap(),
         r2.get("key_created").unwrap()
