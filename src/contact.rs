@@ -1943,7 +1943,7 @@ pub(crate) async fn mark_contact_id_as_verified(
 }
 
 fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
-    *ret += &format!("\n\n{} ({}):\n{}", name, addr, fingerprint);
+    *ret += &format!("\n\n{name} ({addr}):\n{fingerprint}");
 }
 
 fn split_address_book(book: &str) -> Vec<(&str, &str)> {
