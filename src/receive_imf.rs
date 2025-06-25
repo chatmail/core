@@ -225,12 +225,12 @@ async fn get_to_and_past_contact_ids(
     // `None` means that the chat is encrypted,
     // but we were not able to convert the address
     // to PGP-contact, e.g.
-    // because there wase no corresponding
+    // because there was no corresponding
     // Autocrypt-Gossip header.
     //
     // This way we still preserve remaining
-    // contact number and positions
-    // so we can match them contacts to
+    // number of contacts and their positions
+    // so we can match the contacts to
     // e.g. Chat-Group-Member-Timestamps
     // header.
     let to_ids: Vec<Option<ContactId>>;
