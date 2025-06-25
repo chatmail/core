@@ -66,6 +66,8 @@ async fn test_get_contacts() -> Result<()> {
     // Alice is not in the contacts yet.
     let contacts = Contact::get_all(&context.ctx, 0, Some("Alice")).await?;
     assert_eq!(contacts.len(), 0);
+    let contacts = Contact::get_all(&context.ctx, 0, Some("MyName")).await?;
+    assert_eq!(contacts.len(), 0);
 
     let id = context.add_or_lookup_contact_id(&alice).await;
     assert_ne!(id, ContactId::UNDEFINED);
