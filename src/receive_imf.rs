@@ -214,6 +214,243 @@ async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Result<MsgId> 
     Ok(msg_id)
 }
 
+async fn get_to_and_past_contact_ids(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    chat_assignment: &ChatAssignment,
+    is_partial_download: Option<u32>,
+    parent_message: &Option<Message>,
+    incoming_origin: Origin,
+) -> Result<(Vec<Option<ContactId>>, Vec<Option<ContactId>>)> {
+    // `None` means that the chat is encrypted,
+    // but we were not able to convert the address
+    // to PGP-contact, e.g.
+    // because there wase no corresponding
+    // Autocrypt-Gossip header.
+    //
+    // This way we still preserve remaining
+    // contact number and positions
+    // so we can match them contacts to
+    // e.g. Chat-Group-Member-Timestamps
+    // header.
+    let to_ids: Vec<Option<ContactId>>;
+    let past_ids: Vec<Option<ContactId>>;
+
+    // ID of the chat to look up the addresses in.
+    //
+    // Note that this is not necessarily the chat we want to assign the message to.
+    // In case of an outgoing private reply to a group message we may
+    // lookup the address of receipient in the list of addresses used in the group,
+    // but want to assign the message to 1:1 chat.
+    let chat_id = match chat_assignment {
+        ChatAssignment::Trash => None,
+        ChatAssignment::GroupChat { ref grpid } => {
+            if let Some((chat_id, _protected, _blocked)) =
+                chat::get_chat_id_by_grpid(context, grpid).await?
+            {
+                Some(chat_id)
+            } else {
+                None
+            }
+        }
+        ChatAssignment::AdHocGroup => {
+            // If we are going to assign a message to ad hoc group,
+            // we can just convert the email addresses
+            // to e-mail address contacts and don't need a `ChatId`
+            // to lookup PGP-contacts.
+            None
+        }
+        ChatAssignment::ExistingChat { chat_id, .. } => Some(*chat_id),
+        ChatAssignment::MailingList => None,
+        ChatAssignment::OneOneChat => {
+            if is_partial_download.is_none() && !mime_parser.incoming {
+                parent_message.as_ref().map(|m| m.chat_id)
+            } else {
+                None
+            }
+        }
+    };
+
+    let member_fingerprints = mime_parser.chat_group_member_fingerprints();
+    let to_member_fingerprints;
+    let past_member_fingerprints;
+
+    if !member_fingerprints.is_empty() {
+        if member_fingerprints.len() >= mime_parser.recipients.len() {
+            (to_member_fingerprints, past_member_fingerprints) =
+                member_fingerprints.split_at(mime_parser.recipients.len());
+        } else {
+            warn!(
+                context,
+                "Unexpected length of the fingerprint header, expected at least {}, got {}.",
+                mime_parser.recipients.len(),
+                member_fingerprints.len()
+            );
+            to_member_fingerprints = &[];
+            past_member_fingerprints = &[];
+        }
+    } else {
+        to_member_fingerprints = &[];
+        past_member_fingerprints = &[];
+    }
+
+    let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
+        context,
+        &mime_parser.recipients,
+        &mime_parser.gossiped_keys,
+        to_member_fingerprints,
+        Origin::Hidden,
+    )
+    .await?;
+
+    match chat_assignment {
+        ChatAssignment::GroupChat { .. } => {
+            to_ids = pgp_to_ids;
+
+            if let Some(chat_id) = chat_id {
+                past_ids = lookup_pgp_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    past_member_fingerprints,
+                    Some(chat_id),
+                )
+                .await?;
+            } else {
+                past_ids = add_or_lookup_pgp_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    &mime_parser.gossiped_keys,
+                    past_member_fingerprints,
+                    Origin::Hidden,
+                )
+                .await?;
+            }
+        }
+        ChatAssignment::Trash | ChatAssignment::MailingList => {
+            to_ids = Vec::new();
+            past_ids = Vec::new();
+        }
+        ChatAssignment::ExistingChat { chat_id, .. } => {
+            let chat = Chat::load_from_db(context, *chat_id).await?;
+            if chat.is_encrypted(context).await? {
+                to_ids = pgp_to_ids;
+                past_ids = lookup_pgp_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    past_member_fingerprints,
+                    Some(*chat_id),
+                )
+                .await?;
+            } else {
+                to_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.recipients,
+                    if !mime_parser.incoming {
+                        Origin::OutgoingTo
+                    } else if incoming_origin.is_known() {
+                        Origin::IncomingTo
+                    } else {
+                        Origin::IncomingUnknownTo
+                    },
+                )
+                .await?;
+
+                past_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    Origin::Hidden,
+                )
+                .await?;
+            }
+        }
+        ChatAssignment::AdHocGroup => {
+            to_ids = add_or_lookup_contacts_by_address_list(
+                context,
+                &mime_parser.recipients,
+                if !mime_parser.incoming {
+                    Origin::OutgoingTo
+                } else if incoming_origin.is_known() {
+                    Origin::IncomingTo
+                } else {
+                    Origin::IncomingUnknownTo
+                },
+            )
+            .await?;
+
+            past_ids = add_or_lookup_contacts_by_address_list(
+                context,
+                &mime_parser.past_members,
+                Origin::Hidden,
+            )
+            .await?;
+        }
+        ChatAssignment::OneOneChat => {
+            if pgp_to_ids
+                .first()
+                .is_some_and(|contact_id| contact_id.is_some())
+            {
+                // There is a single recipient and we have
+                // mapped it to a PGP contact.
+                // This is a 1:1 PGP-chat.
+                to_ids = pgp_to_ids
+            } else if let Some(chat_id) = chat_id {
+                to_ids = lookup_pgp_contacts_by_address_list(
+                    context,
+                    &mime_parser.recipients,
+                    to_member_fingerprints,
+                    Some(chat_id),
+                )
+                .await?;
+            } else {
+                let ids = match mime_parser.was_encrypted() {
+                    true => {
+                        lookup_pgp_contacts_by_address_list(
+                            context,
+                            &mime_parser.recipients,
+                            to_member_fingerprints,
+                            chat_id,
+                        )
+                        .await?
+                    }
+                    false => vec![],
+                };
+                if chat_id.is_some()
+                || (mime_parser.was_encrypted() && !ids.contains(&None))
+                // Prefer creating PGP chats if there are any PGP contacts. At least this prevents
+                // from replying unencrypted.
+                || ids
+                    .iter()
+                    .any(|&c| c.is_some() && c != Some(ContactId::SELF))
+                {
+                    to_ids = ids;
+                } else {
+                    to_ids = add_or_lookup_contacts_by_address_list(
+                        context,
+                        &mime_parser.recipients,
+                        if !mime_parser.incoming {
+                            Origin::OutgoingTo
+                        } else if incoming_origin.is_known() {
+                            Origin::IncomingTo
+                        } else {
+                            Origin::IncomingUnknownTo
+                        },
+                    )
+                    .await?;
+                }
+            }
+
+            past_ids = add_or_lookup_contacts_by_address_list(
+                context,
+                &mime_parser.past_members,
+                Origin::Hidden,
+            )
+            .await?;
+        }
+    };
+
+    Ok((to_ids, past_ids))
+}
+
 /// Receive a message and add it to the database.
 ///
 /// Returns an error on database failure or if the message is broken,
@@ -427,231 +664,15 @@ pub(crate) async fn receive_imf_inner(
     .await?;
     info!(context, "Chat assignment is {chat_assignment:?}.");
 
-    // ID of the chat to look up the addresses in.
-    //
-    // Note that this is not necessarily the chat we want to assign the message to.
-    // In case of an outgoing private reply to a group message we may
-    // lookup the address of receipient in the list of addresses used in the group,
-    // but want to assign the message to 1:1 chat.
-    let chat_id = match chat_assignment {
-        ChatAssignment::Trash => None,
-        ChatAssignment::GroupChat { ref grpid } => {
-            if let Some((chat_id, _protected, _blocked)) =
-                chat::get_chat_id_by_grpid(context, grpid).await?
-            {
-                Some(chat_id)
-            } else {
-                None
-            }
-        }
-        ChatAssignment::AdHocGroup => {
-            // If we are going to assign a message to ad hoc group,
-            // we can just convert the email addresses
-            // to e-mail address contacts and don't need a `ChatId`
-            // to lookup PGP-contacts.
-            None
-        }
-        ChatAssignment::ExistingChat { chat_id, .. } => Some(chat_id),
-        ChatAssignment::MailingList => None,
-        ChatAssignment::OneOneChat => {
-            if is_partial_download.is_none() && !mime_parser.incoming {
-                parent_message.as_ref().map(|m| m.chat_id)
-            } else {
-                None
-            }
-        }
-    };
-
-    let member_fingerprints = mime_parser.chat_group_member_fingerprints();
-    let to_member_fingerprints;
-    let past_member_fingerprints;
-
-    if !member_fingerprints.is_empty() {
-        if member_fingerprints.len() >= mime_parser.recipients.len() {
-            (to_member_fingerprints, past_member_fingerprints) =
-                member_fingerprints.split_at(mime_parser.recipients.len());
-        } else {
-            warn!(
-                context,
-                "Unexpected length of the fingerprint header, expected at least {}, got {}.",
-                mime_parser.recipients.len(),
-                member_fingerprints.len()
-            );
-            to_member_fingerprints = &[];
-            past_member_fingerprints = &[];
-        }
-    } else {
-        to_member_fingerprints = &[];
-        past_member_fingerprints = &[];
-    }
-
-    let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
+    let (to_ids, past_ids) = get_to_and_past_contact_ids(
         context,
-        &mime_parser.recipients,
-        &mime_parser.gossiped_keys,
-        to_member_fingerprints,
-        Origin::Hidden,
+        &mime_parser,
+        &chat_assignment,
+        is_partial_download,
+        &parent_message,
+        incoming_origin,
     )
     .await?;
-
-    // `None` means that the chat is encrypted,
-    // but we were not able to convert the address
-    // to PGP-contact, e.g.
-    // because there wase no corresponding
-    // Autocrypt-Gossip header.
-    //
-    // This way we still preserve remaining
-    // contact number and positions
-    // so we can match them contacts to
-    // e.g. Chat-Group-Member-Timestamps
-    // header.
-    let to_ids: Vec<Option<ContactId>>;
-    let past_ids: Vec<Option<ContactId>>;
-
-    match chat_assignment {
-        ChatAssignment::GroupChat { .. } => {
-            to_ids = pgp_to_ids;
-
-            if let Some(chat_id) = chat_id {
-                past_ids = lookup_pgp_contacts_by_address_list(
-                    context,
-                    &mime_parser.past_members,
-                    past_member_fingerprints,
-                    Some(chat_id),
-                )
-                .await?;
-            } else {
-                past_ids = add_or_lookup_pgp_contacts_by_address_list(
-                    context,
-                    &mime_parser.past_members,
-                    &mime_parser.gossiped_keys,
-                    past_member_fingerprints,
-                    Origin::Hidden,
-                )
-                .await?;
-            }
-        }
-        ChatAssignment::Trash | ChatAssignment::MailingList => {
-            to_ids = Vec::new();
-            past_ids = Vec::new();
-        }
-        ChatAssignment::ExistingChat { chat_id, .. } => {
-            let chat = Chat::load_from_db(context, chat_id).await?;
-            if chat.is_encrypted(context).await? {
-                to_ids = pgp_to_ids;
-                past_ids = lookup_pgp_contacts_by_address_list(
-                    context,
-                    &mime_parser.past_members,
-                    past_member_fingerprints,
-                    Some(chat_id),
-                )
-                .await?;
-            } else {
-                to_ids = add_or_lookup_contacts_by_address_list(
-                    context,
-                    &mime_parser.recipients,
-                    if !mime_parser.incoming {
-                        Origin::OutgoingTo
-                    } else if incoming_origin.is_known() {
-                        Origin::IncomingTo
-                    } else {
-                        Origin::IncomingUnknownTo
-                    },
-                )
-                .await?;
-
-                past_ids = add_or_lookup_contacts_by_address_list(
-                    context,
-                    &mime_parser.past_members,
-                    Origin::Hidden,
-                )
-                .await?;
-            }
-        }
-        ChatAssignment::AdHocGroup => {
-            to_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.recipients,
-                if !mime_parser.incoming {
-                    Origin::OutgoingTo
-                } else if incoming_origin.is_known() {
-                    Origin::IncomingTo
-                } else {
-                    Origin::IncomingUnknownTo
-                },
-            )
-            .await?;
-
-            past_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.past_members,
-                Origin::Hidden,
-            )
-            .await?;
-        }
-        ChatAssignment::OneOneChat => {
-            if pgp_to_ids
-                .first()
-                .is_some_and(|contact_id| contact_id.is_some())
-            {
-                // There is a single recipient and we have
-                // mapped it to a PGP contact.
-                // This is a 1:1 PGP-chat.
-                to_ids = pgp_to_ids
-            } else if let Some(chat_id) = chat_id {
-                to_ids = lookup_pgp_contacts_by_address_list(
-                    context,
-                    &mime_parser.recipients,
-                    to_member_fingerprints,
-                    Some(chat_id),
-                )
-                .await?;
-            } else {
-                let ids = match mime_parser.was_encrypted() {
-                    true => {
-                        lookup_pgp_contacts_by_address_list(
-                            context,
-                            &mime_parser.recipients,
-                            to_member_fingerprints,
-                            chat_id,
-                        )
-                        .await?
-                    }
-                    false => vec![],
-                };
-                if chat_id.is_some()
-                || (mime_parser.was_encrypted() && !ids.contains(&None))
-                // Prefer creating PGP chats if there are any PGP contacts. At least this prevents
-                // from replying unencrypted.
-                || ids
-                    .iter()
-                    .any(|&c| c.is_some() && c != Some(ContactId::SELF))
-                {
-                    to_ids = ids;
-                } else {
-                    to_ids = add_or_lookup_contacts_by_address_list(
-                        context,
-                        &mime_parser.recipients,
-                        if !mime_parser.incoming {
-                            Origin::OutgoingTo
-                        } else if incoming_origin.is_known() {
-                            Origin::IncomingTo
-                        } else {
-                            Origin::IncomingUnknownTo
-                        },
-                    )
-                    .await?;
-                }
-            }
-
-            past_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.past_members,
-                Origin::Hidden,
-            )
-            .await?;
-        }
-    };
 
     let received_msg;
     if mime_parser.get_header(HeaderDef::SecureJoin).is_some() {
