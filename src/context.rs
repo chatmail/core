@@ -1074,6 +1074,12 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "self_reporting_enabled_timestamp",
+            self.get_config_i64(Config::SelfReportingEnabledTimestamp)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
