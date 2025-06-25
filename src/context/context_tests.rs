@@ -310,6 +310,13 @@ async fn test_get_info_completeness() {
                 "'{key}' missing in get_info() output"
             );
         }
+
+        if skip_from_get_info.contains(&&*key) {
+            assert!(
+                !info.contains_key(&*key),
+                "'{key}' should not be in get_info() output"
+            );
+        }
     }
 }
 

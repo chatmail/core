@@ -774,13 +774,11 @@ impl Context {
 
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
-        let unset = "0";
         let l = EnteredLoginParam::load(self).await?;
         let l2 = ConfiguredLoginParam::load(self)
             .await?
             .map_or_else(|| "Not configured".to_string(), |param| param.to_string());
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
-        let displayname = self.get_config(Config::Displayname).await?;
         let chats = get_chat_cnt(self).await?;
         let unblocked_msgs = message::get_unblocked_msg_cnt(self).await;
         let request_msgs = message::get_request_msg_cnt(self).await;
@@ -859,7 +857,6 @@ impl Context {
         );
         res.insert("journal_mode", journal_mode);
         res.insert("blobdir", self.get_blobdir().display().to_string());
-        res.insert("displayname", displayname.unwrap_or_else(|| unset.into()));
         res.insert(
             "selfavatar",
             self.get_config(Config::Selfavatar)
