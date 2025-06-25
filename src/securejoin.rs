@@ -518,6 +518,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     };
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
+        warn!(context, "Observed SecureJoin message is not encrypted correctly.");
         return Ok(HandshakeMessage::Ignore);
     }
 
@@ -525,16 +526,19 @@ pub(crate) async fn observe_securejoin_on_other_device(
     let addr = contact.get_addr().to_lowercase();
 
     let Some(key) = mime_message.gossiped_keys.get(&addr) else {
+        warn!(context, "No gossip header for {addr} at step {step}.");
         return Ok(HandshakeMessage::Ignore);
     };
 
     let Some(contact_fingerprint) = contact.fingerprint() else {
         // Not a PGP-contact, should not happen.
+        warn!(context, "Contact does not have a fingerprint.");
         return Ok(HandshakeMessage::Ignore);
     };
 
     if key.dc_fingerprint() != contact_fingerprint {
         // Fingerprint does not match, ignore.
+        warn!(context, "Fingerprint does not match.");
         return Ok(HandshakeMessage::Ignore);
     }
 
