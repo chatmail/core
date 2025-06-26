@@ -48,13 +48,13 @@ use crate::EventType;
 const PUBLIC_KEY_LENGTH: usize = 32;
 const PUBLIC_KEY_STUB: &[u8] = "static_string".as_bytes();
 
-/// Store iroh peer channels for the context.
+/// Store Iroh peer channels for the context.
 #[derive(Debug)]
 pub struct Iroh {
-    /// iroh router  needed for iroh peer channels.
+    /// Iroh router  needed for Iroh peer channels.
     pub(crate) router: iroh::protocol::Router,
 
-    /// [Gossip] needed for iroh peer channels.
+    /// [Gossip] needed for Iroh peer channels.
     pub(crate) gossip: Gossip,
 
     /// Sequence numbers for gossip channels.
@@ -138,17 +138,13 @@ impl Iroh {
         Ok(Some(join_rx))
     }
 
-    /// Add gossip peers to realtime channel if it is already active.
-    pub async fn maybe_add_gossip_peers(&self, topic: TopicId, peers: Vec<NodeAddr>) -> Result<()> {
+    /// Add gossip peer to realtime channel if it is already active.
+    pub async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
         if self.iroh_channels.read().await.get(&topic).is_some() {
-            for peer in &peers {
-                self.router.endpoint().add_node_addr(peer.clone())?;
-            }
+            self.router.endpoint().add_node_addr(peer.clone())?;
 
-            self.gossip.subscribe_with_opts(
-                topic,
-                JoinOptions::with_bootstrap(peers.into_iter().map(|peer| peer.node_id)),
-            );
+            self.gossip
+                .subscribe_with_opts(topic, JoinOptions::with_bootstrap(vec![peer.node_id]));
         }
         Ok(())
     }
@@ -198,7 +194,7 @@ impl Iroh {
     }
 
     /// Leave the realtime channel for a given topic.
-    pub(crate) async fn leave_realtime(&self, topic: TopicId) -> Result<()> {
+    pub async fn leave_realtime(&self, topic: TopicId) -> Result<()> {
         if let Some(channel) = self.iroh_channels.write().await.remove(&topic) {
             // Dropping the last GossipTopic results in quitting the topic.
             // It is split into GossipReceiver and GossipSender.
@@ -316,10 +312,21 @@ impl Context {
             }
         }
     }
+
+    pub(crate) async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
+        if let Some(iroh) = &*self.iroh.read().await {
+            info!(
+                self,
+                "Adding (maybe existing) peer with id {} to gossip", peer.node_id
+            );
+            iroh.maybe_add_gossip_peer(topic, peer).await?;
+        }
+        Ok(())
+    }
 }
 
 /// Cache a peers [NodeId] for one topic.
-pub(crate) async fn iroh_add_peer_for_topic(
+pub async fn iroh_add_peer_for_topic(
     ctx: &Context,
     msg_id: MsgId,
     topic: TopicId,
@@ -336,6 +343,7 @@ pub(crate) async fn iroh_add_peer_for_topic(
 }
 
 /// Add gossip peer from `Iroh-Node-Addr` header to WebXDC message identified by `instance_id`.
+/// This should not start iroh, because receiving a NodeAddr does not mean you want to participate.
 pub async fn add_gossip_peer_from_header(
     context: &Context,
     instance_id: MsgId,
@@ -348,12 +356,13 @@ pub async fn add_gossip_peer_from_header(
         return Ok(());
     }
 
-    info!(
-        context,
-        "Adding iroh peer with address {node_addr:?} to the topic of {instance_id}."
-    );
     let node_addr =
         serde_json::from_str::<NodeAddr>(node_addr).context("Failed to parse node address")?;
+
+    info!(
+        context,
+        "Adding iroh peer with node id {} to the topic of {instance_id}.", node_addr.node_id
+    );
 
     context.emit_event(EventType::WebxdcRealtimeAdvertisementReceived {
         msg_id: instance_id,
@@ -371,13 +380,12 @@ pub async fn add_gossip_peer_from_header(
     let relay_server = node_addr.relay_url().map(|relay| relay.as_str());
     iroh_add_peer_for_topic(context, instance_id, topic, node_id, relay_server).await?;
 
-    let iroh = context.get_or_try_init_peer_channel().await?;
-    iroh.maybe_add_gossip_peers(topic, vec![node_addr]).await?;
+    context.maybe_add_gossip_peer(topic, node_addr).await?;
     Ok(())
 }
 
 /// Insert topicId into the database so that we can use it to retrieve the topic.
-pub(crate) async fn insert_topic_stub(ctx: &Context, msg_id: MsgId, topic: TopicId) -> Result<()> {
+pub async fn insert_topic_stub(ctx: &Context, msg_id: MsgId, topic: TopicId) -> Result<()> {
     ctx.sql
         .execute(
             "INSERT OR REPLACE INTO iroh_gossip_peers (msg_id, public_key, topic, relay_server) VALUES (?, ?, ?, ?)",
@@ -554,9 +562,9 @@ async fn subscribe_loop(
 mod tests {
     use super::*;
     use crate::{
-        chat::send_msg,
+        chat::{self, add_contact_to_chat, resend_msgs, send_msg, ChatId, ProtectionStatus},
         message::{Message, Viewtype},
-        test_utils::TestContextManager,
+        test_utils::{TestContext, TestContextManager},
         EventType,
     };
 
@@ -920,8 +928,8 @@ mod tests {
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
 
-        // Alice sends webxdc to bob
-        let alice_chat = alice.create_chat(bob).await;
+        let chat = alice.create_chat(&bob).await.id;
+
         let mut instance = Message::new(Viewtype::File);
         instance
             .set_file_from_bytes(
@@ -931,7 +939,82 @@ mod tests {
                 None,
             )
             .unwrap();
-        send_msg(alice, alice_chat.id, &mut instance).await.unwrap();
+        connect_alice_bob(alice, bob, chat, &mut instance).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_webxdc_resend() {
+        let mut tcm = TestContextManager::new();
+        let alice = &mut tcm.alice().await;
+        let bob = &mut tcm.bob().await;
+        let group = chat::create_group_chat(&alice, ProtectionStatus::Unprotected, "group chat")
+            .await
+            .unwrap();
+
+        // Alice sends webxdc to bob
+        let mut instance = Message::new(Viewtype::File);
+        instance
+            .set_file_from_bytes(
+                alice,
+                "minimal.xdc",
+                include_bytes!("../test-data/webxdc/minimal.xdc"),
+                None,
+            )
+            .unwrap();
+
+        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&bob).await)
+            .await
+            .unwrap();
+
+        connect_alice_bob(alice, bob, group, &mut instance).await;
+
+        // fiona joins late
+        let fiona = &mut tcm.fiona().await;
+
+        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&fiona).await)
+            .await
+            .unwrap();
+
+        resend_msgs(&alice, &[instance.id]).await.unwrap();
+        let msg = alice.pop_sent_msg().await;
+        let fiona_instance = fiona.recv_msg(&msg).await;
+        fiona_instance.chat_id.accept(&fiona).await.unwrap();
+
+        let fiona_connect_future = send_webxdc_realtime_advertisement(&fiona, fiona_instance.id)
+            .await
+            .unwrap()
+            .unwrap();
+        let fiona_advert = fiona.pop_sent_msg().await;
+        alice.recv_msg_trash(&fiona_advert).await;
+
+        fiona_connect_future.await.unwrap();
+        send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
+            .await
+            .unwrap();
+
+        eprintln!("Waiting for ephemeral message");
+        // loop {
+        //     let event = fiona.evtracker.recv().await.unwrap();
+        //     if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
+        //         if data == b"alice -> bob & fiona" {
+        //             break;
+        //         } else {
+        //             panic!(
+        //                 "Unexpected status update: {}",
+        //                 String::from_utf8_lossy(&data)
+        //             );
+        //         }
+        //     }
+        // }
+    }
+
+    async fn connect_alice_bob(
+        alice: &mut TestContext,
+        bob: &mut TestContext,
+        chat: ChatId,
+        instance: &mut Message,
+    ) {
+        send_msg(alice, chat, instance).await.unwrap();
         let alice_webxdc = alice.get_last_msg().await;
 
         let webxdc = alice.pop_sent_msg().await;
