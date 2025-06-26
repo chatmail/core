@@ -391,7 +391,7 @@ async fn get_to_and_past_contact_ids(
             {
                 // There is a single recipient and we have
                 // mapped it to a key contact.
-                // This is a 1:1 key-chat.
+                // This is an encrypted 1:1 chat.
                 to_ids = pgp_to_ids
             } else if let Some(chat_id) = chat_id {
                 to_ids = lookup_key_contacts_by_address_list(
