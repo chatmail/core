@@ -37,7 +37,7 @@ async fn test_chat_info() {
         // We need to do it like this so that the test passes on Windows:
         serde_json::to_string(
             t.get_blobdir()
-                .join("9a17b32ad5ff71df91f7cfda9a62bb2.png")
+                .join("4138c52e5bc1c576cda7dd44d088c07.png")
                 .to_str()
                 .unwrap()
         )
