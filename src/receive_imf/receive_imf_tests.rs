@@ -3317,8 +3317,8 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
 
     let alice_email_id = message.from_id;
     assert_ne!(alice_email_id, alice_id);
-    let alice_email_contact = Contact::get_by_id(&t, alice_email_id).await?;
-    assert!(!alice_email_contact.is_key_contact());
+    let alice_address_contact = Contact::get_by_id(&t, alice_email_id).await?;
+    assert!(!alice_address_contact.is_key_contact());
 
     Ok(())
 }
@@ -3371,7 +3371,7 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
     let msg = Message::load_from_db(bob, msg_id).await?;
     assert!(!msg.get_showpadlock());
 
-    // The message should arrive as email-contact
+    // The message should arrive as address-contact
     let alice_id = msg.from_id;
     let alice_contact = Contact::get_by_id(bob, alice_id).await?;
     assert!(!alice_contact.is_key_contact());
@@ -5055,10 +5055,10 @@ PGh0bWw+PGJvZHk+dGV4dDwvYm9keT5kYXRh
     Ok(())
 }
 
-/// Tests that email contacts are not added into a group
+/// Tests that address-contacts are not added into a group
 /// with key-contacts by a plaintext reply.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_email_contact_added_into_group() -> Result<()> {
+async fn test_no_address_contact_added_into_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;

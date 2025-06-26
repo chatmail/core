@@ -1748,10 +1748,10 @@ impl Chat {
                 return contact.get_profile_image(context).await;
             }
         } else if !self.is_encrypted(context).await? {
-            // This is an email-contact chat, show a special avatar that marks it as such
+            // This is an address-contact chat, show a special avatar that marks it as such
             return Ok(Some(get_abs_path(
                 context,
-                Path::new(&get_email_contact_icon(context).await?),
+                Path::new(&get_address_contact_icon(context).await?),
             )));
         } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             // Load the group avatar, or the device-chat / saved-messages icon
@@ -2483,11 +2483,11 @@ pub(crate) async fn get_archive_icon(context: &Context) -> Result<PathBuf> {
     .await
 }
 
-pub(crate) async fn get_email_contact_icon(context: &Context) -> Result<PathBuf> {
+pub(crate) async fn get_address_contact_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
-        "icon-email-contact",
-        include_bytes!("../assets/icon-email-contact.png"),
+        "icon-address-contact",
+        include_bytes!("../assets/icon-address-contact.png"),
     )
     .await
 }
@@ -4781,7 +4781,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
     let chat = Chat::load_from_db(context, id).await?;
     ensure!(
         !chat.is_encrypted(context).await?,
-        "Cannot add email-contacts to encrypted chat {id}"
+        "Cannot add address-contacts to encrypted chat {id}"
     );
     ensure!(
         chat.typ == Chattype::Broadcast,

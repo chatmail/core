@@ -161,7 +161,7 @@ class TestOfflineContact:
         ac1 = acfactory.get_pseudo_configured_account()
         ac2 = acfactory.get_pseudo_configured_account()
         chat1 = ac1.create_chat(ac2)  # This creates a key-contact chat
-        chat2 = ac1.create_chat(ac2.get_self_contact().addr)  # This creates email-contact chat
+        chat2 = ac1.create_chat(ac2.get_self_contact().addr)  # This creates address-contact chat
         assert chat1 != chat2
         ac3 = acfactory.get_unconfigured_account()
         with pytest.raises(ValueError):

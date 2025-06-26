@@ -780,7 +780,7 @@ impl TestContext {
         Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
     }
 
-    /// Returns 1:1 [`Chat`] with another account email contact.
+    /// Returns 1:1 [`Chat`] with another account address-contact.
     /// Panics if it doesn't exist.
     /// May return a blocked chat.
     ///

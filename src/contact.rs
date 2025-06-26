@@ -820,7 +820,7 @@ impl Contact {
 
     /// Lookup a contact and create it if it does not exist yet.
     /// If `fingerprint` is non-empty, a key-contact with this fingerprint is added / looked up.
-    /// Otherwise, an email-contact with `addr` is added / looked up.
+    /// Otherwise, an address-contact with `addr` is added / looked up.
     /// A name and an "origin" can be given.
     ///
     /// The "origin" is where the address comes from -
@@ -1385,14 +1385,14 @@ impl Contact {
     }
 
     /// Returns true if the contact is a key-contact.
-    /// Otherwise it is an email contact.
+    /// Otherwise it is an addresss-contact.
     pub fn is_key_contact(&self) -> bool {
         self.fingerprint.is_some()
     }
 
     /// Returns OpenPGP fingerprint of a contact.
     ///
-    /// `None` for e-mail contacts.
+    /// `None` for address-contacts.
     pub fn fingerprint(&self) -> Option<Fingerprint> {
         if let Some(fingerprint) = &self.fingerprint {
             fingerprint.parse().ok()
@@ -1521,7 +1521,7 @@ impl Contact {
             return Ok(Some(chat::get_device_icon(context).await?));
         }
         if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
-            return Ok(Some(chat::get_email_contact_icon(context).await?));
+            return Ok(Some(chat::get_address_contact_icon(context).await?));
         }
         if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             if !image_rel.is_empty() {

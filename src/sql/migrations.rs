@@ -1351,7 +1351,7 @@ fn migrate_key_contacts(
             )
             .context("Step 2")?;
 
-        let all_email_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
+        let all_address_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
             .query_map((), |row| {
                 let id: i64 = row.get(0)?;
                 let name: String = row.get(1)?;
@@ -1416,7 +1416,7 @@ fn migrate_key_contacts(
             .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")
             .context("Step 6")?;
 
-        for row in all_email_contacts? {
+        for row in all_address_contacts? {
             let (
                 original_id,
                 name,
@@ -1629,7 +1629,7 @@ fn migrate_key_contacts(
                 .collect::<Result<Vec<u32>, rusqlite::Error>>()
                 .context("Step 26")?;
 
-            let mut keep_email_contacts = |reason: &str| {
+            let mut keep_address_contacts = |reason: &str| {
                 info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}");
                 for m in &old_members {
                     orphaned_contacts.remove(m);
@@ -1637,7 +1637,7 @@ fn migrate_key_contacts(
             };
             let old_and_new_members: Vec<(u32, Option<u32>)> = match typ {
                 // 1:1 chats retain:
-                // - email-contact if peerstate is in the "reset" state,
+                // - address-contact if peerstate is in the "reset" state,
                 //   or if there is no key-contact that has the right email address.
                 // - key-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
                 // - key-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
@@ -1650,7 +1650,7 @@ fn migrate_key_contacts(
                     };
 
                     let (_, Some(new_contact)) = map_to_key_contact(old_member) else {
-                        keep_email_contacts("No peerstate, or peerstate in 'reset' state");
+                        keep_address_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
                     if !addr_cmp_stmt
@@ -1658,11 +1658,11 @@ fn migrate_key_contacts(
                     {
                         // Unprotect this 1:1 chat if it was protected.
                         //
-                        // Otherwise we get protected chat with email-contact.
+                        // Otherwise we get protected chat with address-contact.
                         transaction
                             .execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))?;
 
-                        keep_email_contacts("key contact has different email");
+                        keep_address_contacts("key contact has different email");
                         continue;
                     }
                     vec![(*old_member, Some(new_contact))]
@@ -1673,7 +1673,7 @@ fn migrate_key_contacts(
                     if grpid.is_empty() {
                         // Ad-hoc group that has empty Chat-Group-ID
                         // because it was created in response to receiving a non-chat email.
-                        keep_email_contacts("Empty chat-Group-ID");
+                        keep_address_contacts("Empty chat-Group-ID");
                         continue;
                     } else if protected == 1 {
                         old_members
@@ -1692,7 +1692,7 @@ fn migrate_key_contacts(
 
                 // Mailinglist
                 140 => {
-                    keep_email_contacts("Mailinglist");
+                    keep_address_contacts("Mailinglist");
                     continue;
                 }
 
@@ -1726,7 +1726,7 @@ fn migrate_key_contacts(
                 transaction
                     .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
                     .context("Step 26.1")?;
-                keep_email_contacts("Group contains contact without peerstate");
+                keep_address_contacts("Group contains contact without peerstate");
                 continue;
             }
 

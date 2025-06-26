@@ -38,7 +38,7 @@ pub enum ChatListItemFetchResult {
         ///
         /// False if the chat is unencrypted.
         /// This means that all messages in the chat are unencrypted,
-        /// and all contacts in the chat are "email-contacts",
+        /// and all contacts in the chat are "address-contacts",
         /// i.e. identified by the email address.
         /// The UI should mark this chat e.g. with a mail-letter icon.
         ///

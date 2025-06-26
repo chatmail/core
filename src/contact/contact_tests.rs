@@ -749,11 +749,11 @@ async fn test_contact_get_encrinfo() -> Result<()> {
     let encrinfo = Contact::get_encrinfo(alice, ContactId::DEVICE).await;
     assert!(encrinfo.is_err());
 
-    let email_contact_bob_id = alice.add_or_lookup_email_contact_id(bob).await;
-    let encrinfo = Contact::get_encrinfo(alice, email_contact_bob_id).await?;
+    let address_contact_bob_id = alice.add_or_lookup_email_contact_id(bob).await;
+    let encrinfo = Contact::get_encrinfo(alice, address_contact_bob_id).await?;
     assert_eq!(encrinfo, "No encryption");
 
-    let contact = Contact::get_by_id(alice, email_contact_bob_id).await?;
+    let contact = Contact::get_by_id(alice, address_contact_bob_id).await?;
     assert!(!contact.e2ee_avail(alice).await?);
 
     let contact_bob_id = alice.add_or_lookup_contact_id(bob).await;
