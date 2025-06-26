@@ -34,7 +34,7 @@ pub enum ChatListItemFetchResult {
         /// True if the chat is encrypted.
         /// This means that all messages in the chat are encrypted,
         /// and all contacts in the chat are "key-contacts",
-        /// i.e. identified by the fingerprint.
+        /// i.e. identified by the PGP key fingerprint.
         ///
         /// False if the chat is unencrypted.
         /// This means that all messages in the chat are unencrypted,

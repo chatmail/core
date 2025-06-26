@@ -75,7 +75,7 @@ pub enum HeaderDef {
     /// for members listed in the `Chat-Group-Past-Members` field.
     ChatGroupMemberTimestamps,
 
-    /// Space-separated fingerprints
+    /// Space-separated PGP key fingerprints
     /// of group members listed in the `To` field
     /// followed by fingerprints
     /// of past members listed in the `Chat-Group-Past-Members` field.
