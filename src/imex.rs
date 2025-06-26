@@ -17,7 +17,6 @@ use crate::blob::BlobDirContents;
 use crate::chat::delete_and_reset_all_device_msgs;
 use crate::config::Config;
 use crate::context::Context;
-use crate::e2ee;
 use crate::events::EventType;
 use crate::key::{self, DcKey, DcSecretKey, SignedPublicKey, SignedSecretKey};
 use crate::log::{error, info, warn, LogExt};
@@ -27,6 +26,7 @@ use crate::sql;
 use crate::tools::{
     create_folder, delete_file, get_filesuffix_lc, read_file, time, write_file, TempPathGuard,
 };
+use crate::{e2ee, stock_str};
 
 mod key_transfer;
 mod transfer;
@@ -102,7 +102,14 @@ pub async fn imex(
 
     if let Err(err) = res.as_ref() {
         // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
-        error!(context, "IMEX failed to complete: {:#}", err);
+        if err
+            .to_string()
+            .contains("Backup too new, please update Delta Chat")
+        {
+            error!(context, "{}", stock_str::old_backup(context));
+        } else {
+            error!(context, "IMEX failed to complete: {:#}", err);
+        }
         context.emit_event(EventType::ImexProgress(0));
     } else {
         info!(context, "IMEX successfully completed");

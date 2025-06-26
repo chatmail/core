@@ -395,6 +395,9 @@ pub enum StockMessage {
     #[strum(props(fallback = "I left the group."))]
     MsgILeftGroup = 166,
 
+    #[strum(props(fallback = "The imported backup version is too old"))]
+    OldBackupVersion = 167,
+
     #[strum(props(fallback = "Messages are guaranteed to be end-to-end encrypted from now on."))]
     ChatProtectionEnabled = 170,
 
@@ -568,6 +571,10 @@ pub(crate) async fn image(context: &Context) -> String {
 /// Stock string: `Video`.
 pub(crate) async fn video(context: &Context) -> String {
     translated(context, StockMessage::Video).await
+}
+
+pub(crate) async fn old_backup(context: &Context) -> String {
+    translated(context, StockMessage::OldBackupVersion)
 }
 
 /// Stock string: `Audio`.
