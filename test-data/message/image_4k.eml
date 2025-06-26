@@ -15,14 +15,14 @@ This is a multi-part message in MIME format.
 Content-Type: text/plain; charset=utf-8
 Content-Transfer-Encoding: 7bit
 
-Here is a huge image
+Here is a 4k image
 
 --------------BIG_IMAGE_BOUNDARY
 Content-Type: image/png;
- name="huge_image.png"
+ name="4k_image.png"
 Content-Transfer-Encoding: base64
 Content-Disposition: attachment;
- filename="huge_image.png"
+ filename="4k_image.png"
 
 iVBORw0KGgoAAAANSUhEUgAADwAAAAhwCAIAAAAf3FwlAAAAEElEQVR4nAEFAPr/AP////8AAAAFCeiupAAAAABJRU5ErkJggg==
 --------------BIG_IMAGE_BOUNDARY--
