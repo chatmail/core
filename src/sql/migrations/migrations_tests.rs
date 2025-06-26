@@ -29,7 +29,7 @@ async fn test_clear_config_cache() -> anyhow::Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pgp_contacts_migration_autocrypt() -> Result<()> {
+async fn test_key_contacts_migration_autocrypt() -> Result<()> {
     let t = STOP_MIGRATIONS_AT
         .scope(131, async move { TestContext::new_alice().await })
         .await;
@@ -67,7 +67,7 @@ async fn test_pgp_contacts_migration_autocrypt() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pgp_contacts_migration_email1() -> Result<()> {
+async fn test_key_contacts_migration_email1() -> Result<()> {
     let t = STOP_MIGRATIONS_AT
         .scope(131, async move { TestContext::new_alice().await })
         .await;
@@ -97,7 +97,7 @@ async fn test_pgp_contacts_migration_email1() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pgp_contacts_migration_email2() -> Result<()> {
+async fn test_key_contacts_migration_email2() -> Result<()> {
     let t = STOP_MIGRATIONS_AT
         .scope(131, async move { TestContext::new_alice().await })
         .await;
@@ -126,7 +126,7 @@ async fn test_pgp_contacts_migration_email2() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_pgp_contacts_migration_verified() -> Result<()> {
+async fn test_key_contacts_migration_verified() -> Result<()> {
     let t = STOP_MIGRATIONS_AT
         .scope(131, async move { TestContext::new_alice().await })
         .await;

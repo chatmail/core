@@ -358,7 +358,7 @@ impl CommandApi {
     /// and migrated to the current version,
     /// then this function returns it.
     ///
-    /// This function is useful because the PGP-contacts migration could fail due to bugs
+    /// This function is useful because the key-contacts migration could fail due to bugs
     /// and then the account will not work properly.
     ///
     /// After opening an account, the UI should call this function

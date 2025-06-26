@@ -126,7 +126,7 @@ pub(crate) enum CantSendReason {
     /// Not a member of the chat.
     NotAMember,
 
-    /// State for 1:1 chat with a PGP-contact that does not have a key.
+    /// State for 1:1 chat with a key-contact that does not have a key.
     MissingKey,
 }
 
@@ -147,7 +147,7 @@ impl fmt::Display for CantSendReason {
                 write!(f, "mailing list does not have a know post address")
             }
             Self::NotAMember => write!(f, "not a member of the chat"),
-            Self::MissingKey => write!(f, "OpenPGP key is missing"),
+            Self::MissingKey => write!(f, "key is missing"),
         }
     }
 }
@@ -1336,7 +1336,7 @@ impl ChatId {
         {
             let contact = Contact::get_by_id(context, *contact_id).await?;
             let addr = contact.get_addr();
-            debug_assert!(contact.is_pgp_contact());
+            debug_assert!(contact.is_key_contact());
             let fingerprint = contact
                 .fingerprint()
                 .context("Contact does not have a fingerprint in encrypted chat")?;
@@ -1671,7 +1671,7 @@ impl Chat {
             let contact_ids = get_chat_contacts(context, self.id).await?;
             if let Some(contact_id) = contact_ids.first() {
                 let contact = Contact::get_by_id(context, *contact_id).await?;
-                if contact.is_pgp_contact() && contact.public_key(context).await?.is_none() {
+                if contact.is_key_contact() && contact.public_key(context).await?.is_none() {
                     return Ok(Some(reason));
                 }
             }
@@ -1861,7 +1861,7 @@ impl Chat {
                             true
                         } else {
                             let contact = Contact::get_by_id(context, *contact_id).await?;
-                            contact.is_pgp_contact()
+                            contact.is_key_contact()
                         }
                     } else {
                         true
@@ -3824,8 +3824,8 @@ pub(crate) async fn add_contact_to_chat_ex(
         "Cannot add SELF to broadcast."
     );
     ensure!(
-        chat.is_encrypted(context).await? == contact.is_pgp_contact(),
-        "Only PGP-contacts can be added to encrypted chats"
+        chat.is_encrypted(context).await? == contact.is_key_contact(),
+        "Only key-contacts can be added to encrypted chats"
     );
 
     if !chat.is_self_in_chat(context).await? {
@@ -4829,7 +4829,7 @@ async fn set_contacts_by_fingerprints(
     let chat = Chat::load_from_db(context, id).await?;
     ensure!(
         chat.is_encrypted(context).await?,
-        "Cannot add PGP-contacts to unencrypted chat {id}"
+        "Cannot add key-contacts to unencrypted chat {id}"
     );
     ensure!(
         chat.typ == Chattype::Broadcast,

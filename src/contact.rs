@@ -436,7 +436,7 @@ pub struct Contact {
     addr: String,
 
     /// OpenPGP key fingerprint.
-    /// Non-empty iff the contact is a pgp-contact,
+    /// Non-empty iff the contact is a key-contact,
     /// identified by this fingerprint.
     fingerprint: Option<String>,
 
@@ -795,7 +795,7 @@ impl Contact {
             .query_get_value(
                 "SELECT id FROM contacts
                  WHERE addr=?1 COLLATE NOCASE
-                 AND fingerprint='' -- Do not lookup PGP-contacts
+                 AND fingerprint='' -- Do not lookup key-contacts
                  AND id>?2 AND origin>=?3 AND (? OR blocked=?)",
                 (
                     &addr_normalized,
@@ -819,7 +819,7 @@ impl Contact {
     }
 
     /// Lookup a contact and create it if it does not exist yet.
-    /// If `fingerprint` is non-empty, a PGP-contact with this fingerprint is added / looked up.
+    /// If `fingerprint` is non-empty, a key-contact with this fingerprint is added / looked up.
     /// Otherwise, an email-contact with `addr` is added / looked up.
     /// A name and an "origin" can be given.
     ///
@@ -1384,9 +1384,9 @@ impl Contact {
         &self.addr
     }
 
-    /// Returns true if the contact is a PGP-contact.
+    /// Returns true if the contact is a key-contact.
     /// Otherwise it is an email contact.
-    pub fn is_pgp_contact(&self) -> bool {
+    pub fn is_key_contact(&self) -> bool {
         self.fingerprint.is_some()
     }
 
@@ -1403,9 +1403,9 @@ impl Contact {
 
     /// Returns OpenPGP public key of a contact.
     ///
-    /// Returns `None` if the contact is not a PGP-contact
+    /// Returns `None` if the contact is not a key-contact
     /// or if the key is not available.
-    /// It is possible for a PGP-contact to not have a key,
+    /// It is possible for a key-contact to not have a key,
     /// e.g. if only the fingerprint is known from a QR-code.
     pub async fn public_key(&self, context: &Context) -> Result<Option<SignedPublicKey>> {
         if self.id == ContactId::SELF {
@@ -1520,7 +1520,7 @@ impl Contact {
         } else if self.id == ContactId::DEVICE {
             return Ok(Some(chat::get_device_icon(context).await?));
         }
-        if show_fallback_icon && !self.id.is_special() && !self.is_pgp_contact() {
+        if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
             return Ok(Some(chat::get_email_contact_icon(context).await?));
         }
         if let Some(image_rel) = self.param.get(Param::ProfileImage) {
@@ -1918,7 +1918,7 @@ pub(crate) async fn mark_contact_id_as_verified(
                 |row| row.get(0),
             )?;
             if contact_fingerprint.is_empty() {
-                bail!("Non-PGP contact {contact_id} cannot be verified");
+                bail!("Non-key-contact {contact_id} cannot be verified");
             }
             if verifier_id != ContactId::SELF {
                 let verifier_fingerprint: String = transaction.query_row(
@@ -1928,7 +1928,7 @@ pub(crate) async fn mark_contact_id_as_verified(
                 )?;
                 if verifier_fingerprint.is_empty() {
                     bail!(
-                        "Contact {contact_id} cannot be verified by non-PGP contact {verifier_id}"
+                        "Contact {contact_id} cannot be verified by non-key-contact {verifier_id}"
                     );
                 }
             }

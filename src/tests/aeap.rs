@@ -1,9 +1,9 @@
 //! "AEAP" means "Automatic Email Address Porting"
-//! and was the predecessor of PGP-contacts
-//! (i.e. identifying contacts via the PGP fingerprint,
+//! and was the predecessor of key-contacts
+//! (i.e. identifying contacts via the fingerprint,
 //! while allowing the email address to change).
 //!
-//! These tests still pass because PGP-contacts
+//! These tests still pass because key-contacts
 //! allows messaging to continue after an email address change,
 //! just as AEAP did. Some other tests had to be removed.
 
@@ -236,7 +236,7 @@ async fn test_aeap_replay_attack() -> Result<()> {
 /// after address change.
 ///
 /// This test is redundant after introduction
-/// of PGP-contacts, but is kept to avoid deleting the tests.
+/// of key-contacts, but is kept to avoid deleting the tests.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_write_to_alice_after_aeap() -> Result<()> {
     let mut tcm = TestContextManager::new();

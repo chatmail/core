@@ -75,12 +75,12 @@ pub struct ReceivedMsg {
 ///
 /// This is done before looking up contact IDs
 /// so we know in advance whether to lookup
-/// PGP-contacts or email address contacts.
+/// key-contacts or email address contacts.
 ///
 /// Once this decision is made,
 /// it should not be changed so we
 /// don't assign the message to an encrypted
-/// group after looking up PGP-contacts
+/// group after looking up key-contacts
 /// or vice versa.
 #[derive(Debug)]
 enum ChatAssignment {
@@ -89,7 +89,7 @@ enum ChatAssignment {
 
     /// Group chat with a Group ID.
     ///
-    /// Lookup PGP contacts and
+    /// Lookup key-contacts and
     /// assign to encrypted group.
     GroupChat { grpid: String },
 
@@ -106,7 +106,7 @@ enum ChatAssignment {
     /// and no contact IDs should be looked
     /// up except the `from_id`
     /// which may be an email address contact
-    /// or a PGP-contact.
+    /// or a key-contact.
     MailingList,
 
     /// Group chat without a Group ID.
@@ -137,7 +137,7 @@ enum ChatAssignment {
     /// it does not matter.
     /// It is not possible to mix
     /// email address contacts
-    /// with PGP-contacts in a single 1:1 chat anyway.
+    /// with key-contacts in a single 1:1 chat anyway.
     OneOneChat,
 }
 
@@ -224,7 +224,7 @@ async fn get_to_and_past_contact_ids(
 ) -> Result<(Vec<Option<ContactId>>, Vec<Option<ContactId>>)> {
     // `None` means that the chat is encrypted,
     // but we were not able to convert the address
-    // to PGP-contact, e.g.
+    // to key-contact, e.g.
     // because there was no corresponding
     // Autocrypt-Gossip header.
     //
@@ -257,7 +257,7 @@ async fn get_to_and_past_contact_ids(
             // If we are going to assign a message to ad hoc group,
             // we can just convert the email addresses
             // to e-mail address contacts and don't need a `ChatId`
-            // to lookup PGP-contacts.
+            // to lookup key-contacts.
             None
         }
         ChatAssignment::ExistingChat { chat_id, .. } => Some(*chat_id),
@@ -294,7 +294,7 @@ async fn get_to_and_past_contact_ids(
         past_member_fingerprints = &[];
     }
 
-    let pgp_to_ids = add_or_lookup_pgp_contacts_by_address_list(
+    let pgp_to_ids = add_or_lookup_key_contacts_by_address_list(
         context,
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
@@ -308,7 +308,7 @@ async fn get_to_and_past_contact_ids(
             to_ids = pgp_to_ids;
 
             if let Some(chat_id) = chat_id {
-                past_ids = lookup_pgp_contacts_by_address_list(
+                past_ids = lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -316,7 +316,7 @@ async fn get_to_and_past_contact_ids(
                 )
                 .await?;
             } else {
-                past_ids = add_or_lookup_pgp_contacts_by_address_list(
+                past_ids = add_or_lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.past_members,
                     &mime_parser.gossiped_keys,
@@ -334,7 +334,7 @@ async fn get_to_and_past_contact_ids(
             let chat = Chat::load_from_db(context, *chat_id).await?;
             if chat.is_encrypted(context).await? {
                 to_ids = pgp_to_ids;
-                past_ids = lookup_pgp_contacts_by_address_list(
+                past_ids = lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -390,11 +390,11 @@ async fn get_to_and_past_contact_ids(
                 .is_some_and(|contact_id| contact_id.is_some())
             {
                 // There is a single recipient and we have
-                // mapped it to a PGP contact.
-                // This is a 1:1 PGP-chat.
+                // mapped it to a key contact.
+                // This is a 1:1 key-chat.
                 to_ids = pgp_to_ids
             } else if let Some(chat_id) = chat_id {
-                to_ids = lookup_pgp_contacts_by_address_list(
+                to_ids = lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.recipients,
                     to_member_fingerprints,
@@ -404,7 +404,7 @@ async fn get_to_and_past_contact_ids(
             } else {
                 let ids = match mime_parser.was_encrypted() {
                     true => {
-                        lookup_pgp_contacts_by_address_list(
+                        lookup_key_contacts_by_address_list(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
@@ -416,7 +416,7 @@ async fn get_to_and_past_contact_ids(
                 };
                 if chat_id.is_some()
                 || (mime_parser.was_encrypted() && !ids.contains(&None))
-                // Prefer creating PGP chats if there are any PGP contacts. At least this prevents
+                // Prefer creating PGP chats if there are any key-contacts. At least this prevents
                 // from replying unencrypted.
                 || ids
                     .iter()
@@ -642,7 +642,7 @@ pub(crate) async fn receive_imf_inner(
     // when a message is sent by Thunderbird.
     //
     // This can be also used to lookup
-    // PGP-contact by email address
+    // key-contact by email address
     // when receiving a private 1:1 reply
     // to a group chat message.
     let parent_message = get_parent_message(
@@ -1005,9 +1005,9 @@ pub(crate) async fn receive_imf_inner(
 ///   display names. We don't want the display name to change every time the user gets a new email from
 ///   a mailing list.
 ///
-/// * `find_pgp_contact_by_addr`: if true, we only know the e-mail address
+/// * `find_key_contact_by_addr`: if true, we only know the e-mail address
 ///   of the contact, but not the fingerprint,
-///   yet want to assign the message to some PGP-contact.
+///   yet want to assign the message to some key-contact.
 ///   This can happen during prefetch or when the message is partially downloaded.
 ///   If we get it wrong, the message will be placed into the correct
 ///   chat after downloading.
@@ -1018,7 +1018,7 @@ pub async fn from_field_to_contact_id(
     from: &SingleInfo,
     fingerprint: Option<&Fingerprint>,
     prevent_rename: bool,
-    find_pgp_contact_by_addr: bool,
+    find_key_contact_by_addr: bool,
 ) -> Result<Option<(ContactId, bool, Origin)>> {
     let fingerprint = fingerprint.as_ref().map(|fp| fp.hex()).unwrap_or_default();
     let display_name = if prevent_rename {
@@ -1037,16 +1037,16 @@ pub async fn from_field_to_contact_id(
         }
     };
 
-    if fingerprint.is_empty() && find_pgp_contact_by_addr {
+    if fingerprint.is_empty() && find_key_contact_by_addr {
         let addr_normalized = addr_normalize(&from_addr);
 
-        // Try to assign to some PGP-contact.
+        // Try to assign to some key-contact.
         if let Some((from_id, origin)) = context
             .sql
             .query_row_optional(
                 "SELECT id, origin FROM contacts
                  WHERE addr=?1 COLLATE NOCASE
-                 AND fingerprint<>'' -- Only PGP-contacts
+                 AND fingerprint<>'' -- Only key-contacts
                  AND id>?2 AND origin>=?3 AND blocked=?4
                  ORDER BY last_seen DESC
                  LIMIT 1",
@@ -2833,7 +2833,7 @@ async fn apply_group_changes(
         // rather than old display name.
         // This could be fixed by looking up the contact with the highest
         // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
-        removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat_id)).await?;
+        removed_id = lookup_key_contact_by_address(context, removed_addr, Some(chat_id)).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
@@ -2854,7 +2854,7 @@ async fn apply_group_changes(
             // may contain display name of the wrong contact.
             let fingerprint = key.dc_fingerprint().hex();
             if let Some(contact_id) =
-                lookup_pgp_contact_by_fingerprint(context, &fingerprint).await?
+                lookup_key_contact_by_fingerprint(context, &fingerprint).await?
             {
                 added_id = Some(contact_id);
                 better_msg =
@@ -3582,7 +3582,7 @@ async fn add_or_lookup_contacts_by_address_list(
 }
 
 /// Looks up contact IDs from the database given the list of recipients.
-async fn add_or_lookup_pgp_contacts_by_address_list(
+async fn add_or_lookup_key_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
     gossiped_keys: &HashMap<String, SignedPublicKey>,
@@ -3627,11 +3627,11 @@ async fn add_or_lookup_pgp_contacts_by_address_list(
     Ok(contact_ids)
 }
 
-/// Looks up a PGP-contact by email address.
+/// Looks up a key-contact by email address.
 ///
-/// If provided, `chat_id` must be an encrypted chat ID that has PGP-contacts inside.
+/// If provided, `chat_id` must be an encrypted chat ID that has key-contacts inside.
 /// Otherwise the function searches in all contacts, returning the recently seen one.
-async fn lookup_pgp_contact_by_address(
+async fn lookup_key_contact_by_address(
     context: &Context,
     addr: &str,
     chat_id: Option<ChatId>,
@@ -3689,13 +3689,13 @@ async fn lookup_pgp_contact_by_address(
     Ok(contact_id)
 }
 
-async fn lookup_pgp_contact_by_fingerprint(
+async fn lookup_key_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
     debug_assert!(!fingerprint.is_empty());
     if fingerprint.is_empty() {
-        // Avoid accidentally looking up a non-PGP contact.
+        // Avoid accidentally looking up a non-key-contact.
         return Ok(None);
     }
     if let Some(contact_id) = context
@@ -3723,7 +3723,7 @@ async fn lookup_pgp_contact_by_fingerprint(
     }
 }
 
-/// Looks up PGP-contacts by email addresses.
+/// Looks up key-contacts by email addresses.
 ///
 /// `fingerprints` may be empty.
 /// This is used as a fallback when email addresses are available,
@@ -3738,7 +3738,7 @@ async fn lookup_pgp_contact_by_fingerprint(
 /// is the same as the number of addresses in the header
 /// and it is possible to find corresponding
 /// `Chat-Group-Member-Timestamps` items.
-async fn lookup_pgp_contacts_by_address_list(
+async fn lookup_key_contacts_by_address_list(
     context: &Context,
     address_list: &[SingleInfo],
     fingerprints: &[Fingerprint],
@@ -3773,7 +3773,7 @@ async fn lookup_pgp_contacts_by_address_list(
                 contact_ids.push(None);
             }
         } else {
-            let contact_id = lookup_pgp_contact_by_address(context, addr, chat_id).await?;
+            let contact_id = lookup_key_contact_by_address(context, addr, chat_id).await?;
             contact_ids.push(contact_id);
         }
     }

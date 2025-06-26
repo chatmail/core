@@ -743,7 +743,7 @@ impl TestContext {
     pub async fn add_or_lookup_email_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_email_contact_id(other).await;
         let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
-        debug_assert_eq!(contact.is_pgp_contact(), false);
+        debug_assert_eq!(contact.is_key_contact(), false);
         contact
     }
 
@@ -801,11 +801,11 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
-    /// Returns 1:1 [`Chat`] with another account PGP-contact.
+    /// Returns 1:1 [`Chat`] with another account key-contact.
     /// Panics if the chat does not exist.
     ///
     /// This first creates a contact, but does not import the key,
-    /// so may create a PGP-contact with a fingerprint
+    /// so may create a key-contact with a fingerprint
     /// but without the key.
     pub async fn get_chat(&self, other: &TestContext) -> Chat {
         let contact = self.add_or_lookup_contact_id(other).await;
@@ -953,8 +953,8 @@ impl TestContext {
             "device-talk".to_string()
         } else if sel_chat.get_type() == Chattype::Single && !members.is_empty() {
             let contact = Contact::get_by_id(self, members[0]).await.unwrap();
-            if contact.is_pgp_contact() {
-                format!("PGP {}", contact.get_addr())
+            if contact.is_key_contact() {
+                format!("KEY {}", contact.get_addr())
             } else {
                 contact.get_addr().to_string()
             }

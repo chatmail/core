@@ -1222,7 +1222,7 @@ async fn test_self_is_verified() -> Result<()> {
     assert_eq!(contact.is_verified(&alice).await?, true);
     assert!(contact.is_profile_verified(&alice).await?);
     assert!(contact.get_verifier_id(&alice).await?.is_none());
-    assert!(contact.is_pgp_contact());
+    assert!(contact.is_key_contact());
 
     let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
     assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
@@ -1230,9 +1230,9 @@ async fn test_self_is_verified() -> Result<()> {
     Ok(())
 }
 
-/// Tests that importing a vCard with a key creates a PGP-contact.
+/// Tests that importing a vCard with a key creates a key-contact.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_vcard_creates_pgp_contact() -> Result<()> {
+async fn test_vcard_creates_key_contact() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -1242,7 +1242,7 @@ async fn test_vcard_creates_pgp_contact() -> Result<()> {
     assert_eq!(contact_ids.len(), 1);
     let contact_id = contact_ids.first().unwrap();
     let contact = Contact::get_by_id(alice, *contact_id).await?;
-    assert!(contact.is_pgp_contact());
+    assert!(contact.is_key_contact());
 
     Ok(())
 }

@@ -355,7 +355,7 @@ async fn test_member_add_remove() -> Result<()> {
     for contact_id in fiona_contact_ids {
         let contact = Contact::get_by_id(&fiona, contact_id).await?;
         assert_ne!(contact.get_name(), "robert");
-        assert!(contact.is_pgp_contact());
+        assert!(contact.is_key_contact());
     }
 
     tcm.section("Alice removes Bob from the chat.");
@@ -4241,7 +4241,7 @@ async fn test_oneone_gossip() -> Result<()> {
     let sent_msg3 = alice.send_text(alice_chat.id, "Hello again, Bob!").await;
 
     // This message has no Autocrypt-Gossip header,
-    // but should still be assigned to PGP-contact.
+    // but should still be assigned to key-contact.
     tcm.section("Alice receives a copy of another message on second device");
     let rcvd_msg3 = alice2.recv_msg(&sent_msg3).await;
     assert_eq!(rcvd_msg3.get_showpadlock(), true);
@@ -4266,7 +4266,7 @@ async fn test_no_email_contacts_in_group_chats() -> Result<()> {
     let pgp_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
     let email_charlie_contact_id = alice.add_or_lookup_email_contact_id(charlie).await;
 
-    // PGP-contact should be added successfully.
+    // key-contact should be added successfully.
     add_contact_to_chat(alice, chat_id, pgp_bob_contact_id).await?;
 
     // Adding email-contact should fail.
@@ -4276,9 +4276,9 @@ async fn test_no_email_contacts_in_group_chats() -> Result<()> {
     Ok(())
 }
 
-/// Tests that PGP-contacts cannot be added to ad hoc groups.
+/// Tests that key-contacts cannot be added to ad hoc groups.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
+async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -4305,7 +4305,7 @@ async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
     // Email-contact should be added successfully.
     add_contact_to_chat(alice, chat_id, email_bob_contact_id).await?;
 
-    // Adding PGP-contact should fail.
+    // Adding key-contact should fail.
     let res = add_contact_to_chat(alice, chat_id, pgp_charlie_contact_id).await;
     assert!(res.is_err());
 
