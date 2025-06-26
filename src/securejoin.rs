@@ -534,7 +534,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     };
 
     let Some(contact_fingerprint) = contact.fingerprint() else {
-        // Not a PGP-contact, should not happen.
+        // Not a key-contact, should not happen.
         warn!(context, "Contact does not have a fingerprint.");
         return Ok(HandshakeMessage::Ignore);
     };

@@ -211,7 +211,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     // Alice should not yet have Bob verified
     let contact_bob = alice.add_or_lookup_contact_no_key(&bob).await;
     let contact_bob_id = contact_bob.id;
-    assert_eq!(contact_bob.is_pgp_contact(), true);
+    assert_eq!(contact_bob.is_key_contact(), true);
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), false);
     assert_eq!(contact_bob.get_authname(), "");
 

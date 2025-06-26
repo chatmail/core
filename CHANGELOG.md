@@ -289,8 +289,8 @@
 
 - Use vCard in TestContext.add_or_lookup_contact().
 - Remove test_group_with_removed_message_id.
-- Use add_or_lookup_email_contact() in get_chat().
-- Use add_or_lookup_email_contact in test_setup_contact_ex.
+- Use add_or_lookup_address_contact() in get_chat().
+- Use add_or_lookup_address_contact in test_setup_contact_ex.
 - Use vCards more in Python tests.
 - Use TestContextManager in more tests.
 - Use vCards to create contacts in more Rust tests.

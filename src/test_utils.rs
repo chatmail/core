@@ -722,7 +722,7 @@ impl TestContext {
     }
 
     /// Returns the [`ContactId`] for the other [`TestContext`], creating a contact if necessary.
-    pub async fn add_or_lookup_email_contact_id(&self, other: &TestContext) -> ContactId {
+    pub async fn add_or_lookup_address_contact_id(&self, other: &TestContext) -> ContactId {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         // MailinglistAddress is the lowest allowed origin, we'd prefer to not modify the
@@ -740,10 +740,10 @@ impl TestContext {
     }
 
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
-    pub async fn add_or_lookup_email_contact(&self, other: &TestContext) -> Contact {
-        let contact_id = self.add_or_lookup_email_contact_id(other).await;
+    pub async fn add_or_lookup_address_contact(&self, other: &TestContext) -> Contact {
+        let contact_id = self.add_or_lookup_address_contact_id(other).await;
         let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
-        debug_assert_eq!(contact.is_pgp_contact(), false);
+        debug_assert_eq!(contact.is_key_contact(), false);
         contact
     }
 
@@ -780,14 +780,14 @@ impl TestContext {
         Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
     }
 
-    /// Returns 1:1 [`Chat`] with another account email contact.
+    /// Returns 1:1 [`Chat`] with another account address-contact.
     /// Panics if it doesn't exist.
     /// May return a blocked chat.
     ///
     /// This first creates a contact using the configured details on the other account, then
     /// gets the 1:1 chat with this contact.
     pub async fn get_email_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_email_contact(other).await;
+        let contact = self.add_or_lookup_address_contact(other).await;
 
         let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact.id)
             .await
@@ -801,11 +801,11 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
-    /// Returns 1:1 [`Chat`] with another account PGP-contact.
+    /// Returns 1:1 [`Chat`] with another account key-contact.
     /// Panics if the chat does not exist.
     ///
     /// This first creates a contact, but does not import the key,
-    /// so may create a PGP-contact with a fingerprint
+    /// so may create a key-contact with a fingerprint
     /// but without the key.
     pub async fn get_chat(&self, other: &TestContext) -> Chat {
         let contact = self.add_or_lookup_contact_id(other).await;
@@ -838,7 +838,7 @@ impl TestContext {
     ///
     /// This function can be used to create unencrypted chats.
     pub async fn create_email_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_email_contact(other).await;
+        let contact = self.add_or_lookup_address_contact(other).await;
         let chat_id = ChatId::create_for_contact(self, contact.id).await.unwrap();
 
         Chat::load_from_db(self, chat_id).await.unwrap()
@@ -953,8 +953,8 @@ impl TestContext {
             "device-talk".to_string()
         } else if sel_chat.get_type() == Chattype::Single && !members.is_empty() {
             let contact = Contact::get_by_id(self, members[0]).await.unwrap();
-            if contact.is_pgp_contact() {
-                format!("PGP {}", contact.get_addr())
+            if contact.is_key_contact() {
+                format!("KEY {}", contact.get_addr())
             } else {
                 contact.get_addr().to_string()
             }

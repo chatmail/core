@@ -37,7 +37,7 @@ async fn test_chat_info() {
         // We need to do it like this so that the test passes on Windows:
         serde_json::to_string(
             t.get_blobdir()
-                .join("9a17b32ad5ff71df91f7cfda9a62bb2.png")
+                .join("4138c52e5bc1c576cda7dd44d088c07.png")
                 .to_str()
                 .unwrap()
         )
@@ -355,7 +355,7 @@ async fn test_member_add_remove() -> Result<()> {
     for contact_id in fiona_contact_ids {
         let contact = Contact::get_by_id(&fiona, contact_id).await?;
         assert_ne!(contact.get_name(), "robert");
-        assert!(contact.is_pgp_contact());
+        assert!(contact.is_key_contact());
     }
 
     tcm.section("Alice removes Bob from the chat.");
@@ -4241,7 +4241,7 @@ async fn test_oneone_gossip() -> Result<()> {
     let sent_msg3 = alice.send_text(alice_chat.id, "Hello again, Bob!").await;
 
     // This message has no Autocrypt-Gossip header,
-    // but should still be assigned to PGP-contact.
+    // but should still be assigned to key-contact.
     tcm.section("Alice receives a copy of another message on second device");
     let rcvd_msg3 = alice2.recv_msg(&sent_msg3).await;
     assert_eq!(rcvd_msg3.get_showpadlock(), true);
@@ -4254,31 +4254,31 @@ async fn test_oneone_gossip() -> Result<()> {
     Ok(())
 }
 
-/// Tests that email contacts cannot be added to encrypted group chats.
+/// Tests that address-contacts cannot be added to encrypted group chats.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_email_contacts_in_group_chats() -> Result<()> {
+async fn test_no_address_contacts_in_group_chats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
 
     let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group chat").await?;
-    let pgp_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
-    let email_charlie_contact_id = alice.add_or_lookup_email_contact_id(charlie).await;
+    let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
 
-    // PGP-contact should be added successfully.
-    add_contact_to_chat(alice, chat_id, pgp_bob_contact_id).await?;
+    // key-contact should be added successfully.
+    add_contact_to_chat(alice, chat_id, bob_key_contact_id).await?;
 
-    // Adding email-contact should fail.
-    let res = add_contact_to_chat(alice, chat_id, email_charlie_contact_id).await;
+    // Adding address-contact should fail.
+    let res = add_contact_to_chat(alice, chat_id, charlie_address_contact_id).await;
     assert!(res.is_err());
 
     Ok(())
 }
 
-/// Tests that PGP-contacts cannot be added to ad hoc groups.
+/// Tests that key-contacts cannot be added to ad hoc groups.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
+async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -4299,14 +4299,14 @@ async fn test_no_pgp_contacts_in_adhoc_chats() -> Result<()> {
     .unwrap()
     .chat_id;
 
-    let email_bob_contact_id = alice.add_or_lookup_email_contact_id(bob).await;
-    let pgp_charlie_contact_id = alice.add_or_lookup_contact_id(charlie).await;
+    let bob_address_contact_id = alice.add_or_lookup_address_contact_id(bob).await;
+    let charlie_key_contact_id = alice.add_or_lookup_contact_id(charlie).await;
 
-    // Email-contact should be added successfully.
-    add_contact_to_chat(alice, chat_id, email_bob_contact_id).await?;
+    // Address-contact should be added successfully.
+    add_contact_to_chat(alice, chat_id, bob_address_contact_id).await?;
 
-    // Adding PGP-contact should fail.
-    let res = add_contact_to_chat(alice, chat_id, pgp_charlie_contact_id).await;
+    // Adding key-contact should fail.
+    let res = add_contact_to_chat(alice, chat_id, charlie_key_contact_id).await;
     assert!(res.is_err());
 
     Ok(())

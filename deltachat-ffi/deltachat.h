@@ -3841,7 +3841,7 @@ int             dc_chat_is_protected         (const dc_chat_t* chat);
 /**
  * Check if the chat is encrypted.
  *
- * 1:1 chats with PGP-contacts and group chats with PGP-contacts
+ * 1:1 chats with key-contacts and group chats with key-contacts
  * are encrypted.
  * 1:1 chats with emails contacts and ad-hoc groups
  * created for email threads are not encrypted.

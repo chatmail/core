@@ -1238,11 +1238,11 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
         let start = Instant::now();
-        sql.execute_migration_transaction(|t| migrate_pgp_contacts(context, t), migration_version)
+        sql.execute_migration_transaction(|t| migrate_key_contacts(context, t), migration_version)
             .await?;
         info!(
             context,
-            "PGP contacts migration took {:?} in total.",
+            "key-contacts migration took {:?} in total.",
             start.elapsed()
         );
     }
@@ -1264,11 +1264,11 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     Ok((update_icons, disable_server_delete, recode_avatar))
 }
 
-fn migrate_pgp_contacts(
+fn migrate_key_contacts(
     context: &Context,
     transaction: &mut rusqlite::Transaction<'_>,
 ) -> std::result::Result<(), anyhow::Error> {
-    info!(context, "Starting PGP contact transition.");
+    info!(context, "Starting key-contact transition.");
 
     // =============================== Step 1: ===============================
     //                              Alter tables
@@ -1304,7 +1304,7 @@ fn migrate_pgp_contacts(
         SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates
          WHERE secondary_verified_key_fingerprint IS NOT NULL AND secondary_verified_key IS NOT NULL;",
     )
-    .context("Creating PGP-contact tables")?;
+    .context("Creating key-contact tables")?;
 
     let Some(self_addr): Option<String> = transaction
         .query_row(
@@ -1317,7 +1317,7 @@ fn migrate_pgp_contacts(
     else {
         info!(
             context,
-            "Not yet configured, no need to migrate PGP contacts"
+            "Not yet configured, no need to migrate key-contacts"
         );
         return Ok(());
     };
@@ -1327,14 +1327,14 @@ fn migrate_pgp_contacts(
     // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
     // one from the secondary verified key fingerprint.
     // In the process, build maps from old contact id to new contact id:
-    // one that maps to Autocrypt PGP-contact, one that maps to verified PGP-contact.
-    let mut autocrypt_pgp_contacts: BTreeMap<u32, u32> = BTreeMap::new();
-    let mut autocrypt_pgp_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
-    let mut verified_pgp_contacts: BTreeMap<u32, u32> = BTreeMap::new();
+    // one that maps to Autocrypt key-contact, one that maps to verified key-contact.
+    let mut autocrypt_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut autocrypt_key_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut verified_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
     {
         // This maps from the verified contact to the original contact id of the verifier.
-        // It can't map to the verified pgp contact id, because at the time of constructing
-        // this map, not all pgp contacts are in the database.
+        // It can't map to the verified key contact id, because at the time of constructing
+        // this map, not all key-contacts are in the database.
         let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
 
         let mut load_contacts_stmt = transaction
@@ -1351,7 +1351,7 @@ fn migrate_pgp_contacts(
             )
             .context("Step 2")?;
 
-        let all_email_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
+        let all_address_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
             .query_map((), |row| {
                 let id: i64 = row.get(0)?;
                 let name: String = row.get(1)?;
@@ -1416,7 +1416,7 @@ fn migrate_pgp_contacts(
             .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")
             .context("Step 6")?;
 
-        for row in all_email_contacts? {
+        for row in all_address_contacts? {
             let (
                 original_id,
                 name,
@@ -1490,9 +1490,9 @@ fn migrate_pgp_contacts(
             // prefer_encrypt == 20 would mean EncryptPreference::Reset,
             // i.e. we shouldn't encrypt if possible.
             if prefer_encrypt != 20 {
-                autocrypt_pgp_contacts.insert(original_id.try_into().context("Step 11")?, new_id);
+                autocrypt_key_contacts.insert(original_id.try_into().context("Step 11")?, new_id);
             } else {
-                autocrypt_pgp_contacts_with_reset_peerstate
+                autocrypt_key_contacts_with_reset_peerstate
                     .insert(original_id.try_into().context("Step 12")?, new_id);
             }
 
@@ -1500,7 +1500,7 @@ fn migrate_pgp_contacts(
                 continue;
             };
             let new_id = insert_contact(verified_key).context("Step 13")?;
-            verified_pgp_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
+            verified_key_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
             // If the original verifier is unknown, we represent this in the database
             // by putting `new_id` into the place of the verifier,
             // i.e. we say that this contact verified itself.
@@ -1519,12 +1519,12 @@ fn migrate_pgp_contacts(
         }
         info!(
             context,
-            "Created PGP contacts identified by autocrypt key: {autocrypt_pgp_contacts:?}"
+            "Created key-contacts identified by autocrypt key: {autocrypt_key_contacts:?}"
         );
-        info!(context, "Created PGP contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_pgp_contacts_with_reset_peerstate:?}");
+        info!(context, "Created key-contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_key_contacts_with_reset_peerstate:?}");
         info!(
             context,
-            "Created PGP contacts identified by verified key: {verified_pgp_contacts:?}"
+            "Created key-contacts identified by verified key: {verified_key_contacts:?}"
         );
 
         for (&new_contact, &verifier_original_contact) in &verifications {
@@ -1535,10 +1535,10 @@ fn migrate_pgp_contacts(
             } else {
                 // `verifications` contains the original contact id.
                 // We need to get the new, verified-pgp-identified contact id.
-                match verified_pgp_contacts.get(&verifier_original_contact) {
+                match verified_key_contacts.get(&verifier_original_contact) {
                     Some(v) => *v,
                     None => {
-                        warn!(context, "Couldn't find PGP-contact for {verifier_original_contact} who verified {new_contact}");
+                        warn!(context, "Couldn't find key-contact for {verifier_original_contact} who verified {new_contact}");
                         continue;
                     }
                 }
@@ -1596,18 +1596,18 @@ fn migrate_pgp_contacts(
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or_default()
             != 0;
-        let map_to_pgp_contact = |old_member: &u32| {
+        let map_to_key_contact = |old_member: &u32| {
             (
                 *old_member,
-                autocrypt_pgp_contacts
+                autocrypt_key_contacts
                     .get(old_member)
                     .or_else(|| {
                         // For chatmail servers,
                         // we send encrypted even if the peerstate is reset,
                         // because an unencrypted message likely won't arrive.
-                        // This is the same behavior as before PGP-contacts migration.
+                        // This is the same behavior as before key-contacts migration.
                         if is_chatmail {
-                            autocrypt_pgp_contacts_with_reset_peerstate.get(old_member)
+                            autocrypt_key_contacts_with_reset_peerstate.get(old_member)
                         } else {
                             None
                         }
@@ -1629,7 +1629,7 @@ fn migrate_pgp_contacts(
                 .collect::<Result<Vec<u32>, rusqlite::Error>>()
                 .context("Step 26")?;
 
-            let mut keep_email_contacts = |reason: &str| {
+            let mut keep_address_contacts = |reason: &str| {
                 info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}");
                 for m in &old_members {
                     orphaned_contacts.remove(m);
@@ -1637,11 +1637,11 @@ fn migrate_pgp_contacts(
             };
             let old_and_new_members: Vec<(u32, Option<u32>)> = match typ {
                 // 1:1 chats retain:
-                // - email-contact if peerstate is in the "reset" state,
-                //   or if there is no PGP-contact that has the right email address.
-                // - PGP-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
-                // - PGP-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
-                //   Since the autocrypt and verified PGP contact are identital in this case, we can add the AutocryptPgp contact,
+                // - address-contact if peerstate is in the "reset" state,
+                //   or if there is no key-contact that has the right email address.
+                // - key-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
+                // - key-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
+                //   Since the autocrypt and verified key-contact are identital in this case, we can add the Autocrypt key-contact,
                 //   and the effect will be the same.
                 100 => {
                     let Some(old_member) = old_members.first() else {
@@ -1649,8 +1649,8 @@ fn migrate_pgp_contacts(
                         continue;
                     };
 
-                    let (_, Some(new_contact)) = map_to_pgp_contact(old_member) else {
-                        keep_email_contacts("No peerstate, or peerstate in 'reset' state");
+                    let (_, Some(new_contact)) = map_to_key_contact(old_member) else {
+                        keep_address_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
                     if !addr_cmp_stmt
@@ -1658,11 +1658,11 @@ fn migrate_pgp_contacts(
                     {
                         // Unprotect this 1:1 chat if it was protected.
                         //
-                        // Otherwise we get protected chat with email-contact.
+                        // Otherwise we get protected chat with address-contact.
                         transaction
                             .execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))?;
 
-                        keep_email_contacts("PGP contact has different email");
+                        keep_address_contacts("key contact has different email");
                         continue;
                     }
                     vec![(*old_member, Some(new_contact))]
@@ -1673,26 +1673,26 @@ fn migrate_pgp_contacts(
                     if grpid.is_empty() {
                         // Ad-hoc group that has empty Chat-Group-ID
                         // because it was created in response to receiving a non-chat email.
-                        keep_email_contacts("Empty chat-Group-ID");
+                        keep_address_contacts("Empty chat-Group-ID");
                         continue;
                     } else if protected == 1 {
                         old_members
                             .iter()
                             .map(|old_member| {
-                                (*old_member, verified_pgp_contacts.get(old_member).copied())
+                                (*old_member, verified_key_contacts.get(old_member).copied())
                             })
                             .collect()
                     } else {
                         old_members
                             .iter()
-                            .map(map_to_pgp_contact)
+                            .map(map_to_key_contact)
                             .collect::<Vec<(u32, Option<u32>)>>()
                     }
                 }
 
                 // Mailinglist
                 140 => {
-                    keep_email_contacts("Mailinglist");
+                    keep_address_contacts("Mailinglist");
                     continue;
                 }
 
@@ -1702,13 +1702,13 @@ fn migrate_pgp_contacts(
                     .map(|original| {
                         (
                             *original,
-                            autocrypt_pgp_contacts
+                            autocrypt_key_contacts
                                 .get(original)
                                 // There will be no unencrypted broadcast lists anymore,
                                 // so, if a peerstate is reset,
                                 // the best we can do is encrypting to this key regardless.
                                 .or_else(|| {
-                                    autocrypt_pgp_contacts_with_reset_peerstate.get(original)
+                                    autocrypt_key_contacts_with_reset_peerstate.get(original)
                                 })
                                 .copied(),
                         )
@@ -1726,7 +1726,7 @@ fn migrate_pgp_contacts(
                 transaction
                     .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
                     .context("Step 26.1")?;
-                keep_email_contacts("Group contains contact without peerstate");
+                keep_address_contacts("Group contains contact without peerstate");
                 continue;
             }
 
@@ -1737,7 +1737,7 @@ fn migrate_pgp_contacts(
                 .join(" ");
             info!(
                 context,
-                "Migrating chat {chat_id} to PGP contacts: {human_readable_transitions}"
+                "Migrating chat {chat_id} to key-contacts: {human_readable_transitions}"
             );
 
             for (old_member, new_member) in old_and_new_members {
@@ -1778,7 +1778,7 @@ fn migrate_pgp_contacts(
                         update_member_stmt.execute((new_member, old_member, chat_id))?;
                     }
                 } else {
-                    info!(context, "Old member {old_member} in chat {chat_id} can't be upgraded to PGP-contact, removing them");
+                    info!(context, "Old member {old_member} in chat {chat_id} can't be upgraded to key-contact, removing them");
                     transaction
                         .execute(
                             "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
@@ -1843,14 +1843,14 @@ fn migrate_pgp_contacts(
         for msg in encrypted_msgs {
             let msg = msg.context("Step 34")?;
 
-            let new_from_id = *autocrypt_pgp_contacts
+            let new_from_id = *autocrypt_key_contacts
                 .get(&msg.from_id)
-                .or_else(|| autocrypt_pgp_contacts_with_reset_peerstate.get(&msg.from_id))
+                .or_else(|| autocrypt_key_contacts_with_reset_peerstate.get(&msg.from_id))
                 .unwrap_or(&msg.from_id);
 
-            let new_to_id = *autocrypt_pgp_contacts
+            let new_to_id = *autocrypt_key_contacts
                 .get(&msg.to_id)
-                .or_else(|| autocrypt_pgp_contacts_with_reset_peerstate.get(&msg.to_id))
+                .or_else(|| autocrypt_key_contacts_with_reset_peerstate.get(&msg.to_id))
                 .unwrap_or(&msg.to_id);
 
             rewrite_msg_stmt
@@ -1859,7 +1859,7 @@ fn migrate_pgp_contacts(
         }
         info!(
             context,
-            "Rewriting msgs to PGP contacts took {:?}.",
+            "Rewriting msgs to key-contacts took {:?}.",
             start.elapsed()
         );
     }

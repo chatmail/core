@@ -2588,7 +2588,7 @@ Second thread."#;
     assert_eq!(bob_second_reply.chat_id, bob_second_msg.chat_id);
 
     // Alice adds Fiona to both ad hoc groups.
-    let alice_fiona_contact = alice.add_or_lookup_email_contact(&fiona).await;
+    let alice_fiona_contact = alice.add_or_lookup_address_contact(&fiona).await;
     let alice_fiona_contact_id = alice_fiona_contact.id;
 
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
@@ -3249,7 +3249,7 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     Ok(())
 }
 
-/// Tests that a message from Thunderbird with an Autocrypt header is assigned to the PGP-contact.
+/// Tests that a message from Thunderbird with an Autocrypt header is assigned to the key-contact.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_thunderbird_autocrypt() -> Result<()> {
     let t = TestContext::new_bob().await;
@@ -3266,7 +3266,7 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
     let from_id = message.from_id;
 
     let from_contact = Contact::get_by_id(&t, from_id).await?;
-    assert!(from_contact.is_pgp_contact());
+    assert!(from_contact.is_key_contact());
 
     Ok(())
 }
@@ -3280,7 +3280,7 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
     //
     // Autocrypt header is used to check the signature.
     //
-    // At the time of the writing (2025-04-30, introduction of PGP-contacts)
+    // At the time of the writing (2025-04-30, introduction of key-contacts)
     // signature checking does not work without the Autocrypt header.
     let raw =
         include_bytes!("../../test-data/message/thunderbird_encrypted_signed_with_pubkey.eml");
@@ -3296,7 +3296,7 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
 
     let alice_id = message.from_id;
     let alice_contact = Contact::get_by_id(&t, alice_id).await?;
-    assert!(alice_contact.is_pgp_contact());
+    assert!(alice_contact.is_key_contact());
 
     // The message without the Autocrypt header
     // cannot be assigned to the contact even if it
@@ -3317,8 +3317,8 @@ async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
 
     let alice_email_id = message.from_id;
     assert_ne!(alice_email_id, alice_id);
-    let alice_email_contact = Contact::get_by_id(&t, alice_email_id).await?;
-    assert!(!alice_email_contact.is_pgp_contact());
+    let alice_address_contact = Contact::get_by_id(&t, alice_email_id).await?;
+    assert!(!alice_address_contact.is_key_contact());
 
     Ok(())
 }
@@ -3371,10 +3371,10 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
     let msg = Message::load_from_db(bob, msg_id).await?;
     assert!(!msg.get_showpadlock());
 
-    // The message should arrive as email-contact
+    // The message should arrive as address-contact
     let alice_id = msg.from_id;
     let alice_contact = Contact::get_by_id(bob, alice_id).await?;
-    assert!(!alice_contact.is_pgp_contact());
+    assert!(!alice_contact.is_key_contact());
 
     let raw = include_bytes!("../../test-data/message/thunderbird_signed_unencrypted.eml");
     let received_msg = receive_imf(bob, raw, false).await?.unwrap();
@@ -3386,7 +3386,7 @@ async fn test_thunderbird_autocrypt_unencrypted() -> Result<()> {
 
     let alice_id = msg.from_id;
     let alice_contact = Contact::get_by_id(bob, alice_id).await?;
-    assert!(!alice_contact.is_pgp_contact());
+    assert!(!alice_contact.is_key_contact());
 
     Ok(())
 }
@@ -5055,10 +5055,10 @@ PGh0bWw+PGJvZHk+dGV4dDwvYm9keT5kYXRh
     Ok(())
 }
 
-/// Tests that email contacts are not added into a group
-/// with PGP-contacts by a plaintext reply.
+/// Tests that address-contacts are not added into a group
+/// with key-contacts by a plaintext reply.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_email_contact_added_into_group() -> Result<()> {
+async fn test_no_address_contact_added_into_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -5120,7 +5120,7 @@ async fn test_no_email_contact_added_into_group() -> Result<()> {
 /// if the message has a `Chat-Group-ID` even
 /// if there are only two members in a group.
 ///
-/// Since PGP-contacts introduction all groups are encrypted,
+/// Since key-contacts introduction all groups are encrypted,
 /// but old versions running on other devices might still
 /// create unencrypted groups.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -5151,14 +5151,14 @@ async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
 }
 
 /// Tests that large messages are assigned
-/// to non-PGP contacts if the type is not `multipart/encrypted`.
+/// to non-key-contacts if the type is not `multipart/encrypted`.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_partial_download_pgp_contact_lookup() -> Result<()> {
+async fn test_partial_download_key_contact_lookup() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    // Create two chats with Alice, both with PGP-contact and email address contact.
+    // Create two chats with Alice, both with key-contact and email address contact.
     let encrypted_chat = bob.create_chat(alice).await;
     let unencrypted_chat = bob.create_email_chat(alice).await;
 

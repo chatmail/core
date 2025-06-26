@@ -310,7 +310,7 @@ impl MimeFactory {
                                             } else if id == ContactId::SELF {
                                                 member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                debug_assert!(member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                                debug_assert!(member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
                                             }
                                         }
                                         member_timestamps.push(add_timestamp);
@@ -361,7 +361,7 @@ impl MimeFactory {
                                                 // if we are leaving the group.
                                                 past_member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a PGP-contact, all other past members should be PGP-contacts too");
+                                                debug_assert!(past_member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
                                             }
                                         }
                                     }
@@ -486,7 +486,7 @@ impl MimeFactory {
         let timestamp = create_smeared_timestamp(context);
 
         let addr = contact.get_addr().to_string();
-        let encryption_keys = if contact.is_pgp_contact() {
+        let encryption_keys = if contact.is_key_contact() {
             if let Some(key) = contact.public_key(context).await? {
                 Some(vec![(addr.clone(), key)])
             } else {
@@ -1357,7 +1357,7 @@ impl MimeFactory {
                 }
                 SystemMessage::MemberAddedToGroup => {
                     // TODO: lookup the contact by ID rather than email address.
-                    // We are adding PGP contacts, the cannot be looked up by address.
+                    // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     placeholdertext =
                         Some(stock_str::msg_add_member_remote(context, email_to_add).await);

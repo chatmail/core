@@ -32,12 +32,12 @@ pub struct FullChat {
     is_protected: bool,
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
-    /// and all contacts in the chat are "pgp-contacts",
+    /// and all contacts in the chat are "key-contacts",
     /// i.e. identified by the PGP key fingerprint.
     ///
     /// False if the chat is unencrypted.
     /// This means that all messages in the chat are unencrypted,
-    /// and all contacts in the chat are "email-contacts",
+    /// and all contacts in the chat are "address-contacts",
     /// i.e. identified by the email address.
     /// The UI should mark this chat e.g. with a mail-letter icon.
     ///
@@ -51,7 +51,7 @@ pub struct FullChat {
     /// contains unencrypted messages that were received in core <= v1.159.*
     /// and vice versa.
     ///
-    /// See also `is_pgp_contact` on `Contact`.
+    /// See also `is_key_contact` on `Contact`.
     is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
@@ -186,12 +186,12 @@ pub struct BasicChat {
 
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
-    /// and all contacts in the chat are "pgp-contacts",
+    /// and all contacts in the chat are "key-contacts",
     /// i.e. identified by the PGP key fingerprint.
     ///
     /// False if the chat is unencrypted.
     /// This means that all messages in the chat are unencrypted,
-    /// and all contacts in the chat are "email-contacts",
+    /// and all contacts in the chat are "address-contacts",
     /// i.e. identified by the email address.
     /// The UI should mark this chat e.g. with a mail-letter icon.
     ///
@@ -205,7 +205,7 @@ pub struct BasicChat {
     /// contains unencrypted messages that were received in core <= v1.159.*
     /// and vice versa.
     ///
-    /// See also `is_pgp_contact` on `Contact`.
+    /// See also `is_key_contact` on `Contact`.
     is_encrypted: bool,
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
