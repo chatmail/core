@@ -722,7 +722,7 @@ impl TestContext {
     }
 
     /// Returns the [`ContactId`] for the other [`TestContext`], creating a contact if necessary.
-    pub async fn add_or_lookup_email_contact_id(&self, other: &TestContext) -> ContactId {
+    pub async fn add_or_lookup_address_contact_id(&self, other: &TestContext) -> ContactId {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         // MailinglistAddress is the lowest allowed origin, we'd prefer to not modify the
@@ -740,8 +740,8 @@ impl TestContext {
     }
 
     /// Returns the [`Contact`] for the other [`TestContext`], creating it if necessary.
-    pub async fn add_or_lookup_email_contact(&self, other: &TestContext) -> Contact {
-        let contact_id = self.add_or_lookup_email_contact_id(other).await;
+    pub async fn add_or_lookup_address_contact(&self, other: &TestContext) -> Contact {
+        let contact_id = self.add_or_lookup_address_contact_id(other).await;
         let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
         debug_assert_eq!(contact.is_key_contact(), false);
         contact
@@ -787,7 +787,7 @@ impl TestContext {
     /// This first creates a contact using the configured details on the other account, then
     /// gets the 1:1 chat with this contact.
     pub async fn get_email_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_email_contact(other).await;
+        let contact = self.add_or_lookup_address_contact(other).await;
 
         let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact.id)
             .await
@@ -838,7 +838,7 @@ impl TestContext {
     ///
     /// This function can be used to create unencrypted chats.
     pub async fn create_email_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_email_contact(other).await;
+        let contact = self.add_or_lookup_address_contact(other).await;
         let chat_id = ChatId::create_for_contact(self, contact.id).await.unwrap();
 
         Chat::load_from_db(self, chat_id).await.unwrap()

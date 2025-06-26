@@ -4264,7 +4264,7 @@ async fn test_no_address_contacts_in_group_chats() -> Result<()> {
 
     let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group chat").await?;
     let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
-    let charlie_address_contact_id = alice.add_or_lookup_email_contact_id(charlie).await;
+    let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
 
     // key-contact should be added successfully.
     add_contact_to_chat(alice, chat_id, bob_key_contact_id).await?;
@@ -4299,7 +4299,7 @@ async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
     .unwrap()
     .chat_id;
 
-    let bob_address_contact_id = alice.add_or_lookup_email_contact_id(bob).await;
+    let bob_address_contact_id = alice.add_or_lookup_address_contact_id(bob).await;
     let charlie_key_contact_id = alice.add_or_lookup_contact_id(charlie).await;
 
     // Address-contact should be added successfully.

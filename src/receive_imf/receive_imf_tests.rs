@@ -2588,7 +2588,7 @@ Second thread."#;
     assert_eq!(bob_second_reply.chat_id, bob_second_msg.chat_id);
 
     // Alice adds Fiona to both ad hoc groups.
-    let alice_fiona_contact = alice.add_or_lookup_email_contact(&fiona).await;
+    let alice_fiona_contact = alice.add_or_lookup_address_contact(&fiona).await;
     let alice_fiona_contact_id = alice_fiona_contact.id;
 
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
