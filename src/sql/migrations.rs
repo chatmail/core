@@ -1588,8 +1588,10 @@ fn migrate_key_contacts(
                 Ok((id, typ, grpid, protected))
             })
             .context("Step 23")?;
-        let mut load_chat_contacts_stmt = transaction
-            .prepare("SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9")?;
+        let mut load_chat_contacts_stmt = transaction.prepare(
+            "SELECT contact_id, add_timestamp>=remove_timestamp FROM chats_contacts
+             WHERE chat_id=? AND contact_id>9",
+        )?;
         let is_chatmail: Option<String> = transaction
             .query_row(
                 "SELECT value FROM config WHERE keyname='is_chatmail'",
@@ -1603,23 +1605,20 @@ fn migrate_key_contacts(
             .unwrap_or_default()
             != 0;
         let map_to_key_contact = |old_member: &u32| {
-            (
-                *old_member,
-                autocrypt_key_contacts
-                    .get(old_member)
-                    .or_else(|| {
-                        // For chatmail servers,
-                        // we send encrypted even if the peerstate is reset,
-                        // because an unencrypted message likely won't arrive.
-                        // This is the same behavior as before key-contacts migration.
-                        if is_chatmail {
-                            autocrypt_key_contacts_with_reset_peerstate.get(old_member)
-                        } else {
-                            None
-                        }
-                    })
-                    .copied(),
-            )
+            autocrypt_key_contacts
+                .get(old_member)
+                .or_else(|| {
+                    // For chatmail servers,
+                    // we send encrypted even if the peerstate is reset,
+                    // because an unencrypted message likely won't arrive.
+                    // This is the same behavior as before key-contacts migration.
+                    if is_chatmail {
+                        autocrypt_key_contacts_with_reset_peerstate.get(old_member)
+                    } else {
+                        None
+                    }
+                })
+                .copied()
         };
 
         let mut update_member_stmt = transaction
@@ -1628,23 +1627,27 @@ fn migrate_key_contacts(
             .prepare("SELECT c.addr=d.addr FROM contacts c, contacts d WHERE c.id=? AND d.id=?")?;
         for chat in all_chats {
             let (chat_id, typ, grpid, protected) = chat.context("Step 24")?;
-            // In groups, this also contains past members
-            let old_members: Vec<u32> = load_chat_contacts_stmt
-                .query_map((chat_id,), |row| row.get::<_, u32>(0))
+            // In groups, this also contains past members, i.e. `(_, false)` entries.
+            let old_members: Vec<(u32, bool)> = load_chat_contacts_stmt
+                .query_map((chat_id,), |row| {
+                    let id: u32 = row.get(0)?;
+                    let present: bool = row.get(1)?;
+                    Ok((id, present))
+                })
                 .context("Step 25")?
-                .collect::<Result<Vec<u32>, rusqlite::Error>>()
+                .collect::<Result<Vec<_>, _>>()
                 .context("Step 26")?;
 
             let mut keep_address_contacts = |reason: &str| {
                 info!(
                     context,
-                    "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}"
+                    "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}."
                 );
-                for m in &old_members {
+                for (m, _) in &old_members {
                     orphaned_contacts.remove(m);
                 }
             };
-            let old_and_new_members: Vec<(u32, Option<u32>)> = match typ {
+            let old_and_new_members: Vec<(u32, bool, Option<u32>)> = match typ {
                 // 1:1 chats retain:
                 // - address-contact if peerstate is in the "reset" state,
                 //   or if there is no key-contact that has the right email address.
@@ -1653,15 +1656,15 @@ fn migrate_key_contacts(
                 //   Since the autocrypt and verified key-contact are identital in this case, we can add the Autocrypt key-contact,
                 //   and the effect will be the same.
                 100 => {
-                    let Some(old_member) = old_members.first() else {
+                    let Some((old_member, _)) = old_members.first() else {
                         info!(
                             context,
-                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat"
+                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat."
                         );
                         continue;
                     };
 
-                    let (_, Some(new_contact)) = map_to_key_contact(old_member) else {
+                    let Some(new_contact) = map_to_key_contact(old_member) else {
                         keep_address_contacts("No peerstate, or peerstate in 'reset' state");
                         continue;
                     };
@@ -1677,7 +1680,7 @@ fn migrate_key_contacts(
                         keep_address_contacts("key contact has different email");
                         continue;
                     }
-                    vec![(*old_member, Some(new_contact))]
+                    vec![(*old_member, true, Some(new_contact))]
                 }
 
                 // Group
@@ -1690,15 +1693,15 @@ fn migrate_key_contacts(
                     } else if protected == 1 {
                         old_members
                             .iter()
-                            .map(|old_member| {
-                                (*old_member, verified_key_contacts.get(old_member).copied())
+                            .map(|&(id, present)| {
+                                (id, present, verified_key_contacts.get(&id).copied())
                             })
                             .collect()
                     } else {
                         old_members
                             .iter()
-                            .map(map_to_key_contact)
-                            .collect::<Vec<(u32, Option<u32>)>>()
+                            .map(|&(id, present)| (id, present, map_to_key_contact(&id)))
+                            .collect::<Vec<(u32, bool, Option<u32>)>>()
                     }
                 }
 
@@ -1711,9 +1714,10 @@ fn migrate_key_contacts(
                 // Broadcast list
                 160 => old_members
                     .iter()
-                    .map(|original| {
+                    .map(|(original, _)| {
                         (
                             *original,
+                            true,
                             autocrypt_key_contacts
                                 .get(original)
                                 // There will be no unencrypted broadcast lists anymore,
@@ -1725,7 +1729,7 @@ fn migrate_key_contacts(
                                 .copied(),
                         )
                     })
-                    .collect::<Vec<(u32, Option<u32>)>>(),
+                    .collect::<Vec<(u32, bool, Option<u32>)>>(),
                 _ => {
                     warn!(context, "Invalid chat type {typ}");
                     continue;
@@ -1734,7 +1738,11 @@ fn migrate_key_contacts(
 
             // If a group contains a contact without a key or with 'reset' peerstate,
             // downgrade to unencrypted Ad-Hoc group.
-            if typ == 120 && old_and_new_members.iter().any(|(_old, new)| new.is_none()) {
+            if typ == 120
+                && old_and_new_members
+                    .iter()
+                    .any(|&(_old, present, new)| present && new.is_none())
+            {
                 transaction
                     .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
                     .context("Step 26.1")?;
@@ -1744,7 +1752,7 @@ fn migrate_key_contacts(
 
             let human_readable_transitions = old_and_new_members
                 .iter()
-                .map(|(old, new)| format!("{old}->{}", new.unwrap_or_default()))
+                .map(|(old, _, new)| format!("{old}->{}", new.unwrap_or_default()))
                 .collect::<Vec<String>>()
                 .join(" ");
             info!(
@@ -1752,7 +1760,7 @@ fn migrate_key_contacts(
                 "Migrating chat {chat_id} to key-contacts: {human_readable_transitions}"
             );
 
-            for (old_member, new_member) in old_and_new_members {
+            for (old_member, _, new_member) in old_and_new_members {
                 if let Some(new_member) = new_member {
                     orphaned_contacts.remove(&new_member);
                     let res = update_member_stmt.execute((new_member, old_member, chat_id));
