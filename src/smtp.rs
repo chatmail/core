@@ -3,12 +3,12 @@
 mod connect;
 pub mod send;
 
-use anyhow::{bail, format_err, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, bail, format_err};
 use async_smtp::response::{Category, Code, Detail};
 use async_smtp::{EmailAddress, SmtpTransport};
 use tokio::task;
 
-use crate::chat::{add_info_msg_with_cmd, ChatId};
+use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
@@ -231,7 +231,10 @@ pub(crate) async fn smtp_send(
                     };
 
                     if maybe_transient {
-                        info!(context, "Permanent error that is likely to actually be transient, postponing retry for later.");
+                        info!(
+                            context,
+                            "Permanent error that is likely to actually be transient, postponing retry for later."
+                        );
                         SendResult::Retry
                     } else {
                         info!(context, "Permanent error, message sending failed.");

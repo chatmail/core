@@ -3,13 +3,13 @@ use strum::IntoEnumIterator;
 use tempfile::tempdir;
 
 use super::*;
-use crate::chat::{get_chat_contacts, get_chat_msgs, send_msg, set_muted, Chat, MuteDuration};
+use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg, set_muted};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{get_chat_msg, TestContext};
-use crate::tools::{create_outgoing_rfc724_mid, SystemTime};
+use crate::test_utils::{TestContext, get_chat_msg};
+use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_wrong_db() -> Result<()> {

@@ -5,20 +5,19 @@ use tokio::fs;
 
 use super::*;
 use crate::chat::{
-    add_contact_to_chat, add_to_chat_contacts_table, create_group_chat, get_chat_contacts,
-    get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg, ChatItem,
-    ChatVisibility,
+    ChatItem, ChatVisibility, add_contact_to_chat, add_to_chat_contacts_table, create_group_chat,
+    get_chat_contacts, get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
-use crate::imex::{imex, ImexMode};
+use crate::imex::{ImexMode, imex};
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::mark_as_verified;
-use crate::test_utils::{get_chat_msg, TestContext, TestContextManager};
-use crate::tools::{time, SystemTime};
+use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
+use crate::tools::{SystemTime, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing() -> Result<()> {
@@ -358,10 +357,12 @@ async fn test_no_from() {
     assert!(chats.is_empty());
 
     // Check that the message was added to the db:
-    assert!(message::rfc724_mid_exists(context, "3924@example.com")
-        .await
-        .unwrap()
-        .is_some());
+    assert!(
+        message::rfc724_mid_exists(context, "3924@example.com")
+            .await
+            .unwrap()
+            .is_some()
+    );
 }
 
 /// If there is no Message-Id header, we generate a random id.
@@ -390,14 +391,15 @@ async fn test_no_message_id_header() {
     .unwrap();
     assert!(received.is_none());
 
-    assert!(!t
-        .sql
-        .exists(
-            "SELECT COUNT(*) FROM msgs WHERE chat_id=?;",
-            (DC_CHAT_ID_TRASH,),
-        )
-        .await
-        .unwrap());
+    assert!(
+        !t.sql
+            .exists(
+                "SELECT COUNT(*) FROM msgs WHERE chat_id=?;",
+                (DC_CHAT_ID_TRASH,),
+            )
+            .await
+            .unwrap()
+    );
 
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     // Check that the message is not shown to the user:
@@ -827,7 +829,10 @@ async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
 async fn test_html_only_mail() {
     let t = TestContext::new_alice().await;
     let msg = load_imf_email(&t, include_bytes!("../../test-data/message/wrong-html.eml")).await;
-    assert_eq!(msg.text, "Guten Abend,\n\nLots of text\n\ntext with Umlaut ä...\n\nMfG\n\n--------------------------------------\n\n[Camping ](https://example.com/)\n\nsomeaddress\n\nsometown");
+    assert_eq!(
+        msg.text,
+        "Guten Abend,\n\nLots of text\n\ntext with Umlaut ä...\n\nMfG\n\n--------------------------------------\n\n[Camping ](https://example.com/)\n\nsomeaddress\n\nsometown"
+    );
 }
 
 static GH_MAILINGLIST: &[u8] =
@@ -843,8 +848,7 @@ static GH_MAILINGLIST: &[u8] =
     \n\
     hello\n";
 
-static GH_MAILINGLIST2: &str =
-    "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
+static GH_MAILINGLIST2: &str = "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
     From: Github <notifications@github.com>\n\
     To: deltachat/deltachat-core-rust <deltachat-core-rust@noreply.github.com>\n\
     Subject: [deltachat/deltachat-core-rust] PR run failed\n\
@@ -2693,7 +2697,10 @@ async fn test_gmx_forwarded_msg() -> Result<()> {
 
     let msg = t.get_last_msg().await;
     assert!(msg.has_html());
-    assert_eq!(msg.id.get_html(&t).await?.unwrap().replace("\r\n", "\n"), "<html><head></head><body><div style=\"font-family: Verdana;font-size: 12.0px;\"><div>&nbsp;</div>\n\n<div>&nbsp;\n<div>&nbsp;\n<div data-darkreader-inline-border-left=\"\" name=\"quote\" style=\"margin: 10px 5px 5px 10px; padding: 10px 0px 10px 10px; border-left: 2px solid rgb(195, 217, 229); overflow-wrap: break-word; --darkreader-inline-border-left:#274759;\">\n<div style=\"margin:0 0 10px 0;\"><b>Gesendet:</b>&nbsp;Donnerstag, 12. August 2021 um 15:52 Uhr<br/>\n<b>Von:</b>&nbsp;&quot;Claire&quot; &lt;claire@example.org&gt;<br/>\n<b>An:</b>&nbsp;alice@example.org<br/>\n<b>Betreff:</b>&nbsp;subject</div>\n\n<div name=\"quoted-content\">bodytext</div>\n</div>\n</div>\n</div></div></body></html>\n\n");
+    assert_eq!(
+        msg.id.get_html(&t).await?.unwrap().replace("\r\n", "\n"),
+        "<html><head></head><body><div style=\"font-family: Verdana;font-size: 12.0px;\"><div>&nbsp;</div>\n\n<div>&nbsp;\n<div>&nbsp;\n<div data-darkreader-inline-border-left=\"\" name=\"quote\" style=\"margin: 10px 5px 5px 10px; padding: 10px 0px 10px 10px; border-left: 2px solid rgb(195, 217, 229); overflow-wrap: break-word; --darkreader-inline-border-left:#274759;\">\n<div style=\"margin:0 0 10px 0;\"><b>Gesendet:</b>&nbsp;Donnerstag, 12. August 2021 um 15:52 Uhr<br/>\n<b>Von:</b>&nbsp;&quot;Claire&quot; &lt;claire@example.org&gt;<br/>\n<b>An:</b>&nbsp;alice@example.org<br/>\n<b>Betreff:</b>&nbsp;subject</div>\n\n<div name=\"quoted-content\">bodytext</div>\n</div>\n</div>\n</div></div></body></html>\n\n"
+    );
 
     Ok(())
 }
@@ -3233,9 +3240,11 @@ async fn test_outgoing_undecryptable() -> Result<()> {
         .unwrap();
     let dev_msg = alice.get_last_msg_in(dev_chat_id).await;
     assert!(dev_msg.error().is_none());
-    assert!(dev_msg
-        .text
-        .contains(&stock_str::cant_decrypt_outgoing_msgs(alice).await));
+    assert!(
+        dev_msg
+            .text
+            .contains(&stock_str::cant_decrypt_outgoing_msgs(alice).await)
+    );
 
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
     receive_imf(alice, raw, false).await?;
@@ -3462,9 +3471,10 @@ async fn test_big_forwarded_with_big_attachment() -> Result<()> {
 
     let msg = Message::load_from_db(t, rcvd.msg_ids[1]).await?;
     assert_eq!(msg.get_viewtype(), Viewtype::Text);
-    assert!(msg
-        .get_text()
-        .starts_with("this text with 42 chars is just repeated."));
+    assert!(
+        msg.get_text()
+            .starts_with("this text with 42 chars is just repeated.")
+    );
     assert!(msg.get_text().ends_with("[...]"));
     assert!(!msg.has_html());
 

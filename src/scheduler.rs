@@ -3,12 +3,12 @@ use std::iter::{self, once};
 use std::num::NonZeroUsize;
 use std::sync::atomic::Ordering;
 
-use anyhow::{bail, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
 use futures::future::try_join_all;
 use futures_lite::FutureExt;
 use rand::Rng;
-use tokio::sync::{oneshot, RwLock, RwLockWriteGuard};
+use tokio::sync::{RwLock, RwLockWriteGuard, oneshot};
 use tokio::task;
 use tokio_util::sync::CancellationToken;
 
@@ -16,14 +16,14 @@ use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
-use crate::download::{download_msg, DownloadState};
+use crate::download::{DownloadState, download_msg};
 use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
-use crate::imap::{session::Session, FolderMeaning, Imap};
+use crate::imap::{FolderMeaning, Imap, session::Session};
 use crate::location;
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::message::MsgId;
-use crate::smtp::{send_smtp_messages, Smtp};
+use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
 

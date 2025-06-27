@@ -2,14 +2,14 @@
 use std::hint::black_box;
 use std::path::PathBuf;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use deltachat::{
+    Events,
     config::Config,
     context::Context,
-    imex::{imex, ImexMode},
+    imex::{ImexMode, imex},
     receive_imf::receive_imf,
     stock_str::StockStrings,
-    Events,
 };
 use tempfile::tempdir;
 

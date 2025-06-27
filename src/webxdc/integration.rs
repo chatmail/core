@@ -1,12 +1,12 @@
 use std::path::Path;
 
-use crate::chat::{send_msg, ChatId};
+use crate::chat::{ChatId, send_msg};
 use crate::config::Config;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::param::Param;
-use crate::webxdc::{maps_integration, StatusUpdateItem, StatusUpdateSerial};
+use crate::webxdc::{StatusUpdateItem, StatusUpdateSerial, maps_integration};
 use anyhow::Result;
 
 impl Context {

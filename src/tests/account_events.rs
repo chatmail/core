@@ -5,11 +5,11 @@ use std::time::Duration;
 use anyhow::Result;
 use tempfile::tempdir;
 
+use crate::EventType;
 use crate::accounts::Accounts;
 use crate::config::Config;
-use crate::imex::{get_backup, has_backup, imex, BackupProvider, ImexMode};
-use crate::test_utils::{sync, EventTracker, TestContext, TestContextManager};
-use crate::EventType;
+use crate::imex::{BackupProvider, ImexMode, get_backup, has_backup, imex};
+use crate::test_utils::{EventTracker, TestContext, TestContextManager, sync};
 
 async fn wait_for_item_changed(context: &TestContext) {
     context

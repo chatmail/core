@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::io::Cursor;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
@@ -15,7 +15,7 @@ use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
-use crate::log::{info, LogExt};
+use crate::log::{LogExt, info};
 use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
 
@@ -526,7 +526,7 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::test_utils::{alice_keypair, TestContext};
+    use crate::test_utils::{TestContext, alice_keypair};
 
     static KEYPAIR: LazyLock<KeyPair> = LazyLock::new(alice_keypair);
 

@@ -9,7 +9,7 @@ use num_traits::FromPrimitive;
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::config::Config;
 use crate::context::Context;
-use crate::key::{load_self_public_key, load_self_secret_key, SignedPublicKey};
+use crate::key::{SignedPublicKey, load_self_public_key, load_self_secret_key};
 use crate::pgp;
 
 #[derive(Debug)]

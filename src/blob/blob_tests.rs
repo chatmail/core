@@ -580,20 +580,23 @@ impl SendImageCheckMediaquality<'_> {
 }
 
 fn assert_extension(context: &TestContext, msg: Message, extension: &str) {
-    assert!(msg
-        .param
-        .get(Param::File)
-        .unwrap()
-        .ends_with(&format!(".{extension}")));
-    assert!(msg
-        .param
-        .get(Param::Filename)
-        .unwrap()
-        .ends_with(&format!(".{extension}")));
-    assert!(msg
-        .get_filename()
-        .unwrap()
-        .ends_with(&format!(".{extension}")));
+    assert!(
+        msg.param
+            .get(Param::File)
+            .unwrap()
+            .ends_with(&format!(".{extension}"))
+    );
+    assert!(
+        msg.param
+            .get(Param::Filename)
+            .unwrap()
+            .ends_with(&format!(".{extension}"))
+    );
+    assert!(
+        msg.get_filename()
+            .unwrap()
+            .ends_with(&format!(".{extension}"))
+    );
     assert_eq!(
         msg.get_file(context)
             .unwrap()

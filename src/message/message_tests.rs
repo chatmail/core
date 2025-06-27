@@ -1,7 +1,7 @@
 use num_traits::FromPrimitive;
 
 use super::*;
-use crate::chat::{self, forward_msgs, marknoticed_chat, save_msgs, send_text_msg, ChatItem};
+use crate::chat::{self, ChatItem, forward_msgs, marknoticed_chat, save_msgs, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::reaction::send_reaction;
@@ -734,9 +734,11 @@ async fn test_delete_msgs_offline() -> Result<()> {
         .create_chat_with_contact("Bob", "bob@example.org")
         .await;
     let mut msg = Message::new_text("hi".to_string());
-    assert!(chat::send_msg_sync(&alice, chat.id, &mut msg)
-        .await
-        .is_err());
+    assert!(
+        chat::send_msg_sync(&alice, chat.id, &mut msg)
+            .await
+            .is_err()
+    );
     let stmt = "SELECT COUNT(*) FROM smtp WHERE msg_id=?";
     assert!(alice.sql.exists(stmt, (msg.id,)).await?);
     delete_msgs(&alice, &[msg.id]).await?;

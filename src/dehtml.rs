@@ -6,11 +6,11 @@ use std::io::BufRead;
 use std::sync::LazyLock;
 
 use quick_xml::{
-    events::{BytesEnd, BytesStart, BytesText},
     Reader,
+    events::{BytesEnd, BytesStart, BytesText},
 };
 
-use crate::simplify::{simplify_quote, SimplifiedText};
+use crate::simplify::{SimplifiedText, simplify_quote};
 
 struct Dehtml {
     strbuilder: String,
@@ -481,8 +481,7 @@ mod tests {
 
     #[test]
     fn test_dehtml_html_encoded() {
-        let html =
-                "&lt;&gt;&quot;&apos;&amp; &auml;&Auml;&ouml;&Ouml;&uuml;&Uuml;&szlig; foo&AElig;&ccedil;&Ccedil; &diams;&lrm;&rlm;&zwnj;&noent;&zwj;";
+        let html = "&lt;&gt;&quot;&apos;&amp; &auml;&Auml;&ouml;&Ouml;&uuml;&Uuml;&szlig; foo&AElig;&ccedil;&Ccedil; &diams;&lrm;&rlm;&zwnj;&noent;&zwj;";
 
         let plain = dehtml(html).unwrap().text;
 
@@ -540,6 +539,9 @@ mod tests {
     fn test_spaces() {
         let input = include_str!("../test-data/spaces.html");
         let txt = dehtml(input).unwrap();
-        assert_eq!(txt.text, "Welcome back to Strolling!\n\nHey there,\n\nWelcome back! Use this link to securely sign in to your Strolling account:\n\nSign in to Strolling\n\nFor your security, the link will expire in 24 hours time.\n\nSee you soon!\n\nYou can also copy & paste this URL into your browser:\n\nhttps://strolling.rosano.ca/members/?token=XXX&action=signin&r=https%3A%2F%2Fstrolling.rosano.ca%2F\n\nIf you did not make this request, you can safely ignore this email.\n\nThis message was sent from [strolling.rosano.ca](https://strolling.rosano.ca/) to [alice@example.org](mailto:alice@example.org)");
+        assert_eq!(
+            txt.text,
+            "Welcome back to Strolling!\n\nHey there,\n\nWelcome back! Use this link to securely sign in to your Strolling account:\n\nSign in to Strolling\n\nFor your security, the link will expire in 24 hours time.\n\nSee you soon!\n\nYou can also copy & paste this URL into your browser:\n\nhttps://strolling.rosano.ca/members/?token=XXX&action=signin&r=https%3A%2F%2Fstrolling.rosano.ca%2F\n\nIf you did not make this request, you can safely ignore this email.\n\nThis message was sent from [strolling.rosano.ca](https://strolling.rosano.ca/) to [alice@example.org](mailto:alice@example.org)"
+        );
     }
 }

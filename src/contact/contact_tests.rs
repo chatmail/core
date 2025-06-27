@@ -1,7 +1,7 @@
 use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 
 use super::*;
-use crate::chat::{get_chat_contacts, send_text_msg, Chat};
+use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
@@ -677,20 +677,28 @@ async fn test_name_in_address() {
     assert_eq!(contact.get_name(), "name1");
     assert_eq!(contact.get_addr(), "dave@example.org");
 
-    assert!(Contact::create(&t, "", "<dskjfdslk@sadklj.dk")
-        .await
-        .is_err());
-    assert!(Contact::create(&t, "", "<dskjf>dslk@sadklj.dk>")
-        .await
-        .is_err());
+    assert!(
+        Contact::create(&t, "", "<dskjfdslk@sadklj.dk")
+            .await
+            .is_err()
+    );
+    assert!(
+        Contact::create(&t, "", "<dskjf>dslk@sadklj.dk>")
+            .await
+            .is_err()
+    );
     assert!(Contact::create(&t, "", "dskjfdslksadklj.dk").await.is_err());
-    assert!(Contact::create(&t, "", "dskjfdslk@sadklj.dk>")
-        .await
-        .is_err());
+    assert!(
+        Contact::create(&t, "", "dskjfdslk@sadklj.dk>")
+            .await
+            .is_err()
+    );
     assert!(Contact::create(&t, "", "dskjf dslk@d.e").await.is_err());
-    assert!(Contact::create(&t, "", "<dskjf dslk@sadklj.dk")
-        .await
-        .is_err());
+    assert!(
+        Contact::create(&t, "", "<dskjf dslk@sadklj.dk")
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

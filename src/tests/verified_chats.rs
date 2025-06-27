@@ -3,19 +3,19 @@ use pretty_assertions::assert_eq;
 
 use crate::chat::resend_msgs;
 use crate::chat::{
-    self, add_contact_to_chat, remove_contact_from_chat, send_msg, Chat, ProtectionStatus,
+    self, Chat, ProtectionStatus, add_contact_to_chat, remove_contact_from_chat, send_msg,
 };
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
-use crate::key::{load_self_public_key, DcKey};
+use crate::key::{DcKey, load_self_public_key};
 use crate::message::{Message, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str;
-use crate::test_utils::{get_chat_msg, mark_as_verified, TestContext, TestContextManager};
+use crate::test_utils::{TestContext, TestContextManager, get_chat_msg, mark_as_verified};
 use crate::tools::SystemTime;
 use crate::{e2ee, message};
 

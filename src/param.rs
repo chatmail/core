@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::str;
 
 use anyhow::ensure;
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 

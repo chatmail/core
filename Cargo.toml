@@ -1,7 +1,7 @@
 [package]
 name = "deltachat"
 version = "1.160.0"
-edition = "2021"
+edition = "2024"
 license = "MPL-2.0"
 rust-version = "1.85"
 repository = "https://github.com/chatmail/core"

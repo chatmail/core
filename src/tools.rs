@@ -20,18 +20,18 @@ pub use std::time::SystemTime as Time;
 #[cfg(not(test))]
 pub use std::time::SystemTime;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use chrono::{Local, NaiveDateTime, NaiveTime, TimeZone};
 use deltachat_contact_tools::EmailAddress;
 #[cfg(test)]
 pub use deltachat_time::SystemTimeTools as SystemTime;
 use futures::TryStreamExt;
+use mailparse::MailHeaderMap;
 use mailparse::dateparse;
 use mailparse::headers::Headers;
-use mailparse::MailHeaderMap;
 use num_traits::PrimInt;
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 use tokio::{fs, io};
 use url::Url;
 use uuid::Uuid;
@@ -609,11 +609,7 @@ pub(crate) trait ToOption<T> {
 }
 impl<'a> ToOption<&'a str> for &'a String {
     fn to_option(self) -> Option<&'a str> {
-        if self.is_empty() {
-            None
-        } else {
-            Some(self)
-        }
+        if self.is_empty() { None } else { Some(self) }
     }
 }
 impl ToOption<String> for u16 {

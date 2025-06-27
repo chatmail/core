@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 
 use deltachat_contact_tools::may_be_valid_addr;
 use num_traits::cast::ToPrimitive;
 
-use super::{Qr, DCLOGIN_SCHEME};
+use super::{DCLOGIN_SCHEME, Qr};
 use crate::config::Config;
 use crate::context::Context;
 use crate::login_param::EnteredCertificateChecks;
@@ -263,7 +263,7 @@ pub(crate) async fn configure_from_login_qr(
 mod test {
     use anyhow::bail;
 
-    use super::{decode_login, LoginOptions};
+    use super::{LoginOptions, decode_login};
     use crate::{login_param::EnteredCertificateChecks, provider::Socket, qr::Qr};
 
     macro_rules! login_options_just_pw {

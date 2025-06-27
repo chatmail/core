@@ -21,13 +21,13 @@ use std::fmt;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::chat::{send_msg, Chat, ChatId};
+use crate::chat::{Chat, ChatId, send_msg};
 use crate::chatlist_events;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::info;
-use crate::message::{rfc724_mid_exists, Message, MsgId};
+use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 
 /// A single reaction consisting of multiple emoji sequences.
@@ -404,7 +404,7 @@ mod tests {
     use crate::config::Config;
     use crate::contact::{Contact, Origin};
     use crate::download::DownloadState;
-    use crate::message::{delete_msgs, MessageState};
+    use crate::message::{MessageState, delete_msgs};
     use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
     use crate::sql::housekeeping;
     use crate::test_utils::TestContext;

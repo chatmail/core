@@ -5,14 +5,14 @@
 use std::fmt;
 use std::pin::Pin;
 
-use anyhow::{bail, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, bail, format_err};
 use base64::Engine;
 use bytes::{BufMut, BytesMut};
-use fast_socks5::client::Socks5Stream;
-use fast_socks5::util::target_addr::ToTargetAddr;
 use fast_socks5::AuthenticationMethod;
 use fast_socks5::Socks5Command;
-use percent_encoding::{percent_encode, utf8_percent_encode, NON_ALPHANUMERIC};
+use fast_socks5::client::Socks5Stream;
+use fast_socks5::util::target_addr::ToTargetAddr;
+use percent_encoding::{NON_ALPHANUMERIC, percent_encode, utf8_percent_encode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_io_timeout::TimeoutStream;
@@ -624,7 +624,10 @@ mod tests {
 
     #[test]
     fn test_http_connect_request() {
-        assert_eq!(http_connect_request("example.org", 143, Some(("aladdin", "opensesame"))), "CONNECT example.org:143 HTTP/1.1\r\nHost: example.org:143\r\nProxy-Authorization: Basic YWxhZGRpbjpvcGVuc2VzYW1l\r\n\r\n");
+        assert_eq!(
+            http_connect_request("example.org", 143, Some(("aladdin", "opensesame"))),
+            "CONNECT example.org:143 HTTP/1.1\r\nHost: example.org:143\r\nProxy-Authorization: Basic YWxhZGRpbjpvcGVuc2VzYW1l\r\n\r\n"
+        );
         assert_eq!(
             http_connect_request("example.net", 587, None),
             "CONNECT example.net:587 HTTP/1.1\r\nHost: example.net:587\r\n\r\n"

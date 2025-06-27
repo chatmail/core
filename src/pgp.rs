@@ -465,17 +465,21 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_encrypt_signed() {
         assert!(!ctext_signed().await.is_empty());
-        assert!(ctext_signed()
-            .await
-            .starts_with("-----BEGIN PGP MESSAGE-----"));
+        assert!(
+            ctext_signed()
+                .await
+                .starts_with("-----BEGIN PGP MESSAGE-----")
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_encrypt_unsigned() {
         assert!(!ctext_unsigned().await.is_empty());
-        assert!(ctext_unsigned()
-            .await
-            .starts_with("-----BEGIN PGP MESSAGE-----"));
+        assert!(
+            ctext_unsigned()
+                .await
+                .starts_with("-----BEGIN PGP MESSAGE-----")
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

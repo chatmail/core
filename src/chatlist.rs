@@ -1,9 +1,9 @@
 //! # Chat list module.
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use std::sync::LazyLock;
 
-use crate::chat::{update_special_chat_names, Chat, ChatId, ChatVisibility};
+use crate::chat::{Chat, ChatId, ChatVisibility, update_special_chat_names};
 use crate::constants::{
     Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK, DC_GCL_ADD_ALLDONE_HINT,
     DC_GCL_ARCHIVED_ONLY, DC_GCL_FOR_FORWARDING, DC_GCL_NO_SPECIALS,
@@ -483,8 +483,8 @@ mod tests {
     use super::*;
     use crate::chat::save_msgs;
     use crate::chat::{
-        add_contact_to_chat, create_group_chat, get_chat_contacts, remove_contact_from_chat,
-        send_text_msg, ProtectionStatus,
+        ProtectionStatus, add_contact_to_chat, create_group_chat, get_chat_contacts,
+        remove_contact_from_chat, send_text_msg,
     };
     use crate::receive_imf::receive_imf;
     use crate::stock_str::StockMessage;
@@ -580,19 +580,23 @@ mod tests {
 
         let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
         assert_eq!(chats.len(), 3);
-        assert!(!Chat::load_from_db(&t, chats.get_chat_id(0).unwrap())
-            .await
-            .unwrap()
-            .is_self_talk());
+        assert!(
+            !Chat::load_from_db(&t, chats.get_chat_id(0).unwrap())
+                .await
+                .unwrap()
+                .is_self_talk()
+        );
 
         let chats = Chatlist::try_load(&t, DC_GCL_FOR_FORWARDING, None, None)
             .await
             .unwrap();
         assert_eq!(chats.len(), 2); // device chat cannot be written and is skipped on forwarding
-        assert!(Chat::load_from_db(&t, chats.get_chat_id(0).unwrap())
-            .await
-            .unwrap()
-            .is_self_talk());
+        assert!(
+            Chat::load_from_db(&t, chats.get_chat_id(0).unwrap())
+                .await
+                .unwrap()
+                .is_self_talk()
+        );
 
         remove_contact_from_chat(&t, chats.get_chat_id(1).unwrap(), ContactId::SELF)
             .await

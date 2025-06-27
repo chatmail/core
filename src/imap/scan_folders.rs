@@ -4,8 +4,8 @@ use anyhow::{Context as _, Result};
 
 use super::{get_folder_meaning_by_attrs, get_folder_meaning_by_name};
 use crate::config::Config;
-use crate::imap::{session::Session, Imap};
-use crate::log::{info, LogExt};
+use crate::imap::{Imap, session::Session};
+use crate::log::{LogExt, info};
 use crate::tools::{self, time_elapsed};
 use crate::{context::Context, imap::FolderMeaning};
 

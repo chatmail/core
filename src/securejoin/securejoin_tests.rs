@@ -1,14 +1,14 @@
 use deltachat_contact_tools::EmailAddress;
 
 use super::*;
-use crate::chat::{remove_contact_from_chat, CantSendReason};
+use crate::chat::{CantSendReason, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
-    get_chat_msg, TestContext, TestContextManager, TimeShiftFalsePositiveNote,
+    TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
 };
 use crate::tools::SystemTime;
 use std::time::Duration;
@@ -405,11 +405,12 @@ async fn test_setup_contact_concurrent_calls() -> Result<()> {
     assert!(!alice_id.is_special());
     assert_eq!(chat.typ, Chattype::Single);
     assert_ne!(claire_id, alice_id);
-    assert!(bob
-        .pop_sent_msg()
-        .await
-        .payload()
-        .contains("alice@example.org"));
+    assert!(
+        bob.pop_sent_msg()
+            .await
+            .payload()
+            .contains("alice@example.org")
+    );
 
     Ok(())
 }

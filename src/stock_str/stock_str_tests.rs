@@ -28,16 +28,18 @@ async fn test_set_stock_translation() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_stock_translation_wrong_replacements() {
     let t = TestContext::new().await;
-    assert!(t
-        .ctx
-        .set_stock_translation(StockMessage::NoMessages, "xyz %1$s ".to_string())
-        .await
-        .is_err());
-    assert!(t
-        .ctx
-        .set_stock_translation(StockMessage::NoMessages, "xyz %2$s ".to_string())
-        .await
-        .is_err());
+    assert!(
+        t.ctx
+            .set_stock_translation(StockMessage::NoMessages, "xyz %1$s ".to_string())
+            .await
+            .is_err()
+    );
+    assert!(
+        t.ctx
+            .set_stock_translation(StockMessage::NoMessages, "xyz %2$s ".to_string())
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

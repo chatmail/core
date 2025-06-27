@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
-use anyhow::{bail, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, bail};
 
 use crate::key::{DcKey, SignedPublicKey};
 
@@ -217,7 +217,9 @@ mod tests {
         let rendered = ah.to_string();
         assert_eq!(rendered, fixed_header);
 
-        let ah = Aheader::from_str(&format!(" _foo; __FOO=BAR ;;; addr = a@b.example.org ;\r\n   prefer-encrypt = mutual ; keydata = {RAWKEY}"))?;
+        let ah = Aheader::from_str(&format!(
+            " _foo; __FOO=BAR ;;; addr = a@b.example.org ;\r\n   prefer-encrypt = mutual ; keydata = {RAWKEY}"
+        ))?;
         assert_eq!(ah.addr, "a@b.example.org");
         assert_eq!(ah.prefer_encrypt, EncryptPreference::Mutual);
 
@@ -240,38 +242,44 @@ mod tests {
 
     #[test]
     fn test_display_aheader() {
-        assert!(format!(
-            "{}",
-            Aheader::new(
-                "test@example.com".to_string(),
-                SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                EncryptPreference::Mutual
+        assert!(
+            format!(
+                "{}",
+                Aheader::new(
+                    "test@example.com".to_string(),
+                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    EncryptPreference::Mutual
+                )
             )
-        )
-        .contains("prefer-encrypt=mutual;"));
+            .contains("prefer-encrypt=mutual;")
+        );
 
         // According to Autocrypt Level 1 specification,
         // only "prefer-encrypt=mutual;" can be used.
         // If the setting is nopreference, the whole attribute is omitted.
-        assert!(!format!(
-            "{}",
-            Aheader::new(
-                "test@example.com".to_string(),
-                SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                EncryptPreference::NoPreference
+        assert!(
+            !format!(
+                "{}",
+                Aheader::new(
+                    "test@example.com".to_string(),
+                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    EncryptPreference::NoPreference
+                )
             )
-        )
-        .contains("prefer-encrypt"));
+            .contains("prefer-encrypt")
+        );
 
         // Always lowercase the address in the header.
-        assert!(format!(
-            "{}",
-            Aheader::new(
-                "TeSt@eXaMpLe.cOm".to_string(),
-                SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                EncryptPreference::Mutual
+        assert!(
+            format!(
+                "{}",
+                Aheader::new(
+                    "TeSt@eXaMpLe.cOm".to_string(),
+                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    EncryptPreference::Mutual
+                )
             )
-        )
-        .contains("test@example.com"));
+            .contains("test@example.com")
+        );
     }
 }

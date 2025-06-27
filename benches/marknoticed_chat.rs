@@ -2,12 +2,12 @@
 use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
+use deltachat::Events;
 use deltachat::chat::{self, ChatId};
 use deltachat::chatlist::Chatlist;
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;
-use deltachat::Events;
 use futures_lite::future::block_on;
 use tempfile::tempdir;
 

@@ -22,7 +22,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{anyhow, bail, ensure, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow, bail, ensure, format_err};
 
 use async_zip::tokio::read::seek::ZipFileReader as SeekZipFileReader;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -518,7 +518,9 @@ impl Context {
             })?;
         let viewtype = instance.viewtype;
         if viewtype != Viewtype::Webxdc {
-            bail!("send_webxdc_status_update: message {instance_msg_id} is not a webxdc message, but a {viewtype} message.");
+            bail!(
+                "send_webxdc_status_update: message {instance_msg_id} is not a webxdc message, but a {viewtype} message."
+            );
         }
 
         if instance.param.get_int(Param::WebxdcIntegration).is_some() {
@@ -683,7 +685,9 @@ impl Context {
                 .await?
                 .with_context(|| format!("Chat type for chat {chat_id} not found"))?;
             if chat_type != Chattype::Mailinglist {
-                bail!("receive_status_update: status sender {from_id} is not a member of chat {chat_id}")
+                bail!(
+                    "receive_status_update: status sender {from_id} is not a member of chat {chat_id}"
+                )
             }
         }
 

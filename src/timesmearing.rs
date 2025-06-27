@@ -82,7 +82,7 @@ mod tests {
     use super::*;
     use crate::test_utils::TestContext;
     use crate::tools::{
-        create_smeared_timestamp, create_smeared_timestamps, smeared_time, time, SystemTime,
+        SystemTime, create_smeared_timestamp, create_smeared_timestamps, smeared_time, time,
     };
 
     #[test]

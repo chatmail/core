@@ -4,12 +4,12 @@ use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use base64::Engine as _;
 use chrono::TimeZone;
 use deltachat_contact_tools::sanitize_bidi_characters;
-use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::headers::HeaderType;
+use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::mime::MimePart;
 use tokio::fs;
 
@@ -28,14 +28,14 @@ use crate::key::{DcKey, SignedPublicKey};
 use crate::location;
 use crate::log::{info, warn};
 use crate::message::{self, Message, MsgId, Viewtype};
-use crate::mimeparser::{is_hidden, SystemMessage};
+use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
 use crate::peer_channels::create_iroh_header;
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{
-    create_outgoing_rfc724_mid, create_smeared_timestamp, remove_subject_prefix, time,
-    IsNoneOrEmpty,
+    IsNoneOrEmpty, create_outgoing_rfc724_mid, create_smeared_timestamp, remove_subject_prefix,
+    time,
 };
 use crate::webxdc::StatusUpdateSerial;
 
@@ -571,7 +571,7 @@ impl MimeFactory {
                         return chat.param.get(Param::ProfileImage).map(Into::into);
                     }
                     SystemMessage::GroupImageChanged => {
-                        return msg.param.get(Param::Arg).map(Into::into)
+                        return msg.param.get(Param::Arg).map(Into::into);
                     }
                     _ => {}
                 }
@@ -592,7 +592,7 @@ impl MimeFactory {
 
     async fn subject_str(&self, context: &Context) -> Result<String> {
         let subject = match &self.loaded {
-            Loaded::Message { ref chat, msg } => {
+            Loaded::Message { chat, msg } => {
                 let quoted_msg_subject = msg.quoted_message(context).await?.map(|m| m.subject);
 
                 if !msg.subject.is_empty() {
@@ -1100,9 +1100,9 @@ impl MimeFactory {
             }
 
             // Set the appropriate Content-Type for the inner message.
-            for (h, ref mut v) in &mut message.headers {
+            for (h, v) in &mut message.headers {
                 if h == "Content-Type" {
-                    if let mail_builder::headers::HeaderType::ContentType(ref mut ct) = v {
+                    if let mail_builder::headers::HeaderType::ContentType(ct) = v {
                         *ct = ct.clone().attribute("protected-headers", "v1");
                     }
                 }
@@ -1186,9 +1186,9 @@ impl MimeFactory {
 
                 message
             } else {
-                for (h, ref mut v) in &mut message.headers {
+                for (h, v) in &mut message.headers {
                     if h == "Content-Type" {
-                        if let mail_builder::headers::HeaderType::ContentType(ref mut ct) = v {
+                        if let mail_builder::headers::HeaderType::ContentType(ct) = v {
                             *ct = ct.clone().attribute("protected-headers", "v1");
                         }
                     }

@@ -165,11 +165,12 @@ pub(crate) fn simplify(mut input: String, is_chat_message: bool) -> SimplifiedTe
 /// a message is forwarded or not.
 fn skip_forward_header<'a>(lines: &'a [&str]) -> (&'a [&'a str], bool) {
     match lines {
-        ["---------- Forwarded message ----------", first_line, "", rest @ ..]
-            if first_line.starts_with("From: ") =>
-        {
-            (rest, true)
-        }
+        [
+            "---------- Forwarded message ----------",
+            first_line,
+            "",
+            rest @ ..,
+        ] if first_line.starts_with("From: ") => (rest, true),
         _ => (lines, false),
     }
 }

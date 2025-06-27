@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 
 use anyhow::{Context as _, Result};
-use async_imap::types::Mailbox;
 use async_imap::Session as ImapSession;
+use async_imap::types::Mailbox;
 use futures::TryStreamExt;
 
 use crate::imap::capabilities::Capabilities;

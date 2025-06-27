@@ -31,7 +31,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
 
-use anyhow::{bail, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, bail, format_err};
 use futures_lite::FutureExt;
 use iroh::{Endpoint, RelayMode};
 use tokio::fs;
@@ -45,10 +45,10 @@ use crate::log::{info, warn};
 use crate::message::Message;
 use crate::qr::Qr;
 use crate::stock_str::backup_transfer_msg_body;
-use crate::tools::{create_id, time, TempPathGuard};
-use crate::{e2ee, EventType};
+use crate::tools::{TempPathGuard, create_id, time};
+use crate::{EventType, e2ee};
 
-use super::{export_backup_stream, export_database, import_backup_stream, DBFILE_BACKUP_NAME};
+use super::{DBFILE_BACKUP_NAME, export_backup_stream, export_database, import_backup_stream};
 
 /// ALPN protocol identifier for the backup transfer protocol.
 const BACKUP_ALPN: &[u8] = b"/deltachat/backup";
@@ -382,7 +382,7 @@ pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
 mod tests {
     use std::time::Duration;
 
-    use crate::chat::{get_chat_msgs, send_msg, ChatItem};
+    use crate::chat::{ChatItem, get_chat_msgs, send_msg};
     use crate::message::Viewtype;
     use crate::test_utils::TestContextManager;
 

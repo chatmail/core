@@ -33,7 +33,7 @@
 //! ```
 
 use crate::{chat, location};
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 
 use crate::context::Context;
 use crate::message::{Message, MsgId};
@@ -169,13 +169,13 @@ pub(crate) async fn intercept_get_updates(
 
 #[cfg(test)]
 mod tests {
-    use crate::chat::{create_group_chat, ChatId, ProtectionStatus};
+    use crate::chat::{ChatId, ProtectionStatus, create_group_chat};
     use crate::chatlist::Chatlist;
     use crate::contact::Contact;
     use crate::message::Message;
     use crate::test_utils::TestContext;
     use crate::webxdc::StatusUpdateSerial;
-    use crate::{location, EventType};
+    use crate::{EventType, location};
     use anyhow::Result;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

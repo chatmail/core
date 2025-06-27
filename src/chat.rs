@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{anyhow, bail, ensure, Context as _, Result};
-use deltachat_contact_tools::{sanitize_bidi_characters, sanitize_single_line, ContactAddress};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
+use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use deltachat_derive::{FromSql, ToSql};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
@@ -28,10 +28,10 @@ use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::DownloadState;
-use crate::ephemeral::{start_chat_ephemeral_timers, Timer as EphemeralTimer};
+use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::location;
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -41,9 +41,9 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    buf_compress, create_id, create_outgoing_rfc724_mid, create_smeared_timestamp,
-    create_smeared_timestamps, get_abs_path, gm2local_offset, smeared_time, time,
-    truncate_msg_text, IsNoneOrEmpty, SystemTime,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_id, create_outgoing_rfc724_mid,
+    create_smeared_timestamp, create_smeared_timestamps, get_abs_path, gm2local_offset,
+    smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -4085,7 +4085,10 @@ pub async fn remove_contact_from_chat(
                         res?;
                         set_group_explicitly_left(context, &chat.grpid).await?;
                     } else if let Err(e) = res {
-                        warn!(context, "remove_contact_from_chat({chat_id}, {contact_id}): send_msg() failed: {e:#}.");
+                        warn!(
+                            context,
+                            "remove_contact_from_chat({chat_id}, {contact_id}): send_msg() failed: {e:#}."
+                        );
                     }
                 } else {
                     sync = Sync;
@@ -4918,10 +4921,10 @@ impl Context {
                     Contact::add_or_lookup(self, "", &addr, Origin::Hidden).await?;
                 match action {
                     SyncAction::Block => {
-                        return contact::set_blocked(self, Nosync, contact_id, true).await
+                        return contact::set_blocked(self, Nosync, contact_id, true).await;
                     }
                     SyncAction::Unblock => {
-                        return contact::set_blocked(self, Nosync, contact_id, false).await
+                        return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
                     _ => (),
                 }
@@ -4944,10 +4947,10 @@ impl Context {
                         return Ok(());
                     }
                     SyncAction::Block => {
-                        return contact::set_blocked(self, Nosync, contact_id, true).await
+                        return contact::set_blocked(self, Nosync, contact_id, true).await;
                     }
                     SyncAction::Unblock => {
-                        return contact::set_blocked(self, Nosync, contact_id, false).await
+                        return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
                     _ => (),
                 }

@@ -5,8 +5,8 @@ use async_channel::Receiver;
 use async_imap::extensions::idle::IdleResponse;
 use tokio::time::timeout;
 
-use super::session::Session;
 use super::Imap;
+use super::session::Session;
 use crate::context::Context;
 use crate::log::{info, warn};
 use crate::net::TIMEOUT;

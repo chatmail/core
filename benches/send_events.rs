@@ -1,5 +1,5 @@
 #![recursion_limit = "256"]
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;

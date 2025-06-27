@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::pin::Pin;
 use std::time::Duration;
 
-use anyhow::{format_err, Context as _, Result};
+use anyhow::{Context as _, Result, format_err};
 use tokio::net::TcpStream;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
@@ -22,7 +22,7 @@ pub(crate) mod session;
 pub(crate) mod tls;
 
 use dns::lookup_host_with_cache;
-pub use http::{read_url, read_url_blob, Response as HttpResponse};
+pub use http::{Response as HttpResponse, read_url, read_url_blob};
 use tls::wrap_tls;
 
 /// Connection, write and read timeout.
@@ -128,7 +128,7 @@ pub(crate) async fn connect_tls_inner(
     host: &str,
     strict_tls: bool,
     alpn: &[&str],
-) -> Result<impl SessionStream> {
+) -> Result<impl SessionStream + 'static> {
     let tcp_stream = connect_tcp_inner(addr).await?;
     let tls_stream = wrap_tls(strict_tls, host, alpn, tcp_stream).await?;
     Ok(tls_stream)

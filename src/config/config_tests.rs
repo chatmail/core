@@ -1,7 +1,7 @@
 use num_traits::FromPrimitive;
 
 use super::*;
-use crate::test_utils::{sync, TestContext, TestContextManager};
+use crate::test_utils::{TestContext, TestContextManager, sync};
 
 #[test]
 fn test_to_string() {
@@ -20,10 +20,11 @@ async fn test_set_config_addr() {
     let t = TestContext::new().await;
 
     // Test that uppercase address get lowercased.
-    assert!(t
-        .set_config(Config::Addr, Some("Foobar@eXample.oRg"))
-        .await
-        .is_ok());
+    assert!(
+        t.set_config(Config::Addr, Some("Foobar@eXample.oRg"))
+            .await
+            .is_ok()
+    );
     assert_eq!(
         t.get_config(Config::Addr).await.unwrap().unwrap(),
         "foobar@example.org"
@@ -263,11 +264,13 @@ async fn test_sync() -> Result<()> {
         self_chat_avatar_path,
         alice0.get_blobdir().join(SAVED_MESSAGES_DEDUPLICATED_FILE)
     );
-    assert!(alice1
-        .get_config(Config::Selfavatar)
-        .await?
-        .filter(|path| path.ends_with(".png"))
-        .is_some());
+    assert!(
+        alice1
+            .get_config(Config::Selfavatar)
+            .await?
+            .filter(|path| path.ends_with(".png"))
+            .is_some()
+    );
     alice0.set_config(Config::Selfavatar, None).await?;
     sync(&alice0, &alice1).await;
     assert!(alice1.get_config(Config::Selfavatar).await?.is_none());
@@ -321,17 +324,21 @@ async fn test_no_sync_on_self_sent_msg() -> Result<()> {
         .await?;
     let sent_msg = alice0.send_text(a0b_chat_id, "hi").await;
     alice1.recv_msg(&sent_msg).await;
-    assert!(alice1
-        .get_config(Config::Selfavatar)
-        .await?
-        .filter(|path| path.ends_with(".png"))
-        .is_some());
+    assert!(
+        alice1
+            .get_config(Config::Selfavatar)
+            .await?
+            .filter(|path| path.ends_with(".png"))
+            .is_some()
+    );
     sync(alice1, alice0).await;
-    assert!(alice0
-        .get_config(Config::Selfavatar)
-        .await?
-        .filter(|path| path.ends_with(".jpg"))
-        .is_some());
+    assert!(
+        alice0
+            .get_config(Config::Selfavatar)
+            .await?
+            .filter(|path| path.ends_with(".jpg"))
+            .is_some()
+    );
 
     Ok(())
 }

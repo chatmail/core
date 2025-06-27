@@ -160,9 +160,11 @@ fn test_is_attachment() {
 fn load_mail_with_attachment<'a>(t: &'a TestContext, raw: &'a [u8]) -> ParsedMail<'a> {
     let mail = mailparse::parse_mail(raw).unwrap();
     assert!(get_attachment_filename(t, &mail).unwrap().is_none());
-    assert!(get_attachment_filename(t, &mail.subparts[0])
-        .unwrap()
-        .is_none());
+    assert!(
+        get_attachment_filename(t, &mail.subparts[0])
+            .unwrap()
+            .is_none()
+    );
     mail
 }
 
@@ -321,9 +323,11 @@ async fn test_mailparse_0_16_0_panic() {
     let raw = include_bytes!("../../test-data/message/mailparse-0.16.0-panic.eml");
 
     // There should be an error, but no panic.
-    assert!(MimeMessage::from_bytes(&context.ctx, &raw[..], None)
-        .await
-        .is_err());
+    assert!(
+        MimeMessage::from_bytes(&context.ctx, &raw[..], None)
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -422,9 +426,11 @@ async fn test_mimeparser_with_context() {
 
     // make sure, headers that are only allowed in the encrypted part
     // cannot be set from the outer part
-    assert!(mimeparser
-        .get_header(HeaderDef::SecureJoinFingerprint)
-        .is_none());
+    assert!(
+        mimeparser
+            .get_header(HeaderDef::SecureJoinFingerprint)
+            .is_none()
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -485,9 +491,11 @@ async fn test_mimeparser_with_videochat() {
             .unwrap_or_default(),
         "https://example.org/p2p/?roomname=6HiduoAn4xN"
     );
-    assert!(mimeparser.parts[0]
-        .msg
-        .contains("https://example.org/p2p/?roomname=6HiduoAn4xN"));
+    assert!(
+        mimeparser.parts[0]
+            .msg
+            .contains("https://example.org/p2p/?roomname=6HiduoAn4xN")
+    );
     assert_eq!(mimeparser.user_avatar, None);
     assert_eq!(mimeparser.group_avatar, None);
 }
@@ -1709,7 +1717,10 @@ async fn test_tlsrpt() -> Result<()> {
     assert_eq!(msg.parts.len(), 1);
 
     assert_eq!(msg.parts[0].typ, Viewtype::File);
-    assert_eq!(msg.parts[0].msg, "Report Domain: nine.testrun.org Submitter: google.com Report-ID: <2024.01.20T00.00.00Z+nine.testrun.org@google.com> – This is an aggregate TLS report from google.com");
+    assert_eq!(
+        msg.parts[0].msg,
+        "Report Domain: nine.testrun.org Submitter: google.com Report-ID: <2024.01.20T00.00.00Z+nine.testrun.org@google.com> – This is an aggregate TLS report from google.com"
+    );
 
     Ok(())
 }

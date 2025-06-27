@@ -3,10 +3,10 @@ use crate::chatlist::get_archived_cnt;
 use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
-use crate::imex::{has_backup, imex, ImexMode};
-use crate::message::{delete_msgs, MessengerMessage};
+use crate::imex::{ImexMode, has_backup, imex};
+use crate::message::{MessengerMessage, delete_msgs};
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{sync, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
+use crate::test_utils::{TestContext, TestContextManager, TimeShiftFalsePositiveNote, sync};
 use pretty_assertions::assert_eq;
 use strum::IntoEnumIterator;
 use tokio::fs;
@@ -961,9 +961,11 @@ async fn test_was_device_msg_ever_added() {
     add_device_msg(&t, Some("another-label"), Some(&mut msg))
         .await
         .ok();
-    assert!(was_device_msg_ever_added(&t, "another-label")
-        .await
-        .unwrap());
+    assert!(
+        was_device_msg_ever_added(&t, "another-label")
+            .await
+            .unwrap()
+    );
 
     assert!(!was_device_msg_ever_added(&t, "unused-label").await.unwrap());
 
@@ -1069,10 +1071,12 @@ async fn test_archive() {
     assert_eq!(DC_GCL_NO_SPECIALS, 0x02);
 
     // archive first chat
-    assert!(chat_id1
-        .set_visibility(&t, ChatVisibility::Archived)
-        .await
-        .is_ok());
+    assert!(
+        chat_id1
+            .set_visibility(&t, ChatVisibility::Archived)
+            .await
+            .is_ok()
+    );
     assert!(
         Chat::load_from_db(&t, chat_id1)
             .await
@@ -1093,10 +1097,12 @@ async fn test_archive() {
     assert_eq!(chatlist_len(&t, DC_GCL_ARCHIVED_ONLY).await, 1);
 
     // archive second chat
-    assert!(chat_id2
-        .set_visibility(&t, ChatVisibility::Archived)
-        .await
-        .is_ok());
+    assert!(
+        chat_id2
+            .set_visibility(&t, ChatVisibility::Archived)
+            .await
+            .is_ok()
+    );
     assert!(
         Chat::load_from_db(&t, chat_id1)
             .await
@@ -1117,18 +1123,24 @@ async fn test_archive() {
     assert_eq!(chatlist_len(&t, DC_GCL_ARCHIVED_ONLY).await, 2);
 
     // archive already archived first chat, unarchive second chat two times
-    assert!(chat_id1
-        .set_visibility(&t, ChatVisibility::Archived)
-        .await
-        .is_ok());
-    assert!(chat_id2
-        .set_visibility(&t, ChatVisibility::Normal)
-        .await
-        .is_ok());
-    assert!(chat_id2
-        .set_visibility(&t, ChatVisibility::Normal)
-        .await
-        .is_ok());
+    assert!(
+        chat_id1
+            .set_visibility(&t, ChatVisibility::Archived)
+            .await
+            .is_ok()
+    );
+    assert!(
+        chat_id2
+            .set_visibility(&t, ChatVisibility::Normal)
+            .await
+            .is_ok()
+    );
+    assert!(
+        chat_id2
+            .set_visibility(&t, ChatVisibility::Normal)
+            .await
+            .is_ok()
+    );
     assert!(
         Chat::load_from_db(&t, chat_id1)
             .await
@@ -1368,10 +1380,12 @@ async fn test_pinned() {
     assert_eq!(chatlist, vec![chat_id3, chat_id2, chat_id1]);
 
     // pin
-    assert!(chat_id1
-        .set_visibility(&t, ChatVisibility::Pinned)
-        .await
-        .is_ok());
+    assert!(
+        chat_id1
+            .set_visibility(&t, ChatVisibility::Pinned)
+            .await
+            .is_ok()
+    );
     assert_eq!(
         Chat::load_from_db(&t, chat_id1)
             .await
@@ -1385,10 +1399,12 @@ async fn test_pinned() {
     assert_eq!(chatlist, vec![chat_id1, chat_id3, chat_id2]);
 
     // unpin
-    assert!(chat_id1
-        .set_visibility(&t, ChatVisibility::Normal)
-        .await
-        .is_ok());
+    assert!(
+        chat_id1
+            .set_visibility(&t, ChatVisibility::Normal)
+            .await
+            .is_ok()
+    );
     assert_eq!(
         Chat::load_from_db(&t, chat_id1)
             .await
@@ -1409,10 +1425,12 @@ async fn test_pinned_after_new_msgs() -> Result<()> {
     let alice_chat_id = alice.create_chat(&bob).await.id;
     let bob_chat_id = bob.create_chat(&alice).await.id;
 
-    assert!(alice_chat_id
-        .set_visibility(&alice, ChatVisibility::Pinned)
-        .await
-        .is_ok());
+    assert!(
+        alice_chat_id
+            .set_visibility(&alice, ChatVisibility::Pinned)
+            .await
+            .is_ok()
+    );
     assert_eq!(
         Chat::load_from_db(&alice, alice_chat_id)
             .await?
@@ -1793,10 +1811,12 @@ async fn test_contact_request_fresh_messages() -> Result<()> {
     let chats = Chatlist::try_load(&t, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0).unwrap();
-    assert!(Chat::load_from_db(&t, chat_id)
-        .await
-        .unwrap()
-        .is_contact_request());
+    assert!(
+        Chat::load_from_db(&t, chat_id)
+            .await
+            .unwrap()
+            .is_contact_request()
+    );
     assert_eq!(chat_id.get_msg_cnt(&t).await?, 1);
     assert_eq!(chat_id.get_fresh_msg_cnt(&t).await?, 1);
     let msgs = get_chat_msgs(&t, chat_id).await?;
@@ -2674,9 +2694,11 @@ async fn test_broadcast_multidev() -> Result<()> {
     let a1_broadcast_chat = Chat::load_from_db(&alices[1], a1_broadcast_id).await?;
     assert_eq!(a1_broadcast_chat.get_type(), Chattype::Broadcast);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast list 42");
-    assert!(get_chat_contacts(&alices[1], a1_broadcast_id)
-        .await?
-        .is_empty());
+    assert!(
+        get_chat_contacts(&alices[1], a1_broadcast_id)
+            .await?
+            .is_empty()
+    );
 
     add_contact_to_chat(&alices[1], a1_broadcast_id, a1b_contact_id).await?;
     set_chat_name(&alices[1], a1_broadcast_id, "Broadcast list 43").await?;
@@ -2686,9 +2708,11 @@ async fn test_broadcast_multidev() -> Result<()> {
     let a0_broadcast_chat = Chat::load_from_db(&alices[0], a0_broadcast_id).await?;
     assert_eq!(a0_broadcast_chat.get_type(), Chattype::Broadcast);
     assert_eq!(a0_broadcast_chat.get_name(), "Broadcast list 42");
-    assert!(get_chat_contacts(&alices[0], a0_broadcast_id)
-        .await?
-        .is_empty());
+    assert!(
+        get_chat_contacts(&alices[0], a0_broadcast_id)
+            .await?
+            .is_empty()
+    );
 
     Ok(())
 }
@@ -3422,9 +3446,11 @@ async fn test_sync_broadcast() -> Result<()> {
     remove_contact_from_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
     sync(alice0, alice1).await;
     assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
-    assert!(get_past_chat_contacts(alice1, a1_broadcast_id)
-        .await?
-        .is_empty());
+    assert!(
+        get_past_chat_contacts(alice1, a1_broadcast_id)
+            .await?
+            .is_empty()
+    );
 
     a0_broadcast_id.delete(alice0).await?;
     sync(alice0, alice1).await;
@@ -4102,9 +4128,11 @@ async fn test_cannot_send_edit_request() -> Result<()> {
 
     // Bob cannot edit Alice's message
     let msg = bob.recv_msg(&sent1).await;
-    assert!(send_edit_request(bob, msg.id, "bar".to_string())
-        .await
-        .is_err());
+    assert!(
+        send_edit_request(bob, msg.id, "bar".to_string())
+            .await
+            .is_err()
+    );
 
     // HTML messages cannot be edited
     let mut msg = Message::new_text("plain text".to_string());
@@ -4122,18 +4150,22 @@ async fn test_cannot_send_edit_request() -> Result<()> {
     let msg = alice.get_last_msg().await;
     assert!(msg.is_info());
     assert_eq!(msg.from_id, ContactId::SELF);
-    assert!(send_edit_request(alice, msg.id, "bar".to_string())
-        .await
-        .is_err());
+    assert!(
+        send_edit_request(alice, msg.id, "bar".to_string())
+            .await
+            .is_err()
+    );
 
     // Videochat invitations cannot be edited
     alice
         .set_config(Config::WebrtcInstance, Some("https://foo.bar"))
         .await?;
     let msg_id = send_videochat_invitation(alice, chat_id).await?;
-    assert!(send_edit_request(alice, msg_id, "bar".to_string())
-        .await
-        .is_err());
+    assert!(
+        send_edit_request(alice, msg_id, "bar".to_string())
+            .await
+            .is_err()
+    );
 
     // If not text was given initally, there is nothing to edit
     // (this also avoids complexity in UI element changes; focus is typos and rewordings)
@@ -4200,9 +4232,11 @@ async fn test_send_delete_request_no_encryption() -> Result<()> {
 
     // Alice sends a message, then tries to send a deletion request which fails.
     let sent1 = alice.send_text(alice_chat.id, "wtf").await;
-    assert!(message::delete_msgs_ex(alice, &[sent1.sender_msg_id], true)
-        .await
-        .is_err());
+    assert!(
+        message::delete_msgs_ex(alice, &[sent1.sender_msg_id], true)
+            .await
+            .is_err()
+    );
     sent1.load_from_db().await;
     assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
     Ok(())

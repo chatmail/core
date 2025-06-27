@@ -1,10 +1,10 @@
 //! Implementation of [SecureJoin protocols](https://securejoin.delta.chat/).
 
-use anyhow::{ensure, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, ensure};
 use deltachat_contact_tools::ContactAddress;
-use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
-use crate::chat::{self, get_chat_id_by_grpid, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
@@ -14,7 +14,7 @@ use crate::context::Context;
 use crate::e2ee::ensure_secret_key_exists;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::key::{load_self_public_key, DcKey, Fingerprint};
+use crate::key::{DcKey, Fingerprint, load_self_public_key};
 use crate::log::{error, info, warn};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};

@@ -2,7 +2,7 @@
 
 use std::net::SocketAddr;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use async_smtp::{SmtpClient, SmtpTransport};
 use tokio::io::{AsyncBufRead, AsyncWrite, BufStream};
 

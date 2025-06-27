@@ -3,7 +3,7 @@
 use std::cmp::max;
 use std::collections::BTreeMap;
 
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,7 @@ use crate::log::info;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, Part};
 use crate::tools::time;
-use crate::{chatlist_events, stock_str, EventType};
+use crate::{EventType, chatlist_events, stock_str};
 
 /// Download limits should not be used below `MIN_DOWNLOAD_LIMIT`.
 ///
@@ -83,7 +83,7 @@ impl MsgId {
         let msg = Message::load_from_db(context, self).await?;
         match msg.download_state() {
             DownloadState::Done | DownloadState::Undecipherable => {
-                return Err(anyhow!("Nothing to download."))
+                return Err(anyhow!("Nothing to download."));
             }
             DownloadState::InProgress => return Err(anyhow!("Download already in progress.")),
             DownloadState::Available | DownloadState::Failure => {
@@ -353,8 +353,7 @@ mod tests {
     async fn test_partial_receive_imf() -> Result<()> {
         let t = TestContext::new_alice().await;
 
-        let header =
-            "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
+        let header = "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
              From: bob@example.com\n\
              To: alice@example.org\n\
              Subject: foo\n\
@@ -374,9 +373,10 @@ mod tests {
         let msg = t.get_last_msg().await;
         assert_eq!(msg.download_state(), DownloadState::Available);
         assert_eq!(msg.get_subject(), "foo");
-        assert!(msg
-            .get_text()
-            .contains(&stock_str::partial_download_msg_body(&t, 100000).await));
+        assert!(
+            msg.get_text()
+                .contains(&stock_str::partial_download_msg_body(&t, 100000).await)
+        );
 
         receive_imf_from_inbox(
             &t,
@@ -472,9 +472,11 @@ mod tests {
         )
         .await?;
         assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 0);
-        assert!(Message::load_from_db_optional(&bob, msg.id)
-            .await?
-            .is_none());
+        assert!(
+            Message::load_from_db_optional(&bob, msg.id)
+                .await?
+                .is_none()
+        );
 
         Ok(())
     }
@@ -522,9 +524,11 @@ mod tests {
         // (usually mdn are too small for not being downloaded directly)
         receive_imf_from_inbox(&bob, "bar@example.org", raw, false, None).await?;
         assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 0);
-        assert!(Message::load_from_db_optional(&bob, msg.id)
-            .await?
-            .is_none());
+        assert!(
+            Message::load_from_db_optional(&bob, msg.id)
+                .await?
+                .is_none()
+        );
 
         Ok(())
     }

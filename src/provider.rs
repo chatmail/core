@@ -5,7 +5,7 @@ pub(crate) mod data;
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
 use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::{config, Resolver, TokioResolver};
+use hickory_resolver::{Resolver, TokioResolver, config};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -356,17 +356,21 @@ mod tests {
         let t = TestContext::new().await;
         assert!(get_provider_info(&t, "", false).await.is_none());
         assert!(get_provider_info(&t, "google.com", false).await.unwrap().id == "gmail");
-        assert!(get_provider_info(&t, "example@google.com", false)
-            .await
-            .is_none());
+        assert!(
+            get_provider_info(&t, "example@google.com", false)
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_provider_info_by_addr() -> Result<()> {
         let t = TestContext::new().await;
-        assert!(get_provider_info_by_addr(&t, "google.com", false)
-            .await
-            .is_err());
+        assert!(
+            get_provider_info_by_addr(&t, "google.com", false)
+                .await
+                .is_err()
+        );
         assert!(
             get_provider_info_by_addr(&t, "example@google.com", false)
                 .await?

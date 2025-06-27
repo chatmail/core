@@ -1,11 +1,11 @@
 #![recursion_limit = "256"]
 use std::hint::black_box;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
+use deltachat::Events;
 use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;
-use deltachat::Events;
 use tempfile::tempdir;
 
 async fn address_book_benchmark(n: u32, read_count: u32) {

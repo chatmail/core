@@ -4,7 +4,7 @@
 //! with it rather hard, so here we have a wrapper type that specifically deals with Secure-Join
 //! QR-codes so that the Secure-Join code can have more guarantees when dealing with this.
 
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 
 use crate::contact::ContactId;
 use crate::key::Fingerprint;

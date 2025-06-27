@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use anyhow::{bail, Result};
-use humansize::{format_size, BINARY};
+use anyhow::{Result, bail};
+use humansize::{BINARY, format_size};
 use strum::EnumProperty as EnumPropertyTrait;
 use strum_macros::EnumProperty;
 use tokio::sync::RwLock;

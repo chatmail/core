@@ -1,5 +1,5 @@
 use super::*;
-use crate::{test_utils::TestContext, EventType};
+use crate::{EventType, test_utils::TestContext};
 
 #[test]
 fn test_maybe_add_file() {

@@ -5,12 +5,12 @@ use anyhow::Result;
 
 use crate::net::session::SessionStream;
 
-pub async fn wrap_tls(
+pub async fn wrap_tls<'a>(
     strict_tls: bool,
     hostname: &str,
     alpn: &[&str],
     stream: impl SessionStream + 'static,
-) -> Result<impl SessionStream> {
+) -> Result<impl SessionStream + 'a> {
     if strict_tls {
         let tls_stream = wrap_rustls(hostname, alpn, stream).await?;
         let boxed_stream: Box<dyn SessionStream> = Box::new(tls_stream);
@@ -30,11 +30,11 @@ pub async fn wrap_tls(
     }
 }
 
-pub async fn wrap_rustls(
+pub async fn wrap_rustls<'a>(
     hostname: &str,
     alpn: &[&str],
-    stream: impl SessionStream,
-) -> Result<impl SessionStream> {
+    stream: impl SessionStream + 'a,
+) -> Result<impl SessionStream + 'a> {
     let mut root_cert_store = rustls::RootCertStore::empty();
     root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 

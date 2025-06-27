@@ -4,7 +4,7 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
-use anyhow::{bail, ensure, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure, format_err};
 use futures::TryStreamExt;
 use futures_lite::FutureExt;
 use pin_project::pin_project;
@@ -20,12 +20,12 @@ use crate::context::Context;
 use crate::e2ee;
 use crate::events::EventType;
 use crate::key::{self, DcKey, DcSecretKey, SignedPublicKey, SignedSecretKey};
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
 use crate::tools::{
-    create_folder, delete_file, get_filesuffix_lc, read_file, time, write_file, TempPathGuard,
+    TempPathGuard, create_folder, delete_file, get_filesuffix_lc, read_file, time, write_file,
 };
 
 mod key_transfer;
@@ -33,7 +33,7 @@ mod transfer;
 
 use ::pgp::types::KeyDetails;
 pub use key_transfer::{continue_key_transfer, initiate_key_transfer};
-pub use transfer::{get_backup, BackupProvider};
+pub use transfer::{BackupProvider, get_backup};
 
 // Name of the database file in the backup.
 const DBFILE_BACKUP_NAME: &str = "dc_database_backup.sqlite";
@@ -842,7 +842,7 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::test_utils::{alice_keypair, TestContext};
+    use crate::test_utils::{TestContext, alice_keypair};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_export_public_key_to_asc_file() {
@@ -982,14 +982,16 @@ mod tests {
             let backup = has_backup(&context2, backup_dir.path()).await?;
 
             // Import of unencrypted backup with incorrect "foobar" backup passphrase fails.
-            assert!(imex(
-                &context2,
-                ImexMode::ImportBackup,
-                backup.as_ref(),
-                Some("foobar".to_string())
-            )
-            .await
-            .is_err());
+            assert!(
+                imex(
+                    &context2,
+                    ImexMode::ImportBackup,
+                    backup.as_ref(),
+                    Some("foobar".to_string())
+                )
+                .await
+                .is_err()
+            );
 
             assert!(
                 imex(&context2, ImexMode::ImportBackup, backup.as_ref(), None)

@@ -2,12 +2,12 @@
 use std::hint::black_box;
 use std::path::Path;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
+use deltachat::Events;
 use deltachat::chat::{self, ChatId};
 use deltachat::chatlist::Chatlist;
 use deltachat::context::Context;
 use deltachat::stock_str::StockStrings;
-use deltachat::Events;
 
 async fn get_chat_msgs_benchmark(dbfile: &Path, chats: &[ChatId]) {
     let id = 100;

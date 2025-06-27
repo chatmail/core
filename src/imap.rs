@@ -13,7 +13,7 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use anyhow::{bail, ensure, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure, format_err};
 use async_channel::Receiver;
 use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
 use deltachat_contact_tools::ContactAddress;
@@ -32,9 +32,9 @@ use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::login_param::{
-    prioritize_server_login_params, ConfiguredLoginParam, ConfiguredServerLoginParam,
+    ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
 };
 use crate::message::{self, Message, MessageState, MessengerMessage, MsgId};
 use crate::mimeparser;
@@ -43,7 +43,7 @@ use crate::net::session::SessionStream;
 use crate::oauth2::get_oauth2_access_token;
 use crate::push::encrypt_device_token;
 use crate::receive_imf::{
-    from_field_to_contact_id, get_prefetch_parent_message, receive_imf_inner, ReceivedMsg,
+    ReceivedMsg, from_field_to_contact_id, get_prefetch_parent_message, receive_imf_inner,
 };
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::stock_str;
@@ -56,7 +56,7 @@ pub mod scan_folders;
 pub mod select_folder;
 pub(crate) mod session;
 
-use client::{determine_capabilities, Client};
+use client::{Client, determine_capabilities};
 use mailparse::SingleInfo;
 use session::Session;
 
@@ -1123,7 +1123,8 @@ impl Session {
                 Err(err) => {
                     warn!(
                         context,
-                        "store_seen_flags_on_imap: Failed to select {folder}, will retry later: {err:#}.");
+                        "store_seen_flags_on_imap: Failed to select {folder}, will retry later: {err:#}."
+                    );
                     continue;
                 }
                 Ok(folder_exists) => folder_exists,
@@ -1133,7 +1134,8 @@ impl Session {
             } else if let Err(err) = self.add_flag_finalized_with_set(&uid_set, "\\Seen").await {
                 warn!(
                     context,
-                    "Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}.");
+                    "Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}."
+                );
                 continue;
             } else {
                 info!(
@@ -1349,13 +1351,10 @@ impl Session {
 
                 // Try to find a requested UID in returned FETCH responses.
                 while fetch_response.is_none() {
-                    let next_fetch_response =
-                        if let Some(next_fetch_response) = fetch_responses.next().await {
-                            next_fetch_response
-                        } else {
-                            // No more FETCH responses received from the server.
-                            break;
-                        };
+                    let Some(next_fetch_response) = fetch_responses.next().await else {
+                        // No more FETCH responses received from the server.
+                        break;
+                    };
 
                     let next_fetch_response =
                         next_fetch_response.context("Failed to process IMAP FETCH result")?;
@@ -1806,9 +1805,9 @@ impl Session {
     /// In this case we may want to skip next IDLE and do a round
     /// of fetching new messages and synchronizing seen flags.
     fn drain_unsolicited_responses(&self, context: &Context) -> Result<bool> {
+        use UnsolicitedResponse::*;
         use async_imap::imap_proto::Response;
         use async_imap::imap_proto::ResponseCode;
-        use UnsolicitedResponse::*;
 
         let folder = self.selected_folder.as_deref().unwrap_or_default();
         let mut should_refetch = false;
@@ -2142,7 +2141,7 @@ fn get_folder_meaning_by_attrs(folder_attrs: &[NameAttribute]) -> FolderMeaning 
             NameAttribute::Junk => return FolderMeaning::Spam,
             NameAttribute::Drafts => return FolderMeaning::Drafts,
             NameAttribute::All | NameAttribute::Flagged => return FolderMeaning::Virtual,
-            NameAttribute::Extension(ref label) => {
+            NameAttribute::Extension(label) => {
                 match label.as_ref() {
                     "\\Spam" => return FolderMeaning::Spam,
                     "\\Important" => return FolderMeaning::Virtual,

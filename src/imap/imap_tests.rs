@@ -111,7 +111,9 @@ async fn check_target_folder_combination(
     outgoing: bool,
     setupmessage: bool,
 ) -> Result<()> {
-    println!("Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}");
+    println!(
+        "Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}"
+    );
 
     let t = TestContext::new_alice().await;
     t.ctx
@@ -166,7 +168,11 @@ async fn check_target_folder_combination(
     } else {
         Some(expected_destination)
     };
-    assert_eq!(expected, actual.as_deref(), "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}: expected {expected:?}, got {actual:?}");
+    assert_eq!(
+        expected,
+        actual.as_deref(),
+        "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}: expected {expected:?}, got {actual:?}"
+    );
     Ok(())
 }
 

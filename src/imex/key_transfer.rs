@@ -1,9 +1,9 @@
 //! # Key transfer via Autocrypt Setup Message.
 use std::io::BufReader;
 
-use rand::{thread_rng, Rng};
+use rand::{Rng, thread_rng};
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 
 use crate::blob::BlobObject;
 use crate::chat::{self, ChatId};
@@ -12,7 +12,7 @@ use crate::constants::{ASM_BODY, ASM_SUBJECT};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::imex::set_self_key;
-use crate::key::{load_self_secret_key, DcKey};
+use crate::key::{DcKey, load_self_secret_key};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
@@ -141,7 +141,7 @@ fn create_setup_code(_context: &Context) -> String {
 
     for i in 0..9 {
         loop {
-            random_val = rng.gen();
+            random_val = rng.r#gen();
             if random_val as usize <= 60000 {
                 break;
             }
@@ -184,7 +184,7 @@ fn normalize_setup_code(s: &str) -> String {
 mod tests {
     use super::*;
 
-    use crate::pgp::{split_armored_data, HEADER_AUTOCRYPT, HEADER_SETUPCODE};
+    use crate::pgp::{HEADER_AUTOCRYPT, HEADER_SETUPCODE, split_armored_data};
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
     use ::pgp::armor::BlockType;

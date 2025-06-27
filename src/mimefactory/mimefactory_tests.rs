@@ -1,12 +1,12 @@
 use deltachat_contact_tools::ContactAddress;
 use mail_builder::headers::Header;
-use mailparse::{addrparse_header, MailHeaderMap};
+use mailparse::{MailHeaderMap, addrparse_header};
 use std::str;
 
 use super::*;
 use crate::chat::{
-    self, add_contact_to_chat, create_group_chat, remove_contact_from_chat, send_text_msg, ChatId,
-    ProtectionStatus,
+    self, ChatId, ProtectionStatus, add_contact_to_chat, create_group_chat,
+    remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
@@ -14,7 +14,7 @@ use crate::contact::Origin;
 use crate::headerdef::HeaderDef;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{get_chat_msg, TestContext, TestContextManager};
+use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
 
 fn render_email_address(display_name: &str, addr: &str) -> String {
     let mut output = Vec::<u8>::new();
@@ -32,9 +32,11 @@ fn test_render_email_address() {
     let addr = "x@y.org";
 
     assert!(!display_name.is_ascii());
-    assert!(!display_name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == ' '));
+    assert!(
+        !display_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == ' ')
+    );
 
     let s = render_email_address(display_name, addr);
 
@@ -49,9 +51,11 @@ fn test_render_email_address_noescape() {
     let addr = "x@y.org";
 
     assert!(display_name.is_ascii());
-    assert!(display_name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == ' '));
+    assert!(
+        display_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == ' ')
+    );
 
     let s = render_email_address(display_name, addr);
 
@@ -676,11 +680,13 @@ async fn test_selfavatar_unencrypted_signed() {
         .unwrap()
         .unwrap();
     let alice_contact = Contact::get_by_id(&bob.ctx, alice_id).await.unwrap();
-    assert!(alice_contact
-        .get_profile_image(&bob.ctx)
-        .await
-        .unwrap()
-        .is_some());
+    assert!(
+        alice_contact
+            .get_profile_image(&bob.ctx)
+            .await
+            .unwrap()
+            .is_some()
+    );
 
     // if another message is sent, that one must not contain the avatar
     let mut msg = Message::new_text("this is the text!".to_string());
@@ -719,11 +725,13 @@ async fn test_selfavatar_unencrypted_signed() {
 
     bob.recv_msg(&sent_msg).await;
     let alice_contact = Contact::get_by_id(&bob.ctx, alice_id).await.unwrap();
-    assert!(alice_contact
-        .get_profile_image(&bob.ctx)
-        .await
-        .unwrap()
-        .is_some());
+    assert!(
+        alice_contact
+            .get_profile_image(&bob.ctx)
+            .await
+            .unwrap()
+            .is_some()
+    );
 }
 
 /// Test that removed member address does not go into the `To:` field.
@@ -757,7 +765,7 @@ async fn test_remove_member_bcc() -> Result<()> {
     let to = addrparse_header(to)?;
     for to_addr in to.iter() {
         match to_addr {
-            mailparse::MailAddr::Single(ref info) => {
+            mailparse::MailAddr::Single(info) => {
                 // Addresses should be of existing members (Alice and Bob) and not Charlie.
                 assert_ne!(info.addr, charlie_addr);
             }

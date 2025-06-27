@@ -2,9 +2,9 @@
 
 use anyhow::{Context as _, Result};
 
-use super::qrinvite::QrInvite;
 use super::HandshakeMessage;
-use crate::chat::{self, is_contact_in_chat, ChatId, ProtectionStatus};
+use super::qrinvite::QrInvite;
+use crate::chat::{self, ChatId, ProtectionStatus, is_contact_in_chat};
 use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
@@ -14,7 +14,7 @@ use crate::log::info;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
-use crate::securejoin::{encrypted_and_signed, verify_sender_by_fingerprint, ContactId};
+use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{create_smeared_timestamp, time};
@@ -285,7 +285,7 @@ pub(crate) async fn send_handshake_message(
             // Previous Delta Chat core also sent `Secure-Join-Group` header
             // in `vg-request` messages,
             // but it was not used on the receiver.
-            if let QrInvite::Group { ref grpid, .. } = invite {
+            if let QrInvite::Group { grpid, .. } = invite {
                 msg.param.set(Param::Arg4, grpid);
             }
         }
@@ -346,11 +346,7 @@ async fn joining_chat_id(
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
-        QrInvite::Group {
-            ref grpid,
-            ref name,
-            ..
-        } => {
+        QrInvite::Group { grpid, name, .. } => {
             let group_chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some((chat_id, _protected, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;

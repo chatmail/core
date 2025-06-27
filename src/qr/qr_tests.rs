@@ -1,5 +1,5 @@
 use super::*;
-use crate::chat::{create_group_chat, ProtectionStatus};
+use crate::chat::{ProtectionStatus, create_group_chat};
 use crate::config::Config;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{TestContext, TestContextManager};

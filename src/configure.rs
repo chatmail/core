@@ -13,21 +13,21 @@ mod auto_mozilla;
 mod auto_outlook;
 pub(crate) mod server_params;
 
-use anyhow::{bail, ensure, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure, format_err};
 use auto_mozilla::moz_autoconfigure;
 use auto_outlook::outlk_autodiscover;
-use deltachat_contact_tools::{addr_normalize, EmailAddress};
+use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use futures::FutureExt;
 use futures_lite::FutureExt as _;
 use percent_encoding::utf8_percent_encode;
-use server_params::{expand_param_vector, ServerParams};
+use server_params::{ServerParams, expand_param_vector};
 use tokio::task;
 
 use crate::config::{self, Config};
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
-use crate::log::{info, warn, LogExt};
+use crate::log::{LogExt, info, warn};
 pub use crate::login_param::EnteredLoginParam;
 use crate::login_param::{
     ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
@@ -39,8 +39,8 @@ use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
 use crate::smtp::Smtp;
 use crate::sync::Sync::*;
 use crate::tools::time;
+use crate::{EventType, stock_str};
 use crate::{chat, provider};
-use crate::{stock_str, EventType};
 use deltachat_contact_tools::addr_cmp;
 
 macro_rules! progress {
@@ -215,7 +215,9 @@ impl Context {
     /// (i.e. [EnteredLoginParam::addr]).
     #[expect(clippy::unused_async)]
     pub async fn delete_transport(&self, _addr: &str) -> Result<()> {
-        bail!("Adding and removing additional transports is not supported yet. Check back in a few months!")
+        bail!(
+            "Adding and removing additional transports is not supported yet. Check back in a few months!"
+        )
     }
 
     async fn inner_configure(&self, param: &EnteredLoginParam) -> Result<()> {

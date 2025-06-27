@@ -4,10 +4,10 @@ mod dclogin_scheme;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
-use anyhow::{anyhow, bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow, bail, ensure};
 pub use dclogin_scheme::LoginOptions;
-use deltachat_contact_tools::{addr_normalize, may_be_valid_addr, ContactAddress};
-use percent_encoding::{percent_decode_str, percent_encode, NON_ALPHANUMERIC};
+use deltachat_contact_tools::{ContactAddress, addr_normalize, may_be_valid_addr};
+use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
 use serde::Deserialize;
 
 pub(crate) use self::dclogin_scheme::configure_from_login_qr;
@@ -18,7 +18,7 @@ use crate::events::EventType;
 use crate::key::Fingerprint;
 use crate::message::Message;
 use crate::net::http::post_empty;
-use crate::net::proxy::{ProxyConfig, DEFAULT_SOCKS_PORT};
+use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
 use crate::tools::validate_id;
 
@@ -367,8 +367,8 @@ pub async fn check_qr(context: &Context, qr: &str) -> Result<Qr> {
 pub fn format_backup(qr: &Qr) -> Result<String> {
     match qr {
         Qr::Backup2 {
-            ref node_addr,
-            ref auth_token,
+            node_addr,
+            auth_token,
         } => {
             let node_addr = serde_json::to_string(node_addr)?;
             Ok(format!(

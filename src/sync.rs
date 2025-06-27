@@ -332,7 +332,7 @@ mod tests {
     use anyhow::bail;
 
     use super::*;
-    use crate::chat::{remove_contact_from_chat, Chat, ProtectionStatus};
+    use crate::chat::{Chat, ProtectionStatus, remove_contact_from_chat};
     use crate::chatlist::Chatlist;
     use crate::contact::{Contact, Origin};
     use crate::securejoin::get_securejoin_qr;

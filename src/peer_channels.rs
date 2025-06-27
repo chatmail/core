@@ -23,26 +23,26 @@
 //!    (scoped per WebXDC app instance/message-id). The other peers can then join the gossip with `joinRealtimeChannel().setListener()`
 //!    and `joinRealtimeChannel().send()` just like the other peers.
 
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow, bail};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
 use iroh::{Endpoint, NodeAddr, NodeId, PublicKey, RelayMode, RelayUrl, SecretKey};
-use iroh_gossip::net::{Event, Gossip, GossipEvent, JoinOptions, GOSSIP_ALPN};
+use iroh_gossip::net::{Event, GOSSIP_ALPN, Gossip, GossipEvent, JoinOptions};
 use iroh_gossip::proto::TopicId;
 use parking_lot::Mutex;
 use std::collections::{BTreeSet, HashMap};
 use std::env;
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{RwLock, oneshot};
 use tokio::task::JoinHandle;
 use url::Url;
 
+use crate::EventType;
 use crate::chat::send_msg;
 use crate::config::Config;
 use crate::context::Context;
 use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
-use crate::EventType;
 
 /// The length of an ed25519 `PublicKey`, in bytes.
 const PUBLIC_KEY_LENGTH: usize = 32;
@@ -554,10 +554,10 @@ async fn subscribe_loop(
 mod tests {
     use super::*;
     use crate::{
+        EventType,
         chat::send_msg,
         message::{Message, Viewtype},
         test_utils::TestContextManager,
-        EventType,
     };
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -733,10 +733,12 @@ mod tests {
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
 
-        assert!(alice
-            .get_config_bool(Config::WebxdcRealtimeEnabled)
-            .await
-            .unwrap());
+        assert!(
+            alice
+                .get_config_bool(Config::WebxdcRealtimeEnabled)
+                .await
+                .unwrap()
+        );
         // Alice sends webxdc to bob
         let alice_chat = alice.create_chat(bob).await;
         let mut instance = Message::new(Viewtype::File);
@@ -901,17 +903,19 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
-        assert!(alice
-            .iroh
-            .read()
-            .await
-            .as_ref()
-            .unwrap()
-            .iroh_channels
-            .read()
-            .await
-            .get(&topic)
-            .is_none());
+        assert!(
+            alice
+                .iroh
+                .read()
+                .await
+                .as_ref()
+                .unwrap()
+                .iroh_channels
+                .read()
+                .await
+                .get(&topic)
+                .is_none()
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

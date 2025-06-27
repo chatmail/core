@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use deltachat_contact_tools::{addr_cmp, sanitize_single_line};
 use serde::{Deserialize, Serialize};
@@ -17,10 +17,10 @@ use crate::configure::EnteredLoginParam;
 use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{info, LogExt};
+use crate::log::{LogExt, info};
 use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
-use crate::provider::{get_provider_by_id, Provider};
+use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
 
@@ -813,7 +813,10 @@ impl Context {
                     bail!("Cannot change ConfiguredAddr");
                 }
                 if let Some(addr) = value {
-                    info!(self, "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!");
+                    info!(
+                        self,
+                        "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
+                    );
                     ConfiguredLoginParam::from_json(&format!(
                         r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
                     ))?

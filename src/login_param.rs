@@ -2,19 +2,19 @@
 
 use std::fmt;
 
-use anyhow::{bail, ensure, format_err, Context as _, Result};
-use deltachat_contact_tools::{addr_cmp, addr_normalize, EmailAddress};
+use anyhow::{Context as _, Result, bail, ensure, format_err};
+use deltachat_contact_tools::{EmailAddress, addr_cmp, addr_normalize};
 use num_traits::ToPrimitive as _;
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::configure::server_params::{expand_param_vector, ServerParams};
+use crate::configure::server_params::{ServerParams, expand_param_vector};
 use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
 use crate::net::load_connection_timestamp;
 pub use crate::net::proxy::ProxyConfig;
 pub use crate::provider::Socket;
-use crate::provider::{get_provider_by_id, Protocol, Provider, UsernamePattern};
+use crate::provider::{Protocol, Provider, UsernamePattern, get_provider_by_id};
 use crate::sql::Sql;
 use crate::tools::ToOption;
 
@@ -330,11 +330,7 @@ impl fmt::Display for EnteredLoginParam {
 }
 
 fn unset_empty(s: &str) -> &str {
-    if s.is_empty() {
-        "unset"
-    } else {
-        s
-    }
+    if s.is_empty() { "unset" } else { s }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

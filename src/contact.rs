@@ -6,19 +6,19 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
 use base64::Engine as _;
 pub use deltachat_contact_tools::may_be_valid_addr;
 use deltachat_contact_tools::{
-    self as contact_tools, addr_normalize, sanitize_name, sanitize_name_and_addr, ContactAddress,
-    VcardContact,
+    self as contact_tools, ContactAddress, VcardContact, addr_normalize, sanitize_name,
+    sanitize_name_and_addr,
 };
 use deltachat_derive::{FromSql, ToSql};
 use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use tokio::task;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 
 use crate::blob::BlobObject;
 use crate::chat::{ChatId, ChatIdBlocked, ProtectionStatus};
@@ -28,15 +28,15 @@ use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{
-    load_self_public_key, self_fingerprint, self_fingerprint_opt, DcKey, Fingerprint,
-    SignedPublicKey,
+    DcKey, Fingerprint, SignedPublicKey, load_self_public_key, self_fingerprint,
+    self_fingerprint_opt,
 };
-use crate::log::{info, warn, LogExt};
+use crate::log::{LogExt, info, warn};
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
 use crate::sync::{self, Sync::*};
-use crate::tools::{duration_to_str, get_abs_path, time, SystemTime};
+use crate::tools::{SystemTime, duration_to_str, get_abs_path, time};
 use crate::{chat, chatlist_events, stock_str};
 
 /// Time during which a contact is considered as seen recently.

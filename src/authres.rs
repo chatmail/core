@@ -548,12 +548,13 @@ Authentication-Results: dkim=";
         let rcvd = bob.recv_msg(&sent).await;
 
         // The message info should contain a warning:
-        assert!(rcvd
-            .id
-            .get_info(&bob)
-            .await
-            .unwrap()
-            .contains("DKIM Results: Passed=false"));
+        assert!(
+            rcvd.id
+                .get_info(&bob)
+                .await
+                .unwrap()
+                .contains("DKIM Results: Passed=false")
+        );
 
         Ok(())
     }

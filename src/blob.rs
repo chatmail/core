@@ -6,11 +6,11 @@ use std::iter::FusedIterator;
 use std::mem;
 use std::path::{Path, PathBuf};
 
-use anyhow::{ensure, format_err, Context as _, Result};
+use anyhow::{Context as _, Result, ensure, format_err};
 use base64::Engine as _;
 use futures::StreamExt;
-use image::codecs::jpeg::JpegEncoder;
 use image::ImageReader;
+use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat, Pixel, Rgba};
 use num_traits::FromPrimitive;
 use tokio::{fs, task};
@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::constants::{self, MediaQuality};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::tools::sanitize_filename;
 
 /// Represents a file in the blob directory.
@@ -205,11 +205,7 @@ impl<'a> BlobObject<'a> {
     /// to be lowercase.
     pub fn suffix(&self) -> Option<&str> {
         let ext = self.name.rsplit('.').next();
-        if ext == Some(&self.name) {
-            None
-        } else {
-            ext
-        }
+        if ext == Some(&self.name) { None } else { ext }
     }
 
     /// Checks whether a name is a valid blob name.

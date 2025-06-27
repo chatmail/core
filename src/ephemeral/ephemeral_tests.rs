@@ -1,7 +1,7 @@
 use super::*;
 use crate::chat::{
-    add_contact_to_chat, marknoticed_chat, remove_contact_from_chat, set_muted, ChatVisibility,
-    MuteDuration,
+    ChatVisibility, MuteDuration, add_contact_to_chat, marknoticed_chat, remove_contact_from_chat,
+    set_muted,
 };
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_ARCHIVED_LINK;
@@ -12,7 +12,7 @@ use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager};
 use crate::timesmearing::MAX_SECONDS_TO_LEND_FROM_FUTURE;
 use crate::{
-    chat::{self, create_group_chat, send_text_msg, Chat, ChatItem, ProtectionStatus},
+    chat::{self, Chat, ChatItem, ProtectionStatus, create_group_chat, send_text_msg},
     tools::IsNoneOrEmpty,
 };
 
@@ -649,9 +649,11 @@ async fn test_ephemeral_msg_offline() -> Result<()> {
         .set_ephemeral_timer(&alice, Timer::Enabled { duration })
         .await?;
     let mut msg = Message::new_text("hi".to_string());
-    assert!(chat::send_msg_sync(&alice, chat.id, &mut msg)
-        .await
-        .is_err());
+    assert!(
+        chat::send_msg_sync(&alice, chat.id, &mut msg)
+            .await
+            .is_err()
+    );
     let stmt = "SELECT COUNT(*) FROM smtp WHERE msg_id=?";
     assert!(alice.sql.exists(stmt, (msg.id,)).await?);
     let now = time();
@@ -729,9 +731,11 @@ async fn test_noticed_ephemeral_timer() -> Result<()> {
 
     delete_expired_messages(bob, time()).await?;
 
-    assert!(Message::load_from_db_optional(bob, bob_received_message.id)
-        .await?
-        .is_none());
+    assert!(
+        Message::load_from_db_optional(bob, bob_received_message.id)
+            .await?
+            .is_none()
+    );
     Ok(())
 }
 
@@ -757,9 +761,11 @@ async fn test_archived_ephemeral_timer() -> Result<()> {
 
     delete_expired_messages(bob, time()).await?;
 
-    assert!(Message::load_from_db_optional(bob, bob_received_message.id)
-        .await?
-        .is_none());
+    assert!(
+        Message::load_from_db_optional(bob, bob_received_message.id)
+            .await?
+            .is_none()
+    );
 
     // Bob mutes the chat so it is not unarchived.
     set_muted(bob, bob_received_message.chat_id, MuteDuration::Forever).await?;

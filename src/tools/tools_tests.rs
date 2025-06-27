@@ -10,20 +10,17 @@ use crate::{receive_imf::receive_imf, test_utils::TestContext};
 fn test_parse_receive_headers() {
     // Test `parse_receive_headers()` with some more-or-less random emails from the test-data
     let raw = include_bytes!("../../test-data/message/mail_with_cc.txt");
-    let expected =
-        "Hop: From: localhost; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:22 +0000\n\
+    let expected = "Hop: From: localhost; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:22 +0000\n\
              Hop: From: hq5.merlinux.eu; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:25 +0000";
     check_parse_receive_headers(raw, expected);
 
     let raw = include_bytes!("../../test-data/message/wrong-html.eml");
-    let expected =
-        "Hop: From: oxbsltgw18.schlund.de; By: mrelayeu.kundenserver.de; Date: Thu, 6 Aug 2020 16:40:31 +0000\n\
+    let expected = "Hop: From: oxbsltgw18.schlund.de; By: mrelayeu.kundenserver.de; Date: Thu, 6 Aug 2020 16:40:31 +0000\n\
              Hop: From: mout.kundenserver.de; By: dd37930.kasserver.com; Date: Thu, 6 Aug 2020 16:40:32 +0000";
     check_parse_receive_headers(raw, expected);
 
     let raw = include_bytes!("../../test-data/message/posteo_ndn.eml");
-    let expected =
-        "Hop: By: mout01.posteo.de; Date: Tue, 9 Jun 2020 18:44:22 +0000\n\
+    let expected = "Hop: By: mout01.posteo.de; Date: Tue, 9 Jun 2020 18:44:22 +0000\n\
              Hop: From: mout01.posteo.de; By: mx04.posteo.de; Date: Tue, 9 Jun 2020 18:44:22 +0000\n\
              Hop: From: mx04.posteo.de; By: mailin06.posteo.de; Date: Tue, 9 Jun 2020 18:44:23 +0000\n\
              Hop: From: mailin06.posteo.de; By: proxy02.posteo.de; Date: Tue, 9 Jun 2020 18:44:23 +0000\n\
@@ -273,9 +270,11 @@ async fn test_file_handling() {
         };
     }
 
-    assert!(delete_file(context, Path::new("$BLOBDIR/lkqwjelqkwlje"))
-        .await
-        .is_err());
+    assert!(
+        delete_file(context, Path::new("$BLOBDIR/lkqwjelqkwlje"))
+            .await
+            .is_err()
+    );
     assert!(
         write_file(context, Path::new("$BLOBDIR/foobar"), b"content")
             .await
@@ -298,21 +297,29 @@ async fn test_file_handling() {
 
     assert!(file_exist!(context, &abs_path));
 
-    assert!(delete_file(context, Path::new("$BLOBDIR/foobar"))
-        .await
-        .is_ok());
-    assert!(create_folder(context, Path::new("$BLOBDIR/foobar-folder"))
-        .await
-        .is_ok());
+    assert!(
+        delete_file(context, Path::new("$BLOBDIR/foobar"))
+            .await
+            .is_ok()
+    );
+    assert!(
+        create_folder(context, Path::new("$BLOBDIR/foobar-folder"))
+            .await
+            .is_ok()
+    );
     assert!(file_exist!(context, "$BLOBDIR/foobar-folder"));
-    assert!(delete_file(context, Path::new("$BLOBDIR/foobar-folder"))
-        .await
-        .is_err());
+    assert!(
+        delete_file(context, Path::new("$BLOBDIR/foobar-folder"))
+            .await
+            .is_err()
+    );
 
     let fn0 = "$BLOBDIR/data.data";
-    assert!(write_file(context, Path::new(fn0), b"content")
-        .await
-        .is_ok());
+    assert!(
+        write_file(context, Path::new(fn0), b"content")
+            .await
+            .is_ok()
+    );
 
     assert!(delete_file(context, Path::new(fn0)).await.is_ok());
     assert!(!file_exist!(context, &fn0));

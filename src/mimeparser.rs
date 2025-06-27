@@ -6,11 +6,11 @@ use std::path::Path;
 use std::str;
 use std::str::FromStr;
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use deltachat_contact_tools::{addr_cmp, addr_normalize, sanitize_bidi_characters};
 use deltachat_derive::{FromSql, ToSql};
 use format_flowed::unformat_flowed;
-use mailparse::{addrparse_header, DispositionType, MailHeader, MailHeaderMap, SingleInfo};
+use mailparse::{DispositionType, MailHeader, MailHeaderMap, SingleInfo, addrparse_header};
 use mime::Mime;
 
 use crate::aheader::Aheader;
@@ -25,11 +25,11 @@ use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::key::{self, load_self_secret_keyring, DcKey, Fingerprint, SignedPublicKey};
+use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
 use crate::log::{error, info, warn};
-use crate::message::{self, get_vcard_summary, set_msg_failed, Message, MsgId, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
 use crate::param::{Param, Params};
-use crate::simplify::{simplify, SimplifiedText};
+use crate::simplify::{SimplifiedText, simplify};
 use crate::sync::SyncItems;
 use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
@@ -1643,7 +1643,10 @@ impl MimeMessage {
             if status_part.ctype.mimetype != "message/delivery-status"
                 && status_part.ctype.mimetype != "message/global-delivery-status"
             {
-                warn!(context, "Second part of Delivery Status Notification is not message/delivery-status or message/global-delivery-status, ignoring");
+                warn!(
+                    context,
+                    "Second part of Delivery Status Notification is not message/delivery-status or message/global-delivery-status, ignoring"
+                );
                 return Ok(None);
             }
 
@@ -2222,13 +2225,13 @@ fn get_all_addresses_from_header(headers: &[MailHeader], header: &str) -> Vec<Si
         if let Ok(addrs) = mailparse::addrparse_header(header) {
             for addr in addrs.iter() {
                 match addr {
-                    mailparse::MailAddr::Single(ref info) => {
+                    mailparse::MailAddr::Single(info) => {
                         result.push(SingleInfo {
                             addr: addr_normalize(&info.addr).to_lowercase(),
                             display_name: info.display_name.clone(),
                         });
                     }
-                    mailparse::MailAddr::Group(ref infos) => {
+                    mailparse::MailAddr::Group(infos) => {
                         for info in &infos.addrs {
                             result.push(SingleInfo {
                                 addr: addr_normalize(&info.addr).to_lowercase(),

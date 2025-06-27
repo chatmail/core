@@ -15,26 +15,26 @@ use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
 use pretty_assertions::assert_eq;
 use rand::Rng;
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
 use tokio::{fs, task};
 
 use crate::chat::{
-    self, add_to_chat_contacts_table, create_group_chat, Chat, ChatId, ChatIdBlocked,
-    MessageListOptions, ProtectionStatus,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, ProtectionStatus,
+    add_to_chat_contacts_table, create_group_chat,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype};
 use crate::constants::{DC_CHAT_ID_TRASH, DC_GCL_NO_SPECIALS};
 use crate::contact::{
-    import_vcard, make_vcard, mark_contact_id_as_verified, Contact, ContactId, Modifier, Origin,
+    Contact, ContactId, Modifier, Origin, import_vcard, make_vcard, mark_contact_id_as_verified,
 };
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, self_fingerprint, DcKey, DcSecretKey};
+use crate::key::{self, DcKey, DcSecretKey, self_fingerprint};
 use crate::log::warn;
-use crate::message::{update_msg_state, Message, MessageState, MsgId, Viewtype};
+use crate::message::{Message, MessageState, MsgId, Viewtype, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::KeyPair;
 use crate::receive_imf::receive_imf;
@@ -143,7 +143,8 @@ impl TestContextManager {
     ) -> Message {
         let received_msg = self.send_recv(from, to, msg).await;
         assert_eq!(
-            received_msg.chat_blocked, Blocked::Request,
+            received_msg.chat_blocked,
+            Blocked::Request,
             "`send_recv_accept()` is meant to be used for chat requests. Use `send_recv()` if the chat is already accepted."
         );
         received_msg.chat_id.accept(to).await.unwrap();
@@ -418,7 +419,7 @@ impl TestContext {
     async fn new_internal(name: Option<String>, log_sink: Option<LogSink>) -> Self {
         let dir = tempdir().unwrap();
         let dbfile = dir.path().join("db.sqlite");
-        let id = rand::thread_rng().gen();
+        let id = rand::thread_rng().r#gen();
         if let Some(name) = name {
             let mut context_names = CONTEXT_NAMES.write().unwrap();
             context_names.insert(id, name);
@@ -866,11 +867,13 @@ impl TestContext {
 
     pub async fn assert_no_chat(&self, id: ChatId) {
         assert!(Chat::load_from_db(self, id).await.is_err());
-        assert!(!self
-            .sql
-            .exists("SELECT COUNT(*) FROM chats WHERE id=?", (id,))
-            .await
-            .unwrap());
+        assert!(
+            !self
+                .sql
+                .exists("SELECT COUNT(*) FROM chats WHERE id=?", (id,))
+                .await
+                .unwrap()
+        );
     }
 
     /// Sends out the text message.
@@ -1311,7 +1314,7 @@ impl EventTracker {
     /// Consumes events looking for an [`EventType::Info`] with substring matching.
     pub async fn get_info_contains(&self, s: &str) -> EventType {
         self.get_matching(|evt| match evt {
-            EventType::Info(ref msg) => msg.contains(s),
+            EventType::Info(msg) => msg.contains(s),
             _ => false,
         })
         .await

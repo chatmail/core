@@ -11,7 +11,9 @@ type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Got a NO response when trying to select {0}, usually this means that it doesn't exist: {1}")]
+    #[error(
+        "Got a NO response when trying to select {0}, usually this means that it doesn't exist: {1}"
+    )]
     NoFolder(String, String),
 
     #[error("IMAP other error: {0}")]
@@ -139,7 +141,7 @@ impl ImapSession {
                     Error::NoFolder(..) => return Ok(false),
                     _ => {
                         return Err(err)
-                            .with_context(|| format!("Failed to select folder {folder:?}"))?
+                            .with_context(|| format!("Failed to select folder {folder:?}"))?;
                     }
                 },
             }
@@ -210,7 +212,10 @@ impl ImapSession {
                     // If UIDNEXT changed, there are new emails.
                     self.new_mail |= new_uid_next != old_uid_next;
                 } else {
-                    warn!(context, "Folder {folder} was just selected but we failed to determine UIDNEXT, assume that it has new mail.");
+                    warn!(
+                        context,
+                        "Folder {folder} was just selected but we failed to determine UIDNEXT, assume that it has new mail."
+                    );
                     self.new_mail = true;
                 }
             }

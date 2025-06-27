@@ -6,8 +6,8 @@
 //! It provides [`PushSubscriber`] type
 //! which holds push notification token for the device,
 //! shared by all accounts.
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Result};
 use base64::Engine as _;

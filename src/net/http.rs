@@ -1,6 +1,6 @@
 //! # HTTP module.
 
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{Context as _, Result, anyhow, bail};
 use bytes::Bytes;
 use http_body_util::BodyExt;
 use hyper_util::rt::TokioIo;

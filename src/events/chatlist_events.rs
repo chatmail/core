@@ -1,4 +1,4 @@
-use crate::{chat::ChatId, contact::ContactId, context::Context, EventType};
+use crate::{EventType, chat::ChatId, contact::ContactId, context::Context};
 
 /// order or content of chatlist changes (chat ids, not the actual chatlist item)
 pub(crate) fn emit_chatlist_changed(context: &Context) {
@@ -64,9 +64,10 @@ mod test_chatlist_events {
     };
 
     use crate::{
+        EventType,
         chat::{
-            self, create_broadcast_list, create_group_chat, set_muted, ChatId, ChatVisibility,
-            MuteDuration, ProtectionStatus,
+            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast_list,
+            create_group_chat, set_muted,
         },
         config::Config,
         constants::*,
@@ -76,7 +77,6 @@ mod test_chatlist_events {
         receive_imf::receive_imf,
         securejoin::{get_securejoin_qr, join_securejoin},
         test_utils::{TestContext, TestContextManager},
-        EventType,
     };
 
     use crate::tools::SystemTime;

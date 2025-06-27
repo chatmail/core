@@ -4,9 +4,9 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Instant;
 
-use anyhow::{ensure, Context as _, Result};
-use deltachat_contact_tools::addr_cmp;
+use anyhow::{Context as _, Result, ensure};
 use deltachat_contact_tools::EmailAddress;
+use deltachat_contact_tools::addr_cmp;
 use pgp::composed::SignedPublicKey;
 use rusqlite::OptionalExtension;
 
@@ -1521,7 +1521,10 @@ fn migrate_key_contacts(
             context,
             "Created key-contacts identified by autocrypt key: {autocrypt_key_contacts:?}"
         );
-        info!(context, "Created key-contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_key_contacts_with_reset_peerstate:?}");
+        info!(
+            context,
+            "Created key-contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_key_contacts_with_reset_peerstate:?}"
+        );
         info!(
             context,
             "Created key-contacts identified by verified key: {verified_key_contacts:?}"
@@ -1538,7 +1541,10 @@ fn migrate_key_contacts(
                 match verified_key_contacts.get(&verifier_original_contact) {
                     Some(v) => *v,
                     None => {
-                        warn!(context, "Couldn't find key-contact for {verifier_original_contact} who verified {new_contact}");
+                        warn!(
+                            context,
+                            "Couldn't find key-contact for {verifier_original_contact} who verified {new_contact}"
+                        );
                         continue;
                     }
                 }
@@ -1630,7 +1636,10 @@ fn migrate_key_contacts(
                 .context("Step 26")?;
 
             let mut keep_address_contacts = |reason: &str| {
-                info!(context, "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}");
+                info!(
+                    context,
+                    "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}"
+                );
                 for m in &old_members {
                     orphaned_contacts.remove(m);
                 }
@@ -1645,7 +1654,10 @@ fn migrate_key_contacts(
                 //   and the effect will be the same.
                 100 => {
                     let Some(old_member) = old_members.first() else {
-                        info!(context, "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat");
+                        info!(
+                            context,
+                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat"
+                        );
                         continue;
                     };
 
@@ -1778,7 +1790,10 @@ fn migrate_key_contacts(
                         update_member_stmt.execute((new_member, old_member, chat_id))?;
                     }
                 } else {
-                    info!(context, "Old member {old_member} in chat {chat_id} can't be upgraded to key-contact, removing them");
+                    info!(
+                        context,
+                        "Old member {old_member} in chat {chat_id} can't be upgraded to key-contact, removing them"
+                    );
                     transaction
                         .execute(
                             "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",

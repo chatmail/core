@@ -8,19 +8,19 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
 use pgp::types::PublicKeyTrait;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{ChatId, ProtectionStatus, get_chat_cnt};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
     self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_CHAT_ID_TRASH, DC_VERSION_STR,
 };
-use crate::contact::{import_vcard, mark_contact_id_as_verified, Contact, ContactId};
+use crate::contact::{Contact, ContactId, import_vcard, mark_contact_id_as_verified};
 use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -33,7 +33,7 @@ use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
-use crate::scheduler::{convert_folder_meaning, SchedulerState};
+use crate::scheduler::{SchedulerState, convert_folder_meaning};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;

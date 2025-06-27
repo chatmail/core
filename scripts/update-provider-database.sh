@@ -15,7 +15,7 @@ cd "$TMP"
 git checkout "$REV"
 DATE=$(git show -s --format=%cs)
 "$CORE_ROOT"/scripts/create-provider-data-rs.py "$TMP/_providers" "$DATE" >"$CORE_ROOT/src/provider/data.rs"
-rustfmt "$CORE_ROOT/src/provider/data.rs"
+rustfmt --edition 2024 "$CORE_ROOT/src/provider/data.rs"
 rm -fr "$TMP"
 
 cd "$CORE_ROOT"

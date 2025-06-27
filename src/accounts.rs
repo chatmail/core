@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -14,7 +14,7 @@ use uuid::Uuid;
 #[cfg(not(target_os = "ios"))]
 use tokio::sync::oneshot;
 #[cfg(not(target_os = "ios"))]
-use tokio::time::{sleep, Duration};
+use tokio::time::{Duration, sleep};
 
 use crate::context::{Context, ContextBuilder};
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -352,7 +352,10 @@ impl Accounts {
     ///
     /// Returns a future that resolves when background fetch is done,
     /// but does not capture `&self`.
-    pub fn background_fetch(&self, timeout: std::time::Duration) -> impl Future<Output = ()> {
+    pub fn background_fetch(
+        &self,
+        timeout: std::time::Duration,
+    ) -> impl Future<Output = ()> + use<> {
         let accounts: Vec<Context> = self.accounts.values().cloned().collect();
         let events = self.events.clone();
         Self::background_fetch_with_timeout(accounts, events, timeout)
@@ -456,7 +459,9 @@ impl Config {
             Ok(())
         });
         if locked_rx.await.is_err() {
-            bail!("Delta Chat is already running. To use Delta Chat, you must first close the existing Delta Chat process, or restart your device. (accounts.lock file is already locked)");
+            bail!(
+                "Delta Chat is already running. To use Delta Chat, you must first close the existing Delta Chat process, or restart your device. (accounts.lock file is already locked)"
+            );
         };
         Ok(Some(lock_task))
     }
@@ -500,11 +505,13 @@ impl Config {
     /// protects from parallel calls resulting to a wrong file contents.
     async fn sync(&mut self) -> Result<()> {
         #[cfg(not(target_os = "ios"))]
-        ensure!(!self
-            .lock_task
-            .as_ref()
-            .context("Config is read-only")?
-            .is_finished());
+        ensure!(
+            !self
+                .lock_task
+                .as_ref()
+                .context("Config is read-only")?
+                .is_finished()
+        );
 
         let tmp_path = self.file.with_extension("toml.tmp");
         let mut file = fs::File::create(&tmp_path)
@@ -962,9 +969,11 @@ mod tests {
 
         // Test that event emitter does not return `None` immediately.
         let duration = std::time::Duration::from_millis(1);
-        assert!(tokio::time::timeout(duration, event_emitter.recv())
-            .await
-            .is_err());
+        assert!(
+            tokio::time::timeout(duration, event_emitter.recv())
+                .await
+                .is_err()
+        );
 
         // When account manager is dropped, event emitter is exhausted.
         drop(accounts);

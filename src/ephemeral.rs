@@ -69,23 +69,23 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use async_channel::Receiver;
 use serde::{Deserialize, Serialize};
 use tokio::time::timeout;
 
-use crate::chat::{send_msg, ChatId, ChatIdBlocked};
+use crate::chat::{ChatId, ChatIdBlocked, send_msg};
 use crate::constants::{DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
 use crate::location;
-use crate::log::{error, info, warn, LogExt};
+use crate::log::{LogExt, error, info, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;
-use crate::tools::{duration_to_str, time, SystemTime};
+use crate::tools::{SystemTime, duration_to_str, time};
 
 /// Ephemeral timer value.
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]

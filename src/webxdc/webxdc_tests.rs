@@ -5,8 +5,8 @@ use serde_json::json;
 
 use super::*;
 use crate::chat::{
-    add_contact_to_chat, create_broadcast_list, create_group_chat, forward_msgs,
-    remove_contact_from_chat, resend_msgs, send_msg, send_text_msg, ChatId, ProtectionStatus,
+    ChatId, ProtectionStatus, add_contact_to_chat, create_broadcast_list, create_group_chat,
+    forward_msgs, remove_contact_from_chat, resend_msgs, send_msg, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -296,14 +296,17 @@ async fn test_webxdc_contact_request() -> Result<()> {
     let bob_instance = bob.get_last_msg().await;
     let bob_chat = Chat::load_from_db(&bob, bob_instance.chat_id).await?;
     assert!(bob_chat.is_contact_request());
-    assert!(bob_instance
-        .get_webxdc_blob(&bob, "index.html")
-        .await
-        .is_ok());
-    assert!(bob
-        .send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
-        .await
-        .is_err());
+    assert!(
+        bob_instance
+            .get_webxdc_blob(&bob, "index.html")
+            .await
+            .is_ok()
+    );
+    assert!(
+        bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
+            .await
+            .is_err()
+    );
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
             .await?,
@@ -312,10 +315,11 @@ async fn test_webxdc_contact_request() -> Result<()> {
 
     // Once the contact request is accepted, Bob can send updates
     bob_chat.id.accept(&bob).await?;
-    assert!(bob
-        .send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
-        .await
-        .is_ok());
+    assert!(
+        bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
+            .await
+            .is_ok()
+    );
     assert_eq!(
         bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
             .await?,
@@ -548,15 +552,17 @@ async fn test_create_status_update_record() -> Result<()> {
         .await?;
     assert_eq!(update_id1_duplicate, None);
 
-    assert!(t
-        .send_webxdc_status_update(instance.id, "\n\n\n")
-        .await
-        .is_err());
+    assert!(
+        t.send_webxdc_status_update(instance.id, "\n\n\n")
+            .await
+            .is_err()
+    );
 
-    assert!(t
-        .send_webxdc_status_update(instance.id, "bad json")
-        .await
-        .is_err());
+    assert!(
+        t.send_webxdc_status_update(instance.id, "bad json")
+            .await
+            .is_err()
+    );
 
     assert_eq!(
         t.get_webxdc_status_updates(instance.id, StatusUpdateSerial(0))
@@ -631,12 +637,13 @@ async fn test_receive_status_update() -> Result<()> {
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let now = tools::time();
 
-    assert!(t
-        .receive_status_update(ContactId::SELF, &instance, now, true, r#"foo: bar"#)
-        .await
-        .is_err()); // no json
-    assert!(t
-        .receive_status_update(
+    assert!(
+        t.receive_status_update(ContactId::SELF, &instance, now, true, r#"foo: bar"#)
+            .await
+            .is_err()
+    ); // no json
+    assert!(
+        t.receive_status_update(
             ContactId::SELF,
             &instance,
             now,
@@ -644,9 +651,10 @@ async fn test_receive_status_update() -> Result<()> {
             r#"{"updada":[{"payload":{"foo":"bar"}}]}"#
         )
         .await
-        .is_err()); // "updates" object missing
-    assert!(t
-        .receive_status_update(
+        .is_err()
+    ); // "updates" object missing
+    assert!(
+        t.receive_status_update(
             ContactId::SELF,
             &instance,
             now,
@@ -654,9 +662,10 @@ async fn test_receive_status_update() -> Result<()> {
             r#"{"updates":[{"foo":"bar"}]}"#
         )
         .await
-        .is_err()); // "payload" field missing
-    assert!(t
-        .receive_status_update(
+        .is_err()
+    ); // "payload" field missing
+    assert!(
+        t.receive_status_update(
             ContactId::SELF,
             &instance,
             now,
@@ -664,7 +673,8 @@ async fn test_receive_status_update() -> Result<()> {
             r#"{"updates":{"payload":{"foo":"bar"}}}"#
         )
         .await
-        .is_err()); // not an array
+        .is_err()
+    ); // not an array
 
     t.receive_status_update(
         ContactId::SELF,
@@ -1101,10 +1111,11 @@ async fn test_send_webxdc_status_update_to_non_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
     let msg_id = send_text_msg(&t, chat_id, "ho!".to_string()).await?;
-    assert!(t
-        .send_webxdc_status_update(msg_id, r#"{"foo":"bar"}"#)
-        .await
-        .is_err());
+    assert!(
+        t.send_webxdc_status_update(msg_id, r#"{"foo":"bar"}"#)
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
@@ -1118,10 +1129,12 @@ async fn test_get_webxdc_blob() -> Result<()> {
     assert_eq!(buf.len(), 188);
     assert!(String::from_utf8_lossy(&buf).contains("document.write"));
 
-    assert!(instance
-        .get_webxdc_blob(&t, "not-existent.html")
-        .await
-        .is_err());
+    assert!(
+        instance
+            .get_webxdc_blob(&t, "not-existent.html")
+            .await
+            .is_err()
+    );
     Ok(())
 }
 

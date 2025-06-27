@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 use anyhow::{Context as _, Result};
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::{
-    addr_cmp, addr_normalize, may_be_valid_addr, sanitize_single_line, ContactAddress,
+    ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_single_line,
 };
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
@@ -16,26 +16,26 @@ use regex::Regex;
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, ShowEmails, DC_CHAT_ID_TRASH, EDITED_PREFIX};
-use crate::contact::{mark_contact_id_as_verified, Contact, ContactId, Origin};
+use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
+use crate::contact::{Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
 use crate::download::DownloadState;
-use crate::ephemeral::{stock_ephemeral_timer_changed, Timer as EphemeralTimer};
+use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::imap::{markseen_on_imap_table, GENERATED_PREFIX};
+use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::self_fingerprint_opt;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::message::{
-    self, rfc724_mid_exists, Message, MessageState, MessengerMessage, MsgId, Viewtype,
+    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
-use crate::mimeparser::{parse_message_ids, AvatarAction, MimeMessage, SystemMessage};
+use crate::mimeparser::{AvatarAction, MimeMessage, SystemMessage, parse_message_ids};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
-use crate::reaction::{set_msg_reaction, Reaction};
+use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
 use crate::simplify;
@@ -244,7 +244,7 @@ async fn get_to_and_past_contact_ids(
     // but want to assign the message to 1:1 chat.
     let chat_id = match chat_assignment {
         ChatAssignment::Trash => None,
-        ChatAssignment::GroupChat { ref grpid } => {
+        ChatAssignment::GroupChat { grpid } => {
             if let Some((chat_id, _protected, _blocked)) =
                 chat::get_chat_id_by_grpid(context, grpid).await?
             {
@@ -1729,7 +1729,10 @@ async fn add_parts(
         let is_from_in_chat =
             !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
-        info!(context, "Received new ephemeral timer value {ephemeral_timer:?} for chat {chat_id}, checking if it should be applied.");
+        info!(
+            context,
+            "Received new ephemeral timer value {ephemeral_timer:?} for chat {chat_id}, checking if it should be applied."
+        );
         if !is_from_in_chat {
             warn!(
                 context,

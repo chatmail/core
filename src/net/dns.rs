@@ -912,10 +912,12 @@ mod tests {
         let ipv6_addr = IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0x241, 0x4ce8, 0, 0, 0, 2));
 
         let now = time();
-        assert!(lookup_cache(alice, "nine.testrun.org", 587, "smtp", now)
-            .await
-            .unwrap()
-            .is_empty());
+        assert!(
+            lookup_cache(alice, "nine.testrun.org", 587, "smtp", now)
+                .await
+                .unwrap()
+                .is_empty()
+        );
 
         update_cache(alice, "nine.testrun.org", "116.202.233.236", now)
             .await

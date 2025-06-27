@@ -3,11 +3,11 @@ use std::cmp::min;
 use std::{iter::once, ops::Deref, sync::Arc};
 
 use anyhow::Result;
-use humansize::{format_size, BINARY};
+use humansize::{BINARY, format_size};
 use tokio::sync::Mutex;
 
 use crate::events::EventType;
-use crate::imap::{scan_folders::get_watched_folder_configs, FolderMeaning};
+use crate::imap::{FolderMeaning, scan_folders::get_watched_folder_configs};
 use crate::log::info;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
@@ -509,7 +509,9 @@ impl Context {
                                     "green"
                                 };
                                 let div_width_percent = min(100, percent);
-                                ret += &format!("<div class=\"bar\"><div class=\"progress {color}\" style=\"width: {div_width_percent}%\">{percent}%</div></div>");
+                                ret += &format!(
+                                    "<div class=\"bar\"><div class=\"progress {color}\" style=\"width: {div_width_percent}%\">{percent}%</div></div>"
+                                );
 
                                 ret += "</li>";
                             }

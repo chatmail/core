@@ -12,7 +12,7 @@
 
 use std::time::Duration;
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use async_channel::Receiver;
 use quick_xml::events::{BytesEnd, BytesStart, BytesText};
 use tokio::time::timeout;
