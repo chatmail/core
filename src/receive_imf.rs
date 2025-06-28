@@ -2055,11 +2055,11 @@ RETURNING id
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },
                     sort_timestamp,
-                    mime_parser.timestamp_sent,
-                    mime_parser.timestamp_rcvd,
-                    typ,
-                    state,
-                    is_dc_message,
+                    if trash { 0 } else { mime_parser.timestamp_sent },
+                    if trash { 0 } else { mime_parser.timestamp_rcvd },
+                    if trash { Viewtype::Unknown } else { typ },
+                    if trash { MessageState::Undefined } else { state },
+                    if trash { MessengerMessage::No } else { is_dc_message },
                     if trash || hidden { "" } else { msg },
                     if trash || hidden { None } else { message::normalize_text(msg) },
                     if trash || hidden { "" } else { &subject },
@@ -2068,27 +2068,29 @@ RETURNING id
                     } else {
                         param.to_string()
                     },
-                    hidden,
-                    part.bytes as isize,
+                    !trash && hidden,
+                    if trash { 0 } else { part.bytes as isize },
                     if save_mime_modified && !(trash || hidden) {
                         mime_headers.clone()
                     } else {
                         Vec::new()
                     },
-                    mime_in_reply_to,
-                    mime_references,
-                    save_mime_modified,
-                    part.error.as_deref().unwrap_or_default(),
-                    ephemeral_timer,
-                    ephemeral_timestamp,
-                    if is_partial_download.is_some() {
+                    if trash { "" } else { mime_in_reply_to },
+                    if trash { "" } else { mime_references },
+                    !trash && save_mime_modified,
+                    if trash { "" } else { part.error.as_deref().unwrap_or_default() },
+                    if trash { 0 } else { ephemeral_timer.to_u32() },
+                    if trash { 0 } else { ephemeral_timestamp },
+                    if trash {
+                        DownloadState::Done
+                    } else if is_partial_download.is_some() {
                         DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
                     } else {
                         DownloadState::Done
                     },
-                    mime_parser.hop_info
+                    if trash { "" } else { &mime_parser.hop_info },
                 ],
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
