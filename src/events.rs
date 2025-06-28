@@ -27,7 +27,7 @@ impl Default for Events {
 impl Events {
     /// Creates a new event channel.
     pub fn new() -> Self {
-        let (mut sender, _receiver) = async_broadcast::broadcast(1_000);
+        let (mut sender, _receiver) = async_broadcast::broadcast(10_000);
 
         // We only keep this receiver around
         // to prevent the channel from closing.
