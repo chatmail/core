@@ -2596,11 +2596,15 @@ Second thread."#;
     let alice_fiona_contact_id = alice_fiona_contact.id;
 
     chat::add_contact_to_chat(&alice, alice_first_msg.chat_id, alice_fiona_contact_id).await?;
-    let alice_first_invite = alice.pop_sent_msg().await;
+    let alice_first_invite = alice
+        .send_text(alice_first_msg.chat_id, "I added Fiona")
+        .await;
     let fiona_first_invite = fiona.recv_msg(&alice_first_invite).await;
 
     chat::add_contact_to_chat(&alice, alice_second_msg.chat_id, alice_fiona_contact_id).await?;
-    let alice_second_invite = alice.pop_sent_msg().await;
+    let alice_second_invite = alice
+        .send_text(alice_second_msg.chat_id, "I added Fiona")
+        .await;
     let fiona_second_invite = fiona.recv_msg(&alice_second_invite).await;
 
     // Fiona was added to two separate chats and should see two separate chats, even though they
@@ -4091,12 +4095,22 @@ async fn test_mua_can_readd() -> Result<()> {
     assert_eq!(alice_chat.typ, Chattype::Group);
     assert!(is_contact_in_chat(&alice, alice_chat.id, ContactId::SELF).await?);
 
-    // And leaves it.
-    remove_contact_from_chat(&alice, alice_chat.id, ContactId::SELF).await?;
-    alice.pop_sent_msg().await;
-    assert!(!is_contact_in_chat(&alice, alice_chat.id, ContactId::SELF).await?);
+    // Self-removal from unencrypted groups should fail.
+    assert!(
+        remove_contact_from_chat(&alice, alice_chat.id, ContactId::SELF)
+            .await
+            .is_err()
+    );
 
-    // Bob uses a classical MUA to answer, adding Alice back.
+    // And removes Claire.
+    let claire_id = Contact::lookup_id_by_addr(&alice, "claire@example.org", Origin::OutgoingTo)
+        .await?
+        .unwrap();
+    remove_contact_from_chat(&alice, alice_chat.id, claire_id).await?;
+    assert!(!alice.sql.exists("SELECT COUNT(*) FROM smtp", ()).await?);
+    assert!(!is_contact_in_chat(&alice, alice_chat.id, claire_id).await?);
+
+    // Bob uses a classical MUA to answer, adding Claire back.
     receive_imf(
         &alice,
         b"Subject: Re: Message from alice\r\n\
@@ -4111,7 +4125,44 @@ async fn test_mua_can_readd() -> Result<()> {
     )
     .await?
     .unwrap();
-    assert!(is_contact_in_chat(&alice, alice_chat.id, ContactId::SELF).await?);
+    assert!(is_contact_in_chat(&alice, alice_chat.id, claire_id).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rename_unencrypted_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    for ctx in [alice, bob] {
+        receive_imf(
+            ctx,
+            b"Subject: Some thread\r\n\
+                From: alice@example.org\r\n\
+                To: <bob@example.net>, <claire@example.org> \r\n\
+                Date: Mon, 12 Dec 2022 14:30:39 +0000\r\n\
+                Message-ID: <Mr.alices_original_mail@example.org>\r\n\
+                Chat-Version: 1.0\r\n\
+                \r\n\
+                Hi!\r\n",
+            false,
+        )
+        .await?
+        .unwrap();
+    }
+    let msg = alice.get_last_msg().await;
+    let alice_chat = Chat::load_from_db(alice, msg.chat_id).await?;
+    assert_eq!(alice_chat.typ, Chattype::Group);
+
+    SystemTime::shift(Duration::from_secs(60));
+    chat::set_chat_name(alice, alice_chat.id, "Renamed thread").await?;
+    assert!(!alice.sql.exists("SELECT COUNT(*) FROM smtp", ()).await?);
+
+    let sent_msg = alice.send_text(alice_chat.id, "I renamed the thread").await;
+    let msg = bob.recv_msg(&sent_msg).await;
+    let bob_chat = Chat::load_from_db(bob, msg.chat_id).await?;
+    assert_eq!(bob_chat.get_name(), "Renamed thread");
     Ok(())
 }
 
