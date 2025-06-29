@@ -1684,7 +1684,7 @@ async fn add_parts(
             .await?
         }
         Chattype::InBroadcastChannel => {
-            apply_broadcast_channel_changes(context, mime_parser, &chat, from_id).await?
+            apply_broadcast_channel_changes(context, mime_parser, &mut chat, from_id).await?
         }
     };
 
@@ -2850,7 +2850,7 @@ async fn apply_group_changes(
         // rather than old display name.
         // This could be fixed by looking up the contact with the highest
         // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
-        removed_id = lookup_pgp_contact_by_address(context, removed_addr, Some(chat.id)).await?;
+        removed_id = lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?;
         if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
@@ -2884,32 +2884,15 @@ async fn apply_group_changes(
         }
     }
 
-    apply_chat_name_changes(
+    apply_chat_name_and_avatar_changes(
         context,
         mime_parser,
         from_id,
-        &chat,
+        chat,
         &mut send_event_chat_modified,
         &mut better_msg,
     )
     .await?;
-
-    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg) {
-        if value == "group-avatar-changed" {
-            if let Some(avatar_action) = &mime_parser.group_avatar {
-                // this is just an explicit message containing the group-avatar,
-                // apart from that, the group-avatar is send along with various other messages
-                better_msg = match avatar_action {
-                    AvatarAction::Delete => {
-                        Some(stock_str::msg_grp_img_deleted(context, from_id).await)
-                    }
-                    AvatarAction::Change(_) => {
-                        Some(stock_str::msg_grp_img_changed(context, from_id).await)
-                    }
-                };
-            }
-        }
-    }
 
     if is_from_in_chat {
         if chat.member_list_is_stale(context).await? {
@@ -3040,38 +3023,6 @@ async fn apply_group_changes(
         group_changes_msgs(context, &added_ids, &removed_ids, chat.id).await?
     };
 
-    if let Some(avatar_action) = &mime_parser.group_avatar {
-        if !new_chat_contacts.contains(&ContactId::SELF) {
-            warn!(
-                context,
-                "Received group avatar update for group chat {} we are not a member of.", chat.id
-            );
-        } else if !new_chat_contacts.contains(&from_id) {
-            warn!(
-                context,
-                "Contact {from_id} attempts to modify group chat {} avatar without being a member.",
-                chat.id,
-            );
-        } else {
-            info!(context, "Group-avatar change for {}.", chat.id);
-            if chat
-                .param
-                .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
-            {
-                match avatar_action {
-                    AvatarAction::Change(profile_image) => {
-                        chat.param.set(Param::ProfileImage, profile_image);
-                    }
-                    AvatarAction::Delete => {
-                        chat.param.remove(Param::ProfileImage);
-                    }
-                };
-                chat.update_param(context).await?;
-                send_event_chat_modified = true;
-            }
-        }
-    }
-
     if send_event_chat_modified {
         context.emit_event(EventType::ChatModified(chat.id));
         chatlist_events::emit_chatlist_item_changed(context, chat.id);
@@ -3088,18 +3039,20 @@ async fn apply_group_changes(
     })
 }
 
-/// Applies incoming changes to the group's or broadcast channel's name.
+/// Applies incoming changes to the group's or broadcast channel's name and avatar.
 ///
 /// - `send_event_chat_modified` is set to `true` if ChatModified event should be sent
 /// - `better_msg` is filled with an info message about name change, if necessary
-async fn apply_chat_name_changes(
+async fn apply_chat_name_and_avatar_changes(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
-    chat: &Chat,
+    chat: &mut Chat,
     send_event_chat_modified: &mut bool,
     better_msg: &mut Option<String>,
 ) -> Result<()> {
+    // ========== Apply chat name changes ==========
+
     let group_name_timestamp = mime_parser
         .get_header(HeaderDef::ChatGroupNameTimestamp)
         .and_then(|s| s.parse::<i64>().ok());
@@ -3147,6 +3100,44 @@ async fn apply_chat_name_changes(
                     stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
                 );
             }
+        }
+    }
+
+    // ========== Apply chat avatar changes ==========
+
+    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg) {
+        if value == "group-avatar-changed" {
+            if let Some(avatar_action) = &mime_parser.group_avatar {
+                // this is just an explicit message containing the group-avatar,
+                // apart from that, the group-avatar is send along with various other messages
+                *better_msg = match avatar_action {
+                    AvatarAction::Delete => {
+                        Some(stock_str::msg_grp_img_deleted(context, from_id).await)
+                    }
+                    AvatarAction::Change(_) => {
+                        Some(stock_str::msg_grp_img_changed(context, from_id).await)
+                    }
+                };
+            }
+        }
+    }
+
+    if let Some(avatar_action) = &mime_parser.group_avatar {
+        info!(context, "Group-avatar change for {}.", chat.id);
+        if chat
+            .param
+            .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
+        {
+            match avatar_action {
+                AvatarAction::Change(profile_image) => {
+                    chat.param.set(Param::ProfileImage, profile_image);
+                }
+                AvatarAction::Delete => {
+                    chat.param.remove(Param::ProfileImage);
+                }
+            };
+            chat.update_param(context).await?;
+            *send_event_chat_modified = true;
         }
     }
 
@@ -3435,7 +3426,7 @@ async fn apply_mailinglist_changes(
 async fn apply_broadcast_channel_changes(
     context: &Context,
     mime_parser: &MimeMessage,
-    chat: &Chat,
+    chat: &mut Chat,
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
     ensure!(chat.typ == Chattype::InBroadcastChannel);
@@ -3443,11 +3434,11 @@ async fn apply_broadcast_channel_changes(
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
 
-    apply_chat_name_changes(
+    apply_chat_name_and_avatar_changes(
         context,
         mime_parser,
         from_id,
-        &chat,
+        chat,
         &mut send_event_chat_modified,
         &mut better_msg,
     )
