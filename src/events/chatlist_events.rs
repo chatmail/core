@@ -66,7 +66,7 @@ mod test_chatlist_events {
     use crate::{
         EventType,
         chat::{
-            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast_list,
+            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast_channel,
             create_group_chat, set_muted,
         },
         config::Config,
@@ -314,7 +314,7 @@ mod test_chatlist_events {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         alice.evtracker.clear_events();
-        create_broadcast_list(&alice).await?;
+        create_broadcast_channel(&alice, "Channel".to_string()).await?;
         wait_for_chatlist(&alice).await;
         Ok(())
     }

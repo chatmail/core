@@ -1521,7 +1521,7 @@ async fn do_chat_assignment(
                         } else {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_list_ex(context, Nosync, listid, name).await?
+                            chat::create_broadcast_channel_ex(context, Nosync, listid, name).await?
                         },
                     );
                 }

@@ -2259,7 +2259,7 @@ async fn test_only_minimal_data_are_forwarded() -> Result<()> {
     let single_id = ChatId::create_for_contact(&bob, charlie_id).await?;
     let group_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "group2").await?;
     add_contact_to_chat(&bob, group_id, charlie_id).await?;
-    let broadcast_id = create_broadcast_list(&bob).await?;
+    let broadcast_id = create_broadcast_channel(&bob, "Channel".to_string()).await?;
     add_contact_to_chat(&bob, broadcast_id, charlie_id).await?;
     for chat_id in &[single_id, group_id, broadcast_id] {
         forward_msgs(&bob, &[orig_msg.id], *chat_id).await?;
@@ -2620,7 +2620,7 @@ async fn test_broadcast() -> Result<()> {
     assert!(msg.get_showpadlock());
 
     // test broadcast list
-    let broadcast_id = create_broadcast_list(&alice).await?;
+    let broadcast_id = create_broadcast_channel(&alice, "Channel".to_string()).await?;
     add_contact_to_chat(
         &alice,
         broadcast_id,
@@ -2681,7 +2681,7 @@ async fn test_broadcast_multidev() -> Result<()> {
     let bob = TestContext::new_bob().await;
     let a1b_contact_id = alices[1].add_or_lookup_contact(&bob).await.id;
 
-    let a0_broadcast_id = create_broadcast_list(&alices[0]).await?;
+    let a0_broadcast_id = create_broadcast_channel(&alices[0], "Channel".to_string()).await?;
     let a0_broadcast_chat = Chat::load_from_db(&alices[0], a0_broadcast_id).await?;
     set_chat_name(&alices[0], a0_broadcast_id, "Broadcast list 42").await?;
     let sent_msg = alices[0].send_text(a0_broadcast_id, "hi").await;
@@ -3414,7 +3414,7 @@ async fn test_sync_broadcast() -> Result<()> {
     let bob = &tcm.bob().await;
     let a0b_contact_id = alice0.add_or_lookup_contact(bob).await.id;
 
-    let a0_broadcast_id = create_broadcast_list(alice0).await?;
+    let a0_broadcast_id = create_broadcast_channel(alice0, "Channel".to_string()).await?;
     sync(alice0, alice1).await;
     let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
     let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)
@@ -3465,7 +3465,7 @@ async fn test_sync_name() -> Result<()> {
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
-    let a0_broadcast_id = create_broadcast_list(alice0).await?;
+    let a0_broadcast_id = create_broadcast_channel(alice0, "Channel".to_string()).await?;
     sync(alice0, alice1).await;
     let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
     set_chat_name(alice0, a0_broadcast_id, "Broadcast list 42").await?;

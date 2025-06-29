@@ -3614,37 +3614,13 @@ pub async fn create_group_chat(
     Ok(chat_id)
 }
 
-/// Finds an unused name for a new broadcast list.
-async fn find_unused_broadcast_list_name(context: &Context) -> Result<String> {
-    let base_name = stock_str::broadcast_list(context).await;
-    for attempt in 1..1000 {
-        let better_name = if attempt > 1 {
-            format!("{base_name} {attempt}")
-        } else {
-            base_name.clone()
-        };
-        if !context
-            .sql
-            .exists(
-                "SELECT COUNT(*) FROM chats WHERE type=? AND name=?;",
-                (Chattype::Broadcast, &better_name),
-            )
-            .await?
-        {
-            return Ok(better_name);
-        }
-    }
-    Ok(base_name)
-}
-
 /// Creates a new broadcast list.
-pub async fn create_broadcast_list(context: &Context) -> Result<ChatId> {
-    let chat_name = find_unused_broadcast_list_name(context).await?;
+pub async fn create_broadcast_channel(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    create_broadcast_list_ex(context, Sync, grpid, chat_name).await
+    create_broadcast_channel_ex(context, Sync, grpid, chat_name).await
 }
 
-pub(crate) async fn create_broadcast_list_ex(
+pub(crate) async fn create_broadcast_channel_ex(
     context: &Context,
     sync: sync::Sync,
     grpid: String,
@@ -4960,7 +4936,7 @@ impl Context {
             }
             SyncId::Grpid(grpid) => {
                 if let SyncAction::CreateBroadcast(name) = action {
-                    create_broadcast_list_ex(self, Nosync, grpid.clone(), name.clone()).await?;
+                    create_broadcast_channel_ex(self, Nosync, grpid.clone(), name.clone()).await?;
                     return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)

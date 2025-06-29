@@ -975,18 +975,20 @@ impl CommandApi {
             .map(|id| id.to_u32())
     }
 
-    /// Create a new broadcast list.
-    ///
-    /// Broadcast lists are similar to groups on the sending device,
-    /// however, recipients get the messages in a read-only chat
-    /// and will see who the other members are.
-    ///
-    /// For historical reasons, this function does not take a name directly,
-    /// instead you have to set the name using dc_set_chat_name()
-    /// after creating the broadcast list.
+    /// Deprecated in favor of create_broadcast_channel().
     async fn create_broadcast_list(&self, account_id: u32) -> Result<u32> {
+        self.create_broadcast_channel(account_id, "".to_string())
+            .await
+    }
+
+    /// Create a new **broadcast channel** (or just **channel** for short).
+    ///
+    /// Channels are similar to groups on the sending device,
+    /// however, recipients get the messages in a read-only chat
+    /// and will not see who the other members are.
+    async fn create_broadcast_channel(&self, account_id: u32, chat_name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_broadcast_list(&ctx)
+        chat::create_broadcast_channel(&ctx, chat_name)
             .await
             .map(|id| id.to_u32())
     }

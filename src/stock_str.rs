@@ -237,9 +237,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Messages"))]
     Messages = 114,
 
-    #[strum(props(fallback = "Broadcast List"))]
-    BroadcastList = 115,
-
     #[strum(props(fallback = "%1$s of %2$s used"))]
     PartOfTotallUsed = 116,
 
@@ -1219,12 +1216,6 @@ pub(crate) async fn part_of_total_used(context: &Context, part: &str, total: &st
         .await
         .replace1(part)
         .replace2(total)
-}
-
-/// Stock string: `Broadcast List`.
-/// Used as the default name for broadcast lists; a number may be added.
-pub(crate) async fn broadcast_list(context: &Context) -> String {
-    translated(context, StockMessage::BroadcastList).await
 }
 
 /// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.
