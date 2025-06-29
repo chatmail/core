@@ -1989,7 +1989,7 @@ impl Chat {
                 );
                 bail!("Cannot set message, contact for {} not found.", self.id);
             }
-        } else if self.typ == Chattype::Group
+        } else if matches!(self.typ, Chattype::Group | Chattype::OutBroadcastChannel)
             && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
         {
             msg.param.set_int(Param::AttachGroupImage, 1);
@@ -4168,7 +4168,6 @@ async fn rename_ex(
                 .await?;
             if chat.is_promoted()
                 && !chat.is_mailing_list()
-                && chat.typ != Chattype::OutBroadcastChannel
                 && sanitize_single_line(&chat.name) != new_name
             {
                 msg.viewtype = Viewtype::Text;

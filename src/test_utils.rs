@@ -1147,7 +1147,7 @@ impl Drop for InnerLogSink {
 #[derive(Debug, Clone)]
 pub struct SentMessage<'a> {
     pub payload: String,
-    recipients: String,
+    pub recipients: String,
     pub sender_msg_id: MsgId,
     sender_context: &'a Context,
 }
