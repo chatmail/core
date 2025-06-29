@@ -786,7 +786,7 @@ impl Contact {
 
         let addr_normalized = addr_normalize(addr);
 
-        if context.is_self_addr(&addr_normalized).await? {
+        if context.is_configured().await? && context.is_self_addr(addr).await? {
             return Ok(Some(ContactId::SELF));
         }
 
@@ -860,12 +860,14 @@ impl Contact {
         );
         ensure!(origin != Origin::Unknown, "Missing valid origin");
 
-        if context.is_self_addr(addr).await? {
+        if context.is_configured().await? && context.is_self_addr(addr).await? {
             return Ok((ContactId::SELF, sth_modified));
         }
 
-        if !fingerprint.is_empty() {
-            let fingerprint_self = self_fingerprint(context).await?;
+        if !fingerprint.is_empty() && context.is_configured().await? {
+            let fingerprint_self = self_fingerprint(context)
+                .await
+                .context("self_fingerprint")?;
             if fingerprint == fingerprint_self {
                 return Ok((ContactId::SELF, sth_modified));
             }
