@@ -1989,17 +1989,16 @@ async fn test_protected_date() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_huge_image_becomes_file() {
+async fn test_huge_image_becomes_file() -> Result<()> {
     let t = TestContext::new_alice().await;
-    receive_imf(
-        &t.ctx,
+    let msg_id = receive_imf(
+        &t,
         include_bytes!("../../test-data/message/image_huge_36M.eml"),
         false,
     )
-    .await
-    .unwrap();
-    let chats = Chatlist::try_load(&t.ctx, 0, None, None).await.unwrap();
-    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    .await?
+    .unwrap()
+    .msg_ids[0];
     let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
     // Huge image should be treated as file:
     assert_eq!(msg.viewtype, Viewtype::File);
@@ -2009,20 +2008,20 @@ async fn test_huge_image_becomes_file() {
     // File has no width or height
     assert_eq!(msg.param.get_int(Param::Width).unwrap_or_default(), 0);
     assert_eq!(msg.param.get_int(Param::Height).unwrap_or_default(), 0);
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_4k_image_stays_image() {
+async fn test_4k_image_stays_image() -> Result<()> {
     let t = TestContext::new_alice().await;
-    receive_imf(
-        &t.ctx,
+    let msg_id = receive_imf(
+        &t,
         include_bytes!("../../test-data/message/image_4k.eml"),
         false,
     )
-    .await
-    .unwrap();
-    let chats = Chatlist::try_load(&t.ctx, 0, None, None).await.unwrap();
-    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    .await?
+    .unwrap()
+    .msg_ids[0];
     let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
     // 4K image should be treated as image:
     assert_eq!(msg.viewtype, Viewtype::Image);
@@ -2031,4 +2030,5 @@ async fn test_4k_image_stays_image() {
     assert_eq!(msg.get_filemime().unwrap(), "image/png");
     assert_eq!(msg.param.get_int(Param::Width).unwrap_or_default(), 3840);
     assert_eq!(msg.param.get_int(Param::Height).unwrap_or_default(), 2160);
+    Ok(())
 }
