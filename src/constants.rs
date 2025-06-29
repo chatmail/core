@@ -223,6 +223,10 @@ pub(crate) const WORSE_AVATAR_BYTES: usize = 20_000; // this also fits to Outloo
 pub const BALANCED_IMAGE_SIZE: u32 = 1280;
 pub const WORSE_IMAGE_SIZE: u32 = 640;
 
+/// Limit for received images size. Bigger images become `Viewtype::File` to avoid excessive memory
+/// usage by UIs.
+pub const MAX_RCVD_IMAGE_PIXELS: u32 = 50_000_000;
+
 // Key for the folder configuration version (see below).
 pub(crate) const DC_FOLDERS_CONFIGURED_KEY: &str = "folders_configured";
 // this value can be increased if the folder configuration is changed and must be redone on next program start

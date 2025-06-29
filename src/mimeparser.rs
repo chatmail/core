@@ -1393,6 +1393,20 @@ impl MimeMessage {
             } else {
                 Viewtype::File
             }
+        } else if msg_type == Viewtype::Image
+            || msg_type == Viewtype::Gif
+            || msg_type == Viewtype::Sticker
+        {
+            match get_filemeta(decoded_data) {
+                // image size is known, not too big, keep msg_type:
+                Ok((width, height)) if width * height <= constants::MAX_RCVD_IMAGE_PIXELS => {
+                    part.param.set_i64(Param::Width, width.into());
+                    part.param.set_i64(Param::Height, height.into());
+                    msg_type
+                }
+                // image is too big or size is unknown, display as file:
+                _ => Viewtype::File,
+            }
         } else {
             msg_type
         };
@@ -1412,13 +1426,6 @@ impl MimeMessage {
                 }
             };
         info!(context, "added blobfile: {:?}", blob.as_name());
-
-        if mime_type.type_() == mime::IMAGE {
-            if let Ok((width, height)) = get_filemeta(decoded_data) {
-                part.param.set_int(Param::Width, width as i32);
-                part.param.set_int(Param::Height, height as i32);
-            }
-        }
 
         part.typ = msg_type;
         part.org_filename = Some(filename.to_string());

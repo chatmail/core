@@ -835,15 +835,7 @@ Content-Transfer-Encoding: base64
 Content-Disposition: inline;
  filename="JPEG_filename.jpg"
 
-ISVb1L3m7z15Wy5w97a2cJg6W8P8YKOYfWn3PJ/UCSFcvCPtvBhcXieiN3M3ljguzG4XK7BnGgxG
-acAQdY8e0cWz1n+zKPNeNn4Iu3GXAXz4/IPksHk54inl1//0Lv8ggZjljfjnf0q1SPftYI7lpZWT
-/4aTCkimRrAIcwrQJPnZJRb7BPSC6kfn1QJHMv77mRMz2+4WbdfpyPQQ0CWLJsgVXtBsSMf2Awal
-n+zZzhGpXyCbWTEw1ccqZcK5KaiKNqWv51N4yVXw9dzJoCvxbYtCFGZZJdx7c+ObDotaF1/9KY4C
-xJjgK9/NgTXCZP1jYm0XIBnJsFSNg0pnMRETttTuGbOVi1/s/F1RGv5RNZsCUt21d9FhkWQQXsd2
-rOzDgTdag6BQCN3hSU9eKW/GhNBuMibRN9eS7Sm1y2qFU1HgGJBQfPPRPLKxXaNi++Zt0tnon2IU
-8pg5rP/IvStXYQNUQ9SiFdfAUkLU5b1j8ltnka8xl+oXsleSG44GPz6kM0RmwUrGkl4z/+NfHSsI
-K+TuvC7qOah0WLFhcsXWn2+dDV1bXuAeC769TkqkpHhdXfUHnVgK3Pv7u3rVPT5AMeFUGxRB2dP4
-CWt6wx7fiLp0qS9RrX75g6Gqw7nfCs6EcBERcIPt7DTe8VStJwf3LWqVwxl4gQl46yhfoqwEO+I=
+iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFuG0UUhr/szuxkxtlduzVx00jGUAhcI56CF0DiHXgFHqDiMfoCvAJC4gIJEBdVaZoGOY5dJ45r7zozmRlvzIVDm3Iu//PpP7/+s/OC/0+UREkEGZGr5N6mAX78MwISQEYJ6j6QYqZf7fzsYyRGJDISuQ9g6uMjW00WRCSRCP4DwNSEg496v828fC++B4yBGro7h+PliiiJHtR9B1vrmbtg359cOk+UqA8cDJm+eHu8yDfii6sAxK0u3hlsnPFn1WvT4XxYUqqtKu8cTMNKT8+nz3/aaWft3svKecBD/O9ETu2O//G7fXt5mHX2xwGP32aIEUNNvX/uh3z2pAkcKD+9XOLVNoMESw7YC+aPP8nqqSluyiuVaZRXCKLEQK3PxsP27UHe1lXV9eczCu2V8ippJA2gz+YTNTK9ttZOoYr+aeXwHp+k245cnFRNt1tmMJg3XV0dXQd3F5LcGn5fDnVQgwINRyFvtddnNmwBSW1qXfzNSDwoM+2A+aTbShfDd89Ka9ybiiLvGa33gK8THrWfVNUSSGLTALMRo/xBXnLbACu3QtRXY+sgkWnawKxCcLjPtr29gVZdPTidBUcSaXJeTfUL+mW4631Fmse+772xIGjSza/KTW/MYE/UCXPbEWs//Xxvqf8qZgYhG0jt8cnTnJpEgfDQ6rvE0n9tq66ICafil5OnOYt0hY94FUPoxI136uPpw4VIYNd+M5utrqvGpg0hc50bRl6BvLanX4pb/3347uWi/WgNHtYyyrdwszsX5fjZtwghy7C5sK2WgUoErcjIoEWr4fAHHhoRP+XZ86L/uMAarLFgsMBaAJhM8Ief9Ey7yHSmyXTp0GRoF7KQEdD/ArmtONKkgCleAAAAAElFTkSuQmCC
 
 
 ----11019878869865180--
@@ -908,15 +900,7 @@ Content-ID: <part1.9DFA679B.52A88D69@example.org>
 Content-Disposition: inline;
  filename="1.png"
 
-ISVb1L3m7z15Wy5w97a2cJg6W8P8YKOYfWn3PJ/UCSFcvCPtvBhcXieiN3M3ljguzG4XK7BnGgxG
-acAQdY8e0cWz1n+zKPNeNn4Iu3GXAXz4/IPksHk54inl1//0Lv8ggZjljfjnf0q1SPftYI7lpZWT
-/4aTCkimRrAIcwrQJPnZJRb7BPSC6kfn1QJHMv77mRMz2+4WbdfpyPQQ0CWLJsgVXtBsSMf2Awal
-n+zZzhGpXyCbWTEw1ccqZcK5KaiKNqWv51N4yVXw9dzJoCvxbYtCFGZZJdx7c+ObDotaF1/9KY4C
-xJjgK9/NgTXCZP1jYm0XIBnJsFSNg0pnMRETttTuGbOVi1/s/F1RGv5RNZsCUt21d9FhkWQQXsd2
-rOzDgTdag6BQCN3hSU9eKW/GhNBuMibRN9eS7Sm1y2qFU1HgGJBQfPPRPLKxXaNi++Zt0tnon2IU
-8pg5rP/IvStXYQNUQ9SiFdfAUkLU5b1j8ltnka8xl+oXsleSG44GPz6kM0RmwUrGkl4z/+NfHSsI
-K+TuvC7qOah0WLFhcsXWn2+dDV1bXuAeC769TkqkpHhdXfUHnVgK3Pv7u3rVPT5AMeFUGxRB2dP4
-CWt6wx7fiLp0qS9RrX75g6Gqw7nfCs6EcBERcIPt7DTe8VStJwf3LWqVwxl4gQl46yhfoqwEO+I=
+iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFuG0UUhr/szuxkxtlduzVx00jGUAhcI56CF0DiHXgFHqDiMfoCvAJC4gIJEBdVaZoGOY5dJ45r7zozmRlvzIVDm3Iu//PpP7/+s/OC/0+UREkEGZGr5N6mAX78MwISQEYJ6j6QYqZf7fzsYyRGJDISuQ9g6uMjW00WRCSRCP4DwNSEg496v828fC++B4yBGro7h+PliiiJHtR9B1vrmbtg359cOk+UqA8cDJm+eHu8yDfii6sAxK0u3hlsnPFn1WvT4XxYUqqtKu8cTMNKT8+nz3/aaWft3svKecBD/O9ETu2O//G7fXt5mHX2xwGP32aIEUNNvX/uh3z2pAkcKD+9XOLVNoMESw7YC+aPP8nqqSluyiuVaZRXCKLEQK3PxsP27UHe1lXV9eczCu2V8ippJA2gz+YTNTK9ttZOoYr+aeXwHp+k245cnFRNt1tmMJg3XV0dXQd3F5LcGn5fDnVQgwINRyFvtddnNmwBSW1qXfzNSDwoM+2A+aTbShfDd89Ka9ybiiLvGa33gK8THrWfVNUSSGLTALMRo/xBXnLbACu3QtRXY+sgkWnawKxCcLjPtr29gVZdPTidBUcSaXJeTfUL+mW4631Fmse+772xIGjSza/KTW/MYE/UCXPbEWs//Xxvqf8qZgYhG0jt8cnTnJpEgfDQ6rvE0n9tq66ICafil5OnOYt0hY94FUPoxI136uPpw4VIYNd+M5utrqvGpg0hc50bRl6BvLanX4pb/3347uWi/WgNHtYyyrdwszsX5fjZtwghy7C5sK2WgUoErcjIoEWr4fAHHhoRP+XZ86L/uMAarLFgsMBaAJhM8Ief9Ey7yHSmyXTp0GRoF7KQEdD/ArmtONKkgCleAAAAAElFTkSuQmCC
 --------------10CC6C2609EB38DA782C5CA9--
 
 --------------779C1631600DF3DB8C02E53A--"#;
@@ -979,15 +963,7 @@ Content-Type: image/jpeg;
 Content-Transfer-Encoding: base64
 Content-ID: <image001.jpg@01D622B3.C9D8D750>
 
-ISVb1L3m7z15Wy5w97a2cJg6W8P8YKOYfWn3PJ/UCSFcvCPtvBhcXieiN3M3ljguzG4XK7BnGgxG
-acAQdY8e0cWz1n+zKPNeNn4Iu3GXAXz4/IPksHk54inl1//0Lv8ggZjljfjnf0q1SPftYI7lpZWT
-/4aTCkimRrAIcwrQJPnZJRb7BPSC6kfn1QJHMv77mRMz2+4WbdfpyPQQ0CWLJsgVXtBsSMf2Awal
-n+zZzhGpXyCbWTEw1ccqZcK5KaiKNqWv51N4yVXw9dzJoCvxbYtCFGZZJdx7c+ObDotaF1/9KY4C
-xJjgK9/NgTXCZP1jYm0XIBnJsFSNg0pnMRETttTuGbOVi1/s/F1RGv5RNZsCUt21d9FhkWQQXsd2
-rOzDgTdag6BQCN3hSU9eKW/GhNBuMibRN9eS7Sm1y2qFU1HgGJBQfPPRPLKxXaNi++Zt0tnon2IU
-8pg5rP/IvStXYQNUQ9SiFdfAUkLU5b1j8ltnka8xl+oXsleSG44GPz6kM0RmwUrGkl4z/+NfHSsI
-K+TuvC7qOah0WLFhcsXWn2+dDV1bXuAeC769TkqkpHhdXfUHnVgK3Pv7u3rVPT5AMeFUGxRB2dP4
-CWt6wx7fiLp0qS9RrX75g6Gqw7nfCs6EcBERcIPt7DTe8VStJwf3LWqVwxl4gQl46yhfoqwEO+I=
+iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFuG0UUhr/szuxkxtlduzVx00jGUAhcI56CF0DiHXgFHqDiMfoCvAJC4gIJEBdVaZoGOY5dJ45r7zozmRlvzIVDm3Iu//PpP7/+s/OC/0+UREkEGZGr5N6mAX78MwISQEYJ6j6QYqZf7fzsYyRGJDISuQ9g6uMjW00WRCSRCP4DwNSEg496v828fC++B4yBGro7h+PliiiJHtR9B1vrmbtg359cOk+UqA8cDJm+eHu8yDfii6sAxK0u3hlsnPFn1WvT4XxYUqqtKu8cTMNKT8+nz3/aaWft3svKecBD/O9ETu2O//G7fXt5mHX2xwGP32aIEUNNvX/uh3z2pAkcKD+9XOLVNoMESw7YC+aPP8nqqSluyiuVaZRXCKLEQK3PxsP27UHe1lXV9eczCu2V8ippJA2gz+YTNTK9ttZOoYr+aeXwHp+k245cnFRNt1tmMJg3XV0dXQd3F5LcGn5fDnVQgwINRyFvtddnNmwBSW1qXfzNSDwoM+2A+aTbShfDd89Ka9ybiiLvGa33gK8THrWfVNUSSGLTALMRo/xBXnLbACu3QtRXY+sgkWnawKxCcLjPtr29gVZdPTidBUcSaXJeTfUL+mW4631Fmse+772xIGjSza/KTW/MYE/UCXPbEWs//Xxvqf8qZgYhG0jt8cnTnJpEgfDQ6rvE0n9tq66ICafil5OnOYt0hY94FUPoxI136uPpw4VIYNd+M5utrqvGpg0hc50bRl6BvLanX4pb/3347uWi/WgNHtYyyrdwszsX5fjZtwghy7C5sK2WgUoErcjIoEWr4fAHHhoRP+XZ86L/uMAarLFgsMBaAJhM8Ief9Ey7yHSmyXTp0GRoF7KQEdD/ArmtONKkgCleAAAAAElFTkSuQmCC
 
 ------=_NextPart_000_0003_01D622B3.CA753E60--
 "#;
@@ -2020,5 +1996,50 @@ async fn test_protected_date() -> Result<()> {
     // Timestamp that the sender has put into the message
     // should always be displayed as is on the receiver.
     assert_eq!(alice_msg.get_timestamp(), bob_msg.get_timestamp());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_huge_image_becomes_file() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let msg_id = receive_imf(
+        &t,
+        include_bytes!("../../test-data/message/image_huge_64M.eml"),
+        false,
+    )
+    .await?
+    .unwrap()
+    .msg_ids[0];
+    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    // Huge image should be treated as file:
+    assert_eq!(msg.viewtype, Viewtype::File);
+    assert!(msg.get_file(&t).is_some());
+    assert_eq!(msg.get_filename().unwrap(), "huge_image.png");
+    assert_eq!(msg.get_filemime().unwrap(), "image/png");
+    // File has no width or height
+    assert!(msg.param.get_int(Param::Width).is_none());
+    assert!(msg.param.get_int(Param::Height).is_none());
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_4k_image_stays_image() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let msg_id = receive_imf(
+        &t,
+        include_bytes!("../../test-data/message/image_4k.eml"),
+        false,
+    )
+    .await?
+    .unwrap()
+    .msg_ids[0];
+    let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
+    // 4K image should be treated as image:
+    assert_eq!(msg.viewtype, Viewtype::Image);
+    assert!(msg.get_file(&t).is_some());
+    assert_eq!(msg.get_filename().unwrap(), "4k_image.png");
+    assert_eq!(msg.get_filemime().unwrap(), "image/png");
+    assert_eq!(msg.param.get_int(Param::Width).unwrap_or_default(), 3840);
+    assert_eq!(msg.param.get_int(Param::Height).unwrap_or_default(), 2160);
     Ok(())
 }

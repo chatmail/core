@@ -1,0 +1,28 @@
+Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)
+From: Test Sender <sender@testrun.org>
+Subject: Large image test
+To: alice@example.org
+Message-ID: <huge-image-test@testrun.org>
+Date: Thu, 17 Dec 2020 15:38:45 +0100
+User-Agent: Test-Agent/1.0
+MIME-Version: 1.0
+Content-Type: multipart/mixed;
+ boundary="------------HUGE_IMAGE_BOUNDARY"
+Content-Language: en-US
+
+This is a multi-part message in MIME format.
+--------------HUGE_IMAGE_BOUNDARY
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 7bit
+
+Here is a huge image
+
+--------------HUGE_IMAGE_BOUNDARY
+Content-Type: image/png;
+ name="huge_image.png"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment;
+ filename="huge_image.png"
+
+iVBORw0KGgoAAAANSUhEUgAAH0AAAB9ACAIAAACJkzqjAAAAEElEQVR4nAEFAPr/AP////8AAAAFCeiupAAAAABJRU5ErkJggg==
+--------------HUGE_IMAGE_BOUNDARY--
