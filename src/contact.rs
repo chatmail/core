@@ -24,7 +24,7 @@ use crate::blob::BlobObject;
 use crate::chat::{ChatId, ChatIdBlocked, ProtectionStatus};
 use crate::color::str_to_color;
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, DC_GCL_ADD_SELF};
+use crate::constants::{self, Blocked, Chattype};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::{
@@ -1061,11 +1061,12 @@ impl Contact {
     /// Returns known and unblocked contacts.
     ///
     /// To get information about a single contact, see get_contact().
+    /// By default, key-contacts are listed.
     ///
-    /// `listflags` is a combination of flags:
-    /// - if the flag DC_GCL_ADD_SELF is set, SELF is added to the list unless filtered by other parameters
-    ///
-    /// `query` is a string to filter the list.
+    /// * `listflags` - A combination of flags:
+    ///   - `DC_GCL_ADD_SELF` - Add SELF unless filtered by other parameters.
+    ///   - `DC_GCL_ADDRESS` - List address-contacts instead of key-contacts.
+    /// * `query` - A string to filter the list.
     pub async fn get_all(
         context: &Context,
         listflags: u32,
@@ -1078,7 +1079,8 @@ impl Contact {
             .collect::<HashSet<_>>();
         let mut add_self = false;
         let mut ret = Vec::new();
-        let flag_add_self = (listflags & DC_GCL_ADD_SELF) != 0;
+        let flag_add_self = (listflags & constants::DC_GCL_ADD_SELF) != 0;
+        let flag_address = (listflags & constants::DC_GCL_ADDRESS) != 0;
         let minimal_origin = if context.get_config_bool(Config::Bot).await? {
             Origin::Unknown
         } else {
@@ -1091,13 +1093,14 @@ impl Contact {
                 .query_map(
                     "SELECT c.id, c.addr FROM contacts c
                  WHERE c.id>?
-                 AND c.fingerprint!='' \
+                 AND (c.fingerprint='')=?
                  AND c.origin>=? \
                  AND c.blocked=0 \
                  AND (iif(c.name='',c.authname,c.name) LIKE ? OR c.addr LIKE ?) \
                  ORDER BY c.last_seen DESC, c.id DESC;",
                     (
                         ContactId::LAST_SPECIAL,
+                        flag_address,
                         minimal_origin,
                         &s3str_like_cmd,
                         &s3str_like_cmd,
@@ -1147,11 +1150,11 @@ impl Contact {
                 .query_map(
                     "SELECT id, addr FROM contacts
                  WHERE id>?
-                 AND fingerprint!=''
+                 AND (fingerprint='')=?
                  AND origin>=?
                  AND blocked=0
                  ORDER BY last_seen DESC, id DESC;",
-                    (ContactId::LAST_SPECIAL, minimal_origin),
+                    (ContactId::LAST_SPECIAL, flag_address, minimal_origin),
                     |row| {
                         let id: ContactId = row.get(0)?;
                         let addr: String = row.get(1)?;

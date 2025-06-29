@@ -9,6 +9,7 @@ class ContactFlag(IntEnum):
     """Bit flags for get_contacts() method."""
 
     ADD_SELF = 0x02
+    ADDRESS = 0x04
 
 
 class ChatlistFlag(IntEnum):

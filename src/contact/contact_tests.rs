@@ -69,6 +69,9 @@ async fn test_get_contacts() -> Result<()> {
     let contacts = Contact::get_all(&context.ctx, 0, Some("MyName")).await?;
     assert_eq!(contacts.len(), 0);
 
+    let claire_id = Contact::create(&context, "someone", "claire@example.org").await?;
+    let dave_id = Contact::create(&context, "", "dave@example.org").await?;
+
     let id = context.add_or_lookup_contact_id(&alice).await;
     assert_ne!(id, ContactId::UNDEFINED);
 
@@ -101,10 +104,35 @@ async fn test_get_contacts() -> Result<()> {
     let contacts = Contact::get_all(&context, 0, Some("MyName")).await?;
     assert_eq!(contacts.len(), 0);
 
-    // Search by display name (same as manually set name).
-    let contacts = Contact::get_all(&context.ctx, 0, Some("someone")).await?;
-    assert_eq!(contacts.len(), 1);
-    assert_eq!(contacts.first(), Some(&id));
+    for add_self in [0, constants::DC_GCL_ADD_SELF] {
+        info!(&context, "add_self={add_self}");
+
+        // Search key-contacts by display name (same as manually set name).
+        let contacts = Contact::get_all(&context.ctx, add_self, Some("someone")).await?;
+        assert_eq!(contacts, vec![id]);
+
+        // Get all key-contacts.
+        let contacts = Contact::get_all(&context, add_self, None).await?;
+        match add_self {
+            0 => assert_eq!(contacts, vec![id]),
+            _ => assert_eq!(contacts, vec![id, ContactId::SELF]),
+        }
+    }
+
+    // Search address-contacts by display name.
+    let contacts = Contact::get_all(&context, constants::DC_GCL_ADDRESS, Some("someone")).await?;
+    assert_eq!(contacts, vec![claire_id]);
+
+    // Get all address-contacts. Newer contacts go first.
+    let contacts = Contact::get_all(&context, constants::DC_GCL_ADDRESS, None).await?;
+    assert_eq!(contacts, vec![dave_id, claire_id]);
+    let contacts = Contact::get_all(
+        &context,
+        constants::DC_GCL_ADDRESS | constants::DC_GCL_ADD_SELF,
+        None,
+    )
+    .await?;
+    assert_eq!(contacts, vec![dave_id, claire_id, ContactId::SELF]);
 
     Ok(())
 }

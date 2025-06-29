@@ -2137,6 +2137,7 @@ uint32_t        dc_create_contact            (dc_context_t* context, const char*
 #define         DC_GCL_DEPRECATED_VERIFIED_ONLY         0x01
 
 #define         DC_GCL_ADD_SELF              0x02
+#define         DC_GCL_ADDRESS               0x04
 
 
 /**
@@ -2192,11 +2193,13 @@ dc_array_t*     dc_import_vcard              (dc_context_t* context, const char*
  * Returns known and unblocked contacts.
  *
  * To get information about a single contact, see dc_get_contact().
+ * By default, key-contacts are listed.
  *
  * @memberof dc_context_t
  * @param context The context object.
  * @param flags A combination of flags:
- *     - if the flag DC_GCL_ADD_SELF is set, SELF is added to the list unless filtered by other parameters
+ *     - DC_GCL_ADD_SELF: SELF is added to the list unless filtered by other parameters
+ *     - DC_GCL_ADDRESS: List address-contacts instead of key-contacts.
  * @param query A string to filter the list. Typically used to implement an
  *     incremental search. NULL for no filtering.
  * @return An array containing all contact IDs. Must be dc_array_unref()'d

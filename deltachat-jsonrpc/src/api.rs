@@ -1493,6 +1493,14 @@ impl CommandApi {
         Ok(contacts)
     }
 
+    /// Returns ids of known and unblocked contacts.
+    ///
+    /// By default, key-contacts are listed.
+    ///
+    /// * `list_flags` - A combination of flags:
+    ///   - `DC_GCL_ADD_SELF` - Add SELF unless filtered by other parameters.
+    ///   - `DC_GCL_ADDRESS` - List address-contacts instead of key-contacts.
+    /// * `query` - A string to filter the list.
     async fn get_contact_ids(
         &self,
         account_id: u32,
@@ -1504,8 +1512,10 @@ impl CommandApi {
         Ok(contacts.into_iter().map(|c| c.to_u32()).collect())
     }
 
-    /// Get a list of contacts.
-    /// (formerly called getContacts2 in desktop)
+    /// Returns known and unblocked contacts.
+    ///
+    /// Formerly called `getContacts2` in Desktop.
+    /// See [`Self::get_contact_ids`] for parameters and more info.
     async fn get_contacts(
         &self,
         account_id: u32,
