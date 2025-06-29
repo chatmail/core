@@ -3812,7 +3812,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
     ensure!(
         chat.typ != Chattype::OutBroadcastChannel || contact_id != ContactId::SELF,
-        "Cannot add SELF to broadcast."
+        "Cannot add SELF to channel."
     );
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),
@@ -4276,10 +4276,6 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         if msg.state == MessageState::OutDraft {
             bail!("cannot forward drafts.");
         }
-
-        // we tested a sort of broadcast
-        // by not marking own forwarded messages as such,
-        // however, this turned out to be to confusing and unclear.
 
         if msg.get_viewtype() != Viewtype::Sticker {
             msg.param
@@ -4798,7 +4794,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
             transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (id,))?;
 
             // We do not care about `add_timestamp` column
-            // because timestamps are not used for broadcast lists.
+            // because timestamps are not used for broadcast channels.
             let mut statement = transaction
                 .prepare("INSERT INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)")?;
             for contact_id in &contacts {
@@ -4847,7 +4843,7 @@ async fn set_contacts_by_fingerprints(
             transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (id,))?;
 
             // We do not care about `add_timestamp` column
-            // because timestamps are not used for broadcast lists.
+            // because timestamps are not used for broadcast channels.
             let mut statement = transaction
                 .prepare("INSERT INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)")?;
             for contact_id in &contacts {
@@ -4885,7 +4881,8 @@ pub(crate) enum SyncAction {
     Accept,
     SetVisibility(ChatVisibility),
     SetMuted(MuteDuration),
-    /// Create broadcast list with the given name.
+    /// Create broadcast channel with the given name.
+    /// Named `CreateBroacdast` rather than `CreateBroadcastChannel` for historic reasons.
     CreateBroadcast(String),
     Rename(String),
     /// Set chat contacts by their addresses.

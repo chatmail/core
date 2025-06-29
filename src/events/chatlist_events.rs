@@ -308,7 +308,7 @@ mod test_chatlist_events {
         Ok(())
     }
 
-    /// Create broadcastlist
+    /// Create broadcast channel
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_create_broadcastlist() -> Result<()> {
         let mut tcm = TestContextManager::new();

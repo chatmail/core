@@ -1711,7 +1711,7 @@ fn migrate_key_contacts(
                     continue;
                 }
 
-                // Broadcast list
+                // Broadcast channel
                 160 => old_members
                     .iter()
                     .map(|(original, _)| {

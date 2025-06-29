@@ -80,7 +80,7 @@ pub struct MimeFactory {
     /// because in case of "member removed" message
     /// removed member is in the recipient list,
     /// but not in the `To` header.
-    /// In case of broadcast lists there are multiple recipients,
+    /// In case of broadcast channels there are multiple recipients,
     /// but the `To` header has no members.
     ///
     /// If `bcc_self` configuration is enabled,
@@ -98,7 +98,7 @@ pub struct MimeFactory {
     /// Vector of pairs of recipient name and address that goes into the `To` field.
     ///
     /// The list of actual message recipient addresses may be different,
-    /// e.g. if members are hidden for broadcast lists
+    /// e.g. if members are hidden for broadcast channels
     /// or if the keys for some recipients are missing
     /// and encrypted message cannot be sent to them.
     to: Vec<(String, String)>,

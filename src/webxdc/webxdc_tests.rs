@@ -1621,9 +1621,9 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
     let self_id = t.get_self_chat().await.id;
     let single_id = t.create_chat_with_contact("bob", "bob@e.com").await.id;
     let group_id = create_group_chat(&t, ProtectionStatus::Unprotected, "chat").await?;
-    let broadcast_id = create_broadcast_channel(&t, "Channel".to_string()).await?;
+    let channel_id = create_broadcast_channel(&t, "Channel".to_string()).await?;
 
-    for chat_id in [self_id, single_id, group_id, broadcast_id] {
+    for chat_id in [self_id, single_id, group_id, channel_id] {
         for internet_xdc in [true, false] {
             let mut instance = create_webxdc_instance(
                 &t,

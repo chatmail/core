@@ -96,7 +96,7 @@ enum ChatAssignment {
     /// Mailing list or channel.
     ///
     /// Mailing lists don't have members.
-    /// Broadcast lists have members
+    /// Broadcast channels have members
     /// on the sender side,
     /// but their addresses don't go into
     /// the `To` field.
@@ -1513,7 +1513,8 @@ async fn do_chat_assignment(
                 chat_id_blocked = *new_chat_id_blocked;
             }
             ChatAssignment::MailingListOrChannel => {
-                // Check if the message belongs to a broadcast list.
+                // Check if the message belongs to a broadcast channel
+                // (it can't be a mailing list, since it's outgoing)
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
                     chat_id = Some(
