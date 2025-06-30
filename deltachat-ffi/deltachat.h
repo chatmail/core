@@ -5748,7 +5748,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  *
  * The user can send into this channel,
  * and all recipients will receive messages
- * in an `InBroadcast`.
+ * in a `DC_CHAT_TYPE_IN_BROADCAST`.
  *
  * Called `broadcast` here rather than `channel`,
  * because the word "channel" already appears a lot in the code,
@@ -5762,9 +5762,9 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  * This channel is read-only,
  * and we do not know who the other recipients are.
  *
- * This is similar to a `MailingList`,
+ * This is similar to `DC_CHAT_TYPE_MAILINGLIST`,
  * with the main difference being that
- * `InBroadcast`s are encrypted.
+ * broadcasts are encrypted.
  *
  * Called `broadcast` here rather than `channel`,
  * because the word "channel" already appears a lot in the code,

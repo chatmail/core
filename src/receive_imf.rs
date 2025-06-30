@@ -3197,7 +3197,7 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
     .to_string())
 }
 
-/// Create or lookup a mailing list or incoming channel chat.
+/// Create or lookup a mailing list or incoming broadcast channel chat.
 ///
 /// `list_id_header` contains the Id that must be used for the mailing list
 /// and has the form `Name <Id>`, `<Id>` or just `Id`.
