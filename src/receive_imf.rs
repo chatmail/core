@@ -597,7 +597,7 @@ pub(crate) async fn receive_imf_inner(
         return Ok(None);
     };
 
-    let prevent_rename = (mime_parser.is_mailinglist_message() && !mime_parser.has_chat_version())
+    let prevent_rename = (mime_parser.is_mailinglist_message() && !mime_parser.was_encrypted())
         || mime_parser.get_header(HeaderDef::Sender).is_some();
 
     // get From: (it can be an address list!) and check if it is known (for known From:'s we add
