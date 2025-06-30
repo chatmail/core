@@ -5744,9 +5744,33 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 #define         DC_CHAT_TYPE_MAILINGLIST     140
 
 /**
- * A broadcast list. See dc_chat_get_type() for details.
+ * Outgoing broadcast channel, called "Channel" in the UI.
+ *
+ * The user can send into this channel,
+ * and all recipients will receive messages
+ * in an `InBroadcast`.
+ *
+ * Called `broadcast` here rather than `channel`,
+ * because the word "channel" already appears a lot in the code,
+ * which would make it hard to grep for it.
  */
-#define         DC_CHAT_TYPE_BROADCAST       160
+#define         DC_CHAT_TYPE_OUT_BROADCAST   160
+
+/**
+ * Incoming broadcast channel, called "Channel" in the UI.
+ *
+ * This channel is read-only,
+ * and we do not know who the other recipients are.
+ *
+ * This is similar to a `MailingList`,
+ * with the main difference being that
+ * `InBroadcast`s are encrypted.
+ *
+ * Called `broadcast` here rather than `channel`,
+ * because the word "channel" already appears a lot in the code,
+ * which would make it hard to grep for it.
+ */
+#define         DC_CHAT_TYPE_IN_BROADCAST    165
 
 /**
  * @}

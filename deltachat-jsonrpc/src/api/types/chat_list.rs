@@ -64,7 +64,7 @@ pub enum ChatListItemFetchResult {
         is_pinned: bool,
         is_muted: bool,
         is_contact_request: bool,
-        /// Deprecated alias for is_out_broadcast
+        /// Deprecated 2025-07, alias for is_out_broadcast
         is_broadcast: bool,
         /// true if the chat type is OutBroadcast
         is_out_broadcast: bool,

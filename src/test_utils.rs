@@ -44,8 +44,13 @@ use crate::tools::time;
 
 #[allow(non_upper_case_globals)]
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
+
 #[allow(non_upper_case_globals)]
 pub const AVATAR_64x64_BYTES: &[u8] = include_bytes!("../test-data/image/avatar64x64.png");
+
+/// The filename of [`AVATAR_64x64_BYTES`],
+/// after it has been saved
+/// by [`crate::blob::BlobObject::create_and_deduplicate`].
 #[allow(non_upper_case_globals)]
 pub const AVATAR_64x64_DEDUPLICATED: &str = "e9b6c7a78aa2e4f415644f55a553e73.png";
 

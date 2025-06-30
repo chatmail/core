@@ -975,12 +975,10 @@ impl CommandApi {
             .map(|id| id.to_u32())
     }
 
-    /// Deprecated in favor of create_broadcast().
+    /// Deprecated 2025-07 in favor of create_broadcast().
     async fn create_broadcast_list(&self, account_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        chat::create_broadcast(&ctx, "Channel".to_string())
+        self.create_broadcast(account_id, "Channel".to_string())
             .await
-            .map(|id| id.to_u32())
     }
 
     /// Create a new **broadcast channel**

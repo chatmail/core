@@ -93,7 +93,7 @@ enum ChatAssignment {
     /// assign to encrypted group.
     GroupChat { grpid: String },
 
-    /// Mailing list or channel.
+    /// Mailing list or broadcast channel.
     ///
     /// Mailing lists don't have members.
     /// Broadcast channels have members
@@ -107,7 +107,7 @@ enum ChatAssignment {
     /// up except the `from_id`
     /// which may be an email address contact
     /// or a key-contact.
-    MailingListOrChannel,
+    MailingListOrBroadcast,
 
     /// Group chat without a Group ID.
     ///
@@ -261,7 +261,7 @@ async fn get_to_and_past_contact_ids(
             None
         }
         ChatAssignment::ExistingChat { chat_id, .. } => Some(*chat_id),
-        ChatAssignment::MailingListOrChannel => None,
+        ChatAssignment::MailingListOrBroadcast => None,
         ChatAssignment::OneOneChat => {
             if is_partial_download.is_none() && !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
@@ -326,7 +326,7 @@ async fn get_to_and_past_contact_ids(
                 .await?;
             }
         }
-        ChatAssignment::Trash | ChatAssignment::MailingListOrChannel => {
+        ChatAssignment::Trash | ChatAssignment::MailingListOrBroadcast => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -1202,7 +1202,7 @@ async fn decide_chat_assignment(
     let chat_assignment = if should_trash {
         ChatAssignment::Trash
     } else if mime_parser.get_mailinglist_header().is_some() {
-        ChatAssignment::MailingListOrChannel
+        ChatAssignment::MailingListOrBroadcast
     } else if let Some(grpid) = mime_parser.get_chat_group_id() {
         if mime_parser.was_encrypted() {
             ChatAssignment::GroupChat {
@@ -1333,10 +1333,10 @@ async fn do_chat_assignment(
                     }
                 }
             }
-            ChatAssignment::MailingListOrChannel => {
+            ChatAssignment::MailingListOrBroadcast => {
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     if let Some((new_chat_id, new_chat_id_blocked)) =
-                        create_or_lookup_mailinglist_or_channel(
+                        create_or_lookup_mailinglist_or_broadcast(
                             context,
                             allow_creation,
                             mailinglist_header,
@@ -1382,7 +1382,7 @@ async fn do_chat_assignment(
         // unblock the chat
         if chat_id_blocked != Blocked::Not
             && create_blocked != Blocked::Yes
-            && !matches!(chat_assignment, ChatAssignment::MailingListOrChannel)
+            && !matches!(chat_assignment, ChatAssignment::MailingListOrBroadcast)
         {
             if let Some(chat_id) = chat_id {
                 chat_id.set_blocked(context, create_blocked).await?;
@@ -1512,7 +1512,7 @@ async fn do_chat_assignment(
                 chat_id = Some(*new_chat_id);
                 chat_id_blocked = *new_chat_id_blocked;
             }
-            ChatAssignment::MailingListOrChannel => {
+            ChatAssignment::MailingListOrBroadcast => {
                 // Check if the message belongs to a broadcast channel
                 // (it can't be a mailing list, since it's outgoing)
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
@@ -3206,7 +3206,7 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
 ///
 /// `mime_parser` is the corresponding message
 /// and is used to figure out the mailing list name from different header fields.
-async fn create_or_lookup_mailinglist_or_channel(
+async fn create_or_lookup_mailinglist_or_broadcast(
     context: &Context,
     allow_creation: bool,
     list_id_header: &str,
