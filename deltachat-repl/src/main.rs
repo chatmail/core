@@ -228,9 +228,8 @@ const MESSAGE_COMMANDS: [&str; 9] = [
     "download",
     "react",
 ];
-const CONTACT_COMMANDS: [&str; 9] = [
+const CONTACT_COMMANDS: [&str; 8] = [
     "listcontacts",
-    "listverified",
     "addcontact",
     "contactinfo",
     "delcontact",

@@ -396,7 +396,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  react <msg-id> [<reaction>]\n\
                  ===========================Contact commands==\n\
                  listcontacts [<query>]\n\
-                 listverified [<query>]\n\
                  addcontact [<name>] <addr>\n\
                  contactinfo <contact-id>\n\
                  delcontact <contact-id>\n\
