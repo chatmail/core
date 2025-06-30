@@ -135,22 +135,22 @@ pub enum Chattype {
     /// Mailing list.
     Mailinglist = 140,
 
-    /// Outgoing broadcast channel.
+    /// Outgoing broadcast channel, called "Channel" in the UI.
     ///
     /// The user can send into this channel,
     /// and all recipients will receive messages
-    /// in an `InBroadcastChannel`.
-    OutBroadcastChannel = 160,
+    /// in an `InBroadcast`.
+    OutBroadcast = 160,
 
-    /// Incoming broadcast channel.
+    /// Incoming broadcast channel, called "Channel" in the UI.
     ///
     /// This channel is read-only,
     /// and we do not know who the other recipients are.
     ///
     /// This is similar to a `MailingList`,
     /// with the main difference being that
-    /// `InBroadcastChannel`s are encrypted.
-    InBroadcastChannel = 165,
+    /// `InBroadcast`s are encrypted.
+    InBroadcast = 165,
 }
 
 pub const DC_MSG_ID_DAYMARKER: u32 = 9;
@@ -253,10 +253,7 @@ mod tests {
         assert_eq!(Chattype::Single, Chattype::from_i32(100).unwrap());
         assert_eq!(Chattype::Group, Chattype::from_i32(120).unwrap());
         assert_eq!(Chattype::Mailinglist, Chattype::from_i32(140).unwrap());
-        assert_eq!(
-            Chattype::OutBroadcastChannel,
-            Chattype::from_i32(160).unwrap()
-        );
+        assert_eq!(Chattype::OutBroadcast, Chattype::from_i32(160).unwrap());
     }
 
     #[test]

@@ -1194,7 +1194,7 @@ impl Contact {
                 let rows = stmt.query_map(
                     (
                         Chattype::Mailinglist,
-                        Chattype::InBroadcastChannel,
+                        Chattype::InBroadcast,
                         Blocked::Yes,
                     ),
                     |row| {

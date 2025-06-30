@@ -64,10 +64,10 @@ pub enum ChatListItemFetchResult {
         is_pinned: bool,
         is_muted: bool,
         is_contact_request: bool,
-        /// Deprecated alias for is_out_broadcast_channel
+        /// Deprecated alias for is_out_broadcast
         is_broadcast: bool,
-        /// true if the chat type is OutBroadcastChannel
-        is_out_broadcast_channel: bool,
+        /// true if the chat type is OutBroadcast
+        is_out_broadcast: bool,
         /// contact id if this is a dm chat (for view profile entry in context menu)
         dm_chat_contact: Option<u32>,
         was_seen_recently: bool,
@@ -174,8 +174,8 @@ pub(crate) async fn get_chat_list_item_by_id(
         is_pinned: visibility == ChatVisibility::Pinned,
         is_muted: chat.is_muted(),
         is_contact_request: chat.is_contact_request(),
-        is_broadcast: chat.get_type() == Chattype::OutBroadcastChannel,
-        is_out_broadcast_channel: chat.get_type() == Chattype::OutBroadcastChannel,
+        is_broadcast: chat.get_type() == Chattype::OutBroadcast,
+        is_out_broadcast: chat.get_type() == Chattype::OutBroadcast,
         dm_chat_contact,
         was_seen_recently,
         last_message_type: message_type,

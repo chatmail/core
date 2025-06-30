@@ -975,10 +975,10 @@ impl CommandApi {
             .map(|id| id.to_u32())
     }
 
-    /// Deprecated in favor of create_broadcast_channel().
+    /// Deprecated in favor of create_broadcast().
     async fn create_broadcast_list(&self, account_id: u32) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_broadcast_channel(&ctx, "Channel".to_string())
+        chat::create_broadcast(&ctx, "Channel".to_string())
             .await
             .map(|id| id.to_u32())
     }
@@ -988,9 +988,9 @@ impl CommandApi {
     /// Channels are similar to groups on the sending device,
     /// however, recipients get the messages in a read-only chat
     /// and will not see who the other members are.
-    async fn create_broadcast_channel(&self, account_id: u32, chat_name: String) -> Result<u32> {
+    async fn create_broadcast(&self, account_id: u32, chat_name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_broadcast_channel(&ctx, chat_name)
+        chat::create_broadcast(&ctx, chat_name)
             .await
             .map(|id| id.to_u32())
     }

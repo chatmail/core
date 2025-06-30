@@ -1692,7 +1692,7 @@ pub unsafe extern "C" fn dc_create_broadcast_list(context: *mut dc_context_t) ->
         return 0;
     }
     let ctx = &*context;
-    block_on(chat::create_broadcast_channel(ctx, "Channel".to_string()))
+    block_on(chat::create_broadcast(ctx, "Channel".to_string()))
         .context("Failed to create broadcast channel")
         .log_err(ctx)
         .map(|id| id.to_u32())

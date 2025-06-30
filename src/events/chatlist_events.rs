@@ -66,7 +66,7 @@ mod test_chatlist_events {
     use crate::{
         EventType,
         chat::{
-            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast_channel,
+            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast,
             create_group_chat, set_muted,
         },
         config::Config,
@@ -310,11 +310,11 @@ mod test_chatlist_events {
 
     /// Create broadcast channel
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_create_broadcastlist() -> Result<()> {
+    async fn test_create_broadcast() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         alice.evtracker.clear_events();
-        create_broadcast_channel(&alice, "Channel".to_string()).await?;
+        create_broadcast(&alice, "Channel".to_string()).await?;
         wait_for_chatlist(&alice).await;
         Ok(())
     }

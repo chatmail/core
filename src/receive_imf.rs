@@ -1524,7 +1524,7 @@ async fn do_chat_assignment(
                         } else {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_channel_ex(context, Nosync, listid, name).await?
+                            chat::create_broadcast_ex(context, Nosync, listid, name).await?
                         },
                     );
                 }
@@ -1671,7 +1671,7 @@ async fn add_parts(
         _ if chat.id.is_special() => GroupChangesInfo::default(),
         Chattype::Single => GroupChangesInfo::default(),
         Chattype::Mailinglist => GroupChangesInfo::default(),
-        Chattype::OutBroadcastChannel => GroupChangesInfo::default(),
+        Chattype::OutBroadcast => GroupChangesInfo::default(),
         Chattype::Group => {
             apply_group_changes(
                 context,
@@ -1684,8 +1684,8 @@ async fn add_parts(
             )
             .await?
         }
-        Chattype::InBroadcastChannel => {
-            apply_broadcast_channel_changes(context, mime_parser, &mut chat, from_id).await?
+        Chattype::InBroadcast => {
+            apply_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
         }
     };
 
@@ -3226,7 +3226,7 @@ async fn create_or_lookup_mailinglist_or_channel(
     };
 
     let chattype = if mime_parser.was_encrypted() {
-        Chattype::InBroadcastChannel
+        Chattype::InBroadcast
     } else {
         Chattype::Mailinglist
     };
@@ -3270,7 +3270,7 @@ async fn create_or_lookup_mailinglist_or_channel(
             &[ContactId::SELF],
         )
         .await?;
-        if chattype == Chattype::InBroadcastChannel {
+        if chattype == Chattype::InBroadcast {
             chat::add_to_chat_contacts_table(
                 context,
                 mime_parser.timestamp_sent,
@@ -3424,13 +3424,13 @@ async fn apply_mailinglist_changes(
     Ok(())
 }
 
-async fn apply_broadcast_channel_changes(
+async fn apply_broadcast_changes(
     context: &Context,
     mime_parser: &MimeMessage,
     chat: &mut Chat,
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
-    ensure!(chat.typ == Chattype::InBroadcastChannel);
+    ensure!(chat.typ == Chattype::InBroadcast);
 
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
