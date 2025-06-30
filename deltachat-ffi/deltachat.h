@@ -5286,6 +5286,20 @@ int             dc_contact_is_bot            (dc_contact_t* contact);
 
 
 /**
+ * Returns whether contact is a key-contact,
+ * i.e. it is identified by the public key
+ * rather than the email address.
+ *
+ * If so, all messages to and from this contact are encrypted.
+ *
+ * @memberof dc_contact_t
+ * @param contact The contact object.
+ * @return 1 if the contact is a key-contact, 0 if it is an address-contact.
+ */
+int             dc_contact_is_key_contact    (dc_contact_t* contact);
+
+
+/**
  * Return the contact ID that verified a contact.
  *
  * If the function returns non-zero result,
