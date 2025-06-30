@@ -140,6 +140,10 @@ pub enum Chattype {
     /// The user can send into this channel,
     /// and all recipients will receive messages
     /// in an `InBroadcast`.
+    ///
+    /// Called `broadcast` here rather than `channel`,
+    /// because the word "channel" already appears a lot in the code,
+    /// which would make it hard to grep for it.
     OutBroadcast = 160,
 
     /// Incoming broadcast channel, called "Channel" in the UI.
@@ -150,6 +154,10 @@ pub enum Chattype {
     /// This is similar to a `MailingList`,
     /// with the main difference being that
     /// `InBroadcast`s are encrypted.
+    ///
+    /// Called `broadcast` here rather than `channel`,
+    /// because the word "channel" already appears a lot in the code,
+    /// which would make it hard to grep for it.
     InBroadcast = 165,
 }
 

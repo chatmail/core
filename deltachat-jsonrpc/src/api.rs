@@ -983,11 +983,16 @@ impl CommandApi {
             .map(|id| id.to_u32())
     }
 
-    /// Create a new **broadcast channel** (or just **channel** for short).
+    /// Create a new **broadcast channel**
+    /// (called "Channel" in the UI).
     ///
     /// Channels are similar to groups on the sending device,
     /// however, recipients get the messages in a read-only chat
     /// and will not see who the other members are.
+    ///
+    /// Called `broadcast` here rather than `channel`,
+    /// because the word "channel" already appears a lot in the code,
+    /// which would make it hard to grep for it.
     async fn create_broadcast(&self, account_id: u32, chat_name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         chat::create_broadcast(&ctx, chat_name)
