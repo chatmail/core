@@ -1189,22 +1189,19 @@ impl Contact {
             .sql
             .transaction(move |transaction| {
                 let mut stmt = transaction.prepare(
-                    "SELECT name, grpid FROM chats WHERE (type=? OR type=?) AND blocked=?",
+                    "SELECT name, grpid, type FROM chats WHERE (type=? OR type=?) AND blocked=?",
                 )?;
                 let rows = stmt.query_map(
-                    (
-                        Chattype::Mailinglist,
-                        Chattype::InBroadcast,
-                        Blocked::Yes,
-                    ),
+                    (Chattype::Mailinglist, Chattype::InBroadcast, Blocked::Yes),
                     |row| {
                         let name: String = row.get(0)?;
                         let grpid: String = row.get(1)?;
-                        Ok((name, grpid))
+                        let typ: Chattype = row.get(2)?;
+                        Ok((name, grpid, typ))
                     },
                 )?;
                 let blocked_mailinglists = rows.collect::<std::result::Result<Vec<_>, _>>()?;
-                for (name, grpid) in blocked_mailinglists {
+                for (name, grpid, typ) in blocked_mailinglists {
                     let count = transaction.query_row(
                         "SELECT COUNT(id) FROM contacts WHERE addr=?",
                         [&grpid],
@@ -1217,10 +1214,15 @@ impl Contact {
                         transaction.execute("INSERT INTO contacts (addr) VALUES (?)", [&grpid])?;
                     }
 
+                    let fingerprint = if typ == Chattype::InBroadcast {
+                        "Blocked_broadcast"
+                    } else {
+                        ""
+                    };
                     // Always do an update in case the blocking is reset or name is changed.
                     transaction.execute(
-                        "UPDATE contacts SET name=?, origin=?, blocked=1 WHERE addr=?",
-                        (&name, Origin::MailinglistAddress, &grpid),
+                        "UPDATE contacts SET name=?, origin=?, blocked=1, fingerprint=? WHERE addr=?",
+                        (&name, Origin::MailinglistAddress, fingerprint, &grpid),
                     )?;
                 }
                 Ok(())
