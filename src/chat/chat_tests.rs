@@ -2826,7 +2826,7 @@ async fn test_block_broadcast() -> Result<()> {
     assert_eq!(chat.blocked, Blocked::Yes);
     let blocked = Contact::get_all_blocked(bob).await.unwrap();
     assert_eq!(blocked.len(), 1);
-    let blocked = Contact::get_by_id(&bob, blocked[0]).await?;
+    let blocked = Contact::get_by_id(bob, blocked[0]).await?;
     assert!(blocked.is_key_contact());
 
     let sent = alice.send_text(alice_chat_id, "Second message").await;
