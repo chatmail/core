@@ -3627,6 +3627,8 @@ pub async fn create_group_chat(
 /// Channels are similar to groups on the sending device,
 /// however, recipients get the messages in a read-only chat
 /// and will not see who the other members are.
+///
+/// After creation, the chat has no recipients and is in _unpromoted_ state.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
     create_broadcast_ex(context, Sync, grpid, chat_name).await

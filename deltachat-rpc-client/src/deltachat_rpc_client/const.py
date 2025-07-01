@@ -90,10 +90,40 @@ class ChatType(IntEnum):
     """Chat type."""
 
     UNDEFINED = 0
+
     SINGLE = 100
+    """1:1 chat, i.e. a direct chat with a single contact"""
+
     GROUP = 120
+
     MAILINGLIST = 140
-    BROADCAST = 160
+
+    OUT_BROADCAST = 160
+    """Outgoing broadcast channel, called "Channel" in the UI.
+
+    The user can send into this channel,
+    and all recipients will receive messages
+    in an `IN_BROADCAST`.
+
+    Called `broadcast` here rather than `channel`,
+    because the word "channel" already appears a lot in the code,
+    which would make it hard to grep for it.
+    """
+
+    IN_BROADCAST = 165
+    """Incoming broadcast channel, called "Channel" in the UI.
+
+    This channel is read-only,
+    and we do not know who the other recipients are.
+
+    This is similar to a `MAILINGLIST`,
+    with the main difference being that
+    `IN_BROADCAST`s are encrypted.
+
+    Called `broadcast` here rather than `channel`,
+    because the word "channel" already appears a lot in the code,
+    which would make it hard to grep for it.
+    """
 
 
 class ChatVisibility(str, Enum):

@@ -288,9 +288,43 @@ class Account:
     def create_group(self, name: str, protect: bool = False) -> Chat:
         """Create a new group chat.
 
-        After creation, the group has only self-contact as member and is in unpromoted state.
+        After creation,
+        the group has only self-contact as member one member (see `SpecialContactId.SELF`)
+        and is in _unpromoted_ state.
+        This means, you can add or remove members, change the name,
+        the group image and so on without messages being sent to all group members.
+
+        This changes as soon as the first message is sent to the group members
+        and the group becomes _promoted_.
+        After that, all changes are synced with all group members
+        by sending status message.
+
+        To check, if a chat is still unpromoted, you can look at the `is_unpromoted` property of a chat
+        (see `get_full_snapshot()` / `get_basic_snapshot()`).
+        This may be useful if you want to show some help for just created groups.
+
+        :param protect: If set to 1 the function creates group with protection initially enabled.
+                        Only verified members are allowed in these groups
+                        and end-to-end-encryption is always enabled.
         """
         return Chat(self, self._rpc.create_group_chat(self.id, name, protect))
+
+    def create_broadcast(self, name: str) -> Chat:
+        """Create a new **broadcast channel**
+        (called "Channel" in the UI).
+
+        Channels are similar to groups on the sending device,
+        however, recipients get the messages in a read-only chat
+        and will not see who the other members are.
+
+        Called `broadcast` here rather than `channel`,
+        because the word "channel" already appears a lot in the code,
+        which would make it hard to grep for it.
+
+        After creation, the chat no recipients and is in _unpromoted_ state;
+        see `create_group()` for more information on the unpromoted state.
+        """
+        return Chat(self, self._rpc.create_broadcast(self.id, name))
 
     def get_chat_by_id(self, chat_id: int) -> Chat:
         """Return the Chat instance with the given ID."""

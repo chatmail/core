@@ -126,13 +126,18 @@ pub const DC_CHAT_ID_LAST_SPECIAL: ChatId = ChatId::new(9);
 )]
 #[repr(u32)]
 pub enum Chattype {
-    /// 1:1 chat.
+    /// A 1:1 chat, i.e. a normal chat with a single contact.
+    ///
+    /// Created by [`ChatId::create_for_contact`].
     Single = 100,
 
     /// Group chat.
+    ///
+    /// Created by [`crate::chat::create_group_chat`].
     Group = 120,
 
-    /// Mailing list.
+    /// An (unencrypted) mailing list,
+    /// created by an incoming mailing list email.
     Mailinglist = 140,
 
     /// Outgoing broadcast channel, called "Channel" in the UI.
@@ -144,6 +149,8 @@ pub enum Chattype {
     /// Called `broadcast` here rather than `channel`,
     /// because the word "channel" already appears a lot in the code,
     /// which would make it hard to grep for it.
+    ///
+    /// Created by [`crate::chat::create_broadcast`].
     OutBroadcast = 160,
 
     /// Incoming broadcast channel, called "Channel" in the UI.
