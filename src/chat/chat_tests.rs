@@ -2676,6 +2676,14 @@ async fn test_broadcast() -> Result<()> {
     Ok(())
 }
 
+/// - Alice has multiple devices
+/// - Alice creates a broadcast and sends a message into it
+/// - Alice's second device sees the broadcast
+/// - Alice adds Bob to the broadcast
+/// - Synchronization is only implemented via sync messages for now,
+///   which are not enabled in tests by default,
+///   so, Alice's second device doesn't see the change yet.
+///   `test_sync_broadcast()` tests that synchronization works via sync messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_multidev() -> Result<()> {
     let alices = [
@@ -2721,6 +2729,13 @@ async fn test_broadcast_multidev() -> Result<()> {
     Ok(())
 }
 
+/// - Create a broadcast channel
+/// - Send a message into it in order to promote it
+/// - Add a contact
+/// - Rename it
+///   - the change should be visible on the receiver's side immediately
+/// - Change the avatar
+///   - The change should be visible on the receiver's side immediately
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcasts_name_and_avatar() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -2729,7 +2744,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     let bob = &tcm.bob().await;
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
-    tcm.section("Create a channel");
+    tcm.section("Create a broadcast channel");
     let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
     let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
     assert_eq!(alice_chat.typ, Chattype::OutBroadcast);
@@ -2754,7 +2769,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     assert_eq!(bob_chat.name, "My Channel");
     assert_eq!(bob_chat.get_profile_image(bob).await?, None);
 
-    tcm.section("Change channel name, and check that receivers see it after sending a message");
+    tcm.section("Change broadcast channel name, and check that receivers see it");
     set_chat_name(alice, alice_chat_id, "New Channel name").await?;
     let sent = alice.pop_sent_msg().await;
     let rcvd = bob.recv_msg(&sent).await;
@@ -2767,7 +2782,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
     assert_eq!(bob_chat.name, "New Channel name");
 
-    tcm.section("Set a channel avatar, and check that receivers see it after sending a message");
+    tcm.section("Set a broadcast channel avatar, and check that receivers see it");
     let file = alice.get_blobdir().join("avatar.png");
     tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
     set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
@@ -2800,6 +2815,12 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     Ok(())
 }
 
+/// - Create a broadcast channel
+/// - Block it
+/// - Check that the broadcast channel appears in the list of blocked contacts
+/// - A message is sent into the broadcast channel, but it is blocked
+/// - Unblock it
+/// - Receive a message again in the now-unblocked broadcast channel
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_block_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -2821,6 +2842,7 @@ async fn test_block_broadcast() -> Result<()> {
     let blocked = Contact::get_all_blocked(bob).await.unwrap();
     assert_eq!(blocked.len(), 0);
 
+    tcm.section("Bob blocks the chat");
     rcvd.chat_id.block(bob).await?;
     let chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
     assert_eq!(chat.blocked, Blocked::Yes);
@@ -2828,6 +2850,8 @@ async fn test_block_broadcast() -> Result<()> {
     assert_eq!(blocked.len(), 1);
     let blocked = Contact::get_by_id(bob, blocked[0]).await?;
     assert!(blocked.is_key_contact());
+    assert_eq!(blocked.origin, Origin::MailinglistAddress);
+    assert_eq!(blocked.get_name(), "My Channel");
 
     let sent = alice.send_text(alice_chat_id, "Second message").await;
     let rcvd2 = bob.recv_msg(&sent).await;
@@ -2836,6 +2860,26 @@ async fn test_block_broadcast() -> Result<()> {
 
     let chats = Chatlist::try_load(bob, DC_GCL_NO_SPECIALS, None, None).await?;
     assert_eq!(chats.len(), 0);
+
+    tcm.section("Bob unblocks the chat");
+    Contact::unblock(bob, blocked.id).await?;
+
+    let sent = alice.send_text(alice_chat_id, "Third message").await;
+    let rcvd3 = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd3.chat_id, rcvd.chat_id);
+    assert_eq!(rcvd3.chat_blocked, Blocked::Not);
+
+    let blocked = Contact::get_all_blocked(bob).await.unwrap();
+    assert_eq!(blocked.len(), 0);
+
+    let chats = Chatlist::try_load(bob, DC_GCL_NO_SPECIALS, None, None).await?;
+    assert_eq!(chats.len(), 1);
+    assert_eq!(chats.get_chat_id(0)?, rcvd.chat_id);
+
+    let chat = Chat::load_from_db(bob, rcvd3.chat_id).await?;
+    assert_eq!(chat.blocked, Blocked::Not);
+    assert_eq!(chat.name, "My Channel");
+    assert_eq!(chat.typ, Chattype::InBroadcast);
 
     Ok(())
 }
@@ -3526,6 +3570,7 @@ async fn test_sync_muted() -> Result<()> {
     Ok(())
 }
 
+/// Tests that synchronizing broadcast channels via sync-messages works
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
