@@ -984,7 +984,7 @@ impl CommandApi {
     /// Create a new **broadcast channel**
     /// (called "Channel" in the UI).
     ///
-    /// Channels are similar to groups on the sending device,
+    /// Broadcast channels are similar to groups on the sending device,
     /// however, recipients get the messages in a read-only chat
     /// and will not see who the other members are.
     ///
@@ -994,6 +994,8 @@ impl CommandApi {
     ///
     /// After creation, the chat no recipients and is in _unpromoted_ state;
     /// see [`CommandApi::create_group_chat`] for more information on the unpromoted state.
+    ///
+    /// Returns the created chat's id.
     async fn create_broadcast(&self, account_id: u32, chat_name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         chat::create_broadcast(&ctx, chat_name)

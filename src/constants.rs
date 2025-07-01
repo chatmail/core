@@ -142,7 +142,7 @@ pub enum Chattype {
 
     /// Outgoing broadcast channel, called "Channel" in the UI.
     ///
-    /// The user can send into this channel,
+    /// The user can send into this chat,
     /// and all recipients will receive messages
     /// in an `InBroadcast`.
     ///
@@ -155,7 +155,7 @@ pub enum Chattype {
 
     /// Incoming broadcast channel, called "Channel" in the UI.
     ///
-    /// This channel is read-only,
+    /// This chat is read-only,
     /// and we do not know who the other recipients are.
     ///
     /// This is similar to a `MailingList`,

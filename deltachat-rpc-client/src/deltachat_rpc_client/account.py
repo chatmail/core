@@ -313,7 +313,7 @@ class Account:
         """Create a new **broadcast channel**
         (called "Channel" in the UI).
 
-        Channels are similar to groups on the sending device,
+        Broadcast channels are similar to groups on the sending device,
         however, recipients get the messages in a read-only chat
         and will not see who the other members are.
 
@@ -323,6 +323,8 @@ class Account:
 
         After creation, the chat no recipients and is in _unpromoted_ state;
         see `create_group()` for more information on the unpromoted state.
+
+        Returns the created chat.
         """
         return Chat(self, self._rpc.create_broadcast(self.id, name))
 

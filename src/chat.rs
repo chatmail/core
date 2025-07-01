@@ -124,7 +124,7 @@ pub(crate) enum CantSendReason {
     ReadOnlyMailingList,
 
     /// Incoming broadcast channel where the user can't send messages.
-    ReadOnlyBroadcast,
+    InBroadcast,
 
     /// Not a member of the chat.
     NotAMember,
@@ -149,7 +149,7 @@ impl fmt::Display for CantSendReason {
             Self::ReadOnlyMailingList => {
                 write!(f, "mailing list does not have a know post address")
             }
-            Self::ReadOnlyBroadcast => {
+            Self::InBroadcast => {
                 write!(f, "Broadcast channel is read-only")
             }
             Self::NotAMember => write!(f, "not a member of the chat"),
@@ -1669,7 +1669,7 @@ impl Chat {
             }
         }
         if self.typ == Chattype::InBroadcast {
-            let reason = ReadOnlyBroadcast;
+            let reason = InBroadcast;
             if !skip_fn(&reason) {
                 return Ok(Some(reason));
             }
@@ -3622,13 +3622,21 @@ pub async fn create_group_chat(
     Ok(chat_id)
 }
 
-/// Create a new **broadcast channel** (or just **channel** for short).
+/// Create a new **broadcast channel**
+/// (called "Channel" in the UI).
 ///
-/// Channels are similar to groups on the sending device,
+/// Broadcast channels are similar to groups on the sending device,
 /// however, recipients get the messages in a read-only chat
 /// and will not see who the other members are.
 ///
-/// After creation, the chat has no recipients and is in _unpromoted_ state.
+/// Called `broadcast` here rather than `channel`,
+/// because the word "channel" already appears a lot in the code,
+/// which would make it hard to grep for it.
+///
+/// After creation, the chat no recipients and is in _unpromoted_ state;
+/// see [`create_group_chat`] for more information on the unpromoted state.
+///
+/// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
     create_broadcast_ex(context, Sync, grpid, chat_name).await
@@ -3811,7 +3819,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
     ensure!(
         chat.typ != Chattype::OutBroadcast || contact_id != ContactId::SELF,
-        "Cannot add SELF to channel."
+        "Cannot add SELF to broadcast channel."
     );
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),

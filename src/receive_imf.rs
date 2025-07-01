@@ -1667,7 +1667,6 @@ async fn add_parts(
 
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     let mut group_changes = match chat.typ {
-        // Do not apply group changes to the trash chat:
         _ if chat.id.is_special() => GroupChangesInfo::default(),
         Chattype::Single => GroupChangesInfo::default(),
         Chattype::Mailinglist => GroupChangesInfo::default(),
@@ -2795,9 +2794,7 @@ async fn apply_group_changes(
 ) -> Result<GroupChangesInfo> {
     let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     ensure!(chat.typ == Chattype::Group);
-    if chat.id.is_special() {
-        return Ok(GroupChangesInfo::default());
-    }
+    ensure!(!chat.id.is_special());
 
     let mut send_event_chat_modified = false;
     let (mut removed_id, mut added_id) = (None, None);
@@ -3111,14 +3108,12 @@ async fn apply_chat_name_and_avatar_changes(
             if let Some(avatar_action) = &mime_parser.group_avatar {
                 // this is just an explicit message containing the group-avatar,
                 // apart from that, the group-avatar is send along with various other messages
-                *better_msg = match avatar_action {
-                    AvatarAction::Delete => {
-                        Some(stock_str::msg_grp_img_deleted(context, from_id).await)
-                    }
+                better_msg.get_or_insert(match avatar_action {
+                    AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
                     AvatarAction::Change(_) => {
-                        Some(stock_str::msg_grp_img_changed(context, from_id).await)
+                        stock_str::msg_grp_img_changed(context, from_id).await
                     }
-                };
+                });
             }
         }
     }

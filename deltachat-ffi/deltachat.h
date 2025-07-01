@@ -5746,7 +5746,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 /**
  * Outgoing broadcast channel, called "Channel" in the UI.
  *
- * The user can send into this channel,
+ * The user can send into this chat,
  * and all recipients will receive messages
  * in a `DC_CHAT_TYPE_IN_BROADCAST`.
  *
@@ -5759,7 +5759,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 /**
  * Incoming broadcast channel, called "Channel" in the UI.
  *
- * This channel is read-only,
+ * This chat is read-only,
  * and we do not know who the other recipients are.
  *
  * This is similar to `DC_CHAT_TYPE_MAILINGLIST`,

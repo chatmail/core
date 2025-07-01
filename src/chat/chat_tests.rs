@@ -2804,7 +2804,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
         AVATAR_64x64_DEDUPLICATED
     );
 
-    tcm.section("Check that Bob can't modify the channel");
+    tcm.section("Check that Bob can't modify the broadcast channel");
     set_chat_profile_image(bob, bob_chat.id, file.to_str().unwrap())
         .await
         .unwrap_err();
@@ -2828,7 +2828,7 @@ async fn test_block_broadcast() -> Result<()> {
     let bob = &tcm.bob().await;
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
-    tcm.section("Create a channel with Bob, and send a message");
+    tcm.section("Create a broadcast channel with Bob, and send a message");
     let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
     let sent = alice.send_text(alice_chat_id, "Hi somebody").await;
