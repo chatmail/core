@@ -179,9 +179,11 @@ const DB_COMMANDS: [&str; 11] = [
     "housekeeping",
 ];
 
-const CHAT_COMMANDS: [&str; 36] = [
+const CHAT_COMMANDS: [&str; 39] = [
     "listchats",
     "listarchived",
+    "start-realtime",
+    "send-realtime",
     "chat",
     "createchat",
     "creategroup",
@@ -197,13 +199,16 @@ const CHAT_COMMANDS: [&str; 36] = [
     "dellocations",
     "getlocations",
     "send",
+    "sendempty",
     "sendimage",
+    "sendsticker",
     "sendfile",
     "sendhtml",
     "sendsyncmsg",
     "sendupdate",
     "videochat",
     "draft",
+    "devicemsg",
     "listmedia",
     "archive",
     "unarchive",
@@ -211,46 +216,46 @@ const CHAT_COMMANDS: [&str; 36] = [
     "unpin",
     "mute",
     "unmute",
-    "protect",
-    "unprotect",
     "delchat",
     "accept",
     "blockchat",
 ];
-const MESSAGE_COMMANDS: [&str; 9] = [
+const MESSAGE_COMMANDS: [&str; 10] = [
     "listmsgs",
     "msginfo",
+    "download",
+    "html",
     "listfresh",
     "forward",
     "resend",
     "markseen",
     "delmsg",
-    "download",
     "react",
 ];
-const CONTACT_COMMANDS: [&str; 8] = [
+const CONTACT_COMMANDS: [&str; 7] = [
     "listcontacts",
     "addcontact",
     "contactinfo",
     "delcontact",
-    "cleanupcontacts",
     "block",
     "unblock",
     "listblocked",
 ];
-const MISC_COMMANDS: [&str; 12] = [
+const MISC_COMMANDS: [&str; 14] = [
     "getqr",
     "getqrsvg",
     "getbadqr",
     "checkqr",
     "joinqr",
+    "setqr",
     "createqrsvg",
+    "providerinfo",
     "fileinfo",
+    "estimatedeletion",
     "clear",
     "exit",
     "quit",
     "help",
-    "estimatedeletion",
 ];
 
 impl Hinter for DcHelper {

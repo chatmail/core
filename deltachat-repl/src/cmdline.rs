@@ -333,8 +333,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             _ => println!(
                 "==========================Database commands==\n\
                  info\n\
-                 open <file to open or create>\n\
-                 close\n\
                  set <configuration-key> [<value>]\n\
                  get <configuration-key>\n\
                  oauth2\n\
@@ -349,6 +347,8 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  ==============================Chat commands==\n\
                  listchats [<query>]\n\
                  listarchived\n\
+                 start-realtime <msg-id>\n\
+                 send-realtime <msg-id> <data>\n\
                  chat [<chat-id>|0]\n\
                  createchat <contact-id>\n\
                  creategroup <name>\n\
@@ -364,6 +364,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  dellocations\n\
                  getlocations [<contact-id>]\n\
                  send <text>\n\
+                 sendempty\n\
                  sendimage <file> [<text>]\n\
                  sendsticker <file> [<text>]\n\
                  sendfile <file> [<text>]\n\
@@ -382,7 +383,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  unmute <chat-id>\n\
                  delchat <chat-id>\n\
                  accept <chat-id>\n\
-                 decline <chat-id>\n\
+                 blockchat <chat-id>\n\
                  ===========================Message commands==\n\
                  listmsgs <query>\n\
                  msginfo <msg-id>\n\
@@ -399,7 +400,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  addcontact [<name>] <addr>\n\
                  contactinfo <contact-id>\n\
                  delcontact <contact-id>\n\
-                 cleanupcontacts\n\
                  block <contact-id>\n\
                  unblock <contact-id>\n\
                  listblocked\n\
