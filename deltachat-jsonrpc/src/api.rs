@@ -992,7 +992,7 @@ impl CommandApi {
     /// because the word "channel" already appears a lot in the code,
     /// which would make it hard to grep for it.
     ///
-    /// After creation, the chat no recipients and is in _unpromoted_ state;
+    /// After creation, the chat contains no recipients and is in _unpromoted_ state;
     /// see [`CommandApi::create_group_chat`] for more information on the unpromoted state.
     ///
     /// Returns the created chat's id.

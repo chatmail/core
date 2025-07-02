@@ -321,7 +321,7 @@ class Account:
         because the word "channel" already appears a lot in the code,
         which would make it hard to grep for it.
 
-        After creation, the chat no recipients and is in _unpromoted_ state;
+        After creation, the chat contains no recipients and is in _unpromoted_ state;
         see `create_group()` for more information on the unpromoted state.
 
         Returns the created chat.
