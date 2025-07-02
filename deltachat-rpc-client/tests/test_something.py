@@ -876,5 +876,6 @@ def test_broadcast(acfactory):
     assert not bob_chat_snapshot.is_unpromoted
     assert bob_chat_snapshot.is_encrypted
     assert bob_chat_snapshot.chat_type == ChatType.IN_BROADCAST
+    assert bob_chat_snapshot.is_contact_request
 
     assert not bob_chat.can_send()
