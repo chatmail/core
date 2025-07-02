@@ -3214,16 +3214,18 @@ async fn create_or_lookup_mailinglist_or_broadcast(
         return Ok(Some((chat_id, blocked)));
     }
 
-    let name = if let Some(name) = mime_parser.get_header(HeaderDef::ChatGroupName) {
-        name.trim()
-    } else {
-        &compute_mailinglist_name(list_id_header, &listid, mime_parser)
-    };
-
     let chattype = if mime_parser.was_encrypted() {
         Chattype::InBroadcast
     } else {
         Chattype::Mailinglist
+    };
+
+    let name = if chattype == Chattype::InBroadcast {
+        mime_parser
+            .get_header(HeaderDef::ChatGroupName)
+            .unwrap_or("Broadcast Channel")
+    } else {
+        &compute_mailinglist_name(list_id_header, &listid, mime_parser)
     };
 
     if allow_creation {
