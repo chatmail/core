@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::time::Instant;
 
 use anyhow::{Context as _, Result, ensure};
 use deltachat_contact_tools::EmailAddress;
@@ -21,7 +20,7 @@ use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_by_domain;
 use crate::sql::Sql;
-use crate::tools::inc_and_check;
+use crate::tools::{inc_and_check, time_elapsed, Time};
 
 const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
@@ -1237,13 +1236,13 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
 
     inc_and_check(&mut migration_version, 132)?;
     if dbversion < migration_version {
-        let start = Instant::now();
+        let start = Time::now();
         sql.execute_migration_transaction(|t| migrate_key_contacts(context, t), migration_version)
             .await?;
         info!(
             context,
             "key-contacts migration took {:?} in total.",
-            start.elapsed()
+            time_elapsed(&start),
         );
     }
 
@@ -1832,7 +1831,7 @@ fn migrate_key_contacts(
     // ======================= Step 5: =======================
     // Rewrite `from_id` in messages
     {
-        let start = Instant::now();
+        let start = Time::now();
 
         let mut encrypted_msgs_stmt = transaction
             .prepare(
@@ -1883,7 +1882,7 @@ fn migrate_key_contacts(
         info!(
             context,
             "Rewriting msgs to key-contacts took {:?}.",
-            start.elapsed()
+            time_elapsed(&start),
         );
     }
 
