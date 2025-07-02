@@ -1386,7 +1386,7 @@ impl MimeMessage {
         {
             match get_filemeta(decoded_data) {
                 // image size is known, not too big, keep msg_type:
-                Ok((width, height)) if width * height <= constants::MAX_IMAGE_PIXELS => {
+                Ok((width, height)) if width * height <= constants::MAX_RCVD_IMAGE_PIXELS => {
                     part.param.set_i64(Param::Width, width.into());
                     part.param.set_i64(Param::Height, height.into());
                     msg_type
