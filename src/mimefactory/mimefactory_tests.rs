@@ -12,6 +12,7 @@ use crate::chatlist::Chatlist;
 use crate::constants;
 use crate::contact::Origin;
 use crate::headerdef::HeaderDef;
+use crate::message;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
