@@ -1179,7 +1179,7 @@ impl Contact {
         Ok(ret)
     }
 
-    /// Adds blocked mailinglists as contacts
+    /// Adds blocked mailinglists and broadcast channels as pseudo-contacts
     /// to allow unblocking them as if they are contacts
     /// (this way, only one unblock-ffi is needed and only one set of ui-functions,
     /// from the users perspective,
@@ -1215,6 +1215,8 @@ impl Contact {
                     }
 
                     let fingerprint = if typ == Chattype::InBroadcast {
+                        // Set some fingerprint so that is_pgp_contact() returns true,
+                        // and the contact isn't marked with a letter icon.
                         "Blocked_broadcast"
                     } else {
                         ""
