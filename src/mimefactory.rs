@@ -4,7 +4,7 @@ use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use chrono::TimeZone;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -1311,7 +1311,7 @@ impl MimeFactory {
             ));
         }
 
-        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
+        if chat.typ == Chattype::Group {
             // Send group ID unless it is an ad hoc group that has no ID.
             if !chat.grpid.is_empty() {
                 headers.push((
@@ -1319,7 +1319,9 @@ impl MimeFactory {
                     mail_builder::headers::raw::Raw::new(chat.grpid.clone()).into(),
                 ));
             }
+        }
 
+        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
             headers.push((
                 "Chat-Group-Name",
                 mail_builder::headers::text::Text::new(chat.name.to_string()).into(),
@@ -1333,6 +1335,7 @@ impl MimeFactory {
 
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
+                    ensure!(chat.typ != Chattype::OutBroadcast);
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
 
                     if email_to_remove
@@ -1356,6 +1359,7 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
+                    ensure!(chat.typ != Chattype::OutBroadcast);
                     // TODO: lookup the contact by ID rather than email address.
                     // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
