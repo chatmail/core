@@ -2650,6 +2650,11 @@ async fn test_broadcast() -> Result<()> {
         assert!(msg.was_encrypted());
         assert!(!msg.header_exists(HeaderDef::ChatGroupMemberTimestamps));
         assert!(!msg.header_exists(HeaderDef::AutocryptGossip));
+
+        // If we sent a ChatGroupId header,
+        // older versions of DC would ignore the message
+        assert!(!msg.header_exists(HeaderDef::ChatGroupId));
+
         let msg = bob.recv_msg(&sent_msg).await;
         assert_eq!(msg.get_text(), "ola!");
         assert_eq!(msg.subject, "Broadcast channel");
