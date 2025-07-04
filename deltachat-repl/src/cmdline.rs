@@ -324,7 +324,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  send-backup\n\
                  receive-backup <qr>\n\
                  export-keys\n\
-                 import-keys\n\
+                 import-keys <key-file>\n\
                  poke [<eml-file>|<folder>|<addr> <key-file>]\n\
                  reset <flags>\n\
                  stop\n\
@@ -352,12 +352,12 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  chat [<chat-id>|0]\n\
                  createchat <contact-id>\n\
                  creategroup <name>\n\
-                 createbroadcast\n\
+                 createbroadcast <name>\n\
                  createprotected <name>\n\
                  addmember <contact-id>\n\
                  removemember <contact-id>\n\
                  groupname <name>\n\
-                 groupimage [<file>]\n\
+                 groupimage <image>\n\
                  chatinfo\n\
                  sendlocations <seconds>\n\
                  setlocation <lat> <lng>\n\
@@ -489,6 +489,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             println!("Exported to {}.", dir.to_string_lossy());
         }
         "import-keys" => {
+            ensure!(!arg1.is_empty(), "Argument <key-file> missing.");
             imex(&context, ImexMode::ImportSelfKeys, arg1.as_ref(), None).await?;
         }
         "poke" => {
