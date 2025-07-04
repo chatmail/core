@@ -428,9 +428,19 @@ pub enum Config {
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
 
+    /// Send statistics to Delta Chat's developers.
+    /// Can be exposed to the user as a setting.
+    SelfReporting,
+
+    /// Last time statistics were sent to Delta Chat's developers
+    LastSelfReportSent,
+
     /// This key is sent to the self_reporting bot so that the bot can recognize the user
     /// without storing the email address
     SelfReportingId,
+
+    /// Timestamp of enabling SelfReporting.
+    SelfReportingEnabledTimestamp,
 
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
@@ -823,6 +833,12 @@ impl Context {
                     .save_to_transports_table(self, &EnteredLoginParam::default())
                     .await?;
                 }
+            }
+            Config::SelfReporting => {
+                self.sql.set_raw_config(key.as_ref(), value).await?;
+                self.sql
+                    .set_raw_config(Config::SelfReportingEnabledTimestamp.as_ref(), value)
+                    .await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

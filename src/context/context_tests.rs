@@ -6,9 +6,9 @@ use super::*;
 use crate::chat::{Chat, MuteDuration, get_chat_contacts, get_chat_msgs, send_msg, set_muted};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
-use crate::mimeparser::SystemMessage;
+use crate::message::Message;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{TestContext, get_chat_msg};
+use crate::test_utils::TestContext;
 use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -594,26 +594,6 @@ async fn test_get_next_msgs() -> Result<()> {
         .set_config_u32(Config::LastMsgId, sent_msg.sender_msg_id.to_u32())
         .await?;
     assert!(alice.get_next_msgs().await?.is_empty());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_draft_self_report() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-
-    let chat_id = alice.draft_self_report().await?;
-    let msg = get_chat_msg(&alice, chat_id, 0, 1).await;
-    assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
-
-    let chat = Chat::load_from_db(&alice, chat_id).await?;
-    assert!(chat.is_protected());
-
-    let mut draft = chat_id.get_draft(&alice).await?.unwrap();
-    assert!(draft.text.starts_with("core_version"));
-
-    // Test that sending into the protected chat works:
-    let _sent = alice.send_msg(chat_id, &mut draft).await;
 
     Ok(())
 }
