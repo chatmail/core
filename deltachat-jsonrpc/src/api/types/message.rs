@@ -9,6 +9,7 @@ use deltachat::contact::Contact;
 use deltachat::context::Context;
 use deltachat::download;
 use deltachat::message::Message;
+use deltachat::message::MessageState;
 use deltachat::message::MsgId;
 use deltachat::message::Viewtype;
 use deltachat::reaction::get_msg_reactions;
@@ -149,6 +150,12 @@ impl MessageObject {
 
         let parent_id = message.parent(context).await?.map(|m| m.get_id().to_u32());
 
+        let state = match message.get_state() {
+            MessageState::OutRcvd => MessageState::OutDelivered,
+            s => s,
+        }
+        .to_u32()
+        .context("state conversion to number failed")?;
         let download_state = message.download_state().into();
 
         let quote = if let Some(quoted_text) = message.quoted_text() {
@@ -212,10 +219,7 @@ impl MessageObject {
             has_location: message.has_location(),
             has_html: message.has_html(),
             view_type: message.get_viewtype().into(),
-            state: message
-                .get_state()
-                .to_u32()
-                .context("state conversion to number failed")?,
+            state,
             error: message.error(),
 
             timestamp: message.get_timestamp(),
