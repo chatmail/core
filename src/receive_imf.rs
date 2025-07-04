@@ -2882,17 +2882,17 @@ async fn apply_group_changes(
         }
     }
 
-    apply_chat_name_and_avatar_changes(
-        context,
-        mime_parser,
-        from_id,
-        chat,
-        &mut send_event_chat_modified,
-        &mut better_msg,
-    )
-    .await?;
-
     if is_from_in_chat {
+        apply_chat_name_and_avatar_changes(
+            context,
+            mime_parser,
+            from_id,
+            chat,
+            &mut send_event_chat_modified,
+            &mut better_msg,
+        )
+        .await?;
+
         if chat.member_list_is_stale(context).await? {
             info!(context, "Member list is stale.");
             let mut new_members: HashSet<ContactId> =

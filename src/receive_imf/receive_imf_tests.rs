@@ -4212,14 +4212,18 @@ async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
     let fiona_chat_id = fiona.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
     fiona_chat_id.accept(&fiona).await?;
 
-    send_text_msg(&fiona, fiona_chat_id, "hi".to_string()).await?;
+    SystemTime::shift(Duration::from_secs(60));
+    chat::set_chat_name(&fiona, fiona_chat_id, "Renamed").await?;
     bob.recv_msg(&fiona.pop_sent_msg().await).await;
 
-    // Bob missed the message adding fiona, but mustn't recreate the member list.
+    // Bob missed the message adding fiona, but mustn't recreate the member list or apply the group
+    // name change.
     assert_eq!(get_chat_contacts(&bob, bob_chat_id).await?.len(), 2);
     assert!(is_contact_in_chat(&bob, bob_chat_id, ContactId::SELF).await?);
     let bob_alice_contact = bob.add_or_lookup_contact_id(&alice).await;
     assert!(is_contact_in_chat(&bob, bob_chat_id, bob_alice_contact).await?);
+    let chat = Chat::load_from_db(&bob, bob_chat_id).await?;
+    assert_eq!(chat.get_name(), "Group");
     Ok(())
 }
 
