@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{ensure, Context as _, Result};
+use deltachat_derive::FromSql;
 use pgp::types::PublicKeyTrait;
 use serde::Serialize;
 
@@ -32,6 +33,7 @@ struct Statistics {
     self_reporting_id: String,
     contact_stats: Vec<ContactStat>,
     message_stats: MessageStats,
+    securejoin_source_stats: SecurejoinSourceStats,
 }
 #[derive(Default, Serialize)]
 struct ChatNumbers {
@@ -430,9 +432,77 @@ async fn get_self_report(context: &Context) -> Result<String> {
         self_reporting_id,
         contact_stats: get_contact_stats(context).await?,
         message_stats: get_message_stats(context).await?,
+        securejoin_source_stats: get_securejoin_source_stats(context).await?,
     };
 
     Ok(serde_json::to_string_pretty(&statistics)?)
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
+enum SecurejoinSource {
+    Unknown = 0,
+    ExternalLink = 1,
+    InternalLink = 2,
+    Clipboard = 3,
+    ImageLoaded = 4,
+    Scan = 5,
+}
+
+#[derive(Serialize)]
+struct SecurejoinSourceStats {
+    unknown: u32,
+    external_link: u32,
+    internal_link: u32,
+    clipboard: u32,
+    image_loaded: u32,
+    scan: u32,
+}
+
+pub(crate) async fn count_securejoin_source(context: &Context, source: Option<u32>) -> Result<()> {
+    if context.get_config_bool(Config::SelfReporting).await? {
+        let source = source
+            .context("Missing securejoin source")
+            .log_err(context)
+            .unwrap_or(0);
+
+        context
+            .sql
+            .execute(
+                "INSERT INTO stats_securejoin_sources VALUES (?, 1)
+            ON CONFLICT (source) DO UPDATE SET count=count+1;",
+                (source,),
+            )
+            .await?;
+    }
+    Ok(())
+}
+
+async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSourceStats> {
+    let map = context
+        .sql
+        .query_map(
+            "SELECT source, count FROM stats_securejoin_sources",
+            (),
+            |row| {
+                let source: SecurejoinSource = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((source, count))
+            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
+        )
+        .await?;
+
+    let stats = SecurejoinSourceStats {
+        unknown: *map.get(&SecurejoinSource::Unknown).unwrap_or(&0),
+        external_link: *map.get(&SecurejoinSource::ExternalLink).unwrap_or(&0),
+        internal_link: *map.get(&SecurejoinSource::InternalLink).unwrap_or(&0),
+        clipboard: *map.get(&SecurejoinSource::Clipboard).unwrap_or(&0),
+        image_loaded: *map.get(&SecurejoinSource::ImageLoaded).unwrap_or(&0),
+        scan: *map.get(&SecurejoinSource::Scan).unwrap_or(&0),
+    };
+
+    Ok(stats)
 }
 
 #[cfg(test)]
