@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use anyhow::{ensure, Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use deltachat_derive::FromSql;
 use pgp::types::PublicKeyTrait;
 use serde::Serialize;
@@ -10,8 +10,8 @@ use serde::Serialize;
 use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
 use crate::config::Config;
 use crate::constants::{Chattype, DC_CHAT_ID_TRASH};
-use crate::contact::{import_vcard, mark_contact_id_as_verified, ContactId, Origin};
-use crate::context::{get_version_str, Context};
+use crate::contact::{ContactId, Origin, import_vcard, mark_contact_id_as_verified};
+use crate::context::{Context, get_version_str};
 use crate::download::DownloadState;
 use crate::key::load_self_public_key;
 use crate::log::LogExt;
@@ -118,7 +118,7 @@ async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
         .await?;
 
     // Fill TransitiveViaBot and transitive_chain
-    for contact in contacts.iter_mut() {
+    for contact in &mut contacts {
         if contact.verified == VerifiedStatus::Transitive {
             let mut transitive_chain: u32 = 0;
             let mut has_bot = false;
@@ -152,7 +152,7 @@ async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
     }
 
     // Fill direct_chat
-    for contact in contacts.iter_mut() {
+    for contact in &mut contacts {
         let direct_chat = context
             .sql
             .exists(
