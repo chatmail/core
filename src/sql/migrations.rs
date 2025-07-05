@@ -1838,9 +1838,8 @@ fn migrate_key_contacts(
             .prepare(
                 "SELECT id, from_id, to_id
                 FROM msgs
-                WHERE id>9
-                AND (param LIKE '%\nc=1%' OR param LIKE 'c=1%')
-                AND chat_id>9
+                WHERE chat_id>9
+                AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
                 ORDER BY id DESC LIMIT 10000",
             )
             .context("Step 32")?;
