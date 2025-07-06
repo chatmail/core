@@ -1712,16 +1712,6 @@ impl MimeFactory {
     fn render_mdn(&mut self) -> Result<MimePart<'static>> {
         // RFC 6522, this also requires the `report-type` parameter which is equal
         // to the MIME subtype of the second body part of the multipart/report
-        //
-        // currently, we do not send MDNs encrypted:
-        // - in a multi-device-setup that is not set up properly, MDNs would disturb the communication as they
-        //   are send automatically which may lead to spreading outdated Autocrypt headers.
-        // - they do not carry any information but the Message-ID
-        // - this save some KB
-        // - in older versions, we did not encrypt messages to ourself when they to to SMTP - however, if these messages
-        //   are forwarded for any reasons (eg. gmail always forwards to IMAP), we have no chance to decrypt them;
-        //   this issue is fixed with 0.9.4
-
         let Loaded::Mdn {
             rfc724_mid,
             additional_msg_ids,
