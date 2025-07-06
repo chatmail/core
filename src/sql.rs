@@ -581,6 +581,12 @@ impl Sql {
         Ok(value)
     }
 
+    /// Removes the `key`'s value from the cache.
+    pub(crate) async fn uncache_raw_config(&self, key: &str) {
+        let mut lock = self.config_cache.write().await;
+        lock.remove(key);
+    }
+
     /// Sets configuration for the given key to 32-bit signed integer value.
     pub async fn set_raw_config_int(&self, key: &str, value: i32) -> Result<()> {
         self.set_raw_config(key, Some(&format!("{value}"))).await
@@ -722,6 +728,11 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
     http_cache_cleanup(context)
         .await
         .context("Failed to cleanup HTTP cache")
+        .log_err(context)
+        .ok();
+    migrations::msgs_to_key_contacts(context)
+        .await
+        .context("migrations::msgs_to_key_contacts")
         .log_err(context)
         .ok();
 

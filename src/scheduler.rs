@@ -15,6 +15,7 @@ use tokio_util::task::TaskTracker;
 
 use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
+use crate::constants;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{DownloadState, download_msg};
@@ -497,7 +498,8 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
 
     match ctx.get_config_i64(Config::LastHousekeeping).await {
         Ok(last_housekeeping_time) => {
-            let next_housekeeping_time = last_housekeeping_time.saturating_add(60 * 60 * 24);
+            let next_housekeeping_time =
+                last_housekeeping_time.saturating_add(constants::HOUSEKEEPING_PERIOD);
             if next_housekeeping_time <= time() {
                 sql::housekeeping(ctx).await.log_err(ctx).ok();
             }

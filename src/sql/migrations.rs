@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result, ensure};
 use deltachat_contact_tools::EmailAddress;
@@ -21,7 +21,7 @@ use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_by_domain;
 use crate::sql::Sql;
-use crate::tools::inc_and_check;
+use crate::tools::{Time, inc_and_check, time_elapsed};
 
 const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";
@@ -1245,6 +1245,10 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
             "key-contacts migration took {:?} in total.",
             start.elapsed()
         );
+        // Schedule `msgs_to_key_contacts()`.
+        context
+            .set_config_internal(Config::LastHousekeeping, None)
+            .await?;
     }
 
     let new_version = sql
@@ -1830,62 +1834,110 @@ fn migrate_key_contacts(
     }
 
     // ======================= Step 5: =======================
-    // Rewrite `from_id` in messages
+    // Prepare for rewriting `from_id`, `to_id` in messages
     {
-        let start = Instant::now();
-
-        let mut encrypted_msgs_stmt = transaction
-            .prepare(
-                "SELECT id, from_id, to_id
-                FROM msgs
-                WHERE chat_id>9
-                AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-                ORDER BY id DESC LIMIT 10000",
+        let mut contacts_map = autocrypt_key_contacts_with_reset_peerstate;
+        for (old, new) in autocrypt_key_contacts {
+            contacts_map.insert(old, new);
+        }
+        transaction
+            .execute(
+                "CREATE TABLE key_contacts_map (
+                    old_id INTEGER PRIMARY KEY NOT NULL,
+                    new_id INTEGER NOT NULL
+                ) STRICT",
+                (),
             )
             .context("Step 32")?;
-        let mut rewrite_msg_stmt = transaction
-            .prepare("UPDATE msgs SET from_id=?, to_id=? WHERE id=?")
-            .context("Step 32.1")?;
-
-        struct LoadedMsg {
-            id: u32,
-            from_id: u32,
-            to_id: u32,
+        {
+            let mut stmt = transaction
+                .prepare("INSERT INTO key_contacts_map (old_id, new_id) VALUES (?, ?)")
+                .context("Step 33")?;
+            for ids in contacts_map {
+                stmt.execute(ids).context("Step 34")?;
+            }
         }
-
-        let encrypted_msgs = encrypted_msgs_stmt
-            .query_map((), |row| {
-                let id: u32 = row.get(0)?;
-                let from_id: u32 = row.get(1)?;
-                let to_id: u32 = row.get(2)?;
-                Ok(LoadedMsg { id, from_id, to_id })
-            })
-            .context("Step 33")?;
-
-        for msg in encrypted_msgs {
-            let msg = msg.context("Step 34")?;
-
-            let new_from_id = *autocrypt_key_contacts
-                .get(&msg.from_id)
-                .or_else(|| autocrypt_key_contacts_with_reset_peerstate.get(&msg.from_id))
-                .unwrap_or(&msg.from_id);
-
-            let new_to_id = *autocrypt_key_contacts
-                .get(&msg.to_id)
-                .or_else(|| autocrypt_key_contacts_with_reset_peerstate.get(&msg.to_id))
-                .unwrap_or(&msg.to_id);
-
-            rewrite_msg_stmt
-                .execute((new_from_id, new_to_id, msg.id))
-                .context("Step 35")?;
-        }
-        info!(
-            context,
-            "Rewriting msgs to key-contacts took {:?}.",
-            start.elapsed()
-        );
+        transaction
+            .execute(
+                "INSERT INTO config (keyname, value) VALUES (
+                    'first_key_contacts_msg_id',
+                    IFNULL((SELECT MAX(id)+1 FROM msgs), 0)
+                )",
+                (),
+            )
+            .context("Step 35")?;
     }
 
+    Ok(())
+}
+
+/// Rewrite `from_id`, `to_id` in >= 1000 messages starting from the newest ones, to key-contacts.
+pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
+    let sql = &context.sql;
+    if sql
+        .get_raw_config_int64("first_key_contacts_msg_id")
+        .await?
+        <= Some(0)
+    {
+        return Ok(());
+    }
+    let trans_fn = |t: &mut rusqlite::Transaction| {
+        let mut first_key_contacts_msg_id: u64 = t
+            .query_one(
+                "SELECT CAST(value AS INTEGER) FROM config WHERE keyname='first_key_contacts_msg_id'",
+                (),
+                |row| row.get(0),
+            )
+            .context("Get first_key_contacts_msg_id")?;
+        let mut stmt = t
+            .prepare(
+                "UPDATE msgs SET
+                    from_id=IFNULL(
+                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.from_id),
+                        from_id
+                    ),
+                    to_id=IFNULL(
+                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.to_id),
+                        to_id
+                    )
+                WHERE id>=? AND id<?
+                AND chat_id>9
+                AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')",
+            )
+            .context("Prepare stmt")?;
+        let msgs_to_migrate = 1000;
+        let mut msgs_migrated: u64 = 0;
+        while first_key_contacts_msg_id > 0 && msgs_migrated < msgs_to_migrate {
+            let start_msg_id = first_key_contacts_msg_id.saturating_sub(msgs_to_migrate);
+            let cnt: u64 = stmt
+                .execute((start_msg_id, first_key_contacts_msg_id))
+                .context("UPDATE msgs")?
+                .try_into()?;
+            msgs_migrated += cnt;
+            first_key_contacts_msg_id = start_msg_id;
+        }
+        t.execute(
+            "UPDATE config SET value=? WHERE keyname='first_key_contacts_msg_id'",
+            (first_key_contacts_msg_id,),
+        )
+        .context("Update first_key_contacts_msg_id")?;
+        Ok((msgs_migrated, first_key_contacts_msg_id))
+    };
+    let start = Time::now();
+    let mut msgs_migrated = 0;
+    loop {
+        let (n, first_key_contacts_msg_id) = sql.transaction(trans_fn).await?;
+        msgs_migrated += n;
+        if first_key_contacts_msg_id == 0 || time_elapsed(&start) >= Duration::from_millis(500) {
+            break;
+        }
+    }
+    sql.uncache_raw_config("first_key_contacts_msg_id").await;
+    info!(
+        context,
+        "Rewriting {msgs_migrated} msgs to key-contacts took {:?}.",
+        time_elapsed(&start),
+    );
     Ok(())
 }
 

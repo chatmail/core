@@ -1041,6 +1041,13 @@ impl Context {
                 .await?
                 .to_string(),
         );
+        res.insert(
+            "first_key_contacts_msg_id",
+            self.sql
+                .get_raw_config("first_key_contacts_msg_id")
+                .await?
+                .unwrap_or_default(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));

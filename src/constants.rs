@@ -257,6 +257,9 @@ pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
     If you see this message in a chatmail client (Delta Chat, Arcane Chat, Delta Touch ...), \
     use \"Settings / Add Second Device\" instead.";
 
+/// Period between `sql::housekeeping()` runs.
+pub(crate) const HOUSEKEEPING_PERIOD: i64 = 24 * 60 * 60;
+
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;
