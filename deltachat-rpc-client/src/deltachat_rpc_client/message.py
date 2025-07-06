@@ -2,7 +2,7 @@
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional, Union
+from typing import TYPE_CHECKING, List, Optional, Union
 
 from ._utils import AttrDict, futuremethod
 from .const import EventType
@@ -38,6 +38,11 @@ class Message:
         snapshot["sender"] = Contact(self.account, snapshot.from_id)
         snapshot["message"] = self
         return snapshot
+
+    def get_read_receipts(self) -> List[AttrDict]:
+        """Get message read receipts."""
+        read_receipts = self._rpc.get_message_read_receipts(self.account.id, self.id)
+        return [AttrDict(read_receipt) for read_receipt in read_receipts]
 
     def get_reactions(self) -> Optional[AttrDict]:
         """Get message reactions."""
