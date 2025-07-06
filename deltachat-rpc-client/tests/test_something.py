@@ -726,6 +726,26 @@ def test_markseen_contact_request(acfactory):
     assert message2.get_snapshot().state == MessageState.IN_SEEN
 
 
+def test_read_receipt(acfactory):
+    """
+    Test sending a read receipt and ensure it is attributed to the correct contact.
+    """
+    alice, bob = acfactory.get_online_accounts(2)
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_contact_bob = alice.create_contact(bob)
+    bob.create_chat(alice)  # Accept the chat
+
+    alice_chat_bob.send_text("Hello Bob!")
+    msg = bob.wait_for_incoming_msg()
+    msg.mark_seen()
+
+    read_msg = alice.get_message_by_id(alice.wait_for_event(EventType.MSG_READ).msg_id)
+    read_receipts = read_msg.get_read_receipts()
+    assert len(read_receipts) == 1
+    assert read_receipts[0].contact_id == alice_contact_bob.id
+
+
 def test_get_http_response(acfactory):
     alice = acfactory.new_configured_account()
     http_response = alice._rpc.get_http_response(alice.id, "https://example.org")
