@@ -59,6 +59,26 @@ impl EncryptHelper {
         Ok(ctext)
     }
 
+    /// TODO documentation
+    pub async fn encrypt_for_broadcast(
+        self,
+        context: &Context,
+        passphrase: &str,
+        mail_to_encrypt: MimePart<'static>,
+        compress: bool,
+    ) -> Result<String> {
+        let sign_key = load_self_secret_key(context).await?;
+
+        let mut raw_message = Vec::new();
+        let cursor = Cursor::new(&mut raw_message);
+        mail_to_encrypt.clone().write_part(cursor).ok();
+
+        let ctext =
+            pgp::encrypt_for_broadcast(raw_message, passphrase, Some(sign_key), compress).await?;
+
+        Ok(ctext)
+    }
+
     /// Signs the passed-in `mail` using the private key from `context`.
     /// Returns the payload and the signature.
     pub async fn sign(self, context: &Context, mail: &MimePart<'static>) -> Result<String> {

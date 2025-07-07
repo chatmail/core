@@ -12,6 +12,7 @@ use pgp::composed::{
     SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
     StandaloneSignature, SubkeyParamsBuilder, TheRing,
 };
+use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
@@ -316,6 +317,41 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
         builder.encrypt_with_password(s2k, &passphrase)?;
 
         let encoded_msg = builder.to_armored_string(&mut rng, Default::default())?;
+
+        Ok(encoded_msg)
+    })
+    .await?
+}
+
+/// Symmetric encryption.
+pub async fn encrypt_for_broadcast(
+    plain: Vec<u8>,
+    passphrase: &str,
+    private_key_for_signing: Option<SignedSecretKey>,
+    compress: bool,
+) -> Result<String> {
+    let passphrase = Password::from(passphrase.to_string());
+
+    tokio::task::spawn_blocking(move || {
+        let mut rng = thread_rng();
+        let s2k = StringToKey::new_default(&mut rng);
+        let msg = MessageBuilder::from_bytes("", plain);
+        let mut msg = msg.seipd_v2(
+            &mut rng,
+            SymmetricKeyAlgorithm::AES128,
+            AeadAlgorithm::Ocb,
+            ChunkSize::C8KiB,
+        );
+        msg.encrypt_with_password(&mut rng, s2k, &passphrase)?;
+
+        if let Some(ref skey) = private_key_for_signing {
+            msg.sign(&**skey, Password::empty(), HASH_ALGORITHM);
+            if compress {
+                msg.compression(CompressionAlgorithm::ZLIB);
+            }
+        }
+
+        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
 
         Ok(encoded_msg)
     })
