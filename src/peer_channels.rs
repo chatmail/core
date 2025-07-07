@@ -109,7 +109,7 @@ impl Iroh {
 
         info!(
             ctx,
-            "IROH_REALTIME: Joining gossip with peers: {:?}", node_ids,
+            "IROH_REALTIME: Joining gossip {topic} with peers: {:?}", node_ids,
         );
 
         // Inform iroh of potentially new node addresses
@@ -142,11 +142,11 @@ impl Iroh {
     pub async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: NodeAddr) -> Result<()> {
         if self.iroh_channels.read().await.get(&topic).is_some() {
             self.router.endpoint().add_node_addr(peer.clone())?;
-
-            self.gossip
-                .subscribe_with_opts(topic, JoinOptions::with_bootstrap(vec![peer.node_id]));
+            self.gossip.subscribe(topic, vec![peer.node_id])?;
+            Ok(())
+        } else {
+            anyhow::bail!("can not read iroh channels");
         }
-        Ok(())
     }
 
     /// Send realtime data to the gossip swarm.
@@ -317,7 +317,7 @@ impl Context {
         if let Some(iroh) = &*self.iroh.read().await {
             info!(
                 self,
-                "Adding (maybe existing) peer with id {} to gossip", peer.node_id
+                "Adding (maybe existing) peer with id {} to {topic}", peer.node_id
             );
             iroh.maybe_add_gossip_peer(topic, peer).await?;
         }
@@ -560,6 +560,10 @@ async fn subscribe_loop(
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
+    use tokio::time::timeout;
+
     use super::*;
     use crate::{
         EventType,
@@ -991,7 +995,10 @@ mod tests {
         let fiona_advert = fiona.pop_sent_msg().await;
         alice.recv_msg_trash(&fiona_advert).await;
 
-        fiona_connect_future.await.unwrap();
+        timeout(Duration::from_secs(2), fiona_connect_future)
+            .await
+            .unwrap()
+            .unwrap();
         send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
             .await
             .unwrap();
@@ -1035,8 +1042,9 @@ mod tests {
             .unwrap();
         let alice_advertisement = alice.pop_sent_msg().await;
 
-        send_webxdc_realtime_advertisement(bob, bob_webxdc.id)
+        let bob_advertisement_future = send_webxdc_realtime_advertisement(bob, bob_webxdc.id)
             .await
+            .unwrap()
             .unwrap();
         let bob_advertisement = bob.pop_sent_msg().await;
 
@@ -1044,8 +1052,9 @@ mod tests {
         bob.recv_msg_trash(&alice_advertisement).await;
         alice.recv_msg_trash(&bob_advertisement).await;
 
-        eprintln!("Alice waits for connection");
+        eprintln!("Alice and Bob wait for connection");
         alice_advertisement_future.await.unwrap();
+        bob_advertisement_future.await.unwrap();
 
         // Alice sends ephemeral message
         eprintln!("Sending ephemeral message");

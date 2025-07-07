@@ -5,7 +5,11 @@ use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
+use chrono::TimeZone;
+use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
+use iroh_gossip::proto::TopicId;
+use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::mime::MimePart;
@@ -27,7 +31,8 @@ use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
-use crate::peer_channels::create_iroh_header;
+use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
+use crate::peerstate::Peerstate;
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{
@@ -138,6 +143,9 @@ pub struct MimeFactory {
 
     /// True if the avatar should be attached.
     pub attach_selfavatar: bool,
+
+    /// Sustain webxdc topic on resend.
+    webxdc_topic: Option<TopicId>,
 }
 
 /// Result of rendering a message, ready to be submitted to a send job.
@@ -448,7 +456,7 @@ impl MimeFactory {
             member_timestamps.is_empty()
                 || to.len() + past_members.len() == member_timestamps.len()
         );
-
+        let webxdc_topic = get_iroh_topic_for_msg(context, msg.id).await?;
         let factory = MimeFactory {
             from_addr,
             from_displayname,
@@ -468,6 +476,7 @@ impl MimeFactory {
             last_added_location_id: None,
             sync_ids_to_delete: None,
             attach_selfavatar,
+            webxdc_topic,
         };
         Ok(factory)
     }
@@ -515,6 +524,7 @@ impl MimeFactory {
             last_added_location_id: None,
             sync_ids_to_delete: None,
             attach_selfavatar: false,
+            webxdc_topic: None,
         };
 
         Ok(res)
@@ -1672,10 +1682,13 @@ impl MimeFactory {
             let json = msg.param.get(Param::Arg).unwrap_or_default();
             parts.push(context.build_status_update_part(json));
         } else if msg.viewtype == Viewtype::Webxdc {
+            let topic = self
+                .webxdc_topic
+                .map(|top| BASE32_NOPAD.encode(top.as_bytes()).to_ascii_lowercase())
+                .unwrap_or(create_iroh_header(context, msg.id).await?);
             headers.push((
                 HeaderDef::IrohGossipTopic.into(),
-                mail_builder::headers::raw::Raw::new(create_iroh_header(context, msg.id).await?)
-                    .into(),
+                mail_builder::headers::raw::Raw::new(topic).into(),
             ));
             if let (Some(json), _) = context
                 .render_webxdc_status_update_object(
