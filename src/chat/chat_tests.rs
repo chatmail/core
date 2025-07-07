@@ -5,6 +5,7 @@ use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{MessengerMessage, delete_msgs};
+use crate::mimeparser;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
@@ -2885,6 +2886,65 @@ async fn test_block_broadcast() -> Result<()> {
     assert_eq!(chat.blocked, Blocked::Not);
     assert_eq!(chat.name, "My Channel");
     assert_eq!(chat.typ, Chattype::InBroadcast);
+
+    Ok(())
+}
+
+/// Tests that a List-Id header in the encrypted part
+/// overrides a List-Id header in the unencrypted part,
+/// and that the List-Id isn't visible in the unencrypted part.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_channel_protected_listid() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+
+    tcm.section("Create a broadcast channel with Bob, and send a message");
+    let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    let mut sent = alice.send_text(alice_chat_id, "Hi somebody").await;
+
+    assert!(
+        !sent
+            .payload
+            .to_lowercase()
+            .contains(HeaderDef::ListId.get_headername())
+    );
+    // Do the counter check that the Message-Id header is present:
+    assert!(
+        sent.payload
+            .to_lowercase()
+            .contains(HeaderDef::MessageId.get_headername())
+    );
+
+    // Check that Delta Chat ignores an injected List-ID header:
+    let new_payload = sent.payload.replace(
+        "Date: ",
+        "List-Id: some wrong listid that would make things fail\n",
+    );
+    assert_ne!(&sent.payload, &new_payload);
+    sent.payload = new_payload;
+    println!(
+        "Injected List-Id header, it now looks like this: {}",
+        sent.payload
+    );
+
+    let alice_list_id = Chat::load_from_db(alice, sent.load_from_db().await.chat_id)
+        .await?
+        .grpid;
+
+    let parsed = mimeparser::MimeMessage::from_bytes(bob, sent.payload.as_bytes(), None).await?;
+    assert_eq!(
+        parsed.get_mailinglist_header().unwrap(),
+        format!("My Channel <{}>", alice_list_id)
+    );
+
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(
+        Chat::load_from_db(bob, rcvd.chat_id).await?.grpid,
+        alice_list_id
+    );
 
     Ok(())
 }

@@ -2007,6 +2007,7 @@ fn is_known(key: &str) -> bool {
             | "references"
             | "subject"
             | "secure-join"
+            | "list-id"
     )
 }
 
