@@ -780,7 +780,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
         | EventType::WebxdcRealtimeAdvertisementReceived { .. } => ptr::null_mut(),
-        | EventType::IncomingCall {
+        EventType::IncomingCall {
             place_call_info, ..
         } => {
             let data2 = place_call_info.to_c_string().unwrap_or_default();
