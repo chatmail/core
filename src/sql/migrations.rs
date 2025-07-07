@@ -1247,6 +1247,15 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         );
     }
 
+    inc_and_check(&mut migration_version, 133)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE symmetric_secrets(
+            chat_id INTEGER PRIMARY KEY NOT NULL,
+            symmetric_secret: ",
+        )
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
