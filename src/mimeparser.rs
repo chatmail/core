@@ -354,50 +354,52 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let symmetric_secrets = 
 
-        let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
-                Ok(Some(mut msg)) => {
-                    mail_raw = msg.as_data_vec().unwrap_or_default();
+        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
+            try_decrypt(&mail, &private_keyring, symmetric_secrets)
+        }) {
+            Ok(Some(mut msg)) => {
+                mail_raw = msg.as_data_vec().unwrap_or_default();
 
-                    let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
-                    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-                        info!(
-                            context,
-                            "decrypted message mime-body:\n{}",
-                            String::from_utf8_lossy(&mail_raw),
-                        );
-                    }
-
-                    decrypted_msg = Some(msg);
-
-                    timestamp_sent = Self::get_timestamp_sent(
-                        &decrypted_mail.headers,
-                        timestamp_sent,
-                        timestamp_rcvd,
+                let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
+                if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
+                    info!(
+                        context,
+                        "decrypted message mime-body:\n{}",
+                        String::from_utf8_lossy(&mail_raw),
                     );
+                }
 
-                    if let Some(protected_aheader_value) = decrypted_mail
-                        .headers
-                        .get_header_value(HeaderDef::Autocrypt)
-                    {
-                        aheader_value = Some(protected_aheader_value);
-                    }
+                decrypted_msg = Some(msg);
 
-                    (Ok(decrypted_mail), true)
+                timestamp_sent = Self::get_timestamp_sent(
+                    &decrypted_mail.headers,
+                    timestamp_sent,
+                    timestamp_rcvd,
+                );
+
+                if let Some(protected_aheader_value) = decrypted_mail
+                    .headers
+                    .get_header_value(HeaderDef::Autocrypt)
+                {
+                    aheader_value = Some(protected_aheader_value);
                 }
-                Ok(None) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    (Ok(mail), false)
-                }
-                Err(err) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    warn!(context, "decryption failed: {:#}", err);
-                    (Err(err), false)
-                }
-            };
+
+                (Ok(decrypted_mail), true)
+            }
+            Ok(None) => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                (Ok(mail), false)
+            }
+            Err(err) => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                warn!(context, "decryption failed: {:#}", err);
+                (Err(err), false)
+            }
+        };
 
         let autocrypt_header = if !incoming {
             None
