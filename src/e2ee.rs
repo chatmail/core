@@ -73,8 +73,7 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        let ctext =
-            pgp::encrypt_for_broadcast(raw_message, passphrase, Some(sign_key), compress).await?;
+        let ctext = pgp::encrypt_for_broadcast(raw_message, passphrase, sign_key, compress).await?;
 
         Ok(ctext)
     }
