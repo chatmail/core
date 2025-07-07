@@ -2905,30 +2905,17 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
     let mut sent = alice.send_text(alice_chat_id, "Hi somebody").await;
 
-    assert!(
-        !sent
-            .payload
-            .to_lowercase()
-            .contains(HeaderDef::ListId.get_headername())
-    );
+    assert!(!sent.payload.contains("List-ID"));
     // Do the counter check that the Message-Id header is present:
-    assert!(
-        sent.payload
-            .to_lowercase()
-            .contains(HeaderDef::MessageId.get_headername())
-    );
+    assert!(sent.payload.contains("Message-ID"));
 
     // Check that Delta Chat ignores an injected List-ID header:
     let new_payload = sent.payload.replace(
         "Date: ",
-        "List-Id: some wrong listid that would make things fail\n",
+        "List-ID: some wrong listid that would make things fail\nDate: ",
     );
     assert_ne!(&sent.payload, &new_payload);
     sent.payload = new_payload;
-    println!(
-        "Injected List-Id header, it now looks like this: {}",
-        sent.payload
-    );
 
     let alice_list_id = Chat::load_from_db(alice, sent.load_from_db().await.chat_id)
         .await?
