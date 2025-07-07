@@ -172,6 +172,11 @@ pub enum Param {
     /// post something to the mailing list.
     ListPost = b'p',
 
+    /// For Chats of type [`Chattype::OutBroadcast`] and [`Chattype::InBroadcast`]:
+    /// The symmetric key shared among all chat participants,
+    /// used to encrypt and decrypt messages.
+    SymmetricKey = b'z',
+
     /// For Contacts: If this is the List-Post address of a mailing list, contains
     /// the List-Id of the mailing list (which is also used as the group id of the chat).
     ListId = b's',
