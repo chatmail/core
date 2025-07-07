@@ -4,17 +4,17 @@
 //! This means, the "Call ID" is a "Message ID" currently - similar to webxdc.
 //! So, no database changes are needed at this stage.
 //! When it comes to relay calls over iroh, we may need a dedicated table, and this may change.
-use crate::chat::{send_msg, Chat, ChatId};
+use crate::chat::{Chat, ChatId, send_msg};
 use crate::constants::Chattype;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::message::{self, rfc724_mid_exists, Message, MsgId, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype, rfc724_mid_exists};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::sync::SyncData;
 use crate::tools::time;
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -312,7 +312,7 @@ impl Message {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::test_utils::{sync, TestContext, TestContextManager};
+    use crate::test_utils::{TestContext, TestContextManager, sync};
 
     async fn setup_call() -> Result<(
         TestContext, // Alice's 1st device
