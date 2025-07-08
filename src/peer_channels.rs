@@ -936,7 +936,7 @@ mod tests {
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
 
-        let chat = alice.create_chat(&bob).await.id;
+        let chat = alice.create_chat(bob).await.id;
 
         let mut instance = Message::new(Viewtype::File);
         instance
@@ -955,7 +955,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
-        let group = chat::create_group_chat(&alice, ProtectionStatus::Unprotected, "group chat")
+        let group = chat::create_group_chat(alice, ProtectionStatus::Unprotected, "group chat")
             .await
             .unwrap();
 
@@ -970,7 +970,7 @@ mod tests {
             )
             .unwrap();
 
-        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&bob).await)
+        add_contact_to_chat(alice, group, alice.add_or_lookup_contact_id(bob).await)
             .await
             .unwrap();
 
@@ -979,16 +979,16 @@ mod tests {
         // fiona joins late
         let fiona = &mut tcm.fiona().await;
 
-        add_contact_to_chat(&alice, group, alice.add_or_lookup_contact_id(&fiona).await)
+        add_contact_to_chat(alice, group, alice.add_or_lookup_contact_id(fiona).await)
             .await
             .unwrap();
 
-        resend_msgs(&alice, &[instance.id]).await.unwrap();
+        resend_msgs(alice, &[instance.id]).await.unwrap();
         let msg = alice.pop_sent_msg().await;
         let fiona_instance = fiona.recv_msg(&msg).await;
-        fiona_instance.chat_id.accept(&fiona).await.unwrap();
+        fiona_instance.chat_id.accept(fiona).await.unwrap();
 
-        let fiona_connect_future = send_webxdc_realtime_advertisement(&fiona, fiona_instance.id)
+        let fiona_connect_future = send_webxdc_realtime_advertisement(fiona, fiona_instance.id)
             .await
             .unwrap()
             .unwrap();
