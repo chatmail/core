@@ -499,7 +499,7 @@ impl<'a> BlobObject<'a> {
                 if !is_avatar && no_exif {
                     error!(
                         context,
-                        "Cannot recode image, using original data and file name: {err:#}.",
+                        "Cannot recode image, using original data: {err:#}.",
                     );
                     *viewtype = Viewtype::File;
                     Ok(original_name)

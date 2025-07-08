@@ -1962,12 +1962,7 @@ async fn test_sticker(
     let msg = bob.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, bob_chat.id);
     assert_eq!(msg.get_viewtype(), res_viewtype);
-    let msg_filename = msg.get_filename().unwrap();
-    match res_viewtype {
-        Viewtype::Sticker => assert_eq!(msg_filename, filename),
-        Viewtype::Image => assert!(msg_filename.starts_with("image_")),
-        _ => panic!("Not implemented"),
-    }
+    assert_eq!(msg.get_filename().unwrap(), filename);
     assert_eq!(msg.get_width(), w);
     assert_eq!(msg.get_height(), h);
     assert!(msg.get_filebytes(&bob).await?.unwrap() > 250);
@@ -3739,9 +3734,11 @@ async fn test_nonimage_with_png_ext() -> Result<()> {
     let sent_msg = alice.send_msg(alice_chat.get_id(), &mut msg).await;
     assert_eq!(msg.viewtype, Viewtype::File);
     assert_eq!(msg.get_filemime().unwrap(), "application/octet-stream");
+    assert!(!msg.get_filename().unwrap().contains("screenshot"));
     let msg_bob = bob.recv_msg(&sent_msg).await;
     assert_eq!(msg_bob.viewtype, Viewtype::File);
     assert_eq!(msg_bob.get_filemime().unwrap(), "application/octet-stream");
+    assert!(!msg_bob.get_filename().unwrap().contains("screenshot"));
     Ok(())
 }
 

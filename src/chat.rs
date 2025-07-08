@@ -10,6 +10,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
+use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
 use deltachat_derive::{FromSql, ToSql};
 use mail_builder::mime::MimePart;
@@ -1958,7 +1959,6 @@ impl Chat {
         context: &Context,
         msg: &mut Message,
         update_msg_id: Option<MsgId>,
-        timestamp: i64,
     ) -> Result<MsgId> {
         let mut to_id = 0;
         let mut location_id = 0;
@@ -1990,7 +1990,7 @@ impl Chat {
             msg.param.set_int(Param::AttachGroupImage, 1);
             self.param
                 .remove(Param::Unpromoted)
-                .set_i64(Param::GroupNameTimestamp, timestamp);
+                .set_i64(Param::GroupNameTimestamp, msg.timestamp_sort);
             self.update_param(context).await?;
             // TODO: Remove this compat code needed because Core <= v1.143:
             // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also
@@ -2085,7 +2085,7 @@ impl Chat {
                      (timestamp,from_id,chat_id, latitude,longitude,independent)\
                      VALUES (?,?,?, ?,?,1);",
                     (
-                        timestamp,
+                        msg.timestamp_sort,
                         ContactId::SELF,
                         self.id,
                         msg.param.get_float(Param::SetLatitude).unwrap_or_default(),
@@ -2141,7 +2141,6 @@ impl Chat {
 
         msg.chat_id = self.id;
         msg.from_id = ContactId::SELF;
-        msg.timestamp_sort = timestamp;
 
         // add message to the database
         if let Some(update_msg_id) = update_msg_id {
@@ -2682,6 +2681,7 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
     if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::VideochatInvitation {
         // the caller should check if the message text is empty
     } else if msg.viewtype.has_file() {
+        let viewtype_orig = msg.viewtype;
         let mut blob = msg
             .param
             .get_file_blob(context)?
@@ -2748,6 +2748,52 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
         }
 
         msg.try_calc_and_set_dimensions(context).await?;
+
+        let filename = msg.get_filename().context("msg has no file")?;
+        let suffix = Path::new(&filename)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("dat");
+        // Get file name to use for sending. For privacy purposes, we do not transfer the original
+        // filenames e.g. for images; these names are normally not needed and contain timestamps,
+        // running numbers, etc.
+        let filename: String = match viewtype_orig {
+            Viewtype::Voice => format!(
+                "voice-messsage_{}.{}",
+                chrono::Utc
+                    .timestamp_opt(msg.timestamp_sort, 0)
+                    .single()
+                    .map_or_else(
+                        || "YY-mm-dd_hh:mm:ss".to_string(),
+                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
+                    ),
+                &suffix
+            ),
+            Viewtype::Image | Viewtype::Gif => format!(
+                "image_{}.{}",
+                chrono::Utc
+                    .timestamp_opt(msg.timestamp_sort, 0)
+                    .single()
+                    .map_or_else(
+                        || "YY-mm-dd_hh:mm:ss".to_string(),
+                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string(),
+                    ),
+                &suffix,
+            ),
+            Viewtype::Video => format!(
+                "video_{}.{}",
+                chrono::Utc
+                    .timestamp_opt(msg.timestamp_sort, 0)
+                    .single()
+                    .map_or_else(
+                        || "YY-mm-dd_hh:mm:ss".to_string(),
+                        |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
+                    ),
+                &suffix
+            ),
+            _ => filename,
+        };
+        msg.param.set(Param::Filename, filename);
 
         info!(
             context,
@@ -2901,18 +2947,12 @@ async fn prepare_send_msg(
     // ... then change the MessageState in the message object
     msg.state = MessageState::OutPending;
 
+    msg.timestamp_sort = create_smeared_timestamp(context);
     prepare_msg_blob(context, msg).await?;
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    msg.id = chat
-        .prepare_msg_raw(
-            context,
-            msg,
-            update_msg_id,
-            create_smeared_timestamp(context),
-        )
-        .await?;
+    msg.id = chat.prepare_msg_raw(context, msg, update_msg_id).await?;
     msg.chat_id = chat_id;
 
     let row_ids = create_send_msg_jobs(context, msg)
@@ -4307,9 +4347,8 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
 
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
-        let new_msg_id = chat
-            .prepare_msg_raw(context, &mut msg, None, curr_timestamp)
-            .await?;
+        msg.timestamp_sort = curr_timestamp;
+        let new_msg_id = chat.prepare_msg_raw(context, &mut msg, None).await?;
 
         curr_timestamp += 1;
         if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
@@ -4559,19 +4598,17 @@ pub async fn add_device_msg_with_importance(
         chat_id = ChatId::get_for_contact(context, ContactId::DEVICE).await?;
 
         let rfc724_mid = create_outgoing_rfc724_mid();
-        prepare_msg_blob(context, msg).await?;
-
         let timestamp_sent = create_smeared_timestamp(context);
 
         // makes sure, the added message is the last one,
         // even if the date is wrong (useful esp. when warning about bad dates)
-        let mut timestamp_sort = timestamp_sent;
+        msg.timestamp_sort = timestamp_sent;
         if let Some(last_msg_time) = chat_id.get_timestamp(context).await? {
-            if timestamp_sort <= last_msg_time {
-                timestamp_sort = last_msg_time + 1;
+            if msg.timestamp_sort <= last_msg_time {
+                msg.timestamp_sort = last_msg_time + 1;
             }
         }
-
+        prepare_msg_blob(context, msg).await?;
         let state = MessageState::InFresh;
         let row_id = context
             .sql
@@ -4593,7 +4630,7 @@ pub async fn add_device_msg_with_importance(
                     chat_id,
                     ContactId::DEVICE,
                     ContactId::SELF,
-                    timestamp_sort,
+                    msg.timestamp_sort,
                     timestamp_sent,
                     timestamp_sent, // timestamp_sent equals timestamp_rcvd
                     msg.viewtype,

@@ -2,11 +2,9 @@
 
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
-use std::path::Path;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
-use chrono::TimeZone;
 use deltachat_contact_tools::sanitize_bidi_characters;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::{Address, EmailAddress};
@@ -1770,57 +1768,10 @@ fn hidden_recipients() -> Address<'static> {
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {
     let file_name = msg.get_filename().context("msg has no file")?;
-    let suffix = Path::new(&file_name)
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("dat");
-
     let blob = msg
         .param
         .get_file_blob(context)?
         .context("msg has no file")?;
-
-    // Get file name to use for sending.  For privacy purposes, we do
-    // not transfer the original filenames eg. for images; these names
-    // are normally not needed and contain timestamps, running numbers
-    // etc.
-    let filename_to_send: String = match msg.viewtype {
-        Viewtype::Voice => format!(
-            "voice-messsage_{}.{}",
-            chrono::Utc
-                .timestamp_opt(msg.timestamp_sort, 0)
-                .single()
-                .map_or_else(
-                    || "YY-mm-dd_hh:mm:ss".to_string(),
-                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
-                ),
-            &suffix
-        ),
-        Viewtype::Image | Viewtype::Gif => format!(
-            "image_{}.{}",
-            chrono::Utc
-                .timestamp_opt(msg.timestamp_sort, 0)
-                .single()
-                .map_or_else(
-                    || "YY-mm-dd_hh:mm:ss".to_string(),
-                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string(),
-                ),
-            &suffix,
-        ),
-        Viewtype::Video => format!(
-            "video_{}.{}",
-            chrono::Utc
-                .timestamp_opt(msg.timestamp_sort, 0)
-                .single()
-                .map_or_else(
-                    || "YY-mm-dd_hh:mm:ss".to_string(),
-                    |ts| ts.format("%Y-%m-%d_%H-%M-%S").to_string()
-                ),
-            &suffix
-        ),
-        _ => file_name,
-    };
-
     let mimetype = msg
         .param
         .get(Param::MimeType)
@@ -1833,8 +1784,7 @@ async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'s
     // at least on tested Thunderbird and Gma'l in 2017.
     // But I've heard about problems with inline and outl'k, so we just use the attachment-type until we
     // run into other problems ...
-    let mail =
-        MimePart::new(mimetype, body).attachment(sanitize_bidi_characters(&filename_to_send));
+    let mail = MimePart::new(mimetype, body).attachment(sanitize_bidi_characters(&file_name));
 
     Ok(mail)
 }
