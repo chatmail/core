@@ -2932,6 +2932,61 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_leave_broadcast() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    tcm.section("Alice creates broadcast channel with Bob.");
+    let alice_chat_id = create_broadcast(&alice, "foo".to_string()).await?;
+    let bob_contact = alice.add_or_lookup_contact(&bob).await.id;
+    add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
+
+    tcm.section("Alice sends first message to broadcast.");
+    let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
+    let bob_msg = bob.recv_msg(&sent_msg).await;
+
+    assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 1);
+
+    // Clear events so that we can later check
+    // that the 'Broadcast channel left' message didn't trigger IncomingMsg:
+    alice.evtracker.clear_events();
+
+    // Shift the time so that we can later check the 'Broadcast channel left' message's timestamp:
+    SystemTime::shift(Duration::from_secs(60));
+
+    tcm.section("Bob leaves the broadcast channel.");
+    let bob_chat_id = bob_msg.chat_id;
+    bob_chat_id.accept(&bob).await?;
+    remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;
+
+    let leave_msg = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&leave_msg).await;
+
+    assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 0);
+
+    alice.emit_event(EventType::Test);
+    alice
+        .evtracker
+        .get_matching(|ev| match ev {
+            EventType::Test => true,
+            EventType::IncomingMsg { .. } => {
+                panic!("'Brodcast channel left' message should be silent")
+            }
+            EventType::MsgsNoticed(..) => {
+                panic!("'Broadcast channel left' message shouldn't clear notifications")
+            }
+            EventType::MsgsChanged { .. } => {
+                panic!("Broadcast channels should be left silently, without any message");
+            }
+            _ => false,
+        })
+        .await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_for_contact_with_blocked() -> Result<()> {
     let t = TestContext::new().await;
     let (contact_id, _) = Contact::add_or_lookup(

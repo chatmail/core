@@ -2908,7 +2908,9 @@ async fn prepare_send_msg(
         // Allow to send "Member removed" messages so we can leave the group.
         // Necessary checks should be made anyway before removing contact
         // from the chat.
-        CantSendReason::NotAMember => msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup,
+        CantSendReason::NotAMember | CantSendReason::InBroadcast => {
+            msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup
+        }
         CantSendReason::MissingKey => msg
             .param
             .get_bool(Param::ForcePlaintext)
@@ -4079,8 +4081,6 @@ pub async fn remove_contact_from_chat(
         "Cannot remove special contact"
     );
 
-    let mut msg = Message::new(Viewtype::default());
-
     let chat = Chat::load_from_db(context, chat_id).await?;
     if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
         if !chat.is_self_in_chat(context).await? {
@@ -4110,19 +4110,10 @@ pub async fn remove_contact_from_chat(
             // in case of the database becoming inconsistent due to a bug.
             if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
                 if chat.typ == Chattype::Group && chat.is_promoted() {
-                    msg.viewtype = Viewtype::Text;
-                    if contact_id == ContactId::SELF {
-                        msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
-                    } else {
-                        msg.text =
-                            stock_str::msg_del_member_local(context, contact_id, ContactId::SELF)
-                                .await;
-                    }
-                    msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
-                    msg.param.set(Param::Arg, contact.get_addr().to_lowercase());
-                    msg.param
-                        .set(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
-                    let res = send_msg(context, chat_id, &mut msg).await;
+                    let addr = contact.get_addr();
+
+                    let res = send_member_removal_msg(context, chat_id, contact_id, addr).await;
+
                     if contact_id == ContactId::SELF {
                         res?;
                         set_group_explicitly_left(context, &chat.grpid).await?;
@@ -4141,11 +4132,38 @@ pub async fn remove_contact_from_chat(
                 chat.sync_contacts(context).await.log_err(context).ok();
             }
         }
+    } else if chat.typ == Chattype::InBroadcast && contact_id == ContactId::SELF {
+        // For incoming broadcast channels, it's not possible to remove members,
+        // but it's possible to leave:
+        let self_addr = context.get_primary_self_addr().await?;
+        send_member_removal_msg(context, chat_id, contact_id, &self_addr).await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
 
     Ok(())
+}
+
+async fn send_member_removal_msg(
+    context: &Context,
+    chat_id: ChatId,
+    contact_id: ContactId,
+    addr: &str,
+) -> Result<MsgId> {
+    let mut msg = Message::new(Viewtype::Text);
+
+    if contact_id == ContactId::SELF {
+        msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
+    } else {
+        msg.text = stock_str::msg_del_member_local(context, contact_id, ContactId::SELF).await;
+    }
+
+    msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
+    msg.param.set(Param::Arg, addr.to_lowercase());
+    msg.param
+        .set(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
+
+    send_msg(context, chat_id, &mut msg).await
 }
 
 async fn set_group_explicitly_left(context: &Context, grpid: &str) -> Result<()> {

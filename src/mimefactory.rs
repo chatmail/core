@@ -789,7 +789,7 @@ impl MimeFactory {
         }
 
         if let Loaded::Message { chat, .. } = &self.loaded {
-            if chat.typ == Chattype::OutBroadcast {
+            if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
                 headers.push((
                     "List-ID",
                     mail_builder::headers::text::Text::new(format!(
@@ -1319,7 +1319,10 @@ impl MimeFactory {
             }
         }
 
-        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
+        if chat.typ == Chattype::Group
+            || chat.typ == Chattype::OutBroadcast
+            || chat.typ == Chattype::InBroadcast
+        {
             headers.push((
                 "Chat-Group-Name",
                 mail_builder::headers::text::Text::new(chat.name.to_string()).into(),

@@ -14,7 +14,9 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus};
+use crate::chat::{
+    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, remove_from_chat_contacts_table,
+};
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -1687,7 +1689,9 @@ async fn add_parts(
         _ if chat.id.is_special() => GroupChangesInfo::default(),
         Chattype::Single => GroupChangesInfo::default(),
         Chattype::Mailinglist => GroupChangesInfo::default(),
-        Chattype::OutBroadcast => GroupChangesInfo::default(),
+        Chattype::OutBroadcast => {
+            apply_out_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
+        }
         Chattype::Group => {
             apply_group_changes(
                 context,
@@ -1701,7 +1705,7 @@ async fn add_parts(
             .await?
         }
         Chattype::InBroadcast => {
-            apply_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
+            apply_in_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
         }
     };
 
@@ -3438,7 +3442,30 @@ async fn apply_mailinglist_changes(
     Ok(())
 }
 
-async fn apply_broadcast_changes(
+async fn apply_out_broadcast_changes(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    chat: &mut Chat,
+    from_id: ContactId,
+) -> Result<GroupChangesInfo> {
+    ensure!(chat.typ == Chattype::OutBroadcast);
+
+    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
+        // The sender of the message left the broadcast channel
+        remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+
+        return Ok(GroupChangesInfo {
+            better_msg: Some("".to_string()),
+            added_removed_id: None,
+            silent: true,
+            extra_msgs: vec![],
+        });
+    }
+
+    Ok(GroupChangesInfo::default())
+}
+
+async fn apply_in_broadcast_changes(
     context: &Context,
     mime_parser: &MimeMessage,
     chat: &mut Chat,
