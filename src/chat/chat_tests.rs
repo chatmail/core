@@ -374,7 +374,7 @@ async fn test_member_add_remove() -> Result<()> {
     // Alice leaves the chat.
     remove_contact_from_chat(&alice, alice_chat_id, ContactId::SELF).await?;
     let sent = alice.pop_sent_msg().await;
-    assert_eq!(sent.load_from_db().await.get_text(), "You left the group.");
+    assert_eq!(sent.load_from_db().await.get_text(), "You left.");
 
     Ok(())
 }

@@ -7424,7 +7424,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used in status messages.
 #define DC_STR_REMOVE_MEMBER_BY_OTHER 131
 
-/// "You left the group."
+/// "You left."
 ///
 /// Used in status messages.
 #define DC_STR_GROUP_LEFT_BY_YOU 132

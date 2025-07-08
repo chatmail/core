@@ -285,7 +285,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s removed by %2$s."))]
     MsgDelMemberBy = 131,
 
-    #[strum(props(fallback = "You left the group."))]
+    #[strum(props(fallback = "You left."))]
     MsgYouLeftGroup = 132,
 
     #[strum(props(fallback = "Group left by %1$s."))]
@@ -685,7 +685,7 @@ pub(crate) async fn msg_group_left_remote(context: &Context) -> String {
     translated(context, StockMessage::MsgILeftGroup).await
 }
 
-/// Stock string: `You left the group.` or `Group left by %1$s.`.
+/// Stock string: `You left.` or `Group left by %1$s.`.
 pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouLeftGroup).await
