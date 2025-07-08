@@ -567,8 +567,8 @@ mod tests {
     use super::*;
     use crate::{
         EventType,
+        chat::{self, ChatId, ProtectionStatus, add_contact_to_chat, resend_msgs, send_msg},
         message::{Message, Viewtype},
-        chat::{self, add_contact_to_chat, resend_msgs, send_msg, ChatId, ProtectionStatus},
         test_utils::{TestContext, TestContextManager},
     };
 
