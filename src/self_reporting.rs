@@ -124,7 +124,7 @@ async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
             let mut has_bot = false;
             let mut current_verifier_id = contact.id;
 
-            while current_verifier_id != ContactId::SELF {
+            while current_verifier_id != ContactId::SELF && transitive_chain < 100 {
                 current_verifier_id = match verified_by_map.get(&current_verifier_id) {
                     Some(id) => *id,
                     None => {
