@@ -12,7 +12,7 @@ for example
 ```
     sql.execute(
         "CREATE TABLE messages (
-id INTEGER PRIMARY KEY AUTOINCREMENT,
+id INTEGER PRIMARY KEY NOT NULL AUTOINCREMENT,
 text TEXT DEFAULT '' NOT NULL -- message text
 ) STRICT",
     )
@@ -25,7 +25,7 @@ Do not escape newlines like this:
 ```
     sql.execute(
         "CREATE TABLE messages ( \
-id INTEGER PRIMARY KEY AUTOINCREMENT, \
+id INTEGER PRIMARY KEY NOT NULL AUTOINCREMENT, \
 text TEXT DEFAULT '' NOT NULL \
 ) STRICT",
     )
@@ -56,6 +56,8 @@ Dealing with `NULL` values both in SQL and in Rust is tricky and we try to avoid
 If column is already declared without `NOT NULL`, use `IFNULL` function to provide default value when selecting it.
 Use `HAVING COUNT(*) > 0` clause
 to [prevent aggregate functions such as `MIN` and `MAX` from returning `NULL`](https://stackoverflow.com/questions/66527856/aggregate-functions-max-etc-return-null-instead-of-no-rows).
+Note that in SQLite `PRIMARY KEY` does not imply `NOT NULL` for backwards compatibility,
+so `PRIMARY KEY` columns should be explicitly declared as `NOT NULL`.
 
 Don't delete unused columns too early, but maybe after several months/releases, unused columns are
 still used by older versions, so deleting them breaks downgrading the core or importing a backup in
