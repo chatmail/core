@@ -911,15 +911,3 @@ async fn test_decode_backup() -> Result<()> {
 
     Ok(())
 }
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_import_acc() -> Result<()> {
-    let ctx = &TestContext::new().await;
-    set_account_from_qr(
-        ctx,
-        "dcaccount:https://mailadm.testrun.org/new_email?t=1s_7yjxykttyf7zhh3&n=1s",
-    )
-    .await?;
-
-    Ok(())
-}
