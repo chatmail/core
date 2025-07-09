@@ -343,7 +343,7 @@ pub(crate) async fn post_empty(context: &Context, url: &str) -> Result<(String, 
         .authority()
         .context("URL has no authority")?
         .clone();
-    let req = hyper::Request::post(parsed_url.path())
+    let req = hyper::Request::post(parsed_url)
         .header(hyper::header::HOST, authority.as_str())
         .body(http_body_util::Empty::<Bytes>::new())?;
 
