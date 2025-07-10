@@ -1,6 +1,6 @@
 //! # Account manager module.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
 
@@ -144,6 +144,13 @@ impl Accounts {
         ctx.open("".to_string()).await?;
 
         self.accounts.insert(account_config.id, ctx);
+        
+        // Add new account to the end of the order list
+        if !self.config.inner.accounts_order.contains(&account_config.id) {
+            self.config.inner.accounts_order.push(account_config.id);
+            self.config.sync().await?;
+        }
+        
         self.emit_event(EventType::AccountsChanged);
 
         Ok(account_config.id)
@@ -162,6 +169,13 @@ impl Accounts {
             .build()
             .await?;
         self.accounts.insert(account_config.id, ctx);
+        
+        // Add new account to the end of the order list
+        if !self.config.inner.accounts_order.contains(&account_config.id) {
+            self.config.inner.accounts_order.push(account_config.id);
+            self.config.sync().await?;
+        }
+        
         self.emit_event(EventType::AccountsChanged);
 
         Ok(account_config.id)
@@ -197,6 +211,11 @@ impl Accounts {
                 .context("failed to remove account data")?;
         }
         self.config.remove_account(id).await?;
+        
+        // Remove from order list as well
+        self.config.inner.accounts_order.retain(|&x| x != id);
+        self.config.sync().await?;
+        
         self.emit_event(EventType::AccountsChanged);
 
         Ok(())
@@ -270,9 +289,61 @@ impl Accounts {
         }
     }
 
-    /// Get a list of all account ids.
+    /// Get a list of all account ids in the user-configured order.
     pub fn get_all(&self) -> Vec<u32> {
+        let mut ordered_ids = Vec::new();
+        let all_ids: HashSet<u32> = self.accounts.keys().copied().collect();
+        
+        // First, add accounts in the configured order
+        for &id in &self.config.inner.accounts_order {
+            if all_ids.contains(&id) {
+                ordered_ids.push(id);
+            }
+        }
+        
+        // Then add any accounts not in the order list (newly added accounts)
+        for &id in &all_ids {
+            if !self.config.inner.accounts_order.contains(&id) {
+                ordered_ids.push(id);
+            }
+        }
+        
+        ordered_ids
+    }
+
+    /// Get a list of all account ids without any ordering (raw order).
+    pub fn get_all_unordered(&self) -> Vec<u32> {
         self.accounts.keys().copied().collect()
+    }
+
+    /// Set the order of accounts.
+    /// The provided list should contain all account IDs in the desired order.
+    /// If an account ID is missing from the list, it will be appended at the end.
+    /// If the list contains non-existent account IDs, they will be ignored.
+    pub async fn set_accounts_order(&mut self, order: Vec<u32>) -> Result<()> {
+        let existing_ids: HashSet<u32> = self.accounts.keys().copied().collect();
+        
+        // Filter out non-existent account IDs
+        let mut filtered_order: Vec<u32> = order.into_iter()
+            .filter(|id| existing_ids.contains(id))
+            .collect();
+        
+        // Add any missing account IDs at the end
+        for &id in &existing_ids {
+            if !filtered_order.contains(&id) {
+                filtered_order.push(id);
+            }
+        }
+        
+        self.config.inner.accounts_order = filtered_order;
+        self.config.sync().await?;
+        self.emit_event(EventType::AccountsChanged);
+        Ok(())
+    }
+
+    /// Get the current account order.
+    pub fn get_accounts_order(&self) -> Vec<u32> {
+        self.get_all()
     }
 
     /// Starts background tasks such as IMAP and SMTP loops for all accounts.
@@ -415,6 +486,10 @@ struct InnerConfig {
     pub selected_account: u32,
     pub next_id: u32,
     pub accounts: Vec<AccountConfig>,
+    /// Ordered list of account IDs, representing the user's preferred order.
+    /// If an account ID is not in this list, it will be appended at the end.
+    #[serde(default)]
+    pub accounts_order: Vec<u32>,
 }
 
 impl Drop for Config {
@@ -481,6 +556,7 @@ impl Config {
             accounts: Vec::new(),
             selected_account: 0,
             next_id: 1,
+            accounts_order: Vec::new(),
         };
         if !lock {
             let cfg = Self {
