@@ -143,10 +143,8 @@ impl Iroh {
         if self.iroh_channels.read().await.get(&topic).is_some() {
             self.router.endpoint().add_node_addr(peer.clone())?;
             self.gossip.subscribe(topic, vec![peer.node_id])?;
-            Ok(())
-        } else {
-            anyhow::bail!("can not read iroh channels");
         }
+        Ok(())
     }
 
     /// Send realtime data to the gossip swarm.
@@ -560,10 +558,6 @@ async fn subscribe_loop(
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use tokio::time::timeout;
-
     use super::*;
     use crate::{
         EventType,
@@ -571,6 +565,8 @@ mod tests {
         message::{Message, Viewtype},
         test_utils::{TestContext, TestContextManager},
     };
+    use std::time::Duration;
+    use tokio::time::timeout;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_can_communicate() {
@@ -1003,20 +999,23 @@ mod tests {
             .await
             .unwrap();
 
-        eprintln!("Waiting for ephemeral message");
-        // loop {
-        //     let event = fiona.evtracker.recv().await.unwrap();
-        //     if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-        //         if data == b"alice -> bob & fiona" {
-        //             break;
-        //         } else {
-        //             panic!(
-        //                 "Unexpected status update: {}",
-        //                 String::from_utf8_lossy(&data)
-        //             );
-        //         }
-        //     }
-        // }
+        timeout(Duration::from_secs(2), async {
+            loop {
+                let event = fiona.evtracker.recv().await.unwrap();
+                if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
+                    if data == b"alice -> bob & fiona" {
+                        break;
+                    } else {
+                        panic!(
+                            "Unexpected status update: {}",
+                            String::from_utf8_lossy(&data)
+                        );
+                    }
+                }
+            }
+        })
+        .await
+        .unwrap();
     }
 
     async fn connect_alice_bob(
