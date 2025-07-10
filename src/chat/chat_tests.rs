@@ -374,7 +374,10 @@ async fn test_member_add_remove() -> Result<()> {
     // Alice leaves the chat.
     remove_contact_from_chat(&alice, alice_chat_id, ContactId::SELF).await?;
     let sent = alice.pop_sent_msg().await;
-    assert_eq!(sent.load_from_db().await.get_text(), "You left.");
+    assert_eq!(
+        sent.load_from_db().await.get_text(),
+        stock_str::msg_group_left_local(&alice, ContactId::SELF).await
+    );
 
     Ok(())
 }
@@ -2934,19 +2937,19 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     tcm.section("Alice creates broadcast channel with Bob.");
-    let alice_chat_id = create_broadcast(&alice, "foo".to_string()).await?;
-    let bob_contact = alice.add_or_lookup_contact(&bob).await.id;
-    add_contact_to_chat(&alice, alice_chat_id, bob_contact).await?;
+    let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
+    let bob_contact = alice.add_or_lookup_contact(bob).await.id;
+    add_contact_to_chat(alice, alice_chat_id, bob_contact).await?;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
     let bob_msg = bob.recv_msg(&sent_msg).await;
 
-    assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 1);
+    assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
     // Clear events so that we can later check
     // that the 'Broadcast channel left' message didn't trigger IncomingMsg:
@@ -2957,13 +2960,13 @@ async fn test_leave_broadcast() -> Result<()> {
 
     tcm.section("Bob leaves the broadcast channel.");
     let bob_chat_id = bob_msg.chat_id;
-    bob_chat_id.accept(&bob).await?;
-    remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;
+    bob_chat_id.accept(bob).await?;
+    remove_contact_from_chat(bob, bob_chat_id, ContactId::SELF).await?;
 
     let leave_msg = bob.pop_sent_msg().await;
     alice.recv_msg_trash(&leave_msg).await;
 
-    assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 0);
+    assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 0);
 
     alice.emit_event(EventType::Test);
     alice

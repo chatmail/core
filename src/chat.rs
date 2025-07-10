@@ -2905,7 +2905,7 @@ async fn prepare_send_msg(
             // If the chat is a contact request, let the user accept it later.
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         }
-        // Allow to send "Member removed" messages so we can leave the group.
+        // Allow to send "Member removed" messages so we can leave the group/broadcast.
         // Necessary checks should be made anyway before removing contact
         // from the chat.
         CantSendReason::NotAMember | CantSendReason::InBroadcast => {
@@ -4161,7 +4161,7 @@ async fn send_member_removal_msg(
     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
     msg.param.set(Param::Arg, addr.to_lowercase());
     msg.param
-        .set(Param::ContactAddedRemoved, contact_id.to_u32() as i32);
+        .set(Param::ContactAddedRemoved, contact_id.to_u32());
 
     send_msg(context, chat_id, &mut msg).await
 }
