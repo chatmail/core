@@ -117,6 +117,9 @@ pub async fn maybe_send_self_report(context: &Context) -> Result<Option<ChatId>>
 
 async fn send_self_report(context: &Context) -> Result<ChatId> {
     info!(context, "Sending self report.");
+
+    let last_selfreport_time = context.get_config_i64(Config::LastSelfReportSent).await?;
+
     // Setting this config at the beginning avoids endless loops when things do not
     // work out for whatever reason.
     context
@@ -135,10 +138,13 @@ This helps us improve the security of Delta Chat. \
 See TODO[blog post] for more information."
             .to_string(),
     );
+
+    let self_report = get_self_report(context, last_selfreport_time).await?;
+
     msg.set_file_from_bytes(
         context,
         "statistics.txt",
-        get_self_report(context).await?.as_bytes(),
+        self_report.as_bytes(),
         Some("text/plain"),
     )?;
 
@@ -151,7 +157,7 @@ See TODO[blog post] for more information."
     Ok(chat_id)
 }
 
-async fn get_self_report(context: &Context) -> Result<String> {
+async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result<String> {
     let num_msgs: u32 = context
         .sql
         .query_get_value(
@@ -257,7 +263,7 @@ async fn get_self_report(context: &Context) -> Result<String> {
         chat_numbers,
         self_reporting_id,
         contact_stats: get_contact_stats(context).await?,
-        message_stats: get_message_stats(context).await?,
+        message_stats: get_message_stats(context, last_selfreport_time).await?,
         securejoin_source_stats: get_securejoin_source_stats(context).await?,
     };
 
@@ -394,11 +400,17 @@ async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
     Ok(contacts)
 }
 
-async fn get_message_stats(context: &Context) -> Result<MessageStats> {
+async fn get_message_stats(
+    context: &Context,
+    mut last_selfreport_time: i64,
+) -> Result<MessageStats> {
     let enabled_ts: i64 = context
         .get_config_i64(Config::SelfReportingEnabledTimestamp)
         .await?;
-    ensure!(enabled_ts > 0, "Enabled Timestamp missing");
+    if last_selfreport_time == 0 {
+        last_selfreport_time = enabled_ts;
+    }
+    ensure!(last_selfreport_time > 0, "Enabled Timestamp missing");
 
     let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
 
@@ -422,7 +434,7 @@ async fn get_message_stats(context: &Context) -> Result<MessageStats> {
             "SELECT COUNT(*) FROM msgs
             WHERE chat_id IN temp.verified_chats
             AND chat_id<>? AND id>9 AND timestamp_sent>?",
-            (selfreporting_bot_chat_id, enabled_ts),
+            (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;
 
@@ -431,7 +443,7 @@ async fn get_message_stats(context: &Context) -> Result<MessageStats> {
             WHERE chat_id not IN temp.verified_chats
             AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
             AND chat_id<>? AND id>9 AND timestamp_sent>?",
-            (selfreporting_bot_chat_id, enabled_ts),
+            (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;
 
@@ -440,7 +452,7 @@ async fn get_message_stats(context: &Context) -> Result<MessageStats> {
             WHERE chat_id not IN temp.verified_chats
             AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
             AND chat_id<>? AND id>9 AND timestamp_sent>=?",
-            (selfreporting_bot_chat_id, enabled_ts),
+            (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;
 

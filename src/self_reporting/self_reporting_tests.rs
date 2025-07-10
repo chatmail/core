@@ -45,12 +45,12 @@ async fn test_self_report_one_contact() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::SelfReporting, true).await?;
 
-    let report = get_self_report(alice).await?;
+    let report = get_self_report(alice, 0).await?;
     let r: serde_json::Value = serde_json::from_str(&report)?;
 
     tcm.send_recv_accept(bob, alice, "Hi!").await;
 
-    let report = get_self_report(alice).await?;
+    let report = get_self_report(alice, 0).await?;
     println!("\nWith Bob:\n{report}\n");
     let r2: serde_json::Value = serde_json::from_str(&report)?;
 
@@ -142,7 +142,7 @@ async fn test_self_report_securejoin_source_stats() -> Result<()> {
 }
 
 async fn check_securejoin_report(context: &TestContext, expected: &SecurejoinSourceStats) {
-    let report = get_self_report(context).await.unwrap();
+    let report = get_self_report(context, 0).await.unwrap();
     let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
     let actual = &actual["securejoin_source_stats"];
 
