@@ -5,7 +5,6 @@ use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
-use chrono::TimeZone;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
 use iroh_gossip::proto::TopicId;
