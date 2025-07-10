@@ -317,11 +317,6 @@ impl Accounts {
         Ok(())
     }
 
-    /// Get the current account order.
-    pub fn get_accounts_order(&self) -> Vec<u32> {
-        self.get_all()
-    }
-
     /// Starts background tasks such as IMAP and SMTP loops for all accounts.
     pub async fn start_io(&mut self) {
         for account in self.accounts.values_mut() {

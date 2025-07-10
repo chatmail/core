@@ -232,11 +232,6 @@ impl CommandApi {
         self.accounts.write().await.set_accounts_order(order).await
     }
 
-    /// Get the current account order.
-    async fn get_accounts_order(&self) -> Vec<u32> {
-        self.accounts.read().await.get_accounts_order()
-    }
-
     /// Get a list of all configured accounts.
     async fn get_all_accounts(&self) -> Result<Vec<Account>> {
         let mut accounts = Vec::new();
