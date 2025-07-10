@@ -2934,6 +2934,9 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
     Ok(())
 }
 
+/// Test that if Bob leaves a broadcast channel,
+/// Alice (the channel owner) won't see him as a member anymore,
+/// but won't be notified about this in any way.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -2985,6 +2988,44 @@ async fn test_leave_broadcast() -> Result<()> {
             _ => false,
         })
         .await;
+
+    Ok(())
+}
+
+/// Tests that if Bob leaves a broadcast channel with one device,
+/// the other device shows a correct info message "You left.".
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_leave_broadcast_multidevice() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob0 = &tcm.bob().await;
+    let bob1 = &tcm.bob().await;
+
+    tcm.section("Alice creates broadcast channel with Bob.");
+    let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
+    let bob_contact = alice.add_or_lookup_contact(bob0).await.id;
+    add_contact_to_chat(alice, alice_chat_id, bob_contact).await?;
+
+    tcm.section("Alice sends first message to broadcast.");
+    let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
+    let bob0_hello = bob0.recv_msg(&sent_msg).await;
+    let bob1_hello = bob1.recv_msg(&sent_msg).await;
+
+    tcm.section("Bob leaves the broadcast channel with his first device.");
+    let bob_chat_id = bob0_hello.chat_id;
+    bob_chat_id.accept(bob0).await?;
+    remove_contact_from_chat(bob0, bob_chat_id, ContactId::SELF).await?;
+
+    let leave_msg = bob0.pop_sent_msg().await;
+    let rcvd = bob1.recv_msg(&leave_msg).await;
+
+    assert_eq!(rcvd.chat_id, bob1_hello.chat_id);
+    assert!(rcvd.is_info());
+    assert_eq!(rcvd.get_info_type(), SystemMessage::MemberRemovedFromGroup);
+    assert_eq!(
+        rcvd.text,
+        stock_str::msg_group_left_local(bob1, ContactId::SELF).await
+    );
 
     Ok(())
 }
