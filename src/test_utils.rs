@@ -2,6 +2,7 @@
 //!
 //! This private module is only compiled for test runs.
 use std::collections::{BTreeMap, HashSet};
+use std::env::current_dir;
 use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
 use std::panic;
@@ -1063,6 +1064,27 @@ impl Drop for TestContext {
                 // Print the chats if runtime still exists.
                 handle.block_on(async move {
                     self.print_chats().await;
+
+                    // If you set this to true, and a test fails,
+                    // the sql databases will be saved into the current working directory
+                    // so that you can examine them.
+                    if std::env::var("SAVE_TEMP_DATABASE") == Ok("1".to_string()) {
+                        let _: u32 = self
+                            .sql
+                            .query_get_value("PRAGMA wal_checkpoint;", ())
+                            .await
+                            .unwrap()
+                            .unwrap();
+
+                        let from = self.get_dbfile();
+                        let target = current_dir()
+                            .unwrap()
+                            .join(format!("test-account-{}.db", self.name()));
+                        tokio::fs::copy(from, &target).await.unwrap();
+                        println!("Copied database from {from:?} to {target:?}\n");
+                    } else {
+                        println!("Hint: If you want to examine the database files, set environment variable SAVE_TEMP_DATABASE=1")
+                    }
                 });
             }
         });
