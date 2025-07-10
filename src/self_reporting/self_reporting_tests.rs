@@ -83,6 +83,54 @@ async fn test_self_report_one_contact() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_message_stats() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config_bool(Config::SelfReporting, true).await?;
+    let email_chat = alice.create_email_chat(bob).await;
+    let encrypted_chat = alice.create_chat(bob).await;
+
+    let mut expected = MessageStats {
+        to_verified: 0,
+        unverified_encrypted: 0,
+        unencrypted: 0,
+    };
+
+    check_message_stats_report(alice, &expected).await;
+
+    alice.send_text(email_chat.id, "foo").await;
+    expected.unencrypted += 1;
+    check_message_stats_report(alice, &expected).await;
+
+    alice.send_text(encrypted_chat.id, "foo").await;
+    expected.unverified_encrypted += 1;
+    check_message_stats_report(alice, &expected).await;
+
+    alice.send_text(encrypted_chat.id, "foo").await;
+    expected.unverified_encrypted += 1;
+    check_message_stats_report(alice, &expected).await;
+
+    tcm.execute_securejoin(alice, bob).await;
+    expected.to_verified = expected.unverified_encrypted;
+    expected.unverified_encrypted = 0;
+    check_message_stats_report(alice, &expected).await;
+
+    Ok(())
+}
+
+async fn check_message_stats_report(context: &TestContext, expected: &MessageStats) {
+    let report = get_self_report(context, 0).await.unwrap();
+    let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let actual = &actual["message_stats"];
+
+    let expected = serde_json::to_string_pretty(&expected).unwrap();
+    let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
+
+    assert_eq!(actual, &expected);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_self_report_securejoin_source_stats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -149,5 +197,5 @@ async fn check_securejoin_report(context: &TestContext, expected: &SecurejoinSou
     let expected = serde_json::to_string_pretty(&expected).unwrap();
     let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
 
-    assert_eq!(&expected, actual);
+    assert_eq!(actual, &expected);
 }

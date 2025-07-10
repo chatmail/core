@@ -433,7 +433,8 @@ async fn get_message_stats(
         let to_verified = t.query_row(
             "SELECT COUNT(*) FROM msgs
             WHERE chat_id IN temp.verified_chats
-            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
+            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
             (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;
@@ -442,7 +443,8 @@ async fn get_message_stats(
             "SELECT COUNT(*) FROM msgs
             WHERE chat_id not IN temp.verified_chats
             AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
+            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
             (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;
@@ -451,7 +453,8 @@ async fn get_message_stats(
             "SELECT COUNT(*) FROM msgs
             WHERE chat_id not IN temp.verified_chats
             AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp_sent>=?",
+            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
+            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
             (selfreporting_bot_chat_id, last_selfreport_time),
             |row| row.get(0),
         )?;

@@ -22,7 +22,7 @@ use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
-use crate::tools::get_abs_path;
+use crate::tools::{get_abs_path, time};
 
 /// The available configuration keys.
 #[derive(
@@ -840,7 +840,7 @@ impl Context {
             Config::SelfReporting => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
                 self.sql
-                    .set_raw_config(Config::SelfReportingEnabledTimestamp.as_ref(), value)
+                    .set_raw_config_int64(Config::SelfReportingEnabledTimestamp.as_ref(), time())
                     .await?;
             }
             _ => {
