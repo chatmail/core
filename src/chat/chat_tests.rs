@@ -2952,7 +2952,7 @@ async fn test_leave_broadcast() -> Result<()> {
     // that the 'Broadcast channel left' message didn't trigger IncomingMsg:
     alice.evtracker.clear_events();
 
-    // Shift the time so that we can later check the 'Broadcast channel left' message's timestamp:
+    // Shift the time so that we can later check the "Broadcast channel left" message's timestamp:
     SystemTime::shift(Duration::from_secs(60));
 
     tcm.section("Bob leaves the broadcast channel.");
