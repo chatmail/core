@@ -14,9 +14,7 @@ use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_tls;
-use crate::net::{
-    connect_tcp_inner, run_connection_attempts, update_connection_history,
-};
+use crate::net::{connect_tcp_inner, run_connection_attempts, update_connection_history};
 use crate::tools::time;
 
 #[derive(Debug)]
