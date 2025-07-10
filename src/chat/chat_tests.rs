@@ -2971,7 +2971,7 @@ async fn test_leave_broadcast() -> Result<()> {
         .get_matching(|ev| match ev {
             EventType::Test => true,
             EventType::IncomingMsg { .. } => {
-                panic!("'Brodcast channel left' message should be silent")
+                panic!("'Broadcast channel left' message should be silent")
             }
             EventType::MsgsNoticed(..) => {
                 panic!("'Broadcast channel left' message shouldn't clear notifications")
