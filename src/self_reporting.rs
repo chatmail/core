@@ -69,105 +69,6 @@ struct ContactStat {
     //new: bool, // TODO
 }
 
-async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
-    let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
-    let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
-
-    let mut contacts: Vec<ContactStat> = context
-        .sql
-        .query_map(
-            "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
-            WHERE id>9 AND origin>? AND addr<>?",
-            (Origin::Hidden, SELF_REPORTING_BOT_EMAIL),
-            |row| {
-                let id = row.get(0)?;
-                let is_encrypted: bool = row.get(1)?;
-                let verifier: ContactId = row.get(2)?;
-                let last_seen: u64 = row.get(3)?;
-                let bot: bool = row.get(4)?;
-
-                let verified = match (is_encrypted, verifier) {
-                    (true, ContactId::SELF) => VerifiedStatus::Direct,
-                    (true, ContactId::UNDEFINED) => VerifiedStatus::Opportunistic,
-                    (true, _) => VerifiedStatus::Transitive, // TransitiveViaBot will be filled later
-                    (false, _) => VerifiedStatus::Unencrypted,
-                };
-
-                if verifier != ContactId::UNDEFINED {
-                    verified_by_map.insert(id, verifier);
-                }
-
-                if bot {
-                    bot_ids.insert(id);
-                }
-
-                Ok(ContactStat {
-                    id,
-                    verified,
-                    bot,
-                    direct_chat: false, // will be filled later
-                    last_seen,
-                    transitive_chain: None, // will be filled later
-                })
-            },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
-        )
-        .await?;
-
-    // Fill TransitiveViaBot and transitive_chain
-    for contact in &mut contacts {
-        if contact.verified == VerifiedStatus::Transitive {
-            let mut transitive_chain: u32 = 0;
-            let mut has_bot = false;
-            let mut current_verifier_id = contact.id;
-
-            while current_verifier_id != ContactId::SELF && transitive_chain < 100 {
-                current_verifier_id = match verified_by_map.get(&current_verifier_id) {
-                    Some(id) => *id,
-                    None => {
-                        // The chain ends here, probably because some verification was done
-                        // before we started recording verifiers.
-                        // It's unclear how long the chain really is.
-                        transitive_chain = 0;
-                        break;
-                    }
-                };
-                if bot_ids.contains(&current_verifier_id) {
-                    has_bot = true;
-                }
-                transitive_chain = transitive_chain.saturating_add(1);
-            }
-
-            if transitive_chain > 0 {
-                contact.transitive_chain = Some(transitive_chain);
-            }
-
-            if has_bot {
-                contact.verified = VerifiedStatus::TransitiveViaBot;
-            }
-        }
-    }
-
-    // Fill direct_chat
-    for contact in &mut contacts {
-        let direct_chat = context
-            .sql
-            .exists(
-                "SELECT COUNT(*)
-            FROM chats_contacts cc INNER JOIN chats
-            WHERE cc.contact_id=? AND chats.type=?",
-                (contact.id, Chattype::Single),
-            )
-            .await?;
-        contact.direct_chat = direct_chat;
-    }
-
-    Ok(contacts)
-}
-
 #[derive(Serialize)]
 struct MessageStats {
     to_verified: u32,
@@ -175,69 +76,25 @@ struct MessageStats {
     unencrypted: u32,
 }
 
-async fn get_message_stats(context: &Context) -> Result<MessageStats> {
-    let enabled_ts: i64 = context
-        .get_config_i64(Config::SelfReportingEnabledTimestamp)
-        .await?;
-    ensure!(enabled_ts > 0, "Enabled Timestamp missing");
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
+enum SecurejoinSource {
+    Unknown = 0,
+    ExternalLink = 1,
+    InternalLink = 2,
+    Clipboard = 3,
+    ImageLoaded = 4,
+    Scan = 5,
+}
 
-    let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
-
-    let trans_fn = |t: &mut rusqlite::Transaction| {
-        t.pragma_update(None, "query_only", "0")?;
-        t.execute(
-            "CREATE TEMP TABLE temp.verified_chats (
-                id INTEGER PRIMARY KEY
-            ) STRICT",
-            (),
-        )?;
-
-        t.execute(
-            "INSERT INTO temp.verified_chats
-            SELECT id FROM chats
-            WHERE protected=1 AND id>9",
-            (),
-        )?;
-
-        let to_verified = t.query_row(
-            "SELECT COUNT(*) FROM msgs
-            WHERE chat_id IN temp.verified_chats
-            AND chat_id<>? AND id>9 AND timestamp_sent>?",
-            (selfreporting_bot_chat_id, enabled_ts),
-            |row| row.get(0),
-        )?;
-
-        let unverified_encrypted = t.query_row(
-            "SELECT COUNT(*) FROM msgs
-            WHERE chat_id not IN temp.verified_chats
-            AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp_sent>?",
-            (selfreporting_bot_chat_id, enabled_ts),
-            |row| row.get(0),
-        )?;
-
-        let unencrypted = t.query_row(
-            "SELECT COUNT(*) FROM msgs
-            WHERE chat_id not IN temp.verified_chats
-            AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp_sent>=?",
-            (selfreporting_bot_chat_id, enabled_ts),
-            |row| row.get(0),
-        )?;
-
-        t.execute("DROP TABLE temp.verified_chats", ())?;
-
-        Ok(MessageStats {
-            to_verified,
-            unverified_encrypted,
-            unencrypted,
-        })
-    };
-
-    let query_only = true;
-    let message_stats: MessageStats = context.sql.transaction_ex(query_only, trans_fn).await?;
-
-    Ok(message_stats)
+#[derive(Serialize)]
+struct SecurejoinSourceStats {
+    unknown: u32,
+    external_link: u32,
+    internal_link: u32,
+    clipboard: u32,
+    image_loaded: u32,
+    scan: u32,
 }
 
 /// Sends a message with statistics about the usage of Delta Chat,
@@ -290,37 +147,6 @@ See TODO[blog post] for more information."
         .context("Failed to send self_reporting message")
         .log_err(context)
         .ok();
-
-    Ok(chat_id)
-}
-
-async fn get_selfreporting_bot(context: &Context) -> Result<ChatId, anyhow::Error> {
-    let contact_id: ContactId = *import_vcard(context, SELF_REPORTING_BOT_VCARD)
-        .await?
-        .first()
-        .context("Self reporting bot vCard does not contain a contact")?;
-    mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
-
-    let chat_id = if let Some(res) = ChatId::lookup_by_contact(context, contact_id).await? {
-        // Already exists, no need to create.
-        res
-    } else {
-        let chat_id = ChatId::get_for_contact(context, contact_id).await?;
-        chat_id
-            .set_visibility(context, ChatVisibility::Archived)
-            .await?;
-        chat::set_muted(context, chat_id, MuteDuration::Forever).await?;
-        chat_id
-    };
-
-    chat_id
-        .set_protection(
-            context,
-            ProtectionStatus::Protected,
-            time(),
-            Some(contact_id),
-        )
-        .await?;
 
     Ok(chat_id)
 }
@@ -438,25 +264,199 @@ async fn get_self_report(context: &Context) -> Result<String> {
     Ok(serde_json::to_string_pretty(&statistics)?)
 }
 
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
-enum SecurejoinSource {
-    Unknown = 0,
-    ExternalLink = 1,
-    InternalLink = 2,
-    Clipboard = 3,
-    ImageLoaded = 4,
-    Scan = 5,
+async fn get_selfreporting_bot(context: &Context) -> Result<ChatId, anyhow::Error> {
+    let contact_id: ContactId = *import_vcard(context, SELF_REPORTING_BOT_VCARD)
+        .await?
+        .first()
+        .context("Self reporting bot vCard does not contain a contact")?;
+    mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+
+    let chat_id = if let Some(res) = ChatId::lookup_by_contact(context, contact_id).await? {
+        // Already exists, no need to create.
+        res
+    } else {
+        let chat_id = ChatId::get_for_contact(context, contact_id).await?;
+        chat_id
+            .set_visibility(context, ChatVisibility::Archived)
+            .await?;
+        chat::set_muted(context, chat_id, MuteDuration::Forever).await?;
+        chat_id
+    };
+
+    chat_id
+        .set_protection(
+            context,
+            ProtectionStatus::Protected,
+            time(),
+            Some(contact_id),
+        )
+        .await?;
+
+    Ok(chat_id)
 }
 
-#[derive(Serialize)]
-struct SecurejoinSourceStats {
-    unknown: u32,
-    external_link: u32,
-    internal_link: u32,
-    clipboard: u32,
-    image_loaded: u32,
-    scan: u32,
+async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
+    let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
+    let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
+
+    let mut contacts: Vec<ContactStat> = context
+        .sql
+        .query_map(
+            "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
+            WHERE id>9 AND origin>? AND addr<>?",
+            (Origin::Hidden, SELF_REPORTING_BOT_EMAIL),
+            |row| {
+                let id = row.get(0)?;
+                let is_encrypted: bool = row.get(1)?;
+                let verifier: ContactId = row.get(2)?;
+                let last_seen: u64 = row.get(3)?;
+                let bot: bool = row.get(4)?;
+
+                let verified = match (is_encrypted, verifier) {
+                    (true, ContactId::SELF) => VerifiedStatus::Direct,
+                    (true, ContactId::UNDEFINED) => VerifiedStatus::Opportunistic,
+                    (true, _) => VerifiedStatus::Transitive, // TransitiveViaBot will be filled later
+                    (false, _) => VerifiedStatus::Unencrypted,
+                };
+
+                if verifier != ContactId::UNDEFINED {
+                    verified_by_map.insert(id, verifier);
+                }
+
+                if bot {
+                    bot_ids.insert(id);
+                }
+
+                Ok(ContactStat {
+                    id,
+                    verified,
+                    bot,
+                    direct_chat: false, // will be filled later
+                    last_seen,
+                    transitive_chain: None, // will be filled later
+                })
+            },
+            |rows| {
+                rows.collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(Into::into)
+            },
+        )
+        .await?;
+
+    // Fill TransitiveViaBot and transitive_chain
+    for contact in &mut contacts {
+        if contact.verified == VerifiedStatus::Transitive {
+            let mut transitive_chain: u32 = 0;
+            let mut has_bot = false;
+            let mut current_verifier_id = contact.id;
+
+            while current_verifier_id != ContactId::SELF && transitive_chain < 100 {
+                current_verifier_id = match verified_by_map.get(&current_verifier_id) {
+                    Some(id) => *id,
+                    None => {
+                        // The chain ends here, probably because some verification was done
+                        // before we started recording verifiers.
+                        // It's unclear how long the chain really is.
+                        transitive_chain = 0;
+                        break;
+                    }
+                };
+                if bot_ids.contains(&current_verifier_id) {
+                    has_bot = true;
+                }
+                transitive_chain = transitive_chain.saturating_add(1);
+            }
+
+            if transitive_chain > 0 {
+                contact.transitive_chain = Some(transitive_chain);
+            }
+
+            if has_bot {
+                contact.verified = VerifiedStatus::TransitiveViaBot;
+            }
+        }
+    }
+
+    // Fill direct_chat
+    for contact in &mut contacts {
+        let direct_chat = context
+            .sql
+            .exists(
+                "SELECT COUNT(*)
+            FROM chats_contacts cc INNER JOIN chats
+            WHERE cc.contact_id=? AND chats.type=?",
+                (contact.id, Chattype::Single),
+            )
+            .await?;
+        contact.direct_chat = direct_chat;
+    }
+
+    Ok(contacts)
+}
+
+async fn get_message_stats(context: &Context) -> Result<MessageStats> {
+    let enabled_ts: i64 = context
+        .get_config_i64(Config::SelfReportingEnabledTimestamp)
+        .await?;
+    ensure!(enabled_ts > 0, "Enabled Timestamp missing");
+
+    let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
+
+    let trans_fn = |t: &mut rusqlite::Transaction| {
+        t.pragma_update(None, "query_only", "0")?;
+        t.execute(
+            "CREATE TEMP TABLE temp.verified_chats (
+                id INTEGER PRIMARY KEY
+            ) STRICT",
+            (),
+        )?;
+
+        t.execute(
+            "INSERT INTO temp.verified_chats
+            SELECT id FROM chats
+            WHERE protected=1 AND id>9",
+            (),
+        )?;
+
+        let to_verified = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id IN temp.verified_chats
+            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        let unverified_encrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.verified_chats
+            AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND chat_id<>? AND id>9 AND timestamp_sent>?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        let unencrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.verified_chats
+            AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND chat_id<>? AND id>9 AND timestamp_sent>=?",
+            (selfreporting_bot_chat_id, enabled_ts),
+            |row| row.get(0),
+        )?;
+
+        t.execute("DROP TABLE temp.verified_chats", ())?;
+
+        Ok(MessageStats {
+            to_verified,
+            unverified_encrypted,
+            unencrypted,
+        })
+    };
+
+    let query_only = true;
+    let message_stats: MessageStats = context.sql.transaction_ex(query_only, trans_fn).await?;
+
+    Ok(message_stats)
 }
 
 pub(crate) async fn count_securejoin_source(context: &Context, source: Option<u32>) -> Result<()> {
