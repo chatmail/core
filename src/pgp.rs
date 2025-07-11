@@ -239,7 +239,7 @@ pub fn pk_calc_signature(
 pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
-    symmetric_secrets: &[&str],
+    symmetric_secrets: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
@@ -250,7 +250,7 @@ pub fn decrypt(
     // TODO it may degrade performance that we always try out all passwords here
     let message_password: Vec<Password> = symmetric_secrets
         .iter()
-        .map(|p| Password::from(*p))
+        .map(|p| Password::from(p.as_str()))
         .collect();
     let message_password: Vec<&Password> = message_password.iter().collect();
 
@@ -320,7 +320,7 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     tokio::task::spawn_blocking(move || {
         let mut rng = thread_rng();
         let s2k = StringToKey::new_default(&mut rng);
-        let builder = MessageBuilder::from_bytes("", plain);
+        let builder: MessageBuilder<'_> = MessageBuilder::from_bytes("", plain);
         let mut builder = builder.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
         builder.encrypt_with_password(s2k, &passphrase)?;
 
@@ -389,7 +389,7 @@ mod tests {
     use super::*;
     use crate::{
         key::load_self_secret_key,
-        test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
+        test_utils::{TestContextManager, alice_keypair, bob_keypair},
     };
 
     fn pk_decrypt_and_validate<'a>(
@@ -401,7 +401,7 @@ mod tests {
         HashSet<Fingerprint>,
         Vec<u8>,
     )> {
-        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption)?;
+        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -597,7 +597,7 @@ mod tests {
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
         let ctext = encrypt_for_broadcast(
-            plain,
+            plain.clone(),
             shared_secret,
             load_self_secret_key(alice).await?,
             true,
@@ -605,7 +605,13 @@ mod tests {
         .await?;
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let decrypted = decrypt(ctext.into(), &bob_private_keyring)?;
+        let mut decrypted = decrypt(
+            ctext.into(),
+            &bob_private_keyring,
+            &[shared_secret.to_string()],
+        )?;
+
+        assert_eq!(decrypted.as_data_vec()?, plain);
 
         Ok(())
     }

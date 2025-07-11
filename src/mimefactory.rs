@@ -1158,6 +1158,7 @@ impl MimeFactory {
             };
 
             let encrypted = if let Some(symmetric_key) = symmetric_key {
+                info!(context, "Symmetrically encrypting for broadcast channel.");
                 encrypt_helper
                     .encrypt_for_broadcast(context, symmetric_key, message, compress)
                     .await?
