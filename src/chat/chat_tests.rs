@@ -5,7 +5,7 @@ use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{MessengerMessage, delete_msgs};
-use crate::mimeparser;
+use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
@@ -3017,6 +3017,12 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     remove_contact_from_chat(bob0, bob_chat_id, ContactId::SELF).await?;
 
     let leave_msg = bob0.pop_sent_msg().await;
+    let parsed = MimeMessage::from_bytes(bob1, leave_msg.payload().as_bytes(), None).await?;
+    assert_eq!(
+        parsed.parts[0].msg,
+        stock_str::msg_group_left_remote(bob0).await
+    );
+
     let rcvd = bob1.recv_msg(&leave_msg).await;
 
     assert_eq!(rcvd.chat_id, bob1_hello.chat_id);

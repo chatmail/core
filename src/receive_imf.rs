@@ -3486,6 +3486,15 @@ async fn apply_in_broadcast_changes(
     )
     .await?;
 
+    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
+        // The only member added/removed message that is ever sent is "I left.",
+        // so, this is the only case we need to handle here
+        if from_id == ContactId::SELF {
+            better_msg
+                .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
+        }
+    }
+
     if send_event_chat_modified {
         context.emit_event(EventType::ChatModified(chat.id));
         chatlist_events::emit_chatlist_item_changed(context, chat.id);
