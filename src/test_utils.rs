@@ -1068,7 +1068,7 @@ impl Drop for TestContext {
                     // If you set this to true, and a test fails,
                     // the sql databases will be saved into the current working directory
                     // so that you can examine them.
-                    if std::env::var("SAVE_TEMP_DATABASE") == Ok("1".to_string()) {
+                    if std::env::var("DELTACHAT_SAVE_TMP_DB").is_ok() {
                         let _: u32 = self
                             .sql
                             .query_get_value("PRAGMA wal_checkpoint;", ())
@@ -1081,9 +1081,9 @@ impl Drop for TestContext {
                             .unwrap()
                             .join(format!("test-account-{}.db", self.name()));
                         tokio::fs::copy(from, &target).await.unwrap();
-                        println!("Copied database from {from:?} to {target:?}\n");
+                        eprintln!("Copied database from {from:?} to {target:?}\n");
                     } else {
-                        println!("Hint: If you want to examine the database files, set environment variable SAVE_TEMP_DATABASE=1")
+                        eprintln!("Hint: If you want to examine the database files, set environment variable DELTACHAT_SAVE_TMP_DB=1\n")
                     }
                 });
             }
