@@ -31,6 +31,7 @@ use crate::key::self_fingerprint_opt;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::log::{info, warn};
+use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
@@ -3835,7 +3836,11 @@ async fn lookup_key_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
-    debug_assert!(!fingerprint.is_empty());
+    logged_debug_assert!(
+        context,
+        !fingerprint.is_empty(),
+        "lookup_key_contact_by_fingerprint: fingerprint is empty."
+    );
     if fingerprint.is_empty() {
         // Avoid accidentally looking up a non-key-contact.
         return Ok(None);

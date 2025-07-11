@@ -754,7 +754,7 @@ impl TestContext {
     pub async fn add_or_lookup_address_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_address_contact_id(other).await;
         let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
-        debug_assert_eq!(contact.is_key_contact(), false);
+        assert_eq!(contact.is_key_contact(), false);
         contact
     }
 

@@ -16,6 +16,7 @@ use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, Fingerprint, load_self_public_key};
 use crate::log::{error, info, warn};
+use crate::logged_debug_assert;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -32,9 +33,10 @@ use qrinvite::QrInvite;
 use crate::token::Namespace;
 
 fn inviter_progress(context: &Context, contact_id: ContactId, progress: usize) {
-    debug_assert!(
+    logged_debug_assert!(
+        context,
         progress <= 1000,
-        "value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success"
+        "inviter_progress: contact {contact_id}, progress={progress}, but value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success."
     );
     context.emit_event(EventType::SecurejoinInviterProgress {
         contact_id,

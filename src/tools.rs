@@ -801,5 +801,17 @@ macro_rules! ensure_and_debug_assert_ne {
     };
 }
 
+/// Logs a warning if a condition is not satisfied.
+/// In non-optimized builds, panics also if so.
+#[macro_export]
+macro_rules! logged_debug_assert {
+    ($ctx:expr, $cond:expr, $($arg:tt)*) => {
+        if !$cond {
+            warn!($ctx, $($arg)*);
+        }
+        debug_assert!($cond, $($arg)*);
+    };
+}
+
 #[cfg(test)]
 mod tools_tests;

@@ -33,6 +33,7 @@ use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
+use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -1339,14 +1340,18 @@ impl ChatId {
 
         let mut ret = stock_str::e2e_available(context).await + "\n";
 
-        for contact_id in get_chat_contacts(context, self)
+        for &contact_id in get_chat_contacts(context, self)
             .await?
             .iter()
             .filter(|&contact_id| !contact_id.is_special())
         {
-            let contact = Contact::get_by_id(context, *contact_id).await?;
+            let contact = Contact::get_by_id(context, contact_id).await?;
             let addr = contact.get_addr();
-            debug_assert!(contact.is_key_contact());
+            logged_debug_assert!(
+                context,
+                contact.is_key_contact(),
+                "get_encryption_info: contact {contact_id} is not a key-contact."
+            );
             let fingerprint = contact
                 .fingerprint()
                 .context("Contact does not have a fingerprint in encrypted chat")?;
