@@ -42,9 +42,9 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    IsNoneOrEmpty, SystemTime, buf_compress, create_id, create_outgoing_rfc724_mid,
-    create_smeared_timestamp, create_smeared_timestamps, get_abs_path, gm2local_offset,
-    smeared_time, time, truncate_msg_text,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_shared_secret, create_id,
+    create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
+    gm2local_offset, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -3710,14 +3710,18 @@ pub(crate) async fn create_broadcast_ex(
                     },
                 )?);
             }
+            let mut param = Params::new();
+            // param.set(Param::Unpromoted, 1); // TODO broadcasts will just never be unpromoted for now
+            param.set(Param::SymmetricKey, create_broadcast_shared_secret());
             t.execute(
                 "INSERT INTO chats \
                 (type, name, grpid, param, created_timestamp) \
-                VALUES(?, ?, ?, \'U=1\', ?);",
+                VALUES(?, ?, ?, ?, ?);",
                 (
                     Chattype::OutBroadcast,
                     &chat_name,
                     &grpid,
+                    param.to_string(),
                     create_smeared_timestamp(context),
                 ),
             )?;
@@ -3918,7 +3922,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;
     }
-    if chat.typ == Chattype::Group && chat.is_promoted() {
+    if chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();

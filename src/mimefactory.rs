@@ -789,7 +789,7 @@ impl MimeFactory {
             }
         }
 
-        if let Loaded::Message { chat, .. } = &self.loaded {
+        if let Loaded::Message { msg, chat } = &self.loaded {
             if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
                 headers.push((
                     "List-ID",
@@ -799,6 +799,15 @@ impl MimeFactory {
                     ))
                     .into(),
                 ));
+
+                if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
+                    if let Some(secret) = chat.param.get(Param::SymmetricKey) {
+                        headers.push((
+                            "Chat-Broadcast-Secret",
+                            mail_builder::headers::text::Text::new(secret.to_string()).into(),
+                        ));
+                    }
+                }
             }
         }
 
@@ -978,6 +987,15 @@ impl MimeFactory {
                     ));
                 } else {
                     unprotected_headers.push(header.clone());
+                }
+            } else if header_name == "chat-broadcast-secret" {
+                if is_encrypted {
+                    protected_headers.push(header.clone());
+                } else {
+                    warn!(
+                        context,
+                        "Message is unnecrypted, not including broadcast secret"
+                    );
                 }
             } else if is_encrypted {
                 protected_headers.push(header.clone());

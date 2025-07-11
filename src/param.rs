@@ -169,7 +169,9 @@ pub enum Param {
     /// post something to the mailing list.
     ListPost = b'p',
 
-    /// For Chats of type [`Chattype::OutBroadcast`] and [`Chattype::InBroadcast`]: // TODO (or just OutBroadcast)
+    /// For Chats and Messages:
+    /// For chats of type [`Chattype::OutBroadcast`] and [`Chattype::InBroadcast`] // TODO (or just OutBroadcast)
+    /// and for messages adding members to such a chat.
     /// The symmetric key shared among all chat participants,
     /// used to encrypt and decrypt messages.
     SymmetricKey = b'z',
