@@ -4303,11 +4303,16 @@ int             dc_msg_get_duration           (const dc_msg_t* msg);
 
 
 /**
- * Check if a padlock should be shown beside the message.
+ * Check if message was correctly encrypted and signed.
+ *
+ * Historically, UIs showed a small padlock on the message then.
+ * Today, the UIs should instead
+ * show a small email-icon on the message if the message is not encrypted or signed,
+ * and nothing otherwise.
  *
  * @memberof dc_msg_t
  * @param msg The message object.
- * @return 1=padlock should be shown beside message, 0=do not show a padlock beside the message.
+ * @return 1=message correctly encrypted and signed, no need to show anything; 0=show email-icon beside the message.
  */
 int             dc_msg_get_showpadlock        (const dc_msg_t* msg);
 
