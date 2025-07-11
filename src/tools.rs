@@ -763,7 +763,7 @@ pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
     Ok(())
 }
 
-/// Return early with an error if a condition is not satisfied.
+/// Returns early with an error if a condition is not satisfied.
 /// In non-optimized builds, panics instead if so.
 #[macro_export]
 macro_rules! ensure_and_debug_assert {
