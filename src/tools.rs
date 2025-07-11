@@ -787,7 +787,7 @@ macro_rules! ensure_and_debug_assert_eq {
     };
 }
 
-/// Return early with an error on two expressions equality.
+/// Returns early with an error on two expressions equality.
 /// In non-optimized builds, panics instead if so.
 #[macro_export]
 macro_rules! ensure_and_debug_assert_ne {
