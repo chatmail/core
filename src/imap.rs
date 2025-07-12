@@ -719,7 +719,6 @@ impl Imap {
         };
 
         let actually_download_messages_future = async {
-            // Actually download messages.
             let mut uids_fetch_in_batch = Vec::with_capacity(max(uids_fetch.len(), 1));
             let mut fetch_partially = false;
             uids_fetch.push((0, !uids_fetch.last().unwrap_or(&(0, false)).1));
