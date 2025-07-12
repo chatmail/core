@@ -1082,8 +1082,6 @@ impl Drop for TestContext {
                             .join(format!("test-account-{}.db", self.name()));
                         tokio::fs::copy(from, &target).await.unwrap();
                         eprintln!("Copied database from {from:?} to {target:?}\n");
-                    } else {
-                        eprintln!("Hint: If you want to examine the database files, set environment variable DELTACHAT_SAVE_TMP_DB=1\n")
                     }
                 });
             }
@@ -1167,6 +1165,11 @@ impl Drop for InnerLogSink {
     fn drop(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             print_logevent(&event);
+        }
+        if std::env::var("DELTACHAT_SAVE_TMP_DB").is_err() {
+            eprintln!(
+                "note: If you want to examine the database files, set environment variable DELTACHAT_SAVE_TMP_DB=1"
+            )
         }
     }
 }
