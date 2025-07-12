@@ -3497,6 +3497,17 @@ async fn apply_in_broadcast_changes(
         }
     }
 
+    if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
+        context
+            .sql
+            .execute(
+                "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+                ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
+                (chat.id, secret),
+            )
+            .await?;
+    }
+
     if send_event_chat_modified {
         context.emit_event(EventType::ChatModified(chat.id));
         chatlist_events::emit_chatlist_item_changed(context, chat.id);
