@@ -749,14 +749,19 @@ impl Imap {
         let (largest_uid_fetched, fetch_res) =
             tokio::join!(update_uids_future, actually_download_messages_future);
 
-        // Advance uid_next to the maximum of the largest known UID plus 1
-        // and mailbox UIDNEXT.
-        // Largest known UID is normally less than UIDNEXT,
-        // but a message may have arrived between determining UIDNEXT
-        // and executing the FETCH command.
-        let mut new_uid_next = max(largest_uid_fetched + 1, mailbox_uid_next);
+        // Advance uid_next to the largest fetched UID plus 1.
+        //
+        // This may be larger than `mailbox_uid_next`
+        // if the message has arrived before selecing mailbox
+        // and determining its UIDNEXT and prefetch.
+        let mut new_uid_next = largest_uid_fetched + 1;
         if fetch_res.is_ok() {
-            new_uid_next = max(largest_uid_skipped.unwrap_or(0) + 1, new_uid_next);
+            // If we have successfully fetched all messages we planned during prefetch,
+            // then we have covered at least the range between old UIDNEXT
+            // and UIDNEXT of the mailbox at the time of selecting it.
+            new_uid_next = max(new_uid_next, mailbox_uid_next);
+
+            new_uid_next = max(new_uid_next, largest_uid_skipped.unwrap_or(0) + 1);
         }
         if new_uid_next > old_uid_next {
             set_uid_next(context, folder, new_uid_next).await?;
