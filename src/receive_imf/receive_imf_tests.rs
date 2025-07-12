@@ -684,7 +684,7 @@ async fn test_parse_ndn(
         if error_msg.is_some() {
             MessageState::OutFailed
         } else {
-            MessageState::OutDelivered
+            MessageState::OutRcvd
         }
     );
 
@@ -4316,7 +4316,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
 
     let sent_msg = malice.send_text(malice_chat_id, "hi from malice").await;
     let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.state, MessageState::OutDelivered);
+    assert_eq!(msg.state, MessageState::OutRcvd);
     assert!(!msg.get_showpadlock());
 
     Ok(())
