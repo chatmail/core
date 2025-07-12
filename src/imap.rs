@@ -741,6 +741,13 @@ impl Imap {
                 }
                 uids_fetch_in_batch.push(uid);
             }
+
+            // Close the channel to signal the receiver
+            // that we are done fetching the messages.
+            //
+            // This also moves the `sender` inside the future,
+            // so it will be dropped if `fetch_many_msgs`
+            // returns an error above.
             drop(sender);
 
             anyhow::Ok(())
