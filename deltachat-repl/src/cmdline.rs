@@ -87,7 +87,7 @@ async fn poke_eml_file(context: &Context, filename: &Path) -> Result<()> {
     let data = read_file(context, filename).await?;
 
     if let Err(err) = receive_imf(context, &data, false).await {
-        println!("receive_imf errored: {err:?}");
+        eprintln!("receive_imf errored: {err:?}");
     }
     Ok(())
 }
@@ -621,7 +621,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 println!("Location streaming enabled.");
             }
             println!("{cnt} chats");
-            println!("{time_needed:?} to create this list");
+            eprintln!("{time_needed:?} to create this list");
         }
         "start-realtime" => {
             if arg1.is_empty() {
@@ -731,7 +731,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             chat::marknoticed_chat(&context, sel_chat.get_id()).await?;
             let time_noticed_needed = time_noticed_start.elapsed().unwrap_or_default();
 
-            println!(
+            eprintln!(
                 "{time_needed:?} to create this list, {time_noticed_needed:?} to mark all messages as noticed."
             );
         }
@@ -985,7 +985,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 },
                 query,
             );
-            println!("{time_needed:?} to create this list");
+            eprintln!("{time_needed:?} to create this list");
         }
         "draft" => {
             ensure!(sel_chat.is_some(), "No chat selected.");
@@ -1224,7 +1224,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");
             match set_config_from_qr(&context, arg1).await {
                 Ok(()) => println!("Config set from QR code, you can now call 'configure'"),
-                Err(err) => println!("Cannot set config from QR code: {err:?}"),
+                Err(err) => eprintln!("Cannot set config from QR code: {err:?}"),
             }
         }
         "createqrsvg" => {
