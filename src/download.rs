@@ -213,17 +213,18 @@ impl Session {
 
         let mut uid_message_ids: BTreeMap<u32, String> = BTreeMap::new();
         uid_message_ids.insert(uid, rfc724_mid);
-        let (last_uid, _received) = self
-            .fetch_many_msgs(
-                context,
-                folder,
-                uidvalidity,
-                vec![uid],
-                &uid_message_ids,
-                false,
-            )
-            .await?;
-        if last_uid.is_none() {
+        let (sender, receiver) = async_channel::unbounded();
+        self.fetch_many_msgs(
+            context,
+            folder,
+            uidvalidity,
+            vec![uid],
+            &uid_message_ids,
+            false,
+            sender,
+        )
+        .await?;
+        if receiver.recv().await.is_err() {
             bail!("Failed to fetch UID {uid}");
         }
         Ok(())
