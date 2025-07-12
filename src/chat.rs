@@ -3685,7 +3685,8 @@ pub async fn create_group_chat(
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    create_broadcast_ex(context, Sync, grpid, chat_name).await
+    let secret = create_broadcast_shared_secret();
+    create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
 pub(crate) async fn create_broadcast_ex(
@@ -3693,6 +3694,7 @@ pub(crate) async fn create_broadcast_ex(
     sync: sync::Sync,
     grpid: String,
     chat_name: String,
+    secret: String,
 ) -> Result<ChatId> {
     let row_id = {
         let chat_name = &chat_name;
@@ -3712,7 +3714,7 @@ pub(crate) async fn create_broadcast_ex(
             }
             let mut param = Params::new();
             // param.set(Param::Unpromoted, 1); // TODO broadcasts will just never be unpromoted for now
-            param.set(Param::SymmetricKey, create_broadcast_shared_secret());
+            param.set(Param::SymmetricKey, &secret);
             t.execute(
                 "INSERT INTO chats \
                 (type, name, grpid, param, created_timestamp) \
@@ -3725,6 +3727,13 @@ pub(crate) async fn create_broadcast_ex(
                     create_smeared_timestamp(context),
                 ),
             )?;
+            let chat_id = t.last_insert_rowid();
+            // TODO code duplication of `INSERT INTO broadcasts_shared_secrets`
+            t.execute(
+                "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+                ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
+                (chat_id, &secret),
+            )?;
             Ok(t.last_insert_rowid().try_into()?)
         };
         context.sql.transaction(trans_fn).await?
@@ -3736,7 +3745,7 @@ pub(crate) async fn create_broadcast_ex(
 
     if sync.into() {
         let id = SyncId::Grpid(grpid);
-        let action = SyncAction::CreateBroadcast(chat_name);
+        let action = SyncAction::CreateBroadcast { chat_name, secret };
         self::sync(context, id, action).await.log_err(context).ok();
     }
 
@@ -4952,7 +4961,10 @@ pub(crate) enum SyncAction {
     SetVisibility(ChatVisibility),
     SetMuted(MuteDuration),
     /// Create broadcast channel with the given name.
-    CreateBroadcast(String),
+    CreateBroadcast {
+        chat_name: String,
+        secret: String,
+    },
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5015,8 +5027,15 @@ impl Context {
                     .id
             }
             SyncId::Grpid(grpid) => {
-                if let SyncAction::CreateBroadcast(name) = action {
-                    create_broadcast_ex(self, Nosync, grpid.clone(), name.clone()).await?;
+                if let SyncAction::CreateBroadcast { chat_name, secret } = action {
+                    create_broadcast_ex(
+                        self,
+                        Nosync,
+                        grpid.clone(),
+                        chat_name.clone(),
+                        secret.to_string(),
+                    )
+                    .await?;
                     return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)
@@ -5039,7 +5058,7 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateBroadcast(_) => {
+            SyncAction::CreateBroadcast { .. } => {
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,

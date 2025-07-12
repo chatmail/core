@@ -1540,10 +1540,25 @@ async fn do_chat_assignment(
                         if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await?
                         {
                             id
-                        } else {
+                        } else if let Some(secret) =
+                            mime_parser.get_header(HeaderDef::ChatBroadcastSecret)
+                        {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_ex(context, Nosync, listid, name).await?
+                            chat::create_broadcast_ex(
+                                context,
+                                Nosync,
+                                listid,
+                                name,
+                                secret.to_string(),
+                            )
+                            .await?
+                        } else {
+                            warn!(
+                                context,
+                                "Unknown shared secret for outgoing broadcast (TRASH)"
+                            );
+                            DC_CHAT_ID_TRASH
                         },
                     );
                 }
@@ -3450,7 +3465,21 @@ async fn apply_out_broadcast_changes(
     chat: &mut Chat,
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
+    // TODO code duplication with apply_in_broadcast_changes()
     ensure!(chat.typ == Chattype::OutBroadcast);
+
+    let mut send_event_chat_modified = false;
+    let mut better_msg = None;
+
+    apply_chat_name_and_avatar_changes(
+        context,
+        mime_parser,
+        from_id,
+        chat,
+        &mut send_event_chat_modified,
+        &mut better_msg,
+    )
+    .await?;
 
     if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
         // The sender of the message left the broadcast channel
@@ -3464,7 +3493,16 @@ async fn apply_out_broadcast_changes(
         });
     }
 
-    Ok(GroupChangesInfo::default())
+    if send_event_chat_modified {
+        context.emit_event(EventType::ChatModified(chat.id));
+        chatlist_events::emit_chatlist_item_changed(context, chat.id);
+    }
+    Ok(GroupChangesInfo {
+        better_msg,
+        added_removed_id: None,
+        silent: false,
+        extra_msgs: vec![],
+    })
 }
 
 async fn apply_in_broadcast_changes(

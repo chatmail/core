@@ -3827,12 +3827,25 @@ async fn test_sync_name() -> Result<()> {
     let a0_broadcast_id = create_broadcast(alice0, "Channel".to_string()).await?;
     sync(alice0, alice1).await;
     let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
+
     set_chat_name(alice0, a0_broadcast_id, "Broadcast channel 42").await?;
-    sync(alice0, alice1).await;
+    //sync(alice0, alice1).await; // crash
+
+    let sent = alice0.pop_sent_msg().await;
+    let rcvd = alice1.recv_msg(&sent).await;
+    assert_eq!(rcvd.from_id, ContactId::SELF);
+    assert_eq!(rcvd.to_id, ContactId::SELF);
+    assert_eq!(
+        rcvd.text,
+        "You changed group name from \"Channel\" to \"Broadcast channel 42\"."
+    );
+    assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupNameChanged);
     let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)
         .await?
         .unwrap()
         .0;
+    assert_eq!(rcvd.chat_id, a1_broadcast_id);
+
     let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
     assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcast);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast channel 42");
