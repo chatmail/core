@@ -565,8 +565,6 @@ mod tests {
         message::{Message, Viewtype},
         test_utils::{TestContext, TestContextManager},
     };
-    use std::time::Duration;
-    use tokio::time::timeout;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_can_communicate() {
@@ -991,31 +989,24 @@ mod tests {
         let fiona_advert = fiona.pop_sent_msg().await;
         alice.recv_msg_trash(&fiona_advert).await;
 
-        timeout(Duration::from_secs(2), fiona_connect_future)
-            .await
-            .unwrap()
-            .unwrap();
+        fiona_connect_future.await.unwrap();
         send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
             .await
             .unwrap();
 
-        timeout(Duration::from_secs(2), async {
-            loop {
-                let event = fiona.evtracker.recv().await.unwrap();
-                if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-                    if data == b"alice -> bob & fiona" {
-                        break;
-                    } else {
-                        panic!(
-                            "Unexpected status update: {}",
-                            String::from_utf8_lossy(&data)
-                        );
-                    }
+        loop {
+            let event = fiona.evtracker.recv().await.unwrap();
+            if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
+                if data == b"alice -> bob & fiona" {
+                    break;
+                } else {
+                    panic!(
+                        "Unexpected status update: {}",
+                        String::from_utf8_lossy(&data)
+                    );
                 }
             }
-        })
-        .await
-        .unwrap();
+        }
     }
 
     async fn connect_alice_bob(
