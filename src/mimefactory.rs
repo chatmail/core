@@ -142,7 +142,7 @@ pub struct MimeFactory {
     /// True if the avatar should be attached.
     pub attach_selfavatar: bool,
 
-    /// Sustain webxdc topic on resend.
+    /// This field is used to sustain the topic id of webxdcs needed for peer channels.
     webxdc_topic: Option<TopicId>,
 }
 
