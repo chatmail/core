@@ -1568,20 +1568,16 @@ impl MimeMessage {
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
-            if !headers.contains_key(&key) || // key already exists, only overwrite known types (protected headers)
-                    is_known(&key) || key.starts_with("chat-")
-            {
-                if key == HeaderDef::ChatDispositionNotificationTo.get_headername() {
-                    match addrparse_header(field) {
-                        Ok(addrlist) => {
-                            *chat_disposition_notification_to = addrlist.extract_single_info();
-                        }
-                        Err(e) => warn!(context, "Could not read {} address: {}", key, e),
+            if key == HeaderDef::ChatDispositionNotificationTo.get_headername() {
+                match addrparse_header(field) {
+                    Ok(addrlist) => {
+                        *chat_disposition_notification_to = addrlist.extract_single_info();
                     }
-                } else {
-                    let value = field.get_value();
-                    headers.insert(key.to_string(), value);
+                    Err(e) => warn!(context, "Could not read {} address: {}", key, e),
                 }
+            } else {
+                let value = field.get_value();
+                headers.insert(key.to_string(), value);
             }
         }
         let recipients_new = get_recipients(fields);
@@ -2007,28 +2003,6 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
     } else {
         bail!("could not parse message_id: {}", ids);
     }
-}
-
-/// Returns true if the header overwrites outer header
-/// when it comes from protected headers.
-fn is_known(key: &str) -> bool {
-    matches!(
-        key,
-        "return-path"
-            | "date"
-            | "from"
-            | "sender"
-            | "reply-to"
-            | "to"
-            | "cc"
-            | "bcc"
-            | "message-id"
-            | "in-reply-to"
-            | "references"
-            | "subject"
-            | "secure-join"
-            | "list-id"
-    )
 }
 
 /// Returns if the header is hidden and must be ignored in the IMF section.
