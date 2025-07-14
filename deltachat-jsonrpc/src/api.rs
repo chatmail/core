@@ -5,25 +5,26 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{collections::HashMap, str::FromStr};
 
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use deltachat::EventEmitter;
 pub use deltachat::accounts::Accounts;
 use deltachat::blob::BlobObject;
 use deltachat::chat::{
-    self, add_contact_to_chat, forward_msgs, get_chat_media, get_chat_msgs, get_chat_msgs_ex,
-    marknoticed_chat, remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
-    ProtectionStatus,
+    self, Chat, ChatId, ChatItem, MessageListOptions, ProtectionStatus, add_contact_to_chat,
+    forward_msgs, get_chat_media, get_chat_msgs, get_chat_msgs_ex, marknoticed_chat,
+    remove_contact_from_chat,
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::Config;
 use deltachat::constants::DC_MSG_ID_DAYMARKER;
-use deltachat::contact::{may_be_valid_addr, Contact, ContactId, Origin};
+use deltachat::contact::{Contact, ContactId, Origin, may_be_valid_addr};
 use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::get_msg_read_receipts;
 use deltachat::message::{
-    self, delete_msgs_ex, markseen_msgs, Message, MessageState, MsgId, Viewtype,
+    self, Message, MessageState, MsgId, Viewtype, delete_msgs_ex, markseen_msgs,
 };
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
@@ -35,10 +36,9 @@ use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
 use deltachat::webxdc::StatusUpdateSerial;
-use deltachat::EventEmitter;
 use sanitize_filename::is_sanitized;
 use tokio::fs;
-use tokio::sync::{watch, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, watch};
 use types::login_param::EnteredLoginParam;
 use walkdir::WalkDir;
 use yerpc::rpc;
@@ -64,7 +64,7 @@ use self::types::{
         JSONRPCMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
-use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
+use crate::api::types::chat_list::{ChatListItemFetchResult, get_chat_list_item_by_id};
 use crate::api::types::qr::QrObject;
 
 #[derive(Debug)]
@@ -2017,7 +2017,7 @@ impl CommandApi {
         let message = Message::load_from_db(&ctx, MsgId::new(instance_msg_id)).await?;
         let blob = message.get_webxdc_blob(&ctx, &path).await?;
 
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
         Ok(general_purpose::STANDARD_NO_PAD.encode(blob))
     }
 

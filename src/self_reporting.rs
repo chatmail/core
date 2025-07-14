@@ -12,11 +12,9 @@ use crate::config::Config;
 use crate::constants::{Chattype, DC_CHAT_ID_TRASH};
 use crate::contact::{ContactId, Origin, import_vcard, mark_contact_id_as_verified};
 use crate::context::{Context, get_version_str};
-use crate::download::DownloadState;
 use crate::key::load_self_public_key;
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
-use crate::param::{Param, Params};
 use crate::tools::{create_id, time};
 
 pub(crate) const SELF_REPORTING_BOT_EMAIL: &str = "self_reporting@testrun.org";
@@ -105,8 +103,6 @@ pub async fn maybe_send_self_report(context: &Context) -> Result<Option<ChatId>>
 async fn send_self_report(context: &Context) -> Result<ChatId> {
     info!(context, "Sending self report.");
 
-    let last_selfreport_time = context.get_config_i64(Config::LastSelfReportSent).await?;
-
     // Setting this config at the beginning avoids endless loops when things do not
     // work out for whatever reason.
     context
@@ -126,7 +122,7 @@ See TODO[blog post] for more information."
             .to_string(),
     );
 
-    let self_report = get_self_report(context, last_selfreport_time).await?;
+    let self_report = get_self_report(context).await?;
 
     msg.set_file_from_bytes(
         context,
@@ -141,10 +137,34 @@ See TODO[blog post] for more information."
         .log_err(context)
         .ok();
 
+    set_last_msgid(context).await?;
+
     Ok(chat_id)
 }
 
-async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result<String> {
+pub(crate) async fn set_last_msgid(context: &Context) -> Result<()> {
+    let last_msgid: u64 = context
+        .sql
+        .query_get_value("SELECT MAX(id) FROM msgs", ())
+        .await?
+        .context("All messages are gone")?;
+
+    context
+        .sql
+        .set_raw_config(
+            Config::SelfReportingLastMsgId.as_ref(),
+            Some(&last_msgid.to_string()),
+        )
+        .await?;
+
+    Ok(())
+}
+
+async fn get_self_report(context: &Context) -> Result<String> {
+    let last_msgid = context
+        .get_config_u64(Config::SelfReportingLastMsgId)
+        .await?;
+
     let key_created = load_self_public_key(context)
         .await?
         .primary_key
@@ -161,12 +181,13 @@ async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result
             id
         }
     };
+
     let statistics = Statistics {
         core_version: get_version_str().to_string(),
         key_created,
         self_reporting_id,
         contact_stats: get_contact_stats(context).await?,
-        message_stats: get_message_stats(context, last_selfreport_time).await?,
+        message_stats: get_message_stats(context, last_msgid).await?, // TODO
         securejoin_source_stats: get_securejoin_source_stats(context).await?,
     };
 
@@ -303,66 +324,89 @@ async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
     Ok(contacts)
 }
 
-async fn get_message_stats(
-    context: &Context,
-    mut last_selfreport_time: i64,
-) -> Result<MessageStats> {
-    let enabled_ts: i64 = context
-        .get_config_i64(Config::SelfReportingEnabledTimestamp)
-        .await?;
-    if last_selfreport_time == 0 {
-        last_selfreport_time = enabled_ts;
-    }
-    ensure!(last_selfreport_time > 0, "Enabled Timestamp missing");
+async fn get_message_stats(context: &Context, last_msgid: u64) -> Result<MessageStats> {
+    ensure!(
+        last_msgid >= 9,
+        "Last_msgid < 9 would mean including 'special' messages in the report"
+    );
 
     let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
 
     let trans_fn = |t: &mut rusqlite::Transaction| {
         t.pragma_update(None, "query_only", "0")?;
+
+        // This table will hold all 'protected' chats.
+        // Protected chats guarantee that all messages in the chat
+        // are sent with verified encryption
+        // are marked with a green checkmark in the UI.
         t.execute(
-            "CREATE TEMP TABLE temp.verified_chats (
+            "CREATE TEMP TABLE temp.protected_chats (
                 id INTEGER PRIMARY KEY
             ) STRICT",
             (),
         )?;
 
+        // id>9 because chat ids 0..9 are "special" chats like the trash chat.
         t.execute(
-            "INSERT INTO temp.verified_chats
+            "INSERT INTO temp.protected_chats
             SELECT id FROM chats
             WHERE protected=1 AND id>9",
             (),
         )?;
 
+        // In the following SQL statements,
+        // - we always have the line
+        //   `AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?`.
+        //   `from_id=?` is to count only outgoing messages.
+        //   The rest excludes:
+        //   - the chat with the self-reporting bot itself,
+        //   - messages sent with the last report, or before the config was enabled
+        //   - hidden system messages, which are not actually shown to the user
+        //   - messages in the 'Trash' chat, which is an internal chat assigned to messages that are not shown to the user
+        // - `(param GLOB '*\nc=1*' OR param GLOB 'c=1*')`
+        //   matches all messages that are end-to-end encrypted
         let to_verified = t.query_row(
             "SELECT COUNT(*) FROM msgs
-            WHERE chat_id IN temp.verified_chats
-            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
-            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
-            (selfreporting_bot_chat_id, last_selfreport_time),
+            WHERE chat_id IN temp.protected_chats
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
             |row| row.get(0),
         )?;
 
         let unverified_encrypted = t.query_row(
             "SELECT COUNT(*) FROM msgs
-            WHERE chat_id not IN temp.verified_chats
+            WHERE chat_id not IN temp.protected_chats
             AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
-            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
-            (selfreporting_bot_chat_id, last_selfreport_time),
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
             |row| row.get(0),
         )?;
 
         let unencrypted = t.query_row(
             "SELECT COUNT(*) FROM msgs
-            WHERE chat_id not IN temp.verified_chats
+            WHERE chat_id not IN temp.protected_chats
             AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
-            AND chat_id<>? AND id>9 AND timestamp>=? AND hidden=0
-            AND NOT (param GLOB '*\nS=*' OR param GLOB 'S=*')",
-            (selfreporting_bot_chat_id, last_selfreport_time),
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
             |row| row.get(0),
         )?;
 
-        t.execute("DROP TABLE temp.verified_chats", ())?;
+        t.execute("DROP TABLE temp.protected_chats", ())?;
 
         Ok(MessageStats {
             to_verified,

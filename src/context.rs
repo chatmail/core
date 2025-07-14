@@ -1075,8 +1075,8 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "self_reporting_enabled_timestamp",
-            self.get_config_i64(Config::SelfReportingEnabledTimestamp)
+            "self_reporting_last_msg_id",
+            self.get_config_i64(Config::SelfReportingLastMsgId)
                 .await?
                 .to_string(),
         );

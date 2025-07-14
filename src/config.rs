@@ -22,7 +22,7 @@ use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
-use crate::tools::{get_abs_path, time};
+use crate::tools::get_abs_path;
 
 /// The available configuration keys.
 #[derive(
@@ -442,8 +442,11 @@ pub enum Config {
     /// without storing the email address
     SelfReportingId,
 
-    /// Timestamp of enabling SelfReporting.
-    SelfReportingEnabledTimestamp,
+    /// The last message id that was already included in the previous report,
+    /// or that already existed before the user opted in.
+    /// Only messages with an id larger than this
+    /// will be counted in the next report.
+    SelfReportingLastMsgId,
 
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
@@ -839,9 +842,7 @@ impl Context {
             }
             Config::SelfReporting => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
-                self.sql
-                    .set_raw_config_int64(Config::SelfReportingEnabledTimestamp.as_ref(), time())
-                    .await?;
+                crate::self_reporting::set_last_msgid(self).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

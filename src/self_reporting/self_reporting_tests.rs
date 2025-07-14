@@ -1,8 +1,11 @@
+use std::time::Duration;
+
 use super::*;
 use crate::chat::Chat;
 use crate::mimeparser::SystemMessage;
 use crate::securejoin::{get_securejoin_qr, join_securejoin, join_securejoin_with_source};
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
+use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -45,12 +48,12 @@ async fn test_self_report_one_contact() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::SelfReporting, true).await?;
 
-    let report = get_self_report(alice, 0).await?;
+    let report = get_self_report(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&report)?;
 
     tcm.send_recv_accept(bob, alice, "Hi!").await;
 
-    let report = get_self_report(alice, 0).await?;
+    let report = get_self_report(alice).await?;
     println!("\nWith Bob:\n{report}\n");
     let r2: serde_json::Value = serde_json::from_str(&report)?;
 
@@ -84,6 +87,16 @@ async fn test_self_report_one_contact() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_stats() -> Result<()> {
+    fn check_report(report: &str, expected: &MessageStats) {
+        let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
+        let actual = &actual["message_stats"];
+
+        let expected = serde_json::to_string_pretty(&expected).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
+
+        assert_eq!(actual, &expected);
+    }
+
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -97,37 +110,75 @@ async fn test_message_stats() -> Result<()> {
         unencrypted: 0,
     };
 
-    check_message_stats_report(alice, &expected).await;
+    check_report(&get_self_report(alice).await?, &expected);
 
     alice.send_text(email_chat.id, "foo").await;
     expected.unencrypted += 1;
-    check_message_stats_report(alice, &expected).await;
+    check_report(&get_self_report(alice).await?, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
     expected.unverified_encrypted += 1;
-    check_message_stats_report(alice, &expected).await;
+    check_report(&get_self_report(alice).await?, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
     expected.unverified_encrypted += 1;
-    check_message_stats_report(alice, &expected).await;
+    check_report(&get_self_report(alice).await?, &expected);
 
     tcm.execute_securejoin(alice, bob).await;
     expected.to_verified = expected.unverified_encrypted;
     expected.unverified_encrypted = 0;
-    check_message_stats_report(alice, &expected).await;
+    check_report(&get_self_report(alice).await?, &expected);
+
+    // Incoming messages are not counted:
+    let rcvd = tcm.send_recv(bob, alice, "bar").await;
+    check_report(&get_self_report(alice).await?, &expected);
+
+    // Reactions are not counted:
+    crate::reaction::send_reaction(alice, rcvd.id, "👍")
+        .await
+        .unwrap();
+    check_report(&get_self_report(alice).await?, &expected);
+
+    tcm.section("Test that after actually sending a report, the message numbers are reset.");
+    let report_before_sending = get_self_report(alice).await.unwrap();
+
+    let report = send_and_read_self_report(alice).await;
+    // The report is supposed not to have changed yet
+    assert_eq!(report_before_sending, report);
+
+    // Shift by 8 days so that the next report is due:
+    SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
+
+    let report = send_and_read_self_report(alice).await;
+    assert_ne!(report_before_sending, report);
+
+    expected = MessageStats {
+        to_verified: 0,
+        unverified_encrypted: 0,
+        unencrypted: 0,
+    };
+    check_report(&report, &expected);
+
+    tcm.section(
+        "Test that after sending a message again, the message statistics start to fill again.",
+    );
+    SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
+    tcm.send_recv(alice, bob, "Hi").await;
+    expected.to_verified += 1;
+    check_report(&send_and_read_self_report(alice).await, &expected);
 
     Ok(())
 }
 
-async fn check_message_stats_report(context: &TestContext, expected: &MessageStats) {
-    let report = get_self_report(context, 0).await.unwrap();
-    let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
-    let actual = &actual["message_stats"];
+async fn send_and_read_self_report(context: &TestContext) -> String {
+    let chat_id = maybe_send_self_report(&context).await.unwrap().unwrap();
+    let msg = context.get_last_msg_in(chat_id).await;
+    assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
 
-    let expected = serde_json::to_string_pretty(&expected).unwrap();
-    let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
-
-    assert_eq!(actual, &expected);
+    let report = tokio::fs::read(msg.get_file(&context).unwrap())
+        .await
+        .unwrap();
+    String::from_utf8(report).unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -190,7 +241,7 @@ async fn test_self_report_securejoin_source_stats() -> Result<()> {
 }
 
 async fn check_securejoin_report(context: &TestContext, expected: &SecurejoinSourceStats) {
-    let report = get_self_report(context, 0).await.unwrap();
+    let report = get_self_report(context).await.unwrap();
     let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
     let actual = &actual["securejoin_source_stats"];
 
