@@ -3037,6 +3037,45 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_encrypt_decrypt_broadcast_integration() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob_without_secret = &tcm.bob().await;
+
+    let secret = "secret";
+
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+
+    tcm.section("Create a broadcast channel with Bob, and send a message");
+    let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+
+    let mut alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
+    alice_chat.param.set(Param::SymmetricKey, secret);
+    alice_chat.update_param(alice).await?;
+
+    // TODO the chat_id 10 is magical here:
+    bob.sql
+        .execute(
+            "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (10, ?)",
+            (secret,),
+        )
+        .await?;
+
+    let sent = alice
+        .send_text(alice_chat_id, "Symmetrically encrypted message")
+        .await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.text, "Symmetrically encrypted message");
+
+    tcm.section("If Bob doesn't know the secret, he can't decrypt the message");
+    bob_without_secret.recv_msg_trash(&sent).await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_for_contact_with_blocked() -> Result<()> {
     let t = TestContext::new().await;
     let (contact_id, _) = Contact::add_or_lookup(
