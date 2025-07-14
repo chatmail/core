@@ -25,24 +25,11 @@ const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bo
 #[derive(Serialize)]
 struct Statistics {
     core_version: String,
-    num_msgs: u32,
-    num_chats: u32,
-    db_size: u64,
     key_created: i64,
-    chat_numbers: ChatNumbers,
     self_reporting_id: String,
     contact_stats: Vec<ContactStat>,
     message_stats: MessageStats,
     securejoin_source_stats: SecurejoinSourceStats,
-}
-#[derive(Default, Serialize)]
-struct ChatNumbers {
-    protected: u32,
-    protection_broken: u32,
-    opportunistic_dc: u32,
-    opportunistic_mua: u32,
-    unencrypted_dc: u32,
-    unencrypted_mua: u32,
 }
 
 #[derive(Serialize, PartialEq)]
@@ -158,97 +145,11 @@ See TODO[blog post] for more information."
 }
 
 async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result<String> {
-    let num_msgs: u32 = context
-        .sql
-        .query_get_value(
-            "SELECT COUNT(*) FROM msgs WHERE hidden=0 AND chat_id!=?",
-            (DC_CHAT_ID_TRASH,),
-        )
-        .await?
-        .unwrap_or_default();
-
-    let num_chats: u32 = context
-        .sql
-        .query_get_value("SELECT COUNT(*) FROM chats WHERE id>9 AND blocked!=1", ())
-        .await?
-        .unwrap_or_default();
-
-    let db_size = tokio::fs::metadata(&context.sql.dbfile).await?.len();
-
     let key_created = load_self_public_key(context)
         .await?
         .primary_key
         .created_at()
         .timestamp();
-
-    // how many of the chats active in the last months are:
-    // - protected
-    // - protection-broken
-    // - opportunistic-encrypted and the contact uses Delta Chat
-    // - opportunistic-encrypted and the contact uses a classical MUA
-    // - unencrypted and the contact uses Delta Chat
-    // - unencrypted and the contact uses a classical MUA
-    let three_months_ago = time().saturating_sub(3600 * 24 * 30 * 3);
-    let chat_numbers = context
-        .sql
-        .query_map(
-            // For all chats, query:
-            // - Whether it's protected, i.e. has a green checkmark
-            //   and only allows messages with verified encryption
-            // - Whether the latest message is encrypted (stored in the param)
-            // - Whether the latest message was sent by Delta Chat (stored in msgrmsg)
-            //   TODO: Maybe should only query incoming messages, because outgoing messages are always sent by DC
-            "SELECT c.protected, m.param, m.msgrmsg
-                    FROM chats c
-                    JOIN msgs m
-                        ON c.id=m.chat_id
-                        AND m.id=(
-                                SELECT id
-                                FROM msgs
-                                WHERE chat_id=c.id
-                                AND hidden=0  -- Some control messages are hidden, i.e. not actually shown to the user
-                                AND download_state=?  -- If a message isn't fully downloaded, we don't know whether it's encrypted
-                                AND to_id!=?  -- Some messages are informational messages, rather than actual message content
-                                ORDER BY timestamp DESC, id DESC LIMIT 1)  -- Only query the latest message
-                    WHERE c.id>9
-                    AND (c.blocked=0 OR c.blocked=2)
-                    AND IFNULL(m.timestamp,c.created_timestamp) > ?
-                    GROUP BY c.id",
-            (DownloadState::Done, ContactId::INFO, three_months_ago),
-            |row| {
-                let protected: ProtectionStatus = row.get(0)?;
-                let message_param: Params = row.get::<_, String>(1)?.parse().unwrap_or_default();
-                let is_dc_message: bool = row.get(2)?;
-                Ok((protected, message_param, is_dc_message))
-            },
-            |rows| {
-                let mut chats = ChatNumbers::default();
-                for row in rows {
-                    let (protected, message_param, is_dc_message) = row?;
-                    let encrypted = message_param
-                        .get_bool(Param::GuaranteeE2ee)
-                        .unwrap_or(false);
-
-                    if protected == ProtectionStatus::Protected {
-                        chats.protected += 1;
-                    } else if protected == ProtectionStatus::ProtectionBroken {
-                        chats.protection_broken += 1;
-                    } else if encrypted {
-                        if is_dc_message {
-                            chats.opportunistic_dc += 1;
-                        } else {
-                            chats.opportunistic_mua += 1;
-                        }
-                    } else if is_dc_message {
-                        chats.unencrypted_dc += 1;
-                    } else {
-                        chats.unencrypted_mua += 1;
-                    }
-                }
-                Ok(chats)
-            },
-        )
-        .await?;
 
     let self_reporting_id = match context.get_config(Config::SelfReportingId).await? {
         Some(id) => id,
@@ -262,11 +163,7 @@ async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result
     };
     let statistics = Statistics {
         core_version: get_version_str().to_string(),
-        num_msgs,
-        num_chats,
-        db_size,
         key_created,
-        chat_numbers,
         self_reporting_id,
         contact_stats: get_contact_stats(context).await?,
         message_stats: get_message_stats(context, last_selfreport_time).await?,
