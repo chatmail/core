@@ -192,6 +192,12 @@ async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result
     let chat_numbers = context
         .sql
         .query_map(
+            // For all chats, query:
+            // - Whether it's protected, i.e. has a green checkmark
+            //   and only allows messages with verified encryption
+            // - Whether the latest message is encrypted (stored in the param)
+            // - Whether the latest message was sent by Delta Chat (stored in msgrmsg)
+            //   TODO: Maybe should only query incoming messages, because outgoing messages are always sent by DC
             "SELECT c.protected, m.param, m.msgrmsg
                     FROM chats c
                     JOIN msgs m
@@ -200,10 +206,10 @@ async fn get_self_report(context: &Context, last_selfreport_time: i64) -> Result
                                 SELECT id
                                 FROM msgs
                                 WHERE chat_id=c.id
-                                AND hidden=0
-                                AND download_state=?
-                                AND to_id!=?
-                                ORDER BY timestamp DESC, id DESC LIMIT 1)
+                                AND hidden=0  -- Some control messages are hidden, i.e. not actually shown to the user
+                                AND download_state=?  -- If a message isn't fully downloaded, we don't know whether it's encrypted
+                                AND to_id!=?  -- Some messages are informational messages, rather than actual message content
+                                ORDER BY timestamp DESC, id DESC LIMIT 1)  -- Only query the latest message
                     WHERE c.id>9
                     AND (c.blocked=0 OR c.blocked=2)
                     AND IFNULL(m.timestamp,c.created_timestamp) > ?
