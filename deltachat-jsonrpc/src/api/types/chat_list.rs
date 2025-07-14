@@ -55,6 +55,7 @@ pub enum ChatListItemFetchResult {
         ///
         /// See also `is_key_contact` on `Contact`.
         is_encrypted: bool,
+        /// deprecated 2025-07, use chat_type instead
         is_group: bool,
         fresh_message_counter: usize,
         is_self_talk: bool,
@@ -162,7 +163,6 @@ pub(crate) async fn get_chat_list_item_by_id(
         summary_preview_image,
         is_protected: chat.is_protected(),
         is_encrypted: chat.is_encrypted(ctx).await?,
-        // deprecated 2025-07, use chat_type instead
         is_group: chat.get_type() == Chattype::Group,
         fresh_message_counter,
         is_self_talk: chat.is_self_talk(),
