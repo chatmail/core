@@ -7,6 +7,7 @@ use crate::securejoin::{get_securejoin_qr, join_securejoin, join_securejoin_with
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
 use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
+use serde_json::{Number, Value};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_self_report() -> Result<()> {
@@ -265,6 +266,27 @@ async fn test_self_report_is_chatmail() -> Result<()> {
     let r = get_self_report(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
     assert_eq!(r.get("is_chatmail").unwrap().as_bool().unwrap(), true);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_report_key_creation_timestamp() -> Result<()> {
+    // Alice uses a pregenerated key. It was created at this timestamp:
+    const ALICE_KEY_CREATION_TIME: u128 = 1582855645;
+
+    let alice = &TestContext::new_alice().await;
+    alice.set_config_bool(Config::SelfReporting, true).await?;
+
+    let r = get_self_report(alice).await?;
+    let r: serde_json::Value = serde_json::from_str(&r)?;
+    let key_created = r.get("key_created").unwrap().as_array().unwrap();
+    assert_eq!(
+        key_created,
+        &vec![Value::Number(
+            Number::from_u128(ALICE_KEY_CREATION_TIME).unwrap()
+        )]
+    );
 
     Ok(())
 }

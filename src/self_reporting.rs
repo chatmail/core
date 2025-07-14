@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::constants::{Chattype, DC_CHAT_ID_TRASH};
 use crate::contact::{ContactId, Origin, import_vcard, mark_contact_id_as_verified};
 use crate::context::{Context, get_version_str};
-use crate::key::load_self_public_key;
+use crate::key::load_self_public_keyring;
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
 use crate::tools::{create_id, time};
@@ -23,7 +23,7 @@ const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bo
 #[derive(Serialize)]
 struct Statistics {
     core_version: String,
-    key_created: i64,
+    key_created: Vec<i64>,
     self_reporting_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
@@ -166,11 +166,11 @@ async fn get_self_report(context: &Context) -> Result<String> {
         .get_config_u64(Config::SelfReportingLastMsgId)
         .await?;
 
-    let key_created = load_self_public_key(context)
+    let key_created: Vec<i64> = load_self_public_keyring(context)
         .await?
-        .primary_key
-        .created_at()
-        .timestamp();
+        .iter()
+        .map(|k| k.created_at().timestamp())
+        .collect();
 
     let self_reporting_id = match context.get_config(Config::SelfReportingId).await? {
         Some(id) => id,
