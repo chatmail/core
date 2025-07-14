@@ -250,3 +250,21 @@ async fn check_securejoin_report(context: &TestContext, expected: &SecurejoinSou
 
     assert_eq!(actual, &expected);
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_report_is_chatmail() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    alice.set_config_bool(Config::SelfReporting, true).await?;
+
+    let r = get_self_report(alice).await?;
+    let r: serde_json::Value = serde_json::from_str(&r)?;
+    assert_eq!(r.get("is_chatmail").unwrap().as_bool().unwrap(), false);
+
+    alice.set_config_bool(Config::IsChatmail, true).await?;
+
+    let r = get_self_report(alice).await?;
+    let r: serde_json::Value = serde_json::from_str(&r)?;
+    assert_eq!(r.get("is_chatmail").unwrap().as_bool().unwrap(), true);
+
+    Ok(())
+}

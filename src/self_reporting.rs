@@ -25,6 +25,7 @@ struct Statistics {
     core_version: String,
     key_created: i64,
     self_reporting_id: String,
+    is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
     message_stats: MessageStats,
     securejoin_source_stats: SecurejoinSourceStats,
@@ -186,6 +187,7 @@ async fn get_self_report(context: &Context) -> Result<String> {
         core_version: get_version_str().to_string(),
         key_created,
         self_reporting_id,
+        is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context).await?,
         message_stats: get_message_stats(context, last_msgid).await?, // TODO
         securejoin_source_stats: get_securejoin_source_stats(context).await?,
