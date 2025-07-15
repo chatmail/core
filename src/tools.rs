@@ -767,9 +767,10 @@ pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
 /// In non-optimized builds, panics instead if so.
 #[macro_export]
 macro_rules! ensure_and_debug_assert {
-    ($($arg:tt)*) => {
-        debug_assert!($($arg)*);
-        anyhow::ensure!($($arg)*);
+    ($cond:expr, $($arg:tt)*) => {
+        let cond_val = $cond;
+        debug_assert!(cond_val, $($arg)*);
+        anyhow::ensure!(cond_val, $($arg)*);
     };
 }
 
@@ -806,10 +807,11 @@ macro_rules! ensure_and_debug_assert_ne {
 #[macro_export]
 macro_rules! logged_debug_assert {
     ($ctx:expr, $cond:expr, $($arg:tt)*) => {
-        if !$cond {
+        let cond_val = $cond;
+        if !cond_val {
             warn!($ctx, $($arg)*);
         }
-        debug_assert!($cond, $($arg)*);
+        debug_assert!(cond_val, $($arg)*);
     };
 }
 

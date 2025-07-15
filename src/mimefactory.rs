@@ -368,8 +368,14 @@ impl MimeFactory {
                             }
                         }
 
-                        ensure_and_debug_assert!(member_timestamps.len() >= to.len());
-                        ensure_and_debug_assert!(member_fingerprints.is_empty() || member_fingerprints.len() >= to.len());
+                        ensure_and_debug_assert!(
+                            member_timestamps.len() >= to.len(),
+                            "member_timestamps.len() ({}) < to.len() ({})",
+                            member_timestamps.len(), to.len());
+                        ensure_and_debug_assert!(
+                            member_fingerprints.is_empty() || member_fingerprints.len() >= to.len(),
+                            "member_fingerprints.len() ({}) < to.len() ({})",
+                            member_fingerprints.len(), to.len());
 
                         if to.len() > 1 {
                             if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
@@ -448,7 +454,11 @@ impl MimeFactory {
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
-                || to.len() + past_members.len() == member_timestamps.len()
+                || to.len() + past_members.len() == member_timestamps.len(),
+            "to.len() ({}) + past_members.len() ({}) != member_timestamps.len() ({})",
+            to.len(),
+            past_members.len(),
+            member_timestamps.len(),
         );
 
         let factory = MimeFactory {
@@ -671,7 +681,11 @@ impl MimeFactory {
 
         ensure_and_debug_assert!(
             self.member_timestamps.is_empty()
-                || to.len() + past_members.len() == self.member_timestamps.len()
+                || to.len() + past_members.len() == self.member_timestamps.len(),
+            "to.len() ({}) + past_members.len() ({}) != self.member_timestamps.len() ({})",
+            to.len(),
+            past_members.len(),
+            self.member_timestamps.len(),
         );
         if to.is_empty() {
             to.push(hidden_recipients());

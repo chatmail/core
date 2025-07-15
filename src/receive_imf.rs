@@ -1457,7 +1457,10 @@ async fn do_chat_assignment(
                     false => None,
                 };
                 if let Some(chat) = chat {
-                    ensure_and_debug_assert!(chat.typ == Chattype::Single);
+                    ensure_and_debug_assert!(
+                        chat.typ == Chattype::Single,
+                        "Chat {chat_id} is not Single",
+                    );
                     let mut new_protection = match verified_encryption {
                         VerifiedEncryption::Verified => ProtectionStatus::Protected,
                         VerifiedEncryption::NotVerified(_) => ProtectionStatus::Unprotected,
@@ -2142,7 +2145,7 @@ RETURNING id
         // afterwards insert additional parts.
         replace_msg_id = None;
 
-        ensure_and_debug_assert!(!row_id.is_special());
+        ensure_and_debug_assert!(!row_id.is_special(), "Rowid {row_id} is special");
         created_db_entries.push(row_id);
     }
 
@@ -2406,7 +2409,9 @@ async fn lookup_chat_by_reply(
     // as we can directly assign the message to the chat
     // by its group ID.
     ensure_and_debug_assert!(
-        mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted()
+        mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted(),
+        "Encrypted message has group ID {}",
+        mime_parser.get_chat_group_id().unwrap_or_default(),
     );
 
     // Try to assign message to the same chat as the parent message.
