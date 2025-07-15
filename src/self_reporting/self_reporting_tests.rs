@@ -89,8 +89,9 @@ async fn test_self_report_one_contact() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_stats() -> Result<()> {
     fn check_report(report: &str, expected: &MessageStats) {
+        let key = "message_stats";
         let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
-        let actual = &actual["message_stats"];
+        let actual = &actual[key];
 
         let expected = serde_json::to_string_pretty(&expected).unwrap();
         let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
@@ -184,6 +185,17 @@ async fn send_and_read_self_report(context: &TestContext) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_self_report_securejoin_source_stats() -> Result<()> {
+    async fn check_report(context: &TestContext, expected: &SecurejoinSourceStats) {
+        let report = get_self_report(context).await.unwrap();
+        let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
+        let actual = &actual["securejoin_source_stats"];
+
+        let expected = serde_json::to_string_pretty(&expected).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
+
+        assert_eq!(actual, &expected);
+    }
+
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -198,58 +210,123 @@ async fn test_self_report_securejoin_source_stats() -> Result<()> {
         scan: 0,
     };
 
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
     let qr = get_securejoin_qr(bob, None).await?;
 
     join_securejoin(alice, &qr).await?;
     expected.unknown += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
     join_securejoin(alice, &qr).await?;
     expected.unknown += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32)).await?;
+    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
     expected.clipboard += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::ExternalLink as u32)).await?;
+    join_securejoin_with_source(
+        alice,
+        &qr,
+        Some(SecurejoinSource::ExternalLink as u32),
+        None,
+    )
+    .await?;
     expected.external_link += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::InternalLink as u32)).await?;
+    join_securejoin_with_source(
+        alice,
+        &qr,
+        Some(SecurejoinSource::InternalLink as u32),
+        None,
+    )
+    .await?;
     expected.internal_link += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32)).await?;
+    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32), None)
+        .await?;
     expected.image_loaded += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Scan as u32)).await?;
+    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Scan as u32), None).await?;
     expected.scan += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32)).await?;
+    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
     expected.clipboard += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32)).await?;
+    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
     expected.clipboard += 1;
-    check_securejoin_report(alice, &expected).await;
+    check_report(alice, &expected).await;
 
     Ok(())
 }
 
-async fn check_securejoin_report(context: &TestContext, expected: &SecurejoinSourceStats) {
-    let report = get_self_report(context).await.unwrap();
-    let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
-    let actual = &actual["securejoin_source_stats"];
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_report_securejoin_uipath_stats() -> Result<()> {
+    async fn check_report(context: &TestContext, expected: &SecurejoinUIPathStats) {
+        let report = get_self_report(context).await.unwrap();
+        let actual: serde_json::Value = serde_json::from_str(&report).unwrap();
+        let actual = &actual["securejoin_uipath_stats"];
 
-    let expected = serde_json::to_string_pretty(&expected).unwrap();
-    let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
+        let expected = serde_json::to_string_pretty(&expected).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
 
-    assert_eq!(actual, &expected);
+        assert_eq!(actual, &expected);
+    }
+
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config_bool(Config::SelfReporting, true).await?;
+
+    let mut expected = SecurejoinUIPathStats {
+        other: 0,
+        qr_icon: 0,
+        new_contact: 0,
+    };
+
+    check_report(alice, &expected).await;
+
+    let qr = get_securejoin_qr(bob, None).await?;
+
+    join_securejoin(alice, &qr).await?;
+    expected.other += 1;
+    check_report(alice, &expected).await;
+
+    join_securejoin(alice, &qr).await?;
+    expected.other += 1;
+    check_report(alice, &expected).await;
+
+    join_securejoin_with_source(
+        alice,
+        &qr,
+        Some(0),
+        Some(SecurejoinUIPath::NewContact as u32),
+    )
+    .await?;
+    expected.new_contact += 1;
+    check_report(alice, &expected).await;
+
+    join_securejoin_with_source(
+        alice,
+        &qr,
+        Some(0),
+        Some(SecurejoinUIPath::NewContact as u32),
+    )
+    .await?;
+    expected.new_contact += 1;
+    check_report(alice, &expected).await;
+
+    join_securejoin_with_source(alice, &qr, Some(0), Some(SecurejoinUIPath::QrIcon as u32)).await?;
+    expected.qr_icon += 1;
+    check_report(alice, &expected).await;
+
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

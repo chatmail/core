@@ -29,6 +29,7 @@ struct Statistics {
     contact_stats: Vec<ContactStat>,
     message_stats: MessageStats,
     securejoin_source_stats: SecurejoinSourceStats,
+    securejoin_uipath_stats: SecurejoinUIPathStats,
 }
 
 #[derive(Serialize, PartialEq)]
@@ -81,6 +82,20 @@ struct SecurejoinSourceStats {
     clipboard: u32,
     image_loaded: u32,
     scan: u32,
+}
+
+#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
+enum SecurejoinUIPath {
+    Unknown = 0,
+    QrIcon = 1,
+    NewContact = 2,
+}
+
+#[derive(Serialize)]
+struct SecurejoinUIPathStats {
+    other: u32,
+    qr_icon: u32,
+    new_contact: u32,
 }
 
 /// Sends a message with statistics about the usage of Delta Chat,
@@ -189,8 +204,9 @@ async fn get_self_report(context: &Context) -> Result<String> {
         self_reporting_id,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context).await?,
-        message_stats: get_message_stats(context, last_msgid).await?, // TODO
+        message_stats: get_message_stats(context, last_msgid).await?,
         securejoin_source_stats: get_securejoin_source_stats(context).await?,
+        securejoin_uipath_stats: get_securejoin_uipath_stats(context).await?,
     };
 
     Ok(serde_json::to_string_pretty(&statistics)?)
@@ -423,7 +439,11 @@ async fn get_message_stats(context: &Context, last_msgid: u64) -> Result<Message
     Ok(message_stats)
 }
 
-pub(crate) async fn count_securejoin_source(context: &Context, source: Option<u32>) -> Result<()> {
+pub(crate) async fn count_securejoin(
+    context: &Context,
+    source: Option<u32>,
+    uipath: Option<u32>,
+) -> Result<()> {
     if context.get_config_bool(Config::SelfReporting).await? {
         let source = source
             .context("Missing securejoin source")
@@ -434,8 +454,21 @@ pub(crate) async fn count_securejoin_source(context: &Context, source: Option<u3
             .sql
             .execute(
                 "INSERT INTO stats_securejoin_sources VALUES (?, 1)
-            ON CONFLICT (source) DO UPDATE SET count=count+1;",
+                ON CONFLICT (source) DO UPDATE SET count=count+1;",
                 (source,),
+            )
+            .await?;
+
+        // We only get a UI path if the source is a QR code scan,
+        // a loaded image, or a link pasted from the QR code,
+        // so, no need to log an error if `uipath` is None:
+        let uipath = uipath.unwrap_or(0);
+        context
+            .sql
+            .execute(
+                "INSERT INTO stats_securejoin_uipaths VALUES (?, 1)
+                    ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
+                (uipath,),
             )
             .await?;
     }
@@ -464,6 +497,30 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
         clipboard: *map.get(&SecurejoinSource::Clipboard).unwrap_or(&0),
         image_loaded: *map.get(&SecurejoinSource::ImageLoaded).unwrap_or(&0),
         scan: *map.get(&SecurejoinSource::Scan).unwrap_or(&0),
+    };
+
+    Ok(stats)
+}
+
+async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPathStats> {
+    let map = context
+        .sql
+        .query_map(
+            "SELECT uipath, count FROM stats_securejoin_uipaths",
+            (),
+            |row| {
+                let uipath: SecurejoinUIPath = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((uipath, count))
+            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
+        )
+        .await?;
+
+    let stats = SecurejoinUIPathStats {
+        other: *map.get(&SecurejoinUIPath::Unknown).unwrap_or(&0),
+        qr_icon: *map.get(&SecurejoinUIPath::QrIcon).unwrap_or(&0),
+        new_contact: *map.get(&SecurejoinUIPath::NewContact).unwrap_or(&0),
     };
 
     Ok(stats)

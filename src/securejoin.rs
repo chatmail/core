@@ -146,7 +146,7 @@ async fn get_self_fingerprint(context: &Context) -> Result<Fingerprint> {
 ///
 /// The function returns immediately and the handshake will run in background.
 pub async fn join_securejoin(context: &Context, qr: &str) -> Result<ChatId> {
-    join_securejoin_with_source(context, qr, None).await
+    join_securejoin_with_source(context, qr, None, None).await
 }
 
 /// Take a scanned QR-code and do the setup-contact/join-group/invite handshake.
@@ -159,6 +159,7 @@ pub async fn join_securejoin_with_source(
     context: &Context,
     qr: &str,
     source: Option<u32>,
+    uipath: Option<u32>,
 ) -> Result<ChatId> {
     let res = securejoin(context, qr).await.map_err(|err| {
         warn!(context, "Fatal joiner error: {:#}", err);
@@ -167,7 +168,7 @@ pub async fn join_securejoin_with_source(
         err
     })?;
 
-    self_reporting::count_securejoin_source(context, source)
+    self_reporting::count_securejoin(context, source, uipath)
         .await
         .log_err(context)
         .ok();
