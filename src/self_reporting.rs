@@ -1,0 +1,530 @@
+//! TODO doc comment
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use anyhow::{Context as _, Result, ensure};
+use deltachat_derive::FromSql;
+use pgp::types::PublicKeyTrait;
+use serde::Serialize;
+
+use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
+use crate::config::Config;
+use crate::constants::{Chattype, DC_CHAT_ID_TRASH};
+use crate::contact::{ContactId, Origin, import_vcard, mark_contact_id_as_verified};
+use crate::context::{Context, get_version_str};
+use crate::key::load_self_public_keyring;
+use crate::log::LogExt;
+use crate::message::{Message, Viewtype};
+use crate::tools::{create_id, time};
+
+pub(crate) const SELF_REPORTING_BOT_EMAIL: &str = "self_reporting@testrun.org";
+const SELF_REPORTING_BOT_VCARD: &str = include_str!("../assets/self-reporting-bot.vcf");
+
+#[derive(Serialize)]
+struct Statistics {
+    core_version: String,
+    key_created: Vec<i64>,
+    self_reporting_id: String,
+    is_chatmail: bool,
+    contact_stats: Vec<ContactStat>,
+    message_stats: MessageStats,
+    securejoin_source_stats: SecurejoinSourceStats,
+    securejoin_uipath_stats: SecurejoinUIPathStats,
+}
+
+#[derive(Serialize, PartialEq)]
+enum VerifiedStatus {
+    Direct,
+    Transitive,
+    TransitiveViaBot,
+    Opportunistic,
+    Unencrypted,
+}
+
+#[derive(Serialize)]
+struct ContactStat {
+    #[serde(skip_serializing)]
+    id: ContactId,
+
+    verified: VerifiedStatus,
+    bot: bool,
+    direct_chat: bool,
+    last_seen: u64,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transitive_chain: Option<u32>,
+    //new: bool, // TODO
+}
+
+#[derive(Serialize)]
+struct MessageStats {
+    to_verified: u32,
+    unverified_encrypted: u32,
+    unencrypted: u32,
+}
+
+#[repr(u32)]
+#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
+enum SecurejoinSource {
+    Unknown = 0,
+    ExternalLink = 1,
+    InternalLink = 2,
+    Clipboard = 3,
+    ImageLoaded = 4,
+    Scan = 5,
+}
+
+#[derive(Serialize)]
+struct SecurejoinSourceStats {
+    unknown: u32,
+    external_link: u32,
+    internal_link: u32,
+    clipboard: u32,
+    image_loaded: u32,
+    scan: u32,
+}
+
+#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
+enum SecurejoinUIPath {
+    Unknown = 0,
+    QrIcon = 1,
+    NewContact = 2,
+}
+
+#[derive(Serialize)]
+struct SecurejoinUIPathStats {
+    other: u32,
+    qr_icon: u32,
+    new_contact: u32,
+}
+
+/// Sends a message with statistics about the usage of Delta Chat,
+/// if the last time such a message was sent
+/// was more than a week ago.
+///
+/// On the other end, a bot will receive the message and make it available
+/// to Delta Chat's developers.
+pub async fn maybe_send_self_report(context: &Context) -> Result<Option<ChatId>> {
+    //#[cfg(target_os = "android")] TODO
+    if context.get_config_bool(Config::SelfReporting).await? {
+        let last_selfreport_time = context.get_config_i64(Config::LastSelfReportSent).await?;
+        let next_selfreport_time = last_selfreport_time.saturating_add(30); // TODO increase to 1 day or 1 week
+        if next_selfreport_time <= time() {
+            return Ok(Some(send_self_report(context).await?));
+        }
+    }
+    Ok(None)
+}
+
+async fn send_self_report(context: &Context) -> Result<ChatId> {
+    info!(context, "Sending self report.");
+
+    // Setting this config at the beginning avoids endless loops when things do not
+    // work out for whatever reason.
+    context
+        .set_config_internal(Config::LastSelfReportSent, Some(&time().to_string()))
+        .await
+        .log_err(context)
+        .ok();
+
+    let chat_id = get_selfreporting_bot(context).await?;
+
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_text(
+        "The attachment contains anonymous usage statistics, \
+because you enabled this in the settings. \
+This helps us improve the security of Delta Chat. \
+See TODO[blog post] for more information."
+            .to_string(),
+    );
+
+    let self_report = get_self_report(context).await?;
+
+    msg.set_file_from_bytes(
+        context,
+        "statistics.txt",
+        self_report.as_bytes(),
+        Some("text/plain"),
+    )?;
+
+    crate::chat::send_msg(context, chat_id, &mut msg)
+        .await
+        .context("Failed to send self_reporting message")
+        .log_err(context)
+        .ok();
+
+    set_last_msgid(context).await?;
+
+    Ok(chat_id)
+}
+
+pub(crate) async fn set_last_msgid(context: &Context) -> Result<()> {
+    let last_msgid: u64 = context
+        .sql
+        .query_get_value("SELECT MAX(id) FROM msgs", ())
+        .await?
+        .context("All messages are gone")?;
+
+    context
+        .sql
+        .set_raw_config(
+            Config::SelfReportingLastMsgId.as_ref(),
+            Some(&last_msgid.to_string()),
+        )
+        .await?;
+
+    Ok(())
+}
+
+async fn get_self_report(context: &Context) -> Result<String> {
+    let last_msgid = context
+        .get_config_u64(Config::SelfReportingLastMsgId)
+        .await?;
+
+    let key_created: Vec<i64> = load_self_public_keyring(context)
+        .await?
+        .iter()
+        .map(|k| k.created_at().timestamp())
+        .collect();
+
+    let self_reporting_id = match context.get_config(Config::SelfReportingId).await? {
+        Some(id) => id,
+        None => {
+            let id = create_id();
+            context
+                .set_config_internal(Config::SelfReportingId, Some(&id))
+                .await?;
+            id
+        }
+    };
+
+    let statistics = Statistics {
+        core_version: get_version_str().to_string(),
+        key_created,
+        self_reporting_id,
+        is_chatmail: context.is_chatmail().await?,
+        contact_stats: get_contact_stats(context).await?,
+        message_stats: get_message_stats(context, last_msgid).await?,
+        securejoin_source_stats: get_securejoin_source_stats(context).await?,
+        securejoin_uipath_stats: get_securejoin_uipath_stats(context).await?,
+    };
+
+    Ok(serde_json::to_string_pretty(&statistics)?)
+}
+
+async fn get_selfreporting_bot(context: &Context) -> Result<ChatId, anyhow::Error> {
+    let contact_id: ContactId = *import_vcard(context, SELF_REPORTING_BOT_VCARD)
+        .await?
+        .first()
+        .context("Self reporting bot vCard does not contain a contact")?;
+    mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+
+    let chat_id = if let Some(res) = ChatId::lookup_by_contact(context, contact_id).await? {
+        // Already exists, no need to create.
+        res
+    } else {
+        let chat_id = ChatId::get_for_contact(context, contact_id).await?;
+        chat_id
+            .set_visibility(context, ChatVisibility::Archived)
+            .await?;
+        chat::set_muted(context, chat_id, MuteDuration::Forever).await?;
+        chat_id
+    };
+
+    chat_id
+        .set_protection(
+            context,
+            ProtectionStatus::Protected,
+            time(),
+            Some(contact_id),
+        )
+        .await?;
+
+    Ok(chat_id)
+}
+
+async fn get_contact_stats(context: &Context) -> Result<Vec<ContactStat>> {
+    let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
+    let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
+
+    let mut contacts: Vec<ContactStat> = context
+        .sql
+        .query_map(
+            "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
+            WHERE id>9 AND origin>? AND addr<>?",
+            (Origin::Hidden, SELF_REPORTING_BOT_EMAIL),
+            |row| {
+                let id = row.get(0)?;
+                let is_encrypted: bool = row.get(1)?;
+                let verifier: ContactId = row.get(2)?;
+                let last_seen: u64 = row.get(3)?;
+                let bot: bool = row.get(4)?;
+
+                let verified = match (is_encrypted, verifier) {
+                    (true, ContactId::SELF) => VerifiedStatus::Direct,
+                    (true, ContactId::UNDEFINED) => VerifiedStatus::Opportunistic,
+                    (true, _) => VerifiedStatus::Transitive, // TransitiveViaBot will be filled later
+                    (false, _) => VerifiedStatus::Unencrypted,
+                };
+
+                if verifier != ContactId::UNDEFINED {
+                    verified_by_map.insert(id, verifier);
+                }
+
+                if bot {
+                    bot_ids.insert(id);
+                }
+
+                Ok(ContactStat {
+                    id,
+                    verified,
+                    bot,
+                    direct_chat: false, // will be filled later
+                    last_seen,
+                    transitive_chain: None, // will be filled later
+                })
+            },
+            |rows| {
+                rows.collect::<std::result::Result<Vec<_>, _>>()
+                    .map_err(Into::into)
+            },
+        )
+        .await?;
+
+    // Fill TransitiveViaBot and transitive_chain
+    for contact in &mut contacts {
+        if contact.verified == VerifiedStatus::Transitive {
+            let mut transitive_chain: u32 = 0;
+            let mut has_bot = false;
+            let mut current_verifier_id = contact.id;
+
+            while current_verifier_id != ContactId::SELF && transitive_chain < 100 {
+                current_verifier_id = match verified_by_map.get(&current_verifier_id) {
+                    Some(id) => *id,
+                    None => {
+                        // The chain ends here, probably because some verification was done
+                        // before we started recording verifiers.
+                        // It's unclear how long the chain really is.
+                        transitive_chain = 0;
+                        break;
+                    }
+                };
+                if bot_ids.contains(&current_verifier_id) {
+                    has_bot = true;
+                }
+                transitive_chain = transitive_chain.saturating_add(1);
+            }
+
+            if transitive_chain > 0 {
+                contact.transitive_chain = Some(transitive_chain);
+            }
+
+            if has_bot {
+                contact.verified = VerifiedStatus::TransitiveViaBot;
+            }
+        }
+    }
+
+    // Fill direct_chat
+    for contact in &mut contacts {
+        let direct_chat = context
+            .sql
+            .exists(
+                "SELECT COUNT(*)
+            FROM chats_contacts cc INNER JOIN chats
+            WHERE cc.contact_id=? AND chats.type=?",
+                (contact.id, Chattype::Single),
+            )
+            .await?;
+        contact.direct_chat = direct_chat;
+    }
+
+    Ok(contacts)
+}
+
+async fn get_message_stats(context: &Context, last_msgid: u64) -> Result<MessageStats> {
+    ensure!(
+        last_msgid >= 9,
+        "Last_msgid < 9 would mean including 'special' messages in the report"
+    );
+
+    let selfreporting_bot_chat_id = get_selfreporting_bot(context).await?;
+
+    let trans_fn = |t: &mut rusqlite::Transaction| {
+        t.pragma_update(None, "query_only", "0")?;
+
+        // This table will hold all 'protected' chats.
+        // Protected chats guarantee that all messages in the chat
+        // are sent with verified encryption
+        // are marked with a green checkmark in the UI.
+        t.execute(
+            "CREATE TEMP TABLE temp.protected_chats (
+                id INTEGER PRIMARY KEY
+            ) STRICT",
+            (),
+        )?;
+
+        // id>9 because chat ids 0..9 are "special" chats like the trash chat.
+        t.execute(
+            "INSERT INTO temp.protected_chats
+            SELECT id FROM chats
+            WHERE protected=1 AND id>9",
+            (),
+        )?;
+
+        // In the following SQL statements,
+        // - we always have the line
+        //   `AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?`.
+        //   `from_id=?` is to count only outgoing messages.
+        //   The rest excludes:
+        //   - the chat with the self-reporting bot itself,
+        //   - messages sent with the last report, or before the config was enabled
+        //   - hidden system messages, which are not actually shown to the user
+        //   - messages in the 'Trash' chat, which is an internal chat assigned to messages that are not shown to the user
+        // - `(param GLOB '*\nc=1*' OR param GLOB 'c=1*')`
+        //   matches all messages that are end-to-end encrypted
+        let to_verified = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id IN temp.protected_chats
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
+            |row| row.get(0),
+        )?;
+
+        let unverified_encrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.protected_chats
+            AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
+            |row| row.get(0),
+        )?;
+
+        let unencrypted = t.query_row(
+            "SELECT COUNT(*) FROM msgs
+            WHERE chat_id not IN temp.protected_chats
+            AND NOT (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
+            AND from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id<>?",
+            (
+                ContactId::SELF,
+                selfreporting_bot_chat_id,
+                last_msgid,
+                DC_CHAT_ID_TRASH,
+            ),
+            |row| row.get(0),
+        )?;
+
+        t.execute("DROP TABLE temp.protected_chats", ())?;
+
+        Ok(MessageStats {
+            to_verified,
+            unverified_encrypted,
+            unencrypted,
+        })
+    };
+
+    let query_only = true;
+    let message_stats: MessageStats = context.sql.transaction_ex(query_only, trans_fn).await?;
+
+    Ok(message_stats)
+}
+
+pub(crate) async fn count_securejoin(
+    context: &Context,
+    source: Option<u32>,
+    uipath: Option<u32>,
+) -> Result<()> {
+    if context.get_config_bool(Config::SelfReporting).await? {
+        let source = source
+            .context("Missing securejoin source")
+            .log_err(context)
+            .unwrap_or(0);
+
+        context
+            .sql
+            .execute(
+                "INSERT INTO stats_securejoin_sources VALUES (?, 1)
+                ON CONFLICT (source) DO UPDATE SET count=count+1;",
+                (source,),
+            )
+            .await?;
+
+        // We only get a UI path if the source is a QR code scan,
+        // a loaded image, or a link pasted from the QR code,
+        // so, no need to log an error if `uipath` is None:
+        let uipath = uipath.unwrap_or(0);
+        context
+            .sql
+            .execute(
+                "INSERT INTO stats_securejoin_uipaths VALUES (?, 1)
+                    ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
+                (uipath,),
+            )
+            .await?;
+    }
+    Ok(())
+}
+
+async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSourceStats> {
+    let map = context
+        .sql
+        .query_map(
+            "SELECT source, count FROM stats_securejoin_sources",
+            (),
+            |row| {
+                let source: SecurejoinSource = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((source, count))
+            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
+        )
+        .await?;
+
+    let stats = SecurejoinSourceStats {
+        unknown: *map.get(&SecurejoinSource::Unknown).unwrap_or(&0),
+        external_link: *map.get(&SecurejoinSource::ExternalLink).unwrap_or(&0),
+        internal_link: *map.get(&SecurejoinSource::InternalLink).unwrap_or(&0),
+        clipboard: *map.get(&SecurejoinSource::Clipboard).unwrap_or(&0),
+        image_loaded: *map.get(&SecurejoinSource::ImageLoaded).unwrap_or(&0),
+        scan: *map.get(&SecurejoinSource::Scan).unwrap_or(&0),
+    };
+
+    Ok(stats)
+}
+
+async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPathStats> {
+    let map = context
+        .sql
+        .query_map(
+            "SELECT uipath, count FROM stats_securejoin_uipaths",
+            (),
+            |row| {
+                let uipath: SecurejoinUIPath = row.get(0)?;
+                let count: u32 = row.get(1)?;
+                Ok((uipath, count))
+            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
+        )
+        .await?;
+
+    let stats = SecurejoinUIPathStats {
+        other: *map.get(&SecurejoinUIPath::Unknown).unwrap_or(&0),
+        qr_icon: *map.get(&SecurejoinUIPath::QrIcon).unwrap_or(&0),
+        new_contact: *map.get(&SecurejoinUIPath::NewContact).unwrap_or(&0),
+    };
+
+    Ok(stats)
+}
+
+#[cfg(test)]
+mod self_reporting_tests;
