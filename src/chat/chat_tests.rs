@@ -883,10 +883,7 @@ async fn test_add_device_msg_unlabelled() {
     assert_eq!(msg2.text, "second message");
 
     // check device chat
-    assert_eq!(
-        msg2.chat_id.get_msg_cnt(&t).await.unwrap(),
-        E2EE_INFO_MSGS + 2
-    );
+    assert_eq!(msg2.chat_id.get_msg_cnt(&t).await.unwrap(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -916,7 +913,7 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     // check device chat
     let chat_id = msg1.chat_id;
 
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 1);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 1);
     assert!(!chat_id.is_special());
     let chat = Chat::load_from_db(&t, chat_id).await?;
     assert_eq!(chat.get_type(), Chattype::Single);

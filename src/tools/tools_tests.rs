@@ -3,7 +3,6 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::chatlist::Chatlist;
-use crate::test_utils::E2EE_INFO_MSGS;
 use crate::{chat, test_utils};
 use crate::{receive_imf::receive_imf, test_utils::TestContext};
 
@@ -405,12 +404,12 @@ async fn test_maybe_warn_on_bad_time() {
     assert_eq!(chats.len(), 1);
     let device_chat_id = chats.get_chat_id(0).unwrap();
     let msgs = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 1);
+    assert_eq!(msgs.len(), 1);
 
     // the message should be added only once a day - test that an hour later and nearly a day later
     maybe_warn_on_bad_time(&t, timestamp_past + 60 * 60, get_release_timestamp()).await;
     let msgs = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 1);
+    assert_eq!(msgs.len(), 1);
 
     maybe_warn_on_bad_time(
         &t,
@@ -419,7 +418,7 @@ async fn test_maybe_warn_on_bad_time() {
     )
     .await;
     let msgs = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 1);
+    assert_eq!(msgs.len(), 1);
 
     // next day, there should be another device message
     maybe_warn_on_bad_time(&t, timestamp_past + 60 * 60 * 24, get_release_timestamp()).await;
@@ -427,7 +426,7 @@ async fn test_maybe_warn_on_bad_time() {
     assert_eq!(chats.len(), 1);
     assert_eq!(device_chat_id, chats.get_chat_id(0).unwrap());
     let msgs = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 2);
+    assert_eq!(msgs.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -457,7 +456,7 @@ async fn test_maybe_warn_on_outdated() {
     assert_eq!(chats.len(), 1);
     let device_chat_id = chats.get_chat_id(0).unwrap();
     let msgs = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 1);
+    assert_eq!(msgs.len(), 1);
 
     // do not repeat the warning every day ...
     // (we test that for the 2 subsequent days, this may be the next month, so the result should be 1 or 2 device message)

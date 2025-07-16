@@ -349,7 +349,7 @@ impl ChatId {
             chat_id
                 .add_protection_msg(context, ProtectionStatus::Protected, None, timestamp)
                 .await?;
-        } else if chat_id.is_encrypted(context).await? {
+        } else if chat_id.is_encrypted_and_not_special(context).await? {
             chat_id.add_encrypted_msg(context, timestamp).await?;
         }
 
@@ -627,10 +627,11 @@ impl ChatId {
         Ok(())
     }
 
-    /// Returns true if the chat is encrypted.
-    pub(crate) async fn is_encrypted(self, context: &Context) -> Result<bool> {
+    /// Returns true if the chat is encrypted, plain chat.
+    pub(crate) async fn is_encrypted_and_not_special(self, context: &Context) -> Result<bool> {
         let chat = Chat::load_from_db(context, self).await?;
-        chat.is_encrypted(context).await
+        let res = chat.is_encrypted(context).await? && !chat.is_device_talk();
+        Ok(res)
     }
 
     /// Sets protection and adds a message.
@@ -2702,7 +2703,7 @@ impl ChatIdBlocked {
                     smeared_time,
                 )
                 .await?;
-        } else if chat_id.is_encrypted(context).await? {
+        } else if chat_id.is_encrypted_and_not_special(context).await? {
             chat_id.add_encrypted_msg(context, smeared_time).await?;
         }
 
