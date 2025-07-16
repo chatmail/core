@@ -213,6 +213,9 @@ pub enum SystemMessage {
 
     /// This message contains a users iroh node address.
     IrohNodeAddr = 40,
+
+    /// "Messages are guaranteed to be end-to-end encrypted from now on."
+    ChatE2ee = 50,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
