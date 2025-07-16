@@ -277,7 +277,7 @@ mod tests {
     use crate::chat::{get_chat_msgs, send_msg};
     use crate::ephemeral::Timer;
     use crate::receive_imf::receive_imf_from_inbox;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::{E2EE_INFO_MSGS, TestContext};
 
     #[test]
     fn test_downloadstate_values() {
@@ -459,7 +459,10 @@ mod tests {
         .await?;
         let msg = bob.get_last_msg().await;
         let chat_id = msg.chat_id;
-        assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 1);
+        assert_eq!(
+            get_chat_msgs(&bob, chat_id).await?.len(),
+            E2EE_INFO_MSGS + 1
+        );
         assert_eq!(msg.download_state(), DownloadState::Available);
 
         // downloading the status update afterwards expands to nothing and moves the placeholder to trash-chat
@@ -472,7 +475,7 @@ mod tests {
             None,
         )
         .await?;
-        assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), 0);
+        assert_eq!(get_chat_msgs(&bob, chat_id).await?.len(), E2EE_INFO_MSGS);
         assert!(
             Message::load_from_db_optional(&bob, msg.id)
                 .await?

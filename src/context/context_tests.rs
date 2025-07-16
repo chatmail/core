@@ -8,7 +8,7 @@ use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{TestContext, get_chat_msg};
+use crate::test_utils::{E2EE_INFO_MSGS, TestContext, get_chat_msg};
 use crate::tools::{SystemTime, create_outgoing_rfc724_mid};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -571,7 +571,7 @@ async fn test_get_next_msgs() -> Result<()> {
 
     let alice_chat = alice.create_chat(&bob).await;
 
-    assert!(alice.get_next_msgs().await?.is_empty());
+    assert_eq!(alice.get_next_msgs().await?.len(), E2EE_INFO_MSGS);
     assert!(bob.get_next_msgs().await?.is_empty());
 
     let sent_msg = alice.send_text(alice_chat.id, "Hi Bob").await;

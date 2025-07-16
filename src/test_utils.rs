@@ -43,6 +43,10 @@ use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str::StockStrings;
 use crate::tools::time;
 
+/// The number of info messages added to new e2ee chats.
+/// Currently this is "End-to-end encryption available", string `E2eAvailable`.
+pub const E2EE_INFO_MSGS: usize = 1;
+
 #[allow(non_upper_case_globals)]
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
 

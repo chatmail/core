@@ -8,7 +8,7 @@ use crate::key::self_fingerprint;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, chat_protection_enabled};
 use crate::test_utils::{
-    TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
+    E2EE_INFO_MSGS, TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
 };
 use crate::tools::SystemTime;
 use std::time::Duration;
@@ -244,7 +244,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     // Check Alice got the verified message in her 1:1 chat.
     {
         let chat = alice.get_chat(&bob).await;
-        let msg = get_chat_msg(&alice, chat.get_id(), 0, 1).await;
+        let msg = get_chat_msg(&alice, chat.get_id(), 1, E2EE_INFO_MSGS + 1).await;
         assert!(msg.is_info());
         let expected_text = chat_protection_enabled(&alice).await;
         assert_eq!(msg.get_text(), expected_text);
@@ -289,8 +289,8 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_alice.is_bot(), case == SetupContactCase::AliceIsBot);
 
     // Check Bob got expected info messages in his 1:1 chat.
-    let msg_cnt = 2;
-    let mut i = 0..msg_cnt;
+    let msg_cnt = E2EE_INFO_MSGS + 2;
+    let mut i = 1..msg_cnt;
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);

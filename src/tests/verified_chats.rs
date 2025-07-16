@@ -15,7 +15,9 @@ use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str;
-use crate::test_utils::{TestContext, TestContextManager, get_chat_msg, mark_as_verified};
+use crate::test_utils::{
+    E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
+};
 use crate::tools::SystemTime;
 use crate::{e2ee, message};
 
@@ -162,7 +164,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         let chat = alice.get_chat(&fiona_new).await;
         assert!(!chat.is_protected());
 
-        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
+        let msg = get_chat_msg(&alice, chat.id, 1, E2EE_INFO_MSGS + 1).await;
         assert_eq!(msg.text, "I have a new device");
 
         // After recreating the chat, it should still be unprotected

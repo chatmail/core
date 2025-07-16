@@ -15,8 +15,9 @@ use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::mark_as_verified;
-use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
+use crate::test_utils::{
+    E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
+};
 use crate::tools::{SystemTime, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -133,7 +134,7 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
     let chats = Chatlist::try_load(bob, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0)?;
-    assert_eq!(chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
     Ok(())
 }
 
@@ -3217,7 +3218,7 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
     assert_eq!(rcvd.chat_blocked, Blocked::Request);
     // In order not to lose context, Bob's message should also be shown in the group
     let msgs = chat::get_chat_msgs(&alice, rcvd.chat_id).await?;
-    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 2);
 
     Ok(())
 }
@@ -4410,7 +4411,7 @@ async fn test_create_group_with_big_msg() -> Result<()> {
 
     // The big message must go away from the 1:1 chat.
     let msgs = chat::get_chat_msgs(&alice, ab_chat_id).await?;
-    assert!(msgs.is_empty());
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS);
 
     Ok(())
 }

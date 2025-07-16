@@ -8,7 +8,7 @@ use crate::message::{MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{
-    AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+    AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, sync,
 };
 use pretty_assertions::assert_eq;
@@ -883,7 +883,10 @@ async fn test_add_device_msg_unlabelled() {
     assert_eq!(msg2.text, "second message");
 
     // check device chat
-    assert_eq!(msg2.chat_id.get_msg_cnt(&t).await.unwrap(), 2);
+    assert_eq!(
+        msg2.chat_id.get_msg_cnt(&t).await.unwrap(),
+        E2EE_INFO_MSGS + 2
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -913,7 +916,7 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     // check device chat
     let chat_id = msg1.chat_id;
 
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 1);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 1);
     assert!(!chat_id.is_special());
     let chat = Chat::load_from_db(&t, chat_id).await?;
     assert_eq!(chat.get_type(), Chattype::Single);
@@ -2104,7 +2107,7 @@ async fn test_forward_basic() -> Result<()> {
     forward_msgs(&bob, &[msg.id], bob_chat.get_id()).await?;
 
     let forwarded_msg = bob.pop_sent_msg().await;
-    assert_eq!(bob_chat.id.get_msg_cnt(&bob).await?, 2);
+    assert_eq!(bob_chat.id.get_msg_cnt(&bob).await?, E2EE_INFO_MSGS + 2);
     assert_ne!(
         forwarded_msg.load_from_db().await.rfc724_mid,
         msg.rfc724_mid,
@@ -2132,7 +2135,7 @@ async fn test_forward_info_msg() -> Result<()> {
     assert!(msg1.get_text().contains("bob@example.net"));
 
     let chat_id2 = ChatId::create_for_contact(alice, bob_id).await?;
-    assert_eq!(get_chat_msgs(alice, chat_id2).await?.len(), 0);
+    assert_eq!(get_chat_msgs(alice, chat_id2).await?.len(), E2EE_INFO_MSGS);
     forward_msgs(alice, &[msg1.id], chat_id2).await?;
     let msg2 = alice.get_last_msg_in(chat_id2).await;
     assert!(!msg2.is_info()); // forwarded info-messages lose their info-state
@@ -2518,22 +2521,34 @@ async fn test_resend_own_message() -> Result<()> {
     let sent1_ts_sent = msg.timestamp_sent;
     assert_eq!(msg.get_text(), "alice->bob");
     assert_eq!(get_chat_contacts(&bob, msg.chat_id).await?.len(), 2);
-    assert_eq!(get_chat_msgs(&bob, msg.chat_id).await?.len(), 1);
+    assert_eq!(
+        get_chat_msgs(&bob, msg.chat_id).await?.len(),
+        E2EE_INFO_MSGS + 1
+    );
     bob.recv_msg(&sent2).await;
     assert_eq!(get_chat_contacts(&bob, msg.chat_id).await?.len(), 3);
-    assert_eq!(get_chat_msgs(&bob, msg.chat_id).await?.len(), 2);
+    assert_eq!(
+        get_chat_msgs(&bob, msg.chat_id).await?.len(),
+        E2EE_INFO_MSGS + 2
+    );
     let received = bob.recv_msg_opt(&sent3).await;
     // No message should actually be added since we already know this message:
     assert!(received.is_none());
     assert_eq!(get_chat_contacts(&bob, msg.chat_id).await?.len(), 3);
-    assert_eq!(get_chat_msgs(&bob, msg.chat_id).await?.len(), 2);
+    assert_eq!(
+        get_chat_msgs(&bob, msg.chat_id).await?.len(),
+        E2EE_INFO_MSGS + 2
+    );
 
     // Fiona does not receive the first message, however, due to resending, she has a similar view as Alice and Bob
     fiona.recv_msg(&sent2).await;
     let msg = fiona.recv_msg(&sent3).await;
     assert_eq!(msg.get_text(), "alice->bob");
     assert_eq!(get_chat_contacts(&fiona, msg.chat_id).await?.len(), 3);
-    assert_eq!(get_chat_msgs(&fiona, msg.chat_id).await?.len(), 2);
+    assert_eq!(
+        get_chat_msgs(&fiona, msg.chat_id).await?.len(),
+        E2EE_INFO_MSGS + 2
+    );
     let msg_from = Contact::get_by_id(&fiona, msg.get_from_id()).await?;
     assert_eq!(msg_from.get_addr(), "alice@example.org");
     assert!(sent1_ts_sent < msg.timestamp_sent);
@@ -4454,13 +4469,13 @@ async fn test_receive_edit_request_after_removal() -> Result<()> {
     let bob_msg = bob.recv_msg(&sent1).await;
     let bob_chat_id = bob_msg.chat_id;
     assert_eq!(bob_msg.text, "zext me in delra.cat");
-    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
 
     delete_msgs(bob, &[bob_msg.id]).await?;
-    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 0);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS);
 
     bob.recv_msg_trash(&sent2).await;
-    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, 0);
+    assert_eq!(bob_chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS);
 
     Ok(())
 }
@@ -4549,28 +4564,34 @@ async fn test_send_delete_request() -> Result<()> {
     // Alice sends a message, then sends a deletion request
     let sent1 = alice.send_text(alice_chat.id, "wtf").await;
     let alice_msg = sent1.load_from_db().await;
-    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 2);
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 2);
 
     message::delete_msgs_ex(alice, &[alice_msg.id], true).await?;
     let sent2 = alice.pop_sent_msg().await;
-    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
 
     // Bob receives both messages and has nothing the end
     let bob_msg = bob.recv_msg(&sent1).await;
     assert_eq!(bob_msg.text, "wtf");
-    assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, 2);
+    assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 2);
 
     bob.recv_msg_opt(&sent2).await;
-    assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
 
     // Alice has another device, and there is also nothing at the end
     let alice2 = &tcm.alice().await;
     alice2.recv_msg(&sent0).await;
     let alice2_msg = alice2.recv_msg(&sent1).await;
-    assert_eq!(alice2_msg.chat_id.get_msg_cnt(alice2).await?, 2);
+    assert_eq!(
+        alice2_msg.chat_id.get_msg_cnt(alice2).await?,
+        E2EE_INFO_MSGS + 2
+    );
 
     alice2.recv_msg_opt(&sent2).await;
-    assert_eq!(alice2_msg.chat_id.get_msg_cnt(alice2).await?, 1);
+    assert_eq!(
+        alice2_msg.chat_id.get_msg_cnt(alice2).await?,
+        E2EE_INFO_MSGS + 1
+    );
 
     Ok(())
 }

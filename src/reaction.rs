@@ -407,6 +407,7 @@ mod tests {
     use crate::message::{MessageState, delete_msgs};
     use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
     use crate::sql::housekeeping;
+    use crate::test_utils::E2EE_INFO_MSGS;
     use crate::test_utils::TestContext;
     use crate::test_utils::TestContextManager;
     use crate::tools::SystemTime;
@@ -653,13 +654,25 @@ Here's my footer -- bob@example.net"
         let chat_alice = alice.create_chat(&bob).await;
         let alice_msg = alice.send_text(chat_alice.id, "Hi!").await;
         let bob_msg = bob.recv_msg(&alice_msg).await;
-        assert_eq!(get_chat_msgs(&alice, chat_alice.id).await?.len(), 1);
-        assert_eq!(get_chat_msgs(&bob, bob_msg.chat_id).await?.len(), 1);
+        assert_eq!(
+            get_chat_msgs(&alice, chat_alice.id).await?.len(),
+            E2EE_INFO_MSGS + 1
+        );
+        assert_eq!(
+            get_chat_msgs(&bob, bob_msg.chat_id).await?.len(),
+            E2EE_INFO_MSGS + 1
+        );
 
         let alice_msg2 = alice.send_text(chat_alice.id, "Hi again!").await;
         bob.recv_msg(&alice_msg2).await;
-        assert_eq!(get_chat_msgs(&alice, chat_alice.id).await?.len(), 2);
-        assert_eq!(get_chat_msgs(&bob, bob_msg.chat_id).await?.len(), 2);
+        assert_eq!(
+            get_chat_msgs(&alice, chat_alice.id).await?.len(),
+            E2EE_INFO_MSGS + 2
+        );
+        assert_eq!(
+            get_chat_msgs(&bob, bob_msg.chat_id).await?.len(),
+            E2EE_INFO_MSGS + 2
+        );
 
         bob_msg.chat_id.accept(&bob).await?;
 
@@ -667,12 +680,18 @@ Here's my footer -- bob@example.net"
         send_reaction(&bob, bob_msg.id, "👍").await.unwrap();
         expect_reactions_changed_event(&bob, bob_msg.chat_id, bob_msg.id, ContactId::SELF).await?;
         expect_no_unwanted_events(&bob).await;
-        assert_eq!(get_chat_msgs(&bob, bob_msg.chat_id).await?.len(), 2);
+        assert_eq!(
+            get_chat_msgs(&bob, bob_msg.chat_id).await?.len(),
+            E2EE_INFO_MSGS + 2
+        );
 
         let bob_reaction_msg = bob.pop_sent_msg().await;
         let alice_reaction_msg = alice.recv_msg_hidden(&bob_reaction_msg).await;
         assert_eq!(alice_reaction_msg.state, MessageState::InFresh);
-        assert_eq!(get_chat_msgs(&alice, chat_alice.id).await?.len(), 2);
+        assert_eq!(
+            get_chat_msgs(&alice, chat_alice.id).await?.len(),
+            E2EE_INFO_MSGS + 2
+        );
 
         let reactions = get_msg_reactions(&alice, alice_msg.sender_msg_id).await?;
         assert_eq!(reactions.to_string(), "👍1");
