@@ -739,7 +739,6 @@ async fn test_leave_group() -> Result<()> {
 
     tcm.section("Bob leaves the group.");
     let bob_chat_id = bob_msg.chat_id;
-    bob_chat_id.accept(&bob).await?;
     remove_contact_from_chat(&bob, bob_chat_id, ContactId::SELF).await?;
 
     let leave_msg = bob.pop_sent_msg().await;
