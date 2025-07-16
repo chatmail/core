@@ -349,6 +349,8 @@ impl ChatId {
             chat_id
                 .add_protection_msg(context, ProtectionStatus::Protected, None, timestamp)
                 .await?;
+        } else if chat_id.is_encrypted(context).await? {
+            chat_id.add_encrypted_msg(context, timestamp).await?;
         }
 
         info!(
@@ -602,6 +604,33 @@ impl ChatId {
         .await?;
 
         Ok(())
+    }
+
+    pub(crate) async fn add_encrypted_msg(
+        self,
+        context: &Context,
+        timestamp_sort: i64,
+    ) -> Result<()> {
+        let text = stock_str::chat_protection_enabled(context).await;
+        add_info_msg_with_cmd(
+            context,
+            self,
+            &text,
+            SystemMessage::ChatE2ee,
+            timestamp_sort,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
+    /// Returns true if the chat is encrypted.
+    pub(crate) async fn is_encrypted(self, context: &Context) -> Result<bool> {
+        let chat = Chat::load_from_db(context, self).await?;
+        chat.is_encrypted(context).await
     }
 
     /// Sets protection and adds a message.
@@ -2673,6 +2702,8 @@ impl ChatIdBlocked {
                     smeared_time,
                 )
                 .await?;
+        } else if chat_id.is_encrypted(context).await? {
+            chat_id.add_encrypted_msg(context, smeared_time).await?;
         }
 
         Ok(Self {
