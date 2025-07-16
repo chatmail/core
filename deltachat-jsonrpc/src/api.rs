@@ -977,7 +977,7 @@ impl CommandApi {
             true => ProtectionStatus::Protected,
             false => ProtectionStatus::Unprotected,
         };
-        chat::create_group_ex(&ctx, Some(protect), &name)
+        chat::create_group(&ctx, Some(protect), &name)
             .await
             .map(|id| id.to_u32())
     }
@@ -988,7 +988,7 @@ impl CommandApi {
     /// address-contacts.
     async fn create_group_chat_unencrypted(&self, account_id: u32, name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_group_ex(&ctx, None, &name)
+        chat::create_group(&ctx, None, &name)
             .await
             .map(|id| id.to_u32())
     }
