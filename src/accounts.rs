@@ -353,11 +353,11 @@ impl Accounts {
     /// This is an auxiliary function and not part of public API.
     /// Use [Accounts::background_fetch] instead.
     async fn background_fetch_no_timeout(accounts: Vec<Context>, events: Events) {
+        let n_accounts = accounts.len();
         events.emit(Event {
             id: 0,
             typ: EventType::Info(format!(
-                "Starting background fetch for {} accounts.",
-                accounts.len()
+                "Starting background fetch for {n_accounts} accounts."
             )),
         });
         let mut set = JoinSet::new();
@@ -369,6 +369,12 @@ impl Accounts {
             });
         }
         set.join_all().await;
+        events.emit(Event {
+            id: 0,
+            typ: EventType::Info(format!(
+                "Finished background fetch for {n_accounts} accounts."
+            )),
+        });
     }
 
     /// Auxiliary function for [Accounts::background_fetch].
