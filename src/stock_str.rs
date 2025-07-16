@@ -380,7 +380,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "I left the group."))]
     MsgILeftGroup = 166,
 
-    #[strum(props(fallback = "Messages are guaranteed to be end-to-end encrypted from now on."))]
+    #[strum(props(fallback = "Messages are end-to-end encrypted."))]
     ChatProtectionEnabled = 170,
 
     #[strum(props(fallback = "%1$s sent a message from another device."))]
@@ -1031,7 +1031,7 @@ pub(crate) async fn error_no_network(context: &Context) -> String {
     translated(context, StockMessage::ErrorNoNetwork).await
 }
 
-/// Stock string: `Messages are guaranteed to be end-to-end encrypted from now on.`
+/// Stock string: `Messages are end-to-end encrypted.`
 pub(crate) async fn chat_protection_enabled(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
 }

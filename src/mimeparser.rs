@@ -181,7 +181,7 @@ pub enum SystemMessage {
     /// Chat ephemeral message timer is changed.
     EphemeralTimerChanged = 10,
 
-    /// "Messages are guaranteed to be end-to-end encrypted from now on."
+    /// "Messages are end-to-end encrypted."
     ChatProtectionEnabled = 11,
 
     /// "%1$s sent a message from another device."
@@ -214,7 +214,7 @@ pub enum SystemMessage {
     /// This message contains a users iroh node address.
     IrohNodeAddr = 40,
 
-    /// "Messages are guaranteed to be end-to-end encrypted from now on."
+    /// "Messages are end-to-end encrypted."
     ChatE2ee = 50,
 }
 
