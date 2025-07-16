@@ -2201,6 +2201,7 @@ RETURNING id
 
     if !chat_id.is_trash() && !hidden {
         let mut chat = Chat::load_from_db(context, chat_id).await?;
+        let mut update_param = false;
 
         // In contrast to most other update-timestamps,
         // use `sort_timestamp` instead of `sent_timestamp` for the subject-timestamp comparison.
@@ -2214,6 +2215,14 @@ RETURNING id
             let subject = mime_parser.get_subject().unwrap_or_default();
 
             chat.param.set(Param::LastSubject, subject);
+            update_param = true;
+        }
+
+        if chat.is_unpromoted() {
+            chat.param.remove(Param::Unpromoted);
+            update_param = true;
+        }
+        if update_param {
             chat.update_param(context).await?;
         }
     }

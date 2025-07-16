@@ -3812,6 +3812,42 @@ async fn test_sync_name() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_create_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
+    for a in [alice0, alice1] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    for protection in [ProtectionStatus::Unprotected, ProtectionStatus::Protected] {
+        let a0_chat_id = create_group(alice0, Some(protection), "grp").await?;
+        sync(alice0, alice1).await;
+        let a0_chat = Chat::load_from_db(alice0, a0_chat_id).await?;
+        let a1_chat_id = get_chat_id_by_grpid(alice1, &a0_chat.grpid)
+            .await?
+            .unwrap()
+            .0;
+        let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+        assert_eq!(a1_chat.get_type(), Chattype::Group);
+        assert_eq!(a1_chat.protected, protection);
+        assert_eq!(a1_chat.is_promoted(), false);
+        assert_eq!(a1_chat.get_name(), "grp");
+
+        set_chat_name(alice0, a0_chat_id, "renamed").await?;
+        sync(alice0, alice1).await;
+        let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+        assert_eq!(a1_chat.is_promoted(), false);
+        assert_eq!(a1_chat.get_name(), "renamed");
+
+        let sent_msg = alice0.send_text(a0_chat_id, "hi").await;
+        let msg = alice1.recv_msg(&sent_msg).await;
+        assert_eq!(msg.chat_id, a1_chat_id);
+        assert_eq!(a1_chat_id.is_promoted(alice1).await?, true);
+    }
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed
@@ -4725,7 +4761,7 @@ async fn test_create_unencrypted_group_chat() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
 
-    let chat_id = create_group_ex(alice, None, "Group chat").await?;
+    let chat_id = create_group(alice, None, "Group chat").await?;
     let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
     let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
 
