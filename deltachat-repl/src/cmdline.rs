@@ -200,7 +200,9 @@ async fn log_msg(context: &Context, prefix: impl AsRef<str>, msg: &Message) {
             "[FRESH]"
         },
         if msg.is_info() {
-            if msg.get_info_type() == SystemMessage::ChatProtectionEnabled {
+            if msg.get_info_type() == SystemMessage::ChatE2ee {
+                "[INFO 🔒]"
+            } else if msg.get_info_type() == SystemMessage::ChatProtectionEnabled {
                 "[INFO 🛡️]"
             } else if msg.get_info_type() == SystemMessage::ChatProtectionDisabled {
                 "[INFO 🛡️❌]"
