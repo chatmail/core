@@ -134,7 +134,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         assert!(chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
-        let expected_text = stock_str::chat_protection_enabled(&alice).await;
+        let expected_text = stock_str::messages_e2e_encrypted(&alice).await;
         assert_eq!(msg.text, expected_text);
     }
 
@@ -144,7 +144,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         assert!(chat.is_protected());
 
         let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
-        let expected_text = stock_str::chat_protection_enabled(&fiona).await;
+        let expected_text = stock_str::messages_e2e_encrypted(&fiona).await;
         assert_eq!(msg0.text, expected_text);
     }
 
@@ -270,7 +270,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     .await?;
 
     let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
-    let enabled = stock_str::chat_protection_enabled(&alice).await;
+    let enabled = stock_str::messages_e2e_encrypted(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 

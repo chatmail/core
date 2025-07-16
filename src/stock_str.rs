@@ -1032,7 +1032,7 @@ pub(crate) async fn error_no_network(context: &Context) -> String {
 }
 
 /// Stock string: `Messages are end-to-end encrypted.`
-pub(crate) async fn chat_protection_enabled(context: &Context) -> String {
+pub(crate) async fn messages_e2e_encrypted(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
 }
 
@@ -1303,7 +1303,7 @@ impl Context {
                     "[Error] No contact_id given".to_string()
                 }
             }
-            ProtectionStatus::Protected => chat_protection_enabled(self).await,
+            ProtectionStatus::Protected => messages_e2e_encrypted(self).await,
         }
     }
 

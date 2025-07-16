@@ -6,7 +6,7 @@ use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
 use crate::receive_imf::receive_imf;
-use crate::stock_str::{self, chat_protection_enabled};
+use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
 };
@@ -246,7 +246,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         let chat = alice.get_chat(&bob).await;
         let msg = get_chat_msg(&alice, chat.get_id(), 1, E2EE_INFO_MSGS + 1).await;
         assert!(msg.is_info());
-        let expected_text = chat_protection_enabled(&alice).await;
+        let expected_text = messages_e2e_encrypted(&alice).await;
         assert_eq!(msg.get_text(), expected_text);
         if case == SetupContactCase::CheckProtectionTimestamp {
             assert_eq!(msg.timestamp_sort, vc_request_with_auth_ts_sent + 1);
@@ -296,7 +296,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
-    assert_eq!(msg.get_text(), chat_protection_enabled(&bob).await);
+    assert_eq!(msg.get_text(), messages_e2e_encrypted(&bob).await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -540,7 +540,7 @@ async fn test_secure_join() -> Result<()> {
         // - You added member bob@example.net
         let msg = get_chat_msg(&alice, alice_chatid, 0, 2).await;
         assert!(msg.is_info());
-        let expected_text = chat_protection_enabled(&alice).await;
+        let expected_text = messages_e2e_encrypted(&alice).await;
         assert_eq!(msg.get_text(), expected_text);
     }
 

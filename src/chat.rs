@@ -611,7 +611,7 @@ impl ChatId {
         context: &Context,
         timestamp_sort: i64,
     ) -> Result<()> {
-        let text = stock_str::chat_protection_enabled(context).await;
+        let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
             self,
