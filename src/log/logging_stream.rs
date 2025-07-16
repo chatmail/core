@@ -77,16 +77,23 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         let res = this.inner.poll_read(cx, buf);
 
         if let Poll::Ready(Err(ref err)) = res {
-            if let Ok(peer_addr) = peer_addr {
-                let log_message = format!(
+            debug_assert!(
+                peer_addr.is_ok(),
+                "Logging stream should be created over bound sockets"
+            );
+            let log_message = match peer_addr {
+                Ok(peer_addr) => format!(
                     "Read error on stream {peer_addr:?} after reading {} and writing {} bytes: {err}.",
                     this.metrics.total_read, this.metrics.total_written
-                );
-                this.events.emit(Event {
-                    id: *this.account_id,
-                    typ: EventType::Warning(log_message),
-                });
-            }
+                ),
+                Err(_) => {
+                    format!("Read error on a stream that does not have a peer address: {err}.")
+                }
+            };
+            this.events.emit(Event {
+                id: *this.account_id,
+                typ: EventType::Warning(log_message),
+            });
         }
 
         let n = old_remaining - buf.remaining();
