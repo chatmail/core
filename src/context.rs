@@ -4,11 +4,11 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::{bail, ensure, Context as _, Result};
+use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
 use pgp::composed::SignedPublicKey;
 use pgp::types::PublicKeyTrait;
@@ -16,7 +16,7 @@ use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::aheader::EncryptPreference;
-use crate::chat::{get_chat_cnt, ChatId, ProtectionStatus};
+use crate::chat::{ChatId, ProtectionStatus, get_chat_cnt};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
@@ -27,7 +27,7 @@ use crate::debug_logging::DebugLogging;
 use crate::download::DownloadState;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
-use crate::key::{load_self_public_key, load_self_secret_key, DcKey as _};
+use crate::key::{DcKey as _, load_self_public_key, load_self_secret_key};
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};
@@ -35,7 +35,7 @@ use crate::peer_channels::Iroh;
 use crate::peerstate::Peerstate;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
-use crate::scheduler::{convert_folder_meaning, SchedulerState};
+use crate::scheduler::{SchedulerState, convert_folder_meaning};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
@@ -292,7 +292,7 @@ pub struct InnerContext {
     pub(crate) push_subscribed: AtomicBool,
 
     /// Iroh for realtime peer channels.
-    pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
+    pub(crate) iroh: Arc<Iroh>,
 }
 
 /// The state of ongoing process.
@@ -450,7 +450,7 @@ impl Context {
             debug_logging: std::sync::RwLock::new(None),
             push_subscriber,
             push_subscribed: AtomicBool::new(false),
-            iroh: Arc::new(RwLock::new(None)),
+            iroh: Default::default(),
         };
 
         let ctx = Context {
@@ -486,19 +486,7 @@ impl Context {
     /// Stops the IO scheduler.
     pub async fn stop_io(&self) {
         self.scheduler.stop(self).await;
-        if let Some(iroh) = self.iroh.write().await.take() {
-            // Close all QUIC connections.
-
-            // Spawn into a separate task,
-            // because Iroh calls `wait_idle()` internally
-            // and it may take time, especially if the network
-            // has become unavailable.
-            tokio::spawn(async move {
-                // We do not log the error because we do not want the task
-                // to hold the reference to Context.
-                let _ = tokio::time::timeout(Duration::from_secs(60), iroh.close()).await;
-            });
-        }
+        self.iroh.close();
     }
 
     /// Restarts the IO scheduler if it was running before
@@ -509,9 +497,7 @@ impl Context {
 
     /// Indicate that the network likely has come back.
     pub async fn maybe_network(&self) {
-        if let Some(ref iroh) = *self.iroh.read().await {
-            iroh.network_change().await;
-        }
+        self.iroh.network_change().await;
         self.scheduler.maybe_network().await;
     }
 
