@@ -84,26 +84,29 @@ Create a contact:
 
 ```
 > addcontact yourfriends@email.org
-Command executed successfully.
 ```
 
 List contacts:
 
 ```
 > listcontacts
-Contact#10: <name unset> <yourfriends@email.org>
-Contact#1: Me √√ <your@email.org>
+Contact#Contact#Self: Me √ <your@email.org>
+1 key contacts.
+Contact#Contact#10: yourfriends@email.org <yourfriends@email.org>
+1 address contacts.
 ```
 
 Create a chat with your friend and send a message:
 
 ```
 > createchat 10
-Single#10 created successfully.
-> chat 10
-Single#10: yourfriends@email.org [yourfriends@email.org]
+Single#Chat#12 created successfully.
+> chat 12
+Selecting chat Chat#12
+Single#Chat#12: yourfriends@email.org [yourfriends@email.org] Icon: profile-db-blobs/4138c52e5bc1c576cda7dd44d088c07.png
+0 messages.
+81.252µs to create this list, 123.625µs to mark all messages as noticed.
 > send hi
-Message sent.
 ```
 
 List messages when inside a chat:

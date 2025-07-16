@@ -1151,7 +1151,10 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "listcontacts" | "contacts" => {
             let contacts = Contact::get_all(&context, DC_GCL_ADD_SELF, Some(arg1)).await?;
             log_contactlist(&context, &contacts).await?;
-            println!("{} contacts.", contacts.len());
+            println!("{} key contacts.", contacts.len());
+            let addrcontacts = Contact::get_all(&context, DC_GCL_ADDRESS, Some(arg1)).await?;
+            log_contactlist(&context, &addrcontacts).await?;
+            println!("{} address contacts.", addrcontacts.len());
         }
         "addcontact" => {
             ensure!(!arg1.is_empty(), "Arguments [<name>] <addr> expected.");
