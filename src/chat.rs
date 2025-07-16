@@ -2907,7 +2907,11 @@ async fn prepare_send_msg(
         CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
-            msg.param.get_cmd() == SystemMessage::SecurejoinMessage
+            // And allow leaving a contact request chat.
+            matches!(
+                msg.param.get_cmd(),
+                SystemMessage::SecurejoinMessage | SystemMessage::MemberRemovedFromGroup
+            )
         }
         // Allow to send "Member removed" messages so we can leave the group/broadcast.
         // Necessary checks should be made anyway before removing contact
