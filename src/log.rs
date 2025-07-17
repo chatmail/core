@@ -4,9 +4,9 @@
 
 use crate::context::Context;
 
-mod logging_stream;
+mod stream;
 
-pub(crate) use logging_stream::LoggingStream;
+pub(crate) use stream::LoggingStream;
 
 macro_rules! info {
     ($ctx:expr,  $msg:expr) => {
