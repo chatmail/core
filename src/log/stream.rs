@@ -79,7 +79,7 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         if let Poll::Ready(Err(ref err)) = res {
             debug_assert!(
                 peer_addr.is_ok(),
-                "Logging stream should be created over bound sockets"
+                "Logging stream should be created over a bound socket"
             );
             let log_message = match peer_addr {
                 Ok(peer_addr) => format!(
