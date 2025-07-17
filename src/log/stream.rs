@@ -97,9 +97,7 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         }
 
         let n = old_remaining - buf.remaining();
-        if n > 0 {
-            this.metrics.total_read = this.metrics.total_read.saturating_add(n);
-        }
+        this.metrics.total_read = this.metrics.total_read.saturating_add(n);
 
         res
     }
