@@ -1,3 +1,4 @@
+use crate::headerdef::HeaderDef;
 use num_traits::FromPrimitive;
 
 use super::*;
@@ -802,6 +803,27 @@ async fn test_sanitize_filename_message() -> Result<()> {
 
     msg.set_file_from_bytes(t, ".txt", b"hallo", None)?;
     assert_eq!(msg.get_filename().unwrap(), "file.txt");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_autocrypt_gossip_chat_assign() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_chat(bob).await.id;
+    alice.set_config_u32(Config::GossipPeriod, 0).await?;
+
+    tcm.section("Bob receives a normal message from alice, and assigns it a chat");
+    let sent_msg = alice.send_text(alice_chat_id, "hi").await;
+    let bob_chat_id = bob.recv_msg(&sent_msg).await.chat_id;
+
+    tcm.section("Bob receives a message with a gossip header and assigns it to the same chat");
+    let sent_msg = alice.send_text(alice_chat_id, "hi").await;
+    let msg = bob.parse_msg(&sent_msg).await;
+    assert!(msg.header_exists(HeaderDef::AutocryptGossip));
+    assert_eq!(bob.recv_msg(&sent_msg).await.chat_id, bob_chat_id);
 
     Ok(())
 }
