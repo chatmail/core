@@ -488,10 +488,10 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
 
     let resync_requested = ctx.resync_request.swap(false, Ordering::Relaxed);
     if resync_requested {
-        if let Err(err) = session.resync_folders(ctx).await {
-            warn!(ctx, "Failed to resync folders: {:#}.", err);
-            ctx.resync_request.store(true, Ordering::Relaxed);
-        }
+        session
+            .resync_folders(ctx)
+            .await
+            .context("resync_folders")?;
     }
 
     maybe_add_time_based_warnings(ctx).await;
