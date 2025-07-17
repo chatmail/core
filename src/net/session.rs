@@ -23,8 +23,7 @@ impl SessionStream for Box<dyn SessionStream> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.as_ref().peer_addr()?;
-        Ok(addr)
+        self.as_ref().peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for async_native_tls::TlsStream<T> {
@@ -33,8 +32,7 @@ impl<T: SessionStream> SessionStream for async_native_tls::TlsStream<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        self.get_ref().peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for tokio_rustls::client::TlsStream<T> {
@@ -42,8 +40,7 @@ impl<T: SessionStream> SessionStream for tokio_rustls::client::TlsStream<T> {
         self.get_mut().0.set_read_timeout(timeout);
     }
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().0.peer_addr()?;
-        Ok(addr)
+        self.get_ref().0.peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for BufStream<T> {
@@ -52,8 +49,7 @@ impl<T: SessionStream> SessionStream for BufStream<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        self.get_ref().peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for BufWriter<T> {
@@ -62,8 +58,7 @@ impl<T: SessionStream> SessionStream for BufWriter<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        self.get_ref().peer_addr()
     }
 }
 impl SessionStream for Pin<Box<TimeoutStream<TcpStream>>> {
@@ -72,8 +67,7 @@ impl SessionStream for Pin<Box<TimeoutStream<TcpStream>>> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        Ok(self.get_ref().peer_addr()?)
     }
 }
 impl<T: SessionStream> SessionStream for Socks5Stream<T> {
@@ -82,8 +76,7 @@ impl<T: SessionStream> SessionStream for Socks5Stream<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_socket_ref().peer_addr()?;
-        Ok(addr)
+        self.get_socket_ref().peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for shadowsocks::ProxyClientStream<T> {
@@ -92,8 +85,7 @@ impl<T: SessionStream> SessionStream for shadowsocks::ProxyClientStream<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        self.get_ref().peer_addr()
     }
 }
 impl<T: SessionStream> SessionStream for async_imap::DeflateStream<T> {
@@ -102,8 +94,7 @@ impl<T: SessionStream> SessionStream for async_imap::DeflateStream<T> {
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        let addr = self.get_ref().peer_addr()?;
-        Ok(addr)
+        self.get_ref().peer_addr()
     }
 }
 
