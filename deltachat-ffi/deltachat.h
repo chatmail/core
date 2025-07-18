@@ -6899,9 +6899,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used in summaries.
 #define DC_STR_GIF                        23
 
-/// "Encrypted message"
-///
-/// Used in subjects of outgoing messages.
+/// @deprecated 2025-07, this string is no longer needed.
 #define DC_STR_ENCRYPTEDMSG               24
 
 /// "End-to-end encryption available."

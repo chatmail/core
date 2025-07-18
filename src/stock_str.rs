@@ -65,9 +65,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "GIF"))]
     Gif = 23,
 
-    #[strum(props(fallback = "Encrypted message"))]
-    EncryptedMsg = 24,
-
     #[strum(props(fallback = "End-to-end encryption available"))]
     E2eAvailable = 25,
 
