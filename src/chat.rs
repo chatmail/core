@@ -607,7 +607,9 @@ impl ChatId {
     }
 
     /// Adds message "Messages are end-to-end encrypted" if appropriate.
-    /// This function is called on chat creation.
+    ///
+    /// This function is rather slow because it does a lot of database queries,
+    /// but this is fine because it is only called on chat creation.
     async fn maybe_add_encrypted_msg(self, context: &Context, timestamp_sort: i64) -> Result<()> {
         let chat = Chat::load_from_db(context, self).await?;
 
