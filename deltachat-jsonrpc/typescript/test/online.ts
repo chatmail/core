@@ -95,7 +95,9 @@ describe("online tests", function () {
       false,
     );
 
-    expect(messageList).have.length(1);
+    // There are 2 messages in the chat:
+    // 'Messages are end-to-end encrypted' (info message) and 'Hello'
+    expect(messageList).have.length(2);
     const message = await dc.rpc.getMessage(accountId2, messageList[0]);
     expect(message.text).equal("Hello");
     expect(message.showPadlock).equal(true);

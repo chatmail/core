@@ -10,6 +10,7 @@ from imap_tools import AND, U
 import deltachat as dc
 from deltachat import account_hookimpl, Message
 from deltachat.tracker import ImexTracker
+from deltachat.testplugin import E2EE_INFO_MSGS
 
 
 def test_basic_imap_api(acfactory, tmp_path):
@@ -409,6 +410,10 @@ def test_forward_messages(acfactory, lp):
 
     lp.sec("ac2: wait for receive")
     ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
+    msg_in = ac2.get_message_by_id(ev.data2)
+    assert msg_in.text == "Messages are end-to-end encrypted."
+
+    ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
     assert ev.data2 == msg_out.id
     msg_in = ac2.get_message_by_id(msg_out.id)
     assert msg_in.text == "message2"
@@ -622,6 +627,11 @@ def test_moved_markseen(acfactory):
 
     with ac2.direct_imap.idle() as idle2:
         ac2.start_io()
+
+        ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
+        msg = ac2.get_message_by_id(ev.data2)
+        assert msg.text == "Messages are end-to-end encrypted."
+
         ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
         msg = ac2.get_message_by_id(ev.data2)
 
@@ -738,7 +748,7 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("sending text message from ac1 to ac2")
     msg_out = chat.send_text("message1")
 
-    assert len(chat.get_messages()) == 1
+    assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
     lp.sec("disable ac1 MDNs")
     ac1.set_config("mdns_enabled", "0")
@@ -746,7 +756,7 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("wait for ac2 to receive message")
     msg = ac2._evtracker.wait_next_incoming_message()
 
-    assert len(msg.chat.get_messages()) == 1
+    assert len(msg.chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
     lp.sec("ac2: mark incoming message as seen")
     ac2.mark_seen_messages([msg])
@@ -755,7 +765,7 @@ def test_mdn_asymmetric(acfactory, lp):
     # MDN should be moved even though MDNs are already disabled
     ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
 
-    assert len(chat.get_messages()) == 1
+    assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
     # Wait for the message to be marked as seen on IMAP.
     ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
@@ -1123,6 +1133,11 @@ def test_send_and_receive_image(acfactory, lp, data):
     assert m == msg_out
 
     lp.sec("wait for ac2 to receive message")
+
+    ev = ac2._evtracker.get_matching("DC_EVENT_MSGS_CHANGED|DC_EVENT_INCOMING_MSG")
+    msg_in = ac2.get_message_by_id(ev.data2)
+    assert msg_in.text == "Messages are end-to-end encrypted."
+
     ev = ac2._evtracker.get_matching("DC_EVENT_MSGS_CHANGED|DC_EVENT_INCOMING_MSG")
     assert ev.data2 == msg_out.id
     msg_in = ac2.get_message_by_id(msg_out.id)
@@ -1158,10 +1173,10 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
         assert contact2.addr == some1_addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 3
-        assert messages[0].text == "msg1"
-        assert messages[1].filemime == "image/png"
-        assert os.stat(messages[1].filename).st_size == os.stat(original_image_path).st_size
+        assert len(messages) == 3 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert messages[1 + E2EE_INFO_MSGS].filemime == "image/png"
+        assert os.stat(messages[1 + E2EE_INFO_MSGS].filename).st_size == os.stat(original_image_path).st_size
         ac.set_config("displayname", "new displayname")
         assert ac.get_config("displayname") == "new displayname"
 
@@ -1414,8 +1429,8 @@ def test_connectivity(acfactory, lp):
     ac1.maybe_network()
     ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTED)
     msgs = ac1.create_chat(ac2).get_messages()
-    assert len(msgs) == 1
-    assert msgs[0].text == "Hi"
+    assert len(msgs) == 1 + E2EE_INFO_MSGS
+    assert msgs[0 + E2EE_INFO_MSGS].text == "Hi"
 
     lp.sec("Test that the connectivity changes to WORKING while new messages are fetched")
 
@@ -1425,8 +1440,8 @@ def test_connectivity(acfactory, lp):
     ac1._evtracker.wait_for_connectivity_change(dc.const.DC_CONNECTIVITY_WORKING, dc.const.DC_CONNECTIVITY_CONNECTED)
 
     msgs = ac1.create_chat(ac2).get_messages()
-    assert len(msgs) == 2
-    assert msgs[1].text == "Hi 2"
+    assert len(msgs) == 2 + E2EE_INFO_MSGS
+    assert msgs[1 + E2EE_INFO_MSGS].text == "Hi 2"
 
 
 def test_fetch_deleted_msg(acfactory, lp):

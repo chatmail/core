@@ -6,6 +6,7 @@ import pytest
 import deltachat as dc
 from deltachat.tracker import ImexFailed
 from deltachat import Account, Message
+from deltachat.testplugin import E2EE_INFO_MSGS
 
 
 class TestOfflineAccountBasic:
@@ -461,9 +462,9 @@ class TestOfflineChat:
         assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
     def test_import_export_on_encrypted_acct(self, acfactory, tmp_path):
         passphrase1 = "passphrase1"
@@ -500,9 +501,9 @@ class TestOfflineChat:
         contact2_addr = contact2.addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
         ac2.shutdown()
 
@@ -517,9 +518,9 @@ class TestOfflineChat:
         assert contact2.addr == contact2_addr
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
     def test_import_export_with_passphrase(self, acfactory, tmp_path):
         passphrase = "test_passphrase"
@@ -557,9 +558,9 @@ class TestOfflineChat:
         assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
     def test_import_encrypted_bak_into_encrypted_acct(self, acfactory, tmp_path):
         """
@@ -603,9 +604,9 @@ class TestOfflineChat:
         assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
         ac2.shutdown()
 
@@ -620,9 +621,9 @@ class TestOfflineChat:
         assert contact2.addr == ac_contact.get_config("addr")
         chat2 = contact2.create_chat()
         messages = chat2.get_messages()
-        assert len(messages) == 2
-        assert messages[0].text == "msg1"
-        assert os.path.exists(messages[1].filename)
+        assert len(messages) == 2 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
+        assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
     def test_set_get_draft(self, chat1):
         msg1 = Message.new_empty(chat1.account, "text")
