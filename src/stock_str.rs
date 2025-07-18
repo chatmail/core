@@ -383,6 +383,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Messages are end-to-end encrypted."))]
     ChatProtectionEnabled = 170,
 
+    // deprecated 2025-07
     #[strum(props(fallback = "%1$s sent a message from another device."))]
     ChatProtectionDisabled = 171,
 

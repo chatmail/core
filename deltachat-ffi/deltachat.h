@@ -7614,6 +7614,7 @@ void dc_event_unref(dc_event_t* event);
 /// "%1$s sent a message from another device."
 ///
 /// Used in info messages.
+/// @deprecated 2025-07
 #define DC_STR_CHAT_PROTECTION_DISABLED 171
 
 /// "Others will only see this group after you sent a first message."

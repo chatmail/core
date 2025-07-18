@@ -184,7 +184,7 @@ pub enum SystemMessage {
     /// "Messages are end-to-end encrypted."
     ChatProtectionEnabled = 11,
 
-    /// "%1$s sent a message from another device."
+    /// "%1$s sent a message from another device.", deprecated 2025-07
     ChatProtectionDisabled = 12,
 
     /// Message can't be sent because of `Invalid unencrypted mail to <>`
