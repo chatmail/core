@@ -37,6 +37,9 @@ def test_one_account_send_bcc_setting(acfactory, log, direct_imap):
 
     # Second client receives only second message, but not the first.
     ev_msg = ac1_clone.wait_for_event(EventType.MSGS_CHANGED)
+    assert ac1_clone.get_message_by_id(ev_msg.msg_id).get_snapshot().text == "Messages are end-to-end encrypted."
+
+    ev_msg = ac1_clone.wait_for_event(EventType.MSGS_CHANGED)
     assert ac1_clone.get_message_by_id(ev_msg.msg_id).get_snapshot().text == msg_out.get_snapshot().text
 
     # now make sure we are sending message to ourselves too

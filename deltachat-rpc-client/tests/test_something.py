@@ -12,8 +12,8 @@ import pytest
 
 from deltachat_rpc_client import Contact, EventType, Message, events
 from deltachat_rpc_client.const import ChatType, DownloadState, MessageState
-from deltachat_rpc_client.rpc import JsonRpcError
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
+from deltachat_rpc_client.rpc import JsonRpcError
 
 
 def test_system_info(rpc) -> None:
@@ -458,6 +458,10 @@ def test_wait_next_messages(acfactory) -> None:
         alice_chat_bot.send_text("Hello!")
 
         next_messages = next_messages_task.result()
+
+        if len(next_messages) == E2EE_INFO_MSGS:
+            next_messages += bot.wait_next_messages()
+
         assert len(next_messages) == 1 + E2EE_INFO_MSGS
         snapshot = next_messages[0 + E2EE_INFO_MSGS].get_snapshot()
         assert snapshot.text == "Hello!"
