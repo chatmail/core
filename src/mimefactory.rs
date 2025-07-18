@@ -1685,7 +1685,7 @@ impl MimeFactory {
                 .map(|top| BASE32_NOPAD.encode(top.as_bytes()).to_ascii_lowercase())
                 .unwrap_or(create_iroh_header(context, msg.id).await?);
             headers.push((
-                HeaderDef::IrohGossipTopic.into(),
+                HeaderDef::IrohGossipTopic.get_headername(),
                 mail_builder::headers::raw::Raw::new(topic).into(),
             ));
             if let (Some(json), _) = context

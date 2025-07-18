@@ -109,7 +109,7 @@ impl Iroh {
 
         info!(
             ctx,
-            "IROH_REALTIME: Joining gossip {topic} with peers: {:?}", node_ids,
+            "IROH_REALTIME: Joining gossip {topic} with peers: {:?}.", node_ids,
         );
 
         // Inform iroh of potentially new node addresses
@@ -315,7 +315,7 @@ impl Context {
         if let Some(iroh) = &*self.iroh.read().await {
             info!(
                 self,
-                "Adding (maybe existing) peer with id {} to {topic}", peer.node_id
+                "Adding (maybe existing) peer with id {} to {topic}.", peer.node_id
             );
             iroh.maybe_add_gossip_peer(topic, peer).await?;
         }
@@ -1012,10 +1012,10 @@ mod tests {
     async fn connect_alice_bob(
         alice: &mut TestContext,
         bob: &mut TestContext,
-        chat: ChatId,
+        alice_chat_id: ChatId,
         instance: &mut Message,
     ) {
-        send_msg(alice, chat, instance).await.unwrap();
+        send_msg(alice, alice_chat_id, instance).await.unwrap();
         let alice_webxdc = alice.get_last_msg().await;
 
         let webxdc = alice.pop_sent_msg().await;
