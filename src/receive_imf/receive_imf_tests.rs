@@ -3218,7 +3218,7 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
     assert_eq!(rcvd.chat_blocked, Blocked::Request);
     // In order not to lose context, Bob's message should also be shown in the group
     let msgs = chat::get_chat_msgs(&alice, rcvd.chat_id).await?;
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 2);
+    assert_eq!(msgs.len(), 2);
 
     Ok(())
 }

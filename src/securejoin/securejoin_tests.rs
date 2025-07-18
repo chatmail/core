@@ -289,8 +289,8 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_alice.is_bot(), case == SetupContactCase::AliceIsBot);
 
     // Check Bob got expected info messages in his 1:1 chat.
-    let msg_cnt = E2EE_INFO_MSGS + 2;
-    let mut i = 1..msg_cnt;
+    let msg_cnt = 2;
+    let mut i = 0..msg_cnt;
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);

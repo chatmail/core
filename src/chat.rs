@@ -627,14 +627,16 @@ impl ChatId {
         Ok(())
     }
 
-    /// Returns true if the chat is encrypted, plain chat.
+    /// Returns true if the chat is encrypted, plain, sendable chat or contact request.
+    /// The last two conditions are
     /// Note, that this function uses up to three slow database calls, use with care.
     pub(crate) async fn is_encrypted_and_not_special(self, context: &Context) -> Result<bool> {
         let chat = Chat::load_from_db(context, self).await?;
         let res = chat.is_encrypted(context).await?
             && self > DC_CHAT_ID_LAST_SPECIAL
             && !chat.is_device_talk()
-            && !chat.is_self_talk();
+            && !chat.is_self_talk()
+            && (chat.can_send(context).await? || chat.is_contact_request());
         Ok(res)
     }
 
