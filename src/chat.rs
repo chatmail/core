@@ -606,17 +606,20 @@ impl ChatId {
         Ok(())
     }
 
-    pub(crate) async fn maybe_add_encrypted_msg(
-        self,
-        context: &Context,
-        timestamp_sort: i64,
-    ) -> Result<()> {
+    /// Adds message "Messages are end-to-end encrypted" if appropriate.
+    /// This function is called on chat creation.
+    async fn maybe_add_encrypted_msg(self, context: &Context, timestamp_sort: i64) -> Result<()> {
         let chat = Chat::load_from_db(context, self).await?;
+
+        // as secure-join adds its own message on success (after some other messasges),
+        // we do not want to add "Messages are end-to-end encrypted" on chat creation.
+        // we detect secure join by `can_send` (for Bob, scanner side) and by `blocked` (for Alice, inviter side) below.
         if !chat.is_encrypted(context).await?
             || self <= DC_CHAT_ID_LAST_SPECIAL
             || chat.is_device_talk()
             || chat.is_self_talk()
             || (!chat.can_send(context).await? && !chat.is_contact_request())
+            || chat.blocked == Blocked::Yes
         {
             return Ok(());
         }
