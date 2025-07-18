@@ -21,9 +21,9 @@ use url::Url;
 use crate::config::Config;
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
-use crate::net::connect_tcp;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_rustls;
+use crate::net::{ErrorCapturingStream, connect_tcp};
 use crate::sql::Sql;
 
 /// Default SOCKS5 port according to [RFC 1928](https://tools.ietf.org/html/rfc1928).
@@ -118,7 +118,7 @@ impl Socks5Config {
         target_host: &str,
         target_port: u16,
         load_dns_cache: bool,
-    ) -> Result<Socks5Stream<Pin<Box<TimeoutStream<TcpStream>>>>> {
+    ) -> Result<Socks5Stream<Pin<Box<ErrorCapturingStream<TimeoutStream<TcpStream>>>>>> {
         let tcp_stream = connect_tcp(context, &self.host, self.port, load_dns_cache)
             .await
             .context("Failed to connect to SOCKS5 proxy")?;

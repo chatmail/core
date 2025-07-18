@@ -7,6 +7,8 @@ use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, BufStream, BufWriter};
 use tokio::net::TcpStream;
 use tokio_io_timeout::TimeoutStream;
 
+use crate::net::ErrorCapturingStream;
+
 pub(crate) trait SessionStream:
     AsyncRead + AsyncWrite + Unpin + Send + Sync + std::fmt::Debug
 {
@@ -61,13 +63,13 @@ impl<T: SessionStream> SessionStream for BufWriter<T> {
         self.get_ref().peer_addr()
     }
 }
-impl SessionStream for Pin<Box<TimeoutStream<TcpStream>>> {
+impl SessionStream for Pin<Box<ErrorCapturingStream<TimeoutStream<TcpStream>>>> {
     fn set_read_timeout(&mut self, timeout: Option<Duration>) {
-        self.as_mut().set_read_timeout_pinned(timeout);
+        self.as_mut().get_pin_mut().set_read_timeout_pinned(timeout);
     }
 
     fn peer_addr(&self) -> Result<SocketAddr> {
-        Ok(self.get_ref().peer_addr()?)
+        Ok(self.get_ref().get_ref().peer_addr()?)
     }
 }
 impl<T: SessionStream> SessionStream for Socks5Stream<T> {

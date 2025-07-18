@@ -16,12 +16,14 @@ use crate::sql::Sql;
 use crate::tools::time;
 
 pub(crate) mod dns;
+pub(crate) mod error_capturing_stream;
 pub(crate) mod http;
 pub(crate) mod proxy;
 pub(crate) mod session;
 pub(crate) mod tls;
 
 use dns::lookup_host_with_cache;
+pub(crate) use error_capturing_stream::ErrorCapturingStream;
 pub use http::{Response as HttpResponse, read_url, read_url_blob};
 use tls::wrap_tls;
 
@@ -105,7 +107,7 @@ pub(crate) async fn load_connection_timestamp(
 /// to the network, which is important to reduce the latency of interactive protocols such as IMAP.
 pub(crate) async fn connect_tcp_inner(
     addr: SocketAddr,
-) -> Result<Pin<Box<TimeoutStream<TcpStream>>>> {
+) -> Result<Pin<Box<ErrorCapturingStream<TimeoutStream<TcpStream>>>>> {
     let tcp_stream = timeout(TIMEOUT, TcpStream::connect(addr))
         .await
         .context("connection timeout")?
@@ -118,7 +120,9 @@ pub(crate) async fn connect_tcp_inner(
     timeout_stream.set_write_timeout(Some(TIMEOUT));
     timeout_stream.set_read_timeout(Some(TIMEOUT));
 
-    Ok(Box::pin(timeout_stream))
+    let error_capturing_stream = ErrorCapturingStream::new(timeout_stream);
+
+    Ok(Box::pin(error_capturing_stream))
 }
 
 /// Attempts to establish TLS connection
@@ -235,7 +239,7 @@ pub(crate) async fn connect_tcp(
     host: &str,
     port: u16,
     load_cache: bool,
-) -> Result<Pin<Box<TimeoutStream<TcpStream>>>> {
+) -> Result<Pin<Box<ErrorCapturingStream<TimeoutStream<TcpStream>>>>> {
     let connection_futures = lookup_host_with_cache(context, host, port, "", load_cache)
         .await?
         .into_iter()
