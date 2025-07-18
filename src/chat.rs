@@ -349,8 +349,8 @@ impl ChatId {
             chat_id
                 .add_protection_msg(context, ProtectionStatus::Protected, None, timestamp)
                 .await?;
-        } else if chat_id.is_encrypted_and_not_special(context).await? {
-            chat_id.add_encrypted_msg(context, timestamp).await?;
+        } else {
+            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
         }
 
         info!(
@@ -606,11 +606,21 @@ impl ChatId {
         Ok(())
     }
 
-    pub(crate) async fn add_encrypted_msg(
+    pub(crate) async fn maybe_add_encrypted_msg(
         self,
         context: &Context,
         timestamp_sort: i64,
     ) -> Result<()> {
+        let chat = Chat::load_from_db(context, self).await?;
+        if !chat.is_encrypted(context).await?
+            || self <= DC_CHAT_ID_LAST_SPECIAL
+            || chat.is_device_talk()
+            || chat.is_self_talk()
+            || (!chat.can_send(context).await? && !chat.is_contact_request())
+        {
+            return Ok(());
+        }
+
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
@@ -625,19 +635,6 @@ impl ChatId {
         )
         .await?;
         Ok(())
-    }
-
-    /// Returns true if the chat is encrypted, plain, sendable chat or contact request.
-    /// The last two conditions are
-    /// Note, that this function uses up to three slow database calls, use with care.
-    pub(crate) async fn is_encrypted_and_not_special(self, context: &Context) -> Result<bool> {
-        let chat = Chat::load_from_db(context, self).await?;
-        let res = chat.is_encrypted(context).await?
-            && self > DC_CHAT_ID_LAST_SPECIAL
-            && !chat.is_device_talk()
-            && !chat.is_self_talk()
-            && (chat.can_send(context).await? || chat.is_contact_request());
-        Ok(res)
     }
 
     /// Sets protection and adds a message.
@@ -2709,8 +2706,10 @@ impl ChatIdBlocked {
                     smeared_time,
                 )
                 .await?;
-        } else if chat_id.is_encrypted_and_not_special(context).await? {
-            chat_id.add_encrypted_msg(context, smeared_time).await?;
+        } else {
+            chat_id
+                .maybe_add_encrypted_msg(context, smeared_time)
+                .await?;
         }
 
         Ok(Self {
