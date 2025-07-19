@@ -70,7 +70,7 @@ pub struct FullChat {
     fresh_message_counter: usize,
     // is_group - please check over chat.type in frontend instead
     is_contact_request: bool,
-    is_protection_broken: bool,
+    is_protection_broken: bool, // deprecated
     is_device_chat: bool,
     self_in_group: bool,
     is_muted: bool,
