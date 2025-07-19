@@ -503,13 +503,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `gossip_period` = How often to gossip Autocrypt keys in chats with multiple recipients, in
  *                    seconds. 2 days by default.
  *                    This is not supposed to be changed by UIs and only used for testing.
- * - `verified_one_on_one_chats` = Feature flag for verified 1:1 chats; the UI should set it
- *                    to 1 if it supports verified 1:1 chats.
- *                    Regardless of this setting, `dc_chat_is_protected()` returns true while the key is verified,
- *                    and when the key changes, an info message is posted into the chat.
- *                    0=Nothing else happens when the key changes.
- *                    1=After the key changed, `dc_chat_can_send()` returns false and `dc_chat_is_protection_broken()` returns true
- *                    until `dc_accept_chat()` is called.
  * - `is_chatmail` = 1 if the the server is a chatmail server, 0 otherwise.
  * - `is_muted`     = Whether a context is muted by the user.
  *                    Muted contexts should not sound, vibrate or show notifications.
@@ -3818,15 +3811,12 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 /**
  * Check if a chat is protected.
  *
- * End-to-end encryption is guaranteed in protected chats
- * and only verified contacts
+ * Only verified contacts
  * as determined by dc_contact_is_verified()
  * can be added to protected chats.
  *
  * Protected chats are created using dc_create_group_chat()
  * by setting the 'protect' parameter to 1.
- * 1:1 chats become protected or unprotected automatically
- * if `verified_one_on_one_chats` setting is enabled.
  *
  * UI should display a green checkmark
  * in the chat title,
@@ -3869,6 +3859,8 @@ int             dc_chat_is_encrypted         (const dc_chat_t *chat);
  *
  * The UI should let the user confirm that this is OK with a message like
  * `Bob sent a message from another device. Tap to learn more` and then call dc_accept_chat().
+ *
+ * @deprecated 2025-17 chats protection cannot break any longer
  * @memberof dc_chat_t
  * @param chat The chat object.
  * @return 1=chat protection broken, 0=otherwise.
