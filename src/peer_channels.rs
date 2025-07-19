@@ -341,7 +341,6 @@ pub(crate) async fn iroh_add_peer_for_topic(
 }
 
 /// Add gossip peer from `Iroh-Node-Addr` header to WebXDC message identified by `instance_id`.
-/// This should not start iroh, because receiving a NodeAddr does not mean you want to participate.
 pub async fn add_gossip_peer_from_header(
     context: &Context,
     instance_id: MsgId,
@@ -981,6 +980,7 @@ mod tests {
         let msg = alice.pop_sent_msg().await;
         let fiona_instance = fiona.recv_msg(&msg).await;
         fiona_instance.chat_id.accept(fiona).await.unwrap();
+        assert!(!fiona.ctx.iroh.read().await.is_some());
 
         let fiona_connect_future = send_webxdc_realtime_advertisement(fiona, fiona_instance.id)
             .await
