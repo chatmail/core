@@ -3699,30 +3699,45 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
 }
 
 /// Creates a group chat with a given `name`.
-/// Deprecated on 2025-06-21, use `create_group_ex()`.
+/// Deprecated on 2025-06-21, use `create_group()`.
 pub async fn create_group_chat(
     context: &Context,
     protect: ProtectionStatus,
     name: &str,
 ) -> Result<ChatId> {
-    create_group_ex(context, Some(protect), name).await
+    create_group(context, Some(protect), name).await
 }
 
 /// Creates a group chat.
 ///
 /// * `encryption` - If `Some`, the chat is encrypted (with key-contacts) and can be protected.
 /// * `name` - Chat name.
-pub async fn create_group_ex(
+pub async fn create_group(
     context: &Context,
     encryption: Option<ProtectionStatus>,
+    name: &str,
+) -> Result<ChatId> {
+    create_group_ex(context, Sync, encryption.map(|p| (create_id(), p)), name).await
+}
+
+/// Creates a group chat.
+///
+/// * `sync` - Whether a multi-device synchronization message should be sent. Ignored for
+///   unencrypted chats currently.
+///
+/// See [`create_group`] for other parameters.
+pub(crate) async fn create_group_ex(
+    context: &Context,
+    sync: sync::Sync,
+    encryption: Option<(String /* grpid */, ProtectionStatus)>,
     name: &str,
 ) -> Result<ChatId> {
     let chat_name = sanitize_single_line(name);
     ensure!(!chat_name.is_empty(), "Invalid chat name");
 
-    let grpid = match encryption {
-        Some(_) => create_id(),
-        None => String::new(),
+    let (grpid, protection) = match encryption {
+        Some((grpid, protection)) => (grpid, Some(protection)),
+        None => (String::new(), None),
     };
 
     let timestamp = create_smeared_timestamp(context);
@@ -3732,7 +3747,7 @@ pub async fn create_group_ex(
             "INSERT INTO chats
         (type, name, grpid, param, created_timestamp)
         VALUES(?, ?, ?, \'U=1\', ?);",
-            (Chattype::Group, chat_name, grpid, timestamp),
+            (Chattype::Group, &chat_name, &grpid, timestamp),
         )
         .await?;
 
@@ -3743,7 +3758,7 @@ pub async fn create_group_ex(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    if encryption == Some(ProtectionStatus::Protected) {
+    if protection == Some(ProtectionStatus::Protected) {
         let protect = ProtectionStatus::Protected;
         chat_id
             .set_protection_for_timestamp_sort(context, protect, timestamp, None)
@@ -3756,7 +3771,11 @@ pub async fn create_group_ex(
         let text = stock_str::new_group_send_first_message(context).await;
         add_info_msg(context, chat_id, &text, create_smeared_timestamp(context)).await?;
     }
-
+    if let (true, Some(protection)) = (sync.into(), protection) {
+        let id = SyncId::Grpid(grpid);
+        let action = SyncAction::CreateGroupEncrypted(protection, chat_name);
+        self::sync(context, id, action).await.log_err(context).ok();
+    }
     Ok(chat_id)
 }
 
@@ -5027,7 +5046,7 @@ pub(crate) enum SyncId {
     /// "Message-ID"-s, from oldest to latest. Used for ad-hoc groups.
     Msgids(Vec<String>),
 
-    // Special id for device chat.
+    /// Special id for device chat.
     Device,
 }
 
@@ -5041,6 +5060,8 @@ pub(crate) enum SyncAction {
     SetMuted(MuteDuration),
     /// Create broadcast channel with the given name.
     CreateBroadcast(String),
+    /// Create encrypted group chat with the given name.
+    CreateGroupEncrypted(ProtectionStatus, String),
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5106,6 +5127,9 @@ impl Context {
                 if let SyncAction::CreateBroadcast(name) = action {
                     create_broadcast_ex(self, Nosync, grpid.clone(), name.clone()).await?;
                     return Ok(());
+                } else if let SyncAction::CreateGroupEncrypted(protection, name) = action {
+                    create_group_ex(self, Nosync, Some((grpid.clone(), *protection)), name).await?;
+                    return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)
                     .await?
@@ -5127,7 +5151,7 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateBroadcast(_) => {
+            SyncAction::CreateBroadcast(_) | SyncAction::CreateGroupEncrypted(..) => {
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
