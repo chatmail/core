@@ -2149,7 +2149,7 @@ RETURNING id
         created_db_entries.push(row_id);
     }
 
-    // check all parts whether they contain a new logging webxdc
+    // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
         // check if any part contains a webxdc topic id
         if part.typ == Viewtype::Webxdc {

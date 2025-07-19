@@ -5,7 +5,9 @@ use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
+use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
+use iroh_gossip::proto::TopicId;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::mime::MimePart;
@@ -22,14 +24,14 @@ use crate::context::Context;
 use crate::e2ee::EncryptHelper;
 use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
-use crate::key::self_fingerprint;
-use crate::key::{DcKey, SignedPublicKey};
+use crate::headerdef::HeaderDef;
+use crate::key::{DcKey, SignedPublicKey, self_fingerprint};
 use crate::location;
 use crate::log::{info, warn};
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
-use crate::peer_channels::create_iroh_header;
+use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{
@@ -140,6 +142,9 @@ pub struct MimeFactory {
 
     /// True if the avatar should be attached.
     pub attach_selfavatar: bool,
+
+    /// This field is used to sustain the topic id of webxdcs needed for peer channels.
+    webxdc_topic: Option<TopicId>,
 }
 
 /// Result of rendering a message, ready to be submitted to a send job.
@@ -460,7 +465,7 @@ impl MimeFactory {
             past_members.len(),
             member_timestamps.len(),
         );
-
+        let webxdc_topic = get_iroh_topic_for_msg(context, msg.id).await?;
         let factory = MimeFactory {
             from_addr,
             from_displayname,
@@ -480,6 +485,7 @@ impl MimeFactory {
             last_added_location_id: None,
             sync_ids_to_delete: None,
             attach_selfavatar,
+            webxdc_topic,
         };
         Ok(factory)
     }
@@ -527,6 +533,7 @@ impl MimeFactory {
             last_added_location_id: None,
             sync_ids_to_delete: None,
             attach_selfavatar: false,
+            webxdc_topic: None,
         };
 
         Ok(res)
@@ -1510,7 +1517,7 @@ impl MimeFactory {
             }
             SystemMessage::IrohNodeAddr => {
                 headers.push((
-                    "Iroh-Node-Addr",
+                    HeaderDef::IrohNodeAddr.into(),
                     mail_builder::headers::text::Text::new(serde_json::to_string(
                         &context
                             .get_or_try_init_peer_channel()
@@ -1691,10 +1698,13 @@ impl MimeFactory {
             let json = msg.param.get(Param::Arg).unwrap_or_default();
             parts.push(context.build_status_update_part(json));
         } else if msg.viewtype == Viewtype::Webxdc {
+            let topic = self
+                .webxdc_topic
+                .map(|top| BASE32_NOPAD.encode(top.as_bytes()).to_ascii_lowercase())
+                .unwrap_or(create_iroh_header(context, msg.id).await?);
             headers.push((
-                "Iroh-Gossip-Topic",
-                mail_builder::headers::raw::Raw::new(create_iroh_header(context, msg.id).await?)
-                    .into(),
+                HeaderDef::IrohGossipTopic.get_headername(),
+                mail_builder::headers::raw::Raw::new(topic).into(),
             ));
             if let (Some(json), _) = context
                 .render_webxdc_status_update_object(
