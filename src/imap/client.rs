@@ -209,7 +209,7 @@ impl Client {
         let tcp_stream = connect_tcp_inner(addr).await?;
         let account_id = context.get_id();
         let events = context.events.clone();
-        let logging_stream = LoggingStream::new(tcp_stream, account_id, events);
+        let logging_stream = LoggingStream::new(tcp_stream, account_id, events)?;
         let tls_stream = wrap_tls(strict_tls, hostname, alpn(addr.port()), logging_stream).await?;
         let buffered_stream = BufWriter::new(tls_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
@@ -225,7 +225,7 @@ impl Client {
         let tcp_stream = connect_tcp_inner(addr).await?;
         let account_id = context.get_id();
         let events = context.events.clone();
-        let logging_stream = LoggingStream::new(tcp_stream, account_id, events);
+        let logging_stream = LoggingStream::new(tcp_stream, account_id, events)?;
         let buffered_stream = BufWriter::new(logging_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
@@ -246,7 +246,7 @@ impl Client {
 
         let account_id = context.get_id();
         let events = context.events.clone();
-        let tcp_stream = LoggingStream::new(tcp_stream, account_id, events);
+        let tcp_stream = LoggingStream::new(tcp_stream, account_id, events)?;
 
         // Run STARTTLS command and convert the client back into a stream.
         let buffered_tcp_stream = BufWriter::new(tcp_stream);

@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use pin_project::pin_project;
 
 use crate::events::{Event, EventType, Events};
@@ -51,16 +51,26 @@ pub(crate) struct LoggingStream<S: SessionStream> {
 
     /// Metrics for this stream.
     metrics: Metrics,
+
+    /// Peer address at the time of creation.
+    ///
+    /// Socket may become disconnected later,
+    /// so we save it when `LoggingStream` is created.
+    peer_addr: SocketAddr,
 }
 
 impl<S: SessionStream> LoggingStream<S> {
-    pub fn new(inner: S, account_id: u32, events: Events) -> Self {
-        Self {
+    pub fn new(inner: S, account_id: u32, events: Events) -> Result<Self> {
+        let peer_addr: SocketAddr = inner
+            .peer_addr()
+            .context("Attempt to create LoggingStream over an unconnected stream")?;
+        Ok(Self {
             inner,
             account_id,
             events,
             metrics: Metrics::new(),
-        }
+            peer_addr,
+        })
     }
 }
 
@@ -71,25 +81,16 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         buf: &mut ReadBuf<'_>,
     ) -> Poll<std::io::Result<()>> {
         let this = self.project();
-        let peer_addr = this.inner.peer_addr();
         let old_remaining = buf.remaining();
 
         let res = this.inner.poll_read(cx, buf);
 
         if let Poll::Ready(Err(ref err)) = res {
-            debug_assert!(
-                peer_addr.is_ok(),
-                "Logging stream should be created over a bound socket"
+            let peer_addr = this.peer_addr;
+            let log_message = format!(
+                "Read error on stream {peer_addr:?} after reading {} and writing {} bytes: {err}.",
+                this.metrics.total_read, this.metrics.total_written
             );
-            let log_message = match peer_addr {
-                Ok(peer_addr) => format!(
-                    "Read error on stream {peer_addr:?} after reading {} and writing {} bytes: {err}.",
-                    this.metrics.total_read, this.metrics.total_written
-                ),
-                Err(_) => {
-                    format!("Read error on a stream that does not have a peer address: {err}.")
-                }
-            };
             this.events.emit(Event {
                 id: *this.account_id,
                 typ: EventType::Warning(log_message),
