@@ -118,7 +118,7 @@ pub(crate) enum CantSendReason {
     /// The chat is a contact request, it needs to be accepted before sending a message.
     ContactRequest,
 
-    /// The chat was protected, but now a new message came in
+    /// Deprecated. The chat was protected, but now a new message came in
     /// which was not encrypted / signed correctly.
     ProtectionBroken,
 
@@ -1935,7 +1935,7 @@ impl Chat {
         Ok(is_encrypted)
     }
 
-    /// Returns true if the chat was protected, and then an incoming message broke this protection.
+    /// Deprecated. Returns true if the chat was protected, and then an incoming message broke this protection.
     ///
     /// This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
     /// otherwise it will return false for all chats.
