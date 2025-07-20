@@ -1491,7 +1491,16 @@ impl Session {
 
             // If we don't process the whole response, IMAP client is left in a broken state where
             // it will try to process the rest of response as the next response.
-            while fetch_responses.next().await.is_some() {}
+            //
+            // Make sure to not ignore the errors, because
+            // if connection times out, it will return
+            // infinite stream of `Some(Err(_))` results.
+            while fetch_responses
+                .try_next()
+                .await
+                .context("Failed to drain FETCH responses")?
+                .is_some()
+            {}
 
             if count != request_uids.len() {
                 warn!(
