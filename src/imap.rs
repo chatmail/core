@@ -1384,13 +1384,14 @@ impl Session {
 
                 // Try to find a requested UID in returned FETCH responses.
                 while fetch_response.is_none() {
-                    let Some(next_fetch_response) = fetch_responses.next().await else {
+                    let Some(next_fetch_response) = fetch_responses
+                        .try_next()
+                        .await
+                        .context("Failed to process IMAP FETCH result")?
+                    else {
                         // No more FETCH responses received from the server.
                         break;
                     };
-
-                    let next_fetch_response =
-                        next_fetch_response.context("Failed to process IMAP FETCH result")?;
 
                     if let Some(next_uid) = next_fetch_response.uid {
                         if next_uid == request_uid {
