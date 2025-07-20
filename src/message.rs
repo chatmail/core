@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::str;
 
@@ -1713,6 +1714,35 @@ pub(crate) async fn delete_msg_locally(context: &Context, msg: &Message) -> Resu
     Ok(())
 }
 
+pub(crate) async fn get_webxdc_info_messages(
+    context: &Context,
+    msg: &Message,
+) -> Result<Vec<MsgId>> {
+    let msg_ids = context
+        .sql
+        .query_map(
+            r#"SELECT id, param
+                    FROM msgs
+                    WHERE chat_id=?1 AND hidden=0 AND mime_in_reply_to = ?2
+                    "#,
+            (msg.chat_id, msg.id),
+            |row| {
+                let info_msg_id: MsgId = row.get(0)?;
+                let last_param: Params = row.get::<_, String>(2)?.parse().unwrap_or_default();
+                Ok((info_msg_id, last_param))
+            },
+            |row| {
+                Ok(row
+                    .filter_map(Result::ok)
+                    .filter(|(_, param)| param.get_cmd() == SystemMessage::WebxdcInfoMessage)
+                    .map(|(msg_id, _)| msg_id)
+                    .collect::<Vec<_>>())
+            },
+        )
+        .await?;
+    Ok(msg_ids)
+}
+
 /// Do final events and jobs after batch deletion using calls to delete_msg_locally().
 /// To avoid additional database queries, collecting data is up to the caller.
 pub(crate) async fn delete_msgs_locally_done(
@@ -1751,8 +1781,9 @@ pub async fn delete_msgs_ex(
     let mut modified_chat_ids = HashSet::new();
     let mut deleted_rfc724_mid = Vec::new();
     let mut res = Ok(());
+    let mut msg_ids_queue = VecDeque::from_iter(msg_ids.iter().cloned());
 
-    for &msg_id in msg_ids {
+    while let Some(msg_id) = msg_ids_queue.pop_front() {
         let msg = Message::load_from_db(context, msg_id).await?;
         ensure!(
             !delete_for_all || msg.from_id == ContactId::SELF,
@@ -1763,6 +1794,7 @@ pub async fn delete_msgs_ex(
             "Cannot request deletion of unencrypted message for others"
         );
 
+        msg_ids_queue.extend(get_webxdc_info_messages(context, &msg).await?);
         modified_chat_ids.insert(msg.chat_id);
         deleted_rfc724_mid.push(msg.rfc724_mid.clone());
 
