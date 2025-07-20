@@ -248,6 +248,10 @@ impl MimeFactory {
             let mut missing_key_addresses = BTreeSet::new();
             context
                 .sql
+                // Sort recipients by `add_timestamp DESC` so that if the group is large and there
+                // are multiple SMTP messages, a newly added member receives the member addition
+                // message earlier and has gossiped keys of other members (otherwise the new member
+                // may receive messages from other members earlier and fail to verify them).
                 .query_map(
                     "SELECT
                      c.authname,
@@ -261,7 +265,8 @@ impl MimeFactory {
                      LEFT JOIN contacts c ON cc.contact_id=c.id
                      LEFT JOIN public_keys k ON k.fingerprint=c.fingerprint
                      WHERE cc.chat_id=?
-                     AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))",
+                     AND (cc.contact_id>9 OR (cc.contact_id=1 AND ?))
+                     ORDER BY cc.add_timestamp DESC",
                     (msg.chat_id, chat.typ == Chattype::Group),
                     |row| {
                         let authname: String = row.get(0)?;

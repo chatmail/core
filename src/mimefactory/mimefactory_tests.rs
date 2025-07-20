@@ -2,6 +2,7 @@ use deltachat_contact_tools::ContactAddress;
 use mail_builder::headers::Header;
 use mailparse::{MailHeaderMap, addrparse_header};
 use std::str;
+use std::time::Duration;
 
 use super::*;
 use crate::chat::{
@@ -16,6 +17,7 @@ use crate::message;
 use crate::mimeparser::MimeMessage;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
+use crate::tools::SystemTime;
 
 fn render_email_address(display_name: &str, addr: &str) -> String {
     let mut output = Vec::<u8>::new();
@@ -864,6 +866,43 @@ async fn test_dont_remove_self() -> Result<()> {
         1 // There is a timestamp for Bob, not for Alice
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_new_member_is_first_recipient() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+
+    let group = alice
+        .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[bob])
+        .await;
+    alice.send_text(group, "Hi! I created a group.").await;
+
+    SystemTime::shift(Duration::from_secs(60));
+    add_contact_to_chat(alice, group, charlie_id).await?;
+    let sent_msg = alice.pop_sent_msg().await;
+    assert!(
+        sent_msg
+            .recipients
+            .starts_with(&charlie.get_config(Config::Addr).await?.unwrap())
+    );
+
+    remove_contact_from_chat(alice, group, bob_id).await?;
+    alice.pop_sent_msg().await;
+    SystemTime::shift(Duration::from_secs(60));
+    add_contact_to_chat(alice, group, bob_id).await?;
+    let sent_msg = alice.pop_sent_msg().await;
+    assert!(
+        sent_msg
+            .recipients
+            .starts_with(&bob.get_config(Config::Addr).await?.unwrap())
+    );
     Ok(())
 }
 
