@@ -216,8 +216,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -231,8 +231,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -253,8 +253,8 @@ impl Client {
         let mut client = async_imap::Client::new(buffered_tcp_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         client
             .run_command_and_check_ok("STARTTLS", None)
             .await
@@ -287,8 +287,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -304,8 +304,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -325,8 +325,8 @@ impl Client {
         let mut client = ImapClient::new(buffered_proxy_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         client
             .run_command_and_check_ok("STARTTLS", None)
             .await
