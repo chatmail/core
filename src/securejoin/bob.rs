@@ -47,6 +47,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     let hidden = match invite {
         QrInvite::Contact { .. } => Blocked::Not,
         QrInvite::Group { .. } => Blocked::Yes,
+        QrInvite::Broadcast { .. } => Blocked::Yes,
     };
     let chat_id = ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
         .await
@@ -113,6 +114,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             chat::add_info_msg(context, group_chat_id, &msg, time()).await?;
             Ok(group_chat_id)
         }
+        QrInvite::Broadcast { .. } => {}
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
             // uses it to send the handshake messages.
