@@ -3081,12 +3081,15 @@ async fn test_encrypt_decrypt_broadcast_integration() -> Result<()> {
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
     tcm.section("Create a broadcast channel with Bob, and send a message");
-    let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
+    let alice_chat_id = create_broadcast_ex(
+        alice,
+        Sync,
+        "My Channel".to_string(),
+        "grpid".to_string(),
+        secret.to_string(),
+    )
+    .await?;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
-
-    let mut alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
-    alice_chat.param.set(Param::SymmetricKey, secret);
-    alice_chat.update_param(alice).await?;
 
     // TODO the chat_id 10 is magical here:
     bob.sql
