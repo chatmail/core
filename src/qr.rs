@@ -84,6 +84,21 @@ pub enum Qr {
         authcode: String,
     },
 
+    /// Ask whether to join the broadcast channel.
+    AskJoinBroadcast {
+        // TODO document
+        broadcast_name: String,
+
+        // TODO not sure wheter it makes sense to call this grpid just because it's called like this in the db
+        grpid: String,
+
+        contact_id: ContactId,
+
+        fingerprint: Fingerprint,
+
+        shared_secret: String,
+    },
+
     /// Contact fingerprint is verified.
     ///
     /// Ask the user if they want to start chatting.
@@ -381,7 +396,7 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 
 /// scheme: `OPENPGP4FPR:FINGERPRINT#a=ADDR&n=NAME&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
-///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&c=CHANNELNAME&x=CHANNELID&s=SHAREDSECRET`
+///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=BROADCAST_NAME&x=BROADCAST_ID&b=BROADCAST_SHARED_SECRET`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
@@ -438,6 +453,10 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .map(|s| s.to_string());
     let grpid = param
         .get("x")
+        .filter(|&s| validate_id(s))
+        .map(|s| s.to_string());
+    let broadcast_shared_secret = param
+        .get("b")
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
 
@@ -526,6 +545,30 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 authcode,
             })
         }
+    } else if let (Some(addr), Some(broadcast_name), Some(grpid), Some(shared_secret)) =
+        (&addr, grpname, grpid, broadcast_shared_secret)
+    {
+        // This is a broadcast channel invite link.
+        // TODO code duplication with the previous block
+        // TODO at some point, we can mark this person as verified
+        let addr = ContactAddress::new(addr)?;
+        let (contact_id, _) = Contact::add_or_lookup_ex(
+            context,
+            &name,
+            &addr,
+            &fingerprint.hex(),
+            Origin::UnhandledSecurejoinQrScan,
+        )
+        .await
+        .with_context(|| format!("failed to add or lookup contact for address {addr:?}"))?;
+
+        Ok(Qr::AskJoinBroadcast {
+            broadcast_name,
+            grpid,
+            contact_id,
+            fingerprint,
+            shared_secret,
+        })
     } else if let Some(addr) = addr {
         let fingerprint = fingerprint.hex();
         let (contact_id, _) =
