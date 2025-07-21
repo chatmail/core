@@ -34,6 +34,21 @@ pub enum QrObject {
         /// Authentication code.
         authcode: String,
     },
+    /// Ask the user whether to join the broadcast channel.
+    AskJoinBroadcast {
+        /// Chat name.
+        broadcast_name: String,
+        /// Group ID.
+        grpid: String,
+        /// ID of the contact.
+        contact_id: u32,
+        /// Fingerprint of the contact key as scanned from the QR code.
+        fingerprint: String,
+
+        /// The secret shared between all members,
+        /// used to symmetrically encrypt&decrypt messages.
+        shared_secret: String,
+    },
     /// Contact fingerprint is verified.
     ///
     /// Ask the user if they want to start chatting.
@@ -205,6 +220,23 @@ impl From<Qr> for QrObject {
                     fingerprint,
                     invitenumber,
                     authcode,
+                }
+            }
+            Qr::AskJoinBroadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                shared_secret,
+            } => {
+                let contact_id = contact_id.to_u32();
+                let fingerprint = fingerprint.to_string();
+                QrObject::AskJoinBroadcast {
+                    broadcast_name,
+                    grpid,
+                    contact_id,
+                    fingerprint,
+                    shared_secret,
                 }
             }
             Qr::FprOk { contact_id } => {
