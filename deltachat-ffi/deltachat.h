@@ -3860,7 +3860,7 @@ int             dc_chat_is_encrypted         (const dc_chat_t *chat);
  * The UI should let the user confirm that this is OK with a message like
  * `Bob sent a message from another device. Tap to learn more` and then call dc_accept_chat().
  *
- * @deprecated 2025-17 chats protection cannot break any longer
+ * @deprecated 2025-07 chats protection cannot break any longer
  * @memberof dc_chat_t
  * @param chat The chat object.
  * @return 1=chat protection broken, 0=otherwise.
