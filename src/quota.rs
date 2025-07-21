@@ -124,14 +124,16 @@ impl Context {
     /// in case for some providers the quota is always at ~100%
     /// and new space is allocated as needed.
     pub(crate) async fn update_recent_quota(&self, session: &mut ImapSession) -> Result<()> {
+        info!(self, "Updating IMAP quota.");
+
         let quota = if session.can_check_quota() {
             let folders = get_watched_folders(self).await?;
-            get_unique_quota_roots_and_usage(session, folders).await
+            Some(get_unique_quota_roots_and_usage(session, folders).await?)
         } else {
-            Err(anyhow!(stock_str::not_supported_by_provider(self).await))
+            None
         };
 
-        if let Ok(quota) = &quota {
+        let recent = if let Some(quota) = &quota {
             match get_highest_usage(quota) {
                 Ok((highest, _, _)) => {
                     if needs_quota_warning(
@@ -153,10 +155,13 @@ impl Context {
                 }
                 Err(err) => warn!(self, "cannot get highest quota usage: {:#}", err),
             }
-        }
+            Ok(quota)
+        } else {
+            Err(anyhow!(stock_str::not_supported_by_provider(self).await))
+        };
 
         *self.quota.write().await = Some(QuotaInfo {
-            recent: quota,
+            recent: recent.cloned(),
             modified: tools::Time::now(),
         });
 
