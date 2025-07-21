@@ -417,7 +417,7 @@ pub enum Config {
     #[strum(props(default = "172800"))]
     GossipPeriod,
 
-    /// Deprecated. Feature flag for verified 1:1 chats; the UI should set it
+    /// Deprecated 2025-07. Feature flag for verified 1:1 chats; the UI should set it
     /// to 1 if it supports verified 1:1 chats.
     /// Regardless of this setting, `chat.is_protected()` returns true while the key is verified,
     /// and when the key changes, an info message is posted into the chat.
