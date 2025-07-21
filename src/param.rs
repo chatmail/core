@@ -175,7 +175,7 @@ pub enum Param {
     /// For Chats of type [`Chattype::OutBroadcast`] and [`Chattype::InBroadcast`]: // TODO (or just OutBroadcast)
     /// The symmetric key shared among all chat participants,
     /// used to encrypt and decrypt messages.
-    SymmetricKey = b'z',
+    SymmetricKey = b'z', // TODO remove this again
 
     /// For Contacts: If this is the List-Post address of a mailing list, contains
     /// the List-Id of the mailing list (which is also used as the group id of the chat).
