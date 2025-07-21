@@ -3785,7 +3785,9 @@ async fn test_sync_broadcast() -> Result<()> {
     assert_eq!(a1_broadcast_chat.get_name(), a0_broadcast_chat.get_name());
     assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
     add_contact_to_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
-    sync(alice0, alice1).await;
+    let sent = alice0.pop_sent_msg().await;
+    let rcvd = alice1.recv_msg(&sent).await;
+    dbg!(rcvd); // TODO
 
     // This also imports Bob's key from the vCard.
     // Otherwise it is possible that second device

@@ -1404,7 +1404,6 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     // TODO: lookup the contact by ID rather than email address.
                     // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();

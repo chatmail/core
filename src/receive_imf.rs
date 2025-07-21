@@ -3482,15 +3482,17 @@ async fn apply_out_broadcast_changes(
     .await?;
 
     if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // The sender of the message left the broadcast channel
-        remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+        if from_id != ContactId::SELF {
+            // The sender of the message left the broadcast channel
+            remove_from_chat_contacts_table(context, chat.id, from_id).await?;
 
-        return Ok(GroupChangesInfo {
-            better_msg: Some("".to_string()),
-            added_removed_id: None,
-            silent: true,
-            extra_msgs: vec![],
-        });
+            return Ok(GroupChangesInfo {
+                better_msg: Some("".to_string()),
+                added_removed_id: None,
+                silent: true,
+                extra_msgs: vec![],
+            });
+        }
     }
 
     if send_event_chat_modified {

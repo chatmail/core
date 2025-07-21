@@ -306,6 +306,7 @@ pub(crate) fn create_id() -> String {
 /// and is returned as 64 Base64 characters, each containing 6 bits of entropy.
 /// 384 is chosen because it is sufficiently secure
 /// (larger than AES-128 keys used for message encryption)
+/// TODO: Is it still true that we use AES-128? This info is taken from create_id() comment above.
 /// and divides both by 8 (byte size) and 6 (number of bits in a single Base64 character).
 // TODO ask someone what a good size would be here
 pub(crate) fn create_broadcast_shared_secret() -> String {
