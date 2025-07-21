@@ -1117,7 +1117,7 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            let symmetric_key = match &self.loaded {
+            let symmetric_key: Option<String> = match &self.loaded {
                 Loaded::Message { chat, .. } if chat.typ == Chattype::OutBroadcast => {
                     // If there is no symmetric key yet
                     // (because this is an old broadcast channel,
@@ -1126,7 +1126,13 @@ impl MimeFactory {
                     // Symmetric encryption exists since 2025-08;
                     // some time after that, we can think about requiring everyone
                     // to switch to symmetrically-encrypted broadcast lists.
-                    chat.param.get(Param::SymmetricKey)
+                    context
+                        .sql
+                        .query_get_value(
+                            "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
+                            (chat.id,),
+                        )
+                        .await?
                 }
                 _ => None,
             };
@@ -1134,7 +1140,7 @@ impl MimeFactory {
             let encrypted = if let Some(symmetric_key) = symmetric_key {
                 info!(context, "Symmetrically encrypting for broadcast channel.");
                 encrypt_helper
-                    .encrypt_for_broadcast(context, symmetric_key, message, compress)
+                    .encrypt_for_broadcast(context, &symmetric_key, message, compress)
                     .await?
             } else {
                 // Asymmetric encryption
