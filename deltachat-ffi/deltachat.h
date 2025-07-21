@@ -3818,12 +3818,6 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
  * Protected chats are created using dc_create_group_chat()
  * by setting the 'protect' parameter to 1.
  *
- * UI should display a green checkmark
- * in the chat title,
- * in the chatlist item
- * and in the chat profile
- * if chat protection is enabled.
- *
  * @memberof dc_chat_t
  * @param chat The chat object.
  * @return 1=chat protected, 0=chat is not protected.
@@ -5259,20 +5253,14 @@ int             dc_contact_is_blocked        (const dc_contact_t* contact);
 
 /**
  * Check if the contact
- * can be added to verified chats,
- * i.e. has a verified key
- * and Autocrypt key matches the verified key.
+ * can be added to protected chats.
  *
- * If contact is verified
- * UI should display green checkmark after the contact name
- * in contact list items,
- * in chat member list items
- * and in profiles if no chat with the contact exist (otherwise, use dc_chat_is_protected()).
+ * See dc_contact_get_verifier_id() for a guidance how to display these information.
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
  * @return 0: contact is not verified.
- *    2: SELF and contact have verified their fingerprints in both directions; in the UI typically checkmarks are shown.
+ *    2: SELF and contact have verified their fingerprints in both directions.
  */
 int             dc_contact_is_verified       (dc_contact_t* contact);
 
@@ -5303,16 +5291,22 @@ int             dc_contact_is_key_contact    (dc_contact_t* contact);
 /**
  * Return the contact ID that verified a contact.
  *
- * If the function returns non-zero result,
- * display green checkmark in the profile and "Introduced by ..." line
- * with the name and address of the contact
- * formatted by dc_contact_get_name_n_addr.
+ * Having a verfier does not necessarily mean that
+ * you can add the contact to protected chats.
+ * For that, check dc_contact_is_verified()
+ * and display the information as follows:
  *
- * If this function returns a verifier,
- * this does not necessarily mean
- * you can add the contact to verified chats.
- * Use dc_contact_is_verified() to check
- * if a contact can be added to a verified chat instead.
+ * - If dc_contact_get_verifier_id() != 0,
+ *   display text "Introduced by ..."
+ *   with the name and address of the contact
+ *   formatted by dc_contact_get_name_n_addr().
+ *   Prefix the text by a green checkmark if dc_contact_is_verified() != 0.
+ *
+ * - If dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() != 0,
+ *   display "Introduced" prefixed by a green checkmark.
+ *
+ * - if dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() == 0,
+ *   display nothing
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
@@ -6378,7 +6372,6 @@ void dc_event_unref(dc_event_t* event);
 
 /**
  * Chat changed. The name or the image of a chat group was changed or members were added or removed.
- * Or the verify state of a chat has changed.
  * See dc_set_chat_name(), dc_set_chat_profile_image(), dc_add_contact_to_chat()
  * and dc_remove_contact_from_chat().
  *
@@ -6409,7 +6402,7 @@ void dc_event_unref(dc_event_t* event);
 
 
 /**
- * Contact(s) created, renamed, verified, blocked or deleted.
+ * Contact(s) created, renamed, blocked or deleted.
  *
  * @param data1 (int) contact_id of the changed contact or 0 on batch-changes or deletion.
  * @param data2 0
