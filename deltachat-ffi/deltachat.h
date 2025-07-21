@@ -6402,7 +6402,7 @@ void dc_event_unref(dc_event_t* event);
 
 
 /**
- * Contact(s) created, renamed, blocked or deleted.
+ * Contact(s) created, renamed, verified, blocked or deleted.
  *
  * @param data1 (int) contact_id of the changed contact or 0 on batch-changes or deletion.
  * @param data2 0
