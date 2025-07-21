@@ -5291,16 +5291,16 @@ int             dc_contact_is_key_contact    (dc_contact_t* contact);
 /**
  * Return the contact ID that verified a contact.
  *
- * Having a verfier does not necessarily mean that
- * you can add the contact to protected chats.
- * For that, check dc_contact_is_verified()
- * and display the information as follows:
+ * As verifier may be unknown,
+ * use dc_contact_is_verified() to check if a contact can be added to a protected chat.
+ *
+ * UI should display the information in the contact's profile as follows:
  *
  * - If dc_contact_get_verifier_id() != 0,
  *   display text "Introduced by ..."
  *   with the name and address of the contact
  *   formatted by dc_contact_get_name_n_addr().
- *   Prefix the text by a green checkmark if dc_contact_is_verified() != 0.
+ *   Prefix the text by a green checkmark.
  *
  * - If dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() != 0,
  *   display "Introduced" prefixed by a green checkmark.
