@@ -1505,19 +1505,28 @@ fn migrate_key_contacts(
             };
             let new_id = insert_contact(verified_key).context("Step 13")?;
             verified_key_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
-            // If the original verifier is unknown, we represent this in the database
-            // by putting `new_id` into the place of the verifier,
-            // i.e. we say that this contact verified itself.
-            let verifier_id =
-                original_contact_id_from_addr(&verifier, new_id).context("Step 15")?;
+
+            let verifier_id = if addr_cmp(&verifier, &addr) {
+                // Earlier versions of Delta Chat signalled a direct verification
+                // by putting the contact's own address into the verifier column
+                1 // 1=ContactId::SELF
+            } else {
+                // If the original verifier is unknown, we represent this in the database
+                // by putting `new_id` into the place of the verifier,
+                // i.e. we say that this contact verified itself.
+                original_contact_id_from_addr(&verifier, new_id).context("Step 15")?
+            };
             verifications.insert(new_id, verifier_id);
 
             let Some(secondary_verified_key) = secondary_verified_key else {
                 continue;
             };
             let new_id = insert_contact(secondary_verified_key).context("Step 16")?;
-            let verifier_id: u32 =
-                original_contact_id_from_addr(&secondary_verifier, new_id).context("Step 17")?;
+            let verifier_id: u32 = if addr_cmp(&secondary_verifier, &addr) {
+                1 // 1=ContactId::SELF
+            } else {
+                original_contact_id_from_addr(&secondary_verifier, new_id).context("Step 17")?
+            };
             // Only use secondary verification if there is no primary verification:
             verifications.entry(new_id).or_insert(verifier_id);
         }
