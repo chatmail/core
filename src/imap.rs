@@ -566,10 +566,38 @@ impl Imap {
         }
         session.new_mail = false;
 
+        let mut read_cnt = 0;
+        loop {
+            let (n, fetch_more) = self
+                .fetch_new_msg_batch(context, session, folder, folder_meaning)
+                .await?;
+            read_cnt += n;
+            if !fetch_more {
+                return Ok(read_cnt > 0);
+            }
+        }
+    }
+
+    /// Returns number of messages processed and whether the function should be called again.
+    async fn fetch_new_msg_batch(
+        &mut self,
+        context: &Context,
+        session: &mut Session,
+        folder: &str,
+        folder_meaning: FolderMeaning,
+    ) -> Result<(usize, bool)> {
         let uid_validity = get_uidvalidity(context, folder).await?;
         let old_uid_next = get_uid_next(context, folder).await?;
+        info!(
+            context,
+            "fetch_new_msg_batch({folder}): UIDVALIDITY={uid_validity}, UIDNEXT={old_uid_next}."
+        );
 
-        let msgs = session.prefetch(old_uid_next).await.context("prefetch")?;
+        let uids_to_prefetch = 500;
+        let msgs = session
+            .prefetch(old_uid_next, uids_to_prefetch)
+            .await
+            .context("prefetch")?;
         let read_cnt = msgs.len();
 
         let download_limit = context.download_limit().await?;
@@ -729,7 +757,8 @@ impl Imap {
             largest_uid_fetched
         };
 
-        let actually_download_messages_future = async move {
+        let actually_download_messages_future = async {
+            let sender = sender;
             let mut uids_fetch_in_batch = Vec::with_capacity(max(uids_fetch.len(), 1));
             let mut fetch_partially = false;
             uids_fetch.push((0, !uids_fetch.last().unwrap_or(&(0, false)).1));
@@ -764,14 +793,17 @@ impl Imap {
         // if the message has arrived after selecting mailbox
         // and determining its UIDNEXT and before prefetch.
         let mut new_uid_next = largest_uid_fetched + 1;
-        if fetch_res.is_ok() {
+        let fetch_more = fetch_res.is_ok() && {
+            let prefetch_uid_next = old_uid_next + uids_to_prefetch;
             // If we have successfully fetched all messages we planned during prefetch,
             // then we have covered at least the range between old UIDNEXT
             // and UIDNEXT of the mailbox at the time of selecting it.
-            new_uid_next = max(new_uid_next, mailbox_uid_next);
+            new_uid_next = max(new_uid_next, min(prefetch_uid_next, mailbox_uid_next));
 
             new_uid_next = max(new_uid_next, largest_uid_skipped.unwrap_or(0) + 1);
-        }
+
+            prefetch_uid_next < mailbox_uid_next
+        };
         if new_uid_next > old_uid_next {
             set_uid_next(context, folder, new_uid_next).await?;
         }
@@ -788,7 +820,7 @@ impl Imap {
         // establish a new session if this one is broken.
         fetch_res?;
 
-        Ok(read_cnt > 0)
+        Ok((read_cnt, fetch_more))
     }
 
     /// Read the recipients from old emails sent by the user and add them as contacts.
