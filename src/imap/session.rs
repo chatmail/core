@@ -110,14 +110,16 @@ impl Session {
         Ok(list)
     }
 
-    /// Prefetch all messages greater than or equal to `uid_next`. Returns a list of fetch results
-    /// in the order of ascending delivery time to the server (INTERNALDATE).
+    /// Prefetch `n_uids` messages starting from `uid_next`. Returns a list of fetch results in the
+    /// order of ascending delivery time to the server (INTERNALDATE).
     pub(crate) async fn prefetch(
         &mut self,
         uid_next: u32,
+        n_uids: u32,
     ) -> Result<Vec<(u32, async_imap::types::Fetch)>> {
+        let uid_last = uid_next.saturating_add(n_uids - 1);
         // fetch messages with larger UID than the last one seen
-        let set = format!("{uid_next}:*");
+        let set = format!("{uid_next}:{uid_last}");
         let mut list = self
             .uid_fetch(set, PREFETCH_FLAGS)
             .await
@@ -126,16 +128,7 @@ impl Session {
         let mut msgs = BTreeMap::new();
         while let Some(msg) = list.try_next().await? {
             if let Some(msg_uid) = msg.uid {
-                // If the mailbox is not empty, results always include
-                // at least one UID, even if last_seen_uid+1 is past
-                // the last UID in the mailbox.  It happens because
-                // uid:* is interpreted the same way as *:uid.
-                // See <https://tools.ietf.org/html/rfc3501#page-61> for
-                // standard reference. Therefore, sometimes we receive
-                // already seen messages and have to filter them out.
-                if msg_uid >= uid_next {
-                    msgs.insert((msg.internal_date(), msg_uid), msg);
-                }
+                msgs.insert((msg.internal_date(), msg_uid), msg);
             }
         }
 
