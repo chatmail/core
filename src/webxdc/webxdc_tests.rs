@@ -12,6 +12,7 @@ use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::download::DownloadState;
 use crate::ephemeral;
+use crate::message::delete_msgs;
 use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
@@ -1612,6 +1613,26 @@ async fn test_webxdc_info_msg_no_cleanup_on_interrupted_series() -> Result<()> {
     t.send_webxdc_status_update(instance.id, r#"{"info":"i2", "payload":2}"#)
         .await?;
     assert_eq!(chat_id.get_msg_cnt(&t).await?, 4);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_info_msg_delete() -> Result<()> {
+    let t = TestContext::new_alice().await;
+    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "c").await?;
+    let instance = send_webxdc_instance(&t, chat_id).await?;
+
+    t.send_webxdc_status_update(instance.id, r#"{"info":"i1", "payload":1}"#)
+        .await?;
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 2);
+    send_text_msg(&t, chat_id, "msg between info".to_string()).await?;
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 3);
+    t.send_webxdc_status_update(instance.id, r#"{"info":"i2", "payload":2}"#)
+        .await?;
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 4);
+    delete_msgs(&t, &[instance.id]).await?;
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 1);
 
     Ok(())
 }
