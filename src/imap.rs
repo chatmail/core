@@ -17,7 +17,7 @@ use anyhow::{Context as _, Result, bail, ensure, format_err};
 use async_channel::{self, Receiver, Sender};
 use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
 use deltachat_contact_tools::ContactAddress;
-use futures::{FutureExt as _, StreamExt, TryStreamExt};
+use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use num_traits::FromPrimitive;
 use rand::Rng;
@@ -1698,7 +1698,7 @@ impl Session {
             .uid_store(uid_set, &query)
             .await
             .with_context(|| format!("IMAP failed to store: ({uid_set}, {query})"))?;
-        while let Some(_response) = responses.next().await {
+        while let Some(_response) = responses.try_next().await? {
             // Read all the responses
         }
         Ok(())
