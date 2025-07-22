@@ -3642,7 +3642,7 @@ async fn mark_recipients_as_verified(
         return Ok(());
     }
     for to_id in to_ids.iter().filter_map(|&x| x) {
-        if to_id == ContactId::SELF {
+        if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
 
