@@ -14,6 +14,7 @@ use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
+use crate::mimefactory::MimeFactory;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
@@ -3047,6 +3048,46 @@ async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
     let msg = bob.recv_msg(&sent).await;
     let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
     assert!(!chat.is_contact_request());
+    Ok(())
+}
+
+/// Regression test for a bug where receive_imf() failed
+/// if the sender of a message also put itself into the recipients list.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_verification_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    mark_as_verified(alice, bob).await;
+    mark_as_verified(bob, alice).await;
+
+    mark_as_verified(alice, fiona).await;
+    mark_as_verified(fiona, alice).await;
+
+    let group_id = alice
+        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob, fiona])
+        .await;
+
+    let mut msg = Message::new_text("Hello!".to_string());
+    msg.chat_id = group_id;
+    msg.from_id = ContactId::SELF;
+    msg.rfc724_mid = "rfc724_mid".to_string();
+    msg.id = MsgId::new(10);
+    let mut mime_factory = MimeFactory::from_msg(alice, msg).await?;
+    mime_factory
+        .to
+        .push(("Alice".to_string(), "alice@example.org".to_string()));
+    mime_factory
+        .member_fingerprints
+        .push(crate::key::self_fingerprint(alice).await?.to_string());
+    mime_factory.member_timestamps.push(0);
+    let rendered = mime_factory.render(alice).await?;
+    let imf_raw = rendered.message.as_bytes();
+
+    let _msg = receive_imf(bob, imf_raw, false).await?;
+
     Ok(())
 }
 
