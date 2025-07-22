@@ -940,7 +940,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        connect_alice_bob(alice, bob, chat, &mut instance).await
+        connect_alice_bob(alice, chat, bob, &mut instance).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -967,7 +967,7 @@ mod tests {
             .await
             .unwrap();
 
-        connect_alice_bob(alice, bob, group, &mut instance).await;
+        connect_alice_bob(alice, group, bob, &mut instance).await;
 
         // fiona joins late
         let fiona = &mut tcm.fiona().await;
@@ -980,7 +980,7 @@ mod tests {
         let msg = alice.pop_sent_msg().await;
         let fiona_instance = fiona.recv_msg(&msg).await;
         fiona_instance.chat_id.accept(fiona).await.unwrap();
-        assert!(!fiona.ctx.iroh.read().await.is_some());
+        assert!(fiona.ctx.iroh.read().await.is_none());
 
         let fiona_connect_future = send_webxdc_realtime_advertisement(fiona, fiona_instance.id)
             .await
@@ -1011,8 +1011,8 @@ mod tests {
 
     async fn connect_alice_bob(
         alice: &mut TestContext,
-        bob: &mut TestContext,
         alice_chat_id: ChatId,
+        bob: &mut TestContext,
         instance: &mut Message,
     ) {
         send_msg(alice, alice_chat_id, instance).await.unwrap();
