@@ -3052,7 +3052,7 @@ async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
 }
 
 /// Regression test for a bug where receive_imf() failed
-/// if the sender of a message also put itself into the recipients list.
+/// if the sender of a message also put itself into the To header.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_verification_gossip() -> Result<()> {
     let mut tcm = TestContextManager::new();
