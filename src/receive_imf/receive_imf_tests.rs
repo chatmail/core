@@ -14,7 +14,6 @@ use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
-use crate::mimefactory::MimeFactory;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
