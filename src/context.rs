@@ -334,17 +334,12 @@ impl Default for RunningState {
 pub fn get_info() -> BTreeMap<&'static str, String> {
     let mut res = BTreeMap::new();
 
-    let mut version = format!("v{}", &*DC_VERSION_STR);
     #[cfg(debug_assertions)]
-    {
-        version += " [debug build]";
-    }
+    res.insert("build_profile", "debug".to_string());
     #[cfg(not(debug_assertions))]
-    {
-        version += " [release build]";
-    }
-    res.insert("deltachat_core_version", version);
+    res.insert("build_profile", "release".to_string());
 
+    res.insert("deltachat_core_version", format!("v{}", &*DC_VERSION_STR));
     res.insert("sqlite_version", rusqlite::version().to_string());
     res.insert("arch", (std::mem::size_of::<usize>() * 8).to_string());
     res.insert("num_cpus", num_cpus::get().to_string());
