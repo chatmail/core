@@ -45,14 +45,18 @@ impl QrInvite {
     /// translated to a contact ID.
     pub fn contact_id(&self) -> ContactId {
         match self {
-            Self::Contact { contact_id, .. } | Self::Group { contact_id, .. } => *contact_id,
+            Self::Contact { contact_id, .. }
+            | Self::Group { contact_id, .. }
+            | Self::Broadcast { contact_id, .. } => *contact_id,
         }
     }
 
     /// The fingerprint of the inviter.
     pub fn fingerprint(&self) -> &Fingerprint {
         match self {
-            Self::Contact { fingerprint, .. } | Self::Group { fingerprint, .. } => fingerprint,
+            Self::Contact { fingerprint, .. }
+            | Self::Group { fingerprint, .. }
+            | Self::Broadcast { fingerprint, .. } => fingerprint,
         }
     }
 
@@ -60,6 +64,7 @@ impl QrInvite {
     pub fn invitenumber(&self) -> &str {
         match self {
             Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => invitenumber,
+            Self::Broadcast { .. } => panic!("broadcast invite has no invite number"), // TODO panic
         }
     }
 
@@ -67,6 +72,7 @@ impl QrInvite {
     pub fn authcode(&self) -> &str {
         match self {
             Self::Contact { authcode, .. } | Self::Group { authcode, .. } => authcode,
+            Self::Broadcast { .. } => panic!("broadcast invite has no authcode"), // TODO panic
         }
     }
 }

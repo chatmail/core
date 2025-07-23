@@ -114,7 +114,24 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             chat::add_info_msg(context, group_chat_id, &msg, time()).await?;
             Ok(group_chat_id)
         }
-        QrInvite::Broadcast { .. } => {}
+        QrInvite::Broadcast { .. } => {
+            // For a secure-join we need to create the group and add the contact.  The group will
+            // only become usable once the protocol is finished.
+            let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
+            if !is_contact_in_chat(context, group_chat_id, invite.contact_id()).await? {
+                chat::add_to_chat_contacts_table(
+                    context,
+                    time(),
+                    group_chat_id,
+                    &[invite.contact_id()],
+                )
+                .await?;
+            }
+            // TODO this message should be translatable:
+            let msg = "You were invited to join this channel. Waiting for the channel owner's device to reply…";
+            chat::add_info_msg(context, group_chat_id, msg, time()).await?;
+            Ok(group_chat_id)
+        }
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
             // uses it to send the handshake messages.
@@ -206,7 +223,7 @@ pub(super) async fn handle_auth_required(
             .await?;
 
         match invite {
-            QrInvite::Contact { .. } => {}
+            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
                 // so only show it on secure-join and not on setup-contact.
@@ -325,10 +342,14 @@ impl BobHandshakeMsg {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
+                QrInvite::Broadcast { .. } => "broadcast-request",
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
+                QrInvite::Broadcast { .. } => {
+                    panic!("There is no request-with-auth for broadcasts")
+                } // TODO remove panic
             },
         }
     }
@@ -348,8 +369,19 @@ async fn joining_chat_id(
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
-        QrInvite::Group { grpid, name, .. } => {
-            let group_chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
+        QrInvite::Group { grpid, name, .. }
+        | QrInvite::Broadcast {
+            broadcast_name: name,
+            grpid,
+            ..
+        } => {
+            let chattype = if matches!(invite, QrInvite::Group { .. }) {
+                Chattype::Group
+            } else {
+                Chattype::InBroadcast
+            };
+
+            let chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some((chat_id, _protected, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;
                     chat_id
@@ -357,7 +389,7 @@ async fn joining_chat_id(
                 None => {
                     ChatId::create_multiuser_record(
                         context,
-                        Chattype::Group,
+                        chattype,
                         grpid,
                         name,
                         Blocked::Not,
@@ -368,7 +400,7 @@ async fn joining_chat_id(
                     .await?
                 }
             };
-            Ok(group_chat_id)
+            Ok(chat_id)
         }
     }
 }
