@@ -940,7 +940,7 @@ mod tests {
                 None,
             )
             .unwrap();
-        connect_alice_bob(alice, chat, bob, &mut instance).await
+        connect_alice_bob(alice, chat, &mut instance, bob).await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -967,7 +967,7 @@ mod tests {
             .await
             .unwrap();
 
-        connect_alice_bob(alice, group, bob, &mut instance).await;
+        connect_alice_bob(alice, group, &mut instance, bob).await;
 
         // fiona joins late
         let fiona = &mut tcm.fiona().await;
@@ -1012,8 +1012,8 @@ mod tests {
     async fn connect_alice_bob(
         alice: &mut TestContext,
         alice_chat_id: ChatId,
-        bob: &mut TestContext,
         instance: &mut Message,
+        bob: &mut TestContext,
     ) {
         send_msg(alice, alice_chat_id, instance).await.unwrap();
         let alice_webxdc = alice.get_last_msg().await;
