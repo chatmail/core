@@ -990,23 +990,41 @@ mod tests {
         alice.recv_msg_trash(&fiona_advert).await;
 
         fiona_connect_future.await.unwrap();
-        send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
-            .await
-            .unwrap();
 
-        loop {
-            let event = fiona.evtracker.recv().await.unwrap();
-            if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
-                if data == b"alice -> bob & fiona" {
-                    break;
-                } else {
-                    panic!(
-                        "Unexpected status update: {}",
-                        String::from_utf8_lossy(&data)
-                    );
+        let realtime_send_loop = async {
+            // Keep sending in a loop because right after joining
+            // Fiona may miss messages.
+            loop {
+                send_webxdc_realtime_data(alice, instance.id, b"alice -> bob & fiona".into())
+                    .await
+                    .unwrap();
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
+        };
+
+        let realtime_receive_loop = async {
+            loop {
+                let event = fiona.evtracker.recv().await.unwrap();
+                if let EventType::WebxdcRealtimeData { data, .. } = event.typ {
+                    if data == b"alice -> bob & fiona" {
+                        break;
+                    } else {
+                        panic!(
+                            "Unexpected status update: {}",
+                            String::from_utf8_lossy(&data)
+                        );
+                    }
                 }
             }
-        }
+        };
+        tokio::select!(
+            _ = realtime_send_loop => {
+                panic!("Send loop should never finish");
+            },
+            _ = realtime_receive_loop => {
+                return;
+            }
+        );
     }
 
     async fn connect_alice_bob(
