@@ -335,9 +335,12 @@ pub fn get_info() -> BTreeMap<&'static str, String> {
     let mut res = BTreeMap::new();
 
     #[cfg(debug_assertions)]
-    res.insert("build_profile", "debug".to_string());
+    res.insert(
+        "debug_assertions",
+        "On - DO NOT RELEASE THIS BUILD".to_string(),
+    );
     #[cfg(not(debug_assertions))]
-    res.insert("build_profile", "release".to_string());
+    res.insert("debug_assertions", "Off".to_string());
 
     res.insert("deltachat_core_version", format!("v{}", &*DC_VERSION_STR));
     res.insert("sqlite_version", rusqlite::version().to_string());
