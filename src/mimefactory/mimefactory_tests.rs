@@ -91,8 +91,11 @@ fn test_render_rfc724_mid() {
 
 fn render_header_text(text: &str) -> String {
     let mut output = Vec::<u8>::new();
+
+    // Some non-zero length of the header name.
+    let bytes_written = 20;
     mail_builder::headers::text::Text::new(text.to_string())
-        .write_header(&mut output, 0)
+        .write_header(&mut output, bytes_written)
         .unwrap();
 
     String::from_utf8(output).unwrap()
