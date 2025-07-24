@@ -823,5 +823,17 @@ macro_rules! logged_debug_assert {
     };
 }
 
+/// Logs a warning if the second arg is an error. Evaluates to the second arg value.
+/// In non-optimized builds, panics also on error.
+#[macro_export]
+macro_rules! logged_debug_assert_ok {
+    ($ctx:expr, $res:expr) => {{
+        let res_val = $res;
+        let res_val = res_val.log_err($ctx);
+        debug_assert!(res_val.is_ok());
+        res_val
+    }};
+}
+
 #[cfg(test)]
 mod tools_tests;
