@@ -1781,7 +1781,7 @@ pub async fn delete_msgs_ex(
     let mut modified_chat_ids = HashSet::new();
     let mut deleted_rfc724_mid = Vec::new();
     let mut res = Ok(());
-    let mut msg_ids_queue = VecDeque::from_iter(msg_ids.iter().cloned());
+    let mut msg_ids_queue = VecDeque::from_iter(msg_ids.iter().copied());
     let mut msg_ids = Vec::from(msg_ids);
 
     while let Some(msg_id) = msg_ids_queue.pop_front() {
@@ -1845,7 +1845,7 @@ pub async fn delete_msgs_ex(
             .await?;
     }
 
-    for &msg_id in msg_ids.iter() {
+    for &msg_id in &msg_ids {
         let msg = Message::load_from_db(context, msg_id).await?;
         delete_msg_locally(context, &msg).await?;
     }
