@@ -1952,7 +1952,9 @@ async fn add_parts(
             None,
             added_removed_id,
         )
-        .await?;
+        .await
+        .log_err(context)
+        .ok();
     }
 
     if let Some(node_addr) = mime_parser.get_header(HeaderDef::IrohNodeAddr) {
@@ -1990,7 +1992,7 @@ async fn add_parts(
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
             let is_incoming_fresh = mime_parser.incoming && !seen;
-            set_msg_reaction(
+            if set_msg_reaction(
                 context,
                 mime_in_reply_to,
                 chat_id,
@@ -1999,7 +2001,12 @@ async fn add_parts(
                 Reaction::from(reaction_str.as_str()),
                 is_incoming_fresh,
             )
-            .await?;
+            .await
+            .log_err(context)
+            .is_err()
+            {
+                continue;
+            }
         }
 
         let mut param = part.param.clone();
@@ -2007,8 +2014,10 @@ async fn add_parts(
             param.set_int(Param::Cmd, is_system_message as i32);
         }
 
-        if let Some(replace_msg_id) = replace_msg_id {
-            let placeholder = Message::load_from_db(context, replace_msg_id).await?;
+        if let Some(placeholder) = match replace_msg_id {
+            None => None,
+            Some(replace_msg_id) => Message::load_from_db_optional(context, replace_msg_id).await?,
+        } {
             for key in [
                 Param::WebxdcSummary,
                 Param::WebxdcSummaryTimestamp,
@@ -2019,6 +2028,8 @@ async fn add_parts(
                     param.set(key, value);
                 }
             }
+        } else {
+            replace_msg_id = None;
         }
 
         let (msg, typ): (&str, Viewtype) = if let Some(better_msg) = &better_msg {
@@ -2156,13 +2167,19 @@ RETURNING id
             if let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic) {
                 // default encoding of topic ids is `hex`.
                 let mut topic_raw = [0u8; 32];
-                BASE32_NOPAD
+                if BASE32_NOPAD
                     .decode_mut(topic.to_ascii_uppercase().as_bytes(), &mut topic_raw)
                     .map_err(|e| e.error)
-                    .context("Wrong gossip topic header")?;
-
-                let topic = TopicId::from_bytes(topic_raw);
-                insert_topic_stub(context, *msg_id, topic).await?;
+                    .context("Wrong gossip topic header")
+                    .log_err(context)
+                    .is_ok()
+                {
+                    let topic = TopicId::from_bytes(topic_raw);
+                    insert_topic_stub(context, *msg_id, topic)
+                        .await
+                        .log_err(context)
+                        .ok();
+                }
             } else {
                 warn!(context, "webxdc doesn't have a gossip topic")
             }
@@ -2175,7 +2192,9 @@ RETURNING id
             part.param.get(Param::Filename),
             *msg_id,
         )
-        .await?;
+        .await
+        .log_err(context)
+        .ok();
     }
 
     if let Some(replace_msg_id) = replace_msg_id {
@@ -3647,7 +3666,10 @@ async fn mark_recipients_as_verified(
         }
 
         mark_contact_id_as_verified(context, to_id, from_id).await?;
-        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
+        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent)
+            .await
+            .log_err(context)
+            .ok();
     }
 
     Ok(())
@@ -3709,21 +3731,24 @@ async fn add_or_lookup_contacts_by_address_list(
 ) -> Result<Vec<Option<ContactId>>> {
     let mut contact_ids = Vec::new();
     for info in address_list {
+        contact_ids.push(None);
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
-            contact_ids.push(None);
             continue;
         }
         let display_name = info.display_name.as_deref();
-        if let Ok(addr) = ContactAddress::new(addr) {
-            let (contact_id, _) =
-                Contact::add_or_lookup(context, display_name.unwrap_or_default(), &addr, origin)
-                    .await?;
-            contact_ids.push(Some(contact_id));
-        } else {
+        let Ok(addr) = ContactAddress::new(addr) else {
             warn!(context, "Contact with address {:?} cannot exist.", addr);
-            contact_ids.push(None);
-        }
+            continue;
+        };
+        let contact_id =
+            Contact::add_or_lookup(context, display_name.unwrap_or_default(), &addr, origin)
+                .await
+                .log_err(context)
+                .ok()
+                .map(|(id, _)| id);
+        contact_ids.pop();
+        contact_ids.push(contact_id);
     }
 
     Ok(contact_ids)
@@ -3740,9 +3765,9 @@ async fn add_or_lookup_key_contacts_by_address_list(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        contact_ids.push(None);
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
-            contact_ids.push(None);
             continue;
         }
         let fingerprint: String = if let Some(fp) = fingerprint_iter.next() {
@@ -3751,24 +3776,26 @@ async fn add_or_lookup_key_contacts_by_address_list(
         } else if let Some(key) = gossiped_keys.get(addr) {
             key.dc_fingerprint().hex()
         } else {
-            contact_ids.push(None);
             continue;
         };
         let display_name = info.display_name.as_deref();
-        if let Ok(addr) = ContactAddress::new(addr) {
-            let (contact_id, _) = Contact::add_or_lookup_ex(
-                context,
-                display_name.unwrap_or_default(),
-                &addr,
-                &fingerprint,
-                origin,
-            )
-            .await?;
-            contact_ids.push(Some(contact_id));
-        } else {
+        let Ok(addr) = ContactAddress::new(addr) else {
             warn!(context, "Contact with address {:?} cannot exist.", addr);
-            contact_ids.push(None);
-        }
+            continue;
+        };
+        let contact_id = Contact::add_or_lookup_ex(
+            context,
+            display_name.unwrap_or_default(),
+            &addr,
+            &fingerprint,
+            origin,
+        )
+        .await
+        .log_err(context)
+        .ok()
+        .map(|(id, _)| id);
+        contact_ids.pop();
+        contact_ids.push(contact_id);
     }
 
     ensure_and_debug_assert_eq!(contact_ids.len(), address_list.len(),);
@@ -3899,35 +3926,41 @@ async fn lookup_key_contacts_by_address_list(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        contact_ids.push(None);
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
-            contact_ids.push(None);
             continue;
         }
 
-        if let Some(fp) = fingerprint_iter.next() {
+        let contact_id = if let Some(fp) = fingerprint_iter.next() {
             // Iterator has not ran out of fingerprints yet.
             let display_name = info.display_name.as_deref();
             let fingerprint: String = fp.hex();
 
-            if let Ok(addr) = ContactAddress::new(addr) {
-                let (contact_id, _) = Contact::add_or_lookup_ex(
-                    context,
-                    display_name.unwrap_or_default(),
-                    &addr,
-                    &fingerprint,
-                    Origin::Hidden,
-                )
-                .await?;
-                contact_ids.push(Some(contact_id));
-            } else {
+            let Ok(addr) = ContactAddress::new(addr) else {
                 warn!(context, "Contact with address {:?} cannot exist.", addr);
-                contact_ids.push(None);
-            }
+                continue;
+            };
+            Contact::add_or_lookup_ex(
+                context,
+                display_name.unwrap_or_default(),
+                &addr,
+                &fingerprint,
+                Origin::Hidden,
+            )
+            .await
+            .log_err(context)
+            .ok()
+            .map(|(id, _)| id)
         } else {
-            let contact_id = lookup_key_contact_by_address(context, addr, chat_id).await?;
-            contact_ids.push(contact_id);
-        }
+            lookup_key_contact_by_address(context, addr, chat_id)
+                .await
+                .log_err(context)
+                .ok()
+                .flatten()
+        };
+        contact_ids.pop();
+        contact_ids.push(contact_id);
     }
     ensure_and_debug_assert_eq!(address_list.len(), contact_ids.len(),);
     Ok(contact_ids)
