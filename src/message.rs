@@ -1725,10 +1725,10 @@ pub(crate) async fn get_webxdc_info_messages(
                     FROM msgs
                     WHERE chat_id=?1 AND hidden=0 AND mime_in_reply_to = ?2
                     "#,
-            (msg.chat_id, msg.id),
+            (msg.chat_id, &msg.rfc724_mid),
             |row| {
                 let info_msg_id: MsgId = row.get(0)?;
-                let last_param: Params = row.get::<_, String>(2)?.parse().unwrap_or_default();
+                let last_param: Params = row.get::<_, String>(1)?.parse().unwrap_or_default();
                 Ok((info_msg_id, last_param))
             },
             |row| {
@@ -1782,6 +1782,7 @@ pub async fn delete_msgs_ex(
     let mut deleted_rfc724_mid = Vec::new();
     let mut res = Ok(());
     let mut msg_ids_queue = VecDeque::from_iter(msg_ids.iter().cloned());
+    let mut msg_ids = Vec::from(msg_ids);
 
     while let Some(msg_id) = msg_ids_queue.pop_front() {
         let msg = Message::load_from_db(context, msg_id).await?;
@@ -1794,7 +1795,11 @@ pub async fn delete_msgs_ex(
             "Cannot request deletion of unencrypted message for others"
         );
 
-        msg_ids_queue.extend(get_webxdc_info_messages(context, &msg).await?);
+        if msg.viewtype == Viewtype::Webxdc {
+            let info_msgs = get_webxdc_info_messages(context, &msg).await?;
+            msg_ids_queue.extend(info_msgs.clone());
+            msg_ids.extend(info_msgs);
+        }
         modified_chat_ids.insert(msg.chat_id);
         deleted_rfc724_mid.push(msg.rfc724_mid.clone());
 
@@ -1840,11 +1845,11 @@ pub async fn delete_msgs_ex(
             .await?;
     }
 
-    for &msg_id in msg_ids {
+    for &msg_id in msg_ids.iter() {
         let msg = Message::load_from_db(context, msg_id).await?;
         delete_msg_locally(context, &msg).await?;
     }
-    delete_msgs_locally_done(context, msg_ids, modified_chat_ids).await?;
+    delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
 
     // Interrupt Inbox loop to start message deletion, run housekeeping and call send_sync_msg().
     context.scheduler.interrupt_inbox().await;
