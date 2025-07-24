@@ -1797,7 +1797,7 @@ pub async fn delete_msgs_ex(
 
         if msg.viewtype == Viewtype::Webxdc {
             let info_msgs = get_webxdc_info_messages(context, &msg).await?;
-            msg_ids_queue.extend(info_msgs.clone());
+            msg_ids_queue.extend(&info_msgs);
             msg_ids.extend(info_msgs);
         }
         modified_chat_ids.insert(msg.chat_id);
