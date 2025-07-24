@@ -102,7 +102,7 @@ pub struct MimeFactory {
     /// e.g. if members are hidden for broadcast channels
     /// or if the keys for some recipients are missing
     /// and encrypted message cannot be sent to them.
-    pub(crate) to: Vec<(String, String)>,
+    to: Vec<(String, String)>,
 
     /// Vector of pairs of past group member names and addresses.
     past_members: Vec<(String, String)>,
@@ -112,14 +112,14 @@ pub struct MimeFactory {
     ///
     /// If this is not empty, its length
     /// should be the sum of `to` and `past_members` length.
-    pub(crate) member_fingerprints: Vec<String>,
+    member_fingerprints: Vec<String>,
 
     /// Timestamps of the members in the same order as in the `to`
     /// followed by `past_members`.
     ///
     /// If this is not empty, its length
     /// should be the sum of `to` and `past_members` length.
-    pub(crate) member_timestamps: Vec<i64>,
+    member_timestamps: Vec<i64>,
 
     timestamp: i64,
     loaded: Loaded,
