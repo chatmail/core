@@ -3556,6 +3556,10 @@ pub async fn create_group_unencrypted(context: &Context, name: &str) -> Result<C
 ///   unencrypted chats currently.
 /// * `grpid` - Group ID. Iff nonempty, the chat is encrypted (with key-contacts).
 /// * `name` - Chat name.
+///
+/// NB: Unencrypted chats with similar names and the same members are merged on other devices, but
+/// usually users don't create such chats and look up the existing one instead, so chat split on the
+/// first device is acceptable.
 pub(crate) async fn create_group_ex(
     context: &Context,
     sync: sync::Sync,
