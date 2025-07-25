@@ -815,7 +815,7 @@ impl MimeFactory {
             }
         }
 
-        if let Loaded::Message { chat, .. } = &self.loaded {
+        if let Loaded::Message { msg, chat } = &self.loaded {
             if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
                 headers.push((
                     "List-ID",
@@ -825,6 +825,15 @@ impl MimeFactory {
                     ))
                     .into(),
                 ));
+
+                if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
+                    if let Some(secret) = chat.param.get(Param::SymmetricKey) {
+                        headers.push((
+                            "Chat-Broadcast-Secret",
+                            mail_builder::headers::text::Text::new(secret.to_string()).into(),
+                        ));
+                    }
+                }
             }
         }
 
@@ -1005,6 +1014,15 @@ impl MimeFactory {
                 } else {
                     unprotected_headers.push(header.clone());
                 }
+            } else if header_name == "chat-broadcast-secret" {
+                if is_encrypted {
+                    protected_headers.push(header.clone());
+                } else {
+                    warn!(
+                        context,
+                        "Message is unnecrypted, not including broadcast secret"
+                    );
+                }
             } else if is_encrypted {
                 protected_headers.push(header.clone());
 
@@ -1143,18 +1161,43 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            // Encrypt to self unconditionally,
-            // even for a single-device setup.
-            let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
-            encryption_keyring.extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
+            let symmetric_key = match &self.loaded {
+                Loaded::Message { chat, .. } if chat.typ == Chattype::OutBroadcast => {
+                    // If there is no symmetric key yet
+                    // (because this is an old broadcast channel,
+                    // created before we had symmetric encryption),
+                    // we just encrypt asymmetrically.
+                    // Symmetric encryption exists since 2025-08;
+                    // some time after that, we can think about requiring everyone
+                    // to switch to symmetrically-encrypted broadcast lists.
+                    chat.param.get(Param::SymmetricKey)
+                }
+                _ => None,
+            };
+
+            let encrypted = if let Some(symmetric_key) = symmetric_key {
+                info!(context, "Symmetrically encrypting for broadcast channel.");
+                encrypt_helper
+                    .encrypt_for_broadcast(context, symmetric_key, message, compress)
+                    .await?
+            } else {
+                // Asymmetric encryption
+
+                // Encrypt to self unconditionally,
+                // even for a single-device setup.
+                let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
+                encryption_keyring
+                    .extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
+
+                encrypt_helper
+                    .encrypt(context, encryption_keyring, message, compress)
+                    .await?
+            };
 
             // XXX: additional newline is needed
             // to pass filtermail at
-            // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>
-            let encrypted = encrypt_helper
-                .encrypt(context, encryption_keyring, message, compress)
-                .await?
-                + "\n";
+            // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
+            let encrypted = encrypted + "\n";
 
             // Set the appropriate Content-Type for the outer message
             MimePart::new(
@@ -1387,7 +1430,6 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     // TODO: lookup the contact by ID rather than email address.
                     // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();

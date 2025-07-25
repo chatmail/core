@@ -1544,10 +1544,25 @@ async fn do_chat_assignment(
                         if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await?
                         {
                             id
-                        } else {
+                        } else if let Some(secret) =
+                            mime_parser.get_header(HeaderDef::ChatBroadcastSecret)
+                        {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_ex(context, Nosync, listid, name).await?
+                            chat::create_broadcast_ex(
+                                context,
+                                Nosync,
+                                listid,
+                                name,
+                                secret.to_string(),
+                            )
+                            .await?
+                        } else {
+                            warn!(
+                                context,
+                                "Unknown shared secret for outgoing broadcast (TRASH)"
+                            );
+                            DC_CHAT_ID_TRASH
                         },
                     );
                 }
@@ -3456,21 +3471,46 @@ async fn apply_out_broadcast_changes(
     chat: &mut Chat,
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
+    // TODO code duplication with apply_in_broadcast_changes()
     ensure!(chat.typ == Chattype::OutBroadcast);
 
-    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // The sender of the message left the broadcast channel
-        remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+    let mut send_event_chat_modified = false;
+    let mut better_msg = None;
 
-        return Ok(GroupChangesInfo {
-            better_msg: Some("".to_string()),
-            added_removed_id: None,
-            silent: true,
-            extra_msgs: vec![],
-        });
+    apply_chat_name_and_avatar_changes(
+        context,
+        mime_parser,
+        from_id,
+        chat,
+        &mut send_event_chat_modified,
+        &mut better_msg,
+    )
+    .await?;
+
+    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
+        if from_id != ContactId::SELF {
+            // The sender of the message left the broadcast channel
+            remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+
+            return Ok(GroupChangesInfo {
+                better_msg: Some("".to_string()),
+                added_removed_id: None,
+                silent: true,
+                extra_msgs: vec![],
+            });
+        }
     }
 
-    Ok(GroupChangesInfo::default())
+    if send_event_chat_modified {
+        context.emit_event(EventType::ChatModified(chat.id));
+        chatlist_events::emit_chatlist_item_changed(context, chat.id);
+    }
+    Ok(GroupChangesInfo {
+        better_msg,
+        added_removed_id: None,
+        silent: false,
+        extra_msgs: vec![],
+    })
 }
 
 async fn apply_in_broadcast_changes(
@@ -3501,6 +3541,17 @@ async fn apply_in_broadcast_changes(
             better_msg
                 .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
         }
+    }
+
+    if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
+        context
+            .sql
+            .execute(
+                "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+                ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
+                (chat.id, secret),
+            )
+            .await?;
     }
 
     if send_event_chat_modified {
