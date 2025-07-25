@@ -3049,6 +3049,48 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_encrypt_decrypt_broadcast_integration() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob_without_secret = &tcm.bob().await;
+
+    let secret = "secret";
+
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+
+    tcm.section("Create a broadcast channel with Bob, and send a message");
+    let alice_chat_id = create_broadcast_ex(
+        alice,
+        Sync,
+        "My Channel".to_string(),
+        "grpid".to_string(),
+        secret.to_string(),
+    )
+    .await?;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+
+    // TODO the chat_id 10 is magical here:
+    bob.sql
+        .execute(
+            "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (10, ?)",
+            (secret,),
+        )
+        .await?;
+
+    let sent = alice
+        .send_text(alice_chat_id, "Symmetrically encrypted message")
+        .await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.text, "Symmetrically encrypted message");
+
+    tcm.section("If Bob doesn't know the secret, he can't decrypt the message");
+    bob_without_secret.recv_msg_trash(&sent).await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_for_contact_with_blocked() -> Result<()> {
     let t = TestContext::new().await;
     let (contact_id, _) = Contact::add_or_lookup(
@@ -3800,12 +3842,25 @@ async fn test_sync_name() -> Result<()> {
     let a0_broadcast_id = create_broadcast(alice0, "Channel".to_string()).await?;
     sync(alice0, alice1).await;
     let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
+
     set_chat_name(alice0, a0_broadcast_id, "Broadcast channel 42").await?;
-    sync(alice0, alice1).await;
+    //sync(alice0, alice1).await; // crash
+
+    let sent = alice0.pop_sent_msg().await;
+    let rcvd = alice1.recv_msg(&sent).await;
+    assert_eq!(rcvd.from_id, ContactId::SELF);
+    assert_eq!(rcvd.to_id, ContactId::SELF);
+    assert_eq!(
+        rcvd.text,
+        "You changed group name from \"Channel\" to \"Broadcast channel 42\"."
+    );
+    assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupNameChanged);
     let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)
         .await?
         .unwrap()
         .0;
+    assert_eq!(rcvd.chat_id, a1_broadcast_id);
+
     let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
     assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcast);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast channel 42");

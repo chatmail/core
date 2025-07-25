@@ -8,7 +8,8 @@ use crate::key::self_fingerprint;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
-    TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
+    AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+    TimeShiftFalsePositiveNote, get_chat_msg,
 };
 use crate::tools::SystemTime;
 use std::time::Duration;
@@ -816,6 +817,53 @@ async fn test_wrong_auth_token() -> Result<()> {
 
     let alice_bob_contact = alice.add_or_lookup_contact(bob).await;
     assert!(!alice_bob_contact.is_verified(alice).await?);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_send_avatar_in_securejoin() -> Result<()> {
+    async fn exec_securejoin_group(
+        tcm: &TestContextManager,
+        scanner: &TestContext,
+        scanned: &TestContext,
+    ) {
+        let chat_id = chat::create_group_chat(scanned, ProtectionStatus::Protected, "group")
+            .await
+            .unwrap();
+        let qr = get_securejoin_qr(scanned, Some(chat_id)).await.unwrap();
+        tcm.exec_securejoin_qr(scanner, scanned, &qr).await;
+    }
+
+    for alice_scans in [true, false] {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let file = alice.dir.path().join("avatar.png");
+        tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
+        alice
+            .set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
+            .await?;
+
+        if alice_scans {
+            tcm.execute_securejoin(alice, bob).await;
+            //exec_securejoin_group(&tcm, alice, bob).await;
+            //exec_securejoin_broadcast(&tcm, alice, bob).await;
+            // TODO also test these
+        } else {
+            tcm.execute_securejoin(bob, alice).await;
+            //exec_securejoin_group(&tcm, bob, alice).await;
+            //exec_securejoin_broadcast(&tcm, alice, bob).await;
+        }
+
+        let alice_on_bob = bob.add_or_lookup_contact_no_key(&alice).await;
+        let avatar = alice_on_bob.get_profile_image(&bob).await?.unwrap();
+        assert_eq!(
+            avatar.file_name().unwrap().to_str().unwrap(),
+            AVATAR_64x64_DEDUPLICATED
+        );
+    }
 
     Ok(())
 }
