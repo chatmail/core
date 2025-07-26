@@ -403,6 +403,8 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  block <contact-id>\n\
                  unblock <contact-id>\n\
                  listblocked\n\
+                 import-vcard <file>\n\
+                 make-vcard <file> <contact-id> [contact-id ...]\n\
                  ======================================Misc.==\n\
                  getqr [<chat-id>]\n\
                  getqrsvg [<chat-id>]\n\
@@ -1217,6 +1219,24 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let contacts = Contact::get_all_blocked(&context).await?;
             log_contactlist(&context, &contacts).await?;
             println!("{} blocked contacts.", contacts.len());
+        }
+        "import-vcard" => {
+            ensure!(!arg1.is_empty(), "Argument <file> missing.");
+            let vcard_content = fs::read_to_string(&arg1.to_string()).await?;
+            let contacts = import_vcard(&context, &vcard_content).await?;
+            println!("vCard contacts imported to:");
+            log_contactlist(&context, &contacts).await?;
+        }
+        "make-vcard" => {
+            ensure!(!arg1.is_empty(), "Argument <file> missing.");
+            ensure!(!arg2.is_empty(), "Argument <contact-id> missing.");
+            let mut contact_ids = vec![];
+            for x in arg2.split(' ') {
+                contact_ids.push(ContactId::new(x.parse()?))
+            }
+            let vcard_content = make_vcard(&context, &contact_ids).await?;
+            fs::write(&arg1.to_string(), vcard_content).await?;
+            println!("vCard written to: {}", arg1);
         }
         "checkqr" => {
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");

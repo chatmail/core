@@ -80,18 +80,26 @@ Connect to your mail server (if already configured):
 > connect
 ```
 
-Create a contact:
+Export your public key to a vCard file:
+
+```
+> make-vcard my.vcard 1
+```
+
+Create contacts by address or vCard file:
 
 ```
 > addcontact yourfriends@email.org
+> import-vcard keyfriend.vcard
 ```
 
 List contacts:
 
 ```
 > listcontacts
+Contact#Contact#11: keyfriend@email.org <keyfriend@email.org>
 Contact#Contact#Self: Me √ <your@email.org>
-1 key contacts.
+2 key contacts.
 Contact#Contact#10: yourfriends@email.org <yourfriends@email.org>
 1 address contacts.
 ```

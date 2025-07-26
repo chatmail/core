@@ -232,7 +232,7 @@ const MESSAGE_COMMANDS: [&str; 10] = [
     "delmsg",
     "react",
 ];
-const CONTACT_COMMANDS: [&str; 7] = [
+const CONTACT_COMMANDS: [&str; 9] = [
     "listcontacts",
     "addcontact",
     "contactinfo",
@@ -240,6 +240,8 @@ const CONTACT_COMMANDS: [&str; 7] = [
     "block",
     "unblock",
     "listblocked",
+    "import-vcard",
+    "make-vcard",
 ];
 const MISC_COMMANDS: [&str; 14] = [
     "getqr",
