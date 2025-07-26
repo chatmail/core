@@ -1480,9 +1480,11 @@ fn migrate_key_contacts(
                 } else if addr.is_empty() {
                     Ok(default)
                 } else {
-                    original_contact_id_from_addr_stmt
+                    Ok(original_contact_id_from_addr_stmt
                         .query_row((addr,), |row| row.get(0))
-                        .with_context(|| format!("Original contact '{addr}' not found"))
+                        .optional()
+                        .with_context(|| format!("Original contact '{addr}' not found"))?
+                        .unwrap_or(default))
                 }
             };
 
