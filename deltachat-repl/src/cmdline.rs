@@ -1224,14 +1224,14 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(!arg1.is_empty(), "Argument <file> missing.");
             let vcard_content = fs::read_to_string(&arg1.to_string()).await?;
             let contacts = import_vcard(&context, &vcard_content).await?;
-            println!("vCard contacts imported to:");
+            println!("vCard contacts imported:");
             log_contactlist(&context, &contacts).await?;
         }
         "make-vcard" => {
             ensure!(!arg1.is_empty(), "Argument <file> missing.");
             ensure!(!arg2.is_empty(), "Argument <contact-id> missing.");
             let mut contact_ids = vec![];
-            for x in arg2.split(' ') {
+            for x in arg2.split_whitespace() {
                 contact_ids.push(ContactId::new(x.parse()?))
             }
             let vcard_content = make_vcard(&context, &contact_ids).await?;

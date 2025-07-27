@@ -90,14 +90,14 @@ Create contacts by address or vCard file:
 
 ```
 > addcontact yourfriends@email.org
-> import-vcard keyfriend.vcard
+> import-vcard key-contact.vcard
 ```
 
 List contacts:
 
 ```
 > listcontacts
-Contact#Contact#11: keyfriend@email.org <keyfriend@email.org>
+Contact#Contact#11: key-contact@email.org <key-contact@email.org>
 Contact#Contact#Self: Me √ <your@email.org>
 2 key contacts.
 Contact#Contact#10: yourfriends@email.org <yourfriends@email.org>
