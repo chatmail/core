@@ -3747,6 +3747,9 @@ async fn add_or_lookup_key_contacts_by_address_list(
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
             key.dc_fingerprint().hex()
+        } else if context.is_self_addr(addr).await? {
+            contact_ids.push(Some(ContactId::SELF));
+            continue;
         } else {
             contact_ids.push(None);
             continue;

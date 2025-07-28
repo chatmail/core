@@ -5302,3 +5302,48 @@ async fn test_outgoing_unencrypted_chat_assignment() {
     let chat = alice.create_email_chat(bob).await;
     assert_eq!(received.chat_id, chat.id);
 }
+
+/// Tests Bob receiving a message from Alice
+/// in a new group she just created
+/// with only Alice and Bob.
+///
+/// The message has no Autocrypt-Gossip
+/// headers and no Chat-Group-Member-Fpr header.
+/// Such messages were created by core 1.159.5
+/// when Alice has bcc_self disabled
+/// as Chat-Group-Member-Fpr header did not exist
+/// yet and Autocrypt-Gossip is not sent
+/// as there is only one recipient
+/// (Bob, and no additional Alice devices).
+///
+/// Bob should recognize self as being
+/// a member of the group by just the e-mail address.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_group_introduction_no_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+
+    let received = receive_imf(
+        bob,
+        include_bytes!("../../test-data/message/group-introduction-no-gossip.eml"),
+        false,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let msg = Message::load_from_db(bob, *received.msg_ids.last().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(msg.text, "I created a group");
+    let chat = Chat::load_from_db(bob, msg.chat_id).await.unwrap();
+    assert_eq!(chat.typ, Chattype::Group);
+    assert_eq!(chat.blocked, Blocked::Request);
+    assert_eq!(chat.name, "Group!");
+    assert!(chat.is_encrypted(bob).await.unwrap());
+
+    let contacts = get_chat_contacts(bob, chat.id).await?;
+    assert_eq!(contacts.len(), 2);
+    assert!(chat.is_self_in_chat(bob).await?);
+
+    Ok(())
+}
