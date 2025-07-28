@@ -1087,7 +1087,6 @@ impl Context {
         #[derive(Default)]
         struct ChatNumbers {
             protected: u32,
-            protection_broken: u32,
             opportunistic_dc: u32,
             opportunistic_mua: u32,
             unencrypted_dc: u32,
@@ -1123,7 +1122,6 @@ impl Context {
 
         // how many of the chats active in the last months are:
         // - protected
-        // - protection-broken
         // - opportunistic-encrypted and the contact uses Delta Chat
         // - opportunistic-encrypted and the contact uses a classical MUA
         // - unencrypted and the contact uses Delta Chat
@@ -1166,8 +1164,6 @@ impl Context {
 
                         if protected == ProtectionStatus::Protected {
                             chats.protected += 1;
-                        } else if protected == ProtectionStatus::ProtectionBroken {
-                            chats.protection_broken += 1;
                         } else if encrypted {
                             if is_dc_message {
                                 chats.opportunistic_dc += 1;
@@ -1185,7 +1181,6 @@ impl Context {
             )
             .await?;
         res += &format!("chats_protected {}\n", chats.protected);
-        res += &format!("chats_protection_broken {}\n", chats.protection_broken);
         res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
         res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
         res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);

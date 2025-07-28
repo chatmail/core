@@ -94,14 +94,12 @@ pub enum ProtectionStatus {
     ///
     /// All members of the chat must be verified.
     Protected = 1,
+    // `2` was never used as a value.
 
-    /// The chat was protected, but now a new message came in
-    /// which was not encrypted / signed correctly.
-    /// The user has to confirm that this is OK.
-    ///
-    /// We only do this in 1:1 chats; in group chats, the chat just
-    /// stays protected.
-    ProtectionBroken = 3, // `2` was never used as a value.
+    // Chats don't break in Core v2 anymore. Chats with broken protection existing before the
+    // key-contacts migration are treated as `Unprotected`.
+    //
+    // ProtectionBroken = 3,
 }
 
 /// The reason why messages cannot be sent to the chat.
@@ -117,10 +115,6 @@ pub(crate) enum CantSendReason {
 
     /// The chat is a contact request, it needs to be accepted before sending a message.
     ContactRequest,
-
-    /// Deprecated. The chat was protected, but now a new message came in
-    /// which was not encrypted / signed correctly.
-    ProtectionBroken,
 
     /// Mailing list without known List-Post header.
     ReadOnlyMailingList,
@@ -143,10 +137,6 @@ impl fmt::Display for CantSendReason {
             Self::ContactRequest => write!(
                 f,
                 "contact request chat should be accepted before sending messages"
-            ),
-            Self::ProtectionBroken => write!(
-                f,
-                "accept that the encryption isn't verified anymore before sending messages"
             ),
             Self::ReadOnlyMailingList => {
                 write!(f, "mailing list does not have a know post address")
@@ -479,16 +469,6 @@ impl ChatId {
         let chat = Chat::load_from_db(context, self).await?;
 
         match chat.typ {
-            Chattype::Single
-                if chat.blocked == Blocked::Not
-                    && chat.protected == ProtectionStatus::ProtectionBroken =>
-            {
-                // The protection was broken, then the user clicked 'Accept'/'OK',
-                // so, now we want to set the status to Unprotected again:
-                chat.id
-                    .inner_set_protection(context, ProtectionStatus::Unprotected)
-                    .await?;
-            }
             Chattype::Single | Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast => {
                 // User has "created a chat" with all these contacts.
                 //
@@ -545,7 +525,7 @@ impl ChatId {
                 | Chattype::InBroadcast => {}
                 Chattype::Mailinglist => bail!("Cannot protect mailing lists"),
             },
-            ProtectionStatus::Unprotected | ProtectionStatus::ProtectionBroken => {}
+            ProtectionStatus::Unprotected => {}
         };
 
         context
@@ -588,7 +568,6 @@ impl ChatId {
         let cmd = match protect {
             ProtectionStatus::Protected => SystemMessage::ChatProtectionEnabled,
             ProtectionStatus::Unprotected => SystemMessage::ChatProtectionDisabled,
-            ProtectionStatus::ProtectionBroken => SystemMessage::ChatProtectionDisabled,
         };
         add_info_msg_with_cmd(
             context,
@@ -1700,12 +1679,6 @@ impl Chat {
                 return Ok(Some(reason));
             }
         }
-        if self.is_protection_broken() {
-            let reason = ProtectionBroken;
-            if !skip_fn(&reason) {
-                return Ok(Some(reason));
-            }
-        }
         if self.is_mailing_list() && self.get_mailinglist_addr().is_none_or_empty() {
             let reason = ReadOnlyMailingList;
             if !skip_fn(&reason) {
@@ -1935,25 +1908,9 @@ impl Chat {
         Ok(is_encrypted)
     }
 
-    /// Deprecated 2025-07. Returns true if the chat was protected, and then an incoming message broke this protection.
-    ///
-    /// This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
-    /// otherwise it will return false for all chats.
-    ///
-    /// 1:1 chats are automatically set as protected when a contact is verified.
-    /// When a message comes in that is not encrypted / signed correctly,
-    /// the chat is automatically set as unprotected again.
-    /// `is_protection_broken()` will return true until `chat_id.accept()` is called.
-    ///
-    /// The UI should let the user confirm that this is OK with a message like
-    /// `Bob sent a message from another device. Tap to learn more`
-    /// and then call `chat_id.accept()`.
+    /// Deprecated 2025-07. Returns false.
     pub fn is_protection_broken(&self) -> bool {
-        match self.protected {
-            ProtectionStatus::Protected => false,
-            ProtectionStatus::Unprotected => false,
-            ProtectionStatus::ProtectionBroken => true,
-        }
+        false
     }
 
     /// Returns true if location streaming is enabled in the chat.
@@ -2947,7 +2904,7 @@ async fn prepare_send_msg(
     let mut chat = Chat::load_from_db(context, chat_id).await?;
 
     let skip_fn = |reason: &CantSendReason| match reason {
-        CantSendReason::ProtectionBroken | CantSendReason::ContactRequest => {
+        CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage

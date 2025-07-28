@@ -1292,7 +1292,7 @@ impl Context {
         contact_id: Option<ContactId>,
     ) -> String {
         match protect {
-            ProtectionStatus::Unprotected | ProtectionStatus::ProtectionBroken => {
+            ProtectionStatus::Unprotected => {
                 if let Some(contact_id) = contact_id {
                     chat_protection_disabled(self, contact_id).await
                 } else {

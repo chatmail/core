@@ -31,7 +31,7 @@ async fn test_verified_oneonone_chat_not_broken_by_device_change() {
     check_verified_oneonone_chat_protection_not_broken(false).await;
 }
 
-async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_email: bool) {
+async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: bool) {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -42,7 +42,7 @@ async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_
     assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     assert_verified(&bob, &alice, ProtectionStatus::Protected).await;
 
-    if broken_by_classical_email {
+    if by_classical_email {
         tcm.section("Bob uses a classical MUA to send a message to Alice");
         receive_imf(
             &alice,
@@ -58,7 +58,6 @@ async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_
         .await
         .unwrap()
         .unwrap();
-        // Bob's contact is still verified, but the chat isn't marked as protected anymore
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
         assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
@@ -199,7 +198,6 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
     assert!(chat.is_protected());
-    assert!(!chat.is_protection_broken());
     Ok(())
 }
 
@@ -213,7 +211,6 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     // A chat with an unknown contact should be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     receive_imf(
         &alice,
@@ -230,14 +227,12 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     // Now Bob is a known contact, new chats should still be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     tcm.send_recv(&bob, &alice, "hi").await;
     chat.id.delete(&alice).await.unwrap();
     // Now we have a public key, new chats should still be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     Ok(())
 }
@@ -525,7 +520,6 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     assert!(contact.is_verified(alice).await.unwrap());
     let chat = alice.get_chat(bob).await;
     assert!(chat.is_protected());
-    assert_eq!(chat.is_protection_broken(), false);
     Ok(())
 }
 
@@ -812,19 +806,15 @@ async fn test_verified_chat_editor_reordering() -> Result<()> {
 // ============== Helper Functions ==============
 
 async fn assert_verified(this: &TestContext, other: &TestContext, protected: ProtectionStatus) {
-    if protected != ProtectionStatus::ProtectionBroken {
-        let contact = this.add_or_lookup_contact(other).await;
-        assert_eq!(contact.is_verified(this).await.unwrap(), true);
-    }
+    let contact = this.add_or_lookup_contact(other).await;
+    assert_eq!(contact.is_verified(this).await.unwrap(), true);
 
     let chat = this.get_chat(other).await;
-    let (expect_protected, expect_broken) = match protected {
-        ProtectionStatus::Unprotected => (false, false),
-        ProtectionStatus::Protected => (true, false),
-        ProtectionStatus::ProtectionBroken => (false, true),
-    };
-    assert_eq!(chat.is_protected(), expect_protected);
-    assert_eq!(chat.is_protection_broken(), expect_broken);
+    assert_eq!(
+        chat.is_protected(),
+        protected == ProtectionStatus::Protected
+    );
+    assert_eq!(chat.is_protection_broken(), false);
 }
 
 async fn enable_verified_oneonone_chats(test_contexts: &[&TestContext]) {
