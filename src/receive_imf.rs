@@ -297,7 +297,7 @@ async fn get_to_and_past_contact_ids(
         past_member_fingerprints = &[];
     }
 
-    let pgp_to_ids = add_or_lookup_key_contacts_by_address_list(
+    let pgp_to_ids = add_or_lookup_key_contacts(
         context,
         &mime_parser.recipients,
         &mime_parser.gossiped_keys,
@@ -319,7 +319,7 @@ async fn get_to_and_past_contact_ids(
                 )
                 .await?;
             } else {
-                past_ids = add_or_lookup_key_contacts_by_address_list(
+                past_ids = add_or_lookup_key_contacts(
                     context,
                     &mime_parser.past_members,
                     &mime_parser.gossiped_keys,
@@ -429,7 +429,7 @@ async fn get_to_and_past_contact_ids(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
-                            chat_id,
+                            None,
                         )
                         .await?
                     }
@@ -3727,7 +3727,7 @@ async fn add_or_lookup_contacts_by_address_list(
 }
 
 /// Looks up contact IDs from the database given the list of recipients.
-async fn add_or_lookup_key_contacts_by_address_list(
+async fn add_or_lookup_key_contacts(
     context: &Context,
     address_list: &[SingleInfo],
     gossiped_keys: &HashMap<String, SignedPublicKey>,
