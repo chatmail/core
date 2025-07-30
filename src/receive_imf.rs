@@ -297,18 +297,16 @@ async fn get_to_and_past_contact_ids(
         past_member_fingerprints = &[];
     }
 
-    let pgp_to_ids = add_or_lookup_key_contacts(
-        context,
-        &mime_parser.recipients,
-        &mime_parser.gossiped_keys,
-        to_member_fingerprints,
-        Origin::Hidden,
-    )
-    .await?;
-
     match chat_assignment {
         ChatAssignment::GroupChat { .. } => {
-            to_ids = pgp_to_ids;
+            to_ids = add_or_lookup_key_contacts(
+                context,
+                &mime_parser.recipients,
+                &mime_parser.gossiped_keys,
+                to_member_fingerprints,
+                Origin::Hidden,
+            )
+            .await?;
 
             if let Some(chat_id) = chat_id {
                 past_ids = lookup_key_contacts_by_address_list(
@@ -336,7 +334,14 @@ async fn get_to_and_past_contact_ids(
         ChatAssignment::ExistingChat { chat_id, .. } => {
             let chat = Chat::load_from_db(context, *chat_id).await?;
             if chat.is_encrypted(context).await? {
-                to_ids = pgp_to_ids;
+                to_ids = add_or_lookup_key_contacts(
+                    context,
+                    &mime_parser.recipients,
+                    &mime_parser.gossiped_keys,
+                    to_member_fingerprints,
+                    Origin::Hidden,
+                )
+                .await?;
                 past_ids = lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.past_members,
@@ -388,6 +393,14 @@ async fn get_to_and_past_contact_ids(
             .await?;
         }
         ChatAssignment::OneOneChat => {
+            let pgp_to_ids = add_or_lookup_key_contacts(
+                context,
+                &mime_parser.recipients,
+                &mime_parser.gossiped_keys,
+                to_member_fingerprints,
+                Origin::Hidden,
+            )
+            .await?;
             if pgp_to_ids
                 .first()
                 .is_some_and(|contact_id| contact_id.is_some())
