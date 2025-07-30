@@ -1236,7 +1236,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             }
             let vcard_content = make_vcard(&context, &contact_ids).await?;
             fs::write(&arg1.to_string(), vcard_content).await?;
-            println!("vCard written to: {}", arg1);
+            println!("vCard written to: {arg1}");
         }
         "checkqr" => {
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");
