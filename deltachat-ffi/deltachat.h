@@ -1332,12 +1332,14 @@ dc_msg_t*       dc_get_draft                 (dc_context_t* context, uint32_t ch
  * Optionally, some special markers added to the ID array may help to
  * implement virtual lists.
  *
+ * To get the concrete time of the message, use dc_array_get_timestamp().
+ *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
  * @param chat_id The chat ID of which the messages IDs should be queried.
  * @param flags If set to DC_GCM_ADDDAYMARKER, the marker DC_MSG_ID_DAYMARKER will
  *     be added before each day (regarding the local timezone). Set this to 0 if you do not want this behaviour.
- *     To get the concrete time of the marker, use dc_array_get_timestamp().
+ *     The day marker timestamp is the midnight one for the corresponding (following) day in the local timezone.
  *     If set to DC_GCM_INFO_ONLY, only system messages will be returned, can be combined with DC_GCM_ADDDAYMARKER.
  * @param marker1before Deprecated, set this to 0.
  * @return Array of message IDs, must be dc_array_unref()'d when no longer used.

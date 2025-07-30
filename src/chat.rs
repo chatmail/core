@@ -3323,10 +3323,11 @@ pub async fn get_chat_msgs_ex(
         for (ts, curr_id) in sorted_rows {
             if add_daymarker {
                 let curr_local_timestamp = ts + cnv_to_local;
-                let curr_day = curr_local_timestamp / 86400;
+                let secs_in_day = 86400;
+                let curr_day = curr_local_timestamp / secs_in_day;
                 if curr_day != last_day {
                     ret.push(ChatItem::DayMarker {
-                        timestamp: curr_day * 86400, // Convert day back to Unix timestamp
+                        timestamp: curr_day * secs_in_day - cnv_to_local,
                     });
                     last_day = curr_day;
                 }

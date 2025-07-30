@@ -1227,8 +1227,10 @@ impl CommandApi {
     }
 
     /// Returns all messages of a particular chat.
-    /// If `add_daymarker` is `true`, it will return them as
-    /// `DC_MSG_ID_DAYMARKER`, e.g. [1234, 1237, 9, 1239].
+    ///
+    /// * `add_daymarker` - If `true`, add day markers as `DC_MSG_ID_DAYMARKER` to the result,
+    ///   e.g. [1234, 1237, 9, 1239]. The day marker timestamp is the midnight one for the
+    ///   corresponding (following) day in the local timezone.
     async fn get_message_ids(
         &self,
         account_id: u32,
