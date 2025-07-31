@@ -128,31 +128,33 @@ async fn test_stock_ephemeral_messages() {
 /// Test enabling and disabling ephemeral timer remotely.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_ephemeral_enable_disable() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    let chat_alice = alice.create_chat(&bob).await.id;
-    let chat_bob = bob.create_chat(&alice).await.id;
+    let chat_alice = alice.create_chat(bob).await.id;
+    let chat_bob = bob.create_chat(alice).await.id;
 
     chat_alice
-        .set_ephemeral_timer(&alice.ctx, Timer::Enabled { duration: 60 })
+        .set_ephemeral_timer(alice, Timer::Enabled { duration: 60 })
         .await?;
     let sent = alice.pop_sent_msg().await;
-    bob.recv_msg(&sent).await;
+    let bob_received_message = bob.recv_msg(&sent).await;
     assert_eq!(
-        chat_bob.get_ephemeral_timer(&bob.ctx).await?,
+        bob_received_message.text,
+        "Message deletion timer is set to 1 minute by alice@example.org."
+    );
+    assert_eq!(
+        chat_bob.get_ephemeral_timer(bob).await?,
         Timer::Enabled { duration: 60 }
     );
 
     chat_alice
-        .set_ephemeral_timer(&alice.ctx, Timer::Disabled)
+        .set_ephemeral_timer(alice, Timer::Disabled)
         .await?;
     let sent = alice.pop_sent_msg().await;
     bob.recv_msg(&sent).await;
-    assert_eq!(
-        chat_bob.get_ephemeral_timer(&bob.ctx).await?,
-        Timer::Disabled
-    );
+    assert_eq!(chat_bob.get_ephemeral_timer(bob).await?, Timer::Disabled);
 
     Ok(())
 }

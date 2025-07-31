@@ -1835,6 +1835,8 @@ async fn add_parts(
     {
         Some(stock_str::msg_location_enabled_by(context, from_id).await)
     } else if mime_parser.is_system_message == SystemMessage::EphemeralTimerChanged {
+        let better_msg = stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await;
+
         // Do not delete the system message itself.
         //
         // This prevents confusion when timer is changed
@@ -1843,7 +1845,7 @@ async fn add_parts(
         // week is left.
         ephemeral_timer = EphemeralTimer::Disabled;
 
-        Some(stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await)
+        Some(better_msg)
     } else {
         None
     };
