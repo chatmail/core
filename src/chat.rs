@@ -1885,22 +1885,29 @@ impl Chat {
     pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
         let is_encrypted = self.is_protected()
             || match self.typ {
-                Chattype::Single => {
-                    let chat_contact_ids = get_chat_contacts(context, self.id).await?;
-                    if let Some(contact_id) = chat_contact_ids.first() {
-                        if *contact_id == ContactId::DEVICE {
-                            true
-                        } else {
-                            let contact = Contact::get_by_id(context, *contact_id).await?;
-                            contact.is_key_contact()
-                        }
-                    } else {
-                        true
-                    }
-                }
-                Chattype::Group => {
-                    // Do not encrypt ad-hoc groups.
-                    !self.grpid.is_empty()
+                Chattype::Group if !self.grpid.is_empty() => true,
+                Chattype::Group | Chattype::Single => {
+                    let contacts = context
+                        .sql
+                        .query_map(
+                            "SELECT cc.contact_id, c.fingerprint!=''
+                             FROM chats_contacts cc
+                             LEFT JOIN contacts c ON c.id=cc.contact_id
+                             WHERE cc.chat_id=?
+                            ",
+                            (self.id,),
+                            |row| {
+                                let id: ContactId = row.get(0)?;
+                                let is_key = row.get(1)?;
+                                Ok((id, is_key))
+                            },
+                            |ids| ids.collect::<Result<Vec<_>, _>>().map_err(Into::into),
+                        )
+                        .await?;
+                    (self.typ != Chattype::Group || contacts.iter().any(|&(_, is_key)| is_key))
+                        && contacts.iter().all(|&(id, is_key)| {
+                            is_key || matches!(id, ContactId::SELF | ContactId::DEVICE)
+                        })
                 }
                 Chattype::Mailinglist => false,
                 Chattype::OutBroadcast | Chattype::InBroadcast => true,

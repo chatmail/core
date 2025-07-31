@@ -114,7 +114,8 @@ enum ChatAssignment {
 
     /// Group chat without a Group ID.
     ///
-    /// This is not encrypted.
+    /// This is either encrypted or unencrypted. Encryption status never changes once the group is
+    /// created.
     AdHocGroup,
 
     /// Assign the message to existing chat
@@ -372,25 +373,52 @@ async fn get_to_and_past_contact_ids(
             }
         }
         ChatAssignment::AdHocGroup => {
-            to_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.recipients,
-                if !mime_parser.incoming {
-                    Origin::OutgoingTo
-                } else if incoming_origin.is_known() {
-                    Origin::IncomingTo
-                } else {
-                    Origin::IncomingUnknownTo
-                },
-            )
-            .await?;
+            let key_to_ids = match mime_parser.was_encrypted() {
+                false => Vec::new(),
+                true => {
+                    let ids = lookup_key_contacts_by_address_list(
+                        context,
+                        &mime_parser.recipients,
+                        to_member_fingerprints,
+                        None,
+                    )
+                    .await?;
+                    match ids.contains(&None) {
+                        false => ids,
+                        true => Vec::new(),
+                    }
+                }
+            };
+            if !key_to_ids.is_empty() {
+                to_ids = key_to_ids;
+                past_ids = lookup_key_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    past_member_fingerprints,
+                    None,
+                )
+                .await?;
+            } else {
+                to_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.recipients,
+                    if !mime_parser.incoming {
+                        Origin::OutgoingTo
+                    } else if incoming_origin.is_known() {
+                        Origin::IncomingTo
+                    } else {
+                        Origin::IncomingUnknownTo
+                    },
+                )
+                .await?;
 
-            past_ids = add_or_lookup_contacts_by_address_list(
-                context,
-                &mime_parser.past_members,
-                Origin::Hidden,
-            )
-            .await?;
+                past_ids = add_or_lookup_contacts_by_address_list(
+                    context,
+                    &mime_parser.past_members,
+                    Origin::Hidden,
+                )
+                .await?;
+            }
         }
         ChatAssignment::OneOneChat => {
             let pgp_to_ids = add_or_lookup_key_contacts(
@@ -2513,7 +2541,7 @@ async fn lookup_or_create_adhoc_group(
             .query_row(
                 "SELECT c.id, c.blocked
                 FROM chats c INNER JOIN msgs m ON c.id=m.chat_id
-                WHERE m.hidden=0 AND c.grpid='' AND c.name=?
+                WHERE m.hidden=0 AND (? OR c.grpid='') AND c.name=?
                 AND (SELECT COUNT(*) FROM chats_contacts
                      WHERE chat_id=c.id
                      AND add_timestamp >= remove_timestamp)=?
@@ -2522,7 +2550,7 @@ async fn lookup_or_create_adhoc_group(
                      AND contact_id NOT IN (SELECT id FROM temp.contacts)
                      AND add_timestamp >= remove_timestamp)=0
                 ORDER BY m.timestamp DESC",
-                (&grpname, contact_ids.len()),
+                (mime_parser.was_encrypted(), &grpname, contact_ids.len()),
                 |row| {
                     let id: ChatId = row.get(0)?;
                     let blocked: Blocked = row.get(1)?;
@@ -3800,6 +3828,9 @@ async fn lookup_key_contact_by_address(
     chat_id: Option<ChatId>,
 ) -> Result<Option<ContactId>> {
     if context.is_self_addr(addr).await? {
+        if chat_id.is_none() {
+            return Ok(Some(ContactId::SELF));
+        }
         let is_self_in_chat = context
             .sql
             .exists(
