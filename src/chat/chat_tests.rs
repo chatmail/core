@@ -2808,7 +2808,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     assert_eq!(alice_chat.typ, Chattype::OutBroadcast);
 
     let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
-    assert_eq!(alice_chat.is_promoted(), false);
+    assert_eq!(alice_chat.is_promoted(), true); // Broadcast channels are never unpromoted
     let sent = alice.send_text(alice_chat_id, "Hi nobody").await;
     let alice_chat = Chat::load_from_db(alice, alice_chat_id).await?;
     assert_eq!(alice_chat.is_promoted(), true);
