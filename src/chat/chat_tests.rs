@@ -3003,8 +3003,8 @@ async fn test_leave_broadcast() -> Result<()> {
 
     tcm.section("Alice creates broadcast channel with Bob.");
     let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
-    let bob_contact = alice.add_or_lookup_contact(bob).await.id;
-    add_contact_to_chat(alice, alice_chat_id, bob_contact).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
