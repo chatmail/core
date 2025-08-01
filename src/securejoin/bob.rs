@@ -12,7 +12,7 @@ use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
-use crate::log::info;
+use crate::log::{LogExt as _, info};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -58,12 +58,25 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
 
-    if let QrInvite::Broadcast { shared_secret, .. } = &invite {
+    if let QrInvite::Broadcast {
+        shared_secret,
+        grpid,
+        broadcast_name,
+        ..
+    } = &invite
+    {
         // TODO this causes some performance penalty because joining_chat_id is used again below,
         // but maybe it's fine
         let broadcast_chat_id = joining_chat_id(context, &invite, chat_id).await?;
-        // TODO save the secret to the second device
+
         save_broadcast_shared_secret(context, broadcast_chat_id, shared_secret).await?;
+
+        let id = chat::SyncId::Grpid(grpid.to_string());
+        let action = chat::SyncAction::CreateInBroadcast {
+            chat_name: broadcast_name.to_string(),
+            shared_secret: shared_secret.to_string(),
+        };
+        chat::sync(context, id, action).await.log_err(context).ok();
 
         if verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id()).await? {
             info!(context, "Using fast securejoin with symmetric encryption");

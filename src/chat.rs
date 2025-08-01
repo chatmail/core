@@ -3850,7 +3850,10 @@ pub(crate) async fn create_broadcast_ex(
 
     if sync.into() {
         let id = SyncId::Grpid(grpid);
-        let action = SyncAction::CreateBroadcast { chat_name, secret };
+        let action = SyncAction::CreateOutBroadcast {
+            chat_name,
+            shared_secret: secret,
+        };
         self::sync(context, id, action).await.log_err(context).ok();
     }
 
@@ -3873,16 +3876,17 @@ pub(crate) async fn load_broadcast_shared_secret(
 pub(crate) async fn save_broadcast_shared_secret(
     context: &Context,
     chat_id: ChatId,
-    shared_secret: &str,
+    secret: &str,
 ) -> Result<()> {
     context
         .sql
         .execute(
             "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
                     ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
-            (chat_id, shared_secret),
+            (chat_id, secret),
         )
         .await?;
+
     Ok(())
 }
 
@@ -5087,9 +5091,13 @@ pub(crate) enum SyncAction {
     SetVisibility(ChatVisibility),
     SetMuted(MuteDuration),
     /// Create broadcast channel with the given name.
-    CreateBroadcast {
+    CreateOutBroadcast {
         chat_name: String,
-        secret: String,
+        shared_secret: String,
+    },
+    CreateInBroadcast {
+        chat_name: String,
+        shared_secret: String,
     },
     Rename(String),
     /// Set chat contacts by their addresses.
@@ -5153,7 +5161,11 @@ impl Context {
                     .id
             }
             SyncId::Grpid(grpid) => {
-                if let SyncAction::CreateBroadcast { chat_name, secret } = action {
+                if let SyncAction::CreateOutBroadcast {
+                    chat_name,
+                    shared_secret: secret,
+                } = action
+                {
                     create_broadcast_ex(
                         self,
                         Nosync,
@@ -5184,7 +5196,7 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateBroadcast { .. } => {
+            SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateInBroadcast { .. } => {
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,

@@ -2277,7 +2277,8 @@ async fn test_only_minimal_data_are_forwarded() -> Result<()> {
     let group_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "group2").await?;
     add_contact_to_chat(&bob, group_id, charlie_id).await?;
     let broadcast_id = create_broadcast(&bob, "Channel".to_string()).await?;
-    add_contact_to_chat(&bob, broadcast_id, charlie_id).await?;
+    let qr = get_securejoin_qr(&bob, Some(broadcast_id)).await?;
+    tcm.exec_securejoin_qr(&charlie, &bob, &qr).await;
     for chat_id in &[single_id, group_id, broadcast_id] {
         forward_msgs(&bob, &[orig_msg.id], *chat_id).await?;
         let sent_msg = bob.pop_sent_msg().await;
@@ -3060,8 +3061,9 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 
     tcm.section("Alice creates broadcast channel with Bob.");
     let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
-    let bob_contact = alice.add_or_lookup_contact(bob0).await.id;
-    add_contact_to_chat(alice, alice_chat_id, bob_contact).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob0, alice, &qr).await;
+    sync(bob0, bob1).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
