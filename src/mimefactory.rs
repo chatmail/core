@@ -15,7 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat};
+use crate::chat::{self, Chat, load_broadcast_shared_secret};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -231,6 +231,9 @@ impl MimeFactory {
 
             // Do not encrypt messages to mailing lists.
             encryption_keys = None;
+        } else if chat.is_out_broadcast() {
+            // Encrypt, but only symmetrically, not with the public keys.
+            encryption_keys = Some(Vec::new());
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -563,8 +566,10 @@ impl MimeFactory {
             //   messages are auto-sent unlike usual unencrypted messages.
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
+                || step == "vb-request-with-auth"
                 || step == "vg-member-added"
                 || step == "vc-contact-confirm"
+            // TODO possibly add vb-member-added here
         }
     }
 
@@ -1144,7 +1149,7 @@ impl MimeFactory {
             };
 
             let symmetric_key: Option<String> = match &self.loaded {
-                Loaded::Message { chat, .. } if chat.typ == Chattype::OutBroadcast => {
+                Loaded::Message { chat, .. } if chat.is_any_broadcast() => {
                     // If there is no symmetric key yet
                     // (because this is an old broadcast channel,
                     // created before we had symmetric encryption),
@@ -1152,13 +1157,7 @@ impl MimeFactory {
                     // Symmetric encryption exists since 2025-08;
                     // some time after that, we can think about requiring everyone
                     // to switch to symmetrically-encrypted broadcast lists.
-                    context
-                        .sql
-                        .query_get_value(
-                            "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
-                            (chat.id,),
-                        )
-                        .await?
+                    load_broadcast_shared_secret(context, chat.id).await?
                 }
                 _ => None,
             };
@@ -1515,7 +1514,10 @@ impl MimeFactory {
                     let param2 = msg.param.get(Param::Arg2).unwrap_or_default();
                     if !param2.is_empty() {
                         headers.push((
-                            if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
+                            if step == "vg-request-with-auth"
+                                || step == "vc-request-with-auth"
+                                || step == "vb-request-with-auth"
+                            {
                                 "Secure-Join-Auth"
                             } else {
                                 "Secure-Join-Invitenumber"

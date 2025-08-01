@@ -45,6 +45,8 @@ pub enum QrObject {
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: String,
 
+        authcode: String,
+
         /// The secret shared between all members,
         /// used to symmetrically encrypt&decrypt messages.
         shared_secret: String,
@@ -227,6 +229,7 @@ impl From<Qr> for QrObject {
                 grpid,
                 contact_id,
                 fingerprint,
+                authcode,
                 shared_secret,
             } => {
                 let contact_id = contact_id.to_u32();
@@ -236,6 +239,7 @@ impl From<Qr> for QrObject {
                     grpid,
                     contact_id,
                     fingerprint,
+                    authcode,
                     shared_secret,
                 }
             }
