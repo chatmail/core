@@ -99,6 +99,13 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
 
     let qr = if let Some(chat) = chat {
+        if sync_token {
+            context
+                .sync_qr_code_tokens(Some(chat.grpid.as_str()))
+                .await?;
+            context.scheduler.interrupt_inbox().await;
+        }
+
         if chat.typ == Chattype::OutBroadcast {
             let broadcast_name = chat.get_name();
             let broadcast_name_urlencoded =
@@ -106,7 +113,6 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             let broadcast_secret = load_broadcast_shared_secret(context, chat.id)
                 .await?
                 .context("Could not find broadcast secret")?;
-
             format!(
                 "https://i.delta.chat/#{}&a={}&g={}&x={}&s={}&b={}",
                 fingerprint.hex(),
@@ -121,12 +127,6 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             let group_name = chat.get_name();
             let group_name_urlencoded =
                 utf8_percent_encode(group_name, NON_ALPHANUMERIC).to_string();
-            if sync_token {
-                context
-                    .sync_qr_code_tokens(Some(chat.grpid.as_str()))
-                    .await?;
-                context.scheduler.interrupt_inbox().await;
-            }
             format!(
                 "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
                 fingerprint.hex(),
