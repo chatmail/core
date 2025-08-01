@@ -3058,6 +3058,9 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob0 = &tcm.bob().await;
     let bob1 = &tcm.bob().await;
+    for b in [bob0, bob1] {
+        b.set_config_bool(Config::SyncMsgs, true).await?;
+    }
 
     tcm.section("Alice creates broadcast channel with Bob.");
     let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;

@@ -5161,19 +5161,8 @@ impl Context {
                     .id
             }
             SyncId::Grpid(grpid) => {
-                if let SyncAction::CreateOutBroadcast {
-                    chat_name,
-                    shared_secret: secret,
-                } = action
-                {
-                    create_broadcast_ex(
-                        self,
-                        Nosync,
-                        grpid.clone(),
-                        chat_name.clone(),
-                        secret.to_string(),
-                    )
-                    .await?;
+                let handled = self.handle_sync_create_chat(action, grpid).await?;
+                if handled {
                     return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)
@@ -5197,6 +5186,7 @@ impl Context {
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
             SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateInBroadcast { .. } => {
+                // Create action should have been handled by handle_sync_create_chat() already
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
@@ -5206,6 +5196,45 @@ impl Context {
             }
             SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
         }
+    }
+
+    async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &String) -> Result<bool> {
+        Ok(match action {
+            SyncAction::CreateOutBroadcast {
+                chat_name,
+                shared_secret,
+            } => {
+                create_broadcast_ex(
+                    self,
+                    Nosync,
+                    grpid.clone(),
+                    chat_name.clone(),
+                    shared_secret.to_string(),
+                )
+                .await?;
+                return Ok(true);
+            }
+            SyncAction::CreateInBroadcast {
+                chat_name,
+                shared_secret,
+            } => {
+                let chat_id = ChatId::create_multiuser_record(
+                    self,
+                    Chattype::InBroadcast,
+                    grpid,
+                    chat_name,
+                    Blocked::Not,
+                    ProtectionStatus::Unprotected,
+                    None,
+                    create_smeared_timestamp(self),
+                )
+                .await?;
+                save_broadcast_shared_secret(self, chat_id, shared_secret).await?;
+
+                return Ok(true);
+            }
+            _ => false,
+        })
     }
 
     /// Emits the appropriate `MsgsChanged` event. Should be called if the number of unnoticed
