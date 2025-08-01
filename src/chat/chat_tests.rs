@@ -2746,45 +2746,43 @@ async fn test_broadcast_change_name() -> Result<()> {
 ///   `test_sync_broadcast()` tests that synchronization works via sync messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_multidev() -> Result<()> {
-    let alices = [
-        TestContext::new_alice().await,
-        TestContext::new_alice().await,
-    ];
-    let bob = TestContext::new_bob().await;
-    let a1b_contact_id = alices[1].add_or_lookup_contact(&bob).await.id;
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
+    for a in &[alice0, alice1] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    let bob = &tcm.bob().await;
 
-    let a0_broadcast_id = create_broadcast(&alices[0], "Channel".to_string()).await?;
-    let a0_broadcast_chat = Chat::load_from_db(&alices[0], a0_broadcast_id).await?;
-    set_chat_name(&alices[0], a0_broadcast_id, "Broadcast channel 42").await?;
-    let sent_msg = alices[0].send_text(a0_broadcast_id, "hi").await;
-    let msg = alices[1].recv_msg(&sent_msg).await;
-    let a1_broadcast_id = get_chat_id_by_grpid(&alices[1], &a0_broadcast_chat.grpid)
+    let a0_broadcast_id = create_broadcast(alice0, "Channel".to_string()).await?;
+    sync(alice0, alice1).await;
+    let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
+    set_chat_name(alice0, a0_broadcast_id, "Broadcast channel 42").await?;
+    let sent_msg = alice0.send_text(a0_broadcast_id, "hi").await;
+    let msg = alice1.recv_msg(&sent_msg).await;
+    let a1_broadcast_id = get_chat_id_by_grpid(&alice1, &a0_broadcast_chat.grpid)
         .await?
         .unwrap()
         .0;
     assert_eq!(msg.chat_id, a1_broadcast_id);
-    let a1_broadcast_chat = Chat::load_from_db(&alices[1], a1_broadcast_id).await?;
+    let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
     assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcast);
     assert_eq!(a1_broadcast_chat.get_name(), "Broadcast channel 42");
-    assert!(
-        get_chat_contacts(&alices[1], a1_broadcast_id)
-            .await?
-            .is_empty()
-    );
+    assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
 
-    add_contact_to_chat(&alices[1], a1_broadcast_id, a1b_contact_id).await?;
-    set_chat_name(&alices[1], a1_broadcast_id, "Broadcast channel 43").await?;
-    let sent_msg = alices[1].send_text(a1_broadcast_id, "hi").await;
-    let msg = alices[0].recv_msg(&sent_msg).await;
+    let qr = get_securejoin_qr(alice1, Some(a1_broadcast_id))
+        .await
+        .unwrap();
+    tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+
+    set_chat_name(alice1, a1_broadcast_id, "Broadcast channel 43").await?;
+    let sent_msg = alice1.send_text(a1_broadcast_id, "hi").await;
+    let msg = alice0.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, a0_broadcast_id);
-    let a0_broadcast_chat = Chat::load_from_db(&alices[0], a0_broadcast_id).await?;
+    let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
     assert_eq!(a0_broadcast_chat.get_type(), Chattype::OutBroadcast);
     assert_eq!(a0_broadcast_chat.get_name(), "Broadcast channel 42");
-    assert!(
-        get_chat_contacts(&alices[0], a0_broadcast_id)
-            .await?
-            .is_empty()
-    );
+    assert!(get_chat_contacts(alice0, a0_broadcast_id).await?.is_empty());
 
     Ok(())
 }
