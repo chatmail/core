@@ -107,7 +107,7 @@ tokio-stream = { version = "0.1.17", features = ["fs"] }
 tokio-tar = { version = "0.3" } # TODO: integrate tokio into async-tar
 tokio-util = { workspace = true }
 tokio = { workspace = true, features = ["fs", "rt-multi-thread", "macros"] }
-toml = "0.8"
+toml = "0.9"
 tracing = "0.1.41"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
