@@ -4,7 +4,9 @@ use anyhow::{Context as _, Result};
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
-use crate::chat::{self, ChatId, ProtectionStatus, is_contact_in_chat};
+use crate::chat::{
+    self, ChatId, ProtectionStatus, is_contact_in_chat, save_broadcast_shared_secret,
+};
 use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
@@ -56,8 +58,43 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
 
-    // Now start the protocol and initialise the state.
-    {
+    if let QrInvite::Broadcast { shared_secret, .. } = &invite {
+        // TODO this causes some performance penalty because joining_chat_id is used again below,
+        // but maybe it's fine
+        let broadcast_chat_id = joining_chat_id(context, &invite, chat_id).await?;
+        // TODO save the secret to the second device
+        save_broadcast_shared_secret(context, broadcast_chat_id, shared_secret).await?;
+
+        if verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id()).await? {
+            info!(context, "Using fast securejoin with symmetric encryption");
+
+            // The message has to be sent into the broadcast chat, rather than the 1:1 chat,
+            // so that it will be symmetrically encrypted
+            send_handshake_message(
+                context,
+                &invite,
+                broadcast_chat_id,
+                BobHandshakeMsg::RequestWithAuth,
+            )
+            .await?;
+
+            // Mark 1:1 chat as verified already.
+            chat_id
+                .set_protection(
+                    context,
+                    ProtectionStatus::Protected,
+                    time(),
+                    Some(invite.contact_id()),
+                )
+                .await?;
+
+            context.emit_event(EventType::SecurejoinJoinerProgress {
+                contact_id: invite.contact_id(),
+                progress: JoinerProgress::RequestWithAuthSent.to_usize(),
+            });
+        }
+    } else {
+        // Start the original (non-broadcast) protocol and initialise the state.
         let has_key = context
             .sql
             .exists(
@@ -115,22 +152,22 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(group_chat_id)
         }
         QrInvite::Broadcast { .. } => {
-            // For a secure-join we need to create the group and add the contact.  The group will
-            // only become usable once the protocol is finished.
-            let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
-            if !is_contact_in_chat(context, group_chat_id, invite.contact_id()).await? {
+            // TODO code duplication with previous block
+            let broadcast_chat_id = joining_chat_id(context, &invite, chat_id).await?;
+            if !is_contact_in_chat(context, broadcast_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
                     time(),
-                    group_chat_id,
+                    broadcast_chat_id,
                     &[invite.contact_id()],
                 )
                 .await?;
             }
+
             // TODO this message should be translatable:
             let msg = "You were invited to join this channel. Waiting for the channel owner's device to reply…";
-            chat::add_info_msg(context, group_chat_id, msg, time()).await?;
-            Ok(group_chat_id)
+            chat::add_info_msg(context, broadcast_chat_id, msg, time()).await?;
+            Ok(broadcast_chat_id)
         }
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
@@ -318,7 +355,7 @@ pub(crate) async fn send_handshake_message(
 pub(crate) enum BobHandshakeMsg {
     /// vc-request or vg-request
     Request,
-    /// vc-request-with-auth or vg-request-with-auth
+    /// vc-request-with-auth, vg-request-with-auth, or vb-request-with-auth
     RequestWithAuth,
 }
 
@@ -342,14 +379,14 @@ impl BobHandshakeMsg {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
-                QrInvite::Broadcast { .. } => "broadcast-request",
+                QrInvite::Broadcast { .. } => {
+                    panic!("There is no request-with-auth for broadcasts")
+                } // TODO remove panic
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
-                QrInvite::Broadcast { .. } => {
-                    panic!("There is no request-with-auth for broadcasts")
-                } // TODO remove panic
+                QrInvite::Broadcast { .. } => "vb-request-with-auth",
             },
         }
     }

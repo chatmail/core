@@ -96,6 +96,8 @@ pub enum Qr {
 
         fingerprint: Fingerprint,
 
+        authcode: String,
+
         shared_secret: String,
     },
 
@@ -396,7 +398,7 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 
 /// scheme: `OPENPGP4FPR:FINGERPRINT#a=ADDR&n=NAME&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
-///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=BROADCAST_NAME&x=BROADCAST_ID&b=BROADCAST_SHARED_SECRET`
+///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=BROADCAST_NAME&x=BROADCAST_ID&s=AUTH&b=BROADCAST_SHARED_SECRET`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
@@ -474,7 +476,9 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         None
     };
 
-    if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
+    if let (Some(addr), Some(invitenumber), Some(authcode)) =
+        (&addr, invitenumber, authcode.clone())
+    {
         let addr = ContactAddress::new(addr)?;
         let (contact_id, _) = Contact::add_or_lookup_ex(
             context,
@@ -545,8 +549,13 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 authcode,
             })
         }
-    } else if let (Some(addr), Some(broadcast_name), Some(grpid), Some(shared_secret)) =
-        (&addr, grpname, grpid, broadcast_shared_secret)
+    } else if let (
+        Some(addr),
+        Some(broadcast_name),
+        Some(grpid),
+        Some(authcode),
+        Some(shared_secret),
+    ) = (&addr, grpname, grpid, authcode, broadcast_shared_secret)
     {
         // This is a broadcast channel invite link.
         // TODO code duplication with the previous block
@@ -567,6 +576,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             grpid,
             contact_id,
             fingerprint,
+            authcode,
             shared_secret,
         })
     } else if let Some(addr) = addr {
