@@ -1,6 +1,6 @@
 [package]
 name = "deltachat"
-version = "2.1.0"
+version = "2.9.0"
 edition = "2024"
 license = "MPL-2.0"
 rust-version = "1.85"
@@ -44,7 +44,7 @@ ratelimit = { path = "./deltachat-ratelimit" }
 anyhow = { workspace = true }
 async-broadcast = "0.7.2"
 async-channel = { workspace = true }
-async-imap = { version = "0.10.4", default-features = false, features = ["runtime-tokio", "compress"] }
+async-imap = { version = "0.11.0", default-features = false, features = ["runtime-tokio", "compress"] }
 async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
 async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
@@ -101,7 +101,7 @@ strum_macros = "0.27"
 tagger = "4.3.4"
 textwrap = "0.16.2"
 thiserror = { workspace = true }
-tokio-io-timeout = "1.2.0"
+tokio-io-timeout = "1.2.1"
 tokio-rustls = { version = "0.26.2", default-features = false }
 tokio-stream = { version = "0.1.17", features = ["fs"] }
 tokio-tar = { version = "0.3" } # TODO: integrate tokio into async-tar

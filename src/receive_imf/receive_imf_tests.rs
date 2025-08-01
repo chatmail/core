@@ -15,8 +15,9 @@ use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::mark_as_verified;
-use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
+use crate::test_utils::{
+    E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
+};
 use crate::tools::{SystemTime, time};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -133,7 +134,7 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
     let chats = Chatlist::try_load(bob, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
     let chat_id = chats.get_chat_id(0)?;
-    assert_eq!(chat_id.get_msg_cnt(bob).await?, 1);
+    assert_eq!(chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
     Ok(())
 }
 
@@ -3049,6 +3050,39 @@ async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
     Ok(())
 }
 
+/// Regression test for a bug where receive_imf() failed
+/// if the sender of a verification-gossiping message
+/// also put itself into the To header.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_verification_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    mark_as_verified(alice, bob).await;
+    mark_as_verified(bob, alice).await;
+
+    // This is message sent by Alice with verified encryption
+    // that gossips Fiona's verification,
+    // and for some reason, Alice also put herself into the To: header.
+    let imf_raw =
+        include_bytes!("../../test-data/message/verification-gossip-also-sent-to-from.eml");
+
+    // The regression test is that receive_imf() doesn't panic:
+    let msg = receive_imf(bob, imf_raw, false).await?.unwrap();
+    let msg = Message::load_from_db(bob, msg.msg_ids[0]).await?;
+    assert_eq!(msg.text, "Hello!");
+    assert!(
+        bob.add_or_lookup_contact(fiona)
+            .await
+            .is_verified(bob)
+            .await?
+    );
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_bot_accepts_another_group_after_qr_scan() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -3679,6 +3713,24 @@ async fn test_unsigned_chat_group_hdr() -> Result<()> {
     let chat_id = alice.recv_msg(&sent_msg).await.chat_id;
     assert_eq!(chat_id, alice_chat_id);
     assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_ignore_protected_headers_in_outer_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob_chat_id = tcm.send_recv_accept(alice, bob, "hi").await.chat_id;
+    send_text_msg(bob, bob_chat_id, "hi all!".to_string()).await?;
+    let mut sent_msg = bob.pop_sent_msg().await;
+    sent_msg.payload = sent_msg.payload.replace(
+        "Chat-Version:",
+        "Auto-Submitted: auto-generated\r\nChat-Version:",
+    );
+    alice.recv_msg(&sent_msg).await;
+    let ab_contact = alice.add_or_lookup_contact(bob).await;
+    assert!(!ab_contact.is_bot());
     Ok(())
 }
 
@@ -4392,7 +4444,7 @@ async fn test_create_group_with_big_msg() -> Result<()> {
 
     // The big message must go away from the 1:1 chat.
     let msgs = chat::get_chat_msgs(&alice, ab_chat_id).await?;
-    assert!(msgs.is_empty());
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS);
 
     Ok(())
 }
@@ -5249,4 +5301,49 @@ async fn test_outgoing_unencrypted_chat_assignment() {
 
     let chat = alice.create_email_chat(bob).await;
     assert_eq!(received.chat_id, chat.id);
+}
+
+/// Tests Bob receiving a message from Alice
+/// in a new group she just created
+/// with only Alice and Bob.
+///
+/// The message has no Autocrypt-Gossip
+/// headers and no Chat-Group-Member-Fpr header.
+/// Such messages were created by core 1.159.5
+/// when Alice has bcc_self disabled
+/// as Chat-Group-Member-Fpr header did not exist
+/// yet and Autocrypt-Gossip is not sent
+/// as there is only one recipient
+/// (Bob, and no additional Alice devices).
+///
+/// Bob should recognize self as being
+/// a member of the group by just the e-mail address.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_group_introduction_no_gossip() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+
+    let received = receive_imf(
+        bob,
+        include_bytes!("../../test-data/message/group-introduction-no-gossip.eml"),
+        false,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let msg = Message::load_from_db(bob, *received.msg_ids.last().unwrap())
+        .await
+        .unwrap();
+    assert_eq!(msg.text, "I created a group");
+    let chat = Chat::load_from_db(bob, msg.chat_id).await.unwrap();
+    assert_eq!(chat.typ, Chattype::Group);
+    assert_eq!(chat.blocked, Blocked::Request);
+    assert_eq!(chat.name, "Group!");
+    assert!(chat.is_encrypted(bob).await.unwrap());
+
+    let contacts = get_chat_contacts(bob, chat.id).await?;
+    assert_eq!(contacts.len(), 2);
+    assert!(chat.is_self_in_chat(bob).await?);
+
+    Ok(())
 }

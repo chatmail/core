@@ -13,6 +13,12 @@ from . import Account, AttrDict, Bot, Chat, Client, DeltaChat, EventType, Messag
 from ._utils import futuremethod
 from .rpc import Rpc
 
+E2EE_INFO_MSGS = 1
+"""
+The number of info messages added to new e2ee chats.
+Currently this is "End-to-end encryption available".
+"""
+
 
 class ACFactory:
     """Test account factory."""

@@ -31,13 +31,11 @@ pub struct ContactObject {
     /// e.g. if we just scanned the fingerprint from a QR code.
     e2ee_avail: bool,
 
-    /// True if the contact can be added to verified groups.
+    /// True if the contact
+    /// can be added to protected chats
+    /// because SELF and contact have verified their fingerprints in both directions.
     ///
-    /// If this is true
-    /// UI should display green checkmark after the contact name
-    /// in contact list items,
-    /// in chat member list items
-    /// and in profiles if no chat with the contact exist.
+    /// See [`Self::verifier_id`]/`Contact.verifierId` for a guidance how to display these information.
     is_verified: bool,
 
     /// True if the contact profile title should have a green checkmark.
@@ -46,12 +44,29 @@ pub struct ContactObject {
     /// or will have a green checkmark if created.
     is_profile_verified: bool,
 
-    /// The ID of the contact that verified this contact.
+    /// The contact ID that verified a contact.
     ///
-    /// If this is present,
-    /// display a green checkmark and "Introduced by ..."
-    /// string followed by the verifier contact name and address
-    /// in the contact profile.
+    /// As verifier may be unknown,
+    /// use [`Self::is_verified`]/`Contact.isVerified` to check if a contact can be added to a protected chat.
+    ///
+    /// UI should display the information in the contact's profile as follows:
+    ///
+    /// - If `verifierId` != 0,
+    ///   display text "Introduced by ..."
+    ///   with the name and address of the contact
+    ///   formatted by `name_and_addr`/`nameAndAddr`.
+    ///   Prefix the text by a green checkmark.
+    ///
+    /// - If `verifierId` == 0 and `isVerified` != 0,
+    ///   display "Introduced" prefixed by a green checkmark.
+    ///
+    /// - if `verifierId` == 0 and `isVerified` == 0,
+    ///   display nothing
+    ///
+    /// This contains the contact ID of the verifier.
+    /// If it is `DC_CONTACT_ID_SELF`, we verified the contact ourself.
+    /// If it is None/Null, we don't have verifier information or
+    /// the contact is not verified.
     verifier_id: Option<u32>,
 
     /// the contact's last seen timestamp

@@ -133,8 +133,7 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     assert "added" in msg.text.lower()
 
     assert any(
-        m.is_system_message() and m.text == "Messages are guaranteed to be end-to-end encrypted from now on."
-        for m in msg.chat.get_messages()
+        m.is_system_message() and m.text == "Messages are end-to-end encrypted." for m in msg.chat.get_messages()
     )
     lp.sec("ac1: send message")
     msg_out = chat1.send_text("hello")
@@ -338,7 +337,7 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
     assert contact.addr == ac1.get_config("addr")
     chat2 = msg_in.chat
     assert chat2.is_protected()
-    assert chat2.get_messages()[0].text == "Messages are guaranteed to be end-to-end encrypted from now on."
+    assert chat2.get_messages()[0].text == "Messages are end-to-end encrypted."
     assert open(contact.get_profile_image(), "rb").read() == open(avatar_path, "rb").read()
 
     lp.sec("ac2_offl: sending message")
@@ -412,7 +411,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ev = ac2_offl._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
     msg_in = ac2_offl.get_message_by_id(ev.data2)
     assert msg_in.is_system_message()
-    assert msg_in.text == "Messages are guaranteed to be end-to-end encrypted from now on."
+    assert msg_in.text == "Messages are end-to-end encrypted."
 
     # We need to consume one event that has data2=0
     ev = ac2_offl._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")

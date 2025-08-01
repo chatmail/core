@@ -20,6 +20,12 @@ import deltachat
 from . import Account, account_hookimpl, const, get_core_info
 from .events import FFIEventLogger, FFIEventTracker
 
+E2EE_INFO_MSGS = 1
+"""
+The number of info messages added to new e2ee chats.
+Currently this is "End-to-end encryption available".
+"""
+
 
 def pytest_addoption(parser):
     group = parser.getgroup("deltachat testplugin options")
@@ -606,7 +612,7 @@ class ACFactory:
         ev = ac2._evtracker.get_matching("DC_EVENT_MSGS_CHANGED")
         msg = ac2.get_message_by_id(ev.data2)
         assert msg is not None
-        assert msg.text == "Messages are guaranteed to be end-to-end encrypted from now on."
+        assert msg.text == "Messages are end-to-end encrypted."
         msg = ac2._evtracker.wait_next_incoming_message()
         assert msg is not None
         assert "Member Me " in msg.text and " added by " in msg.text

@@ -33,6 +33,7 @@ use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
+use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -93,14 +94,12 @@ pub enum ProtectionStatus {
     ///
     /// All members of the chat must be verified.
     Protected = 1,
+    // `2` was never used as a value.
 
-    /// The chat was protected, but now a new message came in
-    /// which was not encrypted / signed correctly.
-    /// The user has to confirm that this is OK.
-    ///
-    /// We only do this in 1:1 chats; in group chats, the chat just
-    /// stays protected.
-    ProtectionBroken = 3, // `2` was never used as a value.
+    // Chats don't break in Core v2 anymore. Chats with broken protection existing before the
+    // key-contacts migration are treated as `Unprotected`.
+    //
+    // ProtectionBroken = 3,
 }
 
 /// The reason why messages cannot be sent to the chat.
@@ -116,10 +115,6 @@ pub(crate) enum CantSendReason {
 
     /// The chat is a contact request, it needs to be accepted before sending a message.
     ContactRequest,
-
-    /// The chat was protected, but now a new message came in
-    /// which was not encrypted / signed correctly.
-    ProtectionBroken,
 
     /// Mailing list without known List-Post header.
     ReadOnlyMailingList,
@@ -142,10 +137,6 @@ impl fmt::Display for CantSendReason {
             Self::ContactRequest => write!(
                 f,
                 "contact request chat should be accepted before sending messages"
-            ),
-            Self::ProtectionBroken => write!(
-                f,
-                "accept that the encryption isn't verified anymore before sending messages"
             ),
             Self::ReadOnlyMailingList => {
                 write!(f, "mailing list does not have a know post address")
@@ -348,6 +339,8 @@ impl ChatId {
             chat_id
                 .add_protection_msg(context, ProtectionStatus::Protected, None, timestamp)
                 .await?;
+        } else {
+            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
         }
 
         info!(
@@ -476,16 +469,6 @@ impl ChatId {
         let chat = Chat::load_from_db(context, self).await?;
 
         match chat.typ {
-            Chattype::Single
-                if chat.blocked == Blocked::Not
-                    && chat.protected == ProtectionStatus::ProtectionBroken =>
-            {
-                // The protection was broken, then the user clicked 'Accept'/'OK',
-                // so, now we want to set the status to Unprotected again:
-                chat.id
-                    .inner_set_protection(context, ProtectionStatus::Unprotected)
-                    .await?;
-            }
             Chattype::Single | Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast => {
                 // User has "created a chat" with all these contacts.
                 //
@@ -542,7 +525,7 @@ impl ChatId {
                 | Chattype::InBroadcast => {}
                 Chattype::Mailinglist => bail!("Cannot protect mailing lists"),
             },
-            ProtectionStatus::Unprotected | ProtectionStatus::ProtectionBroken => {}
+            ProtectionStatus::Unprotected => {}
         };
 
         context
@@ -585,7 +568,6 @@ impl ChatId {
         let cmd = match protect {
             ProtectionStatus::Protected => SystemMessage::ChatProtectionEnabled,
             ProtectionStatus::Unprotected => SystemMessage::ChatProtectionDisabled,
-            ProtectionStatus::ProtectionBroken => SystemMessage::ChatProtectionDisabled,
         };
         add_info_msg_with_cmd(
             context,
@@ -600,6 +582,42 @@ impl ChatId {
         )
         .await?;
 
+        Ok(())
+    }
+
+    /// Adds message "Messages are end-to-end encrypted" if appropriate.
+    ///
+    /// This function is rather slow because it does a lot of database queries,
+    /// but this is fine because it is only called on chat creation.
+    async fn maybe_add_encrypted_msg(self, context: &Context, timestamp_sort: i64) -> Result<()> {
+        let chat = Chat::load_from_db(context, self).await?;
+
+        // as secure-join adds its own message on success (after some other messasges),
+        // we do not want to add "Messages are end-to-end encrypted" on chat creation.
+        // we detect secure join by `can_send` (for Bob, scanner side) and by `blocked` (for Alice, inviter side) below.
+        if !chat.is_encrypted(context).await?
+            || self <= DC_CHAT_ID_LAST_SPECIAL
+            || chat.is_device_talk()
+            || chat.is_self_talk()
+            || (!chat.can_send(context).await? && !chat.is_contact_request())
+            || chat.blocked == Blocked::Yes
+        {
+            return Ok(());
+        }
+
+        let text = stock_str::messages_e2e_encrypted(context).await;
+        add_info_msg_with_cmd(
+            context,
+            self,
+            &text,
+            SystemMessage::ChatE2ee,
+            timestamp_sort,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await?;
         Ok(())
     }
 
@@ -1339,14 +1357,18 @@ impl ChatId {
 
         let mut ret = stock_str::e2e_available(context).await + "\n";
 
-        for contact_id in get_chat_contacts(context, self)
+        for &contact_id in get_chat_contacts(context, self)
             .await?
             .iter()
             .filter(|&contact_id| !contact_id.is_special())
         {
-            let contact = Contact::get_by_id(context, *contact_id).await?;
+            let contact = Contact::get_by_id(context, contact_id).await?;
             let addr = contact.get_addr();
-            debug_assert!(contact.is_key_contact());
+            logged_debug_assert!(
+                context,
+                contact.is_key_contact(),
+                "get_encryption_info: contact {contact_id} is not a key-contact."
+            );
             let fingerprint = contact
                 .fingerprint()
                 .context("Contact does not have a fingerprint in encrypted chat")?;
@@ -1669,12 +1691,6 @@ impl Chat {
                 return Ok(Some(reason));
             }
         }
-        if self.is_protection_broken() {
-            let reason = ProtectionBroken;
-            if !skip_fn(&reason) {
-                return Ok(Some(reason));
-            }
-        }
         if self.is_mailing_list() && self.get_mailinglist_addr().is_none_or_empty() {
             let reason = ReadOnlyMailingList;
             if !skip_fn(&reason) {
@@ -1904,25 +1920,9 @@ impl Chat {
         Ok(is_encrypted)
     }
 
-    /// Returns true if the chat was protected, and then an incoming message broke this protection.
-    ///
-    /// This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
-    /// otherwise it will return false for all chats.
-    ///
-    /// 1:1 chats are automatically set as protected when a contact is verified.
-    /// When a message comes in that is not encrypted / signed correctly,
-    /// the chat is automatically set as unprotected again.
-    /// `is_protection_broken()` will return true until `chat_id.accept()` is called.
-    ///
-    /// The UI should let the user confirm that this is OK with a message like
-    /// `Bob sent a message from another device. Tap to learn more`
-    /// and then call `chat_id.accept()`.
+    /// Deprecated 2025-07. Returns false.
     pub fn is_protection_broken(&self) -> bool {
-        match self.protected {
-            ProtectionStatus::Protected => false,
-            ProtectionStatus::Unprotected => false,
-            ProtectionStatus::ProtectionBroken => true,
-        }
+        false
     }
 
     /// Returns true if location streaming is enabled in the chat.
@@ -2680,6 +2680,10 @@ impl ChatIdBlocked {
                     smeared_time,
                 )
                 .await?;
+        } else {
+            chat_id
+                .maybe_add_encrypted_msg(context, smeared_time)
+                .await?;
         }
 
         Ok(Self {
@@ -2912,7 +2916,7 @@ async fn prepare_send_msg(
     let mut chat = Chat::load_from_db(context, chat_id).await?;
 
     let skip_fn = |reason: &CantSendReason| match reason {
-        CantSendReason::ProtectionBroken | CantSendReason::ContactRequest => {
+        CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
 
@@ -2979,6 +2983,9 @@ async fn prepare_send_msg(
     let row_ids = create_send_msg_jobs(context, msg)
         .await
         .context("Failed to create send jobs")?;
+    if !row_ids.is_empty() {
+        donation_request_maybe(context).await.log_err(context).ok();
+    }
     Ok(row_ids)
 }
 
@@ -3223,6 +3230,31 @@ pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Re
     send_msg(context, chat_id, &mut msg).await
 }
 
+async fn donation_request_maybe(context: &Context) -> Result<()> {
+    let secs_between_checks = 30 * 24 * 60 * 60;
+    let now = time();
+    let ts = context
+        .get_config_i64(Config::DonationRequestNextCheck)
+        .await?;
+    if ts > now {
+        return Ok(());
+    }
+    let msg_cnt = context.sql.count(
+        "SELECT COUNT(*) FROM msgs WHERE state>=? AND hidden=0",
+        (MessageState::OutDelivered,),
+    );
+    let ts = if ts == 0 || msg_cnt.await? < 100 {
+        now.saturating_add(secs_between_checks)
+    } else {
+        let mut msg = Message::new_text(stock_str::donation_request(context).await);
+        add_device_msg(context, None, Some(&mut msg)).await?;
+        i64::MAX
+    };
+    context
+        .set_config_internal(Config::DonationRequestNextCheck, Some(&ts.to_string()))
+        .await
+}
+
 /// Chat message list request options.
 #[derive(Debug)]
 pub struct MessageListOptions {
@@ -3308,10 +3340,11 @@ pub async fn get_chat_msgs_ex(
         for (ts, curr_id) in sorted_rows {
             if add_daymarker {
                 let curr_local_timestamp = ts + cnv_to_local;
-                let curr_day = curr_local_timestamp / 86400;
+                let secs_in_day = 86400;
+                let curr_day = curr_local_timestamp / secs_in_day;
                 if curr_day != last_day {
                     ret.push(ChatItem::DayMarker {
-                        timestamp: curr_day * 86400, // Convert day back to Unix timestamp
+                        timestamp: curr_day * secs_in_day - cnv_to_local,
                     });
                     last_day = curr_day;
                 }
@@ -3641,15 +3674,31 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
 }
 
 /// Creates a group chat with a given `name`.
+/// Deprecated on 2025-06-21, use `create_group_ex()`.
 pub async fn create_group_chat(
     context: &Context,
     protect: ProtectionStatus,
-    chat_name: &str,
+    name: &str,
 ) -> Result<ChatId> {
-    let chat_name = sanitize_single_line(chat_name);
+    create_group_ex(context, Some(protect), name).await
+}
+
+/// Creates a group chat.
+///
+/// * `encryption` - If `Some`, the chat is encrypted (with key-contacts) and can be protected.
+/// * `name` - Chat name.
+pub async fn create_group_ex(
+    context: &Context,
+    encryption: Option<ProtectionStatus>,
+    name: &str,
+) -> Result<ChatId> {
+    let chat_name = sanitize_single_line(name);
     ensure!(!chat_name.is_empty(), "Invalid chat name");
 
-    let grpid = create_id();
+    let grpid = match encryption {
+        Some(_) => create_id(),
+        None => String::new(),
+    };
 
     let timestamp = create_smeared_timestamp(context);
     let row_id = context
@@ -3669,7 +3718,8 @@ pub async fn create_group_chat(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    if protect == ProtectionStatus::Protected {
+    if encryption == Some(ProtectionStatus::Protected) {
+        let protect = ProtectionStatus::Protected;
         chat_id
             .set_protection_for_timestamp_sort(context, protect, timestamp, None)
             .await?;

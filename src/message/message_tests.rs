@@ -7,7 +7,7 @@ use crate::config::Config;
 use crate::reaction::send_reaction;
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
-use crate::test_utils::{TestContext, TestContextManager};
+use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 
 #[test]
 fn test_guess_msgtype_from_suffix() {
@@ -347,7 +347,7 @@ async fn test_markseen_msgs() -> Result<()> {
     let chats = Chatlist::try_load(&bob, 0, None, None).await?;
     assert_eq!(chats.len(), 1);
     let msgs = chat::get_chat_msgs(&bob, bob_chat_id).await?;
-    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 2);
     assert_eq!(bob.get_fresh_msgs().await?.len(), 0);
 
     // that has no effect in contact request
@@ -358,7 +358,7 @@ async fn test_markseen_msgs() -> Result<()> {
     assert_eq!(bob_chat.blocked, Blocked::Request);
 
     let msgs = chat::get_chat_msgs(&bob, bob_chat_id).await?;
-    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs.len(), E2EE_INFO_MSGS + 2);
     bob_chat_id.accept(&bob).await.unwrap();
 
     // bob sends to alice,
@@ -761,19 +761,22 @@ async fn test_delete_msgs_sync() -> Result<()> {
 
     // Alice sends a messsage and receives it on the other device
     let sent1 = alice.send_text(alice_chat_id, "foo").await;
-    assert_eq!(alice_chat_id.get_msg_cnt(alice).await?, 1);
+    assert_eq!(alice_chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
 
     let msg = alice2.recv_msg(&sent1).await;
     let alice2_chat_id = msg.chat_id;
     assert_eq!(alice2.get_last_msg_in(alice2_chat_id).await.id, msg.id);
-    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, 1);
+    assert_eq!(
+        alice2_chat_id.get_msg_cnt(alice2).await?,
+        E2EE_INFO_MSGS + 1
+    );
 
     // Alice deletes the message; this should happen on both devices as well
     delete_msgs(alice, &[sent1.sender_msg_id]).await?;
-    assert_eq!(alice_chat_id.get_msg_cnt(alice).await?, 0);
+    assert_eq!(alice_chat_id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS);
 
     test_utils::sync(alice, alice2).await;
-    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, 0);
+    assert_eq!(alice2_chat_id.get_msg_cnt(alice2).await?, E2EE_INFO_MSGS);
 
     Ok(())
 }

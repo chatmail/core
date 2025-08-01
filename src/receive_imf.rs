@@ -31,6 +31,7 @@ use crate::key::self_fingerprint_opt;
 use crate::key::{DcKey, Fingerprint, SignedPublicKey};
 use crate::log::LogExt;
 use crate::log::{info, warn};
+use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
@@ -296,18 +297,16 @@ async fn get_to_and_past_contact_ids(
         past_member_fingerprints = &[];
     }
 
-    let pgp_to_ids = add_or_lookup_key_contacts_by_address_list(
-        context,
-        &mime_parser.recipients,
-        &mime_parser.gossiped_keys,
-        to_member_fingerprints,
-        Origin::Hidden,
-    )
-    .await?;
-
     match chat_assignment {
         ChatAssignment::GroupChat { .. } => {
-            to_ids = pgp_to_ids;
+            to_ids = add_or_lookup_key_contacts(
+                context,
+                &mime_parser.recipients,
+                &mime_parser.gossiped_keys,
+                to_member_fingerprints,
+                Origin::Hidden,
+            )
+            .await?;
 
             if let Some(chat_id) = chat_id {
                 past_ids = lookup_key_contacts_by_address_list(
@@ -318,7 +317,7 @@ async fn get_to_and_past_contact_ids(
                 )
                 .await?;
             } else {
-                past_ids = add_or_lookup_key_contacts_by_address_list(
+                past_ids = add_or_lookup_key_contacts(
                     context,
                     &mime_parser.past_members,
                     &mime_parser.gossiped_keys,
@@ -335,7 +334,14 @@ async fn get_to_and_past_contact_ids(
         ChatAssignment::ExistingChat { chat_id, .. } => {
             let chat = Chat::load_from_db(context, *chat_id).await?;
             if chat.is_encrypted(context).await? {
-                to_ids = pgp_to_ids;
+                to_ids = add_or_lookup_key_contacts(
+                    context,
+                    &mime_parser.recipients,
+                    &mime_parser.gossiped_keys,
+                    to_member_fingerprints,
+                    Origin::Hidden,
+                )
+                .await?;
                 past_ids = lookup_key_contacts_by_address_list(
                     context,
                     &mime_parser.past_members,
@@ -387,6 +393,14 @@ async fn get_to_and_past_contact_ids(
             .await?;
         }
         ChatAssignment::OneOneChat => {
+            let pgp_to_ids = add_or_lookup_key_contacts(
+                context,
+                &mime_parser.recipients,
+                &mime_parser.gossiped_keys,
+                to_member_fingerprints,
+                Origin::Hidden,
+            )
+            .await?;
             if pgp_to_ids
                 .first()
                 .is_some_and(|contact_id| contact_id.is_some())
@@ -428,7 +442,7 @@ async fn get_to_and_past_contact_ids(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
-                            chat_id,
+                            None,
                         )
                         .await?
                     }
@@ -1456,20 +1470,20 @@ async fn do_chat_assignment(
                     false => None,
                 };
                 if let Some(chat) = chat {
-                    ensure_and_debug_assert!(chat.typ == Chattype::Single);
-                    let mut new_protection = match verified_encryption {
+                    ensure_and_debug_assert!(
+                        chat.typ == Chattype::Single,
+                        "Chat {chat_id} is not Single",
+                    );
+                    let new_protection = match verified_encryption {
                         VerifiedEncryption::Verified => ProtectionStatus::Protected,
                         VerifiedEncryption::NotVerified(_) => ProtectionStatus::Unprotected,
                     };
 
-                    if chat.protected != ProtectionStatus::Unprotected
-                        && new_protection == ProtectionStatus::Unprotected
-                        // `chat.protected` must be maintained regardless of the `Config::VerifiedOneOnOneChats`.
-                        // That's why the config is checked here, and not above.
-                        && context.get_config_bool(Config::VerifiedOneOnOneChats).await?
-                    {
-                        new_protection = ProtectionStatus::ProtectionBroken;
-                    }
+                    ensure_and_debug_assert!(
+                        chat.protected == ProtectionStatus::Unprotected
+                            || new_protection == ProtectionStatus::Protected,
+                        "Chat {chat_id} can't downgrade to Unprotected",
+                    );
                     if chat.protected != new_protection {
                         // The message itself will be sorted under the device message since the device
                         // message is `MessageState::InNoticed`, which means that all following
@@ -1835,6 +1849,8 @@ async fn add_parts(
     {
         Some(stock_str::msg_location_enabled_by(context, from_id).await)
     } else if mime_parser.is_system_message == SystemMessage::EphemeralTimerChanged {
+        let better_msg = stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await;
+
         // Do not delete the system message itself.
         //
         // This prevents confusion when timer is changed
@@ -1843,7 +1859,7 @@ async fn add_parts(
         // week is left.
         ephemeral_timer = EphemeralTimer::Disabled;
 
-        Some(stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await)
+        Some(better_msg)
     } else {
         None
     };
@@ -2142,11 +2158,11 @@ RETURNING id
         // afterwards insert additional parts.
         replace_msg_id = None;
 
-        ensure_and_debug_assert!(!row_id.is_special());
+        ensure_and_debug_assert!(!row_id.is_special(), "Rowid {row_id} is special");
         created_db_entries.push(row_id);
     }
 
-    // check all parts whether they contain a new logging webxdc
+    // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
         // check if any part contains a webxdc topic id
         if part.typ == Viewtype::Webxdc {
@@ -2406,7 +2422,9 @@ async fn lookup_chat_by_reply(
     // as we can directly assign the message to the chat
     // by its group ID.
     ensure_and_debug_assert!(
-        mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted()
+        mime_parser.get_chat_group_id().is_none() || !mime_parser.was_encrypted(),
+        "Encrypted message has group ID {}",
+        mime_parser.get_chat_group_id().unwrap_or_default(),
     );
 
     // Try to assign message to the same chat as the parent message.
@@ -3660,7 +3678,7 @@ async fn mark_recipients_as_verified(
         return Ok(());
     }
     for to_id in to_ids.iter().filter_map(|&x| x) {
-        if to_id == ContactId::SELF {
+        if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
 
@@ -3748,7 +3766,7 @@ async fn add_or_lookup_contacts_by_address_list(
 }
 
 /// Looks up contact IDs from the database given the list of recipients.
-async fn add_or_lookup_key_contacts_by_address_list(
+async fn add_or_lookup_key_contacts(
     context: &Context,
     address_list: &[SingleInfo],
     gossiped_keys: &HashMap<String, SignedPublicKey>,
@@ -3768,6 +3786,9 @@ async fn add_or_lookup_key_contacts_by_address_list(
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
             key.dc_fingerprint().hex()
+        } else if context.is_self_addr(addr).await? {
+            contact_ids.push(Some(ContactId::SELF));
+            continue;
         } else {
             contact_ids.push(None);
             continue;
@@ -3859,7 +3880,11 @@ async fn lookup_key_contact_by_fingerprint(
     context: &Context,
     fingerprint: &str,
 ) -> Result<Option<ContactId>> {
-    debug_assert!(!fingerprint.is_empty());
+    logged_debug_assert!(
+        context,
+        !fingerprint.is_empty(),
+        "lookup_key_contact_by_fingerprint: fingerprint is empty."
+    );
     if fingerprint.is_empty() {
         // Avoid accidentally looking up a non-key-contact.
         return Ok(None);

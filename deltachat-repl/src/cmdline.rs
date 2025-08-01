@@ -87,7 +87,7 @@ async fn poke_eml_file(context: &Context, filename: &Path) -> Result<()> {
     let data = read_file(context, filename).await?;
 
     if let Err(err) = receive_imf(context, &data, false).await {
-        println!("receive_imf errored: {err:?}");
+        eprintln!("receive_imf errored: {err:?}");
     }
     Ok(())
 }
@@ -403,6 +403,8 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  block <contact-id>\n\
                  unblock <contact-id>\n\
                  listblocked\n\
+                 import-vcard <file>\n\
+                 make-vcard <file> <contact-id> [contact-id ...]\n\
                  ======================================Misc.==\n\
                  getqr [<chat-id>]\n\
                  getqrsvg [<chat-id>]\n\
@@ -621,7 +623,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 println!("Location streaming enabled.");
             }
             println!("{cnt} chats");
-            println!("{time_needed:?} to create this list");
+            eprintln!("{time_needed:?} to create this list");
         }
         "start-realtime" => {
             if arg1.is_empty() {
@@ -731,7 +733,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             chat::marknoticed_chat(&context, sel_chat.get_id()).await?;
             let time_noticed_needed = time_noticed_start.elapsed().unwrap_or_default();
 
-            println!(
+            eprintln!(
                 "{time_needed:?} to create this list, {time_noticed_needed:?} to mark all messages as noticed."
             );
         }
@@ -985,7 +987,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 },
                 query,
             );
-            println!("{time_needed:?} to create this list");
+            eprintln!("{time_needed:?} to create this list");
         }
         "draft" => {
             ensure!(sel_chat.is_some(), "No chat selected.");
@@ -1151,7 +1153,10 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "listcontacts" | "contacts" => {
             let contacts = Contact::get_all(&context, DC_GCL_ADD_SELF, Some(arg1)).await?;
             log_contactlist(&context, &contacts).await?;
-            println!("{} contacts.", contacts.len());
+            println!("{} key contacts.", contacts.len());
+            let addrcontacts = Contact::get_all(&context, DC_GCL_ADDRESS, Some(arg1)).await?;
+            log_contactlist(&context, &addrcontacts).await?;
+            println!("{} address contacts.", addrcontacts.len());
         }
         "addcontact" => {
             ensure!(!arg1.is_empty(), "Arguments [<name>] <addr> expected.");
@@ -1215,6 +1220,24 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             log_contactlist(&context, &contacts).await?;
             println!("{} blocked contacts.", contacts.len());
         }
+        "import-vcard" => {
+            ensure!(!arg1.is_empty(), "Argument <file> missing.");
+            let vcard_content = fs::read_to_string(&arg1.to_string()).await?;
+            let contacts = import_vcard(&context, &vcard_content).await?;
+            println!("vCard contacts imported:");
+            log_contactlist(&context, &contacts).await?;
+        }
+        "make-vcard" => {
+            ensure!(!arg1.is_empty(), "Argument <file> missing.");
+            ensure!(!arg2.is_empty(), "Argument <contact-id> missing.");
+            let mut contact_ids = vec![];
+            for x in arg2.split_whitespace() {
+                contact_ids.push(ContactId::new(x.parse()?))
+            }
+            let vcard_content = make_vcard(&context, &contact_ids).await?;
+            fs::write(&arg1.to_string(), vcard_content).await?;
+            println!("vCard written to: {arg1}");
+        }
         "checkqr" => {
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");
             let qr = check_qr(&context, arg1).await?;
@@ -1224,7 +1247,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");
             match set_config_from_qr(&context, arg1).await {
                 Ok(()) => println!("Config set from QR code, you can now call 'configure'"),
-                Err(err) => println!("Cannot set config from QR code: {err:?}"),
+                Err(err) => eprintln!("Cannot set config from QR code: {err:?}"),
             }
         }
         "createqrsvg" => {

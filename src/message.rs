@@ -963,6 +963,7 @@ impl Message {
             | SystemMessage::SecurejoinMessage
             | SystemMessage::LocationStreamingEnabled
             | SystemMessage::LocationOnly
+            | SystemMessage::ChatE2ee
             | SystemMessage::ChatProtectionEnabled
             | SystemMessage::ChatProtectionDisabled
             | SystemMessage::InvalidUnencryptedMail

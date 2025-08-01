@@ -43,6 +43,10 @@ use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str::StockStrings;
 use crate::tools::time;
 
+/// The number of info messages added to new e2ee chats.
+/// Currently this is "End-to-end encryption available", string `E2eAvailable`.
+pub const E2EE_INFO_MSGS: usize = 1;
+
 #[allow(non_upper_case_globals)]
 pub const AVATAR_900x900_BYTES: &[u8] = include_bytes!("../test-data/image/avatar900x900.png");
 
@@ -754,7 +758,7 @@ impl TestContext {
     pub async fn add_or_lookup_address_contact(&self, other: &TestContext) -> Contact {
         let contact_id = self.add_or_lookup_address_contact_id(other).await;
         let contact = Contact::get_by_id(&self.ctx, contact_id).await.unwrap();
-        debug_assert_eq!(contact.is_key_contact(), false);
+        assert_eq!(contact.is_key_contact(), false);
         contact
     }
 
@@ -1082,8 +1086,6 @@ impl Drop for TestContext {
                             .join(format!("test-account-{}.db", self.name()));
                         tokio::fs::copy(from, &target).await.unwrap();
                         eprintln!("Copied database from {from:?} to {target:?}\n");
-                    } else {
-                        eprintln!("Hint: If you want to examine the database files, set environment variable DELTACHAT_SAVE_TMP_DB=1\n")
                     }
                 });
             }
@@ -1167,6 +1169,11 @@ impl Drop for InnerLogSink {
     fn drop(&mut self) {
         while let Ok(event) = self.events.try_recv() {
             print_logevent(&event);
+        }
+        if std::env::var("DELTACHAT_SAVE_TMP_DB").is_err() {
+            eprintln!(
+                "note: If you want to examine the database files, set environment variable DELTACHAT_SAVE_TMP_DB=1"
+            )
         }
     }
 }

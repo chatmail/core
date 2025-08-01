@@ -1403,6 +1403,26 @@ async fn test_x_microsoft_original_message_id_precedence() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_extra_imf_chat_header() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let chat_id = t.get_self_chat().await.id;
+
+    chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
+    let sent_msg = t.pop_sent_msg().await;
+    // Check removal of some nonexistent "Chat-*" header to protect the code from future breakages.
+    let payload = sent_msg
+        .payload
+        .replace("Message-ID:", "Chat-Forty-Two: 42\r\nMessage-ID:");
+    let msg = MimeMessage::from_bytes(t, payload.as_bytes(), None)
+        .await
+        .unwrap();
+    assert!(msg.headers.contains_key("chat-version"));
+    assert!(!msg.headers.contains_key("chat-forty-two"));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_long_in_reply_to() -> Result<()> {
     let t = TestContext::new_alice().await;
 

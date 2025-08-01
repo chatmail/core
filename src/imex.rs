@@ -804,7 +804,7 @@ async fn export_database(
                 "UPDATE backup.config SET value='0' WHERE keyname='verified_one_on_one_chats';",
                 [],
             )
-            .ok(); // If verified_one_on_one_chats was not set, this errors, which we ignore
+            .ok(); // Deprecated 2025-07. If verified_one_on_one_chats was not set, this errors, which we ignore
             conn.execute("DETACH DATABASE backup", [])
                 .context("failed to detach backup database")?;
             res?;

@@ -15,7 +15,9 @@ use crate::mimeparser::SystemMessage;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str;
-use crate::test_utils::{TestContext, TestContextManager, get_chat_msg, mark_as_verified};
+use crate::test_utils::{
+    E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
+};
 use crate::tools::SystemTime;
 use crate::{e2ee, message};
 
@@ -29,7 +31,7 @@ async fn test_verified_oneonone_chat_not_broken_by_device_change() {
     check_verified_oneonone_chat_protection_not_broken(false).await;
 }
 
-async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_email: bool) {
+async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: bool) {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -40,7 +42,7 @@ async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_
     assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
     assert_verified(&bob, &alice, ProtectionStatus::Protected).await;
 
-    if broken_by_classical_email {
+    if by_classical_email {
         tcm.section("Bob uses a classical MUA to send a message to Alice");
         receive_imf(
             &alice,
@@ -56,7 +58,6 @@ async fn check_verified_oneonone_chat_protection_not_broken(broken_by_classical_
         .await
         .unwrap()
         .unwrap();
-        // Bob's contact is still verified, but the chat isn't marked as protected anymore
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
         assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
@@ -132,7 +133,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         assert!(chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
-        let expected_text = stock_str::chat_protection_enabled(&alice).await;
+        let expected_text = stock_str::messages_e2e_encrypted(&alice).await;
         assert_eq!(msg.text, expected_text);
     }
 
@@ -142,7 +143,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         assert!(chat.is_protected());
 
         let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
-        let expected_text = stock_str::chat_protection_enabled(&fiona).await;
+        let expected_text = stock_str::messages_e2e_encrypted(&fiona).await;
         assert_eq!(msg0.text, expected_text);
     }
 
@@ -162,7 +163,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
         let chat = alice.get_chat(&fiona_new).await;
         assert!(!chat.is_protected());
 
-        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
+        let msg = get_chat_msg(&alice, chat.id, 1, E2EE_INFO_MSGS + 1).await;
         assert_eq!(msg.text, "I have a new device");
 
         // After recreating the chat, it should still be unprotected
@@ -197,7 +198,6 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
     assert!(chat.is_protected());
-    assert!(!chat.is_protection_broken());
     Ok(())
 }
 
@@ -211,7 +211,6 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     // A chat with an unknown contact should be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     receive_imf(
         &alice,
@@ -228,14 +227,12 @@ async fn test_create_unverified_oneonone_chat() -> Result<()> {
     // Now Bob is a known contact, new chats should still be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     tcm.send_recv(&bob, &alice, "hi").await;
     chat.id.delete(&alice).await.unwrap();
     // Now we have a public key, new chats should still be created unprotected
     let chat = alice.create_chat(&bob).await;
     assert!(!chat.is_protected());
-    assert!(!chat.is_protection_broken());
 
     Ok(())
 }
@@ -268,7 +265,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     .await?;
 
     let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
-    let enabled = stock_str::chat_protection_enabled(&alice).await;
+    let enabled = stock_str::messages_e2e_encrypted(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
 
@@ -523,7 +520,6 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     assert!(contact.is_verified(alice).await.unwrap());
     let chat = alice.get_chat(bob).await;
     assert!(chat.is_protected());
-    assert_eq!(chat.is_protection_broken(), false);
     Ok(())
 }
 
@@ -810,19 +806,15 @@ async fn test_verified_chat_editor_reordering() -> Result<()> {
 // ============== Helper Functions ==============
 
 async fn assert_verified(this: &TestContext, other: &TestContext, protected: ProtectionStatus) {
-    if protected != ProtectionStatus::ProtectionBroken {
-        let contact = this.add_or_lookup_contact(other).await;
-        assert_eq!(contact.is_verified(this).await.unwrap(), true);
-    }
+    let contact = this.add_or_lookup_contact(other).await;
+    assert_eq!(contact.is_verified(this).await.unwrap(), true);
 
     let chat = this.get_chat(other).await;
-    let (expect_protected, expect_broken) = match protected {
-        ProtectionStatus::Unprotected => (false, false),
-        ProtectionStatus::Protected => (true, false),
-        ProtectionStatus::ProtectionBroken => (false, true),
-    };
-    assert_eq!(chat.is_protected(), expect_protected);
-    assert_eq!(chat.is_protection_broken(), expect_broken);
+    assert_eq!(
+        chat.is_protected(),
+        protected == ProtectionStatus::Protected
+    );
+    assert_eq!(chat.is_protection_broken(), false);
 }
 
 async fn enable_verified_oneonone_chats(test_contexts: &[&TestContext]) {

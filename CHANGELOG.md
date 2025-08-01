@@ -1,5 +1,121 @@
 # Changelog
 
+## [2.9.0] - 2025-07-31
+
+### Features / Changes
+
+- repl: Add import-vcard and make-vcard commands ([#7048](https://github.com/chatmail/core/pull/7048)).
+
+### Fixes
+
+- Display correct timer value for ephemeral timer changes.
+- Get_chat_msgs_ex(): Report local midnight in ChatItem::DayMarker.
+
+### Refactor
+
+- Rename add_or_lookup_key_contacts_by_address_list() to add_or_lookup_key_contacts().
+- Don't call add_or_lookup_key_contacts() in advance.
+
+## [2.8.0] - 2025-07-28
+
+### Features / Changes
+
+- Remove ProtectionBroken, make such  chats Unprotected ([#7041](https://github.com/chatmail/core/pull/7041)).
+
+### Fixes
+
+- Lookup self by address if there is no fingerprint or gossip.
+
+## [2.7.0] - 2025-07-26
+
+### Features / Changes
+
+- Mimefactory: Order message recipients by time of addition ([#6872](https://github.com/chatmail/core/pull/6872)).
+- Put the debug/release build version into the info ([#7034](https://github.com/chatmail/core/pull/7034)).
+
+### Fixes
+
+- Realtime late join ([#6869](https://github.com/chatmail/core/pull/6869)).
+- Do not fail to upgrade if the verifier of a contact doesn't exist anymore ([#7044](https://github.com/chatmail/core/pull/7044)).
+
+### Tests
+
+- Add regression test for verification-gossiping crash ([#7033](https://github.com/chatmail/core/pull/7033)).
+
+## [2.6.0] - 2025-07-23
+
+### Fixes
+
+- Fix crash when receiving a verification-gossiping message which a contact also sends to itself ([#7032](https://github.com/chatmail/core/pull/7032)).
+
+## [2.5.0] - 2025-07-22
+
+### Fixes
+
+- Correctly migrate "verified by me".
+- Mark all email chats as unprotected in the migration ([#7026](https://github.com/chatmail/core/pull/7026)).
+- Do not ignore errors in add_flag_finalized_with_set.
+
+### Documentation
+
+- Deprecate protection-broken and related stuff ([#7018](https://github.com/chatmail/core/pull/7018)).
+- Clarify the meaning of is_verified() vs verifier_id() ([#7027](https://github.com/chatmail/core/pull/7027)).
+- STYLE.md: Prefer `try_next()` over `next()`.
+
+## [2.4.0] - 2025-07-21
+
+### Fixes
+
+- Do not ignore errors when draining FETCH responses. This avoids IMAP loop getting stuck in an infinite loop retrying reading from the connection.
+- Update `tokio-io-timeout` to 1.2.1. This release includes a fix to reset timeout after every error, so timeout error is returned at most once a minute if read is attempted after a timeout.
+
+### Miscellaneous Tasks
+
+- Update async-imap to 0.11.0.
+
+### Refactor
+
+- Use `try_next()` when processing FETCH responses.
+
+## [2.3.0] - 2025-07-19
+
+### Features / Changes
+
+- Add "e2ee encrypted" info message to all e2ee chats ([#7008](https://github.com/chatmail/core/pull/7008)).
+- repl: Print errors and debug logs to stderr.
+- `{ensure_and,logged}_debug_assert`: Don't evaluate condition twice.
+- Log when background fetch of all accounts finishes successfully.
+- Log the number of read/written bytes on IMAP stream read error ([#6924](https://github.com/chatmail/core/pull/6924)).
+
+### Fixes
+
+- Ignore protected headers in outer message part ([#6357](https://github.com/chatmail/core/pull/6357)).
+- List e-mail contacts in repl listcontacts command.
+- Save peer address for LoggingStream early.
+
+## [2.2.0] - 2025-07-14
+
+### API-Changes
+
+- Add chat::create_group_ex(), deprecate create_group_chat() ([#6927](https://github.com/chatmail/core/pull/6927)).
+- jsonrpc: Add CommandApi::create_group_chat_unencrypted() ([#6927](https://github.com/chatmail/core/pull/6927)).
+- [**breaking**] In ChatListItem, replace is_group and is_(out_)broadcast with chat_type property ([#7003](https://github.com/chatmail/core/pull/7003)).
+
+### Features / Changes
+
+- Log failed debug assertions in all configurations.
+- Donation request device message ([#6913](https://github.com/chatmail/core/pull/6913)).
+- Advance next UID even if connection fails while fetching.
+
+### Fixes
+
+- Always prefer the last header.
+
+### Tests
+
+- Tune down DELTACHAT_SAVE_TMP_DB hint ([#6998](https://github.com/chatmail/core/pull/6998)).
+- Unencrypted group creation ([#6927](https://github.com/chatmail/core/pull/6927)).
+
 ## [2.1.0] - 2025-07-11
 
 ### Features / Changes
@@ -6454,3 +6570,11 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [1.160.0]: https://github.com/chatmail/core/compare/v1.159.5..v1.160.0
 [2.0.0]: https://github.com/chatmail/core/compare/v1.160.0..v2.0.0
 [2.1.0]: https://github.com/chatmail/core/compare/v2.0.0..v2.1.0
+[2.2.0]: https://github.com/chatmail/core/compare/v2.1.0..v2.2.0
+[2.3.0]: https://github.com/chatmail/core/compare/v2.2.0..v2.3.0
+[2.4.0]: https://github.com/chatmail/core/compare/v2.3.0..v2.4.0
+[2.5.0]: https://github.com/chatmail/core/compare/v2.4.0..v2.5.0
+[2.6.0]: https://github.com/chatmail/core/compare/v2.5.0..v2.6.0
+[2.7.0]: https://github.com/chatmail/core/compare/v2.6.0..v2.7.0
+[2.8.0]: https://github.com/chatmail/core/compare/v2.7.0..v2.8.0
+[2.9.0]: https://github.com/chatmail/core/compare/v2.8.0..v2.9.0

@@ -245,9 +245,6 @@ impl Chatlist {
                     .collect::<std::result::Result<Vec<_>, _>>()
                     .map_err(Into::into)
                 };
-                // Return ProtectionBroken chats also, as that may happen to a verified chat at any
-                // time. It may be confusing if a chat that is normally in the list disappears
-                // suddenly. The UI need to deal with that case anyway.
                 context.sql.query_map(
                     "SELECT c.id, c.type, c.param, m.id
                      FROM chats c

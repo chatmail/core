@@ -8,15 +8,13 @@ use tokio::io::BufWriter;
 
 use super::capabilities::Capabilities;
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::{LoggingStream, info, warn};
 use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_tls;
-use crate::net::{
-    connect_tcp_inner, connect_tls_inner, run_connection_attempts, update_connection_history,
-};
+use crate::net::{connect_tcp_inner, run_connection_attempts, update_connection_history};
 use crate::tools::time;
 
 #[derive(Debug)]
@@ -126,12 +124,12 @@ impl Client {
         );
         let res = match security {
             ConnectionSecurity::Tls => {
-                Client::connect_secure(resolved_addr, host, strict_tls).await
+                Client::connect_secure(context, resolved_addr, host, strict_tls).await
             }
             ConnectionSecurity::Starttls => {
-                Client::connect_starttls(resolved_addr, host, strict_tls).await
+                Client::connect_starttls(context, resolved_addr, host, strict_tls).await
             }
-            ConnectionSecurity::Plain => Client::connect_insecure(resolved_addr).await,
+            ConnectionSecurity::Plain => Client::connect_insecure(context, resolved_addr).await,
         };
         match res {
             Ok(client) => {
@@ -202,40 +200,61 @@ impl Client {
         }
     }
 
-    async fn connect_secure(addr: SocketAddr, hostname: &str, strict_tls: bool) -> Result<Self> {
-        let tls_stream = connect_tls_inner(addr, hostname, strict_tls, alpn(addr.port())).await?;
+    async fn connect_secure(
+        context: &Context,
+        addr: SocketAddr,
+        hostname: &str,
+        strict_tls: bool,
+    ) -> Result<Self> {
+        let tcp_stream = connect_tcp_inner(addr).await?;
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let logging_stream = LoggingStream::new(tcp_stream, account_id, events)?;
+        let tls_stream = wrap_tls(strict_tls, hostname, alpn(addr.port()), logging_stream).await?;
         let buffered_stream = BufWriter::new(tls_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
-    async fn connect_insecure(addr: SocketAddr) -> Result<Self> {
+    async fn connect_insecure(context: &Context, addr: SocketAddr) -> Result<Self> {
         let tcp_stream = connect_tcp_inner(addr).await?;
-        let buffered_stream = BufWriter::new(tcp_stream);
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let logging_stream = LoggingStream::new(tcp_stream, account_id, events)?;
+        let buffered_stream = BufWriter::new(logging_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
-    async fn connect_starttls(addr: SocketAddr, host: &str, strict_tls: bool) -> Result<Self> {
+    async fn connect_starttls(
+        context: &Context,
+        addr: SocketAddr,
+        host: &str,
+        strict_tls: bool,
+    ) -> Result<Self> {
         let tcp_stream = connect_tcp_inner(addr).await?;
+
+        let account_id = context.get_id();
+        let events = context.events.clone();
+        let tcp_stream = LoggingStream::new(tcp_stream, account_id, events)?;
 
         // Run STARTTLS command and convert the client back into a stream.
         let buffered_tcp_stream = BufWriter::new(tcp_stream);
         let mut client = async_imap::Client::new(buffered_tcp_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         client
             .run_command_and_check_ok("STARTTLS", None)
             .await
@@ -246,7 +265,6 @@ impl Client {
         let tls_stream = wrap_tls(strict_tls, host, &[], tcp_stream)
             .await
             .context("STARTTLS upgrade failed")?;
-
         let buffered_stream = BufWriter::new(tls_stream);
         let session_stream: Box<dyn SessionStream> = Box::new(buffered_stream);
         let client = Client::new(session_stream);
@@ -269,8 +287,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -286,8 +304,8 @@ impl Client {
         let mut client = Client::new(session_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         Ok(client)
     }
 
@@ -307,8 +325,8 @@ impl Client {
         let mut client = ImapClient::new(buffered_proxy_stream);
         let _greeting = client
             .read_response()
-            .await
-            .context("failed to read greeting")??;
+            .await?
+            .context("Failed to read greeting")?;
         client
             .run_command_and_check_ok("STARTTLS", None)
             .await

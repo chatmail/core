@@ -23,6 +23,7 @@ pub enum ChatListItemFetchResult {
         name: String,
         avatar_path: Option<String>,
         color: String,
+        chat_type: u32,
         last_updated: Option<i64>,
         summary_text1: String,
         summary_text2: String,
@@ -54,6 +55,7 @@ pub enum ChatListItemFetchResult {
         ///
         /// See also `is_key_contact` on `Contact`.
         is_encrypted: bool,
+        /// deprecated 2025-07, use chat_type instead
         is_group: bool,
         fresh_message_counter: usize,
         is_self_talk: bool,
@@ -64,10 +66,6 @@ pub enum ChatListItemFetchResult {
         is_pinned: bool,
         is_muted: bool,
         is_contact_request: bool,
-        /// Deprecated 2025-07, alias for is_out_broadcast
-        is_broadcast: bool,
-        /// true if the chat type is OutBroadcast
-        is_out_broadcast: bool,
         /// contact id if this is a dm chat (for view profile entry in context menu)
         dm_chat_contact: Option<u32>,
         was_seen_recently: bool,
@@ -157,6 +155,7 @@ pub(crate) async fn get_chat_list_item_by_id(
         name: chat.get_name().to_owned(),
         avatar_path,
         color,
+        chat_type: chat.get_type().to_u32().context("unknown chat type id")?,
         last_updated,
         summary_text1,
         summary_text2,
@@ -174,8 +173,6 @@ pub(crate) async fn get_chat_list_item_by_id(
         is_pinned: visibility == ChatVisibility::Pinned,
         is_muted: chat.is_muted(),
         is_contact_request: chat.is_contact_request(),
-        is_broadcast: chat.get_type() == Chattype::OutBroadcast,
-        is_out_broadcast: chat.get_type() == Chattype::OutBroadcast,
         dm_chat_contact,
         was_seen_recently,
         last_message_type: message_type,

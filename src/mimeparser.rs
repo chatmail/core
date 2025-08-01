@@ -181,10 +181,10 @@ pub enum SystemMessage {
     /// Chat ephemeral message timer is changed.
     EphemeralTimerChanged = 10,
 
-    /// "Messages are guaranteed to be end-to-end encrypted from now on."
+    /// "Messages are end-to-end encrypted."
     ChatProtectionEnabled = 11,
 
-    /// "%1$s sent a message from another device."
+    /// "%1$s sent a message from another device.", deprecated 2025-07
     ChatProtectionDisabled = 12,
 
     /// Message can't be sent because of `Invalid unencrypted mail to <>`
@@ -213,6 +213,9 @@ pub enum SystemMessage {
 
     /// This message contains a users iroh node address.
     IrohNodeAddr = 40,
+
+    /// "Messages are end-to-end encrypted."
+    ChatE2ee = 50,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -246,6 +249,7 @@ impl MimeMessage {
         MimeMessage::merge_headers(
             context,
             &mut headers,
+            &mut headers_removed,
             &mut recipients,
             &mut past_members,
             &mut from,
@@ -273,6 +277,7 @@ impl MimeMessage {
                     MimeMessage::merge_headers(
                         context,
                         &mut headers,
+                        &mut headers_removed,
                         &mut recipients,
                         &mut past_members,
                         &mut from,
@@ -459,26 +464,11 @@ impl MimeMessage {
         });
         if let (Ok(mail), true) = (mail, is_encrypted) {
             if !signatures.is_empty() {
-                // Remove unsigned opportunistically protected headers from messages considered
-                // Autocrypt-encrypted / displayed with padlock.
-                // For "Subject" see <https://github.com/deltachat/deltachat-core-rust/issues/1790>.
-                for h in [
-                    HeaderDef::Subject,
-                    HeaderDef::ChatGroupId,
-                    HeaderDef::ChatGroupName,
-                    HeaderDef::ChatGroupNameChanged,
-                    HeaderDef::ChatGroupNameTimestamp,
-                    HeaderDef::ChatGroupAvatar,
-                    HeaderDef::ChatGroupMemberRemoved,
-                    HeaderDef::ChatGroupMemberAdded,
-                    HeaderDef::ChatGroupMemberTimestamps,
-                    HeaderDef::ChatGroupPastMembers,
-                    HeaderDef::ChatDelete,
-                    HeaderDef::ChatEdit,
-                    HeaderDef::ChatUserAvatar,
-                ] {
-                    remove_header(&mut headers, h.get_headername(), &mut headers_removed);
-                }
+                // Unsigned "Subject" mustn't be prepended to messages shown as encrypted
+                // (<https://github.com/deltachat/deltachat-core-rust/issues/1790>).
+                // Other headers are removed by `MimeMessage::merge_headers()` except for "List-ID".
+                remove_header(&mut headers, "subject", &mut headers_removed);
+                remove_header(&mut headers, "list-id", &mut headers_removed);
             }
 
             // let known protected headers from the decrypted
@@ -491,6 +481,7 @@ impl MimeMessage {
             MimeMessage::merge_headers(
                 context,
                 &mut headers,
+                &mut headers_removed,
                 &mut recipients,
                 &mut past_members,
                 &mut inner_from,
@@ -1571,6 +1562,7 @@ impl MimeMessage {
     fn merge_headers(
         context: &Context,
         headers: &mut HashMap<String, String>,
+        headers_removed: &mut HashSet<String>,
         recipients: &mut Vec<SingleInfo>,
         past_members: &mut Vec<SingleInfo>,
         from: &mut Option<SingleInfo>,
@@ -1578,23 +1570,25 @@ impl MimeMessage {
         chat_disposition_notification_to: &mut Option<SingleInfo>,
         fields: &[mailparse::MailHeader<'_>],
     ) {
+        headers.retain(|k, _| {
+            !is_protected(k) || {
+                headers_removed.insert(k.to_string());
+                false
+            }
+        });
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
-            if !headers.contains_key(&key) || // key already exists, only overwrite known types (protected headers)
-                    is_known(&key) || key.starts_with("chat-")
-            {
-                if key == HeaderDef::ChatDispositionNotificationTo.get_headername() {
-                    match addrparse_header(field) {
-                        Ok(addrlist) => {
-                            *chat_disposition_notification_to = addrlist.extract_single_info();
-                        }
-                        Err(e) => warn!(context, "Could not read {} address: {}", key, e),
+            if key == HeaderDef::ChatDispositionNotificationTo.get_headername() {
+                match addrparse_header(field) {
+                    Ok(addrlist) => {
+                        *chat_disposition_notification_to = addrlist.extract_single_info();
                     }
-                } else {
-                    let value = field.get_value();
-                    headers.insert(key.to_string(), value);
+                    Err(e) => warn!(context, "Could not read {} address: {}", key, e),
                 }
+            } else {
+                let value = field.get_value();
+                headers.insert(key.to_string(), value);
             }
         }
         let recipients_new = get_recipients(fields);
@@ -2022,26 +2016,30 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
     }
 }
 
-/// Returns true if the header overwrites outer header
-/// when it comes from protected headers.
-fn is_known(key: &str) -> bool {
-    matches!(
-        key,
-        "return-path"
-            | "date"
-            | "from"
-            | "sender"
-            | "reply-to"
-            | "to"
-            | "cc"
-            | "bcc"
-            | "message-id"
-            | "in-reply-to"
-            | "references"
-            | "subject"
-            | "secure-join"
-            | "list-id"
-    )
+/// Returns whether the outer header value must be ignored if the message contains a signed (and
+/// optionally encrypted) part.
+///
+/// NB: There are known cases when Subject and List-ID only appear in the outer headers of
+/// signed-only messages. Such messages are shown as unencrypted anyway.
+fn is_protected(key: &str) -> bool {
+    key.starts_with("chat-")
+        || matches!(
+            key,
+            "return-path"
+                | "auto-submitted"
+                | "autocrypt-setup-message"
+                | "date"
+                | "from"
+                | "sender"
+                | "reply-to"
+                | "to"
+                | "cc"
+                | "bcc"
+                | "message-id"
+                | "in-reply-to"
+                | "references"
+                | "secure-join"
+        )
 }
 
 /// Returns if the header is hidden and must be ignored in the IMF section.

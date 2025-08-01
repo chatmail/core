@@ -21,15 +21,16 @@ pub struct FullChat {
 
     /// True if the chat is protected.
     ///
-    /// UI should display a green checkmark
-    /// in the chat title,
-    /// in the chat profile title and
-    /// in the chatlist item
-    /// if chat protection is enabled.
-    /// UI should also display a green checkmark
-    /// in the contact profile
-    /// if 1:1 chat with this contact exists and is protected.
+    /// Only verified contacts
+    /// as determined by [`ContactObject::is_verified`] / `Contact.isVerified`
+    /// can be added to protected chats.
+    ///
+    /// Protected chats are created using [`create_group_chat`] / `createGroupChat()`
+    /// by setting the 'protect' parameter to true.
+    ///
+    /// [`create_group_chat`]: crate::api::CommandApi::create_group_chat
     is_protected: bool,
+
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
     /// and all contacts in the chat are "key-contacts",
@@ -70,7 +71,9 @@ pub struct FullChat {
     fresh_message_counter: usize,
     // is_group - please check over chat.type in frontend instead
     is_contact_request: bool,
+    /// Deprecated 2025-07. Chats protection cannot break any longer.
     is_protection_broken: bool,
+
     is_device_chat: bool,
     self_in_group: bool,
     is_muted: bool,
@@ -215,7 +218,9 @@ pub struct BasicChat {
     is_self_talk: bool,
     color: String,
     is_contact_request: bool,
+    /// Deprecated 2025-07. Chats protection cannot break any longer.
     is_protection_broken: bool,
+
     is_device_chat: bool,
     is_muted: bool,
 }

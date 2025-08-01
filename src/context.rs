@@ -27,6 +27,7 @@ use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::{load_self_secret_key, self_fingerprint};
 use crate::log::{info, warn};
+use crate::logged_debug_assert;
 use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
 use crate::message::{self, Message, MessageState, MsgId};
 use crate::param::{Param, Params};
@@ -332,6 +333,15 @@ impl Default for RunningState {
 /// about the context on top of the information here.
 pub fn get_info() -> BTreeMap<&'static str, String> {
     let mut res = BTreeMap::new();
+
+    #[cfg(debug_assertions)]
+    res.insert(
+        "debug_assertions",
+        "On - DO NOT RELEASE THIS BUILD".to_string(),
+    );
+    #[cfg(not(debug_assertions))]
+    res.insert("debug_assertions", "Off".to_string());
+
     res.insert("deltachat_core_version", format!("v{}", &*DC_VERSION_STR));
     res.insert("sqlite_version", rusqlite::version().to_string());
     res.insert("arch", (std::mem::size_of::<usize>() * 8).to_string());
@@ -660,8 +670,16 @@ impl Context {
     /// or [`Self::emit_msgs_changed_without_msg_id`] should be used
     /// instead of this function.
     pub fn emit_msgs_changed(&self, chat_id: ChatId, msg_id: MsgId) {
-        debug_assert!(!chat_id.is_unset());
-        debug_assert!(!msg_id.is_unset());
+        logged_debug_assert!(
+            self,
+            !chat_id.is_unset(),
+            "emit_msgs_changed: chat_id is unset."
+        );
+        logged_debug_assert!(
+            self,
+            !msg_id.is_unset(),
+            "emit_msgs_changed: msg_id is unset."
+        );
 
         self.emit_event(EventType::MsgsChanged { chat_id, msg_id });
         chatlist_events::emit_chatlist_changed(self);
@@ -670,7 +688,11 @@ impl Context {
 
     /// Emits a MsgsChanged event with specified chat and without message id.
     pub fn emit_msgs_changed_without_msg_id(&self, chat_id: ChatId) {
-        debug_assert!(!chat_id.is_unset());
+        logged_debug_assert!(
+            self,
+            !chat_id.is_unset(),
+            "emit_msgs_changed_without_msg_id: chat_id is unset."
+        );
 
         self.emit_event(EventType::MsgsChanged {
             chat_id,
@@ -1030,7 +1052,7 @@ impl Context {
             self.get_config_int(Config::GossipPeriod).await?.to_string(),
         );
         res.insert(
-            "verified_one_on_one_chats",
+            "verified_one_on_one_chats", // deprecated 2025-07
             self.get_config_bool(Config::VerifiedOneOnOneChats)
                 .await?
                 .to_string(),
@@ -1038,6 +1060,12 @@ impl Context {
         res.insert(
             "webxdc_realtime_enabled",
             self.get_config_bool(Config::WebxdcRealtimeEnabled)
+                .await?
+                .to_string(),
+        );
+        res.insert(
+            "donation_request_next_check",
+            self.get_config_i64(Config::DonationRequestNextCheck)
                 .await?
                 .to_string(),
         );
@@ -1059,7 +1087,6 @@ impl Context {
         #[derive(Default)]
         struct ChatNumbers {
             protected: u32,
-            protection_broken: u32,
             opportunistic_dc: u32,
             opportunistic_mua: u32,
             unencrypted_dc: u32,
@@ -1095,7 +1122,6 @@ impl Context {
 
         // how many of the chats active in the last months are:
         // - protected
-        // - protection-broken
         // - opportunistic-encrypted and the contact uses Delta Chat
         // - opportunistic-encrypted and the contact uses a classical MUA
         // - unencrypted and the contact uses Delta Chat
@@ -1138,8 +1164,6 @@ impl Context {
 
                         if protected == ProtectionStatus::Protected {
                             chats.protected += 1;
-                        } else if protected == ProtectionStatus::ProtectionBroken {
-                            chats.protection_broken += 1;
                         } else if encrypted {
                             if is_dc_message {
                                 chats.opportunistic_dc += 1;
@@ -1157,7 +1181,6 @@ impl Context {
             )
             .await?;
         res += &format!("chats_protected {}\n", chats.protected);
-        res += &format!("chats_protection_broken {}\n", chats.protection_broken);
         res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
         res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
         res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);

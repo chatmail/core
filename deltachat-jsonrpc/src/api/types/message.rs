@@ -416,6 +416,9 @@ pub enum SystemMessageType {
     /// Chat ephemeral message timer is changed.
     EphemeralTimerChanged,
 
+    // Chat is e2ee
+    ChatE2ee,
+
     // Chat protection state changed
     ChatProtectionEnabled,
     ChatProtectionDisabled,
@@ -450,6 +453,7 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::LocationStreamingEnabled => SystemMessageType::LocationStreamingEnabled,
             SystemMessage::LocationOnly => SystemMessageType::LocationOnly,
             SystemMessage::EphemeralTimerChanged => SystemMessageType::EphemeralTimerChanged,
+            SystemMessage::ChatE2ee => SystemMessageType::ChatE2ee,
             SystemMessage::ChatProtectionEnabled => SystemMessageType::ChatProtectionEnabled,
             SystemMessage::ChatProtectionDisabled => SystemMessageType::ChatProtectionDisabled,
             SystemMessage::MultiDeviceSync => SystemMessageType::MultiDeviceSync,

@@ -503,13 +503,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `gossip_period` = How often to gossip Autocrypt keys in chats with multiple recipients, in
  *                    seconds. 2 days by default.
  *                    This is not supposed to be changed by UIs and only used for testing.
- * - `verified_one_on_one_chats` = Feature flag for verified 1:1 chats; the UI should set it
- *                    to 1 if it supports verified 1:1 chats.
- *                    Regardless of this setting, `dc_chat_is_protected()` returns true while the key is verified,
- *                    and when the key changes, an info message is posted into the chat.
- *                    0=Nothing else happens when the key changes.
- *                    1=After the key changed, `dc_chat_can_send()` returns false and `dc_chat_is_protection_broken()` returns true
- *                    until `dc_accept_chat()` is called.
  * - `is_chatmail` = 1 if the the server is a chatmail server, 0 otherwise.
  * - `is_muted`     = Whether a context is muted by the user.
  *                    Muted contexts should not sound, vibrate or show notifications.
@@ -1339,12 +1332,14 @@ dc_msg_t*       dc_get_draft                 (dc_context_t* context, uint32_t ch
  * Optionally, some special markers added to the ID array may help to
  * implement virtual lists.
  *
+ * To get the concrete time of the message, use dc_array_get_timestamp().
+ *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
  * @param chat_id The chat ID of which the messages IDs should be queried.
  * @param flags If set to DC_GCM_ADDDAYMARKER, the marker DC_MSG_ID_DAYMARKER will
  *     be added before each day (regarding the local timezone). Set this to 0 if you do not want this behaviour.
- *     To get the concrete time of the marker, use dc_array_get_timestamp().
+ *     The day marker timestamp is the midnight one for the corresponding (following) day in the local timezone.
  *     If set to DC_GCM_INFO_ONLY, only system messages will be returned, can be combined with DC_GCM_ADDDAYMARKER.
  * @param marker1before Deprecated, set this to 0.
  * @return Array of message IDs, must be dc_array_unref()'d when no longer used.
@@ -3818,21 +3813,12 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 /**
  * Check if a chat is protected.
  *
- * End-to-end encryption is guaranteed in protected chats
- * and only verified contacts
+ * Only verified contacts
  * as determined by dc_contact_is_verified()
  * can be added to protected chats.
  *
  * Protected chats are created using dc_create_group_chat()
  * by setting the 'protect' parameter to 1.
- * 1:1 chats become protected or unprotected automatically
- * if `verified_one_on_one_chats` setting is enabled.
- *
- * UI should display a green checkmark
- * in the chat title,
- * in the chatlist item
- * and in the chat profile
- * if chat protection is enabled.
  *
  * @memberof dc_chat_t
  * @param chat The chat object.
@@ -3869,6 +3855,8 @@ int             dc_chat_is_encrypted         (const dc_chat_t *chat);
  *
  * The UI should let the user confirm that this is OK with a message like
  * `Bob sent a message from another device. Tap to learn more` and then call dc_accept_chat().
+ *
+ * @deprecated 2025-07 chats protection cannot break any longer
  * @memberof dc_chat_t
  * @param chat The chat object.
  * @return 1=chat protection broken, 0=otherwise.
@@ -4535,12 +4523,12 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  * - DC_INFO_MEMBER_ADDED_TO_GROUP (4) - "Member CONTACT added by OTHER_CONTACT"
  * - DC_INFO_MEMBER_REMOVED_FROM_GROUP (5) - "Member CONTACT removed by OTHER_CONTACT"
  * - DC_INFO_EPHEMERAL_TIMER_CHANGED (10) - "Disappearing messages CHANGED_TO by CONTACT"
- * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is now protected"
- * - DC_INFO_PROTECTION_DISABLED (12) - Info-message for "Chat is no longer protected"
+ * - DC_INFO_PROTECTION_ENABLED (11) - Info-message for "Chat is protected"
  * - DC_INFO_INVALID_UNENCRYPTED_MAIL (13) - Info-message for "Provider requires end-to-end encryption which is not setup yet",
  *   the UI should change the corresponding string using #DC_STR_INVALID_UNENCRYPTED_MAIL
  *   and also offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
+ * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
  *
  * For the messages that refer to a CONTACT,
  * dc_msg_get_info_contact_id() returns the contact ID.
@@ -4593,9 +4581,10 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_LOCATION_ONLY              9
 #define         DC_INFO_EPHEMERAL_TIMER_CHANGED   10
 #define         DC_INFO_PROTECTION_ENABLED        11
-#define         DC_INFO_PROTECTION_DISABLED       12
+#define         DC_INFO_PROTECTION_DISABLED       12 // deprecated 2025-07
 #define         DC_INFO_INVALID_UNENCRYPTED_MAIL  13
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
+#define         DC_INFO_CHAT_E2EE                 50
 
 
 /**
@@ -5266,20 +5255,14 @@ int             dc_contact_is_blocked        (const dc_contact_t* contact);
 
 /**
  * Check if the contact
- * can be added to verified chats,
- * i.e. has a verified key
- * and Autocrypt key matches the verified key.
+ * can be added to protected chats.
  *
- * If contact is verified
- * UI should display green checkmark after the contact name
- * in contact list items,
- * in chat member list items
- * and in profiles if no chat with the contact exist (otherwise, use dc_chat_is_protected()).
+ * See dc_contact_get_verifier_id() for a guidance how to display these information.
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
  * @return 0: contact is not verified.
- *    2: SELF and contact have verified their fingerprints in both directions; in the UI typically checkmarks are shown.
+ *    2: SELF and contact have verified their fingerprints in both directions.
  */
 int             dc_contact_is_verified       (dc_contact_t* contact);
 
@@ -5310,16 +5293,22 @@ int             dc_contact_is_key_contact    (dc_contact_t* contact);
 /**
  * Return the contact ID that verified a contact.
  *
- * If the function returns non-zero result,
- * display green checkmark in the profile and "Introduced by ..." line
- * with the name and address of the contact
- * formatted by dc_contact_get_name_n_addr.
+ * As verifier may be unknown,
+ * use dc_contact_is_verified() to check if a contact can be added to a protected chat.
  *
- * If this function returns a verifier,
- * this does not necessarily mean
- * you can add the contact to verified chats.
- * Use dc_contact_is_verified() to check
- * if a contact can be added to a verified chat instead.
+ * UI should display the information in the contact's profile as follows:
+ *
+ * - If dc_contact_get_verifier_id() != 0,
+ *   display text "Introduced by ..."
+ *   with the name and address of the contact
+ *   formatted by dc_contact_get_name_n_addr().
+ *   Prefix the text by a green checkmark.
+ *
+ * - If dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() != 0,
+ *   display "Introduced" prefixed by a green checkmark.
+ *
+ * - if dc_contact_get_verifier_id() == 0 and dc_contact_is_verified() == 0,
+ *   display nothing
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
@@ -6385,7 +6374,6 @@ void dc_event_unref(dc_event_t* event);
 
 /**
  * Chat changed. The name or the image of a chat group was changed or members were added or removed.
- * Or the verify state of a chat has changed.
  * See dc_set_chat_name(), dc_set_chat_profile_image(), dc_add_contact_to_chat()
  * and dc_remove_contact_from_chat().
  *
@@ -6898,9 +6886,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used in summaries.
 #define DC_STR_GIF                        23
 
-/// "Encrypted message"
-///
-/// Used in subjects of outgoing messages.
+/// @deprecated 2025-07, this string is no longer needed.
 #define DC_STR_ENCRYPTEDMSG               24
 
 /// "End-to-end encryption available."
@@ -7605,7 +7591,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used as a device message after a successful backup transfer.
 #define DC_STR_BACKUP_TRANSFER_MSG_BODY 163
 
-/// "Messages are guaranteed to be end-to-end encrypted from now on."
+/// "Messages are end-to-end encrypted."
 ///
 /// Used in info messages.
 #define DC_STR_CHAT_PROTECTION_ENABLED 170
@@ -7613,6 +7599,7 @@ void dc_event_unref(dc_event_t* event);
 /// "%1$s sent a message from another device."
 ///
 /// Used in info messages.
+/// @deprecated 2025-07
 #define DC_STR_CHAT_PROTECTION_DISABLED 171
 
 /// "Others will only see this group after you sent a first message."
@@ -7666,6 +7653,9 @@ void dc_event_unref(dc_event_t* event);
 /// Used as info message.
 /// @deprecated 2025-06-05
 #define DC_STR_SECUREJOIN_TAKES_LONGER 192
+
+/// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
+#define DC_STR_DONATION_REQUEST 193
 
 /// "Contact". Deprecated, currently unused.
 #define DC_STR_CONTACT 200
