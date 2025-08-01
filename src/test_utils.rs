@@ -229,15 +229,15 @@ impl TestContextManager {
     pub async fn exec_securejoin_qr(
         &self,
         scanner: &TestContext,
-        scanned: &TestContext,
+        inviter: &TestContext,
         qr: &str,
     ) -> ChatId {
         let chat_id = join_securejoin(&scanner.ctx, qr).await.unwrap();
 
         loop {
             if let Some(sent) = scanner.pop_sent_msg_opt(Duration::ZERO).await {
-                scanned.recv_msg_opt(&sent).await;
-            } else if let Some(sent) = scanned.pop_sent_msg_opt(Duration::ZERO).await {
+                inviter.recv_msg_opt(&sent).await;
+            } else if let Some(sent) = inviter.pop_sent_msg_opt(Duration::ZERO).await {
                 scanner.recv_msg_opt(&sent).await;
             } else {
                 break;

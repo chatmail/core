@@ -4,7 +4,10 @@ use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid};
+use crate::chat::{
+    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid,
+    load_broadcast_shared_secret,
+};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
@@ -46,9 +49,9 @@ fn inviter_progress(context: &Context, contact_id: ContactId, progress: usize) {
 
 /// Generates a Secure Join QR code.
 ///
-/// With `group` set to `None` this generates a setup-contact QR code, with `group` set to a
-/// [`ChatId`] generates a join-group QR code for the given chat.
-pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Result<String> {
+/// With `chat` set to `None` this generates a setup-contact QR code, with `chat` set to a
+/// [`ChatId`] generates a join-group/join-broadcast-channel QR code for the given chat.
+pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Result<String> {
     /*=======================================================
     ====             Alice - the inviter side            ====
     ====   Step 1 in "Setup verified contact" protocol   ====
@@ -56,12 +59,13 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
 
     ensure_secret_key_exists(context).await.ok();
 
-    let chat = match group {
+    let chat = match chat {
         Some(id) => {
             let chat = Chat::load_from_db(context, id).await?;
             ensure!(
-                chat.typ == Chattype::Group,
-                "Can't generate SecureJoin QR code for 1:1 chat {id}"
+                chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
+                "Can't generate SecureJoin QR code for chat {id} of type {}",
+                chat.typ
             );
             if chat.grpid.is_empty() {
                 let err = format!("Can't generate QR code, chat {id} is a email thread");
@@ -94,24 +98,44 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
         utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
 
     let qr = if let Some(chat) = chat {
-        // parameters used: a=g=x=i=s=
-        let group_name = chat.get_name();
-        let group_name_urlencoded = utf8_percent_encode(group_name, NON_ALPHANUMERIC).to_string();
-        if sync_token {
-            context
-                .sync_qr_code_tokens(Some(chat.grpid.as_str()))
-                .await?;
-            context.scheduler.interrupt_inbox().await;
+        if chat.typ == Chattype::OutBroadcast {
+            let broadcast_name = chat.get_name();
+            let broadcast_name_urlencoded =
+                utf8_percent_encode(broadcast_name, NON_ALPHANUMERIC).to_string();
+            let broadcast_secret = load_broadcast_shared_secret(context, chat.id)
+                .await?
+                .context("Could not find broadcast secret")?;
+
+            format!(
+                "https://i.delta.chat/#{}&a={}&g={}&x={}&s={}&b={}",
+                fingerprint.hex(),
+                self_addr_urlencoded,
+                &broadcast_name_urlencoded,
+                &chat.grpid,
+                &auth,
+                broadcast_secret
+            )
+        } else {
+            // parameters used: a=g=x=i=s=
+            let group_name = chat.get_name();
+            let group_name_urlencoded =
+                utf8_percent_encode(group_name, NON_ALPHANUMERIC).to_string();
+            if sync_token {
+                context
+                    .sync_qr_code_tokens(Some(chat.grpid.as_str()))
+                    .await?;
+                context.scheduler.interrupt_inbox().await;
+            }
+            format!(
+                "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
+                fingerprint.hex(),
+                self_addr_urlencoded,
+                &group_name_urlencoded,
+                &chat.grpid,
+                &invitenumber,
+                &auth,
+            )
         }
-        format!(
-            "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
-            fingerprint.hex(),
-            self_addr_urlencoded,
-            &group_name_urlencoded,
-            &chat.grpid,
-            &invitenumber,
-            &auth,
-        )
     } else {
         // parameters used: a=n=i=s=
         if sync_token {
@@ -266,9 +290,9 @@ pub(crate) async fn handle_securejoin_handshake(
 
     info!(context, "Received secure-join message {step:?}.");
 
-    let join_vg = step.starts_with("vg-");
-
-    if !matches!(step, "vg-request" | "vc-request") {
+    // TODO talk with link2xt about whether we need to protect against this identity-misbinding attack,
+    // and if so, how
+    if !matches!(step, "vg-request" | "vc-request" | "vb-request-with-auth") {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
@@ -338,7 +362,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ========================================================*/
             bob::handle_auth_required(context, mime_message).await
         }
-        "vg-request-with-auth" | "vc-request-with-auth" => {
+        "vg-request-with-auth" | "vc-request-with-auth" | "vb-request-with-auth" => {
             /*==========================================================
             ====              Alice - the inviter side              ====
             ====   Steps 5+6 in "Setup verified contact" protocol   ====
@@ -399,7 +423,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
             // (secure-join-information are shown in the group chat)
-            if !join_vg {
+            if step.starts_with("vc-") {
                 ChatId::create_for_contact(context, contact_id).await?;
             }
             context.emit_event(EventType::ContactsChanged(Some(contact_id)));
@@ -500,6 +524,7 @@ pub(crate) async fn handle_securejoin_handshake(
 /// we know that we are Alice (inviter-observer)
 /// that just marked peer (Bob) as verified
 /// in response to correct vc-request-with-auth message.
+// TODO here I may be able to fix some multi-device things
 pub(crate) async fn observe_securejoin_on_other_device(
     context: &Context,
     mime_message: &MimeMessage,

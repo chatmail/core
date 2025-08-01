@@ -7,6 +7,7 @@ use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, sync,
@@ -2929,11 +2930,13 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
     tcm.section("Create a broadcast channel with Bob, and send a message");
     let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
-    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
     let mut sent = alice.send_text(alice_chat_id, "Hi somebody").await;
 
     assert!(!sent.payload.contains("List-ID"));

@@ -30,10 +30,11 @@ pub enum QrInvite {
         authcode: String,
     },
     Broadcast {
-        broadcast_name: String,
-        grpid: String,
         contact_id: ContactId,
         fingerprint: Fingerprint,
+        broadcast_name: String,
+        grpid: String,
+        authcode: String,
         shared_secret: String,
     },
 }
@@ -71,8 +72,9 @@ impl QrInvite {
     /// The `AUTH` code of the setup-contact/secure-join protocol.
     pub fn authcode(&self) -> &str {
         match self {
-            Self::Contact { authcode, .. } | Self::Group { authcode, .. } => authcode,
-            Self::Broadcast { .. } => panic!("broadcast invite has no authcode"), // TODO panic
+            Self::Contact { authcode, .. }
+            | Self::Group { authcode, .. }
+            | Self::Broadcast { authcode, .. } => authcode,
         }
     }
 }
@@ -113,15 +115,17 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 contact_id,
                 fingerprint,
+                authcode,
                 shared_secret,
             } => Ok(QrInvite::Broadcast {
                 broadcast_name,
                 grpid,
                 contact_id,
                 fingerprint,
+                authcode,
                 shared_secret,
             }),
-            _ => bail!("Unsupported QR type"),
+            _ => bail!("Unsupported QR type: {qr:?}"),
         }
     }
 }

@@ -43,9 +43,9 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_shared_secret, create_id,
-    create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
-    gm2local_offset, smeared_time, time, truncate_msg_text,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_id, create_outgoing_rfc724_mid,
+    create_smeared_timestamp, create_smeared_timestamps, get_abs_path, gm2local_offset,
+    smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -1646,6 +1646,18 @@ impl Chat {
         self.typ == Chattype::Mailinglist
     }
 
+    /// Returns true if chat is an outgoing broadcast channel.
+    pub fn is_out_broadcast(&self) -> bool {
+        self.typ == Chattype::OutBroadcast
+    }
+
+    /// Returns true if the chat is a broadcast channel,
+    /// regardless of whether self is on the sending
+    /// or receiving side.
+    pub fn is_any_broadcast(&self) -> bool {
+        matches!(self.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
+    }
+
     /// Returns None if user can send messages to this chat.
     ///
     /// Otherwise returns a reason useful for logging.
@@ -1726,7 +1738,7 @@ impl Chat {
         match self.typ {
             Chattype::Single | Chattype::OutBroadcast | Chattype::Mailinglist => Ok(true),
             Chattype::Group => is_contact_in_chat(context, self.id, ContactId::SELF).await,
-            Chattype::InBroadcast => Ok(false),
+            Chattype::InBroadcast => Ok(true),
         }
     }
 
@@ -2916,13 +2928,18 @@ async fn prepare_send_msg(
         CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
+
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         }
         // Allow to send "Member removed" messages so we can leave the group/broadcast.
         // Necessary checks should be made anyway before removing contact
         // from the chat.
-        CantSendReason::NotAMember | CantSendReason::InBroadcast => {
-            msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup
+        CantSendReason::NotAMember => msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup,
+        CantSendReason::InBroadcast => {
+            matches!(
+                msg.param.get_cmd(),
+                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+            )
         }
         CantSendReason::MissingKey => msg
             .param
@@ -3777,7 +3794,7 @@ pub async fn create_group_ex(
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    let secret = create_broadcast_shared_secret();
+    let secret = create_id();
     create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
@@ -3838,6 +3855,35 @@ pub(crate) async fn create_broadcast_ex(
     }
 
     Ok(chat_id)
+}
+
+pub(crate) async fn load_broadcast_shared_secret(
+    context: &Context,
+    chat_id: ChatId,
+) -> Result<Option<String>> {
+    Ok(context
+        .sql
+        .query_get_value(
+            "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
+            (chat_id,),
+        )
+        .await?)
+}
+
+pub(crate) async fn save_broadcast_shared_secret(
+    context: &Context,
+    chat_id: ChatId,
+    shared_secret: &str,
+) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+                    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
+            (chat_id, shared_secret),
+        )
+        .await?;
+    Ok(())
 }
 
 /// Set chat contacts in the `chats_contacts` table.
