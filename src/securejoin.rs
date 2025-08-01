@@ -5,8 +5,8 @@ use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid,
-    load_broadcast_shared_secret,
+    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, add_to_chat_contacts_table,
+    get_chat_id_by_grpid, load_broadcast_shared_secret,
 };
 use crate::chatlist_events;
 use crate::config::Config;
@@ -27,6 +27,7 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::token;
+use crate::tools::time;
 
 mod bob;
 mod qrinvite;
@@ -437,13 +438,26 @@ pub(crate) async fn handle_securejoin_handshake(
                     mime_message.timestamp_sent,
                 )
                 .await?;
-                chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
-                    .await?;
+                if step.starts_with("vb-") {
+                    // TODO extract into variable
+                    add_to_chat_contacts_table(context, time(), group_chat_id, &[contact_id])
+                        .await?;
+                } else {
+                    chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
+                        .await?;
+                }
                 inviter_progress(context, contact_id, 800);
                 inviter_progress(context, contact_id, 1000);
-                // IMAP-delete the message to avoid handling it by another device and adding the
-                // member twice. Another device will know the member's key from Autocrypt-Gossip.
-                Ok(HandshakeMessage::Done)
+                if step.starts_with("vb-") {
+                    // For broadcasts, we don't want to delete the message,
+                    // because the other device should also internally add the member
+                    // and see the key (because it won't see the member via autocrypt-gossip).
+                    Ok(HandshakeMessage::Propagate)
+                } else {
+                    // IMAP-delete the message to avoid handling it by another device and adding the
+                    // member twice. Another device will know the member's key from Autocrypt-Gossip.
+                    Ok(HandshakeMessage::Done)
+                }
             } else {
                 // Setup verified contact.
                 secure_connection_established(

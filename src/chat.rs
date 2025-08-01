@@ -3823,8 +3823,8 @@ pub(crate) async fn create_broadcast_ex(
             }
             t.execute(
                 "INSERT INTO chats \
-                (type, name, grpid, param, created_timestamp) \
-                VALUES(?, ?, ?, \'U=1\', ?);",
+                (type, name, grpid, created_timestamp) \
+                VALUES(?, ?, ?, ?);",
                 (
                     Chattype::OutBroadcast,
                     &chat_name,
@@ -4000,8 +4000,8 @@ pub(crate) async fn add_contact_to_chat_ex(
     // this also makes sure, no contacts are added to special or normal chats
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
-        "{} is not a group/broadcast where one can add members",
+        chat.typ == Chattype::Group,
+        "{} is not a group where one can add members",
         chat_id
     );
     ensure!(
@@ -4010,10 +4010,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         contact_id
     );
     ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
-    ensure!(
-        chat.typ != Chattype::OutBroadcast || contact_id != ContactId::SELF,
-        "Cannot add SELF to broadcast channel."
-    );
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),
         "Only key-contacts can be added to encrypted chats"
@@ -4065,7 +4061,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;
     }
-    if chat.typ == Chattype::Group && chat.is_promoted() {
+    if chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
