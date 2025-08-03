@@ -13,6 +13,7 @@ use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
+use crate::ensure_and_debug_assert;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::BLOBS_BACKUP_NAME;
 use crate::location::delete_orphaned_poi_locations;
@@ -175,10 +176,12 @@ impl Sql {
         .await
     }
 
+    const N_DB_CONNECTIONS: usize = 3;
+
     /// Creates a new connection pool.
     fn new_pool(dbfile: &Path, passphrase: String) -> Result<Pool> {
         let mut connections = Vec::new();
-        for _ in 0..3 {
+        for _ in 0..Self::N_DB_CONNECTIONS {
             let connection = new_connection(dbfile, &passphrase)?;
             connections.push(connection);
         }
@@ -637,6 +640,31 @@ impl Sql {
     pub fn config_cache(&self) -> &RwLock<HashMap<String, Option<String>>> {
         &self.config_cache
     }
+
+    /// Runs a checkpoint operation in TRUNCATE mode, so the WAL file is truncated to 0 bytes.
+    pub(crate) async fn wal_checkpoint(&self) -> Result<()> {
+        let lock = self.pool.read().await;
+        let pool = lock.as_ref().context("No SQL connection pool")?;
+        let mut conns = Vec::new();
+        let query_only = true;
+        // Kick out readers to avoid blocking/SQLITE_BUSY.
+        for _ in 0..(Self::N_DB_CONNECTIONS - 1) {
+            conns.push(pool.get(query_only).await?);
+        }
+        let conn = pool.get(query_only).await?;
+        tokio::task::block_in_place(move || {
+            // Execute some transaction causing the WAL file to be opened so that the
+            // `wal_checkpoint()` can proceed, otherwise it fails when called the first time, see
+            // https://sqlite.org/forum/forumpost/7512d76a05268fc8.
+            conn.query_row("PRAGMA table_list", [], |_row| Ok(()))?;
+            let blocked = conn.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                let blocked: i64 = row.get(0)?;
+                Ok(blocked)
+            })?;
+            ensure_and_debug_assert!(blocked == 0,);
+            Ok(())
+        })
+    }
 }
 
 /// Creates a new SQLite connection.
@@ -759,6 +787,13 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
 
     if let Err(err) = incremental_vacuum(context).await {
         warn!(context, "Failed to run incremental vacuum: {err:#}.");
+    }
+    // Work around possible checkpoint starvations (there were cases reported when a WAL file is
+    // bigger than 200M) and also make sure we truncate the WAL periodically. Auto-checkponting does
+    // not normally truncate the WAL (unless the `journal_size_limit` pragma is set), see
+    // https://www.sqlite.org/wal.html.
+    if let Err(err) = context.sql.wal_checkpoint().await {
+        warn!(context, "wal_checkpoint() failed: {err:#}.");
     }
 
     context
