@@ -795,8 +795,8 @@ impl Contact {
             .query_get_value(
                 "SELECT id FROM contacts
                  WHERE addr=?1 COLLATE NOCASE
-                 AND fingerprint='' -- Do not lookup key-contacts
-                 AND id>?2 AND origin>=?3 AND (? OR blocked=?)",
+                 AND id>?2 AND origin>=?3 AND (? OR blocked=?)
+                 ORDER BY last_seen DESC LIMIT 1",
                 (
                     &addr_normalized,
                     ContactId::LAST_SPECIAL,
