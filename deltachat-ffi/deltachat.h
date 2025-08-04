@@ -2095,6 +2095,10 @@ int             dc_may_be_valid_addr         (const char* addr);
  * To validate an e-mail address independently of the contact database
  * use dc_may_be_valid_addr().
  *
+ * If there are multiple contacts with this address
+ * (e.g. an address-contact and a key-contact),
+ * this looks up the most recently seen contact.
+ *
  * @memberof dc_context_t
  * @param context The context object.
  * @param addr The e-mail address to check.
@@ -2112,6 +2116,13 @@ uint32_t        dc_lookup_contact_id_by_addr (dc_context_t* context, const char*
  *
  * To add a number of contacts, see dc_add_address_book() which is much faster for adding
  * a bunch of addresses.
+ *
+ * This will always create or lookup an address-contact,
+ * i.e. a contact identified by an email address,
+ * with all messages sent to and from this contact being unencrypted.
+ * If the user just clicked on an email address,
+ * you should first check [`Self::lookup_contact_id_by_addr`]/`lookupContactIdByAddr.`,
+ * and only if there is no contact yet call this function here.
  *
  * May result in a #DC_EVENT_CONTACTS_CHANGED event.
  *
