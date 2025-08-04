@@ -20,7 +20,7 @@ use crate::message::Message;
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
-use crate::tools::validate_id;
+use crate::tools::{validate_broadcast_shared_secret, validate_id};
 
 const OPENPGP4FPR_SCHEME: &str = "OPENPGP4FPR:"; // yes: uppercase
 const IDELTACHAT_SCHEME: &str = "https://i.delta.chat/#";
@@ -459,7 +459,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .map(|s| s.to_string());
     let broadcast_shared_secret = param
         .get("b")
-        .filter(|&s| validate_id(s))
+        .filter(|&s| validate_broadcast_shared_secret(s))
         .map(|s| s.to_string());
 
     let grpname = if grpid.is_some() {
