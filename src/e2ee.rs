@@ -54,6 +54,11 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
+        println!(
+            "\nEncrypting pk:\n{}\n",
+            str::from_utf8(&raw_message).unwrap()
+        );
+
         let ctext = pgp::pk_encrypt(raw_message, keyring, Some(sign_key), compress).await?;
 
         Ok(ctext)
@@ -72,6 +77,11 @@ impl EncryptHelper {
         let mut raw_message = Vec::new();
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
+
+        println!(
+            "\nEncrypting symm:\n{}\n",
+            str::from_utf8(&raw_message).unwrap()
+        );
 
         let ctext = pgp::encrypt_for_broadcast(raw_message, passphrase, sign_key, compress).await?;
 
