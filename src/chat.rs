@@ -4065,7 +4065,15 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
-        msg.text = stock_str::msg_add_member_local(context, contact.id, ContactId::SELF).await;
+        let added_by = if from_handshake && chat.is_out_broadcast() {
+            // The contact was added via a QR code rather than explicit user action,
+            // and there is added information in saying 'You added member Alice'
+            // if self is the only one who can add members.
+            ContactId::UNDEFINED
+        } else {
+            ContactId::SELF
+        };
+        msg.text = stock_str::msg_add_member_local(context, contact.id, added_by).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());

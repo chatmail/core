@@ -3504,6 +3504,17 @@ async fn apply_out_broadcast_changes(
             silent: true,
             extra_msgs: vec![],
         });
+    } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        // TODO this may lookup the wrong contact if multiple contacts have the same email addr.
+        // We can send sync messages instead,
+        // lookup the fingerprint by gossip header (like it's done for groups right now)
+        // or add a header ChatGroupMemberAddedFpr.
+        let contact = lookup_key_contact_by_address(context, added_addr, None).await?;
+        if let Some(contact) = contact {
+            better_msg.get_or_insert(
+                stock_str::msg_add_member_local(context, contact, ContactId::UNDEFINED).await,
+            );
+        }
     }
 
     if send_event_chat_modified {
@@ -3545,6 +3556,12 @@ async fn apply_in_broadcast_changes(
         if from_id == ContactId::SELF {
             better_msg
                 .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
+        }
+    } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        if context.is_self_addr(added_addr).await? {
+            better_msg.get_or_insert(
+                stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await,
+            );
         }
     }
 
