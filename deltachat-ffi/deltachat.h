@@ -2089,7 +2089,7 @@ int             dc_may_be_valid_addr         (const char* addr);
 
 
 /**
- * Check if an e-mail address belongs to a known and unblocked contact.
+ * Looks up a known and unblocked contact with a given e-mail address.
  * To get a list of all known and unblocked contacts, use dc_get_contacts().
  *
  * To validate an e-mail address independently of the contact database
@@ -2117,12 +2117,12 @@ uint32_t        dc_lookup_contact_id_by_addr (dc_context_t* context, const char*
  * To add a number of contacts, see dc_add_address_book() which is much faster for adding
  * a bunch of addresses.
  *
- * This will always create or lookup an address-contact,
+ * This will always create or look up an address-contact,
  * i.e. a contact identified by an email address,
  * with all messages sent to and from this contact being unencrypted.
  * If the user just clicked on an email address,
- * you should first check [`Self::lookup_contact_id_by_addr`]/`lookupContactIdByAddr.`,
- * and only if there is no contact yet call this function here.
+ * you should first check `lookup_contact_id_by_addr`,
+ * and only if there is no contact yet, call this function here.
  *
  * May result in a #DC_EVENT_CONTACTS_CHANGED event.
  *

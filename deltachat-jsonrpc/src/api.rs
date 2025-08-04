@@ -1473,12 +1473,12 @@ impl CommandApi {
 
     /// Add a single contact as a result of an explicit user action.
     ///
-    /// This will always create or lookup an address-contact,
+    /// This will always create or look up an address-contact,
     /// i.e. a contact identified by an email address,
     /// with all messages sent to and from this contact being unencrypted.
     /// If the user just clicked on an email address,
     /// you should first check [`Self::lookup_contact_id_by_addr`]/`lookupContactIdByAddr.`,
-    /// and only if there is no contact yet call this function here.
+    /// and only if there is no contact yet, call this function here.
     ///
     /// Returns contact id of the created or existing contact.
     async fn create_contact(
@@ -1630,7 +1630,7 @@ impl CommandApi {
         Contact::get_encrinfo(&ctx, ContactId::new(contact_id)).await
     }
 
-    /// Check if an e-mail address belongs to a known and unblocked contact.
+    /// Looks up a known and unblocked contact with a given e-mail address.
     /// To get a list of all known and unblocked contacts, use contacts_get_contacts().
     ///
     /// If there are multiple contacts with this address

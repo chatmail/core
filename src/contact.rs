@@ -755,7 +755,12 @@ impl Contact {
         self.is_bot
     }
 
-    /// Check if an e-mail address belongs to a known and unblocked contact.
+    /// Looks up a known and unblocked contact with a given e-mail address.
+    /// To get a list of all known and unblocked contacts, use contacts_get_contacts().
+    ///
+    /// If there are multiple contacts with this address
+    /// (e.g. an address-contact and a key-contact),
+    /// this looks up the most recently seen contact.
     ///
     /// Known and unblocked contacts will be returned by `get_contacts()`.
     ///
