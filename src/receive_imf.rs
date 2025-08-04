@@ -44,7 +44,7 @@ use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on
 use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, create_id, remove_subject_prefix};
+use crate::tools::{self, buf_compress, create_broadcast_shared_secret, remove_subject_prefix};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 use crate::{contact, imap};
 
@@ -1566,7 +1566,7 @@ async fn do_chat_assignment(
                         } else {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            let secret = create_id();
+                            let secret = create_broadcast_shared_secret();
                             chat::create_broadcast_ex(context, Nosync, listid, name, secret).await?
                         },
                     );

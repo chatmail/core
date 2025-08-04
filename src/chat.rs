@@ -43,9 +43,9 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    IsNoneOrEmpty, SystemTime, buf_compress, create_id, create_outgoing_rfc724_mid,
-    create_smeared_timestamp, create_smeared_timestamps, get_abs_path, gm2local_offset,
-    smeared_time, time, truncate_msg_text,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_shared_secret, create_id,
+    create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
+    gm2local_offset, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -3794,7 +3794,7 @@ pub async fn create_group_ex(
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    let secret = create_id();
+    let secret = create_broadcast_shared_secret();
     create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
