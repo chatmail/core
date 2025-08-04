@@ -2,6 +2,7 @@ use super::*;
 use crate::chat;
 use crate::chat::ChatId;
 use crate::config::Config;
+use crate::constants;
 use crate::contact::Contact;
 use crate::contact::ContactId;
 use crate::contact::Origin;
@@ -43,19 +44,11 @@ async fn test_key_contacts_migration_autocrypt() -> Result<()> {
     t.sql.run_migrations(&t).await?;
 
     //std::thread::sleep(std::time::Duration::from_secs(1000));
-    let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
+    let pgp_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
         .await?
         .unwrap();
-    let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
-    assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::Hidden); // Email bob is in no chats, so, contact is hidden
-    assert_eq!(email_bob.e2ee_avail(&t).await?, false);
-    assert_eq!(email_bob.fingerprint(), None);
-    assert_eq!(email_bob.get_verifier_id(&t).await?, None);
-
-    let bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
-    let pgp_bob_id = tools::single_value(bob_chat_contacts).unwrap();
     let pgp_bob = Contact::get_by_id(&t, pgp_bob_id).await?;
+    assert_eq!(pgp_bob.is_key_contact(), true);
     assert_eq!(pgp_bob.origin, Origin::OutgoingTo);
     assert_eq!(pgp_bob.e2ee_avail(&t).await?, true);
     assert_eq!(
@@ -63,6 +56,16 @@ async fn test_key_contacts_migration_autocrypt() -> Result<()> {
         pgp_bob.public_key(&t).await?.unwrap().dc_fingerprint()
     );
     assert_eq!(pgp_bob.get_verifier_id(&t).await?, None);
+
+    // Hidden address-contact can't be looked up.
+    assert!(
+        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
+            .await?
+            .is_empty()
+    );
+
+    let bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
+    assert_eq!(tools::single_value(bob_chat_contacts).unwrap(), pgp_bob_id);
 
     Ok(())
 }
@@ -82,8 +85,9 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
+    let email_bob_id = *Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
         .await?
+        .first()
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
@@ -112,12 +116,19 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
+    let pgp_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
         .await?
+        .unwrap();
+    let pgp_bob = Contact::get_by_id(&t, pgp_bob_id).await?;
+    assert_eq!(pgp_bob.is_key_contact(), true);
+
+    let email_bob_id = *Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
+        .await?
+        .first()
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::OutgoingTo); // Email bob is in no chats, so, contact is hidden
+    assert_eq!(email_bob.origin, Origin::OutgoingTo);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
     assert_eq!(email_bob.get_verifier_id(&t).await?, None);
@@ -146,16 +157,12 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    let email_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
-        .await?
-        .unwrap();
-    let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
-    dbg!(&email_bob);
-    assert_eq!(email_bob.is_key_contact(), false);
-    assert_eq!(email_bob.origin, Origin::Hidden); // Email bob is in no chats, so, contact is hidden
-    assert_eq!(email_bob.e2ee_avail(&t).await?, false);
-    assert_eq!(email_bob.fingerprint(), None);
-    assert_eq!(email_bob.get_verifier_id(&t).await?, None);
+    // Hidden address-contact can't be looked up.
+    assert!(
+        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
+            .await?
+            .is_empty()
+    );
 
     let mut bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
     assert_eq!(bob_chat_contacts.len(), 2);
