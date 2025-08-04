@@ -174,6 +174,7 @@ def test_account(acfactory) -> None:
     # get_contact_by_addr() can lookup a key contact by address:
     bob_contact = alice.get_contact_by_addr(bob_addr).get_snapshot()
     assert bob_contact.display_name == "Bob"
+    assert bob_contact.is_key_contact
     assert alice.get_contacts()
     assert alice.get_contacts(snapshot=True)
     assert alice.self_contact
