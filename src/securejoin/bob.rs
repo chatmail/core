@@ -19,7 +19,7 @@ use crate::param::Param;
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{create_smeared_timestamp, time};
+use crate::tools::{smeared_time, time};
 
 /// Starts the securejoin protocol with the QR `invite`.
 ///
@@ -445,7 +445,7 @@ async fn joining_chat_id(
                         Blocked::Not,
                         ProtectionStatus::Unprotected, // protection is added later as needed
                         None,
-                        create_smeared_timestamp(context),
+                        smeared_time(context),
                     )
                     .await?
                 }
