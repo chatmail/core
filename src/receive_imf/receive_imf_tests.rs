@@ -991,6 +991,7 @@ async fn test_other_device_writes_to_mailinglist() -> Result<()> {
             .await?
             .unwrap();
     let list_post_contact = Contact::get_by_id(&t, list_post_contact_id).await?;
+    assert_eq!(list_post_contact.is_key_contact(), false);
     assert_eq!(
         list_post_contact.param.get(Param::ListId).unwrap(),
         "delta.codespeak.net"
@@ -1453,6 +1454,7 @@ async fn test_apply_mailinglist_changes_assigned_by_reply() {
     .unwrap()
     .unwrap();
     let contact = Contact::get_by_id(&t, contact_id).await.unwrap();
+    assert_eq!(contact.is_key_contact(), false);
     assert_eq!(
         contact.param.get(Param::ListId).unwrap(),
         "deltachat-core-rust.deltachat.github.com"
@@ -3682,10 +3684,13 @@ async fn test_mua_user_adds_recipient_to_single_chat() -> Result<()> {
         chat::get_chat_contacts(&alice, group_chat.id).await?.len(),
         4
     );
-    let fiona = Contact::lookup_id_by_addr(&alice, "fiona@example.net", Origin::IncomingTo)
-        .await?
-        .unwrap();
-    assert!(chat::is_contact_in_chat(&alice, group_chat.id, fiona).await?);
+    let fiona_contact_id =
+        Contact::lookup_id_by_addr(&alice, "fiona@example.net", Origin::IncomingTo)
+            .await?
+            .unwrap();
+    assert!(chat::is_contact_in_chat(&alice, group_chat.id, fiona_contact_id).await?);
+    let fiona_contact = Contact::get_by_id(&alice, fiona_contact_id).await?;
+    assert_eq!(fiona_contact.is_key_contact(), false);
 
     Ok(())
 }

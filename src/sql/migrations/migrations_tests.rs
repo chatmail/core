@@ -47,6 +47,7 @@ async fn test_key_contacts_migration_autocrypt() -> Result<()> {
         .await?
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
+    assert_eq!(email_bob.is_key_contact(), false);
     assert_eq!(email_bob.origin, Origin::Hidden); // Email bob is in no chats, so, contact is hidden
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
@@ -85,6 +86,7 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
         .await?
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
+    assert_eq!(email_bob.is_key_contact(), false);
     assert_eq!(email_bob.origin, Origin::OutgoingTo);
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
@@ -114,6 +116,7 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
         .await?
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
+    assert_eq!(email_bob.is_key_contact(), false);
     assert_eq!(email_bob.origin, Origin::OutgoingTo); // Email bob is in no chats, so, contact is hidden
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);
@@ -148,6 +151,7 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
         .unwrap();
     let email_bob = Contact::get_by_id(&t, email_bob_id).await?;
     dbg!(&email_bob);
+    assert_eq!(email_bob.is_key_contact(), false);
     assert_eq!(email_bob.origin, Origin::Hidden); // Email bob is in no chats, so, contact is hidden
     assert_eq!(email_bob.e2ee_avail(&t).await?, false);
     assert_eq!(email_bob.fingerprint(), None);

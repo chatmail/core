@@ -1072,6 +1072,7 @@ async fn test_sync_create() -> Result<()> {
             .unwrap();
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.name, "Bob");
+    assert_eq!(a1b_contact.is_key_contact(), false);
 
     Contact::create(alice0, "Bob Renamed", "bob@example.net").await?;
     test_utils::sync(alice0, alice1).await;
@@ -1081,6 +1082,7 @@ async fn test_sync_create() -> Result<()> {
     assert_eq!(id, a1b_contact_id);
     let a1b_contact = Contact::get_by_id(alice1, a1b_contact_id).await?;
     assert_eq!(a1b_contact.name, "Bob Renamed");
+    assert_eq!(a1b_contact.is_key_contact(), false);
 
     Ok(())
 }
