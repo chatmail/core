@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.10.0] - 2025-08-04
+
+### Features / Changes
+
+- Also lookup key contacts in lookup_id_by_addr() ([#7073](https://github.com/chatmail/core/pull/7073)).
+
+### Miscellaneous Tasks
+
+- cargo: Bump serde_json from 1.0.140 to 1.0.142.
+- cargo: Bump bolero from 0.13.3 to 0.13.4.
+- cargo: Bump async-channel from 2.3.1 to 2.5.0.
+- cargo: Bump hyper-util from 0.1.14 to 0.1.16.
+- cargo: Bump criterion from 0.6.0 to 0.7.0.
+- cargo: Bump strum from 0.27.1 to 0.27.2.
+- cargo: Bump strum_macros from 0.27.1 to 0.27.2.
+- Upgrade async-imap to 0.11.1.
+
 ## [2.9.0] - 2025-07-31
 
 ### Features / Changes
@@ -6578,3 +6595,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.7.0]: https://github.com/chatmail/core/compare/v2.6.0..v2.7.0
 [2.8.0]: https://github.com/chatmail/core/compare/v2.7.0..v2.8.0
 [2.9.0]: https://github.com/chatmail/core/compare/v2.8.0..v2.9.0
+[2.10.0]: https://github.com/chatmail/core/compare/v2.9.0..v2.10.0
