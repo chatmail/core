@@ -2800,7 +2800,6 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     let alice = &tcm.alice().await;
     alice.set_config(Config::Displayname, Some("Alice")).await?;
     let bob = &tcm.bob().await;
-    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
     tcm.section("Create a broadcast channel");
     let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
@@ -2815,7 +2814,8 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     assert_eq!(sent.recipients, "alice@example.org");
 
     tcm.section("Add a contact to the chat and send a message");
-    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
     let sent = alice.send_text(alice_chat_id, "Hi somebody").await;
 
     assert_eq!(sent.recipients, "bob@example.net alice@example.org");

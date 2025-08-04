@@ -231,9 +231,6 @@ impl MimeFactory {
 
             // Do not encrypt messages to mailing lists.
             encryption_keys = None;
-        } else if chat.is_out_broadcast() {
-            // Encrypt, but only symmetrically, not with the public keys.
-            encryption_keys = Some(Vec::new());
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -332,7 +329,7 @@ impl MimeFactory {
 
                                 if let Some(public_key) = public_key_opt {
                                     keys.push((addr.clone(), public_key))
-                                } else if id != ContactId::SELF {
+                                } else if id != ContactId::SELF && !chat.is_any_broadcast() {
                                     missing_key_addresses.insert(addr.clone());
                                     if is_encrypted {
                                         warn!(context, "Missing key for {addr}");
@@ -353,7 +350,7 @@ impl MimeFactory {
 
                                             if let Some(public_key) = public_key_opt {
                                                 keys.push((addr.clone(), public_key))
-                                            } else if id != ContactId::SELF {
+                                            } else if id != ContactId::SELF && !chat.is_any_broadcast()  {
                                                 missing_key_addresses.insert(addr.clone());
                                                 if is_encrypted {
                                                     warn!(context, "Missing key for {addr}");
@@ -420,6 +417,9 @@ impl MimeFactory {
 
             encryption_keys = if !is_encrypted {
                 None
+            } else if chat.is_out_broadcast() {
+                // Encrypt, but only symmetrically, not with the public keys.
+                Some(Vec::new())
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
                     bail!(
