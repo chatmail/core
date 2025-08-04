@@ -415,6 +415,9 @@ impl MimeFactory {
                 req_mdn = true;
             }
 
+            // TODO if hidden_recipients but email_to_remove is some,
+            // only send to email_to_remove
+
             encryption_keys = if !is_encrypted {
                 None
             } else if chat.is_out_broadcast() {
