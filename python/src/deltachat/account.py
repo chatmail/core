@@ -339,7 +339,7 @@ class Account:
         i.e. which contact is returned depends on which contact last sent a message.
         If the user just clicked on a mailto: link, then this is the best thing you can do.
         But **DO NOT** internally represent contacts by their email address
-        and use this function to look them up;
+        and do not use this function to look them up;
         otherwise this function will sometimes look up the wrong contact.
         Instead, you should internally represent contacts by their ids.
 
