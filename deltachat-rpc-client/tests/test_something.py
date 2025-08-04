@@ -171,7 +171,10 @@ def test_account(acfactory) -> None:
     assert alice.get_size()
     assert alice.is_configured()
     assert not alice.get_avatar()
-    assert alice.get_contact_by_addr(bob_addr) is None  # There is no address-contact, only key-contact
+    # get_contact_by_addr() can lookup a key contact by address:
+    bob_contact = alice.get_contact_by_addr(bob_addr).get_snapshot()
+    assert bob_contact.display_name == "Bob"
+    assert bob_contact.is_key_contact
     assert alice.get_contacts()
     assert alice.get_contacts(snapshot=True)
     assert alice.self_contact

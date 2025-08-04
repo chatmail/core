@@ -1473,7 +1473,14 @@ impl CommandApi {
 
     /// Add a single contact as a result of an explicit user action.
     ///
-    /// Returns contact id of the created or existing contact
+    /// This will always create or look up an address-contact,
+    /// i.e. a contact identified by an email address,
+    /// with all messages sent to and from this contact being unencrypted.
+    /// If the user just clicked on an email address,
+    /// you should first check [`Self::lookup_contact_id_by_addr`]/`lookupContactIdByAddr.`,
+    /// and only if there is no contact yet, call this function here.
+    ///
+    /// Returns contact id of the created or existing contact.
     async fn create_contact(
         &self,
         account_id: u32,
@@ -1623,8 +1630,18 @@ impl CommandApi {
         Contact::get_encrinfo(&ctx, ContactId::new(contact_id)).await
     }
 
-    /// Check if an e-mail address belongs to a known and unblocked contact.
+    /// Looks up a known and unblocked contact with a given e-mail address.
     /// To get a list of all known and unblocked contacts, use contacts_get_contacts().
+    ///
+    /// **POTENTIAL SECURITY ISSUE**: If there are multiple contacts with this address
+    /// (e.g. an address-contact and a key-contact),
+    /// this looks up the most recently seen contact,
+    /// i.e. which contact is returned depends on which contact last sent a message.
+    /// If the user just clicked on a mailto: link, then this is the best thing you can do.
+    /// But **DO NOT** internally represent contacts by their email address
+    /// and do not use this function to look them up;
+    /// otherwise this function will sometimes look up the wrong contact.
+    /// Instead, you should internally represent contacts by their ids.
     ///
     /// To validate an e-mail address independently of the contact database
     /// use check_email_validity().

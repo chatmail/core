@@ -330,7 +330,21 @@ class Account:
         return bool(lib.dc_delete_contact(self._dc_context, contact_id))
 
     def get_contact_by_addr(self, email: str) -> Optional[Contact]:
-        """get a contact for the email address or None if it's blocked or doesn't exist."""
+        """Looks up a known and unblocked contact with a given e-mail address.
+        To get a list of all known and unblocked contacts, use contacts_get_contacts().
+
+        **POTENTIAL SECURITY ISSUE**: If there are multiple contacts with this address
+        (e.g. an address-contact and a key-contact),
+        this looks up the most recently seen contact,
+        i.e. which contact is returned depends on which contact last sent a message.
+        If the user just clicked on a mailto: link, then this is the best thing you can do.
+        But **DO NOT** internally represent contacts by their email address
+        and do not use this function to look them up;
+        otherwise this function will sometimes look up the wrong contact.
+        Instead, you should internally represent contacts by their ids.
+
+        To validate an e-mail address independently of the contact database
+        use check_email_validity()."""
         _, addr = parseaddr(email)
         addr = as_dc_charpointer(addr)
         contact_id = lib.dc_lookup_contact_id_by_addr(self._dc_context, addr)

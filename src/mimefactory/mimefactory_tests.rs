@@ -683,6 +683,7 @@ async fn test_selfavatar_unencrypted_signed() {
         .unwrap()
         .unwrap();
     let alice_contact = Contact::get_by_id(&bob.ctx, alice_id).await.unwrap();
+    assert_eq!(alice_contact.is_key_contact(), false);
     assert!(
         alice_contact
             .get_profile_image(&bob.ctx)
