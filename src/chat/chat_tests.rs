@@ -2893,8 +2893,6 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
-    // TODO it's not nice that it says 'you added member bob'
-    // and 'Secure-Join: vb-request-with-auth'
     alice
         .golden_test_chat(alice_chat_id, "test_broadcast_joining_golden_alice")
         .await;

@@ -445,16 +445,9 @@ pub(crate) async fn handle_securejoin_handshake(
                     .await?;
                 inviter_progress(context, contact_id, 800);
                 inviter_progress(context, contact_id, 1000);
-                if step.starts_with("vb-") {
-                    // For broadcasts, we don't want to delete the message,
-                    // because the other device should also internally add the member
-                    // and see the key (because it won't see the member via autocrypt-gossip).
-                    Ok(HandshakeMessage::Propagate)
-                } else {
-                    // IMAP-delete the message to avoid handling it by another device and adding the
-                    // member twice. Another device will know the member's key from Autocrypt-Gossip.
-                    Ok(HandshakeMessage::Done)
-                }
+                // IMAP-delete the message to avoid handling it by another device and adding the
+                // member twice. Another device will know the member's key from Autocrypt-Gossip.
+                Ok(HandshakeMessage::Done)
             } else {
                 // Setup verified contact.
                 secure_connection_established(
