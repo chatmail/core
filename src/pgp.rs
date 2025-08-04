@@ -261,11 +261,7 @@ pub fn decrypt(
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
-    anyhow::ensure!(
-        !ring_result.secret_keys.is_empty(),
-        "decryption failed, no matching secret keys"
-    );
+    let (msg, _ring_result) = msg.decrypt_the_ring(ring, true)?;
 
     // remove one layer of compression
     let msg = msg.decompress()?;
