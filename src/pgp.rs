@@ -18,7 +18,7 @@ use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
-use rand::thread_rng;
+use rand::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -342,9 +342,14 @@ pub async fn encrypt_for_broadcast(
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
-        let mut rng = thread_rng();
-        let s2k = StringToKey::new_default(&mut rng);
         let msg = MessageBuilder::from_bytes("", plain);
+        let mut rng = thread_rng();
+        let mut salt = [0u8; 8];
+        rng.fill(&mut salt[..]);
+        let s2k = StringToKey::Salted {
+            hash_alg: HashAlgorithm::default(),
+            salt,
+        };
         let mut msg = msg.seipd_v2(
             &mut rng,
             SymmetricKeyAlgorithm::AES128,
