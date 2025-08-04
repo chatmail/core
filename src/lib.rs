@@ -75,7 +75,10 @@ mod mimefactory;
 pub mod mimeparser;
 pub mod oauth2;
 mod param;
+#[cfg(not(feature = "internals"))]
 mod pgp;
+#[cfg(feature = "internals")]
+pub mod pgp;
 pub mod provider;
 pub mod qr;
 pub mod qr_code_generator;

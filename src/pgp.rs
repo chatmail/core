@@ -149,6 +149,11 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
     Ok(key_pair)
 }
 
+#[cfg(feature = "internals")]
+pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
+    create_keypair(EmailAddress::new(addr)?)
+}
+
 /// Selects a subkey of the public key to use for encryption.
 ///
 /// Returns `None` if the public key cannot be used for encryption.
