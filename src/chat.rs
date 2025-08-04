@@ -4004,7 +4004,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     // this also makes sure, no contacts are added to special or normal chats
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group,
+        chat.typ == Chattype::Group || (from_handshake && chat.typ == Chattype::OutBroadcast),
         "{} is not a group where one can add members",
         chat_id
     );
@@ -4013,7 +4013,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         "invalid contact_id {} for adding to group",
         contact_id
     );
-    ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),
         "Only key-contacts can be added to encrypted chats"
@@ -4058,9 +4057,6 @@ pub(crate) async fn add_contact_to_chat_ex(
                 context,
                 "Cannot add non-bidirectionally verified contact {contact_id} to protected chat {chat_id}."
             );
-            return Ok(false);
-        }
-        if is_contact_in_chat(context, chat_id, contact_id).await? {
             return Ok(false);
         }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;

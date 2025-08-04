@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 
-use anyhow::{Context as _, Result, anyhow, bail, ensure};
+use anyhow::{Context as _, Result, anyhow, bail};
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -415,8 +415,18 @@ impl MimeFactory {
                 req_mdn = true;
             }
 
-            // TODO if hidden_recipients but email_to_remove is some,
-            // only send to email_to_remove
+            // If undisclosed_recipients, and this is a member-added/removed message,
+            // only send to the added/removed member
+            if undisclosed_recipients
+                && matches!(
+                    msg.param.get_cmd(),
+                    SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
+                )
+            {
+                if let Some(member) = msg.param.get(Param::Arg) {
+                    recipients.retain(|addr| addr == member);
+                }
+            }
 
             encryption_keys = if !is_encrypted {
                 None
@@ -571,6 +581,7 @@ impl MimeFactory {
                 || step == "vc-request-with-auth"
                 || step == "vb-request-with-auth"
                 || step == "vg-member-added"
+                || step == "vb-member-added"
                 || step == "vc-contact-confirm"
             // TODO possibly add vb-member-added here
         }
@@ -1396,7 +1407,6 @@ impl MimeFactory {
 
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
 
                     if email_to_remove
@@ -1420,7 +1430,6 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     // TODO: lookup the contact by ID rather than email address.
                     // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
@@ -1434,14 +1443,15 @@ impl MimeFactory {
                         ));
                     }
                     if 0 != msg.param.get_int(Param::Arg2).unwrap_or_default() & DC_FROM_HANDSHAKE {
-                        info!(
-                            context,
-                            "Sending secure-join message {:?}.", "vg-member-added",
-                        );
+                        let step = match chat.typ {
+                            Chattype::Group => "vg-member-added",
+                            Chattype::OutBroadcast => "vb-member-added",
+                            _ => bail!("Wrong chattype {}", chat.typ),
+                        };
+                        info!(context, "Sending secure-join message {:?}.", step,);
                         headers.push((
                             "Secure-Join",
-                            mail_builder::headers::raw::Raw::new("vg-member-added".to_string())
-                                .into(),
+                            mail_builder::headers::raw::Raw::new(step.to_string()).into(),
                         ));
                     }
                 }

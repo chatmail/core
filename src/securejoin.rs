@@ -5,8 +5,8 @@ use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, add_to_chat_contacts_table,
-    get_chat_id_by_grpid, load_broadcast_shared_secret,
+    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid,
+    load_broadcast_shared_secret,
 };
 use crate::chatlist_events;
 use crate::config::Config;
@@ -27,7 +27,6 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::token;
-use crate::tools::time;
 
 mod bob;
 mod qrinvite;
@@ -293,7 +292,10 @@ pub(crate) async fn handle_securejoin_handshake(
 
     // TODO talk with link2xt about whether we need to protect against this identity-misbinding attack,
     // and if so, how
-    if !matches!(step, "vg-request" | "vc-request" | "vb-request-with-auth") {
+    if !matches!(
+        step,
+        "vg-request" | "vc-request" | "vb-request-with-auth" | "vb-member-added"
+    ) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
@@ -438,14 +440,9 @@ pub(crate) async fn handle_securejoin_handshake(
                     mime_message.timestamp_sent,
                 )
                 .await?;
-                if step.starts_with("vb-") {
-                    // TODO extract into variable
-                    add_to_chat_contacts_table(context, time(), group_chat_id, &[contact_id])
-                        .await?;
-                } else {
-                    chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
-                        .await?;
-                }
+
+                chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
+                    .await?;
                 inviter_progress(context, contact_id, 800);
                 inviter_progress(context, contact_id, 1000);
                 if step.starts_with("vb-") {
@@ -486,7 +483,7 @@ pub(crate) async fn handle_securejoin_handshake(
             });
             Ok(HandshakeMessage::Ignore)
         }
-        "vg-member-added" => {
+        "vg-member-added" | "vb-member-added" => {
             let Some(member_added) = mime_message.get_header(HeaderDef::ChatGroupMemberAdded)
             else {
                 warn!(
@@ -554,7 +551,11 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     if !matches!(
         step,
-        "vg-request-with-auth" | "vc-request-with-auth" | "vg-member-added" | "vc-contact-confirm"
+        "vg-request-with-auth"
+            | "vc-request-with-auth"
+            | "vg-member-added"
+            | "vb-member-added"
+            | "vc-contact-confirm"
     ) {
         return Ok(HandshakeMessage::Ignore);
     };
@@ -594,10 +595,12 @@ pub(crate) async fn observe_securejoin_on_other_device(
     if step == "vg-member-added" {
         inviter_progress(context, contact_id, 800);
     }
-    if step == "vg-member-added" || step == "vc-contact-confirm" {
+    if step == "vg-member-added" || step == "vb-member-added" || step == "vc-contact-confirm" {
         inviter_progress(context, contact_id, 1000);
     }
 
+    // TODO not sure if I should ad vb-request-with-auth here
+    // Actually, I'm not even sure why vg-request-with-auth is here - why do we create a 1:1 chat??
     if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
         // This actually reflects what happens on the first device (which does the secure
         // join) and causes a subsequent "vg-member-added" message to create an unblocked
@@ -605,7 +608,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Not).await?;
     }
 
-    if step == "vg-member-added" {
+    if step == "vg-member-added" || step == "vb-member-added" {
         Ok(HandshakeMessage::Propagate)
     } else {
         Ok(HandshakeMessage::Ignore)

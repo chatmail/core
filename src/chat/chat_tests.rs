@@ -2873,6 +2873,37 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     Ok(())
 }
 
+/// Tests that directly after broadcast-securejoin,
+/// the brodacast is shown correctly on both devices.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_joining_golden() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    alice.set_config(Config::Displayname, Some("Alice")).await?;
+
+    tcm.section("Create a broadcast channel with an avatar");
+    let alice_chat_id = create_broadcast(alice, "My Channel".to_string()).await?;
+    let file = alice.get_blobdir().join("avatar.png");
+    tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
+    set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
+    alice.pop_sent_msg().await; // TODO check if Alice wrongly sends out a message here
+
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    // TODO it's not nice that it says 'you added member bob'
+    // and 'Secure-Join: vb-request-with-auth'
+    alice
+        .golden_test_chat(alice_chat_id, "test_broadcast_joining_golden_alice")
+        .await;
+    bob.golden_test_chat(bob_chat_id, "test_broadcast_joining_golden_bob")
+        .await;
+
+    Ok(())
+}
+
 /// - Create a broadcast channel
 /// - Block it
 /// - Check that the broadcast channel appears in the list of blocked contacts
