@@ -3099,13 +3099,14 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_encrypt_decrypt_broadcast_integration() -> Result<()> {
+async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let bob_without_secret = &tcm.bob().await;
 
     let secret = "secret";
+    let grpid = "grpid";
 
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
 
@@ -3114,19 +3115,24 @@ async fn test_encrypt_decrypt_broadcast_integration() -> Result<()> {
         alice,
         Sync,
         "My Channel".to_string(),
-        "grpid".to_string(),
+        grpid.to_string(),
         secret.to_string(),
     )
     .await?;
-    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    add_to_chat_contacts_table(alice, time(), alice_chat_id, &[alice_bob_contact_id]).await?;
 
-    // TODO the chat_id 10 is magical here:
-    bob.sql
-        .execute(
-            "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (10, ?)",
-            (secret,),
-        )
-        .await?;
+    let bob_chat_id = ChatId::create_multiuser_record(
+        bob,
+        Chattype::InBroadcast,
+        grpid,
+        "My Channel",
+        Blocked::Not,
+        ProtectionStatus::Unprotected,
+        None,
+        time(),
+    )
+    .await?;
+    save_broadcast_shared_secret(bob, bob_chat_id, secret).await?;
 
     let sent = alice
         .send_text(alice_chat_id, "Symmetrically encrypted message")

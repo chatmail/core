@@ -5226,7 +5226,7 @@ impl Context {
                     Blocked::Not,
                     ProtectionStatus::Unprotected,
                     None,
-                    create_smeared_timestamp(self),
+                    smeared_time(self),
                 )
                 .await?;
                 save_broadcast_shared_secret(self, chat_id, shared_secret).await?;
