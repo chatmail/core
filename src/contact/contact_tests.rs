@@ -1035,8 +1035,7 @@ async fn test_was_seen_recently_event() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_lookup_id_by_addr_recent() -> Result<()> {
+async fn test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let bob = &tcm.bob().await;
 
@@ -1053,10 +1052,12 @@ Date: Thu, 24 Nov 2022 $TIME +0100
 
 Hi"#
     .to_string();
-    for (time, is_key_contact) in [("20:05:57", true), ("20:05:58", false)] {
+    for (time, is_key_contact) in [("20:05:57", true), ("20:05:58", !accept_unencrypted_chat)] {
         let raw = raw.replace("$TIME", time);
         let received_msg = receive_imf(bob, raw.as_bytes(), false).await?.unwrap();
-        received_msg.chat_id.accept(bob).await?;
+        if accept_unencrypted_chat {
+            received_msg.chat_id.accept(bob).await?;
+        }
         let contact_id = Contact::lookup_id_by_addr(bob, "alice@example.org", Origin::Unknown)
             .await?
             .unwrap();
@@ -1064,6 +1065,18 @@ Hi"#
         assert_eq!(contact.is_key_contact(), is_key_contact);
     }
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_lookup_id_by_addr_recent() -> Result<()> {
+    let accept_unencrypted_chat = true;
+    test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_lookup_id_by_addr_recent_accepted() -> Result<()> {
+    let accept_unencrypted_chat = false;
+    test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

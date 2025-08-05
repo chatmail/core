@@ -116,11 +116,15 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    let pgp_bob_id = Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Hidden)
-        .await?
-        .unwrap();
-    let pgp_bob = Contact::get_by_id(&t, pgp_bob_id).await?;
+    // Hidden key-contact can't be looked up.
+    assert!(
+        Contact::get_all(&t, 0, Some("bob@example.net"))
+            .await?
+            .is_empty()
+    );
+    let pgp_bob = Contact::get_by_id(&t, ContactId::new(11)).await?;
     assert_eq!(pgp_bob.is_key_contact(), true);
+    assert_eq!(pgp_bob.origin, Origin::Hidden);
 
     let email_bob_id = *Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
         .await?
