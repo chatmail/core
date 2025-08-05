@@ -18,7 +18,7 @@ use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, remove_from_chat_contacts_table,
 };
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
+use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
@@ -3793,7 +3793,7 @@ async fn add_or_lookup_key_contacts(
 /// Looks up a key-contact by email address.
 ///
 /// If provided, `chat_id` must be an encrypted chat ID that has key-contacts inside.
-/// Otherwise the function searches in all contacts, returning the recently seen one.
+/// Otherwise the function searches in all contacts, preferring accepted and most recently seen ones.
 async fn lookup_key_contact_by_address(
     context: &Context,
     addr: &str,
@@ -3836,11 +3836,26 @@ async fn lookup_key_contact_by_address(
                 .sql
                 .query_row_optional(
                     "SELECT id FROM contacts
-                     WHERE contacts.addr=?1
+                     WHERE addr=?
                      AND fingerprint<>''
-                     ORDER BY last_seen DESC, id DESC
+                     ORDER BY
+                         (
+                             SELECT COUNT(*) FROM chats c
+                             INNER JOIN chats_contacts cc
+                             ON c.id=cc.chat_id
+                             WHERE c.type=?
+                                 AND c.id>?
+                                 AND c.blocked=?
+                                 AND cc.contact_id=contacts.id
+                         ) DESC,
+                         last_seen DESC, id DESC
                      ",
-                    (addr,),
+                    (
+                        addr,
+                        Chattype::Single,
+                        constants::DC_CHAT_ID_LAST_SPECIAL,
+                        Blocked::Not,
+                    ),
                     |row| {
                         let contact_id: ContactId = row.get(0)?;
                         Ok(contact_id)

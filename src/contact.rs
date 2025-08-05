@@ -807,14 +807,28 @@ impl Contact {
             .query_get_value(
                 "SELECT id FROM contacts
                  WHERE addr=?1 COLLATE NOCASE
-                 AND id>?2 AND origin>=?3 AND (? OR blocked=?)
-                 ORDER BY last_seen DESC, fingerprint DESC LIMIT 1",
+                     AND id>?2 AND origin>=?3 AND (? OR blocked=?)
+                 ORDER BY
+                     (
+                         SELECT COUNT(*) FROM chats c
+                         INNER JOIN chats_contacts cc
+                         ON c.id=cc.chat_id
+                         WHERE c.type=?
+                             AND c.id>?
+                             AND c.blocked=?
+                             AND cc.contact_id=contacts.id
+                     ) DESC,
+                     last_seen DESC, fingerprint DESC
+                 LIMIT 1",
                 (
                     &addr_normalized,
                     ContactId::LAST_SPECIAL,
                     min_origin as u32,
                     blocked.is_none(),
-                    blocked.unwrap_or_default(),
+                    blocked.unwrap_or(Blocked::Not),
+                    Chattype::Single,
+                    constants::DC_CHAT_ID_LAST_SPECIAL,
+                    blocked.unwrap_or(Blocked::Not),
                 ),
             )
             .await?;
