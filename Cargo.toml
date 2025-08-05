@@ -158,7 +158,7 @@ required-features = ["internals"]
 harness = false
 
 [[bench]]
-name = "encrypt_decrypt"
+name = "benchmark_decrypting"
 required-features = ["internals"]
 harness = false
 
