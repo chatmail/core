@@ -414,7 +414,11 @@ pub(crate) async fn send_msg_to_smtp(
                 .await?;
         }
         SendResult::Failure(ref err) => {
-            if err.to_string().contains("Invalid unencrypted mail") {
+            if err
+                .to_string()
+                .to_lowercase()
+                .contains("invalid unencrypted mail")
+            {
                 let res = context
                     .sql
                     .query_row_optional(
