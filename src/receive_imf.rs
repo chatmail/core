@@ -16,6 +16,7 @@ use regex::Regex;
 
 use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, remove_from_chat_contacts_table,
+    save_broadcast_shared_secret,
 };
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
@@ -3565,6 +3566,10 @@ async fn apply_in_broadcast_changes(
                 stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await,
             );
         }
+    }
+
+    if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
+        save_broadcast_shared_secret(context, chat.id, secret).await?;
     }
 
     if send_event_chat_modified {
