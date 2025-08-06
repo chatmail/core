@@ -808,3 +808,22 @@ async fn test_sanitize_filename_message() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that empty file can be sent and received.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_send_empty_file() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob).await;
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_file_from_bytes(alice, "myfile", b"", None)?;
+    chat::send_msg(alice, alice_chat.id, &mut msg).await?;
+    let sent = alice.pop_sent_msg().await;
+
+    let bob_received_msg = bob.recv_msg(&sent).await;
+    assert_eq!(bob_received_msg.get_filename().unwrap(), "myfile");
+    assert_eq!(bob_received_msg.get_viewtype(), Viewtype::File);
+    Ok(())
+}
