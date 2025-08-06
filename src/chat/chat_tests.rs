@@ -2280,14 +2280,19 @@ async fn test_only_minimal_data_are_forwarded() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_save_msgs() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
     let alice_chat = alice.create_chat(&bob).await;
 
     let sent = alice.send_text(alice_chat.get_id(), "hi, bob").await;
     let sent_msg = Message::load_from_db(&alice, sent.sender_msg_id).await?;
     assert!(sent_msg.get_saved_msg_id(&alice).await?.is_none());
     assert!(sent_msg.get_original_msg_id(&alice).await?.is_none());
+    let sent_timestamp = sent_msg.get_timestamp();
+    assert!(sent_timestamp > 0);
+
+    SystemTime::shift(Duration::from_secs(60));
 
     let self_chat = alice.get_self_chat().await;
     save_msgs(&alice, &[sent.sender_msg_id]).await?;
@@ -2305,6 +2310,8 @@ async fn test_save_msgs() -> Result<()> {
     assert_eq!(saved_msg.get_from_id(), ContactId::SELF);
     assert_eq!(saved_msg.get_state(), MessageState::OutDelivered);
     assert_ne!(saved_msg.rfc724_mid(), sent_msg.rfc724_mid());
+    let saved_timestamp = saved_msg.get_timestamp();
+    assert_eq!(saved_timestamp, sent_timestamp);
 
     let sent_msg = Message::load_from_db(&alice, sent.sender_msg_id).await?;
     assert_eq!(

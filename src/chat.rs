@@ -4481,15 +4481,24 @@ pub(crate) async fn save_copy_in_self_talk(
         bail!("message already saved.");
     }
 
-    let copy_fields = "from_id, to_id, timestamp_sent, timestamp_rcvd, type, txt, \
-                             mime_modified, mime_headers, mime_compressed, mime_in_reply_to, subject, msgrmsg";
+    let copy_fields = "from_id, to_id, timestamp_rcvd, type, txt,
+                       mime_modified, mime_headers, mime_compressed, mime_in_reply_to, subject, msgrmsg";
     let row_id = context
         .sql
         .insert(
             &format!(
-                "INSERT INTO msgs ({copy_fields}, chat_id, rfc724_mid, state, timestamp, param, starred) \
-                            SELECT {copy_fields}, ?, ?, ?, ?, ?, ? \
-                            FROM msgs WHERE id=?;"
+                "INSERT INTO msgs ({copy_fields},
+                                   timestamp_sent,
+                                   chat_id, rfc724_mid, state, timestamp, param, starred)
+                 SELECT            {copy_fields},
+                                   -- Outgoing messages on originating device
+                                   -- have timestamp_sent == 0.
+                                   -- We copy sort timestamp instead
+                                   -- so UIs display the same timestamp
+                                   -- for saved and original message.
+                                   IIF(timestamp_sent == 0, timestamp, timestamp_sent),
+                                   ?, ?, ?, ?, ?, ?
+                 FROM msgs WHERE id=?;"
             ),
             (
                 dest_chat_id,
