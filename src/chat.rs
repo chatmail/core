@@ -4038,7 +4038,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         let contact_addr = contact.get_addr().to_lowercase();
         let added_by = if from_handshake && chat.is_out_broadcast() {
             // The contact was added via a QR code rather than explicit user action,
-            // and there is added information in saying 'You added member Alice'
+            // and there is no useful information in saying 'You added member Alice'
             // if self is the only one who can add members.
             ContactId::UNDEFINED
         } else {
@@ -4050,6 +4050,12 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param.set_int(Param::Arg2, from_handshake.into());
         msg.param
             .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
+        if chat.is_out_broadcast() {
+            let secret = load_broadcast_shared_secret(context, chat_id)
+                .await?
+                .context("Failed to find broadcast shared secret")?;
+            msg.param.set(Param::Arg3, secret);
+        }
         send_msg(context, chat_id, &mut msg).await?;
 
         sync = Nosync;
