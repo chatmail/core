@@ -106,12 +106,29 @@ pub enum Param {
     Arg = b'E',
 
     /// For Messages
+    ///
+    /// For `BobHandshakeMsg::Request`, this is the `Secure-Join-Invitenumber` header.
+    ///
+    /// For `BobHandshakeMsg::RequestWithAuth`, this is the `Secure-Join-Auth` header.
+    ///
+    /// For [`SystemMessage::MultiDeviceSync`], this contains the ids that are synced.
+    ///
+    /// For [`SystemMessage::MemberAddedToGroup`],
+    /// this is '1' if it was added because of a securejoin-handshake, and '0' otherwise.
     Arg2 = b'F',
 
-    /// `Secure-Join-Fingerprint` header for `{vc,vg}-request-with-auth` messages.
+    /// For Messages
+    ///
+    /// For `BobHandshakeMsg::RequestWithAuth`,
+    /// this contains the `Secure-Join-Fingerprint` header.
+    ///
+    /// For [`SystemMessage::MemberAddedToGroup`] that add to a broadcast channel,
+    /// this contains the broadcast channel's shared secret.
     Arg3 = b'G',
 
-    /// Deprecated `Secure-Join-Group` header for messages.
+    /// For Messages
+    ///
+    /// Deprecated `Secure-Join-Group` header for `BobHandshakeMsg::RequestWithAuth` messages.
     Arg4 = b'H',
 
     /// For Messages

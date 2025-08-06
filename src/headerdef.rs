@@ -94,6 +94,11 @@ pub enum HeaderDef {
     /// This message obsoletes the text of the message defined here by rfc724_mid.
     ChatEdit,
 
+    /// The secret shared amongst all recipients of this broadcast channel,
+    /// used to encrypt and decrypt messages.
+    /// This secret is sent to a new member in the member-addition message.
+    ChatBroadcastSecret,
+
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
     AutocryptGossip,
