@@ -277,6 +277,7 @@ pub(crate) async fn stock_ephemeral_timer_changed(
                 .await
             }
             604_800 => stock_str::msg_ephemeral_timer_week(context, from_id).await,
+            31_536_000..=31_708_800 => stock_str::msg_ephemeral_timer_year(context, from_id).await,
             _ => {
                 stock_str::msg_ephemeral_timer_weeks(
                     context,
