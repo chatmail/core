@@ -3507,8 +3507,10 @@ async fn apply_out_broadcast_changes(
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         // TODO this may lookup the wrong contact if multiple contacts have the same email addr.
         // We can send sync messages instead,
-        // lookup the fingerprint by gossip header (like it's done for groups right now)
-        // or add a header ChatGroupMemberAddedFpr.
+        // lookup the fingerprint by gossip header (like it's done for groups right now),
+        // add a header ChatGroupMemberAddedFpr,
+        // or only handle addition on receival of Bob's request message and solve the problem in a different way for member-removed.
+        // --> link2xt said to probably handle addition on receival of Bob's request message, and to add a header ChatGroupMemberRemovedFpr.
         let contact = lookup_key_contact_by_address(context, added_addr, None).await?;
         if let Some(contact) = contact {
             better_msg.get_or_insert(

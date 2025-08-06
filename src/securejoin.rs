@@ -292,6 +292,8 @@ pub(crate) async fn handle_securejoin_handshake(
 
     // TODO talk with link2xt about whether we need to protect against this identity-misbinding attack,
     // and if so, how
+    // -> just put Alice's fingerprint into a header (can't put the gossip header bc we don't have this)
+    // -> or just ignore the problem for now - we will need to solve it for all messages anyways: https://github.com/chatmail/core/issues/7057
     if !matches!(
         step,
         "vg-request" | "vc-request" | "vb-request-with-auth" | "vb-member-added"
