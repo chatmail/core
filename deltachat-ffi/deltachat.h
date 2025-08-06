@@ -7598,6 +7598,18 @@ void dc_event_unref(dc_event_t* event);
 /// `%2$s` will be replaced by name and address of the contact.
 #define DC_STR_EPHEMERAL_TIMER_WEEKS_BY_OTHER 157
 
+/// "You set message deletion timer to 1 year."
+///
+/// Used in status messages.
+#define DC_STR_EPHEMERAL_TIMER_1_YEAR_BY_YOU 158
+
+/// "Message deletion timer is set to 1 year by %1$s."
+///
+/// `%1$s` will be replaced by name and address of the contact.
+///
+/// Used in status messages.
+#define DC_STR_EPHEMERAL_TIMER_1_YEAR_BY_OTHER 159
+
 /// "Scan to set up second device for %1$s"
 ///
 /// `%1$s` will be replaced by name and address of the account.

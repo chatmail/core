@@ -362,6 +362,12 @@ pub enum StockMessage {
     #[strum(props(fallback = "Message deletion timer is set to %1$s weeks by %2$s."))]
     MsgEphemeralTimerWeeksBy = 157,
 
+    #[strum(props(fallback = "You set message deletion timer to 1 year."))]
+    MsgYouEphemeralTimerYear = 158,
+
+    #[strum(props(fallback = "Message deletion timer is set to 1 year by %1$s."))]
+    MsgEphemeralTimerYearBy = 159,
+
     #[strum(props(fallback = "Scan to set up second device for %1$s"))]
     BackupTransferQr = 162,
 
@@ -987,6 +993,17 @@ pub(crate) async fn msg_ephemeral_timer_week(context: &Context, by_contact: Cont
         translated(context, StockMessage::MsgYouEphemeralTimerWeek).await
     } else {
         translated(context, StockMessage::MsgEphemeralTimerWeekBy)
+            .await
+            .replace1(&by_contact.get_stock_name(context).await)
+    }
+}
+
+/// Stock string: `Message deletion timer is set to 1 year.`.
+pub(crate) async fn msg_ephemeral_timer_year(context: &Context, by_contact: ContactId) -> String {
+    if by_contact == ContactId::SELF {
+        translated(context, StockMessage::MsgYouEphemeralTimerYear).await
+    } else {
+        translated(context, StockMessage::MsgEphemeralTimerYearBy)
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
