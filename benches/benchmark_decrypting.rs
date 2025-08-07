@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::{hint::black_box, io::Write};
+use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
+use deltachat::benchmark_internals::create_dummy_keypair;
 use deltachat::benchmark_internals::save_broadcast_shared_secret;
 use deltachat::{
     Events,
@@ -11,10 +11,7 @@ use deltachat::{
     chat::ChatId,
     config::Config,
     context::Context,
-    imex::{ImexMode, imex},
-    key,
-    pgp::{KeyPair, create_dummy_keypair, decrypt, encrypt_for_broadcast, pk_encrypt},
-    receive_imf,
+    pgp::{KeyPair, decrypt, encrypt_for_broadcast, pk_encrypt},
     stock_str::StockStrings,
     tools::create_broadcast_shared_secret_pub,
 };

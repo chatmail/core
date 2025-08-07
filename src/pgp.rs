@@ -26,7 +26,7 @@ use crate::key::{DcKey, Fingerprint};
 #[cfg(test)]
 pub(crate) const HEADER_AUTOCRYPT: &str = "autocrypt-prefer-encrypt";
 
-pub const HEADER_SETUPCODE: &str = "passphrase-begin";
+pub(crate) const HEADER_SETUPCODE: &str = "passphrase-begin";
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
@@ -147,11 +147,6 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
         .verify()
         .context("invalid public key generated")?;
     Ok(key_pair)
-}
-
-#[cfg(feature = "internals")]
-pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
-    create_keypair(EmailAddress::new(addr)?)
 }
 
 /// Selects a subkey of the public key to use for encryption.
