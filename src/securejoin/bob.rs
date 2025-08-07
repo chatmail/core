@@ -164,9 +164,8 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 .await?;
             }
 
-            // TODO this message should be translatable:
-            let msg = "You were invited to join this channel. Waiting for the channel owner's device to reply…";
-            chat::add_info_msg(context, joining_chat_id, msg, time()).await?;
+            let msg = stock_str::securejoin_wait(context).await;
+            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
             Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
