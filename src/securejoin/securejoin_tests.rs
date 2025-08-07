@@ -834,8 +834,19 @@ async fn test_send_avatar_in_securejoin() -> Result<()> {
         let qr = get_securejoin_qr(scanned, Some(chat_id)).await.unwrap();
         tcm.exec_securejoin_qr(scanner, scanned, &qr).await;
     }
+    async fn exec_securejoin_broadcast(
+        tcm: &TestContextManager,
+        scanner: &TestContext,
+        scanned: &TestContext,
+    ) {
+        let chat_id = chat::create_broadcast(scanned, "group".to_string())
+            .await
+            .unwrap();
+        let qr = get_securejoin_qr(scanned, Some(chat_id)).await.unwrap();
+        tcm.exec_securejoin_qr(scanner, scanned, &qr).await;
+    }
 
-    for alice_scans in [true, false] {
+    for round in 0..6 {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
@@ -846,15 +857,26 @@ async fn test_send_avatar_in_securejoin() -> Result<()> {
             .set_config(Config::Selfavatar, Some(file.to_str().unwrap()))
             .await?;
 
-        if alice_scans {
-            tcm.execute_securejoin(alice, bob).await;
-            //exec_securejoin_group(&tcm, alice, bob).await;
-            //exec_securejoin_broadcast(&tcm, alice, bob).await;
-            // TODO also test these
-        } else {
-            tcm.execute_securejoin(bob, alice).await;
-            //exec_securejoin_group(&tcm, bob, alice).await;
-            //exec_securejoin_broadcast(&tcm, alice, bob).await;
+        match round {
+            0 => {
+                tcm.execute_securejoin(alice, bob).await;
+            }
+            1 => {
+                tcm.execute_securejoin(bob, alice).await;
+            }
+            2 => {
+                exec_securejoin_group(&tcm, alice, bob).await;
+            }
+            3 => {
+                exec_securejoin_group(&tcm, bob, alice).await;
+            }
+            4 => {
+                exec_securejoin_broadcast(&tcm, alice, bob).await;
+            }
+            5 => {
+                exec_securejoin_broadcast(&tcm, bob, alice).await;
+            }
+            _ => panic!(),
         }
 
         let alice_on_bob = bob.add_or_lookup_contact_no_key(alice).await;
