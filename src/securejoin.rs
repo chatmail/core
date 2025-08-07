@@ -388,10 +388,7 @@ pub(crate) async fn handle_securejoin_handshake(
             }
             // verify that the `Secure-Join-Auth:`-header matches the secret written to the QR code,
             // or that the message was encrypted with the secret written to the QR code.
-            let auth = mime_message
-                .get_header(HeaderDef::SecureJoinAuth)
-                .or_else(|| mime_message.was_encrypted_with.auth_token());
-            let Some(auth) = auth else {
+            let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
                 warn!(
                     context,
                     "Ignoring {step} message because of missing auth code."

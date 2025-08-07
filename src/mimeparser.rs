@@ -136,10 +136,6 @@ pub(crate) struct MimeMessage {
     /// Sender timestamp in secs since epoch. Allowed to be in the future due to unsynchronized
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
-
-    /// How the message was encrypted (and now successfully decrypted):
-    /// The asymmetric key, an AUTH token, or a broadcast's shared secret.
-    pub(crate) was_encrypted_with: EncryptedWith,
 }
 
 #[derive(Debug, PartialEq)]
@@ -236,25 +232,6 @@ pub enum SystemMessage {
 
     /// Message indicating that a call was ended.
     CallEnded = 67,
-}
-
-#[derive(Debug)]
-pub(crate) enum EncryptedWith {
-    AsymmetricKey,
-    BroadcastSecret(String),
-    AuthToken(String),
-    None,
-}
-
-impl EncryptedWith {
-    pub(crate) fn auth_token(&self) -> Option<&str> {
-        match self {
-            EncryptedWith::AsymmetricKey => None,
-            EncryptedWith::BroadcastSecret(_) => None,
-            EncryptedWith::AuthToken(token) => Some(token),
-            EncryptedWith::None => None,
-        }
-    }
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -389,64 +366,51 @@ impl MimeMessage {
                 },
             )
             .await?;
-        let num_broadcast_secrets = secrets.len();
         secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
 
-        let (mail, is_encrypted, decrypted_with) = match tokio::task::block_in_place(|| {
-            try_decrypt(&mail, &private_keyring, &secrets)
-        }) {
-            Ok(Some((mut msg, index_of_secret))) => {
-                mail_raw = msg.as_data_vec().unwrap_or_default();
+        let (mail, is_encrypted) =
+            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
+                Ok(Some(mut msg)) => {
+                    mail_raw = msg.as_data_vec().unwrap_or_default();
 
-                let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
-                if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-                    info!(
-                        context,
-                        "decrypted message mime-body:\n{}",
-                        String::from_utf8_lossy(&mail_raw),
-                    );
-                }
-
-                decrypted_msg = Some(msg);
-
-                timestamp_sent = Self::get_timestamp_sent(
-                    &decrypted_mail.headers,
-                    timestamp_sent,
-                    timestamp_rcvd,
-                );
-
-                if let Some(protected_aheader_value) = decrypted_mail
-                    .headers
-                    .get_header_value(HeaderDef::Autocrypt)
-                {
-                    aheader_value = Some(protected_aheader_value);
-                }
-
-                let decrypted_with = if let Some(index_of_secret) = index_of_secret {
-                    let used_secret = secrets.into_iter().nth(index_of_secret).unwrap_or_default();
-                    if index_of_secret < num_broadcast_secrets {
-                        EncryptedWith::BroadcastSecret(used_secret)
-                    } else {
-                        EncryptedWith::AuthToken(used_secret)
+                    let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
+                    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
+                        info!(
+                            context,
+                            "decrypted message mime-body:\n{}",
+                            String::from_utf8_lossy(&mail_raw),
+                        );
                     }
-                } else {
-                    EncryptedWith::AsymmetricKey
-                };
 
-                (Ok(decrypted_mail), true, decrypted_with)
-            }
-            Ok(None) => {
-                mail_raw = Vec::new();
-                decrypted_msg = None;
-                (Ok(mail), false, EncryptedWith::None)
-            }
-            Err(err) => {
-                mail_raw = Vec::new();
-                decrypted_msg = None;
-                warn!(context, "decryption failed: {:#}", err);
-                (Err(err), false, EncryptedWith::None)
-            }
-        };
+                    decrypted_msg = Some(msg);
+
+                    timestamp_sent = Self::get_timestamp_sent(
+                        &decrypted_mail.headers,
+                        timestamp_sent,
+                        timestamp_rcvd,
+                    );
+
+                    if let Some(protected_aheader_value) = decrypted_mail
+                        .headers
+                        .get_header_value(HeaderDef::Autocrypt)
+                    {
+                        aheader_value = Some(protected_aheader_value);
+                    }
+
+                    (Ok(decrypted_mail), true)
+                }
+                Ok(None) => {
+                    mail_raw = Vec::new();
+                    decrypted_msg = None;
+                    (Ok(mail), false)
+                }
+                Err(err) => {
+                    mail_raw = Vec::new();
+                    decrypted_msg = None;
+                    warn!(context, "decryption failed: {:#}", err);
+                    (Err(err), false)
+                }
+            };
 
         let autocrypt_header = if !incoming {
             None
@@ -656,7 +620,6 @@ impl MimeMessage {
             is_bot: None,
             timestamp_rcvd,
             timestamp_sent,
-            was_encrypted_with: decrypted_with,
         };
 
         match partial {

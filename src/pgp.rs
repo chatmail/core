@@ -251,7 +251,7 @@ pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
     shared_secrets: &[String],
-) -> Result<(pgp::composed::Message<'static>, Option<usize>)> {
+) -> Result<pgp::composed::Message<'static>> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
 
@@ -277,12 +277,7 @@ pub fn decrypt(
     // remove one layer of compression
     let msg = msg.decompress()?;
 
-    let decrypted_with_secret = ring_result
-        .message_password
-        .iter()
-        .position(|&p| p == InnerRingResult::Ok);
-
-    Ok((msg, decrypted_with_secret))
+    Ok(msg)
 }
 
 /// Returns fingerprints
@@ -418,7 +413,7 @@ mod tests {
         HashSet<Fingerprint>,
         Vec<u8>,
     )> {
-        let (mut msg, _) = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
+        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -622,14 +617,13 @@ mod tests {
         .await?;
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let (mut decrypted, index_of_secret) = decrypt(
+        let mut decrypted = decrypt(
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
         )?;
 
         assert_eq!(decrypted.as_data_vec()?, plain);
-        assert_eq!(index_of_secret, Some(0));
 
         Ok(())
     }
