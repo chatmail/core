@@ -18,7 +18,7 @@ pub enum QrInvite {
     Contact {
         contact_id: ContactId,
         fingerprint: Fingerprint,
-        invitenumber: String,
+        invitenumber: Option<String>,
         authcode: String,
     },
     Group {
@@ -26,7 +26,7 @@ pub enum QrInvite {
         fingerprint: Fingerprint,
         name: String,
         grpid: String,
-        invitenumber: String,
+        invitenumber: Option<String>,
         authcode: String,
     },
     Broadcast {
@@ -62,10 +62,12 @@ impl QrInvite {
     }
 
     /// The `INVITENUMBER` of the setup-contact/secure-join protocol.
-    pub fn invitenumber(&self) -> &str {
+    pub fn invitenumber(&self) -> Option<&str> {
         match self {
-            Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => invitenumber,
-            Self::Broadcast { .. } => panic!("broadcast invite has no invite number"), // TODO panic
+            Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => {
+                invitenumber.as_deref()
+            }
+            Self::Broadcast { .. } => None,
         }
     }
 
@@ -76,6 +78,17 @@ impl QrInvite {
             | Self::Group { authcode, .. }
             | Self::Broadcast { authcode, .. } => authcode,
         }
+    }
+
+    /// Whether this QR code uses the faster "version 2" protocol,
+    /// where the first message from Bob to Alice is symmetrically encrypted
+    /// with the AUTH code.
+    /// We may decide in the future to backwards-compatibly mark QR codes as V2,
+    /// but for now, everything without an invite number
+    /// is definitely V2,
+    /// because the invite number is needed for V1.
+    pub(crate) fn is_v2(&self) -> bool {
+        self.invitenumber().is_none()
     }
 }
 
@@ -92,7 +105,7 @@ impl TryFrom<Qr> for QrInvite {
             } => Ok(QrInvite::Contact {
                 contact_id,
                 fingerprint,
-                invitenumber,
+                invitenumber: Some(invitenumber),
                 authcode,
             }),
             Qr::AskVerifyGroup {
@@ -107,7 +120,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 name: grpname,
                 grpid,
-                invitenumber,
+                invitenumber: Some(invitenumber),
                 authcode,
             }),
             Qr::AskJoinBroadcast {
