@@ -244,7 +244,7 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             .clone();
 
         let req = hyper::Request::builder()
-            .uri(parsed_url.path())
+            .uri(parsed_url)
             .header(hyper::header::HOST, authority.as_str())
             .body(http_body_util::Empty::<Bytes>::new())?;
         let response = sender.send_request(req).await?;
@@ -378,7 +378,7 @@ pub(crate) async fn post_string(context: &Context, url: &str, body: String) -> R
         .context("URL has no authority")?
         .clone();
 
-    let request = hyper::Request::post(parsed_url.path())
+    let request = hyper::Request::post(parsed_url)
         .header(hyper::header::HOST, authority.as_str())
         .body(body)?;
     let response = sender.send_request(request).await?;
@@ -408,7 +408,7 @@ pub(crate) async fn post_form<T: Serialize + ?Sized>(
         .authority()
         .context("URL has no authority")?
         .clone();
-    let request = hyper::Request::post(parsed_url.path())
+    let request = hyper::Request::post(parsed_url)
         .header(hyper::header::HOST, authority.as_str())
         .header("content-type", "application/x-www-form-urlencoded")
         .body(encoded_body)?;
