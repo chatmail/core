@@ -109,17 +109,13 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             let broadcast_name = chat.get_name();
             let broadcast_name_urlencoded =
                 utf8_percent_encode(broadcast_name, NON_ALPHANUMERIC).to_string();
-            let broadcast_secret = load_broadcast_shared_secret(context, chat.id)
-                .await?
-                .context("Could not find broadcast secret")?;
             format!(
-                "https://i.delta.chat/#{}&a={}&g={}&x={}&s={}&b={}",
+                "https://i.delta.chat/#{}&a={}&b={}&x={}&s={}",
                 fingerprint.hex(),
                 self_addr_urlencoded,
                 &broadcast_name_urlencoded,
                 &chat.grpid,
                 &auth,
-                broadcast_secret
             )
         } else {
             // parameters used: a=g=x=i=s=

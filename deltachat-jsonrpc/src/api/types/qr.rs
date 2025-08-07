@@ -46,10 +46,6 @@ pub enum QrObject {
         fingerprint: String,
 
         authcode: String,
-
-        /// The secret shared between all members,
-        /// used to symmetrically encrypt&decrypt messages.
-        shared_secret: String,
     },
     /// Contact fingerprint is verified.
     ///
@@ -230,7 +226,6 @@ impl From<Qr> for QrObject {
                 contact_id,
                 fingerprint,
                 authcode,
-                shared_secret,
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.to_string();
@@ -240,7 +235,6 @@ impl From<Qr> for QrObject {
                     contact_id,
                     fingerprint,
                     authcode,
-                    shared_secret,
                 }
             }
             Qr::FprOk { contact_id } => {

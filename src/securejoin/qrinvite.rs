@@ -35,7 +35,6 @@ pub enum QrInvite {
         broadcast_name: String,
         grpid: String,
         authcode: String,
-        shared_secret: String,
     },
 }
 
@@ -129,14 +128,12 @@ impl TryFrom<Qr> for QrInvite {
                 contact_id,
                 fingerprint,
                 authcode,
-                shared_secret,
             } => Ok(QrInvite::Broadcast {
                 broadcast_name,
                 grpid,
                 contact_id,
                 fingerprint,
                 authcode,
-                shared_secret,
             }),
             _ => bail!("Unsupported QR type: {qr:?}"),
         }

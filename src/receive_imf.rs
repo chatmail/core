@@ -45,7 +45,10 @@ use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on
 use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, create_broadcast_shared_secret, remove_subject_prefix};
+use crate::tools::{
+    self, buf_compress, create_broadcast_shared_secret, remove_subject_prefix,
+    validate_broadcast_shared_secret,
+};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 use crate::{contact, imap};
 
@@ -3569,7 +3572,11 @@ async fn apply_in_broadcast_changes(
     }
 
     if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
-        save_broadcast_shared_secret(context, chat.id, secret).await?;
+        if validate_broadcast_shared_secret(secret) {
+            save_broadcast_shared_secret(context, chat.id, secret).await?;
+        } else {
+            warn!(context, "Not saving invalid broadcast secret");
+        }
     }
 
     if send_event_chat_modified {
