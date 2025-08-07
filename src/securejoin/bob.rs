@@ -164,8 +164,10 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 .await?;
             }
 
-            let msg = stock_str::securejoin_wait(context).await;
-            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
+                let msg = stock_str::securejoin_wait(context).await;
+                chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            }
             Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
