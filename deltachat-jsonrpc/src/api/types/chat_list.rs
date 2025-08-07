@@ -129,7 +129,9 @@ pub(crate) async fn get_chat_list_item_by_id(
 
     let chat_contacts = get_chat_contacts(ctx, chat_id).await?;
 
-    let self_in_group = chat_contacts.contains(&ContactId::SELF);
+    let self_in_group = chat_contacts.contains(&ContactId::SELF)
+        || chat.get_type() == Chattype::OutBroadcast
+        || chat.get_type() == Chattype::Mailinglist;
 
     let (dm_chat_contact, was_seen_recently) = if chat.get_type() == Chattype::Single {
         let contact = chat_contacts.first();
