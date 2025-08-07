@@ -3893,14 +3893,11 @@ async fn test_sync_broadcast() -> Result<()> {
         .await
         .unwrap();
     sync(alice0, alice1).await; // Sync QR code
-    tcm.exec_securejoin_qr_multi_device(bob, &[alice0, alice1], &qr)
+    let bob_broadcast_id = tcm
+        .exec_securejoin_qr_multi_device(bob, &[alice0, alice1], &qr)
         .await;
 
-    // This also imports Bob's key from the vCard.
-    // Otherwise it is possible that second device
-    // does not have Bob's key as only the fingerprint
-    // is transferred in the sync message.
-    let a1b_contact_id = alice1.add_or_lookup_contact(bob).await.id;
+    let a1b_contact_id = alice1.add_or_lookup_contact_no_key(bob).await.id;
     assert_eq!(
         get_chat_contacts(alice1, a1_broadcast_id).await?,
         vec![a1b_contact_id]
@@ -3923,6 +3920,10 @@ async fn test_sync_broadcast() -> Result<()> {
     a0_broadcast_id.delete(alice0).await?;
     sync(alice0, alice1).await;
     alice1.assert_no_chat(a1_broadcast_id).await;
+
+    bob.golden_test_chat(bob_broadcast_id, "test_sync_broadcast_bob")
+        .await;
+
     Ok(())
 }
 
