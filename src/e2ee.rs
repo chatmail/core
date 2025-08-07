@@ -56,8 +56,8 @@ impl EncryptHelper {
 
         println!(
             "\nEncrypting pk:\n{}\n",
-            str::from_utf8(&raw_message).unwrap()
-        );
+            String::from_utf8_lossy(&raw_message)
+        ); // TODO
 
         let ctext = pgp::pk_encrypt(raw_message, keyring, Some(sign_key), compress).await?;
 
@@ -80,8 +80,8 @@ impl EncryptHelper {
 
         println!(
             "\nEncrypting symm:\n{}\n",
-            str::from_utf8(&raw_message).unwrap()
-        );
+            String::from_utf8_lossy(&raw_message)
+        ); // TODO
 
         let ctext = pgp::encrypt_for_broadcast(raw_message, passphrase, sign_key, compress).await?;
 

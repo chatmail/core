@@ -1,6 +1,8 @@
 //! Re-exports of internal functions needed for benchmarks.
+#![allow(missing_docs)] // Not necessary to put a doc comment on the pub functions here
 
 use anyhow::Result;
+use deltachat_contact_tools::EmailAddress;
 use std::collections::BTreeMap;
 
 use crate::chat::ChatId;
@@ -31,4 +33,8 @@ pub async fn save_broadcast_shared_secret(
     secret: &str,
 ) -> Result<()> {
     crate::chat::save_broadcast_shared_secret(context, chat_id, secret).await
+}
+
+pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
+    pgp::create_keypair(EmailAddress::new(addr)?)
 }
