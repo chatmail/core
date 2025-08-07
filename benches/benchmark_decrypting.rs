@@ -71,7 +71,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
 
         b.iter(|| {
-            let (mut msg, _) =
+            let mut msg =
                 decrypt(encrypted.clone().into_bytes(), &[], black_box(&secrets)).unwrap();
             let decrypted = msg.as_data_vec().unwrap();
 
@@ -101,7 +101,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
 
         b.iter(|| {
-            let (mut msg, _) = decrypt(
+            let mut msg = decrypt(
                 encrypted.clone().into_bytes(),
                 &[key_pair.secret.clone()],
                 black_box(&secrets),
