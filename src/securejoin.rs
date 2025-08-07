@@ -6,7 +6,6 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::chat::{
     self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid,
-    load_broadcast_shared_secret,
 };
 use crate::chatlist_events;
 use crate::config::Config;

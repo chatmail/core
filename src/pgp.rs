@@ -8,7 +8,7 @@ use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    ArmorOptions, Deserializable, InnerRingResult, KeyType as PgpKeyType, Message, MessageBuilder,
+    ArmorOptions, Deserializable, KeyType as PgpKeyType, Message, MessageBuilder,
     SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
     StandaloneSignature, SubkeyParamsBuilder, TheRing,
 };
@@ -272,7 +272,7 @@ pub fn decrypt(
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
+    let (msg, _ring_result) = msg.decrypt_the_ring(ring, true)?;
 
     // remove one layer of compression
     let msg = msg.decompress()?;

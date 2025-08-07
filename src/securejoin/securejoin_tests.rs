@@ -857,8 +857,8 @@ async fn test_send_avatar_in_securejoin() -> Result<()> {
             //exec_securejoin_broadcast(&tcm, alice, bob).await;
         }
 
-        let alice_on_bob = bob.add_or_lookup_contact_no_key(&alice).await;
-        let avatar = alice_on_bob.get_profile_image(&bob).await?.unwrap();
+        let alice_on_bob = bob.add_or_lookup_contact_no_key(alice).await;
+        let avatar = alice_on_bob.get_profile_image(bob).await?.unwrap();
         assert_eq!(
             avatar.file_name().unwrap().to_str().unwrap(),
             AVATAR_64x64_DEDUPLICATED

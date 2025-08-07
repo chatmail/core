@@ -2649,17 +2649,17 @@ async fn test_broadcast_change_name() -> Result<()> {
     let fiona = &tcm.fiona().await;
 
     tcm.section("Alice sends a message to Bob");
-    let chat_alice = alice.create_chat(&bob).await;
-    send_text_msg(&alice, chat_alice.id, "hi!".to_string()).await?;
+    let chat_alice = alice.create_chat(bob).await;
+    send_text_msg(alice, chat_alice.id, "hi!".to_string()).await?;
     bob.recv_msg(&alice.pop_sent_msg().await).await;
 
     tcm.section("Bob sends a message to Alice");
-    let chat_bob = bob.create_chat(&alice).await;
-    send_text_msg(&bob, chat_bob.id, "ho!".to_string()).await?;
+    let chat_bob = bob.create_chat(alice).await;
+    send_text_msg(bob, chat_bob.id, "ho!".to_string()).await?;
     let msg = alice.recv_msg(&bob.pop_sent_msg().await).await;
     assert!(msg.get_showpadlock());
 
-    let broadcast_id = create_broadcast(&alice, "Channel".to_string()).await?;
+    let broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
     let qr = get_securejoin_qr(alice, Some(broadcast_id)).await.unwrap();
 
     tcm.section("Alice invites Bob to her channel");
@@ -2669,7 +2669,7 @@ async fn test_broadcast_change_name() -> Result<()> {
 
     {
         tcm.section("Alice changes the chat name");
-        set_chat_name(&alice, broadcast_id, "My great broadcast").await?;
+        set_chat_name(alice, broadcast_id, "My great broadcast").await?;
         let sent = alice.pop_sent_msg().await;
 
         tcm.section("Bob receives the name-change system message");
@@ -2687,15 +2687,15 @@ async fn test_broadcast_change_name() -> Result<()> {
 
     {
         tcm.section("Alice changes the chat name again, but the system message is lost somehow");
-        set_chat_name(&alice, broadcast_id, "Broadcast channel").await?;
+        set_chat_name(alice, broadcast_id, "Broadcast channel").await?;
 
-        let chat = Chat::load_from_db(&alice, broadcast_id).await?;
+        let chat = Chat::load_from_db(alice, broadcast_id).await?;
         assert_eq!(chat.typ, Chattype::OutBroadcast);
         assert_eq!(chat.name, "Broadcast channel");
         assert!(!chat.is_self_talk());
 
         tcm.section("Alice sends a text message 'ola!'");
-        send_text_msg(&alice, broadcast_id, "ola!".to_string()).await?;
+        send_text_msg(alice, broadcast_id, "ola!".to_string()).await?;
         let msg = alice.get_last_msg().await;
         assert_eq!(msg.chat_id, chat.id);
     }
@@ -2717,7 +2717,7 @@ async fn test_broadcast_change_name() -> Result<()> {
         assert_eq!(msg.subject, "Re: Broadcast channel");
         assert!(msg.get_showpadlock());
         assert!(msg.get_override_sender_name().is_none());
-        let chat = Chat::load_from_db(&bob, msg.chat_id).await?;
+        let chat = Chat::load_from_db(bob, msg.chat_id).await?;
         assert_eq!(chat.typ, Chattype::InBroadcast);
         assert_ne!(chat.id, chat_bob.id);
         assert_eq!(chat.name, "Broadcast channel");
@@ -2760,7 +2760,7 @@ async fn test_broadcast_multidev() -> Result<()> {
     set_chat_name(alice0, a0_broadcast_id, "Broadcast channel 42").await?;
     let sent_msg = alice0.send_text(a0_broadcast_id, "hi").await;
     let msg = alice1.recv_msg(&sent_msg).await;
-    let a1_broadcast_id = get_chat_id_by_grpid(&alice1, &a0_broadcast_chat.grpid)
+    let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)
         .await?
         .unwrap()
         .0;

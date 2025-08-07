@@ -3867,13 +3867,13 @@ pub(crate) async fn load_broadcast_shared_secret(
     context: &Context,
     chat_id: ChatId,
 ) -> Result<Option<String>> {
-    Ok(context
+    context
         .sql
         .query_get_value(
             "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
             (chat_id,),
         )
-        .await?)
+        .await
 }
 
 pub(crate) async fn save_broadcast_shared_secret(
@@ -5213,7 +5213,7 @@ impl Context {
         }
     }
 
-    async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &String) -> Result<bool> {
+    async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &str) -> Result<bool> {
         Ok(match action {
             SyncAction::CreateOutBroadcast {
                 chat_name,
@@ -5222,7 +5222,7 @@ impl Context {
                 create_broadcast_ex(
                     self,
                     Nosync,
-                    grpid.clone(),
+                    grpid.to_string(),
                     chat_name.clone(),
                     shared_secret.to_string(),
                 )
