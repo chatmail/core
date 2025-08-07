@@ -7,7 +7,7 @@ use crate::imex::{ImexMode, has_backup, imex};
 use crate::message::{MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
-use crate::securejoin::get_securejoin_qr;
+use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, sync,
@@ -3094,8 +3094,12 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     tcm.section("Alice creates broadcast channel with Bob.");
     let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
-    tcm.exec_securejoin_qr(bob0, alice, &qr).await;
-    sync(bob0, bob1).await;
+    join_securejoin(bob0, &qr).await.unwrap();
+    let request = bob0.pop_sent_msg().await;
+    alice.recv_msg(&request).await;
+    let answer = alice.pop_sent_msg().await;
+    bob0.recv_msg(&answer).await;
+    bob1.recv_msg(&answer).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;

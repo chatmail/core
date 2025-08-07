@@ -18,7 +18,6 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
-use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
@@ -35,6 +34,7 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, stock_str, tools};
+use crate::{constants, token};
 
 /// A parsed MIME message.
 ///
@@ -136,6 +136,10 @@ pub(crate) struct MimeMessage {
     /// Sender timestamp in secs since epoch. Allowed to be in the future due to unsynchronized
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
+
+    /// How the message was encrypted (and now successfully decrypted):
+    /// The asymmetric key, an AUTH token, or a broadcast's shared secret.
+    pub(crate) was_encrypted_with: EncryptedWith,
 }
 
 #[derive(Debug, PartialEq)]
@@ -232,6 +236,25 @@ pub enum SystemMessage {
 
     /// Message indicating that a call was ended.
     CallEnded = 67,
+}
+
+#[derive(Debug)]
+pub(crate) enum EncryptedWith {
+    AsymmetricKey,
+    BroadcastSecret(String),
+    AuthToken(String),
+    None,
+}
+
+impl EncryptedWith {
+    pub(crate) fn auth_token(&self) -> Option<&str> {
+        match self {
+            EncryptedWith::AsymmetricKey => None,
+            EncryptedWith::BroadcastSecret(_) => None,
+            EncryptedWith::AuthToken(token) => Some(token),
+            EncryptedWith::None => None,
+        }
+    }
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -354,7 +377,7 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
-        let symmetric_secrets: Vec<String> = context
+        let mut secrets: Vec<String> = context
             .sql
             .query_map(
                 "SELECT secret FROM broadcasts_shared_secrets",
@@ -366,11 +389,13 @@ impl MimeMessage {
                 },
             )
             .await?;
+        let num_broadcast_secrets = secrets.len();
+        secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
 
-        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
-            try_decrypt(&mail, &private_keyring, &symmetric_secrets)
+        let (mail, is_encrypted, decrypted_with) = match tokio::task::block_in_place(|| {
+            try_decrypt(&mail, &private_keyring, &secrets)
         }) {
-            Ok(Some(mut msg)) => {
+            Ok(Some((mut msg, index_of_secret))) => {
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 
                 let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
@@ -397,18 +422,29 @@ impl MimeMessage {
                     aheader_value = Some(protected_aheader_value);
                 }
 
-                (Ok(decrypted_mail), true)
+                let decrypted_with = if let Some(index_of_secret) = index_of_secret {
+                    let used_secret = secrets.into_iter().nth(index_of_secret).unwrap_or_default();
+                    if index_of_secret < num_broadcast_secrets {
+                        EncryptedWith::BroadcastSecret(used_secret)
+                    } else {
+                        EncryptedWith::AuthToken(used_secret)
+                    }
+                } else {
+                    EncryptedWith::AsymmetricKey
+                };
+
+                (Ok(decrypted_mail), true, decrypted_with)
             }
             Ok(None) => {
                 mail_raw = Vec::new();
                 decrypted_msg = None;
-                (Ok(mail), false)
+                (Ok(mail), false, EncryptedWith::None)
             }
             Err(err) => {
                 mail_raw = Vec::new();
                 decrypted_msg = None;
                 warn!(context, "decryption failed: {:#}", err);
-                (Err(err), false)
+                (Err(err), false, EncryptedWith::None)
             }
         };
 
@@ -620,6 +656,7 @@ impl MimeMessage {
             is_bot: None,
             timestamp_rcvd,
             timestamp_sent,
+            was_encrypted_with: decrypted_with,
         };
 
         match partial {

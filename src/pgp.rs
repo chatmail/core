@@ -8,7 +8,7 @@ use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    ArmorOptions, Deserializable, KeyType as PgpKeyType, Message, MessageBuilder,
+    ArmorOptions, Deserializable, InnerRingResult, KeyType as PgpKeyType, Message, MessageBuilder,
     SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
     StandaloneSignature, SubkeyParamsBuilder, TheRing,
 };
@@ -239,13 +239,19 @@ pub fn pk_calc_signature(
 
 /// Decrypts the message with keys from the private key keyring.
 ///
-/// Receiver private keys are provided in
-/// `private_keys_for_decryption`.
+/// Receiver private keys are passed in `private_keys_for_decryption`,
+/// shared secrets used for symmetric encryption
+/// are passed in `shared_secrets`.
+///
+/// Returns a tuple of:
+/// - The decrypted and decompressed message
+/// - If the message was symmetrically encrypted:
+///   The index in `shared_secrets` of the secret used to decrypt the message.
 pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
-    symmetric_secrets: &[String],
-) -> Result<pgp::composed::Message<'static>> {
+    shared_secrets: &[String],
+) -> Result<(pgp::composed::Message<'static>, Option<usize>)> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
 
@@ -253,7 +259,7 @@ pub fn decrypt(
     let empty_pw = Password::empty();
 
     // TODO it may degrade performance that we always try out all passwords here
-    let message_password: Vec<Password> = symmetric_secrets
+    let message_password: Vec<Password> = shared_secrets
         .iter()
         .map(|p| Password::from(p.as_str()))
         .collect();
@@ -266,12 +272,17 @@ pub fn decrypt(
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, _ring_result) = msg.decrypt_the_ring(ring, true)?;
+    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
 
     // remove one layer of compression
     let msg = msg.decompress()?;
 
-    Ok(msg)
+    let decrypted_with_secret = ring_result
+        .message_password
+        .iter()
+        .position(|&p| p == InnerRingResult::Ok);
+
+    Ok((msg, decrypted_with_secret))
 }
 
 /// Returns fingerprints
@@ -407,7 +418,7 @@ mod tests {
         HashSet<Fingerprint>,
         Vec<u8>,
     )> {
-        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
+        let (mut msg, _) = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -611,13 +622,14 @@ mod tests {
         .await?;
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let mut decrypted = decrypt(
+        let (mut decrypted, index_of_secret) = decrypt(
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
         )?;
 
         assert_eq!(decrypted.as_data_vec()?, plain);
+        assert_eq!(index_of_secret, Some(0));
 
         Ok(())
     }

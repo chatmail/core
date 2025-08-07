@@ -2941,10 +2941,13 @@ async fn prepare_send_msg(
                 SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
             )
         }
-        CantSendReason::MissingKey => msg
-            .param
-            .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default(),
+        CantSendReason::MissingKey => {
+            msg.param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+            // V2 securejoin messages are symmetrically encrypted, no need for the public key:
+                || msg.securejoin_step() == Some("vb-request-v2")
+        }
         _ => false,
     };
     if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
@@ -3878,11 +3881,13 @@ pub(crate) async fn save_broadcast_shared_secret(
     chat_id: ChatId,
     secret: &str,
 ) -> Result<()> {
+    info!(context, "Saving broadcast secret for chat {chat_id}");
+    info!(context, "dbg the new secret for chat {chat_id} is {secret}");
     context
         .sql
         .execute(
             "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
-                    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
+                    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret",
             (chat_id, secret),
         )
         .await?;

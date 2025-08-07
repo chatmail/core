@@ -329,7 +329,7 @@ impl MimeFactory {
 
                                 if let Some(public_key) = public_key_opt {
                                     keys.push((addr.clone(), public_key))
-                                } else if id != ContactId::SELF && !chat.is_any_broadcast() {
+                                } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
                                     missing_key_addresses.insert(addr.clone());
                                     if is_encrypted {
                                         warn!(context, "Missing key for {addr}");
@@ -350,7 +350,7 @@ impl MimeFactory {
 
                                             if let Some(public_key) = public_key_opt {
                                                 keys.push((addr.clone(), public_key))
-                                            } else if id != ContactId::SELF && !chat.is_any_broadcast()  {
+                                            } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat)  {
                                                 missing_key_addresses.insert(addr.clone());
                                                 if is_encrypted {
                                                     warn!(context, "Missing key for {addr}");
@@ -430,7 +430,7 @@ impl MimeFactory {
 
             encryption_keys = if !is_encrypted {
                 None
-            } else if chat.is_out_broadcast() {
+            } else if should_encrypt_symmetrically(&msg, &chat) {
                 // Encrypt, but only symmetrically, not with the public keys.
                 Some(Vec::new())
             } else {
@@ -579,7 +579,7 @@ impl MimeFactory {
             //   messages are auto-sent unlike usual unencrypted messages.
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
-                || step == "vb-request-with-auth"
+                || step == "vb-request-v2"
                 || step == "vg-member-added"
                 || step == "vb-member-added"
                 || step == "vc-contact-confirm"
@@ -825,7 +825,7 @@ impl MimeFactory {
         } else if let Loaded::Message { msg, .. } = &self.loaded {
             if msg.param.get_cmd() == SystemMessage::SecurejoinMessage {
                 let step = msg.param.get(Param::Arg).unwrap_or_default();
-                if step != "vg-request" && step != "vc-request" {
+                if step != "vg-request" && step != "vc-request" && step != "vb-request-v2" {
                     headers.push((
                         "Auto-Submitted",
                         mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
@@ -1181,7 +1181,13 @@ impl MimeFactory {
             };
 
             let symmetric_key: Option<String> = match &self.loaded {
-                Loaded::Message { chat, .. } if chat.is_any_broadcast() => {
+                Loaded::Message { msg, .. } if should_encrypt_with_auth_token(msg) => {
+                    // TODO rather than setting Arg2, bob.rs could set a param `Param::SharedSecretForEncryption` or similar
+                    msg.param.get(Param::Arg2).map(|s| s.to_string())
+                }
+                Loaded::Message { chat, msg }
+                    if should_encrypt_with_broadcast_secret(msg, chat) =>
+                {
                     // If there is no symmetric key yet
                     // (because this is an old broadcast channel,
                     // created before we had symmetric encryption),
@@ -1196,6 +1202,7 @@ impl MimeFactory {
 
             let encrypted = if let Some(symmetric_key) = symmetric_key {
                 info!(context, "Symmetrically encrypting for broadcast channel.");
+                info!(context, "secret: {symmetric_key}"); // TODO
                 encrypt_helper
                     .encrypt_for_broadcast(context, &symmetric_key, message, compress)
                     .await?
@@ -1547,7 +1554,7 @@ impl MimeFactory {
                         headers.push((
                             if step == "vg-request-with-auth"
                                 || step == "vc-request-with-auth"
-                                || step == "vb-request-with-auth"
+                                || step == "vb-request-v2"
                             {
                                 "Secure-Join-Auth"
                             } else {
@@ -1896,6 +1903,22 @@ impl MimeFactory {
 
 fn hidden_recipients() -> Address<'static> {
     Address::new_group(Some("hidden-recipients".to_string()), Vec::new())
+}
+
+fn should_encrypt_with_auth_token(msg: &Message) -> bool {
+    msg.param.get_cmd() == SystemMessage::SecurejoinMessage
+        && msg.param.get(Param::Arg).unwrap_or_default() == "vb-request-v2"
+}
+
+fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
+    chat.is_any_broadcast()
+        && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
+        // The member-added message in a broadcast must be asymmetrirally encrypted:
+        && msg.param.get_cmd() != SystemMessage::MemberAddedToGroup
+}
+
+fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
+    should_encrypt_with_auth_token(msg) || should_encrypt_with_broadcast_secret(msg, chat)
 }
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {

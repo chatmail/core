@@ -296,7 +296,7 @@ pub(crate) async fn handle_securejoin_handshake(
     // -> or just ignore the problem for now - we will need to solve it for all messages anyways: https://github.com/chatmail/core/issues/7057
     if !matches!(
         step,
-        "vg-request" | "vc-request" | "vb-request-with-auth" | "vb-member-added"
+        "vg-request" | "vc-request" | "vb-request-v2" | "vb-member-added"
     ) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
@@ -367,7 +367,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ========================================================*/
             bob::handle_auth_required(context, mime_message).await
         }
-        "vg-request-with-auth" | "vc-request-with-auth" | "vb-request-with-auth" => {
+        "vg-request-with-auth" | "vc-request-with-auth" | "vb-request-v2" => {
             /*==========================================================
             ====              Alice - the inviter side              ====
             ====   Steps 5+6 in "Setup verified contact" protocol   ====
@@ -390,8 +390,12 @@ pub(crate) async fn handle_securejoin_handshake(
                 );
                 return Ok(HandshakeMessage::Ignore);
             }
-            // verify that the `Secure-Join-Auth:`-header matches the secret written to the QR code
-            let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
+            // verify that the `Secure-Join-Auth:`-header matches the secret written to the QR code,
+            // or that the message was encrypted with the secret written to the QR code.
+            let auth = mime_message
+                .get_header(HeaderDef::SecureJoinAuth)
+                .or_else(|| mime_message.was_encrypted_with.auth_token());
+            let Some(auth) = auth else {
                 warn!(
                     context,
                     "Ignoring {step} message because of missing auth code."
@@ -447,9 +451,16 @@ pub(crate) async fn handle_securejoin_handshake(
                     .await?;
                 inviter_progress(context, contact_id, 800);
                 inviter_progress(context, contact_id, 1000);
-                // IMAP-delete the message to avoid handling it by another device and adding the
-                // member twice. Another device will know the member's key from Autocrypt-Gossip.
-                Ok(HandshakeMessage::Done)
+                if step.starts_with("vb-") {
+                    // For broadcasts, we don't want to delete the message,
+                    // because the other device should also internally add the member
+                    // and see the key (because it won't see the member via autocrypt-gossip).
+                    Ok(HandshakeMessage::Propagate)
+                } else {
+                    // IMAP-delete the message to avoid handling it by another device and adding the
+                    // member twice. Another device will know the member's key from Autocrypt-Gossip.
+                    Ok(HandshakeMessage::Done)
+                }
             } else {
                 // Setup verified contact.
                 secure_connection_established(
@@ -594,7 +605,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         inviter_progress(context, contact_id, 1000);
     }
 
-    // TODO not sure if I should ad vb-request-with-auth here
+    // TODO not sure if I should add vb-request-v2 here
     // Actually, I'm not even sure why vg-request-with-auth is here - why do we create a 1:1 chat??
     if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
         // This actually reflects what happens on the first device (which does the secure

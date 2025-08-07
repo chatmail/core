@@ -103,6 +103,9 @@ pub enum Param {
     /// removed from the group.
     ///
     /// For "MemberAddedToGroup" this is the email address added to the group.
+    ///
+    /// For securejoin messages, this is the step,
+    /// which is put into the `Secure-Join` header.
     Arg = b'E',
 
     /// For Messages
@@ -110,6 +113,9 @@ pub enum Param {
     /// For `BobHandshakeMsg::Request`, this is the `Secure-Join-Invitenumber` header.
     ///
     /// For `BobHandshakeMsg::RequestWithAuth`, this is the `Secure-Join-Auth` header.
+    ///
+    /// For version two of the securejoin protocol (`vb-request-v2`),
+    /// this is the Auth token used to encrypt the message.
     ///
     /// For [`SystemMessage::MultiDeviceSync`], this contains the ids that are synced.
     ///

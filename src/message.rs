@@ -1385,6 +1385,18 @@ impl Message {
     pub fn error(&self) -> Option<String> {
         self.error.clone()
     }
+
+    // TODO this function could be used a lot more
+    /// If this is a secure-join message,
+    /// returns the current step,
+    /// which is put into the `Secure-Join` header.
+    pub(crate) fn securejoin_step(&self) -> Option<&str> {
+        if self.param.get_cmd() == SystemMessage::SecurejoinMessage {
+            self.param.get(Param::Arg)
+        } else {
+            None
+        }
+    }
 }
 
 /// State of the message.
