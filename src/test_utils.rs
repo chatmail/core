@@ -343,7 +343,7 @@ impl TestContextBuilder {
                 .addr;
             let name = EmailAddress::new(&addr).unwrap().local;
             let mut unused_name = name.clone();
-            let mut i = 0;
+            let mut i = 1;
             while used_names.contains(&unused_name) {
                 i += 1;
                 unused_name = format!("{name}{i}");
