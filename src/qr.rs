@@ -433,15 +433,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         None
     };
 
-    let name = if let Some(encoded_name) = param.get("n") {
-        let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-        match percent_decode_str(&encoded_name).decode_utf8() {
-            Ok(name) => name.to_string(),
-            Err(err) => bail!("Invalid name: {}", err),
-        }
-    } else {
-        "".to_string()
-    };
+    let name = decode_name(&param, "n")?.unwrap_or_default();
 
     let invitenumber = param
         .get("i")
@@ -456,8 +448,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
 
-    let grpname = decode_chat_name(&param, &grpid, "g")?;
-    let broadcast_name = decode_chat_name(&param, &grpid, "b")?;
+    let grpname = decode_name(&param, "g")?;
+    let broadcast_name = decode_name(&param, "b")?;
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) =
         (&addr, invitenumber, authcode.clone())
@@ -577,20 +569,12 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     }
 }
 
-fn decode_chat_name(
-    param: &BTreeMap<&str, &str>,
-    grpid: &Option<String>,
-    key: &str,
-) -> Result<Option<String>> {
-    if grpid.is_some() {
-        if let Some(encoded_name) = param.get(key) {
-            let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-            match percent_decode_str(&encoded_name).decode_utf8() {
-                Ok(name) => Ok(Some(name.to_string())),
-                Err(err) => bail!("Invalid group name: {}", err),
-            }
-        } else {
-            Ok(None)
+fn decode_name(param: &BTreeMap<&str, &str>, key: &str) -> Result<Option<String>> {
+    if let Some(encoded_name) = param.get(key) {
+        let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
+        match percent_decode_str(&encoded_name).decode_utf8() {
+            Ok(name) => Ok(Some(name.to_string())),
+            Err(err) => bail!("Invalid QR param {key}: {err}"),
         }
     } else {
         Ok(None)
