@@ -1737,8 +1737,9 @@ impl Chat {
     pub(crate) async fn is_self_in_chat(&self, context: &Context) -> Result<bool> {
         match self.typ {
             Chattype::Single | Chattype::OutBroadcast | Chattype::Mailinglist => Ok(true),
-            Chattype::Group => is_contact_in_chat(context, self.id, ContactId::SELF).await,
-            Chattype::InBroadcast => Ok(true),
+            Chattype::Group | Chattype::InBroadcast => {
+                is_contact_in_chat(context, self.id, ContactId::SELF).await
+            }
         }
     }
 

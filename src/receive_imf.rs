@@ -3061,9 +3061,7 @@ async fn apply_group_changes(
 
     if let Some(added_id) = added_id {
         if !added_ids.remove(&added_id) && !self_added {
-            // No-op "Member added" message.
-            //
-            // Trash it.
+            info!(context, "No-op 'Member added' message (TRASH)");
             better_msg = Some(String::new());
         }
     }
@@ -3315,13 +3313,6 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             )
         })?;
 
-        chat::add_to_chat_contacts_table(
-            context,
-            mime_parser.timestamp_sent,
-            chat_id,
-            &[ContactId::SELF],
-        )
-        .await?;
         if chattype == Chattype::InBroadcast {
             chat::add_to_chat_contacts_table(
                 context,
@@ -3556,19 +3547,40 @@ async fn apply_in_broadcast_changes(
     )
     .await?;
 
+    if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        if context.is_self_addr(added_addr).await? {
+            let msg;
+
+            if chat.is_self_in_chat(context).await? {
+                // Self is already in the chat.
+                // Probably Alice has two devices and her second device added us again;
+                // just hide the message.
+                info!(context, "No-op broadcast 'Member added' message (TRASH)");
+                msg = "".to_string();
+            } else {
+                msg = stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await;
+            }
+
+            better_msg.get_or_insert(msg);
+        }
+    }
+
     if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // The only member added/removed message that is ever sent is "I left.",
-        // so, this is the only case we need to handle here
         if from_id == ContactId::SELF {
+            // The only member added/removed message that is ever sent is "I left.",
+            // so, this is the only case we need to handle here
             better_msg
                 .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
-        }
-    } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        if context.is_self_addr(added_addr).await? {
-            better_msg.get_or_insert(
-                stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await,
-            );
-        }
+        } // TODO handle removed case
+    } else if !chat.is_self_in_chat(context).await? {
+        // Apparently, self is in the chat now, because we're receiving messages
+        chat::add_to_chat_contacts_table(
+            context,
+            mime_parser.timestamp_sent,
+            chat.id,
+            &[ContactId::SELF],
+        )
+        .await?;
     }
 
     if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
