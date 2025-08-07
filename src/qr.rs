@@ -86,16 +86,25 @@ pub enum Qr {
 
     /// Ask whether to join the broadcast channel.
     AskJoinBroadcast {
-        // TODO document
+        /// The user-visible name of this broadcast channel
         broadcast_name: String,
 
-        // TODO not sure wheter it makes sense to call this grpid just because it's called like this in the db
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel in the database.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
         grpid: String,
 
+        /// The contact id of the inviter
         contact_id: ContactId,
 
+        /// The PGP fingerprint of the inviter
         fingerprint: Fingerprint,
 
+        /// The AUTH code from the secure-join protocol,
+        /// which is both used to encrypt the first message to the inviter
+        /// and to prove to the inviter that we saw the QR code.
         authcode: String,
     },
 
