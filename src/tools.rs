@@ -334,7 +334,7 @@ pub(crate) fn validate_id(s: &str) -> bool {
 
 pub(crate) fn validate_broadcast_shared_secret(s: &str) -> bool {
     let alphabet = base64::alphabet::URL_SAFE.as_str();
-    s.chars().all(|c| alphabet.contains(c)) && s.len() == 43
+    s.chars().all(|c| alphabet.contains(c)) && s.len() >= 43 && s.len() <= 100
 }
 
 /// Function generates a Message-ID that can be used for a new outgoing message.

@@ -20,7 +20,7 @@ use crate::message::Message;
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
-use crate::tools::{validate_broadcast_shared_secret, validate_id};
+use crate::tools::validate_id;
 
 const OPENPGP4FPR_SCHEME: &str = "OPENPGP4FPR:"; // yes: uppercase
 const IDELTACHAT_SCHEME: &str = "https://i.delta.chat/#";
@@ -97,8 +97,6 @@ pub enum Qr {
         fingerprint: Fingerprint,
 
         authcode: String,
-
-        shared_secret: String,
     },
 
     /// Contact fingerprint is verified.
@@ -398,7 +396,7 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 
 /// scheme: `OPENPGP4FPR:FINGERPRINT#a=ADDR&n=NAME&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
-///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=BROADCAST_NAME&x=BROADCAST_ID&s=AUTH&b=BROADCAST_SHARED_SECRET`
+///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&b=BROADCAST_NAME&x=BROADCAST_ID&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
@@ -457,24 +455,9 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .get("x")
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
-    let broadcast_shared_secret = param
-        .get("b")
-        .filter(|&s| validate_broadcast_shared_secret(s))
-        .map(|s| s.to_string());
 
-    let grpname = if grpid.is_some() {
-        if let Some(encoded_name) = param.get("g") {
-            let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-            match percent_decode_str(&encoded_name).decode_utf8() {
-                Ok(name) => Some(name.to_string()),
-                Err(err) => bail!("Invalid group name: {}", err),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let grpname = decode_chat_name(&param, &grpid, "g")?;
+    let broadcast_name = decode_chat_name(&param, &grpid, "b")?;
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) =
         (&addr, invitenumber, authcode.clone())
@@ -549,13 +532,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 authcode,
             })
         }
-    } else if let (
-        Some(addr),
-        Some(broadcast_name),
-        Some(grpid),
-        Some(authcode),
-        Some(shared_secret),
-    ) = (&addr, grpname, grpid, authcode, broadcast_shared_secret)
+    } else if let (Some(addr), Some(broadcast_name), Some(grpid), Some(authcode)) =
+        (&addr, broadcast_name, grpid, authcode)
     {
         // This is a broadcast channel invite link.
         // TODO code duplication with the previous block
@@ -577,7 +555,6 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             contact_id,
             fingerprint,
             authcode,
-            shared_secret,
         })
     } else if let Some(addr) = addr {
         let fingerprint = fingerprint.hex();
@@ -597,6 +574,26 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         Ok(Qr::FprWithoutAddr {
             fingerprint: fingerprint.to_string(),
         })
+    }
+}
+
+fn decode_chat_name(
+    param: &BTreeMap<&str, &str>,
+    grpid: &Option<String>,
+    key: &str,
+) -> Result<Option<String>> {
+    if grpid.is_some() {
+        if let Some(encoded_name) = param.get(key) {
+            let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
+            match percent_decode_str(&encoded_name).decode_utf8() {
+                Ok(name) => Ok(Some(name.to_string())),
+                Err(err) => bail!("Invalid group name: {}", err),
+            }
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
     }
 }
 
