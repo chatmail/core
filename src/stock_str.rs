@@ -665,9 +665,9 @@ pub(crate) async fn msg_del_member_remote(context: &Context, removed_member_addr
         .replace1(whom)
 }
 
-/// Stock string: `I added member %1$s.` or `Member %1$s removed by %2$s.`.
+/// Stock string: `Member %1$s removed.`, `You removed member %1$s.` or `Member %1$s removed by %2$s.`
 ///
-/// The `removed_member_addr` parameter should be an email address and is looked up in
+/// The `removed_member` and `by_contact` parameter is looked up in
 /// the contacts to combine with the display name.
 pub(crate) async fn msg_del_member_local(
     context: &Context,
