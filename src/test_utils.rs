@@ -85,7 +85,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_alice()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -93,7 +93,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_bob()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -101,7 +101,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_charlie()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -109,7 +109,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_dom()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -117,7 +117,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_elena()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -125,7 +125,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_fiona()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -133,7 +133,7 @@ impl TestContextManager {
     pub async fn unconfigured(&mut self) -> TestContext {
         TestContext::builder()
             .with_log_sink(self.log_sink.clone())
-            .build(&mut self.used_names)
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -329,7 +329,7 @@ impl TestContextBuilder {
     }
 
     /// Builds the [`TestContext`].
-    pub async fn build(self, used_names: &mut BTreeSet<String>) -> TestContext {
+    pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
             let userid = {
                 let public_key = &key_pair.public;
@@ -343,12 +343,14 @@ impl TestContextBuilder {
                 .addr;
             let name = EmailAddress::new(&addr).unwrap().local;
             let mut unused_name = name.clone();
-            let mut i = 1;
-            while used_names.contains(&unused_name) {
-                i += 1;
-                unused_name = format!("{name}{i}");
+            if let Some(used_names) = used_names {
+                let mut i = 1;
+                while used_names.contains(&unused_name) {
+                    i += 1;
+                    unused_name = format!("{name}{i}");
+                }
+                used_names.insert(unused_name.clone());
             }
-            used_names.insert(unused_name.clone());
 
             let test_context = TestContext::new_internal(Some(unused_name), self.log_sink).await;
             test_context.configure_addr(&addr).await;
@@ -404,30 +406,21 @@ impl TestContext {
     ///
     /// This is a shortcut which configures alice@example.org with a fixed key.
     pub async fn new_alice() -> Self {
-        Self::builder()
-            .configure_alice()
-            .build(&mut BTreeSet::new())
-            .await
+        Self::builder().configure_alice().build(None).await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures bob@example.net with a fixed key.
     pub async fn new_bob() -> Self {
-        Self::builder()
-            .configure_bob()
-            .build(&mut BTreeSet::new())
-            .await
+        Self::builder().configure_bob().build(None).await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures fiona@example.net with a fixed key.
     pub async fn new_fiona() -> Self {
-        Self::builder()
-            .configure_fiona()
-            .build(&mut BTreeSet::new())
-            .await
+        Self::builder().configure_fiona().build(None).await
     }
 
     /// Print current chat state.
@@ -1604,20 +1597,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_with_alice() {
-        let alice = TestContext::builder()
-            .configure_alice()
-            .build(&mut BTreeSet::new())
-            .await;
+        let alice = TestContext::builder().configure_alice().build(None).await;
         alice.ctx.emit_event(EventType::Info("hello".into()));
         // panic!("Alice fails");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_with_bob() {
-        let bob = TestContext::builder()
-            .configure_bob()
-            .build(&mut BTreeSet::new())
-            .await;
+        let bob = TestContext::builder().configure_bob().build(None).await;
         bob.ctx.emit_event(EventType::Info("there".into()));
         // panic!("Bob fails");
     }
