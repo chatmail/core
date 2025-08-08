@@ -250,7 +250,7 @@ impl BackupProvider {
                                 Err(format_err!("Backup provider dropped"))
                             }
                         ).await {
-                            warn!(context, "Error while handling backup connection: {err:#}.");
+                            error!(context, "Error while handling backup connection: {err:#}.");
                             context.emit_event(EventType::ImexProgress(0));
                             break;
                         } else {
@@ -367,7 +367,8 @@ pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
                     Err(format_err!("Backup reception cancelled"))
                 })
                 .await;
-            if res.is_err() {
+            if let Err(ref res) = res {
+                error!(context, "{:#}", res);
                 context.emit_event(EventType::ImexProgress(0));
             }
             context.free_ongoing().await;
