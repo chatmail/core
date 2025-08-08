@@ -2881,6 +2881,16 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     bob.golden_test_chat(bob_chat_id, "test_broadcast_joining_golden_bob")
         .await;
 
+    let alice_bob_contact = alice.add_or_lookup_contact_id(bob).await;
+    let direct_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact)
+        .await?
+        .unwrap();
+    // The 1:1 chat with Bob should not be visible to the user:
+    assert_eq!(direct_chat.blocked, Blocked::Yes);
+    alice
+        .golden_test_chat(direct_chat.id, "test_broadcast_joining_golden_alice_direct")
+        .await;
+
     Ok(())
 }
 
