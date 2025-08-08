@@ -1180,7 +1180,7 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            let symmetric_key: Option<String> = match &self.loaded {
+            let shared_secret: Option<String> = match &self.loaded {
                 Loaded::Message { msg, .. } if should_encrypt_with_auth_token(msg) => {
                     // TODO rather than setting Arg2, bob.rs could set a param `Param::SharedSecretForEncryption` or similar
                     msg.param.get(Param::Arg2).map(|s| s.to_string())
@@ -1188,7 +1188,7 @@ impl MimeFactory {
                 Loaded::Message { chat, msg }
                     if should_encrypt_with_broadcast_secret(msg, chat) =>
                 {
-                    // If there is no symmetric key yet
+                    // If there is no shared secret yet
                     // (because this is an old broadcast channel,
                     // created before we had symmetric encryption),
                     // we just encrypt asymmetrically.
@@ -1200,11 +1200,10 @@ impl MimeFactory {
                 _ => None,
             };
 
-            let encrypted = if let Some(symmetric_key) = symmetric_key {
-                info!(context, "Symmetrically encrypting for broadcast channel.");
-                info!(context, "secret: {symmetric_key}"); // TODO
+            let encrypted = if let Some(shared_secret) = shared_secret {
+                info!(context, "Encrypting symmetrically.");
                 encrypt_helper
-                    .encrypt_for_broadcast(context, &symmetric_key, message, compress)
+                    .encrypt_for_broadcast(context, &shared_secret, message, compress)
                     .await?
             } else {
                 // Asymmetric encryption

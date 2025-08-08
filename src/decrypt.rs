@@ -10,11 +10,8 @@ use crate::pgp;
 
 /// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
 ///
-/// If successful and the message is encrypted, returns a tuple of:
-///
-/// - The decrypted and decompressed message
-/// - If the message was symmetrically encrypted:
-///   The index in `shared_secrets` of the secret used to decrypt the message.
+/// If successful and the message is encrypted,
+/// returns the decrypted and decompressed message.
 pub fn try_decrypt<'a>(
     mail: &'a ParsedMail<'a>,
     private_keyring: &'a [SignedSecretKey],
