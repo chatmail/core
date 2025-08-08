@@ -1433,6 +1433,7 @@ impl MimeFactory {
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
+                    let fingerprint_to_remove = msg.param.get(Param::Arg2).unwrap_or_default();
 
                     if email_to_remove
                         == context
@@ -1450,6 +1451,14 @@ impl MimeFactory {
                         headers.push((
                             "Chat-Group-Member-Removed",
                             mail_builder::headers::raw::Raw::new(email_to_remove.to_string())
+                                .into(),
+                        ));
+                    }
+
+                    if !fingerprint_to_remove.is_empty() {
+                        headers.push((
+                            "Chat-Group-Member-Removed-Fpr",
+                            mail_builder::headers::raw::Raw::new(fingerprint_to_remove.to_string())
                                 .into(),
                         ));
                     }

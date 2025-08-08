@@ -63,6 +63,7 @@ pub enum HeaderDef {
     ChatUserAvatar,
     ChatVoiceMessage,
     ChatGroupMemberRemoved,
+    ChatGroupMemberRemovedFpr,
     ChatGroupMemberAdded,
     ChatContent,
 
