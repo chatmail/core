@@ -1784,7 +1784,7 @@ impl Chat {
             // This is an address-contact chat, show a special avatar that marks it as such
             return Ok(Some(get_abs_path(
                 context,
-                Path::new(&get_address_contact_icon(context).await?),
+                Path::new(&get_unencrypted_icon(context).await?),
             )));
         } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             // Load the group avatar, or the device-chat / saved-messages icon
@@ -2490,11 +2490,13 @@ pub(crate) async fn get_archive_icon(context: &Context) -> Result<PathBuf> {
     .await
 }
 
-pub(crate) async fn get_address_contact_icon(context: &Context) -> Result<PathBuf> {
+/// Returns path to the icon
+/// indicating unencrypted chats and address-contacts.
+pub(crate) async fn get_unencrypted_icon(context: &Context) -> Result<PathBuf> {
     get_asset_icon(
         context,
-        "icon-address-contact",
-        include_bytes!("../assets/icon-address-contact.png"),
+        "icon-unencrypted",
+        include_bytes!("../assets/icon-unencrypted.png"),
     )
     .await
 }

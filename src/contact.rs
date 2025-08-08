@@ -1564,7 +1564,7 @@ impl Contact {
             return Ok(Some(chat::get_device_icon(context).await?));
         }
         if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
-            return Ok(Some(chat::get_address_contact_icon(context).await?));
+            return Ok(Some(chat::get_unencrypted_icon(context).await?));
         }
         if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             if !image_rel.is_empty() {
