@@ -1771,6 +1771,12 @@ impl Chat {
             return Ok(Some(get_device_icon(context).await?));
         } else if self.is_self_talk() {
             return Ok(Some(get_saved_messages_icon(context).await?));
+        } else if !self.is_encrypted(context).await? {
+            // This is an unencrypted chat, show a special avatar that marks it as such.
+            return Ok(Some(get_abs_path(
+                context,
+                Path::new(&get_unencrypted_icon(context).await?),
+            )));
         } else if self.typ == Chattype::Single {
             // For 1:1 chats, we always use the same avatar as for the contact
             // This is before the `self.is_encrypted()` check, because that function
@@ -1780,12 +1786,6 @@ impl Chat {
                 let contact = Contact::get_by_id(context, *contact_id).await?;
                 return contact.get_profile_image(context).await;
             }
-        } else if !self.is_encrypted(context).await? {
-            // This is an address-contact chat, show a special avatar that marks it as such
-            return Ok(Some(get_abs_path(
-                context,
-                Path::new(&get_unencrypted_icon(context).await?),
-            )));
         } else if let Some(image_rel) = self.param.get(Param::ProfileImage) {
             // Load the group avatar, or the device-chat / saved-messages icon
             if !image_rel.is_empty() {
