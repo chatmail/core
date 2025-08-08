@@ -115,7 +115,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         .map(|_| create_broadcast_shared_secret_pub())
         .collect();
 
-    // "secret" is the symmetric secret that was used to encrypt text_symmetrically_encrypted.eml:
+    // "secret" is the shared secret that was used to encrypt text_symmetrically_encrypted.eml:
     secrets[NUM_SECRETS / 2] = "secret".to_string();
 
     let context = rt.block_on(async {

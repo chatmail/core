@@ -2947,7 +2947,7 @@ async fn prepare_send_msg(
             msg.param
                 .get_bool(Param::ForcePlaintext)
                 .unwrap_or_default()
-            // V2 securejoin messages are symmetrically encrypted, no need for the public key:
+                // V2 securejoin messages are symmetrically encrypted, no need for the public key:
                 || msg.securejoin_step() == Some("vb-request-v2")
         }
         _ => false,

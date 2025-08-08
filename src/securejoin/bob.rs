@@ -71,6 +71,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
         let mut msg = Message {
             viewtype: Viewtype::Text,
+            // TODO I may want to make this generic also for group/contacts
             text: "Secure-Join: vb-request-v2".to_string(),
             hidden: true,
             ..Default::default()

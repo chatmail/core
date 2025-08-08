@@ -238,10 +238,7 @@ pub fn pk_calc_signature(
 /// shared secrets used for symmetric encryption
 /// are passed in `shared_secrets`.
 ///
-/// Returns a tuple of:
-/// - The decrypted and decompressed message
-/// - If the message was symmetrically encrypted:
-///   The index in `shared_secrets` of the secret used to decrypt the message.
+/// Returns the decrypted and decompressed message.
 pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
@@ -253,7 +250,13 @@ pub fn decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
-    // TODO it may degrade performance that we always try out all passwords here
+    // We always try out all passwords here, which is not great for performance.
+    // But benchmarking (see `benchmark_decrypting.rs`)
+    // showed that the performance penalty is acceptable.
+    // We could include a short (~2 character) identifier of the secret
+    // in
+    // (or just include the first 2 characters of the secret in clear-text)
+    // in order to
     let message_password: Vec<Password> = shared_secrets
         .iter()
         .map(|p| Password::from(p.as_str()))
@@ -322,7 +325,7 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     tokio::task::spawn_blocking(move || {
         let mut rng = thread_rng();
         let s2k = StringToKey::new_default(&mut rng);
-        let builder: MessageBuilder<'_> = MessageBuilder::from_bytes("", plain);
+        let builder = MessageBuilder::from_bytes("", plain);
         let mut builder = builder.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
         builder.encrypt_with_password(s2k, &passphrase)?;
 
@@ -333,14 +336,15 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     .await?
 }
 
-/// Symmetric encryption.
+/// Symmetrically encrypt the message to be sent into a broadcast channel.
+/// `shared secret` is the secret that will be used for symmetric encryption.
 pub async fn encrypt_for_broadcast(
     plain: Vec<u8>,
-    passphrase: &str,
+    shared_secret: &str,
     private_key_for_signing: SignedSecretKey,
     compress: bool,
 ) -> Result<String> {
-    let passphrase = Password::from(passphrase.to_string());
+    let shared_secret = Password::from(shared_secret.to_string());
 
     tokio::task::spawn_blocking(move || {
         let msg = MessageBuilder::from_bytes("", plain);
@@ -357,7 +361,7 @@ pub async fn encrypt_for_broadcast(
             AeadAlgorithm::Ocb,
             ChunkSize::C8KiB,
         );
-        msg.encrypt_with_password(&mut rng, s2k, &passphrase)?;
+        msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
 
         msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
         if compress {
