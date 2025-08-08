@@ -2902,6 +2902,16 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     bob.golden_test_chat(bob_chat_id, "test_broadcast_joining_golden_bob")
         .await;
 
+    let alice_bob_contact = alice.add_or_lookup_contact_id(bob).await;
+    let direct_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact)
+        .await?
+        .unwrap();
+    // The 1:1 chat with Bob should not be visible to the user:
+    assert_eq!(direct_chat.blocked, Blocked::Yes);
+    alice
+        .golden_test_chat(direct_chat.id, "test_broadcast_joining_golden_alice_direct")
+        .await;
+
     Ok(())
 }
 
@@ -3099,7 +3109,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
     join_securejoin(bob0, &qr).await.unwrap();
     let request = bob0.pop_sent_msg().await;
-    alice.recv_msg(&request).await;
+    alice.recv_msg_trash(&request).await;
     let answer = alice.pop_sent_msg().await;
     bob0.recv_msg(&answer).await;
     bob1.recv_msg(&answer).await;

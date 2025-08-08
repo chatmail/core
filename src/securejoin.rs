@@ -4,9 +4,7 @@ use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
-use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid,
-};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
@@ -443,11 +441,11 @@ pub(crate) async fn handle_securejoin_handshake(
                     .await?;
                 inviter_progress(context, contact_id, 800);
                 inviter_progress(context, contact_id, 1000);
-                if step.starts_with("vb-") {
+                if step == "vb-request-v2" {
                     // For broadcasts, we don't want to delete the message,
                     // because the other device should also internally add the member
                     // and see the key (because it won't see the member via autocrypt-gossip).
-                    Ok(HandshakeMessage::Propagate)
+                    Ok(HandshakeMessage::Ignore)
                 } else {
                     // IMAP-delete the message to avoid handling it by another device and adding the
                     // member twice. Another device will know the member's key from Autocrypt-Gossip.
