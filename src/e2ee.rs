@@ -54,7 +54,36 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
+        println!(
+            "\nEncrypting pk:\n{}\n",
+            String::from_utf8_lossy(&raw_message)
+        ); // TODO
+
         let ctext = pgp::pk_encrypt(raw_message, keyring, Some(sign_key), compress).await?;
+
+        Ok(ctext)
+    }
+
+    /// TODO documentation
+    pub async fn encrypt_for_broadcast(
+        self,
+        context: &Context,
+        passphrase: &str,
+        mail_to_encrypt: MimePart<'static>,
+        compress: bool,
+    ) -> Result<String> {
+        let sign_key = load_self_secret_key(context).await?;
+
+        let mut raw_message = Vec::new();
+        let cursor = Cursor::new(&mut raw_message);
+        mail_to_encrypt.clone().write_part(cursor).ok();
+
+        println!(
+            "\nEncrypting symm:\n{}\n",
+            String::from_utf8_lossy(&raw_message)
+        ); // TODO
+
+        let ctext = pgp::encrypt_for_broadcast(raw_message, passphrase, sign_key, compress).await?;
 
         Ok(ctext)
     }

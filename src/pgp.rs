@@ -12,12 +12,13 @@ use pgp::composed::{
     SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
     StandaloneSignature, SubkeyParamsBuilder, TheRing,
 };
+use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
-use rand::thread_rng;
+use rand::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -25,7 +26,7 @@ use crate::key::{DcKey, Fingerprint};
 #[cfg(test)]
 pub(crate) const HEADER_AUTOCRYPT: &str = "autocrypt-prefer-encrypt";
 
-pub const HEADER_SETUPCODE: &str = "passphrase-begin";
+pub(crate) const HEADER_SETUPCODE: &str = "passphrase-begin";
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
@@ -233,11 +234,15 @@ pub fn pk_calc_signature(
 
 /// Decrypts the message with keys from the private key keyring.
 ///
-/// Receiver private keys are provided in
-/// `private_keys_for_decryption`.
-pub fn pk_decrypt(
+/// Receiver private keys are passed in `private_keys_for_decryption`,
+/// shared secrets used for symmetric encryption
+/// are passed in `shared_secrets`.
+///
+/// Returns the decrypted and decompressed message.
+pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
+    shared_secrets: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
@@ -245,18 +250,27 @@ pub fn pk_decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
+    // We always try out all passwords here, which is not great for performance.
+    // But benchmarking (see `benchmark_decrypting.rs`)
+    // showed that the performance penalty is acceptable.
+    // We could include a short (~2 character) identifier of the secret
+    // in
+    // (or just include the first 2 characters of the secret in clear-text)
+    // in order to
+    let message_password: Vec<Password> = shared_secrets
+        .iter()
+        .map(|p| Password::from(p.as_str()))
+        .collect();
+    let message_password: Vec<&Password> = message_password.iter().collect();
+
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![&empty_pw],
-        message_password: vec![],
+        message_password,
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
-    anyhow::ensure!(
-        !ring_result.secret_keys.is_empty(),
-        "decryption failed, no matching secret keys"
-    );
+    let (msg, _ring_result) = msg.decrypt_the_ring(ring, true)?;
 
     // remove one layer of compression
     let msg = msg.decompress()?;
@@ -322,6 +336,45 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     .await?
 }
 
+/// Symmetrically encrypt the message to be sent into a broadcast channel.
+/// `shared secret` is the secret that will be used for symmetric encryption.
+pub async fn encrypt_for_broadcast(
+    plain: Vec<u8>,
+    shared_secret: &str,
+    private_key_for_signing: SignedSecretKey,
+    compress: bool,
+) -> Result<String> {
+    let shared_secret = Password::from(shared_secret.to_string());
+
+    tokio::task::spawn_blocking(move || {
+        let msg = MessageBuilder::from_bytes("", plain);
+        let mut rng = thread_rng();
+        let mut salt = [0u8; 8];
+        rng.fill(&mut salt[..]);
+        let s2k = StringToKey::Salted {
+            hash_alg: HashAlgorithm::default(),
+            salt,
+        };
+        let mut msg = msg.seipd_v2(
+            &mut rng,
+            SymmetricKeyAlgorithm::AES128,
+            AeadAlgorithm::Ocb,
+            ChunkSize::C8KiB,
+        );
+        msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
+
+        msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+        if compress {
+            msg.compression(CompressionAlgorithm::ZLIB);
+        }
+
+        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
+
+        Ok(encoded_msg)
+    })
+    .await?
+}
+
 /// Symmetric decryption.
 pub async fn symm_decrypt<T: BufRead + std::fmt::Debug + 'static + Send>(
     passphrase: &str,
@@ -345,7 +398,10 @@ mod tests {
     use tokio::sync::OnceCell;
 
     use super::*;
-    use crate::test_utils::{alice_keypair, bob_keypair};
+    use crate::{
+        key::load_self_secret_key,
+        test_utils::{TestContextManager, alice_keypair, bob_keypair},
+    };
 
     fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
@@ -356,7 +412,7 @@ mod tests {
         HashSet<Fingerprint>,
         Vec<u8>,
     )> {
-        let mut msg = pk_decrypt(ctext.to_vec(), private_keys_for_decryption)?;
+        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation)?;
@@ -541,5 +597,33 @@ mod tests {
                 .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_encrypt_decrypt_broadcast() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let shared_secret = "shared secret";
+        let ctext = encrypt_for_broadcast(
+            plain.clone(),
+            shared_secret,
+            load_self_secret_key(alice).await?,
+            true,
+        )
+        .await?;
+
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let mut decrypted = decrypt(
+            ctext.into(),
+            &bob_private_keyring,
+            &[shared_secret.to_string()],
+        )?;
+
+        assert_eq!(decrypted.as_data_vec()?, plain);
+
+        Ok(())
     }
 }
