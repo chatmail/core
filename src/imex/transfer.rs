@@ -367,8 +367,8 @@ pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
                     Err(format_err!("Backup reception cancelled"))
                 })
                 .await;
-            if res.is_err() {
-                error!(context, "get_backup2 failed");
+            if let Err(ref res) = res {
+                error!(context, "{:#}", res);
                 context.emit_event(EventType::ImexProgress(0));
             }
             context.free_ongoing().await;
