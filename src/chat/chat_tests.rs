@@ -2888,7 +2888,10 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     let file = alice.get_blobdir().join("avatar.png");
     tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
     set_chat_profile_image(alice, alice_chat_id, file.to_str().unwrap()).await?;
-    alice.pop_sent_msg().await; // TODO check if Alice wrongly sends out a message here
+    // Because broadcasts are always 'promoted',
+    // set_chat_profile_image() sends out a message,
+    // which we need to pop:
+    alice.pop_sent_msg().await;
 
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
