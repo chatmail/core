@@ -31,6 +31,7 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
+use crate::key::self_fingerprint;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::logged_debug_assert;
@@ -4272,10 +4273,18 @@ pub async fn remove_contact_from_chat(
             // This allows to delete dangling references to deleted contacts
             // in case of the database becoming inconsistent due to a bug.
             if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
-                if chat.typ == Chattype::Group && chat.is_promoted() {
+                if chat.is_promoted() {
                     let addr = contact.get_addr();
+                    let fingerprint = contact.fingerprint().map(|f| f.hex());
 
-                    let res = send_member_removal_msg(context, chat_id, contact_id, addr).await;
+                    let res = send_member_removal_msg(
+                        context,
+                        chat_id,
+                        contact_id,
+                        addr,
+                        fingerprint.as_deref(),
+                    )
+                    .await;
 
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4299,7 +4308,9 @@ pub async fn remove_contact_from_chat(
         // For incoming broadcast channels, it's not possible to remove members,
         // but it's possible to leave:
         let self_addr = context.get_primary_self_addr().await?;
-        send_member_removal_msg(context, chat_id, contact_id, &self_addr).await?;
+        let fingerprint = self_fingerprint(context).await?;
+        send_member_removal_msg(context, chat_id, contact_id, &self_addr, Some(fingerprint))
+            .await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
@@ -4312,6 +4323,7 @@ async fn send_member_removal_msg(
     chat_id: ChatId,
     contact_id: ContactId,
     addr: &str,
+    fingerprint: Option<&str>,
 ) -> Result<MsgId> {
     let mut msg = Message::new(Viewtype::Text);
 
@@ -4323,6 +4335,7 @@ async fn send_member_removal_msg(
 
     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
     msg.param.set(Param::Arg, addr.to_lowercase());
+    msg.param.set_optional(Param::Arg2, fingerprint);
     msg.param
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 

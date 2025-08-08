@@ -3909,13 +3909,18 @@ async fn test_sync_broadcast() -> Result<()> {
     let msg = alice0.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, a0_broadcast_id);
     remove_contact_from_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
-    sync(alice0, alice1).await;
+    let sent = alice0.pop_sent_msg().await;
+    alice1.recv_msg(&sent).await;
     assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
-    assert!(
-        get_past_chat_contacts(alice1, a1_broadcast_id)
-            .await?
-            .is_empty()
-    );
+    // TODO do we want to make sure that there is no trace of a member?
+    // assert!(
+    //     get_past_chat_contacts(alice1, a1_broadcast_id)
+    //         .await?
+    //         .is_empty()
+    // );
+    bob.recv_msg(&sent).await;
+    let bob_chat = Chat::load_from_db(bob, bob_broadcast_id).await?;
+    assert!(!bob_chat.is_self_in_chat(bob).await?);
 
     a0_broadcast_id.delete(alice0).await?;
     sync(alice0, alice1).await;

@@ -1,6 +1,7 @@
-InBroadcast#Chat#11: Channel [2 member(s)] 
+InBroadcast#Chat#11: Channel [1 member(s)] 
 --------------------------------------------------------------------------------
 Msg#11: info (Contact#Contact#Info): Establishing guaranteed end-to-end encryption, please wait… [NOTICED][INFO]
 Msg#12🔒:  (Contact#Contact#10): Member Me added by alice@example.org. [FRESH][INFO]
 Msg#14🔒:  (Contact#Contact#10): hi [FRESH]
+Msg#15🔒:  (Contact#Contact#10): Member Me removed by alice@example.org. [FRESH][INFO]
 --------------------------------------------------------------------------------
