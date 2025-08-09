@@ -3819,6 +3819,9 @@ async fn lookup_key_contact_by_address(
     chat_id: Option<ChatId>,
 ) -> Result<Option<ContactId>> {
     if context.is_self_addr(addr).await? {
+        if chat_id.is_none() {
+            return Ok(Some(ContactId::SELF));
+        }
         let is_self_in_chat = context
             .sql
             .exists(
