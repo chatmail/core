@@ -4779,3 +4779,25 @@ async fn test_no_avatar_in_adhoc_chats() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that long group name with non-ASCII characters is correctly received
+/// by other members.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_long_group_name() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let group_name = "δδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδδ";
+    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, group_name).await?;
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+    let sent = alice
+        .send_text(alice_chat_id, "Hi! I created a group.")
+        .await;
+    let bob_chat_id = bob.recv_msg(&sent).await.chat_id;
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.name, group_name);
+
+    Ok(())
+}
