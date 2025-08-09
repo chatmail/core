@@ -1366,17 +1366,6 @@ impl Message {
         Ok(())
     }
 
-    pub(crate) async fn update_subject(&self, context: &Context) -> Result<()> {
-        context
-            .sql
-            .execute(
-                "UPDATE msgs SET subject=? WHERE id=?;",
-                (&self.subject, self.id),
-            )
-            .await?;
-        Ok(())
-    }
-
     /// Gets the error status of the message.
     ///
     /// A message can have an associated error status if something went wrong when sending or
