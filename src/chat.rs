@@ -2976,6 +2976,10 @@ async fn prepare_send_msg(
 
 /// Constructs jobs for sending a message and inserts them into the appropriate table.
 ///
+/// Updates the message `GuaranteeE2ee` parameter and persists it
+/// in the database depending on whether the message
+/// is added to the outgoing queue as encrypted or not.
+///
 /// Returns row ids if `smtp` table jobs were created or an empty `Vec` otherwise.
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
@@ -3069,13 +3073,20 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         }
     }
 
-    if rendered_msg.is_encrypted && !needs_encryption {
+    if rendered_msg.is_encrypted {
         msg.param.set_int(Param::GuaranteeE2ee, 1);
-        msg.update_param(context).await?;
+    } else {
+        msg.param.remove(Param::GuaranteeE2ee);
     }
-
     msg.subject.clone_from(&rendered_msg.subject);
-    msg.update_subject(context).await?;
+    context
+        .sql
+        .execute(
+            "UPDATE msgs SET subject=?, param=? WHERE id=?",
+            (&msg.subject, msg.param.to_string(), msg.id),
+        )
+        .await?;
+
     let chunk_size = context.get_max_smtp_rcpt_to().await?;
     let trans_fn = |t: &mut rusqlite::Transaction| {
         let mut row_ids = Vec::<i64>::new();
@@ -4559,7 +4570,13 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
     for mut msg in msgs {
         if msg.get_showpadlock() && !chat.is_protected() {
             msg.param.remove(Param::GuaranteeE2ee);
-            msg.update_param(context).await?;
+
+            // Do not call `msg.update_param` here.
+            // We do not want the message to appear unencrypted
+            // if it is loaded precisely at this time.
+            //
+            // Actual encryption status is persisted
+            // by `create_send_msg_jobs` below.
         }
         match msg.get_state() {
             // `get_state()` may return an outdated `OutPending`, so update anyway.
@@ -4571,16 +4588,21 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
             }
             msg_state => bail!("Unexpected message state {msg_state}"),
         }
+        msg.timestamp_sort = create_smeared_timestamp(context);
+        if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
+            continue;
+        }
+
+        // Emit the event only after `create_send_msg_jobs`
+        // because `create_send_msg_jobs` may change the message
+        // encryption status and call `msg.update_param`.
         context.emit_event(EventType::MsgsChanged {
             chat_id: msg.chat_id,
             msg_id: msg.id,
         });
-        msg.timestamp_sort = create_smeared_timestamp(context);
         // note(treefit): only matters if it is the last message in chat (but probably to expensive to check, debounce also solves it)
         chatlist_events::emit_chatlist_item_changed(context, msg.chat_id);
-        if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
-            continue;
-        }
+
         if msg.viewtype == Viewtype::Webxdc {
             let conn_fn = |conn: &mut rusqlite::Connection| {
                 let range = conn.query_row(
