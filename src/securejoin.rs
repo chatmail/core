@@ -1,6 +1,6 @@
 //! Implementation of [SecureJoin protocols](https://securejoin.delta.chat/).
 
-use anyhow::{Context as _, Error, Result, ensure};
+use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
@@ -63,10 +63,11 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
                 chat.typ == Chattype::Group,
                 "Can't generate SecureJoin QR code for 1:1 chat {id}"
             );
-            ensure!(
-                !chat.grpid.is_empty(),
-                "Can't generate SecureJoin QR code for ad-hoc group {id}"
-            );
+            if chat.grpid.is_empty() {
+                let err = format!("Can't generate QR code, chat {id} is a email thread");
+                error!(context, "get_securejoin_qr: {}.", err);
+                bail!(err);
+            }
             Some(chat)
         }
         None => None,
