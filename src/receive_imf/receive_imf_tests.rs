@@ -5436,3 +5436,15 @@ async fn test_small_unencrypted_group() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_lookup_key_contact_by_address_self() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let addr = &t.get_config(Config::Addr).await?.unwrap();
+    assert_eq!(
+        lookup_key_contact_by_address(t, addr, None).await?,
+        Some(ContactId::SELF)
+    );
+    Ok(())
+}
