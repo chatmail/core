@@ -1886,16 +1886,25 @@ impl Chat {
         let is_encrypted = self.is_protected()
             || match self.typ {
                 Chattype::Single => {
-                    let chat_contact_ids = get_chat_contacts(context, self.id).await?;
-                    if let Some(contact_id) = chat_contact_ids.first() {
-                        if *contact_id == ContactId::DEVICE {
-                            true
-                        } else {
-                            let contact = Contact::get_by_id(context, *contact_id).await?;
-                            contact.is_key_contact()
-                        }
-                    } else {
-                        true
+                    match context
+                        .sql
+                        .query_row_optional(
+                            "SELECT cc.contact_id, c.fingerprint<>''
+                             FROM chats_contacts cc LEFT JOIN contacts c
+                                 ON c.id=cc.contact_id
+                             WHERE cc.chat_id=?
+                            ",
+                            (self.id,),
+                            |row| {
+                                let id: ContactId = row.get(0)?;
+                                let is_key: bool = row.get(1)?;
+                                Ok((id, is_key))
+                            },
+                        )
+                        .await?
+                    {
+                        Some((id, is_key)) => is_key || id == ContactId::DEVICE,
+                        None => true,
                     }
                 }
                 Chattype::Group => {
