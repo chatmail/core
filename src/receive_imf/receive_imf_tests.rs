@@ -5092,6 +5092,44 @@ async fn test_two_group_securejoins() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unverified_member_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let alice_chat_id =
+        chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+
+    let fiona_chat_id = fiona.get_last_msg().await.chat_id;
+    let fiona_sent_msg = fiona.send_text(fiona_chat_id, "Hi").await;
+
+    // The message can't be verified, but the user can re-download it.
+    let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
+    assert_eq!(bob_msg.download_state, DownloadState::Available);
+    assert!(
+        bob_msg
+            .text
+            .contains("Re-download the message or see 'Info' for more details")
+    );
+
+    let alice_sent_msg = alice
+        .send_text(alice_chat_id, "Hi all, it's Alice introducing Fiona")
+        .await;
+    bob.recv_msg(&alice_sent_msg).await;
+
+    // Now Bob has Fiona's key and can verify the message.
+    let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
+    assert_eq!(bob_msg.download_state, DownloadState::Done);
+    assert_eq!(bob_msg.text, "Hi");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sanitize_filename_in_received() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let raw = b"Message-ID: Mr.XA6y3og8-az.WGbH9_dNcQx@testr
