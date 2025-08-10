@@ -4542,18 +4542,9 @@ pub(crate) async fn save_copy_in_self_talk(
 ///
 /// This is primarily intended to make existing webxdcs available to new chat members.
 pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
-    let mut chat_id = None;
     let mut msgs: Vec<Message> = Vec::new();
     for msg_id in msg_ids {
         let msg = Message::load_from_db(context, *msg_id).await?;
-        if let Some(chat_id) = chat_id {
-            ensure!(
-                chat_id == msg.chat_id,
-                "messages to resend needs to be in the same chat"
-            );
-        } else {
-            chat_id = Some(msg.chat_id);
-        }
         ensure!(
             msg.from_id == ContactId::SELF,
             "can resend only own messages"
@@ -4562,22 +4553,7 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
         msgs.push(msg)
     }
 
-    let Some(chat_id) = chat_id else {
-        return Ok(());
-    };
-
-    let chat = Chat::load_from_db(context, chat_id).await?;
     for mut msg in msgs {
-        if msg.get_showpadlock() && !chat.is_protected() {
-            msg.param.remove(Param::GuaranteeE2ee);
-
-            // Do not call `msg.update_param` here.
-            // We do not want the message to appear unencrypted
-            // if it is loaded precisely at this time.
-            //
-            // Actual encryption status is persisted
-            // by `create_send_msg_jobs` below.
-        }
         match msg.get_state() {
             // `get_state()` may return an outdated `OutPending`, so update anyway.
             MessageState::OutPending
