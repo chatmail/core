@@ -67,7 +67,7 @@ struct InnerPool {
     ///
     /// This mutex is locked when write connection
     /// is outside the pool.
-    write_mutex: Arc<Mutex<()>>,
+    pub(crate) write_mutex: Arc<Mutex<()>>,
 }
 
 impl InnerPool {
@@ -96,13 +96,13 @@ impl InnerPool {
                     .pop()
                     .context("Got a permit when there are no connections in the pool")?
             };
-            conn.pragma_update(None, "query_only", "1")?;
             let conn = PooledConnection {
                 pool: Arc::downgrade(&self),
                 conn: Some(conn),
                 _permit: permit,
                 _write_mutex_guard: None,
             };
+            conn.pragma_update(None, "query_only", "1")?;
             Ok(conn)
         } else {
             // We get write guard first to avoid taking a permit
@@ -119,13 +119,13 @@ impl InnerPool {
                     "Got a permit and write lock when there are no connections in the pool",
                 )?
             };
-            conn.pragma_update(None, "query_only", "0")?;
             let conn = PooledConnection {
                 pool: Arc::downgrade(&self),
                 conn: Some(conn),
                 _permit: permit,
                 _write_mutex_guard: Some(write_mutex_guard),
             };
+            conn.pragma_update(None, "query_only", "0")?;
             Ok(conn)
         }
     }
@@ -194,5 +194,13 @@ impl Pool {
 
     pub async fn get(&self, query_only: bool) -> Result<PooledConnection> {
         Arc::clone(&self.inner).get(query_only).await
+    }
+
+    /// Returns a mutex guard guaranteeing that there are no concurrent write connections.
+    ///
+    /// NB: Make sure you're not holding all connections when calling this, otherwise it deadlocks
+    /// if there is a concurrent writer waiting for available connection.
+    pub(crate) async fn write_lock(&self) -> OwnedMutexGuard<()> {
+        Arc::clone(&self.inner.write_mutex).lock_owned().await
     }
 }
