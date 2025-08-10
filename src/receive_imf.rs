@@ -1863,6 +1863,7 @@ async fn add_parts(
         None
     };
 
+    let mut verification_failed = false;
     if !chat_id.is_special() && is_partial_download.is_none() {
         // For outgoing emails in the 1:1 chat we have an exception that
         // they are allowed to be unencrypted:
@@ -1874,8 +1875,9 @@ async fn add_parts(
         //    likely reinstalled DC" or similar) would be wrong.
         if chat.is_protected() && (mime_parser.incoming || chat.typ != Chattype::Single) {
             if let VerifiedEncryption::NotVerified(err) = verified_encryption {
+                verification_failed = true;
                 warn!(context, "Verification problem: {err:#}.");
-                let s = format!("{err}. See 'Info' for more details");
+                let s = format!("{err}. Re-download the message or see 'Info' for more details");
                 mime_parser.replace_msg_by_error(&s);
             }
         }
@@ -2137,6 +2139,10 @@ RETURNING id
                         DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
+                    } else if verification_failed {
+                        // Verification can fail because of message reordering. Re-downloading the
+                        // message should help if so.
+                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
@@ -2871,20 +2877,13 @@ async fn apply_group_changes(
     let is_from_in_chat =
         !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
-    if mime_parser.get_header(HeaderDef::ChatVerified).is_some() {
+    if mime_parser.get_header(HeaderDef::ChatVerified).is_some() && !chat.is_protected() {
         if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-            if chat.is_protected() {
-                warn!(context, "Verification problem: {err:#}.");
-                let s = format!("{err}. See 'Info' for more details");
-                mime_parser.replace_msg_by_error(&s);
-            } else {
-                warn!(
-                    context,
-                    "Not marking chat {} as protected due to verification problem: {err:#}.",
-                    chat.id
-                );
-            }
-        } else if !chat.is_protected() {
+            warn!(
+                context,
+                "Not marking chat {} as protected due to verification problem: {err:#}.", chat.id,
+            );
+        } else {
             chat.id
                 .set_protection(
                     context,
