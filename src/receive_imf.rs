@@ -1673,12 +1673,12 @@ async fn add_parts(
         }
     }
 
+    let mut chat = Chat::load_from_db(context, chat_id).await?;
+
     if mime_parser.incoming && !chat_id.is_trash() {
         // It can happen that the message is put into a chat
         // but the From-address is not a member of this chat.
         if !chat::is_contact_in_chat(context, chat_id, from_id).await? {
-            let chat = Chat::load_from_db(context, chat_id).await?;
-
             // Mark the sender as overridden.
             // The UI will prepend `~` to the sender's name,
             // indicating that the sender is not part of the group.
@@ -1699,7 +1699,6 @@ async fn add_parts(
     let is_location_kml = mime_parser.location_kml.is_some();
     let is_mdn = !mime_parser.mdn_reports.is_empty();
 
-    let mut chat = Chat::load_from_db(context, chat_id).await?;
     let mut group_changes = match chat.typ {
         _ if chat.id.is_special() => GroupChangesInfo::default(),
         Chattype::Single => GroupChangesInfo::default(),
@@ -1864,10 +1863,7 @@ async fn add_parts(
         None
     };
 
-    // if a chat is protected and the message is fully downloaded, check additional properties
     if !chat_id.is_special() && is_partial_download.is_none() {
-        let chat = Chat::load_from_db(context, chat_id).await?;
-
         // For outgoing emails in the 1:1 chat we have an exception that
         // they are allowed to be unencrypted:
         // 1. They can't be an attack (they are outgoing, not incoming)
@@ -1884,6 +1880,7 @@ async fn add_parts(
             }
         }
     }
+    drop(chat); // Avoid using stale `chat` object.
 
     let sort_timestamp = tweak_sort_timestamp(
         context,
