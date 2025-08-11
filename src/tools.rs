@@ -319,11 +319,6 @@ pub(crate) fn create_broadcast_shared_secret() -> String {
     res
 }
 
-#[cfg(feature = "internals")]
-pub fn create_broadcast_shared_secret_pub() -> String {
-    create_broadcast_shared_secret()
-}
-
 /// Returns true if given string is a valid ID.
 ///
 /// All IDs generated with `create_id()` should be considered valid.

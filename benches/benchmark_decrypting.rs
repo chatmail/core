@@ -1,19 +1,45 @@
+//! Benchmarks for message decryption,
+//! comparing decryption of symmetrically-encrypted messages
+//! to decryption of asymmetrically-encrypted messages.
+//!
+//! Call with
+//!
+//! ```text
+//! cargo bench --bench benchmark_decrypting --features="internals"
+//! ```
+//!
+//! or, if you want to only run e.g. the 'Decrypt a symmetrically encrypted message' benchmark:
+//!
+//! ```text
+//! cargo bench --bench benchmark_decrypting --features="internals" -- 'Decrypt a symmetrically encrypted message'
+//! ```
+//!
+//! You can also pass a substring.
+//! So, you can run all 'Decrypt and parse' benchmarks with:
+//!
+//! ```text
+//! cargo bench --bench benchmark_decrypting --features="internals" -- 'Decrypt and parse'
+//! ```
+//!
+//! Symmetric decryption has to try out all known secrets,
+//! You can benchmark this by adapting the `NUM_SECRETS` variable.
+
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use deltachat::benchmark_internals::create_dummy_keypair;
-use deltachat::benchmark_internals::save_broadcast_shared_secret;
+use deltachat::internals_for_benchmarks::create_broadcast_shared_secret;
+use deltachat::internals_for_benchmarks::create_dummy_keypair;
+use deltachat::internals_for_benchmarks::save_broadcast_shared_secret;
 use deltachat::{
     Events,
-    benchmark_internals::key_from_asc,
-    benchmark_internals::parse_and_get_text,
-    benchmark_internals::store_self_keypair,
     chat::ChatId,
     config::Config,
     context::Context,
+    internals_for_benchmarks::key_from_asc,
+    internals_for_benchmarks::parse_and_get_text,
+    internals_for_benchmarks::store_self_keypair,
     pgp::{KeyPair, decrypt, encrypt_for_broadcast, pk_encrypt},
     stock_str::StockStrings,
-    tools::create_broadcast_shared_secret_pub,
 };
 use rand::{Rng, thread_rng};
 use tempfile::tempdir;
@@ -45,15 +71,17 @@ async fn create_context() -> Context {
 
 fn criterion_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("Decrypt");
+
+    // ===========================================================================================
+    // Benchmarks for decryption only, without any other parsing
+    // ===========================================================================================
+
     group.sample_size(10);
-    group.bench_function("Decrypt symmetrically encrypted", |b| {
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut plain: Vec<u8> = vec![0; 500];
-        thread_rng().fill(&mut plain[..]);
-        let (secrets, encrypted) = rt.block_on(async {
-            let secrets: Vec<String> = (0..NUM_SECRETS)
-                .map(|_| create_broadcast_shared_secret_pub())
-                .collect();
+
+    group.bench_function("Decrypt a symmetrically encrypted message", |b| {
+        let plain = generate_plaintext();
+        let secrets = generate_secrets();
+        let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
             let secret = secrets[NUM_SECRETS / 2].clone();
             let encrypted = encrypt_for_broadcast(
                 plain.clone(),
@@ -64,7 +92,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             .await
             .unwrap();
 
-            (secrets, encrypted)
+            encrypted
         });
 
         b.iter(|| {
@@ -75,16 +103,12 @@ fn criterion_benchmark(c: &mut Criterion) {
             assert_eq!(black_box(decrypted), plain);
         });
     });
-    group.bench_function("Decrypt pk encrypted", |b| {
-        // TODO code duplication with previous benchmark
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut plain: Vec<u8> = vec![0; 500];
-        thread_rng().fill(&mut plain[..]);
+
+    group.bench_function("Decrypt a public-key encrypted message", |b| {
+        let plain = generate_plaintext();
         let key_pair = create_dummy_keypair("alice@example.org").unwrap();
-        let (secrets, encrypted) = rt.block_on(async {
-            let secrets: Vec<String> = (0..NUM_SECRETS)
-                .map(|_| create_broadcast_shared_secret_pub())
-                .collect();
+        let secrets = generate_secrets();
+        let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
             let encrypted = pk_encrypt(
                 plain.clone(),
                 vec![black_box(key_pair.public.clone())],
@@ -94,7 +118,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             .await
             .unwrap();
 
-            (secrets, encrypted)
+            encrypted
         });
 
         b.iter(|| {
@@ -110,12 +134,15 @@ fn criterion_benchmark(c: &mut Criterion) {
         });
     });
 
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    let mut secrets: Vec<String> = (0..NUM_SECRETS)
-        .map(|_| create_broadcast_shared_secret_pub())
-        .collect();
+    // ===========================================================================================
+    // Benchmarks for the whole parsing pipeline, incl. decryption (but excl. receive_imf())
+    // ===========================================================================================
 
-    // "secret" is the shared secret that was used to encrypt text_symmetrically_encrypted.eml:
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let mut secrets = generate_secrets();
+
+    // "secret" is the shared secret that was used to encrypt text_symmetrically_encrypted.eml.
+    // Put it into the middle of our secrets:
     secrets[NUM_SECRETS / 2] = "secret".to_string();
 
     let context = rt.block_on(async {
@@ -128,21 +155,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         context
     });
 
-    group.bench_function("Receive a public-key encrypted message", |b| {
-        b.to_async(&rt).iter(|| {
-            let ctx = context.clone();
-            async move {
-                let text = parse_and_get_text(
-                    &ctx,
-                    include_bytes!("../test-data/message/text_from_alice_encrypted.eml"),
-                )
-                .await
-                .unwrap();
-                assert_eq!(text, "hi");
-            }
-        });
-    });
-    group.bench_function("Receive a symmetrically encrypted message", |b| {
+    group.bench_function("Decrypt and parse a symmetrically encrypted message", |b| {
         b.to_async(&rt).iter(|| {
             let ctx = context.clone();
             async move {
@@ -156,7 +169,36 @@ fn criterion_benchmark(c: &mut Criterion) {
             }
         });
     });
+
+    group.bench_function("Decrypt and parse a public-key encrypted message", |b| {
+        b.to_async(&rt).iter(|| {
+            let ctx = context.clone();
+            async move {
+                let text = parse_and_get_text(
+                    &ctx,
+                    include_bytes!("../test-data/message/text_from_alice_encrypted.eml"),
+                )
+                .await
+                .unwrap();
+                assert_eq!(text, "hi");
+            }
+        });
+    });
+
     group.finish();
+}
+
+fn generate_secrets() -> Vec<String> {
+    let secrets: Vec<String> = (0..NUM_SECRETS)
+        .map(|_| create_broadcast_shared_secret())
+        .collect();
+    secrets
+}
+
+fn generate_plaintext() -> Vec<u8> {
+    let mut plain: Vec<u8> = vec![0; 500];
+    thread_rng().fill(&mut plain[..]);
+    plain
 }
 
 criterion_group!(benches, criterion_benchmark);
