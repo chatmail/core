@@ -99,10 +99,10 @@ pub enum Param {
 
     /// For Messages
     ///
-    /// For "MemberRemovedFromGroup" this is the email address
+    /// For "MemberRemovedFromGroup", this is the email address
     /// removed from the group.
     ///
-    /// For "MemberAddedToGroup" this is the email address added to the group.
+    /// For "MemberAddedToGroup", this is the email address added to the group.
     ///
     /// For securejoin messages, this is the step,
     /// which is put into the `Secure-Join` header.

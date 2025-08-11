@@ -2904,8 +2904,8 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     bob.golden_test_chat(bob_chat_id, "test_broadcast_joining_golden_bob")
         .await;
 
-    let alice_bob_contact = alice.add_or_lookup_contact_id(bob).await;
-    let direct_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact)
+    let alice_bob_contact = alice.add_or_lookup_contact_no_key(bob).await;
+    let direct_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
         .await?
         .unwrap();
     // The 1:1 chat with Bob should not be visible to the user:
@@ -2913,6 +2913,25 @@ async fn test_broadcast_joining_golden() -> Result<()> {
     alice
         .golden_test_chat(direct_chat.id, "test_broadcast_joining_golden_alice_direct")
         .await;
+
+    assert_eq!(
+        alice_bob_contact
+            .get_verifier_id(alice)
+            .await?
+            .unwrap()
+            .unwrap(),
+        ContactId::SELF
+    );
+
+    let bob_alice_contact = bob.add_or_lookup_contact_no_key(alice).await;
+    assert_eq!(
+        bob_alice_contact
+            .get_verifier_id(bob)
+            .await?
+            .unwrap()
+            .unwrap(),
+        ContactId::SELF
+    );
 
     Ok(())
 }

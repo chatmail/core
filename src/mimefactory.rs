@@ -580,11 +580,13 @@ impl MimeFactory {
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
                 || step == "vb-request-with-auth"
+                // Note that for "vg-member-added" and "vb-member-added",
+                // get_cmd() returns `MemberAddedToGroup` rather than `SecurejoinMessage`,
+                // so, it wouldn't actually be necessary to have them in the list here.
+                // Still, they are here for completeness.
                 || step == "vg-member-added"
                 || step == "vb-member-added"
                 || step == "vc-contact-confirm"
-            // TODO possibly add vb-member-added here
-            // TODO wait... for member-added messages, Param::Arg doesn't even contain the step, but the email
         }
     }
 
@@ -1183,7 +1185,6 @@ impl MimeFactory {
 
             let shared_secret: Option<String> = match &self.loaded {
                 Loaded::Message { msg, .. } if should_encrypt_with_auth_token(msg) => {
-                    // TODO rather than setting Arg2, bob.rs could set a param `Param::SharedSecretForEncryption` or similar
                     msg.param.get(Param::Arg2).map(|s| s.to_string())
                 }
                 Loaded::Message { chat, msg }
