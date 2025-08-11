@@ -5352,3 +5352,57 @@ async fn test_group_introduction_no_gossip() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests reception of an encrypted group message
+/// without Chat-Group-ID.
+///
+/// The message should be displayed as
+/// encrypted and have key-contact `from_id`,
+/// but all group members should be address-contacts.
+///
+/// Due to a bug in v2.10.0 this resulted
+/// in creation of an ad hoc group with a key-contact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_encrypted_adhoc_group_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Bob receives encrypted message from Alice
+    // sent to multiple recipients,
+    // but without a group ID.
+    let received = receive_imf(
+        bob,
+        include_bytes!("../../test-data/message/encrypted-group-without-id.eml"),
+        false,
+    )
+    .await?
+    .unwrap();
+    let msg = Message::load_from_db(bob, *received.msg_ids.last().unwrap())
+        .await
+        .unwrap();
+
+    let chat = Chat::load_from_db(bob, msg.chat_id).await.unwrap();
+    assert_eq!(chat.typ, Chattype::Group);
+    assert_eq!(chat.is_encrypted(bob).await?, false);
+
+    let contact_ids = get_chat_contacts(bob, chat.id).await?;
+    assert_eq!(contact_ids.len(), 3);
+    assert!(chat.is_self_in_chat(bob).await?);
+
+    // Since the group is unencrypted, all contacts have
+    // to be address-contacts.
+    for contact_id in contact_ids {
+        let contact = Contact::get_by_id(bob, contact_id).await?;
+        if contact_id != ContactId::SELF {
+            assert_eq!(contact.is_key_contact(), false);
+        }
+    }
+
+    // `from_id` of the message corresponds to key-contact of Alice
+    // even though the message is assigned to unencrypted chat.
+    let alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
+    assert_eq!(msg.from_id, alice_contact_id);
+
+    Ok(())
+}

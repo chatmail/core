@@ -630,8 +630,7 @@ pub(crate) async fn receive_imf_inner(
         return Ok(None);
     };
 
-    let prevent_rename = (mime_parser.is_mailinglist_message() && !mime_parser.was_encrypted())
-        || mime_parser.get_header(HeaderDef::Sender).is_some();
+    let prevent_rename = should_prevent_rename(&mime_parser);
 
     // get From: (it can be an address list!) and check if it is known (for known From:'s we add
     // the other To:/Cc: in the 3rd pass)
@@ -1397,7 +1396,6 @@ async fn do_chat_assignment(
                     context,
                     mime_parser,
                     to_ids,
-                    from_id,
                     allow_creation || test_normal_chat.is_some(),
                     create_blocked,
                     is_partial_download.is_some(),
@@ -1567,7 +1565,6 @@ async fn do_chat_assignment(
                     context,
                     mime_parser,
                     to_ids,
-                    from_id,
                     allow_creation,
                     Blocked::Not,
                     is_partial_download.is_some(),
@@ -2464,7 +2461,6 @@ async fn lookup_or_create_adhoc_group(
     context: &Context,
     mime_parser: &MimeMessage,
     to_ids: &[Option<ContactId>],
-    from_id: ContactId,
     allow_creation: bool,
     create_blocked: Blocked,
     is_partial_download: bool,
@@ -2486,6 +2482,20 @@ async fn lookup_or_create_adhoc_group(
         );
         return Ok(None);
     }
+
+    // Lookup address-contact by the From address.
+    let fingerprint = None;
+    let find_key_contact_by_addr = false;
+    let prevent_rename = should_prevent_rename(mime_parser);
+    let (from_id, _from_id_blocked, _incoming_origin) = from_field_to_contact_id(
+        context,
+        &mime_parser.from,
+        fingerprint,
+        prevent_rename,
+        find_key_contact_by_addr,
+    )
+    .await?
+    .context("Cannot lookup addres-contact by the From field")?;
 
     let grpname = mime_parser
         .get_subject()
@@ -3961,6 +3971,13 @@ async fn lookup_key_contacts_by_address_list(
     }
     ensure_and_debug_assert_eq!(address_list.len(), contact_ids.len(),);
     Ok(contact_ids)
+}
+
+/// Returns true if the message should not result in renaming
+/// of the sender contact.
+fn should_prevent_rename(mime_parser: &MimeMessage) -> bool {
+    (mime_parser.is_mailinglist_message() && !mime_parser.was_encrypted())
+        || mime_parser.get_header(HeaderDef::Sender).is_some()
 }
 
 #[cfg(test)]
