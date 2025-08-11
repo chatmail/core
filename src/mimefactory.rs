@@ -579,7 +579,7 @@ impl MimeFactory {
             //   messages are auto-sent unlike usual unencrypted messages.
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
-                || step == "vb-request-v2"
+                || step == "vb-request-with-auth"
                 || step == "vg-member-added"
                 || step == "vb-member-added"
                 || step == "vc-contact-confirm"
@@ -826,7 +826,7 @@ impl MimeFactory {
         } else if let Loaded::Message { msg, .. } = &self.loaded {
             if msg.param.get_cmd() == SystemMessage::SecurejoinMessage {
                 let step = msg.param.get(Param::Arg).unwrap_or_default();
-                if step != "vg-request" && step != "vc-request" && step != "vb-request-v2" {
+                if step != "vg-request" && step != "vc-request" && step != "vb-request-with-auth" {
                     headers.push((
                         "Auto-Submitted",
                         mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
@@ -1563,7 +1563,7 @@ impl MimeFactory {
                         headers.push((
                             if step == "vg-request-with-auth"
                                 || step == "vc-request-with-auth"
-                                || step == "vb-request-v2"
+                                || step == "vb-request-with-auth"
                             {
                                 "Secure-Join-Auth"
                             } else {
@@ -1916,7 +1916,7 @@ fn hidden_recipients() -> Address<'static> {
 
 fn should_encrypt_with_auth_token(msg: &Message) -> bool {
     msg.param.get_cmd() == SystemMessage::SecurejoinMessage
-        && msg.param.get(Param::Arg).unwrap_or_default() == "vb-request-v2"
+        && msg.param.get(Param::Arg).unwrap_or_default() == "vb-request-with-auth"
 }
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {

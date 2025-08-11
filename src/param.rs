@@ -114,7 +114,7 @@ pub enum Param {
     ///
     /// For `BobHandshakeMsg::RequestWithAuth`, this is the `Secure-Join-Auth` header.
     ///
-    /// For version two of the securejoin protocol (`vb-request-v2`),
+    /// For version two of the securejoin protocol (`vb-request-with-auth`),
     /// this is the Auth token used to encrypt the message.
     ///
     /// For [`SystemMessage::MultiDeviceSync`], this contains the ids that are synced.

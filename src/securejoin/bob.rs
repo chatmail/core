@@ -72,13 +72,13 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         let mut msg = Message {
             viewtype: Viewtype::Text,
             // TODO I may want to make this generic also for group/contacts
-            text: "Secure-Join: vb-request-v2".to_string(),
+            text: "Secure-Join: vb-request-with-auth".to_string(),
             hidden: true,
             ..Default::default()
         };
         msg.param.set_cmd(SystemMessage::SecurejoinMessage);
 
-        msg.param.set(Param::Arg, "vb-request-v2");
+        msg.param.set(Param::Arg, "vb-request-with-auth");
         msg.param.set(Param::Arg2, invite.authcode());
         msg.param.set_int(Param::GuaranteeE2ee, 1);
         let bob_fp = self_fingerprint(context).await?;
@@ -357,7 +357,7 @@ pub(crate) async fn send_handshake_message(
 pub(crate) enum BobHandshakeMsg {
     /// vc-request or vg-request
     Request,
-    /// vc-request-with-auth, vg-request-with-auth, or vb-request-v2
+    /// vc-request-with-auth, vg-request-with-auth, or vb-request-with-auth
     RequestWithAuth,
 }
 
