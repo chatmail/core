@@ -69,22 +69,13 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         }
         info!(context, "Using fast securejoin with symmetric encryption");
 
-        let mut msg = Message {
-            viewtype: Viewtype::Text,
-            // TODO I may want to make this generic also for group/contacts
-            text: "Secure-Join: vb-request-with-auth".to_string(),
-            hidden: true,
-            ..Default::default()
-        };
-        msg.param.set_cmd(SystemMessage::SecurejoinMessage);
-
-        msg.param.set(Param::Arg, "vb-request-with-auth");
-        msg.param.set(Param::Arg2, invite.authcode());
-        msg.param.set_int(Param::GuaranteeE2ee, 1);
-        let bob_fp = self_fingerprint(context).await?;
-        msg.param.set(Param::Arg3, bob_fp);
-
-        chat::send_msg(context, private_chat_id, &mut msg).await?;
+        send_handshake_message(
+            context,
+            &invite,
+            private_chat_id,
+            BobHandshakeMsg::RequestWithAuth,
+        )
+        .await?;
 
         context.emit_event(EventType::SecurejoinJoinerProgress {
             contact_id: invite.contact_id(),
@@ -388,9 +379,7 @@ impl BobHandshakeMsg {
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
-                QrInvite::Broadcast { .. } => {
-                    panic!("There is no request-with-auth for broadcasts")
-                } // TODO remove panic
+                QrInvite::Broadcast { .. } => "vb-request-with-auth",
             },
         }
     }
