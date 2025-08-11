@@ -2499,7 +2499,7 @@ async fn lookup_or_create_adhoc_group(
         find_key_contact_by_addr,
     )
     .await?
-    .context("Cannot lookup addres-contact by the From field")?;
+    .context("Cannot lookup address-contact by the From field")?;
 
     let grpname = mime_parser
         .get_subject()
