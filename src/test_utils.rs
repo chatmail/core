@@ -345,6 +345,7 @@ impl TestContextBuilder {
 
             let mut unused_name = name.clone();
             if let Some(used_names) = used_names {
+                assert!(used_names.len() < 100);
                 // If there are multiple Alices, call them 'alice', 'alice2', 'alice3', ...
                 let mut i = 1;
                 while used_names.contains(&unused_name) {
