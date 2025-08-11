@@ -1271,11 +1271,15 @@ async fn decide_chat_assignment(
                 chat_id,
                 chat_id_blocked,
             }
+        } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
+            ChatAssignment::AdHocGroup
         } else if num_recipients <= 1 {
             ChatAssignment::OneOneChat
         } else {
             ChatAssignment::AdHocGroup
         }
+    } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
+        ChatAssignment::AdHocGroup
     } else if num_recipients <= 1 {
         ChatAssignment::OneOneChat
     } else {

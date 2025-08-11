@@ -5406,3 +5406,33 @@ async fn test_encrypted_adhoc_group_message() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that messages sent to unencrypted group
+/// with only two members arrive in a group
+/// and not in 1:1 chat.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_small_unencrypted_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_group_ex(alice, None, "Unencrypted group").await?;
+    let alice_bob_id = alice.add_or_lookup_address_contact_id(bob).await;
+    add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
+    send_text_msg(alice, alice_chat_id, "Hello!".to_string()).await?;
+
+    let sent_msg = alice.pop_sent_msg().await;
+    let bob_chat_id = bob.recv_msg(&sent_msg).await.chat_id;
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+
+    assert_eq!(bob_chat.typ, Chattype::Group);
+    assert_eq!(bob_chat.is_encrypted(bob).await?, false);
+
+    bob_chat_id.accept(bob).await?;
+    send_text_msg(bob, bob_chat_id, "Hello back!".to_string()).await?;
+    let sent_msg = bob.pop_sent_msg().await;
+    let alice_rcvd_msg = alice.recv_msg(&sent_msg).await;
+    assert_eq!(alice_rcvd_msg.chat_id, alice_chat_id);
+
+    Ok(())
+}
