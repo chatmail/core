@@ -3803,6 +3803,10 @@ pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<Ch
     create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
+const SQL_INSERT_BROADCAST_SECRET: &str =
+    "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret";
+
 pub(crate) async fn create_broadcast_ex(
     context: &Context,
     sync: sync::Sync,
@@ -3838,12 +3842,7 @@ pub(crate) async fn create_broadcast_ex(
                 ),
             )?;
             let chat_id = t.last_insert_rowid();
-            // TODO code duplication of `INSERT INTO broadcasts_shared_secrets`
-            t.execute(
-                "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
-                ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.chat_id",
-                (chat_id, &secret),
-            )?;
+            t.execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, &secret))?;
             Ok(t.last_insert_rowid().try_into()?)
         };
         context.sql.transaction(trans_fn).await?
@@ -3884,14 +3883,9 @@ pub(crate) async fn save_broadcast_shared_secret(
     secret: &str,
 ) -> Result<()> {
     info!(context, "Saving broadcast secret for chat {chat_id}");
-    info!(context, "dbg the new secret for chat {chat_id} is {secret}");
     context
         .sql
-        .execute(
-            "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
-                    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret",
-            (chat_id, secret),
-        )
+        .execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, secret))
         .await?;
 
     Ok(())
