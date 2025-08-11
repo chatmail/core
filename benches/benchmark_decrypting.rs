@@ -38,7 +38,7 @@ use deltachat::{
     internals_for_benchmarks::key_from_asc,
     internals_for_benchmarks::parse_and_get_text,
     internals_for_benchmarks::store_self_keypair,
-    pgp::{KeyPair, decrypt, encrypt_for_broadcast, pk_encrypt},
+    pgp::{KeyPair, decrypt, encrypt_symmetrically, pk_encrypt},
     stock_str::StockStrings,
 };
 use rand::{Rng, thread_rng};
@@ -83,7 +83,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let secrets = generate_secrets();
         let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
             let secret = secrets[NUM_SECRETS / 2].clone();
-            let encrypted = encrypt_for_broadcast(
+            let encrypted = encrypt_symmetrically(
                 plain.clone(),
                 black_box(&secret),
                 create_dummy_keypair("alice@example.org").unwrap().secret,

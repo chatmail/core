@@ -1204,7 +1204,7 @@ impl MimeFactory {
             let encrypted = if let Some(shared_secret) = shared_secret {
                 info!(context, "Encrypting symmetrically.");
                 encrypt_helper
-                    .encrypt_for_broadcast(context, &shared_secret, message, compress)
+                    .encrypt_symmetrically(context, &shared_secret, message, compress)
                     .await?
             } else {
                 // Asymmetric encryption

@@ -54,21 +54,18 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        println!(
-            "\nEncrypting pk:\n{}\n",
-            String::from_utf8_lossy(&raw_message)
-        ); // TODO
-
         let ctext = pgp::pk_encrypt(raw_message, keyring, Some(sign_key), compress).await?;
 
         Ok(ctext)
     }
 
-    /// TODO documentation
-    pub async fn encrypt_for_broadcast(
+    /// Symmetrically encrypt the message to be sent into a broadcast channel,
+    /// or for version 2 of the Securejoin protocol.
+    /// `shared secret` is the secret that will be used for symmetric encryption.
+    pub async fn encrypt_symmetrically(
         self,
         context: &Context,
-        passphrase: &str,
+        shared_secret: &str,
         mail_to_encrypt: MimePart<'static>,
         compress: bool,
     ) -> Result<String> {
@@ -78,12 +75,8 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        println!(
-            "\nEncrypting symm:\n{}\n",
-            String::from_utf8_lossy(&raw_message)
-        ); // TODO
-
-        let ctext = pgp::encrypt_for_broadcast(raw_message, passphrase, sign_key, compress).await?;
+        let ctext =
+            pgp::encrypt_symmetrically(raw_message, shared_secret, sign_key, compress).await?;
 
         Ok(ctext)
     }

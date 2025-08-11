@@ -336,9 +336,10 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     .await?
 }
 
-/// Symmetrically encrypt the message to be sent into a broadcast channel.
+/// Symmetrically encrypt the message to be sent into a broadcast channel,
+/// or for version 2 of the Securejoin protocol.
 /// `shared secret` is the secret that will be used for symmetric encryption.
-pub async fn encrypt_for_broadcast(
+pub async fn encrypt_symmetrically(
     plain: Vec<u8>,
     shared_secret: &str,
     private_key_for_signing: SignedSecretKey,
@@ -607,7 +608,7 @@ mod tests {
 
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
-        let ctext = encrypt_for_broadcast(
+        let ctext = encrypt_symmetrically(
             plain.clone(),
             shared_secret,
             load_self_secret_key(alice).await?,
