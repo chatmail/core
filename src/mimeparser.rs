@@ -584,7 +584,8 @@ impl MimeMessage {
         };
 
         let is_location_only = parser.location_kml.is_some() && parser.parts.is_empty();
-        if parser.mdn_reports.is_empty()
+        if parser.has_chat_version()
+            && parser.mdn_reports.is_empty()
             && !is_location_only
             && parser.sync_items.is_none()
             && parser.webxdc_status_update.is_none()
