@@ -2502,9 +2502,14 @@ async fn lookup_or_create_adhoc_group(
     .context("Cannot lookup address-contact by the From field")?;
 
     let grpname = mime_parser
-        .get_subject()
-        .map(|s| remove_subject_prefix(&s))
-        .unwrap_or_else(|| "👥📧".to_string());
+        .get_header(HeaderDef::ChatGroupName)
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            mime_parser
+                .get_subject()
+                .map(|s| remove_subject_prefix(&s))
+                .unwrap_or_else(|| "👥📧".to_string())
+        });
     let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     let mut contact_ids = Vec::with_capacity(to_ids.len() + 1);
     contact_ids.extend(&to_ids);
