@@ -1697,6 +1697,15 @@ async fn add_parts(
                     part.error = Some(s);
                 }
             }
+
+            if chat.typ == Chattype::InBroadcast {
+                let s = stock_str::error(context, "This message was not sent by the channel owner")
+                    .await;
+                if let Some(part) = mime_parser.parts.first_mut() {
+                    part.error = Some(format!("{s}:\n\"{}\"", part.msg));
+                }
+                mime_parser.replace_msg_by_error(&s);
+            }
         }
     }
 
@@ -3549,6 +3558,16 @@ async fn apply_in_broadcast_changes(
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
     ensure!(chat.typ == Chattype::InBroadcast);
+
+    if let Some(part) = mime_parser.parts.first() {
+        if let Some(error) = &part.error {
+            warn!(
+                context,
+                "Not applying broadcast changes from message with error: {error}"
+            );
+            return Ok(GroupChangesInfo::default());
+        }
+    }
 
     let mut send_event_chat_modified = false;
     let mut better_msg = None;

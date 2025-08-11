@@ -584,6 +584,7 @@ impl MimeFactory {
                 || step == "vb-member-added"
                 || step == "vc-contact-confirm"
             // TODO possibly add vb-member-added here
+            // TODO wait... for member-added messages, Param::Arg doesn't even contain the step, but the email
         }
     }
 
