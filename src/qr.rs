@@ -537,8 +537,6 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         (&addr, broadcast_name, grpid, authcode)
     {
         // This is a broadcast channel invite link.
-        // TODO code duplication with the previous block
-        // TODO at some point, we can mark this person as verified
         let addr = ContactAddress::new(addr)?;
         let (contact_id, _) = Contact::add_or_lookup_ex(
             context,
