@@ -38,3 +38,7 @@ pub async fn save_broadcast_shared_secret(
 pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
     pgp::create_keypair(EmailAddress::new(addr)?)
 }
+
+pub fn create_broadcast_shared_secret() -> String {
+    crate::tools::create_broadcast_shared_secret()
+}
