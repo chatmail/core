@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::chatlist::get_archived_cnt;
 use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
@@ -3139,6 +3141,118 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     assert_eq!(
         rcvd.text,
         stock_str::msg_group_left_local(bob1, ContactId::SELF).await
+    );
+
+    Ok(())
+}
+
+/// Test that only the owner of the broadcast channel
+/// can send messages into the chat.
+///
+/// To do so, we change Alice's public key on Bob's side,
+/// so that she is supposed to appear as a new contact when we receive another message,
+/// and check that she can't write into the channel.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.section("Alice creates broadcast channel and creates a QR code.");
+    let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+
+    tcm.section("Bob now scans the QR code sends the request message");
+    let bob_broadcast_id = join_securejoin(bob, &qr).await.unwrap();
+    let request = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&request).await;
+
+    tcm.section("Alice answers");
+    let answer = alice.pop_sent_msg().await;
+
+    tcm.section("Change Alice's fingerprint for Bob, so that she is a different contact from Bob's point of view");
+    let bob_alice_id = bob.add_or_lookup_contact_no_key(alice).await.id;
+    bob.sql
+        .execute(
+            "UPDATE contacts
+            SET fingerprint='1234567890123456789012345678901234567890'
+            WHERE id=?",
+            (bob_alice_id,),
+        )
+        .await?;
+
+    tcm.section("Bob receives an answer, but it ignored because of a fingerprint mismatch");
+    bob.recv_msg(&answer).await;
+    assert!(
+        load_broadcast_shared_secret(bob, bob_broadcast_id)
+            .await?
+            .is_none()
+    );
+
+    Ok(())
+}
+
+/// Same as the previous test, but Alice's fingerprint is changed later,
+/// so that we can check that until the fingerprint change, everything works fine.
+///
+/// Also, this changes Alice's fingerprint in Alice's database, rather than Bob's database,
+/// in order to test for the same thing in different ways.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &mut tcm.bob().await;
+
+    tcm.section("Alice creates broadcast channel and creates a QR code.");
+    let alice_broadcast_id = create_broadcast(alice, "foo".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_broadcast_id))
+        .await
+        .unwrap();
+
+    tcm.section("Bob now scans the QR code");
+    let bob_broadcast_id = join_securejoin(bob, &qr).await.unwrap();
+    let request = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&request).await;
+    let answer = alice.pop_sent_msg().await;
+
+    tcm.section("Bob receives an answer, and processes it");
+    let rcvd = bob.recv_msg(&answer).await;
+    assert!(
+        load_broadcast_shared_secret(bob, bob_broadcast_id)
+            .await?
+            .is_some()
+    );
+    assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberAddedToGroup);
+
+    tcm.section("Alice sends a message, which still arrives fine");
+    let sent = alice.send_text(alice_broadcast_id, "Hi").await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.text, "Hi");
+
+    tcm.section("Now, Alice's fingerprint changes");
+
+    alice.sql.execute("DELETE FROM keypairs", ()).await?;
+    alice
+        .sql
+        .execute("DELETE FROM config WHERE keyname='key_id'", ())
+        .await?;
+    // Invalidate cached self fingerprint:
+    Arc::get_mut(&mut bob.ctx.inner)
+        .unwrap()
+        .self_fingerprint
+        .take();
+
+    tcm.section("Alice sends a message, which doesn't arrive fine");
+    let sent = alice.send_text(alice_broadcast_id, "Hi").await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(
+        rcvd.text,
+        "[Error: This message was not sent by the channel owner]"
+    );
+    assert_eq!(
+        rcvd.error.unwrap(),
+        r#"Error: This message was not sent by the channel owner:
+"Hi""#
     );
 
     Ok(())
