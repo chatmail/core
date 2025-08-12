@@ -30,7 +30,7 @@ jobs:
     name: Lint Rust
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -53,7 +53,7 @@ jobs:
     name: cargo deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -67,7 +67,7 @@ jobs:
     name: Check provider database
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -80,7 +80,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -Dwarnings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -115,7 +115,7 @@ jobs:
         shell: bash
         if: matrix.rust == 'latest'
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -154,7 +154,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -179,7 +179,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -201,7 +201,7 @@ jobs:
     name: Python lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -244,7 +244,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -297,7 +297,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false

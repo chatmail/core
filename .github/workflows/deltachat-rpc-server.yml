@@ -30,7 +30,7 @@ jobs:
         arch: [aarch64, armv7l, armv6l, i686, x86_64]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -54,7 +54,7 @@ jobs:
         arch: [win32, win64]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -79,7 +79,7 @@ jobs:
 
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -105,7 +105,7 @@ jobs:
         arch: [arm64-v8a, armeabi-v7a]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -132,7 +132,7 @@ jobs:
       contents: write
     runs-on: "ubuntu-latest"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -285,7 +285,7 @@ jobs:
       # Needed to publish the binaries to the release.
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
