@@ -5118,10 +5118,8 @@ pub(crate) enum SyncAction {
         chat_name: String,
         shared_secret: String,
     },
-    CreateInBroadcast {
-        chat_name: String,
-        shared_secret: String,
-    },
+    /// Mark the contact with the given fingerprint as verified by self.
+    MarkVerified,
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5177,6 +5175,14 @@ impl Context {
                     SyncAction::Unblock => {
                         return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
+                    SyncAction::MarkVerified => {
+                        return contact::mark_contact_id_as_verified(
+                            self,
+                            contact_id,
+                            ContactId::SELF,
+                        )
+                        .await;
+                    }
                     _ => (),
                 }
                 ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
@@ -5208,8 +5214,9 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateInBroadcast { .. } => {
-                // Create action should have been handled by handle_sync_create_chat() already
+            SyncAction::CreateOutBroadcast { .. } | SyncAction::MarkVerified => {
+                // Create action should have been handled by handle_sync_create_chat() already.
+                // MarkVerified action should have been handled by mark_contact_id_as_verified() already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
@@ -5222,7 +5229,7 @@ impl Context {
     }
 
     async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &str) -> Result<bool> {
-        Ok(match action {
+        match action {
             SyncAction::CreateOutBroadcast {
                 chat_name,
                 shared_secret,
@@ -5235,29 +5242,10 @@ impl Context {
                     shared_secret.to_string(),
                 )
                 .await?;
-                return Ok(true);
+                Ok(true)
             }
-            SyncAction::CreateInBroadcast {
-                chat_name,
-                shared_secret,
-            } => {
-                let chat_id = ChatId::create_multiuser_record(
-                    self,
-                    Chattype::InBroadcast,
-                    grpid,
-                    chat_name,
-                    Blocked::Not,
-                    ProtectionStatus::Unprotected,
-                    None,
-                    smeared_time(self),
-                )
-                .await?;
-                save_broadcast_shared_secret(self, chat_id, shared_secret).await?;
-
-                return Ok(true);
-            }
-            _ => false,
-        })
+            _ => Ok(false),
+        }
     }
 
     /// Emits the appropriate `MsgsChanged` event. Should be called if the number of unnoticed

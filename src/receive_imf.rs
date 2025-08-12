@@ -3521,6 +3521,7 @@ async fn apply_out_broadcast_changes(
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         // TODO this block can be removed,
         // now that all of Alice's devices get to know about Bob joining via Bob's QR message.
+        // TODO test if this creates some problems with duplicate member-added messages on Alice's device
         let contact = lookup_key_contact_by_address(context, added_addr, None).await?;
         if let Some(contact) = contact {
             better_msg.get_or_insert(

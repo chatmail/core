@@ -10,7 +10,7 @@ use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
-use crate::log::info;
+use crate::log::{LogExt as _, info};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -81,6 +81,13 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             contact_id: invite.contact_id(),
             progress: JoinerProgress::RequestWithAuthSent.to_usize(),
         });
+
+        // Our second device won't be able to decrypt the outgoing message
+        // because it will be symmetrically encrypted with the AUTH token.
+        // So, we need to send a sync message:
+        let id = chat::SyncId::ContactFingerprint(invite.fingerprint().hex());
+        let action = chat::SyncAction::MarkVerified;
+        chat::sync(context, id, action).await.log_err(context).ok();
     } else {
         // Start the version 1 protocol and initialise the state.
         let has_key = context

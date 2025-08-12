@@ -595,8 +595,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
         inviter_progress(context, contact_id, 1000);
     }
 
-    // TODO not sure if I should add vb-request-with-auth here
-    // Actually, I'm not even sure why vg-request-with-auth is here - why do we create a 1:1 chat??
     if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
         // This actually reflects what happens on the first device (which does the secure
         // join) and causes a subsequent "vg-member-added" message to create an unblocked

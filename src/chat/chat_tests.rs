@@ -3133,7 +3133,18 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     alice.recv_msg_trash(&request).await;
     let answer = alice.pop_sent_msg().await;
     bob0.recv_msg(&answer).await;
+
+    // Sync Bob's verification of Alice:
+    sync(bob0, bob1).await;
+    // TODO uncommenting the next line creates a message "Can't decrypt outgoing messages, probably you're using DC on multiple devices without transferring your key"
+    // bob1.recv_msg(&request).await;
     bob1.recv_msg(&answer).await;
+
+    // The 1:1 chat should not be visible to the user on any of the devices.
+    // The contact should be marked as verified.
+    check_direct_chat_is_hidden_and_contact_is_verified(alice, bob0).await;
+    check_direct_chat_is_hidden_and_contact_is_verified(bob0, alice).await;
+    check_direct_chat_is_hidden_and_contact_is_verified(bob1, alice).await;
 
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
@@ -3163,6 +3174,20 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     );
 
     Ok(())
+}
+
+async fn check_direct_chat_is_hidden_and_contact_is_verified(
+    t: &TestContext,
+    contact: &TestContext,
+) {
+    let contact = t.add_or_lookup_contact_no_key(contact).await;
+    if let Some(direct_chat) = ChatIdBlocked::lookup_by_contact(t, contact.id)
+        .await
+        .unwrap()
+    {
+        assert_eq!(direct_chat.blocked, Blocked::Yes);
+    }
+    assert!(contact.is_verified(t).await.unwrap());
 }
 
 /// Test that only the owner of the broadcast channel
