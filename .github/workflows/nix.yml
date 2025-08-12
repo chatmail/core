@@ -19,7 +19,7 @@ jobs:
     name: check flake formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -81,7 +81,7 @@ jobs:
           #- deltachat-rpc-server-x86_64-android
           #- deltachat-rpc-server-x86-android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
@@ -101,7 +101,7 @@ jobs:
           # - deltachat-rpc-server-aarch64-darwin
           # - deltachat-rpc-server-x86_64-darwin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           show-progress: false
           persist-credentials: false
