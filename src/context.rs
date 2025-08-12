@@ -1031,12 +1031,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "protect_autocrypt",
-            self.get_config_int(Config::ProtectAutocrypt)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "debug_logging",
             self.get_config_int(Config::DebugLogging).await?.to_string(),
         );

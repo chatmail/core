@@ -217,10 +217,12 @@ async fn test_aeap_replay_attack() -> Result<()> {
     // Fiona gets the message, replaces the From addr...
     let sent = sent
         .payload()
-        .replace("From: <alice@example.org>", "From: <fiona@example.net>")
-        .replace("addr=alice@example.org;", "addr=fiona@example.net;");
+        .replace("From: <alice@example.org>", "From: <fiona@example.net>");
     sent.find("From: <fiona@example.net>").unwrap(); // Assert that it worked
-    sent.find("addr=fiona@example.net;").unwrap(); // Assert that it worked
+
+    // Autocrypt header is protected, nothing to replace outside.
+    // In the signed part we cannot replace it without breaking the signature.
+    assert!(!sent.contains("addr=alice@example.org;"));
 
     tcm.section("Fiona replaced the From addr and forwards the message to Bob");
     receive_imf(&bob, sent.as_bytes(), false).await?.unwrap();
