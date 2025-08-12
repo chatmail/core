@@ -964,10 +964,6 @@ impl MimeFactory {
                 hidden_headers.push(header.clone());
             } else if is_hidden(&header_name) {
                 hidden_headers.push(header.clone());
-            } else if header_name == "autocrypt"
-                && !context.get_config_bool(Config::ProtectAutocrypt).await?
-            {
-                unprotected_headers.push(header.clone());
             } else if header_name == "from" {
                 // Unencrypted securejoin messages should _not_ include the display name:
                 if is_encrypted || !is_securejoin_message {
