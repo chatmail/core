@@ -1,7 +1,7 @@
 //! Utilities to help writing tests.
 //!
 //! This private module is only compiled for test runs.
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::env::current_dir;
 use std::fmt::Write;
 use std::ops::{Deref, DerefMut};
@@ -70,19 +70,22 @@ static CONTEXT_NAMES: LazyLock<std::sync::RwLock<BTreeMap<u32, String>>> =
 /// [`TestContext`]s without managing your own [`LogSink`].
 pub struct TestContextManager {
     log_sink: LogSink,
+    used_names: BTreeSet<String>,
 }
 
 impl TestContextManager {
     pub fn new() -> Self {
-        let log_sink = LogSink::new();
-        Self { log_sink }
+        Self {
+            log_sink: LogSink::new(),
+            used_names: BTreeSet::new(),
+        }
     }
 
     pub async fn alice(&mut self) -> TestContext {
         TestContext::builder()
             .configure_alice()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -90,7 +93,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_bob()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -98,7 +101,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_charlie()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -106,7 +109,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_dom()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -114,7 +117,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_elena()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -122,7 +125,7 @@ impl TestContextManager {
         TestContext::builder()
             .configure_fiona()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -130,7 +133,7 @@ impl TestContextManager {
     pub async fn unconfigured(&mut self) -> TestContext {
         TestContext::builder()
             .with_log_sink(self.log_sink.clone())
-            .build()
+            .build(Some(&mut self.used_names))
             .await
     }
 
@@ -326,7 +329,7 @@ impl TestContextBuilder {
     }
 
     /// Builds the [`TestContext`].
-    pub async fn build(self) -> TestContext {
+    pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
             let userid = {
                 let public_key = &key_pair.public;
@@ -340,7 +343,19 @@ impl TestContextBuilder {
                 .addr;
             let name = EmailAddress::new(&addr).unwrap().local;
 
-            let test_context = TestContext::new_internal(Some(name), self.log_sink).await;
+            let mut unused_name = name.clone();
+            if let Some(used_names) = used_names {
+                assert!(used_names.len() < 100);
+                // If there are multiple Alices, call them 'alice', 'alice2', 'alice3', ...
+                let mut i = 1;
+                while used_names.contains(&unused_name) {
+                    i += 1;
+                    unused_name = format!("{name}{i}");
+                }
+                used_names.insert(unused_name.clone());
+            }
+
+            let test_context = TestContext::new_internal(Some(unused_name), self.log_sink).await;
             test_context.configure_addr(&addr).await;
             key::store_self_keypair(&test_context, &key_pair)
                 .await
@@ -394,21 +409,21 @@ impl TestContext {
     ///
     /// This is a shortcut which configures alice@example.org with a fixed key.
     pub async fn new_alice() -> Self {
-        Self::builder().configure_alice().build().await
+        Self::builder().configure_alice().build(None).await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures bob@example.net with a fixed key.
     pub async fn new_bob() -> Self {
-        Self::builder().configure_bob().build().await
+        Self::builder().configure_bob().build(None).await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures fiona@example.net with a fixed key.
     pub async fn new_fiona() -> Self {
-        Self::builder().configure_fiona().build().await
+        Self::builder().configure_fiona().build(None).await
     }
 
     /// Print current chat state.
@@ -1585,14 +1600,14 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_with_alice() {
-        let alice = TestContext::builder().configure_alice().build().await;
+        let alice = TestContext::builder().configure_alice().build(None).await;
         alice.ctx.emit_event(EventType::Info("hello".into()));
         // panic!("Alice fails");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_with_bob() {
-        let bob = TestContext::builder().configure_bob().build().await;
+        let bob = TestContext::builder().configure_bob().build(None).await;
         bob.ctx.emit_event(EventType::Info("there".into()));
         // panic!("Bob fails");
     }
