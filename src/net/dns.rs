@@ -227,9 +227,6 @@ pub(crate) async fn update_connect_timestamp(
 }
 
 /// Preloaded DNS results that can be used in case of DNS server failures.
-///
-/// See <https://support.delta.chat/t/no-dns-resolution-result/2778> and
-/// <https://github.com/deltachat/deltachat-core-rust/issues/4920> for reasons.
 static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new(|| {
     HashMap::from([
         (
