@@ -1,5 +1,54 @@
 # Changelog
 
+## [2.11.0] - 2025-08-13
+
+### Features / Changes
+
+- Contact::lookup_id_by_addr_ex: Prefer returning key-contact.
+- Contact::lookup_id_by_addr_ex: Prefer returning accepted contacts.
+- Better string when using disappearing messages of one year (365..367 days, so it can be tweaked later).
+- Do not require resent messages to be from the same chat.
+- `lookup_key_contact_by_address()`: Allow looking up ContactId::SELF without chat id.
+- `get_securejoin_qr()`: Log error if group doesn't have grpid.
+- `receive_imf::add_parts()`: Get rid of extra `Chat::load_from_db()` calls.
+
+### Fixes
+
+- Ignore case when trying to detect 'invalid unencrypted mail' and add an info-message.
+- Run wal_checkpoint during housekeeping ([#6089](https://github.com/chatmail/core/pull/6089)).
+- Allow receiving empty files.
+- Set correct sent_timestamp for saved outgoing messages.
+- Do not remove query parameters from URLs.
+- Log and set imex progress error ([#7091](https://github.com/chatmail/core/pull/7091)).
+- Do not add key-contacts to unencrypted groups.
+- Do not reset `GuaranteeE2ee` in the database when resending messages.
+- Assign messages to a group if there is a `Chat-Group-Name`.
+- Take `Chat-Group-Name` into account when matching ad hoc groups.
+- Don't break long group names with non-ASCII characters.
+- Add messages that can't be verified as `DownloadState::Available` ([#7059](https://github.com/chatmail/core/pull/7059)).
+
+### Tests
+
+- Log the number of the test account if there are multiple alices ([#7087](https://github.com/chatmail/core/pull/7087)).
+
+### CI
+
+- Update Rust to 1.89.0.
+
+### Refactor
+
+- Rename icon-address-contact to icon-unencrypted.
+- Skip loading the contact of 1:1 unencrypted chat to show the avatar.
+- Chat::is_encrypted(): Make one query instead of two for 1:1 chats.
+
+### Miscellaneous Tasks
+
+- cargo: Bump toml from 0.8.23 to 0.9.4.
+- cargo: Bump human-panic from 2.0.2 to 2.0.3.
+- deny.toml: Add exception for duplicate toml_datetime 0.6.11 dependency.
+- deps: Bump actions/checkout from 4 to 5.
+- deps: Bump actions/download-artifact from 4 to 5.
+
 ## [2.10.0] - 2025-08-04
 
 ### Features / Changes
@@ -6596,3 +6645,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.8.0]: https://github.com/chatmail/core/compare/v2.7.0..v2.8.0
 [2.9.0]: https://github.com/chatmail/core/compare/v2.8.0..v2.9.0
 [2.10.0]: https://github.com/chatmail/core/compare/v2.9.0..v2.10.0
+[2.11.0]: https://github.com/chatmail/core/compare/v2.10.0..v2.11.0
