@@ -3316,6 +3316,31 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
     Ok(())
 }
 
+/// Tests that a message without an Autocrypt header is assigned to the key-contact
+/// by using the signature Issuer Fingerprint.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_issuer_fingerprint() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
+
+    let raw = include_bytes!("../../test-data/message/encrypted-signed.eml");
+    let received_msg = receive_imf(bob, raw, false).await?.unwrap();
+
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
+
+    let message = Message::load_from_db(bob, msg_id).await?;
+    assert!(message.get_showpadlock());
+
+    let from_id = message.from_id;
+    assert_eq!(from_id, alice_contact_id);
+
+    Ok(())
+}
+
 /// Tests reception of a message from Thunderbird with attached key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_prefer_encrypt_mutual_if_encrypted() -> Result<()> {
