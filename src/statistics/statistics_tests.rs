@@ -252,11 +252,11 @@ async fn send_and_read_statistics(context: &TestContext) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_securejoin_source_stats() -> Result<()> {
-    async fn check_statistics(context: &TestContext, expected: &SecurejoinSourceStats) {
+async fn test_statistics_securejoin_sources() -> Result<()> {
+    async fn check_statistics(context: &TestContext, expected: &SecurejoinSources) {
         let statistics = get_statistics(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&statistics).unwrap();
-        let actual = &actual["securejoin_source_stats"];
+        let actual = &actual["securejoin_sources"];
 
         let expected = serde_json::to_string_pretty(&expected).unwrap();
         let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
@@ -269,7 +269,7 @@ async fn test_statistics_securejoin_source_stats() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::SendStatistics, true).await?;
 
-    let mut expected = SecurejoinSourceStats {
+    let mut expected = SecurejoinSources {
         unknown: 0,
         external_link: 0,
         internal_link: 0,
@@ -335,11 +335,11 @@ async fn test_statistics_securejoin_source_stats() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_securejoin_uipath_stats() -> Result<()> {
-    async fn check_statistics(context: &TestContext, expected: &SecurejoinUIPathStats) {
+async fn test_statistics_securejoin_uipaths() -> Result<()> {
+    async fn check_statistics(context: &TestContext, expected: &SecurejoinUIPaths) {
         let stats = get_statistics(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
-        let actual = &actual["securejoin_uipath_stats"];
+        let actual = &actual["securejoin_uipaths"];
 
         let expected = serde_json::to_string_pretty(&expected).unwrap();
         let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
@@ -352,7 +352,7 @@ async fn test_statistics_securejoin_uipath_stats() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::SendStatistics, true).await?;
 
-    let mut expected = SecurejoinUIPathStats {
+    let mut expected = SecurejoinUIPaths {
         other: 0,
         qr_icon: 0,
         new_contact: 0,
@@ -402,7 +402,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     async fn check_statistics(context: &TestContext, expected: &[JoinedInvite]) {
         let stats = get_statistics(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
-        let actual = &actual["securejoin_invites_stats"];
+        let actual = &actual["securejoin_invites"];
 
         let expected = serde_json::to_string_pretty(&expected).unwrap();
         let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();

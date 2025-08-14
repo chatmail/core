@@ -156,6 +156,10 @@ pub async fn join_securejoin(context: &Context, qr: &str) -> Result<ChatId> {
 /// for more details.
 ///
 /// The function returns immediately and the handshake will run in background.
+///
+/// **source** and **uipath** are for statistics-sending,
+/// if the user enabled it in the settings;
+/// if you don't have statistics-sending implemented, just pass `None` here.
 pub async fn join_securejoin_with_source(
     context: &Context,
     qr: &str,

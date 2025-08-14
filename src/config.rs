@@ -14,7 +14,6 @@ use tokio::fs;
 
 use crate::blob::BlobObject;
 use crate::configure::EnteredLoginParam;
-use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{LogExt, info};
@@ -23,6 +22,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
+use crate::{constants, statistics};
 
 /// The available configuration keys.
 #[derive(
@@ -846,8 +846,8 @@ impl Context {
             }
             Config::SendStatistics => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
-                crate::statistics::set_last_excluded_msg_id(self).await?;
-                crate::statistics::set_last_old_contact_id(self).await?;
+                statistics::set_last_excluded_msg_id(self).await?;
+                statistics::set_last_old_contact_id(self).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
