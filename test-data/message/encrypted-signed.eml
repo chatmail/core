@@ -1,0 +1,52 @@
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; 
+	boundary="18566fe03178296e_f40510c3b59ace3_ecf843ae3ccd2b17"
+MIME-Version: 1.0
+From: alice@example.org
+To: bob@example.net
+Subject: [...]
+Date: Mon, 28 Jul 2025 14:15:14 +0000
+Message-ID: <48b9e9cc-2bae-4d41-89b4-a409e2c60c28@localhost>
+References: <48b9e9cc-2bae-4d41-89b4-a409e2c60c28@localhost>
+Chat-Version: 1.0
+
+
+--18566fe03178296e_f40510c3b59ace3_ecf843ae3ccd2b17
+Content-Type: application/pgp-encrypted; charset="utf-8"
+Content-Description: PGP/MIME version identification
+Content-Transfer-Encoding: 7bit
+
+Version: 1
+
+--18566fe03178296e_f40510c3b59ace3_ecf843ae3ccd2b17
+Content-Type: application/octet-stream; name="encrypted.asc"; 
+	charset="utf-8"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc";
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP MESSAGE-----
+
+wV4D5tq63hTeebASAQdAaI0Cw7tTd10Oz0I1C1Ds5NpF/m6zXlx73Pxzib6Q2Qow
+36Fc9KiSZx+vXlw9mZ9zYpumIY/svkYcTRdZwohPWe4TL7iRC8gTZ43/VGZvb+1k
+wcBMA+PY3JvEjuMiAQf+MCZLm1vgocYO0xRz2J9Z9QGqScfxBMhYToZbFTx4DAha
+hejVmW9AGnNqm8yky2DJpqT3oy//D261HX+xzLfkfWFgHzKud7NtMN6II/d1jyqO
+A+K0LjSLPcR3aWl8g30+6bGhHCwc2spP3gIk1aE8S/1c/yQPxD7mqNSkYrY6BgHP
++5Z7ocrud4RKVQayZsWpiiY962w1GJii1h4zE+xhkqFERr1OqepQB7CDf4FBsGr0
+qarJtcWCGqd9ksr/wn8Ew9MPHz+8ooCSlXzJ7Uac4VshUm9dXzO3NSS6MgTME0av
+WRlRiKuGCmrS4dyf/Tdj1yMB3jJ52SxdEq0yYYLKvdLBWAF9JU7sQp3x4oivpr5U
+wv5OP/tbfRVA2zqkOHlMhBAXaLOsiJrHYh3ieJLwfWSmEQARLE7sBgD5fqre1v+D
+Xpof8R42j9MQ3St/+nPDsLpbZ2a2RKBl16C8IYnmK1CYwh5lEK533HMHeSLka/ng
+soK2HqJxrhkxYpm5OPWN8liSdKlQ8mZXISGNPo8KEWFlPqONqj88UudpQiPCh2qw
+aeFC2Y1EkQQGpiTq1GuTQfG8zO4wa3FTW1wOELsvYozszS1Oc1exH767pS+ozNWa
+xk8J7ekEFvR5b3TUK2a/ucmRgXuuowCxxV6EiNeRqGa3SfQnQWnMkqsVIeIiARDt
+QMbRCrrAjJ+dQEekviq/hqq9+DRLuX0hOybe8aYjJttg7NLgaM04V4QuvWeVQa2g
+2IBR2Nw1pcvbyDRkTLsQ2AlR/ig5VPf+4oqN2nBuXgPzply9LU5JyhW9GNIhH+N1
+K6w8o5o4ebUx0ldaTjBnrFMUqih4nE9qrrb0UYMcQO3HVAueQii0CZqhJy/n/6U6
+cAhnh/fTI1wMoYuYR7cLdf+9P7dHcQPdt3FQA/NrRpv31tyzzKNeBr0VdvoT0uwX
+sv0nh+ACjnum7H8yCyoe1tIqUPW0byslROuHAfMwp7rsnBEGJ4AqFYNIdpfSFuia
+LsZmODaUG1n6XkamfKPin+Z5Mo8/bK0KwE317Zc/aQD/okvGv4SWsQmW
+=hj9/
+-----END PGP MESSAGE-----
+
+
+--18566fe03178296e_f40510c3b59ace3_ecf843ae3ccd2b17--
