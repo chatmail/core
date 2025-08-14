@@ -1261,6 +1261,27 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 134)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE stats_securejoin_sources(
+                source INTEGER PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            CREATE TABLE stats_securejoin_uipaths(
+                uipath INTEGER PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            CREATE TABLE stats_securejoin_invites(
+                contact_created INTEGER NOT NULL,
+                already_verified INTEGER NOT NULL,
+                type TEXT NOT NULL
+            ) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

@@ -4,7 +4,7 @@ use deltachat::chatlist::get_last_message_for_chat;
 use deltachat::constants::*;
 use deltachat::contact::{Contact, ContactId};
 use deltachat::{
-    chat::{get_chat_contacts, ChatVisibility},
+    chat::{ChatVisibility, get_chat_contacts},
     chatlist::Chatlist,
 };
 use num_traits::cast::ToPrimitive;

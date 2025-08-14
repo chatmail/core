@@ -16,7 +16,7 @@ pub struct HttpResponse {
 
 impl From<CoreHttpResponse> for HttpResponse {
     fn from(response: CoreHttpResponse) -> Self {
-        use base64::{engine::general_purpose, Engine as _};
+        use base64::{Engine as _, engine::general_purpose};
         let blob = general_purpose::STANDARD_NO_PAD.encode(response.blob);
         let mimetype = response.mimetype;
         let encoding = response.encoding;

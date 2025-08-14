@@ -98,6 +98,7 @@ pub mod html;
 pub mod net;
 pub mod plaintext;
 mod push;
+pub mod statistics;
 pub mod summary;
 
 mod debug_logging;

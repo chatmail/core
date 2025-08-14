@@ -431,9 +431,26 @@ pub enum Config {
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
 
-    /// This key is sent to the self_reporting bot so that the bot can recognize the user
+    /// Send statistics to Delta Chat's developers.
+    /// Can be exposed to the user as a setting.
+    SendStatistics,
+
+    /// Last time statistics were sent to Delta Chat's developers
+    LastStatisticsSent,
+
+    /// This key is sent to the statistics bot so that the bot can recognize the user
     /// without storing the email address
-    SelfReportingId,
+    StatisticsId,
+
+    /// The last message id that was already included in the previously sent statistics,
+    /// or that already existed before the user opted in.
+    /// Only messages with an id larger than this
+    /// will be counted in the next statistics.
+    StatsLastExcludedMsgId,
+
+    /// The last contact id that already existed when statistics-sending was enabled.
+    /// All newer contacts get the `"new": true` attribute.
+    StatsLastOldContactId,
 
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
@@ -826,6 +843,11 @@ impl Context {
                     .save_to_transports_table(self, &EnteredLoginParam::default())
                     .await?;
                 }
+            }
+            Config::SendStatistics => {
+                self.sql.set_raw_config(key.as_ref(), value).await?;
+                crate::statistics::set_last_excluded_msg_id(self).await?;
+                crate::statistics::set_last_old_contact_id(self).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
