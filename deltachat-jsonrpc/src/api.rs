@@ -383,11 +383,6 @@ impl CommandApi {
         Ok(BlobObject::create_and_deduplicate(&ctx, file, file)?.to_abs_path())
     }
 
-    async fn draft_self_report(&self, account_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        Ok(ctx.draft_self_report().await?.to_u32())
-    }
-
     /// Sets the given configuration key.
     async fn set_config(&self, account_id: u32, key: String, value: Option<String>) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
@@ -877,12 +872,22 @@ impl CommandApi {
     /// **qr**: The text of the scanned QR code. Typically, the same string as given
     ///     to `check_qr()`.
     ///
+    /// **source** and **uipath** are for statistics-sending,
+    /// if the user enabled it in the settings;
+    /// if you don't have statistics-sending implemented, just pass `None` here.
+    ///
     /// **returns**: The chat ID of the joined chat, the UI may redirect to the this chat.
     ///         A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
     ///
-    async fn secure_join(&self, account_id: u32, qr: String) -> Result<u32> {
+    async fn secure_join(
+        &self,
+        account_id: u32,
+        qr: String,
+        source: Option<u32>,
+        uipath: Option<u32>,
+    ) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        let chat_id = securejoin::join_securejoin(&ctx, &qr).await?;
+        let chat_id = securejoin::join_securejoin_with_source(&ctx, &qr, source, uipath).await?;
         Ok(chat_id.to_u32())
     }
 
