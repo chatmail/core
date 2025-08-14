@@ -33,9 +33,9 @@ struct Statistics {
     contact_stats: Vec<ContactStat>,
     message_stats_one_one: MessageStats,
     message_stats_multi_user: MessageStats,
-    securejoin_source_stats: SecurejoinSourceStats,
-    securejoin_uipath_stats: SecurejoinUIPathStats,
-    securejoin_invites_stats: Vec<JoinedInvite>,
+    securejoin_sources: SecurejoinSources,
+    securejoin_uipaths: SecurejoinUIPaths,
+    securejoin_invites: Vec<JoinedInvite>,
 }
 
 #[derive(Serialize, PartialEq)]
@@ -84,7 +84,7 @@ enum SecurejoinSource {
 }
 
 #[derive(Serialize)]
-struct SecurejoinSourceStats {
+struct SecurejoinSources {
     unknown: u32,
     external_link: u32,
     internal_link: u32,
@@ -101,7 +101,7 @@ enum SecurejoinUIPath {
 }
 
 #[derive(Serialize)]
-struct SecurejoinUIPathStats {
+struct SecurejoinUIPaths {
     other: u32,
     qr_icon: u32,
     new_contact: u32,
@@ -155,7 +155,7 @@ See TODO[blog post] for more information."
         Some("text/plain"),
     )?;
 
-    crate::chat::send_msg(context, chat_id, &mut msg)
+    chat::send_msg(context, chat_id, &mut msg)
         .await
         .context("Failed to send statistics message")
         .log_err(context)
@@ -240,9 +240,9 @@ async fn get_statistics(context: &Context) -> Result<String> {
         contact_stats: get_contact_stats(context, last_old_contact).await?,
         message_stats_one_one: get_message_stats(context, last_excluded_msg, true).await?,
         message_stats_multi_user: get_message_stats(context, last_excluded_msg, false).await?,
-        securejoin_source_stats: get_securejoin_source_stats(context).await?,
-        securejoin_uipath_stats: get_securejoin_uipath_stats(context).await?,
-        securejoin_invites_stats: get_securejoin_invite_stats(context).await?,
+        securejoin_sources: get_securejoin_source_stats(context).await?,
+        securejoin_uipaths: get_securejoin_uipath_stats(context).await?,
+        securejoin_invites: get_securejoin_invite_stats(context).await?,
     };
 
     Ok(serde_json::to_string_pretty(&statistics)?)
@@ -556,7 +556,7 @@ pub(crate) async fn count_securejoin_source(
     context
         .sql
         .execute(
-            "INSERT INTO stats_securejoin_sources VALUES (?, 1)
+            "INSERT INTO statistics_securejoin_sources VALUES (?, 1)
                 ON CONFLICT (source) DO UPDATE SET count=count+1;",
             (source,),
         )
@@ -569,7 +569,7 @@ pub(crate) async fn count_securejoin_source(
     context
         .sql
         .execute(
-            "INSERT INTO stats_securejoin_uipaths VALUES (?, 1)
+            "INSERT INTO statistics_securejoin_uipaths VALUES (?, 1)
                 ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
             (uipath,),
         )
@@ -577,11 +577,11 @@ pub(crate) async fn count_securejoin_source(
     Ok(())
 }
 
-async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSourceStats> {
+async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSources> {
     let map = context
         .sql
         .query_map(
-            "SELECT source, count FROM stats_securejoin_sources",
+            "SELECT source, count FROM statistics_securejoin_sources",
             (),
             |row| {
                 let source: SecurejoinSource = row.get(0)?;
@@ -592,7 +592,7 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
         )
         .await?;
 
-    let stats = SecurejoinSourceStats {
+    let stats = SecurejoinSources {
         unknown: *map.get(&SecurejoinSource::Unknown).unwrap_or(&0),
         external_link: *map.get(&SecurejoinSource::ExternalLink).unwrap_or(&0),
         internal_link: *map.get(&SecurejoinSource::InternalLink).unwrap_or(&0),
@@ -604,11 +604,11 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
     Ok(stats)
 }
 
-async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPathStats> {
+async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPaths> {
     let map = context
         .sql
         .query_map(
-            "SELECT uipath, count FROM stats_securejoin_uipaths",
+            "SELECT uipath, count FROM statistics_securejoin_uipaths",
             (),
             |row| {
                 let uipath: SecurejoinUIPath = row.get(0)?;
@@ -619,7 +619,7 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPa
         )
         .await?;
 
-    let stats = SecurejoinUIPathStats {
+    let stats = SecurejoinUIPaths {
         other: *map.get(&SecurejoinUIPath::Unknown).unwrap_or(&0),
         qr_icon: *map.get(&SecurejoinUIPath::QrIcon).unwrap_or(&0),
         new_contact: *map.get(&SecurejoinUIPath::NewContact).unwrap_or(&0),
@@ -653,7 +653,7 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     context
         .sql
         .execute(
-            "INSERT INTO stats_securejoin_invites (contact_created, already_verified, type)
+            "INSERT INTO statistics_securejoin_invites (contact_created, already_verified, type)
             VALUES (?, ?, ?)",
             (contact_created, already_verified, typ),
         )
@@ -683,7 +683,7 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
     let qr_scans: Vec<JoinedInvite> = context
         .sql
         .query_map(
-            "SELECT contact_created, already_verified, type FROM stats_securejoin_invites",
+            "SELECT contact_created, already_verified, type FROM statistics_securejoin_invites",
             (),
             |row| {
                 let contact_created: bool = row.get(0)?;
