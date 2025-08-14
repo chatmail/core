@@ -803,6 +803,73 @@ async fn test_verified_chat_editor_reordering() -> Result<()> {
     Ok(())
 }
 
+/// Tests that already verified contact
+/// does not get a new "verifier"
+/// via gossip.
+///
+/// Directly verifying is still possible.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_reverification() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    let fiona = &tcm.fiona().await;
+
+    tcm.execute_securejoin(alice, bob).await;
+    tcm.execute_securejoin(alice, charlie).await;
+    tcm.execute_securejoin(alice, fiona).await;
+
+    tcm.section("Alice creates a protected group with Bob, Charlie and Fiona");
+    let alice_chat_id = alice
+        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob, charlie, fiona])
+        .await;
+    let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
+    let bob_rcvd_msg = bob.recv_msg(&alice_sent).await;
+    let bob_alice_id = bob_rcvd_msg.from_id;
+
+    // Charlie is verified by Alice for Bob.
+    let bob_charlie_contact = bob.add_or_lookup_contact(charlie).await;
+    assert_eq!(
+        bob_charlie_contact
+            .get_verifier_id(bob)
+            .await?
+            .unwrap()
+            .unwrap(),
+        bob_alice_id
+    );
+
+    let fiona_rcvd_msg = fiona.recv_msg(&alice_sent).await;
+    let fiona_chat_id = fiona_rcvd_msg.chat_id;
+    let fiona_sent = fiona.send_text(fiona_chat_id, "Post by Fiona").await;
+    bob.recv_msg(&fiona_sent).await;
+
+    // Charlie should still be verified by Alice, not by Fiona.
+    let bob_charlie_contact = bob.add_or_lookup_contact(charlie).await;
+    assert_eq!(
+        bob_charlie_contact
+            .get_verifier_id(bob)
+            .await?
+            .unwrap()
+            .unwrap(),
+        bob_alice_id
+    );
+
+    // Bob can still verify Charlie directly.
+    tcm.execute_securejoin(bob, charlie).await;
+    let bob_charlie_contact = bob.add_or_lookup_contact(charlie).await;
+    assert_eq!(
+        bob_charlie_contact
+            .get_verifier_id(bob)
+            .await?
+            .unwrap()
+            .unwrap(),
+        ContactId::SELF
+    );
+
+    Ok(())
+}
+
 // ============== Helper Functions ==============
 
 async fn assert_verified(this: &TestContext, other: &TestContext, protected: ProtectionStatus) {
