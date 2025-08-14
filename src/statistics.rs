@@ -185,6 +185,17 @@ pub(crate) async fn set_last_excluded_msg_id(context: &Context) -> Result<()> {
 }
 
 pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
+    let config_exists = context
+        .sql
+        .get_raw_config(Config::StatsLastOldContactId.as_ref())
+        .await?
+        .is_some();
+    if config_exists {
+        // The user had statistics-sending enabled already in the past,
+        // keep the 'last old contact id' as-is
+        return Ok(());
+    }
+
     let last_contact_id: u64 = context
         .sql
         .query_get_value("SELECT MAX(id) FROM contacts", ())
