@@ -1098,6 +1098,7 @@ impl MimeFactory {
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
                                 prefer_encrypt: EncryptPreference::NoPreference,
+                                verified: false,
                             }
                             .to_string();
 
