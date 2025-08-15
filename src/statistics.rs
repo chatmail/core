@@ -23,6 +23,7 @@ use crate::tools::{create_id, time};
 
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
+const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 
 #[derive(Serialize)]
 struct Statistics {
@@ -146,7 +147,7 @@ struct JoinedInvite {
 pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> {
     if should_send_statistics(context).await? {
         let last_sending_time = context.get_config_i64(Config::LastStatisticsSent).await?;
-        let next_sending_time = last_sending_time.saturating_add(30); // TODO increase to 1 day or 1 week
+        let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
         if next_sending_time <= time() {
             return Ok(Some(send_statistics(context).await?));
         }
