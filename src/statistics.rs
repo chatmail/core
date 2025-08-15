@@ -120,6 +120,23 @@ struct SecurejoinUIPaths {
     new_contact: u32,
 }
 
+/// Some information on an invite-joining event
+/// (i.e. a qr scan or a clicked link).
+#[derive(Serialize)]
+struct JoinedInvite {
+    /// Whether the contact was newly created right now.
+    /// If this is false, then a contact existed already before.
+    contact_created: bool,
+    /// If a contact already existed,
+    /// this tells us whether the contact was verified already.
+    already_verified: bool,
+    /// The type of the invite:
+    /// "contact" for 1:1 invites that setup a verified contact,
+    /// "group" for invites that invite to a group
+    /// and also perform the contact verification 'along the way'.
+    typ: String,
+}
+
 /// Sends a message with statistics about the usage of Delta Chat,
 /// if the last time such a message was sent
 /// was more than a week ago.
@@ -513,8 +530,7 @@ async fn get_message_stats(
 
         let unverified_encrypted = t.query_row(
             &format!(
-                // (param GLOB '*\nc=1*' OR param GLOB 'c=1*')`
-                // matches all messages that are end-to-end encrypted
+                // (param GLOB '*\nc=1*' OR param GLOB 'c=1*') matches all messages that are end-to-end encrypted
                 "SELECT COUNT(*) FROM msgs
                 WHERE chat_id NOT IN temp.verified_chats AND chat_id NOT IN temp.empty_chats
                 AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')
@@ -684,23 +700,6 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
         .await?;
 
     Ok(())
-}
-
-/// Some information on an invite-joining event
-/// (i.e. a qr scan or a clicked link).
-#[derive(Serialize)]
-struct JoinedInvite {
-    /// Whether the contact was newly created right now.
-    /// If this is false, then a contact existed already before.
-    contact_created: bool,
-    /// If a contact already existed,
-    /// this tells us whether the contact was verified already.
-    already_verified: bool,
-    /// The type of the invite:
-    /// "contact" for 1:1 invites that setup a verified contact,
-    /// "group" for invites that invite to a group
-    /// and also perform the contact verification 'along the way'.
-    typ: String,
 }
 
 async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvite>> {
