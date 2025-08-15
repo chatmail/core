@@ -70,10 +70,7 @@ async fn test_statistics_one_contact() -> Result<()> {
     let contact_stats = r2.get("contact_stats").unwrap().as_array().unwrap();
     assert_eq!(contact_stats.len(), 1);
     let contact_info = &contact_stats[0];
-    assert_eq!(
-        contact_info.get("bot").unwrap(),
-        &serde_json::Value::Bool(false)
-    );
+    assert!(contact_info.get("bot").is_none());
     assert_eq!(
         contact_info.get("direct_chat").unwrap(),
         &serde_json::Value::Bool(true)
