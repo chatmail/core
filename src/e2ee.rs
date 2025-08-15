@@ -35,6 +35,7 @@ impl EncryptHelper {
             addr: self.addr.clone(),
             public_key: self.public_key.clone(),
             prefer_encrypt: self.prefer_encrypt,
+            verified: false,
         }
     }
 
