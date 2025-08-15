@@ -53,15 +53,28 @@ struct ContactStat {
     id: ContactId,
 
     verified: VerifiedStatus,
+
+    // If one of the boolean properties is false,
+    // we leave them away.
+    // This way, the Json file becomes a lot smaller.
+    #[serde(skip_serializing_if = "is_false")]
     bot: bool,
+
+    #[serde(skip_serializing_if = "is_false")]
     direct_chat: bool,
+
     last_seen: u64,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     transitive_chain: Option<u32>,
 
     /// Whether the contact was established after stats-sending was enabled
+    #[serde(skip_serializing_if = "is_false")]
     new: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 #[derive(Serialize)]
@@ -379,8 +392,8 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
             .sql
             .exists(
                 "SELECT COUNT(*)
-            FROM chats_contacts cc INNER JOIN chats
-            WHERE cc.contact_id=? AND chats.type=?",
+                FROM chats_contacts cc INNER JOIN chats
+                WHERE cc.contact_id=? AND chats.type=?",
                 (contact.id, Chattype::Single),
             )
             .await?;
