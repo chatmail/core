@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, Cursor};
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
@@ -242,7 +242,7 @@ pub fn pk_calc_signature(
 pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
-    shared_secrets: &[String],
+    mut shared_secrets: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
@@ -250,13 +250,17 @@ pub fn decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
+    let try_symmetric_decryption = should_try_symmetric_decryption(&msg);
+    if try_symmetric_decryption.is_err() {
+        shared_secrets = &[];
+    }
+
     // We always try out all passwords here, which is not great for performance.
     // But benchmarking (see `benchmark_decrypting.rs`)
     // showed that the performance penalty is acceptable.
-    // We could include a short (~2 character) identifier of the secret
-    // in
-    // (or just include the first 2 characters of the secret in clear-text)
-    // in order to
+    // We could include a short (~2 character) identifier of the secret in cleartext
+    // (or just include the first 2 characters of the secret in cleartext)
+    // in order to narrow down the number of shared secrets that have to be tried out.
     let message_password: Vec<Password> = shared_secrets
         .iter()
         .map(|p| Password::from(p.as_str()))
@@ -270,12 +274,52 @@ pub fn decrypt(
         session_keys: vec![],
         allow_legacy: false,
     };
-    let (msg, _ring_result) = msg.decrypt_the_ring(ring, true)?;
+
+    let res = msg.decrypt_the_ring(ring, true);
+
+    let (msg, _ring_result) = match res {
+        Ok(it) => it,
+        Err(err) => {
+            if let Err(reason) = try_symmetric_decryption {
+                bail!("{err:#} (Note: symmetric decryption was not tried: {reason})")
+            } else {
+                bail!("{err:#}");
+            }
+        }
+    };
 
     // remove one layer of compression
     let msg = msg.decompress()?;
 
     Ok(msg)
+}
+
+/// Returns Ok(()) if we want to try symmetrically decrypting the message,
+/// and Err with a reason if symmetric decryption should not be tried.
+///
+/// A DOS attacker could send a message with a lot of encrypted session keys,
+/// all of which use a very hard-to-compute string2key algorithm.
+/// We would then try to decrypt all of the encrypted session keys
+/// with all of the known shared secrets.
+/// In order to prevent this, we do not try to symmetrically decrypt messages
+/// that use a string2key algorithm other than 'Salted'.
+fn should_try_symmetric_decryption(msg: &Message<'_>) -> std::result::Result<(), &'static str> {
+    let Message::Encrypted { esk, .. } = msg else {
+        return Err("not encrypted");
+    };
+
+    if esk.len() > 1 {
+        return Err("too many esks");
+    }
+
+    let [pgp::composed::Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] else {
+        return Err("not symmetrically encrypted");
+    };
+
+    match esk.s2k() {
+        Some(StringToKey::Salted { .. }) => Ok(()),
+        _ => Err("unsupported string2key algorithm"),
+    }
 }
 
 /// Returns fingerprints
@@ -339,6 +383,7 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
 /// Symmetrically encrypt the message to be sent into a broadcast channel,
 /// or for version 2 of the Securejoin protocol.
 /// `shared secret` is the secret that will be used for symmetric encryption.
+// TODO this name is veeery similar to `symm_encrypt()`
 pub async fn encrypt_symmetrically(
     plain: Vec<u8>,
     shared_secret: &str,
@@ -356,6 +401,7 @@ pub async fn encrypt_symmetrically(
             hash_alg: HashAlgorithm::default(),
             salt,
         };
+        // TODO ask whether it's actually good to use Seidp_v2 here
         let mut msg = msg.seipd_v2(
             &mut rng,
             SymmetricKeyAlgorithm::AES128,
@@ -400,7 +446,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        key::load_self_secret_key,
+        key::{load_self_public_key, load_self_secret_key},
         test_utils::{TestContextManager, alice_keypair, bob_keypair},
     };
 
@@ -624,6 +670,77 @@ mod tests {
         )?;
 
         assert_eq!(decrypted.as_data_vec()?, plain);
+
+        Ok(())
+    }
+
+    /// Test that we don't try to decrypt a message
+    /// that is symmetrically encrypted
+    /// with an expensive string2key algorithm
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_dont_decrypt_expensive_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let shared_secret = "shared secret";
+
+        // Create a symmetrically encrypted message
+        // with an IteratedAndSalted string2key algorithm:
+
+        let shared_secret_pw = Password::from(shared_secret.to_string());
+        let msg = MessageBuilder::from_bytes("", plain);
+        let mut rng = thread_rng();
+        let s2k = StringToKey::new_default(&mut rng); // Default is IteratedAndSalted
+
+        let mut msg = msg.seipd_v2(
+            &mut rng,
+            SymmetricKeyAlgorithm::AES128,
+            AeadAlgorithm::Ocb,
+            ChunkSize::C8KiB,
+        );
+        msg.encrypt_with_password(&mut rng, s2k, &shared_secret_pw)?;
+
+        let ctext = msg.to_armored_string(&mut rng, Default::default())?;
+
+        // Trying to decrypt it should fail with a helpful error message:
+
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let error = decrypt(
+            ctext.into(),
+            &bob_private_keyring,
+            &[shared_secret.to_string()],
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "missing key (Note: symmetric decryption was not tried: unsupported string2key algorithm)"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_decryption_error_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let pk_for_encryption = load_self_public_key(alice).await?;
+
+        // Encrypt a message, but only to self, not to Bob:
+        let ctext = pk_encrypt(plain, vec![pk_for_encryption], None, true).await?;
+
+        // Trying to decrypt it should fail with an OK error message:
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let error = decrypt(ctext.into(), &bob_private_keyring, &[]).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "missing key (Note: symmetric decryption was not tried: not symmetrically encrypted)"
+        );
 
         Ok(())
     }
