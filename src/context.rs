@@ -14,7 +14,6 @@ use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::chat::{ChatId, get_chat_cnt};
-use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId};
@@ -34,6 +33,7 @@ use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
 use crate::tools::{self, duration_to_str, time, time_elapsed};
+use crate::{chatlist_events, statistics};
 
 /// Builder for the [`Context`].
 ///
@@ -1084,9 +1084,7 @@ impl Context {
         );
         res.insert(
             "send_statistics",
-            self.get_config_bool(Config::SendStatistics)
-                .await?
-                .to_string(),
+            statistics::should_send_statistics(self).await?.to_string(),
         );
         res.insert(
             "last_statistics_sent",
