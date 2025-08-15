@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -28,14 +28,14 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::self_fingerprint_opt;
-use crate::key::{DcKey, Fingerprint, SignedPublicKey};
+use crate::key::{DcKey, Fingerprint};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
-use crate::mimeparser::{AvatarAction, MimeMessage, SystemMessage, parse_message_ids};
+use crate::mimeparser::{AvatarAction, GossipedKey, MimeMessage, SystemMessage, parse_message_ids};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{Reaction, set_msg_reaction};
@@ -743,7 +743,7 @@ pub(crate) async fn receive_imf_inner(
     let verified_encryption = has_verified_encryption(context, &mime_parser, from_id).await?;
 
     if verified_encryption == VerifiedEncryption::Verified {
-        mark_recipients_as_verified(context, from_id, &to_ids, &mime_parser).await?;
+        mark_recipients_as_verified(context, from_id, &mime_parser).await?;
     }
 
     let received_msg = if let Some(received_msg) = received_msg {
@@ -836,7 +836,7 @@ pub(crate) async fn receive_imf_inner(
             context
                 .sql
                 .transaction(move |transaction| {
-                    let fingerprint = gossiped_key.dc_fingerprint().hex();
+                    let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
                     transaction.execute(
                         "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
                          VALUES                       (?, ?, ?)
@@ -2923,7 +2923,7 @@ async fn apply_group_changes(
             // highest `add_timestamp` to disambiguate.
             // The result of the error is that info message
             // may contain display name of the wrong contact.
-            let fingerprint = key.dc_fingerprint().hex();
+            let fingerprint = key.public_key.dc_fingerprint().hex();
             if let Some(contact_id) =
                 lookup_key_contact_by_fingerprint(context, &fingerprint).await?
             {
@@ -3662,13 +3662,18 @@ async fn has_verified_encryption(
 async fn mark_recipients_as_verified(
     context: &Context,
     from_id: ContactId,
-    to_ids: &[Option<ContactId>],
     mimeparser: &MimeMessage,
 ) -> Result<()> {
-    if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
-        return Ok(());
-    }
-    for to_id in to_ids.iter().filter_map(|&x| x) {
+    for gossiped_key in mimeparser
+        .gossiped_keys
+        .values()
+        .filter(|gossiped_key| gossiped_key.is_verified)
+    {
+        let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
+        let Some(to_id) = lookup_key_contact_by_fingerprint(context, &fingerprint).await? else {
+            continue;
+        };
+
         if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
@@ -3760,7 +3765,7 @@ async fn add_or_lookup_contacts_by_address_list(
 async fn add_or_lookup_key_contacts(
     context: &Context,
     address_list: &[SingleInfo],
-    gossiped_keys: &HashMap<String, SignedPublicKey>,
+    gossiped_keys: &BTreeMap<String, GossipedKey>,
     fingerprints: &[Fingerprint],
     origin: Origin,
 ) -> Result<Vec<Option<ContactId>>> {
@@ -3776,7 +3781,7 @@ async fn add_or_lookup_key_contacts(
             // Iterator has not ran out of fingerprints yet.
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
-            key.dc_fingerprint().hex()
+            key.public_key.dc_fingerprint().hex()
         } else if context.is_self_addr(addr).await? {
             contact_ids.push(Some(ContactId::SELF));
             continue;

@@ -37,7 +37,8 @@ impl EncryptHelper {
     pub fn get_aheader(&self) -> Aheader {
         let pk = self.public_key.clone();
         let addr = self.addr.to_string();
-        Aheader::new(addr, pk, self.prefer_encrypt)
+        let verified = false;
+        Aheader::new(addr, pk, self.prefer_encrypt, verified)
     }
 
     /// Tries to encrypt the passed in `mail`.

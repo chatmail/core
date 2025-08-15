@@ -448,9 +448,9 @@ def test_gossip_verification(acfactory) -> None:
     assert snapshot.text == "Hello Autocrypt group"
     assert snapshot.show_padlock
 
-    # Autocrypt group does not propagate verification.
+    # Autocrypt group propagates verification using Autocrypt-Gossip header.
     carol_contact_alice_snapshot = carol_contact_alice.get_snapshot()
-    assert not carol_contact_alice_snapshot.is_verified
+    assert carol_contact_alice_snapshot.is_verified
 
     logging.info("Bob creates a Securejoin group")
     bob_group_chat = bob.create_group("Securejoin Group", protect=True)

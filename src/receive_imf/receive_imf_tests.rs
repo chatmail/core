@@ -5117,6 +5117,8 @@ async fn test_unverified_member_msg() -> Result<()> {
             .contains("Re-download the message or see 'Info' for more details")
     );
 
+    // Shift the time by 1 week to trigger gossiping.
+    SystemTime::shift(Duration::from_secs(3600 * 24 * 7));
     let alice_sent_msg = alice
         .send_text(alice_chat_id, "Hi all, it's Alice introducing Fiona")
         .await;
