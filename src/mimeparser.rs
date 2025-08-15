@@ -427,7 +427,7 @@ impl MimeMessage {
             None
         };
 
-        let public_keyring = if incoming {
+        let mut public_keyring = if incoming {
             if let Some(autocrypt_header) = autocrypt_header {
                 vec![autocrypt_header.public_key]
             } else {
@@ -436,6 +436,44 @@ impl MimeMessage {
         } else {
             key::load_self_public_keyring(context).await?
         };
+
+        if let Some(signature) = match &decrypted_msg {
+            Some(pgp::composed::Message::Literal { .. }) => None,
+            Some(pgp::composed::Message::Compressed { .. }) => {
+                // One layer of compression should already be handled by now.
+                // We don't decompress messages compressed multiple times.
+                None
+            }
+            Some(pgp::composed::Message::SignedOnePass { reader, .. }) => reader.signature(),
+            Some(pgp::composed::Message::Signed { reader, .. }) => Some(reader.signature()),
+            Some(pgp::composed::Message::Encrypted { .. }) => {
+                // The message is already decrypted once.
+                None
+            }
+            None => None,
+        } {
+            for issuer_fingerprint in signature.issuer_fingerprint() {
+                let issuer_fingerprint =
+                    crate::key::Fingerprint::from(issuer_fingerprint.clone()).hex();
+                if let Some(public_key_bytes) = context
+                    .sql
+                    .query_row_optional(
+                        "SELECT public_key
+                         FROM public_keys
+                         WHERE fingerprint=?",
+                        (&issuer_fingerprint,),
+                        |row| {
+                            let bytes: Vec<u8> = row.get(0)?;
+                            Ok(bytes)
+                        },
+                    )
+                    .await?
+                {
+                    let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+                    public_keyring.push(public_key)
+                }
+            }
+        }
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
             crate::pgp::valid_signature_fingerprints(decrypted_msg, &public_keyring)?
