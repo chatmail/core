@@ -870,6 +870,44 @@ async fn test_no_reverification() -> Result<()> {
     Ok(())
 }
 
+/// Tests that if our second device observes
+/// us gossiping a verification,
+/// it is not treated as direct verification.
+///
+/// Direct verifications should only happen
+/// as a result of SecureJoin.
+/// If we see our second device gossiping
+/// a verification of some contact,
+/// it may be indirect verification,
+/// so we should mark the contact as verified,
+/// but with unknown verifier.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_direct_verification_via_bcc() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    mark_as_verified(alice, bob).await;
+
+    let alice_chat_id = alice.create_chat_id(bob).await;
+    let alice_sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
+    alice2.recv_msg(&alice_sent_msg).await;
+
+    // Alice 2 observes Alice 1 gossiping verification for Bob.
+    // Alice 2 does not know if Alice 1 has verified Bob directly though.
+    let alice2_bob_contact = alice2.add_or_lookup_contact(bob).await;
+    assert_eq!(alice2_bob_contact.is_verified(alice2).await?, true);
+
+    // There is some verifier, but it is unknown to Alice's second device.
+    assert_eq!(
+        alice2_bob_contact.get_verifier_id(alice2).await?,
+        Some(None)
+    );
+
+    Ok(())
+}
+
 // ============== Helper Functions ==============
 
 async fn assert_verified(this: &TestContext, other: &TestContext, protected: ProtectionStatus) {

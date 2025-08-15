@@ -743,7 +743,7 @@ pub(crate) async fn receive_imf_inner(
     let verified_encryption = has_verified_encryption(context, &mime_parser, from_id).await?;
 
     if verified_encryption == VerifiedEncryption::Verified {
-        mark_recipients_as_verified(context, from_id, &to_ids, &mime_parser).await?;
+        mark_recipients_as_verified(context, from_id, &mime_parser).await?;
     }
 
     let received_msg = if let Some(received_msg) = received_msg {
@@ -3665,7 +3665,6 @@ async fn has_verified_encryption(
 async fn mark_recipients_as_verified(
     context: &Context,
     from_id: ContactId,
-    to_ids: &[Option<ContactId>],
     mimeparser: &MimeMessage,
 ) -> Result<()> {
     let verifier_id = Some(from_id).filter(|&id| id != ContactId::SELF);
@@ -3679,18 +3678,6 @@ async fn mark_recipients_as_verified(
             continue;
         };
 
-        if to_id == ContactId::SELF || to_id == from_id {
-            continue;
-        }
-
-        mark_contact_id_as_verified(context, to_id, verifier_id).await?;
-        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
-    }
-
-    if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
-        return Ok(());
-    }
-    for to_id in to_ids.iter().filter_map(|&x| x) {
         if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
