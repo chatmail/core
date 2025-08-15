@@ -144,7 +144,7 @@ struct JoinedInvite {
 /// On the other end, a bot will receive the message and make it available
 /// to Delta Chat's developers.
 pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> {
-    if context.get_config_bool(Config::SendStatistics).await? {
+    if should_send_statistics(context).await? {
         let last_sending_time = context.get_config_i64(Config::LastStatisticsSent).await?;
         let next_sending_time = last_sending_time.saturating_add(30); // TODO increase to 1 day or 1 week
         if next_sending_time <= time() {
@@ -152,6 +152,21 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
         }
     }
     Ok(None)
+}
+
+pub(crate) async fn should_send_statistics(_context: &Context) -> Result<bool> {
+    #[cfg(any(target_os = "android", test))]
+    {
+        _context.get_config_bool(Config::SendStatistics).await
+    }
+
+    // If the user enables statistics-sending on Android,
+    // and then transfers the account to e.g. Desktop,
+    // we should not send any statistics:
+    #[cfg(not(any(target_os = "android", test)))]
+    {
+        Ok(false)
+    }
 }
 
 async fn send_statistics(context: &Context) -> Result<ChatId> {
@@ -584,7 +599,7 @@ pub(crate) async fn count_securejoin_ux_info(
     source: Option<u32>,
     uipath: Option<u32>,
 ) -> Result<()> {
-    if !context.get_config_bool(Config::SendStatistics).await? {
+    if !should_send_statistics(context).await? {
         return Ok(());
     }
 
@@ -669,7 +684,7 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPa
 }
 
 pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite) -> Result<()> {
-    if !context.get_config_bool(Config::SendStatistics).await? {
+    if !should_send_statistics(context).await? {
         return Ok(());
     }
 
