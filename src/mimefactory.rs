@@ -1088,6 +1088,17 @@ impl MimeFactory {
                                             .is_none_or(|ts| now >= ts + gossip_period || now < ts)
                                 };
 
+                            let verifier_id: Option<u32> = context
+                                .sql
+                                .query_get_value(
+                                    "SELECT verifier FROM contacts WHERE fingerprint=?",
+                                    (&fingerprint,),
+                                )
+                                .await?;
+
+                            let is_verified =
+                                verifier_id.is_some_and(|verifier_id| verifier_id != 0);
+
                             if !should_do_gossip {
                                 continue;
                             }
@@ -1098,7 +1109,7 @@ impl MimeFactory {
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
                                 prefer_encrypt: EncryptPreference::NoPreference,
-                                verified: false,
+                                verified: is_verified,
                             }
                             .to_string();
 
