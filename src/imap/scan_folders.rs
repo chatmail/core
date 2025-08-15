@@ -18,7 +18,7 @@ impl Imap {
     ) -> Result<bool> {
         // First of all, debounce to once per minute:
         {
-            let mut last_scan = context.last_full_folder_scan.lock().await;
+            let mut last_scan = session.last_full_folder_scan.lock().await;
             if let Some(last_scan) = *last_scan {
                 let elapsed_secs = time_elapsed(&last_scan).as_secs();
                 let debounce_secs = context
