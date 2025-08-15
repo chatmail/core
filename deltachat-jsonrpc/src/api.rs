@@ -871,15 +871,19 @@ impl CommandApi {
     ///
     /// **qr**: The text of the scanned QR code. Typically, the same string as given
     ///     to `check_qr()`.
-    ///
-    /// **source** and **uipath** are for statistics-sending,
-    /// if the user enabled it in the settings;
-    /// if you don't have statistics-sending implemented, just pass `None` here.
-    ///
     /// **returns**: The chat ID of the joined chat, the UI may redirect to the this chat.
     ///         A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
     ///
-    async fn secure_join(
+    async fn secure_join(&self, account_id: u32, qr: String) -> Result<u32> {
+        let ctx = self.get_context(account_id).await?;
+        let chat_id = securejoin::join_securejoin(&ctx, &qr).await?;
+        Ok(chat_id.to_u32())
+    }
+
+    /// Like `secure_join()`, but allows to pass a source and a UI-path.
+    /// You only need this if your UI has an option to send statistics
+    /// to Delta Chat's developers.
+    async fn secure_join_with_ux_info(
         &self,
         account_id: u32,
         qr: String,
@@ -887,7 +891,7 @@ impl CommandApi {
         uipath: Option<u32>,
     ) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        let chat_id = securejoin::join_securejoin_with_source(&ctx, &qr, source, uipath).await?;
+        let chat_id = securejoin::join_securejoin_with_ux_info(&ctx, &qr, source, uipath).await?;
         Ok(chat_id.to_u32())
     }
 

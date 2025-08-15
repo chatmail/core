@@ -579,7 +579,7 @@ async fn get_message_stats(
     Ok(message_stats)
 }
 
-pub(crate) async fn count_securejoin_source(
+pub(crate) async fn count_securejoin_ux_info(
     context: &Context,
     source: Option<u32>,
     uipath: Option<u32>,

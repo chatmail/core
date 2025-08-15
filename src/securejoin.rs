@@ -147,7 +147,7 @@ async fn get_self_fingerprint(context: &Context) -> Result<Fingerprint> {
 ///
 /// The function returns immediately and the handshake will run in background.
 pub async fn join_securejoin(context: &Context, qr: &str) -> Result<ChatId> {
-    join_securejoin_with_source(context, qr, None, None).await
+    join_securejoin_with_ux_info(context, qr, None, None).await
 }
 
 /// Take a scanned QR-code and do the setup-contact/join-group/invite handshake.
@@ -160,7 +160,7 @@ pub async fn join_securejoin(context: &Context, qr: &str) -> Result<ChatId> {
 /// **source** and **uipath** are for statistics-sending,
 /// if the user enabled it in the settings;
 /// if you don't have statistics-sending implemented, just pass `None` here.
-pub async fn join_securejoin_with_source(
+pub async fn join_securejoin_with_ux_info(
     context: &Context,
     qr: &str,
     source: Option<u32>,
@@ -173,7 +173,7 @@ pub async fn join_securejoin_with_source(
         err
     })?;
 
-    statistics::count_securejoin_source(context, source, uipath)
+    statistics::count_securejoin_ux_info(context, source, uipath)
         .await
         .log_err(context)
         .ok();
