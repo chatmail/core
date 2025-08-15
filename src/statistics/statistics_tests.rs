@@ -16,22 +16,22 @@ async fn test_maybe_send_statistics() -> Result<()> {
 
     alice.set_config_bool(Config::SendStatistics, true).await?;
 
-    let chat_id = maybe_send_statistics(&alice).await?.unwrap();
-    let msg = get_chat_msg(&alice, chat_id, 0, 2).await;
+    let chat_id = maybe_send_statistics(alice).await?.unwrap();
+    let msg = get_chat_msg(alice, chat_id, 0, 2).await;
     assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
 
-    let chat = Chat::load_from_db(&alice, chat_id).await?;
+    let chat = Chat::load_from_db(alice, chat_id).await?;
     assert!(chat.is_protected());
 
-    let msg = get_chat_msg(&alice, chat_id, 1, 2).await;
+    let msg = get_chat_msg(alice, chat_id, 1, 2).await;
     assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
 
-    let stats = tokio::fs::read(msg.get_file(&alice).unwrap()).await?;
+    let stats = tokio::fs::read(msg.get_file(alice).unwrap()).await?;
     let stats = std::str::from_utf8(&stats)?;
-    println!("\nEmpty account:\n{}\n", stats);
+    println!("\nEmpty account:\n{stats}\n");
     assert!(stats.contains(r#""contact_stats": []"#));
 
-    let r: serde_json::Value = serde_json::from_str(&stats)?;
+    let r: serde_json::Value = serde_json::from_str(stats)?;
     assert_eq!(
         r.get("contact_stats").unwrap(),
         &serde_json::Value::Array(vec![])
@@ -96,7 +96,7 @@ async fn test_message_stats() -> Result<()> {
         expected_one_one: &MessageStats,
         expected_multi_user: &MessageStats,
     ) {
-        let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
+        let actual: serde_json::Value = serde_json::from_str(stats).unwrap();
 
         for (expected, key) in [
             (expected_one_one, "message_stats_one_one"),
@@ -238,11 +238,11 @@ async fn test_message_stats() -> Result<()> {
 }
 
 async fn send_and_read_statistics(context: &TestContext) -> String {
-    let chat_id = maybe_send_statistics(&context).await.unwrap().unwrap();
+    let chat_id = maybe_send_statistics(context).await.unwrap().unwrap();
     let msg = context.get_last_msg_in(chat_id).await;
     assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
 
-    let stats = tokio::fs::read(msg.get_file(&context).unwrap())
+    let stats = tokio::fs::read(msg.get_file(context).unwrap())
         .await
         .unwrap();
     String::from_utf8(stats).unwrap()

@@ -154,10 +154,11 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
     Ok(None)
 }
 
-pub(crate) async fn should_send_statistics(_context: &Context) -> Result<bool> {
+#[allow(clippy::unused_async, unused)]
+pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
     #[cfg(any(target_os = "android", test))]
     {
-        _context.get_config_bool(Config::SendStatistics).await
+        context.get_config_bool(Config::SendStatistics).await
     }
 
     // If the user enables statistics-sending on Android,
@@ -438,7 +439,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
 /// - `last_msg_id`: The last msg_id that was already counted in the previous stats.
 ///   Only messages newer than that will be counted.
 /// - `one_one_chats`: If true, only messages in 1:1 chats are counted.
-///    If false, only messages in other chats (groups and broadcast channels) are counted.
+///   If false, only messages in other chats (groups and broadcast channels) are counted.
 async fn get_message_stats(
     context: &Context,
     last_excluded_msg: u32,
