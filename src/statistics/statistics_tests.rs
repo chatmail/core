@@ -4,7 +4,7 @@ use super::*;
 use crate::chat::{Chat, create_broadcast, create_group_chat, create_group_ex};
 use crate::mimeparser::SystemMessage;
 use crate::qr::check_qr;
-use crate::securejoin::{get_securejoin_qr, join_securejoin, join_securejoin_with_source};
+use crate::securejoin::{get_securejoin_qr, join_securejoin, join_securejoin_with_ux_info};
 use crate::test_utils::{TestContext, TestContextManager, get_chat_msg};
 use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
@@ -287,11 +287,12 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     expected.unknown += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
+        .await?;
     expected.clipboard += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(
+    join_securejoin_with_ux_info(
         alice,
         &qr,
         Some(SecurejoinSource::ExternalLink as u32),
@@ -301,7 +302,7 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     expected.external_link += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(
+    join_securejoin_with_ux_info(
         alice,
         &qr,
         Some(SecurejoinSource::InternalLink as u32),
@@ -311,20 +312,22 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     expected.internal_link += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32), None)
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32), None)
         .await?;
     expected.image_loaded += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Scan as u32), None).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Scan as u32), None).await?;
     expected.scan += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
+        .await?;
     expected.clipboard += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
+        .await?;
     expected.clipboard += 1;
     check_statistics(alice, &expected).await;
 
@@ -367,7 +370,7 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     expected.other += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(
+    join_securejoin_with_ux_info(
         alice,
         &qr,
         Some(0),
@@ -377,7 +380,7 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     expected.new_contact += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(
+    join_securejoin_with_ux_info(
         alice,
         &qr,
         Some(0),
@@ -387,7 +390,8 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     expected.new_contact += 1;
     check_statistics(alice, &expected).await;
 
-    join_securejoin_with_source(alice, &qr, Some(0), Some(SecurejoinUIPath::QrIcon as u32)).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(0), Some(SecurejoinUIPath::QrIcon as u32))
+        .await?;
     expected.qr_icon += 1;
     check_statistics(alice, &expected).await;
 
