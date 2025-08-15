@@ -871,6 +871,7 @@ impl CommandApi {
     ///
     /// **qr**: The text of the scanned QR code. Typically, the same string as given
     ///     to `check_qr()`.
+    ///
     /// **returns**: The chat ID of the joined chat, the UI may redirect to the this chat.
     ///         A returned chat ID does not guarantee that the chat is protected or the belonging contact is verified.
     ///
