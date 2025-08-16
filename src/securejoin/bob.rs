@@ -309,14 +309,14 @@ pub(crate) async fn send_handshake_message(
 ) -> Result<()> {
     let mut msg = Message {
         viewtype: Viewtype::Text,
-        text: step.body_text(invite),
+        text: step.body_text(invite)?,
         hidden: true,
         ..Default::default()
     };
     msg.param.set_cmd(SystemMessage::SecurejoinMessage);
 
     // Sends the step in Secure-Join header.
-    msg.param.set(Param::Arg, step.securejoin_header(invite));
+    msg.param.set(Param::Arg, step.securejoin_header(invite)?);
 
     match step {
         BobHandshakeMsg::Request => {
@@ -365,8 +365,8 @@ impl BobHandshakeMsg {
     /// This text has no significance to the protocol, but would be visible if users see
     /// this email message directly, e.g. when accessing their email without using
     /// DeltaChat.
-    fn body_text(&self, invite: &QrInvite) -> String {
-        format!("Secure-Join: {}", self.securejoin_header(invite))
+    fn body_text(&self, invite: &QrInvite) -> Result<String> {
+        Ok(format!("Secure-Join: {}", self.securejoin_header(invite)?))
     }
 
     /// Returns the `Secure-Join` header value.
@@ -374,21 +374,22 @@ impl BobHandshakeMsg {
     /// This identifies the step this message is sending information about.  Most protocol
     /// steps include additional information into other headers, see
     /// [`send_handshake_message`] for these.
-    fn securejoin_header(&self, invite: &QrInvite) -> &'static str {
-        match self {
+    fn securejoin_header(&self, invite: &QrInvite) -> Result<&'static str> {
+        let res = match self {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
                 QrInvite::Broadcast { .. } => {
-                    panic!("There is no request-with-auth for broadcasts")
-                } // TODO remove panic
+                    bail!("There is no request-with-auth for broadcasts")
+                }
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
                 QrInvite::Broadcast { .. } => "vb-request-with-auth",
             },
-        }
+        };
+        Ok(res)
     }
 }
 
