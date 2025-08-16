@@ -438,7 +438,7 @@ impl MimeMessage {
         };
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
-            crate::pgp::valid_signature_fingerprints(decrypted_msg, &public_keyring)?
+            crate::pgp::valid_signature_fingerprints(decrypted_msg, &public_keyring)
         } else {
             HashSet::new()
         };

@@ -272,7 +272,7 @@ pub fn pk_decrypt(
 pub fn valid_signature_fingerprints(
     msg: &pgp::composed::Message,
     public_keys_for_validation: &[SignedPublicKey],
-) -> Result<HashSet<Fingerprint>> {
+) -> HashSet<Fingerprint> {
     let mut ret_signature_fingerprints: HashSet<Fingerprint> = Default::default();
     if msg.is_signed() {
         for pkey in public_keys_for_validation {
@@ -282,7 +282,7 @@ pub fn valid_signature_fingerprints(
             }
         }
     }
-    Ok(ret_signature_fingerprints)
+    ret_signature_fingerprints
 }
 
 /// Validates detached signature.
@@ -359,7 +359,7 @@ mod tests {
         let mut msg = pk_decrypt(ctext.to_vec(), private_keys_for_decryption)?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
-            valid_signature_fingerprints(&msg, public_keys_for_validation)?;
+            valid_signature_fingerprints(&msg, public_keys_for_validation);
 
         Ok((msg, ret_signature_fingerprints, content))
     }
