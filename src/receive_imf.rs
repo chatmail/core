@@ -642,7 +642,7 @@ pub(crate) async fn receive_imf_inner(
     // For example, GitHub sends messages from `notifications@github.com`,
     // but uses display name of the user whose action generated the notification
     // as the display name.
-    let fingerprint = mime_parser.signatures.iter().next();
+    let fingerprint = mime_parser.signature.as_ref();
     let (from_id, _from_id_blocked, incoming_origin) = match from_field_to_contact_id(
         context,
         &mime_parser.from,
@@ -3662,7 +3662,10 @@ async fn has_verified_encryption(
         ));
     }
 
-    let signed_with_verified_key = mimeparser.signatures.contains(&fingerprint);
+    let signed_with_verified_key = mimeparser
+        .signature
+        .as_ref()
+        .is_some_and(|signature| *signature == fingerprint);
     if signed_with_verified_key {
         Ok(Verified)
     } else {
