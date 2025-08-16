@@ -8,7 +8,6 @@ from typing import Optional, Union
 from . import const, props
 from .capi import ffi, lib
 from .cutil import as_dc_charpointer, from_dc_charpointer, from_optional_dc_charpointer
-from .reactions import Reactions
 
 
 class Message:
@@ -163,17 +162,6 @@ class Message:
                 as_dc_charpointer(description),
             ),
         )
-
-    def send_reaction(self, reaction: str):
-        """Send a reaction to message and return the resulting Message instance."""
-        msg_id = lib.dc_send_reaction(self.account._dc_context, self.id, as_dc_charpointer(reaction))
-        if msg_id == 0:
-            raise ValueError("reaction could not be send")
-        return Message.from_db(self.account, msg_id)
-
-    def get_reactions(self) -> Reactions:
-        """Get :class:`deltachat.reactions.Reactions` to the message."""
-        return Reactions.from_msg(self)
 
     def is_system_message(self):
         """return True if this message is a system/info message."""
