@@ -362,8 +362,8 @@ pub fn pk_validate(
     Ok(ret)
 }
 
-/// Symmetric encryption.
-pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
+/// Symmetric encryption for the autocrypt setup file.
+pub async fn symm_encrypt_setup_file(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
@@ -380,11 +380,10 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     .await?
 }
 
-/// Symmetrically encrypt the message to be sent into a broadcast channel,
-/// or for version 2 of the Securejoin protocol.
+/// Symmetrically encrypt the message.
+/// This is used for broadcast channels and for version 2 of the Securejoin protocol.
 /// `shared secret` is the secret that will be used for symmetric encryption.
-// TODO this name is veeery similar to `symm_encrypt()`
-pub async fn encrypt_symmetrically(
+pub async fn symm_encrypt_message(
     plain: Vec<u8>,
     shared_secret: &str,
     private_key_for_signing: SignedSecretKey,
@@ -654,7 +653,7 @@ mod tests {
 
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
-        let ctext = encrypt_symmetrically(
+        let ctext = symm_encrypt_message(
             plain.clone(),
             shared_secret,
             load_self_secret_key(alice).await?,
