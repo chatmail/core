@@ -3130,14 +3130,19 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
     join_securejoin(bob0, &qr).await.unwrap();
     let request = bob0.pop_sent_msg().await;
+
+    // Bob must send the message only to Alice, not to Self,
+    // because otherwise, his second device would show a device message
+    // "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages.
+    // To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions."
+    assert_eq!(request.recipients, "alice@example.org");
+
     alice.recv_msg_trash(&request).await;
     let answer = alice.pop_sent_msg().await;
     bob0.recv_msg(&answer).await;
 
     // Sync Bob's verification of Alice:
     sync(bob0, bob1).await;
-    // TODO uncommenting the next line creates a message "Can't decrypt outgoing messages, probably you're using DC on multiple devices without transferring your key"
-    // bob1.recv_msg(&request).await;
     bob1.recv_msg(&answer).await;
 
     // The 1:1 chat should not be visible to the user on any of the devices.

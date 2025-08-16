@@ -1916,8 +1916,7 @@ fn hidden_recipients() -> Address<'static> {
 }
 
 fn should_encrypt_with_auth_token(msg: &Message) -> bool {
-    msg.param.get_cmd() == SystemMessage::SecurejoinMessage
-        && msg.param.get(Param::Arg).unwrap_or_default() == "vb-request-with-auth"
+    msg.is_vb_request_with_auth()
 }
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {

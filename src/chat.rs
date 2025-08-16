@@ -2948,7 +2948,7 @@ async fn prepare_send_msg(
                 .get_bool(Param::ForcePlaintext)
                 .unwrap_or_default()
                 // V2 securejoin messages are symmetrically encrypted, no need for the public key:
-                || msg.securejoin_step() == Some("vb-request-with-auth")
+                || msg.is_vb_request_with_auth()
         }
         _ => false,
     };
@@ -3052,6 +3052,9 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     if (context.get_config_bool(Config::BccSelf).await?
         || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage)
         && (context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty())
+        // `vb-request-with-auth` messages are symmetrically encrypted
+        // with a secret which the other device doesn't have:
+        && !msg.is_vb_request_with_auth()
     {
         recipients.push(from);
     }

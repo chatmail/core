@@ -1386,15 +1386,16 @@ impl Message {
         self.error.clone()
     }
 
-    // TODO this function could be used a lot more
-    /// If this is a secure-join message,
-    /// returns the current step,
-    /// which is put into the `Secure-Join` header.
-    pub(crate) fn securejoin_step(&self) -> Option<&str> {
+    /// Returns `true` if this message is a `vb-request-with-auth` SecureJoin message.
+    pub(crate) fn is_vb_request_with_auth(&self) -> bool {
         if self.param.get_cmd() == SystemMessage::SecurejoinMessage {
-            self.param.get(Param::Arg)
+            // CAVE: You can't check in the same way whether the message
+            // is a `v{g|b}-member-added` message,
+            // because for these messages,
+            // `param.get_cmd()` returns `SystemMessage::MemberAddedToGroup`.
+            self.param.get(Param::Arg) == Some("vb-request-with-auth")
         } else {
-            None
+            false
         }
     }
 }
