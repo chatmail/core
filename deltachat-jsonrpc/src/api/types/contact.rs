@@ -38,12 +38,6 @@ pub struct ContactObject {
     /// See [`Self::verifier_id`]/`Contact.verifierId` for a guidance how to display these information.
     is_verified: bool,
 
-    /// True if the contact profile title should have a green checkmark.
-    ///
-    /// This indicates whether 1:1 chat has a green checkmark
-    /// or will have a green checkmark if created.
-    is_profile_verified: bool,
-
     /// The contact ID that verified a contact.
     ///
     /// As verifier may be unknown,
@@ -87,7 +81,6 @@ impl ContactObject {
             None => None,
         };
         let is_verified = contact.is_verified(context).await?;
-        let is_profile_verified = contact.is_profile_verified(context).await?;
 
         let verifier_id = contact
             .get_verifier_id(context)
@@ -109,7 +102,6 @@ impl ContactObject {
             is_key_contact: contact.is_key_contact(),
             e2ee_avail: contact.e2ee_avail(context).await?,
             is_verified,
-            is_profile_verified,
             verifier_id,
             last_seen: contact.last_seen(),
             was_seen_recently: contact.was_seen_recently(),
