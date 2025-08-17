@@ -5133,21 +5133,9 @@ async fn test_unverified_member_msg() -> Result<()> {
     let fiona_chat_id = fiona.get_last_msg().await.chat_id;
     let fiona_sent_msg = fiona.send_text(fiona_chat_id, "Hi").await;
 
-    // The message can't be verified, but the user can re-download it.
-    let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
-    assert_eq!(bob_msg.download_state, DownloadState::Available);
-    assert!(
-        bob_msg
-            .text
-            .contains("Re-download the message or see 'Info' for more details")
-    );
-
-    let alice_sent_msg = alice
-        .send_text(alice_chat_id, "Hi all, it's Alice introducing Fiona")
-        .await;
-    bob.recv_msg(&alice_sent_msg).await;
-
-    // Now Bob has Fiona's key and can verify the message.
+    // The message is by non-verified member,
+    // but the checks have been removed
+    // and the message should be downloaded as usual.
     let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
     assert_eq!(bob_msg.download_state, DownloadState::Done);
     assert_eq!(bob_msg.text, "Hi");

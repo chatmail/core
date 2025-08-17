@@ -1864,25 +1864,6 @@ async fn add_parts(
         None
     };
 
-    let mut verification_failed = false;
-    if !chat_id.is_special() && is_partial_download.is_none() {
-        // For outgoing emails in the 1:1 chat we have an exception that
-        // they are allowed to be unencrypted:
-        // 1. They can't be an attack (they are outgoing, not incoming)
-        // 2. Probably the unencryptedness is just a temporary state, after all
-        //    the user obviously still uses DC
-        //    -> Showing info messages every time would be a lot of noise
-        // 3. The info messages that are shown to the user ("Your chat partner
-        //    likely reinstalled DC" or similar) would be wrong.
-        if chat.is_protected() && (mime_parser.incoming || chat.typ != Chattype::Single) {
-            if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-                verification_failed = true;
-                warn!(context, "Verification problem: {err:#}.");
-                let s = format!("{err}. Re-download the message or see 'Info' for more details");
-                mime_parser.replace_msg_by_error(&s);
-            }
-        }
-    }
     drop(chat); // Avoid using stale `chat` object.
 
     let sort_timestamp = tweak_sort_timestamp(
@@ -2156,10 +2137,6 @@ RETURNING id
                         DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
-                    } else if verification_failed {
-                        // Verification can fail because of message reordering. Re-downloading the
-                        // message should help if so.
-                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
