@@ -68,7 +68,6 @@ def test_qr_securejoin(acfactory, protect):
 
     logging.info("Alice creates a group")
     alice_chat = alice.create_group("Group", protect=protect)
-    assert alice_chat.get_basic_snapshot().is_protected == protect
 
     logging.info("Bob joins the group")
     qr_code = alice_chat.get_qr_code()
@@ -89,7 +88,6 @@ def test_qr_securejoin(acfactory, protect):
 
     snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
-    assert snapshot.chat.get_basic_snapshot().is_protected == protect
 
     # Test that Bob verified Alice's profile.
     bob_contact_alice = bob.create_contact(alice)
@@ -218,7 +216,6 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
 
     logging.info("ac1 creates verified group")
     chat = ac1.create_group("Verified group", protect=True)
-    assert chat.get_basic_snapshot().is_protected
 
     logging.info("ac2 joins verified group")
     qr_code = chat.get_qr_code()
@@ -313,7 +310,6 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     while 1:
         snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
         if snapshot.text == "ac1 says hello":
-            assert snapshot.chat.get_basic_snapshot().is_protected
             break
 
     logging.info("ac1: let ac2 join again but shutoff ac1 in the middle of securejoin")
@@ -335,7 +331,6 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     while 1:
         msg = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
         if msg.text == "hello":
-            assert msg.chat.get_basic_snapshot().is_protected
             break
 
     logging.info("ac3: create a join-code for group VG and let ac4 join, check that ac2 got it")
@@ -385,7 +380,6 @@ def test_aeap_flow_verified(acfactory):
 
     logging.info("ac1: create verified-group QR, ac2 scans and joins")
     chat = ac1.create_group("hello", protect=True)
-    assert chat.get_basic_snapshot().is_protected
     qr_code = chat.get_qr_code()
     logging.info("ac2: start QR-code based join-group protocol")
     ac2.secure_join(qr_code)
@@ -439,7 +433,6 @@ def test_gossip_verification(acfactory) -> None:
 
     logging.info("Bob creates an Autocrypt group")
     bob_group_chat = bob.create_group("Autocrypt Group")
-    assert not bob_group_chat.get_basic_snapshot().is_protected
     bob_group_chat.add_contact(bob_contact_alice)
     bob_group_chat.add_contact(bob_contact_carol)
     bob_group_chat.send_message(text="Hello Autocrypt group")
@@ -454,7 +447,6 @@ def test_gossip_verification(acfactory) -> None:
 
     logging.info("Bob creates a Securejoin group")
     bob_group_chat = bob.create_group("Securejoin Group", protect=True)
-    assert bob_group_chat.get_basic_snapshot().is_protected
     bob_group_chat.add_contact(bob_contact_alice)
     bob_group_chat.add_contact(bob_contact_carol)
     bob_group_chat.send_message(text="Hello Securejoin group")
@@ -525,7 +517,6 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
     snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert snapshot.is_info
     ac2_chat = snapshot.chat
-    assert ac2_chat.get_basic_snapshot().is_protected
     assert len(ac2_chat.get_contacts()) == 3
 
     # ac1 is still "not verified" for ac2 due to inconsistent state.
@@ -537,7 +528,6 @@ def test_withdraw_securejoin_qr(acfactory):
 
     logging.info("Alice creates a verified group")
     alice_chat = alice.create_group("Verified group", protect=True)
-    assert alice_chat.get_basic_snapshot().is_protected
     logging.info("Bob joins verified group")
 
     qr_code = alice_chat.get_qr_code()
@@ -548,7 +538,6 @@ def test_withdraw_securejoin_qr(acfactory):
 
     snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
     assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
-    assert snapshot.chat.get_basic_snapshot().is_protected
     bob_chat.leave()
 
     snapshot = alice.get_message_by_id(alice.wait_for_msgs_changed_event().msg_id).get_snapshot()

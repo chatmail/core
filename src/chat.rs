@@ -1399,7 +1399,7 @@ impl ChatId {
     }
 
     /// Returns true if the chat is protected.
-    pub async fn is_protected(self, context: &Context) -> Result<ProtectionStatus> {
+    pub(crate) async fn is_protected(self, context: &Context) -> Result<ProtectionStatus> {
         let protection_status = context
             .sql
             .query_get_value("SELECT protected FROM chats WHERE id=?", (self,))
