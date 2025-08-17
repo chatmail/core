@@ -3957,28 +3957,6 @@ int             dc_chat_is_encrypted         (const dc_chat_t *chat);
 
 
 /**
- * Checks if the chat was protected, and then an incoming message broke this protection.
- *
- * This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
- * otherwise it will return false for all chats.
- *
- * 1:1 chats are automatically set as protected when a contact is verified.
- * When a message comes in that is not encrypted / signed correctly,
- * the chat is automatically set as unprotected again.
- * dc_chat_is_protection_broken() will return true until dc_accept_chat() is called.
- *
- * The UI should let the user confirm that this is OK with a message like
- * `Bob sent a message from another device. Tap to learn more` and then call dc_accept_chat().
- *
- * @deprecated 2025-07 chats protection cannot break any longer
- * @memberof dc_chat_t
- * @param chat The chat object.
- * @return 1=chat protection broken, 0=otherwise.
- */
-int             dc_chat_is_protection_broken (const dc_chat_t* chat);
-
-
-/**
  * Check if locations are sent to the chat
  * at the time the object was created using dc_get_chat().
  * To check if locations are sent to _any_ chat,
