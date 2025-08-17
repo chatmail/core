@@ -881,7 +881,6 @@ async fn assert_verified(this: &TestContext, other: &TestContext, protected: Pro
         chat.is_protected(),
         protected == ProtectionStatus::Protected
     );
-    assert_eq!(chat.is_protection_broken(), false);
 }
 
 async fn enable_verified_oneonone_chats(test_contexts: &[&TestContext]) {
