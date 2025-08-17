@@ -729,6 +729,7 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
          PRAGMA busy_timeout = 0; -- fail immediately
          PRAGMA soft_heap_limit = 8388608; -- 8 MiB limit, same as set in Android SQLiteDatabase.
          PRAGMA foreign_keys=on;
+         PRAGMA wal_autocheckpoint=N;
          ",
     )?;
 
