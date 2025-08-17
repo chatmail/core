@@ -1920,11 +1920,6 @@ impl Chat {
         Ok(is_encrypted)
     }
 
-    /// Deprecated 2025-07. Returns false.
-    pub fn is_protection_broken(&self) -> bool {
-        false
-    }
-
     /// Returns true if location streaming is enabled in the chat.
     pub fn is_sending_locations(&self) -> bool {
         self.is_sending_locations
