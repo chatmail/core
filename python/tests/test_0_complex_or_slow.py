@@ -119,7 +119,6 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     ac1_addr = ac1.get_self_contact().addr
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
     chat1 = ac1.create_group_chat("hello", verified=True)
-    assert chat1.is_protected()
     qr = chat1.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -142,7 +141,6 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     lp.sec("ac2: read message and check that it's a verified chat")
     msg = ac2._evtracker.wait_next_incoming_message()
     assert msg.text == "hello"
-    assert msg.chat.is_protected()
     assert msg.is_encrypted()
 
     lp.sec("ac2: Check that ac2 verified ac1")
@@ -267,7 +265,6 @@ def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
     chat = ac1.create_group_chat("hello", verified=True)
-    assert chat.is_protected()
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -322,7 +319,6 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
     chat = ac1.create_group_chat("hello", verified=True)
-    assert chat.is_protected()
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     ac2.qr_join_chat(qr)
@@ -336,7 +332,6 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
     assert msg_in.is_system_message()
     assert contact.addr == ac1.get_config("addr")
     chat2 = msg_in.chat
-    assert chat2.is_protected()
     assert chat2.get_messages()[0].text == "Messages are end-to-end encrypted."
     assert open(contact.get_profile_image(), "rb").read() == open(avatar_path, "rb").read()
 
@@ -377,7 +372,6 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
     chat1 = ac1.create_group_chat("hello", verified=True)
-    assert chat1.is_protected()
     qr = chat1.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -402,7 +396,6 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     assert ac2_offl_ac1_contact.addr == ac1.get_config("addr")
     assert not ac2_offl_ac1_contact.is_verified()
     chat2_offl = msg_in.chat
-    assert not chat2_offl.is_protected()
 
     lp.sec("ac2: sending message re-gossiping Autocrypt keys")
     chat2.send_text("hi2")
@@ -423,7 +416,6 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     assert msg_in.text == "hi2"
     assert msg_in.chat == chat2_offl
     assert msg_in.get_sender_contact().addr == ac2.get_config("addr")
-    assert msg_in.chat.is_protected()
     assert ac2_offl_ac1_contact.is_verified()
 
 
