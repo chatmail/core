@@ -21,7 +21,7 @@ use tokio::task;
 use tokio::time::{Duration, timeout};
 
 use crate::blob::BlobObject;
-use crate::chat::{ChatId, ChatIdBlocked, ProtectionStatus};
+use crate::chat::ChatId;
 use crate::color::str_to_color;
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype};
@@ -1647,29 +1647,6 @@ impl Contact {
             Ok(Some(None))
         } else {
             Ok(Some(Some(ContactId::new(verifier_id))))
-        }
-    }
-
-    /// Returns if the contact profile title should display a green checkmark.
-    ///
-    /// This generally should be consistent with the 1:1 chat with the contact
-    /// so 1:1 chat with the contact and the contact profile
-    /// either both display the green checkmark or both don't display a green checkmark.
-    ///
-    /// UI often knows beforehand if a chat exists and can also call
-    /// `chat.is_protected()` (if there is a chat)
-    /// or `contact.is_verified()` (if there is no chat) directly.
-    /// This is often easier and also skips some database calls.
-    pub async fn is_profile_verified(&self, context: &Context) -> Result<bool> {
-        let contact_id = self.id;
-
-        if let Some(ChatIdBlocked { id: chat_id, .. }) =
-            ChatIdBlocked::lookup_by_contact(context, contact_id).await?
-        {
-            Ok(chat_id.is_protected(context).await? == ProtectionStatus::Protected)
-        } else {
-            // 1:1 chat does not exist.
-            Ok(self.is_verified(context).await?)
         }
     }
 
