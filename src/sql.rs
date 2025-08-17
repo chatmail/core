@@ -298,7 +298,11 @@ impl Sql {
     /// The database must already be encrypted and the passphrase cannot be empty.
     /// It is impossible to turn encrypted database into unencrypted
     /// and vice versa this way, use import/export for this.
-    pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
+    pub(crate) async fn change_passphrase(
+        &self,
+        _context: &Context,
+        passphrase: String,
+    ) -> Result<()> {
         let mut lock = self.pool.write().await;
 
         let pool = lock.take().context("SQL connection pool is not open")?;
@@ -683,8 +687,12 @@ impl Sql {
         &self.config_cache
     }
 
-    /// Runs a checkpoint operation in TRUNCATE mode, so the WAL file is truncated to 0 bytes.
-    pub(crate) async fn wal_checkpoint(context: &Context) -> Result<()> {
+    /// Runs a WAL checkpoint operation.
+    ///
+    /// * `force_truncate` - Force TRUNCATE mode to truncate the WAL file to 0 bytes, otherwise only
+    ///   run PASSIVE mode if the WAL isn't too large. NB: Truncating blocks all db connections for
+    ///   some time.
+    pub(crate) async fn wal_checkpoint(context: &Context, force_truncate: bool) -> Result<()> {
         let t_start = Time::now();
         let lock = context.sql.pool.read().await;
         let Some(pool) = lock.as_ref() else {
@@ -695,13 +703,19 @@ impl Sql {
         // Do as much work as possible without blocking anybody.
         let query_only = true;
         let conn = pool.get(query_only).await?;
-        tokio::task::block_in_place(|| {
+        let pages_total = tokio::task::block_in_place(|| {
             // Execute some transaction causing the WAL file to be opened so that the
             // `wal_checkpoint()` can proceed, otherwise it fails when called the first time,
             // see https://sqlite.org/forum/forumpost/7512d76a05268fc8.
             conn.query_row("PRAGMA table_list", [], |_| Ok(()))?;
-            conn.query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |_| Ok(()))
+            conn.query_row("PRAGMA wal_checkpoint(PASSIVE)", [], |row| {
+                let pages_total: i64 = row.get(1)?;
+                Ok(pages_total)
+            })
         })?;
+        if !force_truncate && pages_total < 4096 {
+            return Ok(());
+        }
 
         // Kick out writers.
         const _: () = assert!(Sql::N_DB_CONNECTIONS > 1, "Deadlock possible");
@@ -772,6 +786,7 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
          PRAGMA busy_timeout = 0; -- fail immediately
          PRAGMA soft_heap_limit = 8388608; -- 8 MiB limit, same as set in Android SQLiteDatabase.
          PRAGMA foreign_keys=on;
+         PRAGMA wal_autocheckpoint=N;
          ",
     )?;
 
@@ -880,7 +895,8 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
     // bigger than 200M) and also make sure we truncate the WAL periodically. Auto-checkponting does
     // not normally truncate the WAL (unless the `journal_size_limit` pragma is set), see
     // https://www.sqlite.org/wal.html.
-    if let Err(err) = Sql::wal_checkpoint(context).await {
+    let force_truncate = true;
+    if let Err(err) = Sql::wal_checkpoint(context, force_truncate).await {
         warn!(context, "wal_checkpoint() failed: {err:#}.");
         debug_assert!(false);
     }
