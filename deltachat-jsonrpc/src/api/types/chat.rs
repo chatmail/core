@@ -71,8 +71,6 @@ pub struct FullChat {
     fresh_message_counter: usize,
     // is_group - please check over chat.type in frontend instead
     is_contact_request: bool,
-    /// Deprecated 2025-07. Chats protection cannot break any longer.
-    is_protection_broken: bool,
 
     is_device_chat: bool,
     self_in_group: bool,
@@ -147,7 +145,6 @@ impl FullChat {
             color,
             fresh_message_counter,
             is_contact_request: chat.is_contact_request(),
-            is_protection_broken: chat.is_protection_broken(),
             is_device_chat: chat.is_device_talk(),
             self_in_group: contact_ids.contains(&ContactId::SELF),
             is_muted: chat.is_muted(),
@@ -218,8 +215,6 @@ pub struct BasicChat {
     is_self_talk: bool,
     color: String,
     is_contact_request: bool,
-    /// Deprecated 2025-07. Chats protection cannot break any longer.
-    is_protection_broken: bool,
 
     is_device_chat: bool,
     is_muted: bool,
@@ -249,7 +244,6 @@ impl BasicChat {
             is_self_talk: chat.is_self_talk(),
             color,
             is_contact_request: chat.is_contact_request(),
-            is_protection_broken: chat.is_protection_broken(),
             is_device_chat: chat.is_device_talk(),
             is_muted: chat.is_muted(),
         })
