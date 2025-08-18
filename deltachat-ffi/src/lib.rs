@@ -22,7 +22,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration, ProtectionStatus};
+use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration};
 use deltachat::constants::DC_MSG_ID_LAST_SPECIAL;
 use deltachat::contact::{Contact, ContactId, Origin};
 use deltachat::context::{Context, ContextBuilder};
@@ -1721,7 +1721,7 @@ pub unsafe extern "C" fn dc_get_chat(context: *mut dc_context_t, chat_id: u32) -
 #[no_mangle]
 pub unsafe extern "C" fn dc_create_group_chat(
     context: *mut dc_context_t,
-    protect: libc::c_int,
+    _protect: libc::c_int,
     name: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || name.is_null() {
@@ -1729,22 +1729,12 @@ pub unsafe extern "C" fn dc_create_group_chat(
         return 0;
     }
     let ctx = &*context;
-    let Some(protect) = ProtectionStatus::from_i32(protect)
-        .context("Bad protect-value for dc_create_group_chat()")
-        .log_err(ctx)
-        .ok()
-    else {
-        return 0;
-    };
 
-    block_on(async move {
-        chat::create_group_chat(ctx, protect, &to_string_lossy(name))
-            .await
-            .context("Failed to create group chat")
-            .log_err(ctx)
-            .map(|id| id.to_u32())
-            .unwrap_or(0)
-    })
+    block_on(chat::create_group_chat(ctx, &to_string_lossy(name)))
+        .context("Failed to create group chat")
+        .log_err(ctx)
+        .map(|id| id.to_u32())
+        .unwrap_or(0)
 }
 
 #[no_mangle]

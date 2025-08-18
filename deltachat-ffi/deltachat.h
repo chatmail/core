@@ -1763,9 +1763,7 @@ dc_chat_t*      dc_get_chat                  (dc_context_t* context, uint32_t ch
  *
  * @memberof dc_context_t
  * @param context The context object.
- * @param protect If set to 1 the function creates group with protection initially enabled.
- *     Only verified members are allowed in these groups
- *     and end-to-end-encryption is always enabled.
+ * @param protect Deprecated 2025-08-31, ignored.
  * @param name The name of the group chat to create.
  *     The name may be changed later using dc_set_chat_name().
  *     To find out the name of a group later, see dc_chat_get_name()

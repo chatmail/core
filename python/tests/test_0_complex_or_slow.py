@@ -118,7 +118,7 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
     ac1_addr = ac1.get_self_contact().addr
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
-    chat1 = ac1.create_group_chat("hello", verified=True)
+    chat1 = ac1.create_group_chat("hello")
     qr = chat1.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -171,8 +171,10 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     lp.sec("ac2: Check that ac1 verified ac3 for ac2")
     ac2_ac1_contact = ac2.get_contacts()[0]
     assert ac2.get_self_contact().get_verifier(ac2_ac1_contact).id == dc.const.DC_CONTACT_ID_SELF
-    ac2_ac3_contact = ac2.get_contacts()[1]
-    assert ac2.get_self_contact().get_verifier(ac2_ac3_contact).addr == ac1_addr
+    for ac2_contact in chat2.get_contacts():
+        if ac2_contact == ac2_ac1_contact or ac2_contact.id == dc.const.DC_CONTACT_ID_SELF:
+            continue
+        assert ac2.get_self_contact().get_verifier(ac2_contact).addr == ac1_addr
 
     lp.sec("ac2: send message and let ac3 read it")
     chat2.send_text("hi")
@@ -264,7 +266,7 @@ def test_see_new_verified_member_after_going_online(acfactory, tmp_path, lp):
     ac1_offl.stop_io()
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
-    chat = ac1.create_group_chat("hello", verified=True)
+    chat = ac1.create_group_chat("hello")
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -318,7 +320,7 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
     ac1.set_avatar(avatar_path)
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
-    chat = ac1.create_group_chat("hello", verified=True)
+    chat = ac1.create_group_chat("hello")
     qr = chat.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     ac2.qr_join_chat(qr)
@@ -371,7 +373,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ac2_offl.stop_io()
 
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
-    chat1 = ac1.create_group_chat("hello", verified=True)
+    chat1 = ac1.create_group_chat("hello")
     qr = chat1.get_join_qr()
     lp.sec("ac2: start QR-code based join-group protocol")
     chat2 = ac2.qr_join_chat(qr)
@@ -401,15 +403,6 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     chat2.send_text("hi2")
 
     lp.sec("ac2_offl: receiving message")
-    ev = ac2_offl._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-    msg_in = ac2_offl.get_message_by_id(ev.data2)
-    assert msg_in.is_system_message()
-    assert msg_in.text == "Messages are end-to-end encrypted."
-
-    # We need to consume one event that has data2=0
-    ev = ac2_offl._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-    assert ev.data2 == 0
-
     ev = ac2_offl._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
     msg_in = ac2_offl.get_message_by_id(ev.data2)
     assert not msg_in.is_system_message()
