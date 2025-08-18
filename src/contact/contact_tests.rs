@@ -4,7 +4,7 @@ use super::*;
 use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
-use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
+use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, sync};
 
 #[test]
 fn test_contact_id_values() {
@@ -850,8 +850,7 @@ CCCB 5AA9 F6E1 141C 9431
     Ok(())
 }
 
-/// Tests that status is synchronized when sending encrypted BCC-self messages and not
-/// synchronized when the message is not encrypted.
+/// Tests that self-status is not synchronized from outgoing messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_synchronize_status() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -870,21 +869,12 @@ async fn test_synchronize_status() -> Result<()> {
         .await?;
     let chat = alice1.create_email_chat(bob).await;
 
-    // Alice sends a message to Bob from the first device.
+    // Alice sends an unencrypted message to Bob from the first device.
     send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
-    // Message is not encrypted.
-    let message = sent_msg.load_from_db().await;
-    assert!(!message.get_showpadlock());
-
     // Alice's second devices receives a copy of outgoing message.
     alice2.recv_msg(&sent_msg).await;
-
-    // Bob receives message.
-    bob.recv_msg(&sent_msg).await;
-
-    // Message was not encrypted, so status is not copied.
     assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
 
     // Alice sends encrypted message.
@@ -892,17 +882,9 @@ async fn test_synchronize_status() -> Result<()> {
     send_text_msg(alice1, chat.id, "Hello".to_string()).await?;
     let sent_msg = alice1.pop_sent_msg().await;
 
-    // Second message is encrypted.
-    let message = sent_msg.load_from_db().await;
-    assert!(message.get_showpadlock());
-
     // Alice's second devices receives a copy of second outgoing message.
     alice2.recv_msg(&sent_msg).await;
-
-    assert_eq!(
-        alice2.get_config(Config::Selfstatus).await?,
-        Some("New status".to_string())
-    );
+    assert_eq!(alice2.get_config(Config::Selfstatus).await?, default_status);
 
     Ok(())
 }
@@ -915,9 +897,9 @@ async fn test_selfavatar_changed_event() -> Result<()> {
     // Alice has two devices.
     let alice1 = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
-
-    // Bob has one device.
-    let bob = &tcm.bob().await;
+    for a in [alice1, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
 
     assert_eq!(alice1.get_config(Config::Selfavatar).await?, None);
 
@@ -933,17 +915,7 @@ async fn test_selfavatar_changed_event() -> Result<()> {
         .get_matching(|e| matches!(e, EventType::SelfavatarChanged))
         .await;
 
-    // Alice sends a message.
-    let alice1_chat_id = alice1.create_chat(bob).await.id;
-    send_text_msg(alice1, alice1_chat_id, "Hello".to_string()).await?;
-    let sent_msg = alice1.pop_sent_msg().await;
-
-    // The message is encrypted.
-    let message = sent_msg.load_from_db().await;
-    assert!(message.get_showpadlock());
-
-    // Alice's second device receives a copy of the outgoing message.
-    alice2.recv_msg(&sent_msg).await;
+    sync(alice1, alice2).await;
 
     // Alice's second device applies the selfavatar.
     assert!(alice2.get_config(Config::Selfavatar).await?.is_some());

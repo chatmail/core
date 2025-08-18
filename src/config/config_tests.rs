@@ -278,7 +278,6 @@ async fn test_sync() -> Result<()> {
     Ok(())
 }
 
-/// Sync message mustn't be sent if self-{status,avatar} is changed by a self-sent message.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_no_sync_on_self_sent_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -288,7 +287,7 @@ async fn test_no_sync_on_self_sent_msg() -> Result<()> {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
 
-    let status = "Synced via usual message";
+    let status = "Sent via usual message";
     alice0.set_config(Config::Selfstatus, Some(status)).await?;
     alice0.send_sync_msg().await?;
     alice0.pop_sent_sync_msg().await;
@@ -297,7 +296,7 @@ async fn test_no_sync_on_self_sent_msg() -> Result<()> {
     tcm.send_recv(alice0, alice1, "hi Alice!").await;
     assert_eq!(
         alice1.get_config(Config::Selfstatus).await?,
-        Some(status.to_string())
+        Some(status1.to_string())
     );
     sync(alice1, alice0).await;
     assert_eq!(
@@ -328,7 +327,7 @@ async fn test_no_sync_on_self_sent_msg() -> Result<()> {
         alice1
             .get_config(Config::Selfavatar)
             .await?
-            .filter(|path| path.ends_with(".png"))
+            .filter(|path| path.ends_with(".jpg"))
             .is_some()
     );
     sync(alice1, alice0).await;
