@@ -1216,7 +1216,7 @@ def test_qr_email_capitalization(acfactory, lp):
     ac1.create_contact(ac2_addr_uppercase)
 
     lp.sec("ac3 creates a verified group with a QR code")
-    chat = ac3.create_group_chat("hello", verified=True)
+    chat = ac3.create_group_chat("hello")
     qr = chat.get_join_qr()
 
     lp.sec("ac1 joins a verified group via a QR code")

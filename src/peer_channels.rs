@@ -560,7 +560,7 @@ mod tests {
     use super::*;
     use crate::{
         EventType,
-        chat::{self, ChatId, ProtectionStatus, add_contact_to_chat, resend_msgs, send_msg},
+        chat::{self, ChatId, add_contact_to_chat, resend_msgs, send_msg},
         message::{Message, Viewtype},
         test_utils::{TestContext, TestContextManager},
     };
@@ -948,9 +948,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
-        let group = chat::create_group_chat(alice, ProtectionStatus::Unprotected, "group chat")
-            .await
-            .unwrap();
+        let group = chat::create_group_chat(alice, "group chat").await.unwrap();
 
         // Alice sends webxdc to bob
         let mut instance = Message::new(Viewtype::File);
