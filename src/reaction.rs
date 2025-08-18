@@ -991,42 +991,6 @@ Content-Disposition: reaction\n\
         Ok(())
     }
 
-    /// Regression test for reaction resetting self-status.
-    ///
-    /// Reactions do not contain the status,
-    /// but should not result in self-status being reset on other devices.
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_reaction_status_multidevice() -> Result<()> {
-        let mut tcm = TestContextManager::new();
-        let alice1 = tcm.alice().await;
-        let alice2 = tcm.alice().await;
-
-        alice1
-            .set_config(Config::Selfstatus, Some("New status"))
-            .await?;
-
-        let alice2_msg = tcm.send_recv(&alice1, &alice2, "Hi!").await;
-        assert_eq!(
-            alice2.get_config(Config::Selfstatus).await?.as_deref(),
-            Some("New status")
-        );
-
-        // Alice reacts to own message from second device,
-        // first device receives rection.
-        {
-            send_reaction(&alice2, alice2_msg.id, "👍").await?;
-            let msg = alice2.pop_sent_msg().await;
-            alice1.recv_msg_hidden(&msg).await;
-        }
-
-        // Check that the status is still the same.
-        assert_eq!(
-            alice1.get_config(Config::Selfstatus).await?.as_deref(),
-            Some("New status")
-        );
-        Ok(())
-    }
-
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_send_reaction_multidevice() -> Result<()> {
         let mut tcm = TestContextManager::new();
