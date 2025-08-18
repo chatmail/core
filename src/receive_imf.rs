@@ -886,7 +886,7 @@ pub(crate) async fn receive_imf_inner(
     }
 
     if let Some(avatar_action) = &mime_parser.user_avatar {
-        if from_id != ContactId::UNDEFINED
+        if !matches!(from_id, ContactId::UNDEFINED | ContactId::SELF)
             && context
                 .update_contacts_timestamp(
                     from_id,
@@ -895,14 +895,7 @@ pub(crate) async fn receive_imf_inner(
                 )
                 .await?
         {
-            if let Err(err) = contact::set_profile_image(
-                context,
-                from_id,
-                avatar_action,
-                mime_parser.was_encrypted(),
-            )
-            .await
-            {
+            if let Err(err) = contact::set_profile_image(context, from_id, avatar_action).await {
                 warn!(context, "receive_imf cannot update profile image: {err:#}.");
             };
         }
@@ -914,7 +907,7 @@ pub(crate) async fn receive_imf_inner(
         // Ignore footers from mailinglists as they are often created or modified by the mailinglist
         // software.
         if !mime_parser.is_mailinglist_message()
-            && from_id != ContactId::UNDEFINED
+            && !matches!(from_id, ContactId::UNDEFINED | ContactId::SELF)
             && context
                 .update_contacts_timestamp(
                     from_id,
@@ -923,15 +916,7 @@ pub(crate) async fn receive_imf_inner(
                 )
                 .await?
         {
-            if let Err(err) = contact::set_status(
-                context,
-                from_id,
-                footer.clone(),
-                mime_parser.was_encrypted(),
-                mime_parser.has_chat_version(),
-            )
-            .await
-            {
+            if let Err(err) = contact::set_status(context, from_id, footer.clone()).await {
                 warn!(context, "Cannot update contact status: {err:#}.");
             }
         }

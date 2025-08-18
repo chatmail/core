@@ -383,11 +383,7 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         None => None,
     };
     if let Some(path) = path {
-        // Currently this value doesn't matter as we don't import the contact of self.
-        let was_encrypted = false;
-        if let Err(e) =
-            set_profile_image(context, id, &AvatarAction::Change(path), was_encrypted).await
-        {
+        if let Err(e) = set_profile_image(context, id, &AvatarAction::Change(path)).await {
             warn!(
                 context,
                 "import_vcard_contact: Could not set avatar for {}: {e:#}.", contact.addr
@@ -395,7 +391,7 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         }
     }
     if let Some(biography) = &contact.biography {
-        if let Err(e) = set_status(context, id, biography.to_owned(), false, false).await {
+        if let Err(e) = set_status(context, id, biography.to_owned()).await {
             warn!(
                 context,
                 "import_vcard_contact: Could not set biography for {}: {e:#}.", contact.addr
@@ -1818,25 +1814,19 @@ WHERE type=? AND id IN (
 /// The given profile image is expected to be already in the blob directory
 /// as profile images can be set only by receiving messages, this should be always the case, however.
 ///
-/// For contact SELF, the image is not saved in the contact-database but as Config::Selfavatar;
-/// this typically happens if we see message with our own profile image.
+/// For contact SELF, the image is not saved in the contact-database but as Config::Selfavatar.
 pub(crate) async fn set_profile_image(
     context: &Context,
     contact_id: ContactId,
     profile_image: &AvatarAction,
-    was_encrypted: bool,
 ) -> Result<()> {
     let mut contact = Contact::get_by_id(context, contact_id).await?;
     let changed = match profile_image {
         AvatarAction::Change(profile_image) => {
             if contact_id == ContactId::SELF {
-                if was_encrypted {
-                    context
-                        .set_config_ex(Nosync, Config::Selfavatar, Some(profile_image))
-                        .await?;
-                } else {
-                    info!(context, "Do not use unencrypted selfavatar.");
-                }
+                context
+                    .set_config_ex(Nosync, Config::Selfavatar, Some(profile_image))
+                    .await?;
             } else {
                 contact.param.set(Param::ProfileImage, profile_image);
             }
@@ -1844,13 +1834,9 @@ pub(crate) async fn set_profile_image(
         }
         AvatarAction::Delete => {
             if contact_id == ContactId::SELF {
-                if was_encrypted {
-                    context
-                        .set_config_ex(Nosync, Config::Selfavatar, None)
-                        .await?;
-                } else {
-                    info!(context, "Do not use unencrypted selfavatar deletion.");
-                }
+                context
+                    .set_config_ex(Nosync, Config::Selfavatar, None)
+                    .await?;
             } else {
                 contact.param.remove(Param::ProfileImage);
             }
@@ -1867,22 +1853,16 @@ pub(crate) async fn set_profile_image(
 
 /// Sets contact status.
 ///
-/// For contact SELF, the status is not saved in the contact table, but as Config::Selfstatus.  This
-/// is only done if message is sent from Delta Chat and it is encrypted, to synchronize signature
-/// between Delta Chat devices.
+/// For contact SELF, the status is not saved in the contact table, but as Config::Selfstatus.
 pub(crate) async fn set_status(
     context: &Context,
     contact_id: ContactId,
     status: String,
-    encrypted: bool,
-    has_chat_version: bool,
 ) -> Result<()> {
     if contact_id == ContactId::SELF {
-        if encrypted && has_chat_version {
-            context
-                .set_config_ex(Nosync, Config::Selfstatus, Some(&status))
-                .await?;
-        }
+        context
+            .set_config_ex(Nosync, Config::Selfstatus, Some(&status))
+            .await?;
     } else {
         let mut contact = Contact::get_by_id(context, contact_id).await?;
 
