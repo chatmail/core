@@ -177,7 +177,7 @@ async fn test_forward_webxdc_instance() -> Result<()> {
             .await?,
         r#"[{"payload":42,"info":"foo","document":"doc","summary":"bar","serial":1,"max_serial":1}]"#
     );
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 2); // instance and info
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 3); // "Messages are end-to-end encrypted", instance and info
     let info = Message::load_from_db(&t, instance.id)
         .await?
         .get_webxdc_info(&t)
@@ -194,7 +194,7 @@ async fn test_forward_webxdc_instance() -> Result<()> {
             .await?,
         "[]"
     );
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 3); // two instances, only one info
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, 4); // "Messages are end-to-end encrypted", two instances, only one info
     let info = Message::load_from_db(&t, instance2.id)
         .await?
         .get_webxdc_info(&t)
@@ -215,14 +215,14 @@ async fn test_resend_webxdc_instance_and_info() -> Result<()> {
     alice.set_config_bool(Config::BccSelf, false).await?;
     let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
     let alice_instance = send_webxdc_instance(&alice, alice_grp).await?;
-    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 1);
+    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 2);
     alice
         .send_webxdc_status_update(
             alice_instance.id,
             r#"{"payload":7,"info": "i","summary":"s"}"#,
         )
         .await?;
-    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 2);
+    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 3);
     assert!(alice.get_last_msg_in(alice_grp).await.is_info());
 
     // Alice adds Bob and resends already used webxdc
@@ -232,7 +232,7 @@ async fn test_resend_webxdc_instance_and_info() -> Result<()> {
         alice.add_or_lookup_contact_id(&bob).await,
     )
     .await?;
-    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 3);
+    assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 4);
     resend_msgs(&alice, &[alice_instance.id]).await?;
     let sent1 = alice.pop_sent_msg().await;
     alice.flush_status_updates().await?;
@@ -1606,12 +1606,12 @@ async fn test_webxdc_info_msg_no_cleanup_on_interrupted_series() -> Result<()> {
 
     t.send_webxdc_status_update(instance.id, r#"{"info":"i1", "payload":1}"#)
         .await?;
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 2);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 2);
     send_text_msg(&t, chat_id, "msg between info".to_string()).await?;
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 3);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 3);
     t.send_webxdc_status_update(instance.id, r#"{"info":"i2", "payload":2}"#)
         .await?;
-    assert_eq!(chat_id.get_msg_cnt(&t).await?, 4);
+    assert_eq!(chat_id.get_msg_cnt(&t).await?, E2EE_INFO_MSGS + 4);
 
     Ok(())
 }
@@ -2195,6 +2195,5 @@ async fn test_self_addr_consistency() -> Result<()> {
     let sent = alice.send_msg(alice_chat, &mut instance).await;
     let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
     assert_eq!(db_msg.get_webxdc_self_addr(alice).await?, self_addr);
-    assert_eq!(alice_chat.get_msg_cnt(alice).await?, 1);
     Ok(())
 }

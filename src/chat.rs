@@ -3731,11 +3731,19 @@ pub async fn create_group_ex(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    if encryption == Some(ProtectionStatus::Protected) {
-        let protect = ProtectionStatus::Protected;
-        chat_id
-            .set_protection_for_timestamp_sort(context, protect, timestamp, None)
-            .await?;
+    match encryption {
+        Some(ProtectionStatus::Protected) => {
+            let protect = ProtectionStatus::Protected;
+            chat_id
+                .set_protection_for_timestamp_sort(context, protect, timestamp, None)
+                .await?;
+        }
+        Some(ProtectionStatus::Unprotected) => {
+            // Add "Messages are end-to-end encrypted." message
+            // even to unprotected chats.
+            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
+        }
+        None => {}
     }
 
     if !context.get_config_bool(Config::Bot).await?
