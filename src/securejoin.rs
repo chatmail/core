@@ -4,8 +4,7 @@ use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, get_chat_id_by_grpid};
-use crate::chatlist_events;
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid};
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype, NON_ALPHANUMERIC_WITHOUT_DOT};
 use crate::contact::mark_contact_id_as_verified;
@@ -414,13 +413,6 @@ pub(crate) async fn handle_securejoin_handshake(
             context.emit_event(EventType::ContactsChanged(Some(contact_id)));
             if let Some(group_chat_id) = group_chat_id {
                 // Join group.
-                secure_connection_established(
-                    context,
-                    contact_id,
-                    group_chat_id,
-                    mime_message.timestamp_sent,
-                )
-                .await?;
                 chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
                     .await?;
                 let is_group = true;
@@ -431,13 +423,6 @@ pub(crate) async fn handle_securejoin_handshake(
             } else {
                 let chat_id = info_chat_id(context, contact_id).await?;
                 // Setup verified contact.
-                secure_connection_established(
-                    context,
-                    contact_id,
-                    chat_id,
-                    mime_message.timestamp_sent,
-                )
-                .await?;
                 send_alice_handshake_msg(context, contact_id, "vc-contact-confirm")
                     .await
                     .context("failed sending vc-contact-confirm message")?;
@@ -560,8 +545,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
 
-    ChatId::set_protection_for_contact(context, contact_id, mime_message.timestamp_sent).await?;
-
     if step == "vg-member-added" || step == "vc-contact-confirm" {
         let is_group = mime_message
             .get_header(HeaderDef::ChatGroupMemberAdded)
@@ -590,28 +573,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
     } else {
         Ok(HandshakeMessage::Ignore)
     }
-}
-
-async fn secure_connection_established(
-    context: &Context,
-    contact_id: ContactId,
-    chat_id: ChatId,
-    timestamp: i64,
-) -> Result<()> {
-    let private_chat_id = ChatIdBlocked::get_for_contact(context, contact_id, Blocked::Yes)
-        .await?
-        .id;
-    private_chat_id
-        .set_protection(
-            context,
-            ProtectionStatus::Protected,
-            timestamp,
-            Some(contact_id),
-        )
-        .await?;
-    context.emit_event(EventType::ChatModified(chat_id));
-    chatlist_events::emit_chatlist_item_changed(context, chat_id);
-    Ok(())
 }
 
 /* ******************************************************************************

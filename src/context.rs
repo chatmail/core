@@ -1210,9 +1210,6 @@ impl Context {
         mark_contact_id_as_verified(self, contact_id, Some(ContactId::SELF)).await?;
 
         let chat_id = ChatId::create_for_contact(self, contact_id).await?;
-        chat_id
-            .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
-            .await?;
 
         let mut msg = Message::new_text(self.get_self_report().await?);
 
