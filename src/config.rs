@@ -759,6 +759,14 @@ impl Context {
         let better_value;
 
         match key {
+            Config::Selfstatus => {
+                // Ensure that future versions send the self-status that after upgrade. Currently we
+                // send it in every appropriate message.
+                self.sql
+                    .execute("UPDATE contacts SET selfavatar_sent=0", ())
+                    .await?;
+                self.sql.set_raw_config(key.as_ref(), value).await?;
+            }
             Config::Selfavatar => {
                 self.sql
                     .execute("UPDATE contacts SET selfavatar_sent=0;", ())
