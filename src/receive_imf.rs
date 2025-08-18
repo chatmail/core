@@ -1693,12 +1693,6 @@ async fn add_parts(
             let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
             for part in &mut mime_parser.parts {
                 part.param.set(Param::OverrideSenderDisplayname, name);
-
-                if chat.is_protected() {
-                    // In protected chat, also mark the message with an error.
-                    let s = stock_str::unknown_sender_for_chat(context).await;
-                    part.error = Some(s);
-                }
             }
         }
     }
