@@ -6,9 +6,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, Result};
-use deltachat::chat::{
-    self, Chat, ChatId, ChatItem, ChatVisibility, MuteDuration, ProtectionStatus,
-};
+use deltachat::chat::{self, Chat, ChatId, ChatItem, ChatVisibility, MuteDuration};
 use deltachat::chatlist::*;
 use deltachat::constants::*;
 use deltachat::contact::*;
@@ -347,7 +345,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  createchat <contact-id>\n\
                  creategroup <name>\n\
                  createbroadcast <name>\n\
-                 createprotected <name>\n\
                  addmember <contact-id>\n\
                  removemember <contact-id>\n\
                  groupname <name>\n\
@@ -740,8 +737,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         }
         "creategroup" => {
             ensure!(!arg1.is_empty(), "Argument <name> missing.");
-            let chat_id =
-                chat::create_group_chat(&context, ProtectionStatus::Unprotected, arg1).await?;
+            let chat_id = chat::create_group_chat(&context, arg1).await?;
 
             println!("Group#{chat_id} created successfully.");
         }
@@ -750,13 +746,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let chat_id = chat::create_broadcast(&context, arg1.to_string()).await?;
 
             println!("Broadcast#{chat_id} created successfully.");
-        }
-        "createprotected" => {
-            ensure!(!arg1.is_empty(), "Argument <name> missing.");
-            let chat_id =
-                chat::create_group_chat(&context, ProtectionStatus::Protected, arg1).await?;
-
-            println!("Group#{chat_id} created and protected successfully.");
         }
         "addmember" => {
             ensure!(sel_chat.is_some(), "No chat selected");

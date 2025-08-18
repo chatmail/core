@@ -11,13 +11,10 @@ use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
     TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
 };
-use crate::tools::SystemTime;
-use std::time::Duration;
 
 #[derive(PartialEq)]
 enum SetupContactCase {
     Normal,
-    CheckProtectionTimestamp,
     WrongAliceGossip,
     AliceIsBot,
     AliceHasName,
@@ -26,11 +23,6 @@ enum SetupContactCase {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact() {
     test_setup_contact_ex(SetupContactCase::Normal).await
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_setup_contact_protection_timestamp() {
-    test_setup_contact_ex(SetupContactCase::CheckProtectionTimestamp).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -164,10 +156,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     assert!(!sent.payload.contains("Bob Examplenet"));
     let mut msg = alice.parse_msg(&sent).await;
-    let vc_request_with_auth_ts_sent = msg
-        .get_header(HeaderDef::Date)
-        .and_then(|value| mailparse::dateparse(value).ok())
-        .unwrap();
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
@@ -214,10 +202,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), false);
     assert_eq!(contact_bob.get_authname(), "");
 
-    if case == SetupContactCase::CheckProtectionTimestamp {
-        SystemTime::shift(Duration::from_secs(3600));
-    }
-
     tcm.section("Step 5+6: Alice receives vc-request-with-auth, sends vc-contact-confirm");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice).await.unwrap(), true);
@@ -247,9 +231,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         assert!(msg.is_info());
         let expected_text = messages_e2e_encrypted(&alice).await;
         assert_eq!(msg.get_text(), expected_text);
-        if case == SetupContactCase::CheckProtectionTimestamp {
-            assert_eq!(msg.timestamp_sort, vc_request_with_auth_ts_sent + 1);
-        }
     }
 
     // Make sure Alice hasn't yet sent their name to Bob.
@@ -292,10 +273,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     let mut i = 0..msg_cnt;
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
-    assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
+    assert_eq!(msg.get_text(), messages_e2e_encrypted(&bob).await);
     let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
     assert!(msg.is_info());
-    assert_eq!(msg.get_text(), messages_e2e_encrypted(&bob).await);
+    assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -448,8 +429,7 @@ async fn test_secure_join() -> Result<()> {
     assert_eq!(Chatlist::try_load(&alice, 0, None, None).await?.len(), 0);
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 0);
 
-    let alice_chatid =
-        chat::create_group_chat(&alice, ProtectionStatus::Protected, "the chat").await?;
+    let alice_chatid = chat::create_group_chat(&alice, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
     let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
@@ -583,7 +563,7 @@ async fn test_secure_join() -> Result<()> {
             Blocked::Yes,
             "Alice's 1:1 chat with Bob is not hidden"
         );
-        // There should be 3 messages in the chat:
+        // There should be 2 messages in the chat:
         // - The ChatProtectionEnabled message
         // - You added member bob@example.net
         let msg = get_chat_msg(&alice, alice_chatid, 0, 2).await;
@@ -619,7 +599,6 @@ async fn test_secure_join() -> Result<()> {
     }
 
     let bob_chat = Chat::load_from_db(&bob.ctx, bob_chatid).await?;
-    assert!(bob_chat.is_protected());
     assert!(bob_chat.typ == Chattype::Group);
 
     // On this "happy path", Alice and Bob get only a group-chat where all information are added to.
@@ -667,7 +646,7 @@ async fn test_unknown_sender() -> Result<()> {
     tcm.execute_securejoin(&alice, &bob).await;
 
     let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group with Bob", &[&bob])
+        .create_group_with_members("Group with Bob", &[&bob])
         .await;
 
     let sent = alice.send_text(alice_chat_id, "Hi!").await;
@@ -733,10 +712,8 @@ async fn test_parallel_securejoin() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat1_id =
-        chat::create_group_chat(alice, ProtectionStatus::Protected, "First chat").await?;
-    let alice_chat2_id =
-        chat::create_group_chat(alice, ProtectionStatus::Protected, "Second chat").await?;
+    let alice_chat1_id = chat::create_group_chat(alice, "First chat").await?;
+    let alice_chat2_id = chat::create_group_chat(alice, "Second chat").await?;
 
     let qr1 = get_securejoin_qr(alice, Some(alice_chat1_id)).await?;
     let qr2 = get_securejoin_qr(alice, Some(alice_chat2_id)).await?;

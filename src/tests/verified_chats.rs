@@ -2,9 +2,7 @@ use anyhow::Result;
 use pretty_assertions::assert_eq;
 
 use crate::chat::resend_msgs;
-use crate::chat::{
-    self, Chat, ProtectionStatus, add_contact_to_chat, remove_contact_from_chat, send_msg,
-};
+use crate::chat::{self, Chat, add_contact_to_chat, remove_contact_from_chat, send_msg};
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
@@ -38,8 +36,8 @@ async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: 
 
     tcm.execute_securejoin(&alice, &bob).await;
 
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
-    assert_verified(&bob, &alice, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
+    assert_verified(&bob, &alice).await;
 
     if by_classical_email {
         tcm.section("Bob uses a classical MUA to send a message to Alice");
@@ -59,7 +57,7 @@ async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: 
         .unwrap();
         let contact = alice.add_or_lookup_contact(&bob).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), true);
-        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+        assert_verified(&alice, &bob).await;
     } else {
         tcm.section("Bob sets up another Delta Chat device");
         let bob2 = tcm.unconfigured().await;
@@ -71,7 +69,7 @@ async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: 
             .await;
         let contact = alice.add_or_lookup_contact(&bob2).await;
         assert_eq!(contact.is_verified(&alice).await.unwrap(), false);
-        assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+        assert_verified(&alice, &bob).await;
     }
 
     tcm.section("Bob sends another message from DC");
@@ -79,7 +77,7 @@ async fn check_verified_oneonone_chat_protection_not_broken(by_classical_email: 
     tcm.send_recv(&bob, &alice, "Using DC again").await;
 
     // Bob's chat is marked as verified again
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -91,21 +89,17 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
 
     tcm.execute_securejoin(&alice, &bob).await;
     tcm.execute_securejoin(&bob, &fiona).await;
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
-    assert_verified(&bob, &alice, ProtectionStatus::Protected).await;
-    assert_verified(&bob, &fiona, ProtectionStatus::Protected).await;
-    assert_verified(&fiona, &bob, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
+    assert_verified(&bob, &alice).await;
+    assert_verified(&bob, &fiona).await;
+    assert_verified(&fiona, &bob).await;
 
     let group_id = bob
-        .create_group_with_members(
-            ProtectionStatus::Protected,
-            "Group with everyone",
-            &[&alice, &fiona],
-        )
+        .create_group_with_members("Group with everyone", &[&alice, &fiona])
         .await;
     assert_eq!(
         get_chat_msg(&bob, group_id, 0, 1).await.get_info_type(),
-        SystemMessage::ChatProtectionEnabled
+        SystemMessage::ChatE2ee
     );
 
     {
@@ -117,33 +111,13 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
             get_chat_msg(&fiona, msg.chat_id, 0, 2)
                 .await
                 .get_info_type(),
-            SystemMessage::ChatProtectionEnabled
+            SystemMessage::ChatE2ee
         );
     }
 
     // Alice and Fiona should now be verified because of gossip
     let alice_fiona_contact = alice.add_or_lookup_contact(&fiona).await;
     assert!(alice_fiona_contact.is_verified(&alice).await.unwrap(),);
-
-    // Alice should have a hidden protected chat with Fiona
-    {
-        let chat = alice.get_chat(&fiona).await;
-        assert!(chat.is_protected());
-
-        let msg = get_chat_msg(&alice, chat.id, 0, 1).await;
-        let expected_text = stock_str::messages_e2e_encrypted(&alice).await;
-        assert_eq!(msg.text, expected_text);
-    }
-
-    // Fiona should have a hidden protected chat with Alice
-    {
-        let chat = fiona.get_chat(&alice).await;
-        assert!(chat.is_protected());
-
-        let msg0 = get_chat_msg(&fiona, chat.id, 0, 1).await;
-        let expected_text = stock_str::messages_e2e_encrypted(&fiona).await;
-        assert_eq!(msg0.text, expected_text);
-    }
 
     tcm.section("Fiona reinstalls DC");
     drop(fiona);
@@ -180,7 +154,7 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     let bob = &tcm.bob().await;
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
-    assert!(chat.is_protected());
+    assert!(chat.can_send(bob).await?);
     bob.sql
         .execute(
             "DELETE FROM public_keys WHERE fingerprint=?",
@@ -191,9 +165,13 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
                 .hex(),),
         )
         .await?;
+    let chat = Chat::load_from_db(bob, chat_id).await?;
+    assert!(!chat.can_send(bob).await?);
+
     let chat_id = tcm.execute_securejoin(bob, alice).await;
     let chat = Chat::load_from_db(bob, chat_id).await?;
-    assert!(chat.is_protected());
+    assert!(chat.can_send(bob).await?);
+
     Ok(())
 }
 
@@ -261,7 +239,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
     let enabled = stock_str::messages_e2e_encrypted(&alice).await;
     assert_eq!(msg0.text, enabled);
-    assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatProtectionEnabled);
+    assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatE2ee);
 
     let email_chat = alice.get_email_chat(&bob).await;
     assert!(!email_chat.is_encrypted(&alice).await?);
@@ -369,7 +347,7 @@ async fn test_mdn_doesnt_disable_verification() -> Result<()> {
     let body = rendered_msg.message;
     receive_imf(&alice, body.as_bytes(), false).await.unwrap();
 
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
 
     Ok(())
 }
@@ -384,7 +362,7 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     mark_as_verified(&bob, &alice).await;
 
     tcm.send_recv_accept(&bob, &alice, "Heyho from DC").await;
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
 
     let sent = receive_imf(
         &alice,
@@ -497,7 +475,7 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     mark_as_verified(bob, alice).await;
 
     tcm.send_recv(bob, alice, "Now i have it!").await;
-    assert_verified(alice, bob, ProtectionStatus::Protected).await;
+    assert_verified(alice, bob).await;
 
     let msg = alice.recv_msg(&sent_old).await;
     assert!(msg.get_showpadlock());
@@ -528,7 +506,7 @@ async fn test_verify_then_verify_again() -> Result<()> {
     mark_as_verified(&bob, &alice).await;
 
     alice.create_chat(&bob).await;
-    assert_verified(&alice, &bob, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob).await;
 
     tcm.section("Bob reinstalls DC");
     drop(bob);
@@ -537,42 +515,39 @@ async fn test_verify_then_verify_again() -> Result<()> {
     e2ee::ensure_secret_key_exists(&bob_new).await?;
 
     tcm.execute_securejoin(&bob_new, &alice).await;
-    assert_verified(&alice, &bob_new, ProtectionStatus::Protected).await;
+    assert_verified(&alice, &bob_new).await;
 
     Ok(())
 }
 
-/// Tests that on the second device of a protected group creator the first message is
-/// `SystemMessage::ChatProtectionEnabled` and the second one is the message populating the group.
+/// Tests that on the second device of a group creator the first message is
+/// `SystemMessage::ChatE2ee` and the second one is the message populating the group.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_protected_grp_multidev() -> Result<()> {
+async fn test_create_grp_multidev() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice1 = &tcm.alice().await;
 
-    let group_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[])
-        .await;
+    let group_id = alice.create_group_with_members("Group", &[]).await;
     assert_eq!(
         get_chat_msg(alice, group_id, 0, 1).await.get_info_type(),
-        SystemMessage::ChatProtectionEnabled
+        SystemMessage::ChatE2ee
     );
 
     let sent = alice.send_text(group_id, "Hey").await;
     // This time shift is necessary to reproduce the bug when the original message is sorted over
-    // the "protection enabled" message so that these messages have different timestamps.
+    // the "Messages are end-to-end encrypted" message so that these messages have different timestamps.
     SystemTime::shift(std::time::Duration::from_secs(3600));
     let msg = alice1.recv_msg(&sent).await;
     let group1 = Chat::load_from_db(alice1, msg.chat_id).await?;
     assert_eq!(group1.get_type(), Chattype::Group);
-    assert!(group1.is_protected());
     assert_eq!(
         chat::get_chat_contacts(alice1, group1.id).await?,
         vec![ContactId::SELF]
     );
     assert_eq!(
         get_chat_msg(alice1, group1.id, 0, 2).await.get_info_type(),
-        SystemMessage::ChatProtectionEnabled
+        SystemMessage::ChatE2ee
     );
     assert_eq!(get_chat_msg(alice1, group1.id, 1, 2).await.id, msg.id);
 
@@ -592,10 +567,8 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     tcm.execute_securejoin(bob, alice).await;
     tcm.execute_securejoin(fiona, alice).await;
 
-    // Alice creates protected group with Bob.
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
-        .await;
+    // Alice creates a group with Bob.
+    let alice_chat_id = alice.create_group_with_members("Group", &[bob]).await;
     let alice_sent_group_promotion = alice.send_text(alice_chat_id, "I created a group").await;
     let msg = bob.recv_msg(&alice_sent_group_promotion).await;
     let bob_chat_id = msg.chat_id;
@@ -621,8 +594,6 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     // Fiona receives late "Member added" message
     // and the chat becomes protected.
     fiona.recv_msg(&alice_sent_member_added).await;
-    let fiona_chat = Chat::load_from_db(fiona, fiona_received_message.chat_id).await?;
-    assert_eq!(fiona_chat.is_protected(), true);
 
     Ok(())
 }
@@ -665,9 +636,7 @@ async fn test_verified_lost_member_added() -> Result<()> {
     tcm.execute_securejoin(bob, alice).await;
     tcm.execute_securejoin(fiona, alice).await;
 
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
-        .await;
+    let alice_chat_id = alice.create_group_with_members("Group", &[bob]).await;
     let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
     let bob_chat_id = bob.recv_msg(&alice_sent).await.chat_id;
     assert_eq!(chat::get_chat_contacts(bob, bob_chat_id).await?.len(), 2);
@@ -728,9 +697,7 @@ async fn test_verified_chat_editor_reordering() -> Result<()> {
     tcm.execute_securejoin(alice, bob).await;
 
     tcm.section("Alice creates a protected group with Bob");
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
-        .await;
+    let alice_chat_id = alice.create_group_with_members("Group", &[bob]).await;
     let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
     let bob_chat_id = bob.recv_msg(&alice_sent).await.chat_id;
 
@@ -811,7 +778,7 @@ async fn test_no_reverification() -> Result<()> {
 
     tcm.section("Alice creates a protected group with Bob, Charlie and Fiona");
     let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob, charlie, fiona])
+        .create_group_with_members("Group", &[bob, charlie, fiona])
         .await;
     let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
     let bob_rcvd_msg = bob.recv_msg(&alice_sent).await;
@@ -899,13 +866,7 @@ async fn test_no_direct_verification_via_bcc() -> Result<()> {
 
 // ============== Helper Functions ==============
 
-async fn assert_verified(this: &TestContext, other: &TestContext, protected: ProtectionStatus) {
+async fn assert_verified(this: &TestContext, other: &TestContext) {
     let contact = this.add_or_lookup_contact(other).await;
     assert_eq!(contact.is_verified(this).await.unwrap(), true);
-
-    let chat = this.get_chat(other).await;
-    assert_eq!(
-        chat.is_protected(),
-        protected == ProtectionStatus::Protected
-    );
 }
