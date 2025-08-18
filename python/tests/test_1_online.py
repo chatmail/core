@@ -1204,7 +1204,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, lp):
 
 def test_qr_email_capitalization(acfactory, lp):
     """Regression test for a bug
-    that resulted in failure to propagate verification via gossip in a verified group
+    that resulted in failure to propagate verification
     when the database already contained the contact with a different email address capitalization.
     """
 
@@ -1215,17 +1215,17 @@ def test_qr_email_capitalization(acfactory, lp):
     lp.sec(f"ac1 creates a contact for ac2 ({ac2_addr_uppercase})")
     ac1.create_contact(ac2_addr_uppercase)
 
-    lp.sec("ac3 creates a verified group with a QR code")
-    chat = ac3.create_group_chat("hello", verified=True)
+    lp.sec("ac3 creates a group with a QR code")
+    chat = ac3.create_group_chat("hello")
     qr = chat.get_join_qr()
 
-    lp.sec("ac1 joins a verified group via a QR code")
+    lp.sec("ac1 joins a group via a QR code")
     ac1_chat = ac1.qr_join_chat(qr)
     msg = ac1._evtracker.wait_next_incoming_message()
     assert msg.text == "Member Me added by {}.".format(ac3.get_config("addr"))
     assert len(ac1_chat.get_contacts()) == 2
 
-    lp.sec("ac2 joins a verified group via a QR code")
+    lp.sec("ac2 joins a group via a QR code")
     ac2.qr_join_chat(qr)
     ac1._evtracker.wait_next_incoming_message()
 

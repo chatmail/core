@@ -74,16 +74,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth)
                 .await?;
 
-            // Mark 1:1 chat as verified already.
-            chat_id
-                .set_protection(
-                    context,
-                    ProtectionStatus::Protected,
-                    time(),
-                    Some(invite.contact_id()),
-                )
-                .await?;
-
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id: invite.contact_id(),
                 progress: JoinerProgress::RequestWithAuthSent.to_usize(),
@@ -214,15 +204,6 @@ pub(super) async fn handle_auth_required(
                 chat::add_info_msg(context, chat_id, &msg, time()).await?;
             }
         }
-
-        chat_id
-            .set_protection(
-                context,
-                ProtectionStatus::Protected,
-                message.timestamp_sent,
-                Some(invite.contact_id()),
-            )
-            .await?;
 
         context.emit_event(EventType::SecurejoinJoinerProgress {
             contact_id: invite.contact_id(),
@@ -359,7 +340,6 @@ async fn joining_chat_id(
                         grpid,
                         name,
                         Blocked::Not,
-                        ProtectionStatus::Unprotected, // protection is added later as needed
                         None,
                         create_smeared_timestamp(context),
                     )
