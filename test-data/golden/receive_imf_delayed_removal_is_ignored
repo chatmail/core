@@ -1,9 +1,10 @@
 Group#Chat#10: Group [5 member(s)] 
 --------------------------------------------------------------------------------
-Msg#10🔒: Me (Contact#Contact#Self): populate  √
-Msg#11: info (Contact#Contact#Info): Member dom@example.net added. [NOTICED][INFO]
-Msg#12: info (Contact#Contact#Info): Member fiona@example.net removed. [NOTICED][INFO]
-Msg#13🔒:  (Contact#Contact#10): Member elena@example.net added by bob@example.net. [FRESH][INFO]
-Msg#14🔒: Me (Contact#Contact#Self): You added member fiona@example.net. [INFO] o
-Msg#15🔒:  (Contact#Contact#10): Member fiona@example.net removed by bob@example.net. [FRESH][INFO]
+Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
+Msg#11🔒: Me (Contact#Contact#Self): populate  √
+Msg#12: info (Contact#Contact#Info): Member dom@example.net added. [NOTICED][INFO]
+Msg#13: info (Contact#Contact#Info): Member fiona@example.net removed. [NOTICED][INFO]
+Msg#14🔒:  (Contact#Contact#10): Member elena@example.net added by bob@example.net. [FRESH][INFO]
+Msg#15🔒: Me (Contact#Contact#Self): You added member fiona@example.net. [INFO] o
+Msg#16🔒:  (Contact#Contact#10): Member fiona@example.net removed by bob@example.net. [FRESH][INFO]
 --------------------------------------------------------------------------------

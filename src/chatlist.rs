@@ -488,6 +488,8 @@ mod tests {
     use crate::stock_str::StockMessage;
     use crate::test_utils::TestContext;
     use crate::test_utils::TestContextManager;
+    use crate::tools::SystemTime;
+    use std::time::Duration;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_try_load() {
@@ -509,6 +511,8 @@ mod tests {
         assert_eq!(chats.get_chat_id(0).unwrap(), chat_id3);
         assert_eq!(chats.get_chat_id(1).unwrap(), chat_id2);
         assert_eq!(chats.get_chat_id(2).unwrap(), chat_id1);
+
+        SystemTime::shift(Duration::from_secs(5));
 
         // New drafts are sorted to the top
         // We have to set a draft on the other two messages, too, as
