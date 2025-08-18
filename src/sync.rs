@@ -339,7 +339,7 @@ mod tests {
     use anyhow::bail;
 
     use super::*;
-    use crate::chat::{Chat, ProtectionStatus, remove_contact_from_chat};
+    use crate::chat::{Chat, remove_contact_from_chat};
     use crate::chatlist::Chatlist;
     use crate::contact::{Contact, Origin};
     use crate::securejoin::get_securejoin_qr;
@@ -714,8 +714,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         alice.set_config_bool(Config::SyncMsgs, true).await?;
-        let alice_chatid =
-            chat::create_group_chat(alice, ProtectionStatus::Protected, "the chat").await?;
+        let alice_chatid = chat::create_group_chat(alice, "the chat").await?;
         let qr = get_securejoin_qr(alice, Some(alice_chatid)).await?;
 
         // alice2 syncs the QR code token.
