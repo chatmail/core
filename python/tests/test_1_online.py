@@ -432,7 +432,7 @@ def test_forward_messages(acfactory, lp):
     lp.sec("ac2: check new chat has a forwarded message")
     assert chat3.is_promoted()
     messages = chat3.get_messages()
-    assert len(messages) == 2
+    assert len(messages) == 3
     msg = messages[-1]
     assert msg.is_forwarded()
     ac2.delete_messages(messages)
@@ -1242,7 +1242,7 @@ def test_qr_email_capitalization(acfactory, lp):
     ac1.create_contact(ac2_addr_uppercase)
 
     lp.sec("ac3 creates a verified group with a QR code")
-    chat = ac3.create_group_chat("hello", verified=True)
+    chat = ac3.create_group_chat("hello")
     qr = chat.get_join_qr()
 
     lp.sec("ac1 joins a verified group via a QR code")
