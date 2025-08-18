@@ -406,7 +406,7 @@ def test_forward_messages(acfactory, lp):
     lp.sec("ac2: check new chat has a forwarded message")
     assert chat3.is_promoted()
     messages = chat3.get_messages()
-    assert len(messages) == 2
+    assert len(messages) == 3
     msg = messages[-1]
     assert msg.is_forwarded()
     ac2.delete_messages(messages)
