@@ -11,7 +11,9 @@ use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, sync,
 };
+use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
+use std::time::Duration;
 use strum::IntoEnumIterator;
 use tokio::fs;
 
@@ -1644,7 +1646,7 @@ async fn test_set_mute_duration() {
 async fn test_add_info_msg() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
-    add_info_msg(&t, chat_id, "foo info", 200000).await?;
+    add_info_msg(&t, chat_id, "foo info", time()).await?;
 
     let msg = t.get_last_msg_in(chat_id).await;
     assert_eq!(msg.get_chat_id(), chat_id);
@@ -1666,7 +1668,7 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         chat_id,
         "foo bar info",
         SystemMessage::EphemeralTimerChanged,
-        10000,
+        time(),
         None,
         None,
         None,
