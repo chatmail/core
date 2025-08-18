@@ -604,7 +604,7 @@ async fn test_draft_self_report() -> Result<()> {
 
     let chat_id = alice.draft_self_report().await?;
     let msg = get_chat_msg(&alice, chat_id, 0, 1).await;
-    assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
+    assert_eq!(msg.get_info_type(), SystemMessage::ChatE2ee);
 
     let chat = Chat::load_from_db(&alice, chat_id).await?;
     assert!(chat.is_protected());
