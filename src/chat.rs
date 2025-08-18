@@ -3719,12 +3719,12 @@ pub(crate) async fn add_contact_to_chat_ex(
     Ok(true)
 }
 
-/// Returns true if an avatar should be attached in the given chat.
+/// Returns whether profile data should be attached when sending to the given chat.
 ///
-/// This function does not check if the avatar is set.
+/// This function does not check if the avatar/status is set.
 /// If avatar is not set and this function returns `true`,
 /// a `Chat-User-Avatar: 0` header should be sent to reset the avatar.
-pub(crate) async fn shall_attach_selfavatar(context: &Context, chat_id: ChatId) -> Result<bool> {
+pub(crate) async fn should_attach_profile(context: &Context, chat_id: ChatId) -> Result<bool> {
     let timestamp_some_days_ago = time() - DC_RESEND_USER_AVATAR_DAYS * 24 * 60 * 60;
     let needs_attach = context
         .sql
@@ -3739,8 +3739,8 @@ pub(crate) async fn shall_attach_selfavatar(context: &Context, chat_id: ChatId) 
                 let mut needs_attach = false;
                 for row in rows {
                     let row = row?;
-                    let selfavatar_sent = row?;
-                    if selfavatar_sent < timestamp_some_days_ago {
+                    let profile_sent = row?;
+                    if profile_sent < timestamp_some_days_ago {
                         needs_attach = true;
                     }
                 }

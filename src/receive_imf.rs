@@ -908,8 +908,11 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    // Ignore footers from mailinglists as they are often created or modified by the mailinglist software.
-    if let Some(footer) = &mime_parser.footer {
+    if let Some(footer) = mime_parser.footer.as_ref().filter(|footer| {
+        !footer.is_empty() || mime_parser.user_avatar.is_some() || !mime_parser.was_encrypted()
+    }) {
+        // Ignore footers from mailinglists as they are often created or modified by the mailinglist
+        // software.
         if !mime_parser.is_mailinglist_message()
             && from_id != ContactId::UNDEFINED
             && context
@@ -923,7 +926,7 @@ pub(crate) async fn receive_imf_inner(
             if let Err(err) = contact::set_status(
                 context,
                 from_id,
-                footer.to_string(),
+                footer.clone(),
                 mime_parser.was_encrypted(),
                 mime_parser.has_chat_version(),
             )

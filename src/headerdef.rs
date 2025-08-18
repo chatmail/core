@@ -60,7 +60,12 @@ pub enum HeaderDef {
     ChatGroupNameTimestamp,
     ChatVerified,
     ChatGroupAvatar,
+
+    /// If present, contact's avatar and status should be applied from the message.
+    /// "Chat-User-Avatar: 0" means that the contact has no avatar. Contact's status is transferred
+    /// in the message footer.
     ChatUserAvatar,
+
     ChatVoiceMessage,
     ChatGroupMemberRemoved,
     ChatGroupMemberAdded,
