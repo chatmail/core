@@ -634,7 +634,7 @@ async fn test_unknown_sender() -> Result<()> {
     // The message from Bob is delivered late, Bob is already removed.
     let msg = alice.recv_msg(&sent).await;
     assert_eq!(msg.text, "Hi hi!");
-    assert_eq!(msg.error.unwrap(), "Unknown sender for this chat.");
+    assert_eq!(msg.get_override_sender_name().unwrap(), "bob@example.net");
 
     Ok(())
 }

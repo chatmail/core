@@ -7214,6 +7214,8 @@ void dc_event_unref(dc_event_t* event);
 /// "Unknown sender for this chat. See 'info' for more details."
 ///
 /// Use as message text if assigning the message to a chat is not totally correct.
+///
+/// @deprecated 2025-08-18
 #define DC_STR_UNKNOWN_SENDER_FOR_CHAT    72
 
 /// "Message from %1$s"
