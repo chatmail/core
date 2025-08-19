@@ -1006,7 +1006,7 @@ impl TestContext {
         };
         writeln!(
             res,
-            "{}#{}: {} [{}]{}{}{} {}",
+            "{}#{}: {} [{}]{}{}{}",
             sel_chat.typ,
             sel_chat.get_id(),
             sel_chat.get_name(),
@@ -1023,11 +1023,6 @@ impl TestContext {
                     _ => " Icon: Err".to_string(),
                 },
                 _ => "".to_string(),
-            },
-            if sel_chat.is_protected() {
-                "🛡️"
-            } else {
-                ""
             },
         )
         .unwrap();

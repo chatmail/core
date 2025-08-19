@@ -1221,16 +1221,6 @@ impl ChatId {
         Ok(())
     }
 
-    /// Returns true if the chat is protected.
-    pub(crate) async fn is_protected(self, context: &Context) -> Result<ProtectionStatus> {
-        let protection_status = context
-            .sql
-            .query_get_value("SELECT protected FROM chats WHERE id=?", (self,))
-            .await?
-            .unwrap_or_default();
-        Ok(protection_status)
-    }
-
     /// Returns the sort timestamp for a new message in the chat.
     ///
     /// `message_timestamp` should be either the message "sent" timestamp or a timestamp of the
@@ -1693,53 +1683,38 @@ impl Chat {
         !self.is_unpromoted()
     }
 
-    /// Returns true if chat protection is enabled.
-    ///
-    /// UI should display a green checkmark
-    /// in the chat title,
-    /// in the chat profile title and
-    /// in the chatlist item
-    /// if chat protection is enabled.
-    /// UI should also display a green checkmark
-    /// in the contact profile
-    /// if 1:1 chat with this contact exists and is protected.
-    pub fn is_protected(&self) -> bool {
-        self.protected == ProtectionStatus::Protected
-    }
-
     /// Returns true if the chat is encrypted.
     pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
-        let is_encrypted = self.is_protected()
-            || match self.typ {
-                Chattype::Single => {
-                    match context
-                        .sql
-                        .query_row_optional(
-                            "SELECT cc.contact_id, c.fingerprint<>''
+        let is_encrypted = match self.typ {
+            Chattype::Single => {
+                match context
+                    .sql
+                    .query_row_optional(
+                        "SELECT cc.contact_id, c.fingerprint<>''
                              FROM chats_contacts cc LEFT JOIN contacts c
                                  ON c.id=cc.contact_id
                              WHERE cc.chat_id=?
                             ",
-                            (self.id,),
-                            |row| {
-                                let id: ContactId = row.get(0)?;
-                                let is_key: bool = row.get(1)?;
-                                Ok((id, is_key))
-                            },
-                        )
-                        .await?
-                    {
-                        Some((id, is_key)) => is_key || id == ContactId::DEVICE,
-                        None => true,
-                    }
+                        (self.id,),
+                        |row| {
+                            let id: ContactId = row.get(0)?;
+                            let is_key: bool = row.get(1)?;
+                            Ok((id, is_key))
+                        },
+                    )
+                    .await?
+                {
+                    Some((id, is_key)) => is_key || id == ContactId::DEVICE,
+                    None => true,
                 }
-                Chattype::Group => {
-                    // Do not encrypt ad-hoc groups.
-                    !self.grpid.is_empty()
-                }
-                Chattype::Mailinglist => false,
-                Chattype::OutBroadcast | Chattype::InBroadcast => true,
-            };
+            }
+            Chattype::Group => {
+                // Do not encrypt ad-hoc groups.
+                !self.grpid.is_empty()
+            }
+            Chattype::Mailinglist => false,
+            Chattype::OutBroadcast | Chattype::InBroadcast => true,
+        };
         Ok(is_encrypted)
     }
 
@@ -3810,13 +3785,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         }
     } else {
         // else continue and send status mail
-        if chat.is_protected() && !contact.is_verified(context).await? {
-            error!(
-                context,
-                "Cannot add non-bidirectionally verified contact {contact_id} to protected chat {chat_id}."
-            );
-            return Ok(false);
-        }
         if is_contact_in_chat(context, chat_id, contact_id).await? {
             return Ok(false);
         }
