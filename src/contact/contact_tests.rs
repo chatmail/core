@@ -1,7 +1,7 @@
 use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 
 use super::*;
-use crate::chat::{Chat, ProtectionStatus, get_chat_contacts, send_text_msg};
+use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
@@ -1291,22 +1291,6 @@ async fn test_import_vcard_key_change() -> Result<()> {
     let sent_msg = alice.send_text(chat_id, "moin").await;
     let msg = bob.recv_msg(&sent_msg).await;
     assert!(msg.get_showpadlock());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_self_is_verified() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-
-    let contact = Contact::get_by_id(&alice, ContactId::SELF).await?;
-    assert_eq!(contact.is_verified(&alice).await?, true);
-    assert!(contact.get_verifier_id(&alice).await?.is_none());
-    assert!(contact.is_key_contact());
-
-    let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
-    assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
 
     Ok(())
 }

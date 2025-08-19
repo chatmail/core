@@ -4,7 +4,7 @@ use anyhow::{Context as _, Result};
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
-use crate::chat::{self, ChatId, ProtectionStatus, is_contact_in_chat};
+use crate::chat::{self, ChatId, is_contact_in_chat};
 use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
@@ -113,21 +113,19 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             let ts_sort = chat_id
                 .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
                 .await?;
-            if chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
-                let ts_start = time();
-                chat::add_info_msg_with_cmd(
-                    context,
-                    chat_id,
-                    &stock_str::securejoin_wait(context).await,
-                    SystemMessage::SecurejoinWait,
-                    ts_sort,
-                    Some(ts_start),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-            }
+            let ts_start = time();
+            chat::add_info_msg_with_cmd(
+                context,
+                chat_id,
+                &stock_str::securejoin_wait(context).await,
+                SystemMessage::SecurejoinWait,
+                ts_sort,
+                Some(ts_start),
+                None,
+                None,
+                None,
+            )
+            .await?;
             Ok(chat_id)
         }
     }
