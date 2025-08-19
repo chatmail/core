@@ -132,19 +132,12 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
     tcm.send_recv(&fiona_new, &alice, "I have a new device")
         .await;
 
-    // Alice gets a new unprotected chat with new Fiona contact.
+    // Alice gets a new chat with new Fiona contact.
     {
         let chat = alice.get_chat(&fiona_new).await;
-        assert!(!chat.is_protected());
 
         let msg = get_chat_msg(&alice, chat.id, 1, E2EE_INFO_MSGS + 1).await;
         assert_eq!(msg.text, "I have a new device");
-
-        // After recreating the chat, it should still be unprotected
-        chat.id.delete(&alice).await?;
-
-        let chat = alice.create_chat(&fiona_new).await;
-        assert!(!chat.is_protected());
     }
 
     Ok(())
@@ -179,42 +172,6 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_unverified_oneonone_chat() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    enable_verified_oneonone_chats(&[&alice, &bob]).await;
-
-    // A chat with an unknown contact should be created unprotected
-    let chat = alice.create_chat(&bob).await;
-    assert!(!chat.is_protected());
-
-    receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2@example.org>\n\
-          \n\
-          hello\n",
-        false,
-    )
-    .await?;
-
-    chat.id.delete(&alice).await.unwrap();
-    // Now Bob is a known contact, new chats should still be created unprotected
-    let chat = alice.create_chat(&bob).await;
-    assert!(!chat.is_protected());
-
-    tcm.send_recv(&bob, &alice, "hi").await;
-    chat.id.delete(&alice).await.unwrap();
-    // Now we have a public key, new chats should still be created unprotected
-    let chat = alice.create_chat(&bob).await;
-    assert!(!chat.is_protected());
-
-    Ok(())
-}
-
 /// Tests that receiving unencrypted message
 /// does not disable protection of 1:1 chat.
 ///
@@ -229,7 +186,6 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     mark_as_verified(&alice, &bob).await;
 
     let alice_chat = alice.create_chat(&bob).await;
-    assert!(alice_chat.is_protected());
 
     receive_imf(
         &alice,
@@ -496,8 +452,6 @@ async fn test_message_from_old_dc_setup() -> Result<()> {
     // The outdated Bob's Autocrypt header isn't applied
     // and the message goes to another chat, so the verification preserves.
     assert!(contact.is_verified(alice).await.unwrap());
-    let chat = alice.get_chat(bob).await;
-    assert!(chat.is_protected());
     Ok(())
 }
 
@@ -602,9 +556,9 @@ async fn test_verified_member_added_reordering() -> Result<()> {
     // "Member added" message, so unverified group is created.
     let fiona_received_message = fiona.recv_msg(&bob_sent_message).await;
     let fiona_chat = Chat::load_from_db(fiona, fiona_received_message.chat_id).await?;
+    assert!(!fiona_chat.can_send(fiona).await?);
 
     assert_eq!(fiona_received_message.get_text(), "Hi");
-    assert_eq!(fiona_chat.is_protected(), false);
 
     // Fiona receives late "Member added" message
     // and the chat becomes protected.
