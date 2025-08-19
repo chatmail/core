@@ -560,7 +560,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 for i in (0..cnt).rev() {
                     let chat = Chat::load_from_db(&context, chatlist.get_chat_id(i)?).await?;
                     println!(
-                        "{}#{}: {} [{} fresh] {}{}{}{}",
+                        "{}#{}: {} [{} fresh] {}{}{}",
                         chat_prefix(&chat),
                         chat.get_id(),
                         chat.get_name(),
@@ -571,7 +571,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                             ChatVisibility::Archived => "📦",
                             ChatVisibility::Pinned => "📌",
                         },
-                        if chat.is_protected() { "🛡️" } else { "" },
                         if chat.is_contact_request() {
                             "🆕"
                         } else {
@@ -686,7 +685,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 format!("{} member(s)", members.len())
             };
             println!(
-                "{}#{}: {} [{}]{}{}{} {}",
+                "{}#{}: {} [{}]{}{}{}",
                 chat_prefix(sel_chat),
                 sel_chat.get_id(),
                 sel_chat.get_name(),
@@ -703,11 +702,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                         _ => " Icon: Err".to_string(),
                     },
                     _ => "".to_string(),
-                },
-                if sel_chat.is_protected() {
-                    "🛡️"
-                } else {
-                    ""
                 },
             );
             log_msglist(&context, &msglist).await?;
