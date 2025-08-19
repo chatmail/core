@@ -606,13 +606,10 @@ async fn test_draft_self_report() -> Result<()> {
     let msg = get_chat_msg(&alice, chat_id, 0, 1).await;
     assert_eq!(msg.get_info_type(), SystemMessage::ChatE2ee);
 
-    let chat = Chat::load_from_db(&alice, chat_id).await?;
-    assert!(chat.is_protected());
-
     let mut draft = chat_id.get_draft(&alice).await?.unwrap();
     assert!(draft.text.starts_with("core_version"));
 
-    // Test that sending into the protected chat works:
+    // Test that sending into the chat works:
     let _sent = alice.send_msg(chat_id, &mut draft).await;
 
     Ok(())

@@ -1334,20 +1334,6 @@ impl MimeFactory {
         let command = msg.param.get_cmd();
         let mut placeholdertext = None;
 
-        let send_verified_headers = match chat.typ {
-            Chattype::Single => true,
-            Chattype::Group => true,
-            // Mailinglists and broadcast channels can actually never be verified:
-            Chattype::Mailinglist => false,
-            Chattype::OutBroadcast | Chattype::InBroadcast => false,
-        };
-        if chat.is_protected() && send_verified_headers {
-            headers.push((
-                "Chat-Verified",
-                mail_builder::headers::raw::Raw::new("1").into(),
-            ));
-        }
-
         if chat.typ == Chattype::Group {
             // Send group ID unless it is an ad hoc group that has no ID.
             if !chat.grpid.is_empty() {
