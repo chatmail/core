@@ -327,7 +327,7 @@ async fn joining_chat_id(
         QrInvite::Contact { .. } => Ok(alice_chat_id),
         QrInvite::Group { grpid, name, .. } => {
             let group_chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
-                Some((chat_id, _protected, _blocked)) => {
+                Some((chat_id, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;
                     chat_id
                 }
