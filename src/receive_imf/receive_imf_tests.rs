@@ -1000,7 +1000,7 @@ async fn test_other_device_writes_to_mailinglist() -> Result<()> {
         chat::get_chat_id_by_grpid(&t, "delta.codespeak.net")
             .await?
             .unwrap(),
-        (first_chat.id, false, Blocked::Request)
+        (first_chat.id, Blocked::Request)
     );
 
     receive_imf(
