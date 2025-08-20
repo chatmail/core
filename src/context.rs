@@ -34,7 +34,7 @@ use crate::param::{Param, Params};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
-use crate::scheduler::{SchedulerState, convert_folder_meaning};
+use crate::scheduler::{ConnectivityStore, SchedulerState, convert_folder_meaning};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
@@ -304,6 +304,10 @@ pub struct InnerContext {
     /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
     pub(crate) self_fingerprint: OnceLock<String>,
+
+    /// `Connectivity` values for mailboxes, unordered. Used to compute the aggregate connectivity,
+    /// see [`Context::get_connectivity()`].
+    pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
 }
 
 /// The state of ongoing process.
@@ -473,6 +477,7 @@ impl Context {
             push_subscribed: AtomicBool::new(false),
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
+            connectivities: parking_lot::Mutex::new(Vec::new()),
         };
 
         let ctx = Context {
@@ -502,7 +507,7 @@ impl Context {
         // Now, some configs may have changed, so, we need to invalidate the cache.
         self.sql.config_cache.write().await.clear();
 
-        self.scheduler.start(self.clone()).await;
+        self.scheduler.start(self).await;
     }
 
     /// Stops the IO scheduler.
@@ -579,7 +584,7 @@ impl Context {
         } else {
             // Pause the scheduler to ensure another connection does not start
             // while we are fetching on a dedicated connection.
-            let _pause_guard = self.scheduler.pause(self.clone()).await?;
+            let _pause_guard = self.scheduler.pause(self).await?;
 
             // Start a new dedicated connection.
             let mut connection = Imap::new_configured(self, channel::bounded(1).1).await?;

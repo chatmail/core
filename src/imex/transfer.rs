@@ -105,7 +105,7 @@ impl BackupProvider {
 
         // Acquire global "ongoing" mutex.
         let cancel_token = context.alloc_ongoing().await?;
-        let paused_guard = context.scheduler.pause(context.clone()).await?;
+        let paused_guard = context.scheduler.pause(context).await?;
         let context_dir = context
             .get_blobdir()
             .parent()
