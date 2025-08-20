@@ -12,7 +12,6 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
-use deltachat_derive::{FromSql, ToSql};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -65,41 +64,6 @@ pub enum ChatItem {
         /// Marker timestamp, for day markers
         timestamp: i64,
     },
-}
-
-/// Chat protection status.
-#[derive(
-    Debug,
-    Default,
-    Display,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    FromPrimitive,
-    ToPrimitive,
-    FromSql,
-    ToSql,
-    IntoStaticStr,
-    Serialize,
-    Deserialize,
-)]
-#[repr(u32)]
-pub enum ProtectionStatus {
-    /// Chat is not protected.
-    #[default]
-    Unprotected = 0,
-
-    /// Chat is protected.
-    ///
-    /// All members of the chat must be verified.
-    Protected = 1,
-    // `2` was never used as a value.
-
-    // Chats don't break in Core v2 anymore. Chats with broken protection existing before the
-    // key-contacts migration are treated as `Unprotected`.
-    //
-    // ProtectionBroken = 3,
 }
 
 /// The reason why messages cannot be sent to the chat.
@@ -1375,9 +1339,6 @@ pub struct Chat {
 
     /// Duration of the chat being muted.
     pub mute_duration: MuteDuration,
-
-    /// If the chat is protected (verified).
-    pub(crate) protected: ProtectionStatus,
 }
 
 impl Chat {
@@ -1387,7 +1348,7 @@ impl Chat {
             .sql
             .query_row(
                 "SELECT c.type, c.name, c.grpid, c.param, c.archived,
-                    c.blocked, c.locations_send_until, c.muted_until, c.protected
+                    c.blocked, c.locations_send_until, c.muted_until
              FROM chats c
              WHERE c.id=?;",
                 (chat_id,),
@@ -1402,7 +1363,6 @@ impl Chat {
                         blocked: row.get::<_, Option<_>>(5)?.unwrap_or_default(),
                         is_sending_locations: row.get(6)?,
                         mute_duration: row.get(7)?,
-                        protected: row.get(8)?,
                     };
                     Ok(c)
                 },
@@ -2425,7 +2385,6 @@ impl ChatIdBlocked {
             _ => (),
         }
 
-        let protected = contact_id == ContactId::SELF || contact.is_verified(context).await?;
         let smeared_time = create_smeared_timestamp(context);
 
         let chat_id = context
@@ -2433,19 +2392,14 @@ impl ChatIdBlocked {
             .transaction(move |transaction| {
                 transaction.execute(
                     "INSERT INTO chats
-                     (type, name, param, blocked, created_timestamp, protected)
-                     VALUES(?, ?, ?, ?, ?, ?)",
+                     (type, name, param, blocked, created_timestamp)
+                     VALUES(?, ?, ?, ?, ?)",
                     (
                         Chattype::Single,
                         chat_name,
                         params.to_string(),
                         create_blocked as u8,
                         smeared_time,
-                        if protected {
-                            ProtectionStatus::Protected
-                        } else {
-                            ProtectionStatus::Unprotected
-                        },
                     ),
                 )?;
                 let chat_id = ChatId::new(
@@ -4434,24 +4388,21 @@ pub(crate) async fn get_chat_cnt(context: &Context) -> Result<usize> {
     }
 }
 
-/// Returns a tuple of `(chatid, is_protected, blocked)`.
+/// Returns a tuple of `(chatid, blocked)`.
 pub(crate) async fn get_chat_id_by_grpid(
     context: &Context,
     grpid: &str,
-) -> Result<Option<(ChatId, bool, Blocked)>> {
+) -> Result<Option<(ChatId, Blocked)>> {
     context
         .sql
         .query_row_optional(
-            "SELECT id, blocked, protected FROM chats WHERE grpid=?;",
+            "SELECT id, blocked FROM chats WHERE grpid=?;",
             (grpid,),
             |row| {
                 let chat_id = row.get::<_, ChatId>(0)?;
 
                 let b = row.get::<_, Option<Blocked>>(1)?.unwrap_or_default();
-                let p = row
-                    .get::<_, Option<ProtectionStatus>>(2)?
-                    .unwrap_or_default();
-                Ok((chat_id, p == ProtectionStatus::Protected, b))
+                Ok((chat_id, b))
             },
         )
         .await

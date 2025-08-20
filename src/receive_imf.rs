@@ -246,9 +246,7 @@ async fn get_to_and_past_contact_ids(
     let chat_id = match chat_assignment {
         ChatAssignment::Trash => None,
         ChatAssignment::GroupChat { grpid } => {
-            if let Some((chat_id, _protected, _blocked)) =
-                chat::get_chat_id_by_grpid(context, grpid).await?
-            {
+            if let Some((chat_id, _blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some(chat_id)
             } else {
                 None
@@ -1354,9 +1352,7 @@ async fn do_chat_assignment(
             }
             ChatAssignment::GroupChat { grpid } => {
                 // Try to assign to a chat based on Chat-Group-ID.
-                if let Some((id, _protected, blocked)) =
-                    chat::get_chat_id_by_grpid(context, grpid).await?
-                {
+                if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
                 } else if allow_creation || test_normal_chat.is_some() {
@@ -1485,9 +1481,7 @@ async fn do_chat_assignment(
                 chat_id = Some(DC_CHAT_ID_TRASH);
             }
             ChatAssignment::GroupChat { grpid } => {
-                if let Some((id, _protected, blocked)) =
-                    chat::get_chat_id_by_grpid(context, grpid).await?
-                {
+                if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
                 } else if allow_creation {
@@ -1554,7 +1548,7 @@ async fn do_chat_assignment(
             if chat_id.is_none() && allow_creation {
                 let to_contact = Contact::get_by_id(context, to_id).await?;
                 if let Some(list_id) = to_contact.param.get(Param::ListId) {
-                    if let Some((id, _, blocked)) =
+                    if let Some((id, blocked)) =
                         chat::get_chat_id_by_grpid(context, list_id).await?
                     {
                         chat_id = Some(id);
@@ -3178,7 +3172,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
 ) -> Result<Option<(ChatId, Blocked)>> {
     let listid = mailinglist_header_listid(list_id_header)?;
 
-    if let Some((chat_id, _, blocked)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+    if let Some((chat_id, blocked)) = chat::get_chat_id_by_grpid(context, &listid).await? {
         return Ok(Some((chat_id, blocked)));
     }
 
