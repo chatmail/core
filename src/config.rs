@@ -734,7 +734,7 @@ impl Context {
         Self::check_config(key, value)?;
 
         let _pause = match key.needs_io_restart() {
-            true => self.scheduler.pause(self.clone()).await?,
+            true => self.scheduler.pause(self).await?,
             _ => Default::default(),
         };
         self.set_config_internal(key, value).await?;

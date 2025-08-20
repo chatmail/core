@@ -272,16 +272,7 @@ impl Context {
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     pub async fn get_connectivity(&self) -> Connectivity {
-        let lock = self.scheduler.inner.read().await;
-        let stores: Vec<_> = match *lock {
-            InnerSchedulerState::Started(ref sched) => sched
-                .boxes()
-                .map(|b| b.conn_state.state.connectivity.clone())
-                .collect(),
-            _ => return Connectivity::NotConnected,
-        };
-        drop(lock);
-
+        let stores = self.connectivities.lock().clone();
         let mut connectivities = Vec::new();
         for s in stores {
             if let Some(connectivity) = s.get_basic().await {
@@ -291,7 +282,18 @@ impl Context {
         connectivities
             .into_iter()
             .min()
-            .unwrap_or(Connectivity::Connected)
+            .unwrap_or(Connectivity::NotConnected)
+    }
+
+    pub(crate) fn update_connectivities(&self, sched: &InnerSchedulerState) {
+        let stores: Vec<_> = match sched {
+            InnerSchedulerState::Started(sched) => sched
+                .boxes()
+                .map(|b| b.conn_state.state.connectivity.clone())
+                .collect(),
+            _ => Vec::new(),
+        };
+        *self.connectivities.lock() = stores;
     }
 
     /// Get an overview of the current connectivity, and possibly more statistics.
