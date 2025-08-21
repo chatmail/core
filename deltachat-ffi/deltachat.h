@@ -1221,21 +1221,35 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * who will get informed by an #DC_EVENT_INCOMING_CALL event and rings.
  *
  * Possible actions during ringing:
- * - caller cancels the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED.
- * - callee accepts using dc_accept_incoming_call(), caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED,
+ *
+ * - caller cancels the call using dc_end_call():
+ *   callee receives #DC_EVENT_CALL_ENDED
+ *
+ * - callee accepts using dc_accept_incoming_call():
+ *   caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED.
  *   callee's devices receive #DC_EVENT_INCOMING_CALL_ACCEPTED, call starts
- * - callee rejects using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED,
- *   callee's other devices receive #DC_EVENT_CALL_ENDED.
- * - callee is already in a call. in this case,
- *   UI may decide to show a notification instead of ringing.
- *   otherwise, this is same as timeout.
- * - timeout: after 1 minute without action, caller and callee receive #DC_EVENT_CALL_ENDED
+ *
+ * - callee rejects using dc_end_call():
+ *   caller does _not_ receive #DC_EVENT_CALL_ENDED but times out.
+ *   callee's other devices receive #DC_EVENT_CALL_ENDED
+ *
+ * - callee is already in a call:
+ *   in this case, UI may decide to show a notification instead of ringing.
+ *   otherwise, this is same as timeout
+ *
+ * - timeout:
+ *   after 1 minute without action,
+ *   caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
- *   in case caller got offline without being able to send cancellation message.
+ *   in case caller got offline without being able to send cancellation message
  *
  * Actions during the call:
- * - callee ends the call using dc_end_call(), caller receives #DC_EVENT_CALL_ENDED
- * - caller ends the call using dc_end_call(), callee receives #DC_EVENT_CALL_ENDED
+ *
+ * - caller ends the call using dc_end_call():
+ *   callee receives #DC_EVENT_CALL_ENDED
+ *
+ * - callee ends the call using dc_end_call():
+ *   caller receives #DC_EVENT_CALL_ENDED
  *
  * Note, that the events are for updating the call screen,
  * possible status messages are added and updated as usual, including the known events.
