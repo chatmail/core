@@ -138,7 +138,7 @@ impl Context {
         Ok(())
     }
 
-    /// Cancel, reject for hangup an incoming or outgoing call.
+    /// Cancel, reject or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let call: CallInfo = self.load_call_by_root_id(call_id).await?;
 
