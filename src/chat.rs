@@ -1798,7 +1798,7 @@ impl Chat {
     /// Returns chat avatar color.
     ///
     /// For 1:1 chats, the color is calculated from the contact's address.
-    /// For group chats the color is calculated from the chat name.
+    /// For group chats the color is calculated from the grpid, if present, or the chat name.
     pub async fn get_color(&self, context: &Context) -> Result<u32> {
         let mut color = 0;
 
@@ -1809,6 +1809,8 @@ impl Chat {
                     color = contact.get_color();
                 }
             }
+        } else if !self.grpid.is_empty() {
+            color = str_to_color(&self.grpid);
         } else {
             color = str_to_color(&self.name);
         }

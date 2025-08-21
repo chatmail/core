@@ -1929,16 +1929,28 @@ async fn test_classic_email_chat() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_get_color() -> Result<()> {
     let t = TestContext::new().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat").await?;
+    let chat_id = create_group_ex(&t, None, "a chat").await?;
     let color1 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
     assert_eq!(color1, 0x008772);
 
     // upper-/lowercase makes a difference for the colors, these are different groups
     // (in contrast to email addresses, where upper-/lowercase is ignored in practise)
     let t = TestContext::new().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "A CHAT").await?;
+    let chat_id = create_group_ex(&t, None, "A CHAT").await?;
     let color2 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
     assert_ne!(color2, color1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_get_color_encrypted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let chat_id = create_group_ex(t, Some(ProtectionStatus::Unprotected), "a chat").await?;
+    let color1 = Chat::load_from_db(t, chat_id).await?.get_color(t).await?;
+    set_chat_name(t, chat_id, "A CHAT").await?;
+    let color2 = Chat::load_from_db(t, chat_id).await?.get_color(t).await?;
+    assert_eq!(color2, color1);
     Ok(())
 }
 
