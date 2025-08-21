@@ -763,7 +763,6 @@ pub(crate) async fn receive_imf_inner(
         let show_emails = ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
             .unwrap_or_default();
 
-        let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
         let allow_creation = if mime_parser.decrypting_failed {
             false
         } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
@@ -777,7 +776,7 @@ pub(crate) async fn receive_imf_inner(
                 ShowEmails::All => true,
             }
         } else {
-            !is_reaction
+            !mime_parser.parts.iter().all(|part| part.is_reaction)
         };
 
         let to_id = if mime_parser.incoming {
@@ -1995,10 +1994,10 @@ async fn add_parts(
 
     handle_edit_delete(context, mime_parser, from_id).await?;
 
-    let is_reaction = mime_parser.parts.iter().any(|part| part.is_reaction);
-    let hidden = is_reaction;
+    let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);
     let mut parts = mime_parser.parts.iter().peekable();
     while let Some(part) = parts.next() {
+        let hidden = part.is_reaction;
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
             let is_incoming_fresh = mime_parser.incoming && !seen;

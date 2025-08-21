@@ -404,7 +404,7 @@ mod tests {
     use crate::config::Config;
     use crate::contact::{Contact, Origin};
     use crate::download::DownloadState;
-    use crate::message::{MessageState, delete_msgs};
+    use crate::message::{MessageState, Viewtype, delete_msgs};
     use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
     use crate::sql::housekeeping;
     use crate::test_utils::E2EE_INFO_MSGS;
@@ -549,6 +549,46 @@ Here's my footer -- bob@example.net"
 
         let reactions = get_msg_reactions(&alice, msg.id).await?;
         assert_eq!(reactions.to_string(), "😀1");
+
+        // Alice receives a message with reaction to her message from Bob.
+        let msg_bob = receive_imf(
+            &alice,
+            "To: alice@example.org\n\
+From: bob@example.net\n\
+Date: Today, 29 February 2021 00:00:10 -800\n\
+Message-ID: 56791@example.net\n\
+In-Reply-To: 12345@example.org\n\
+Mime-Version: 1.0\n\
+Content-Type: multipart/mixed; boundary=\"YiEDa0DAkWCtVeE4\"\n\
+Content-Disposition: inline\n\
+\n\
+--YiEDa0DAkWCtVeE4\n\
+Content-Type: text/plain; charset=utf-8\n\
+Content-Disposition: inline\n\
+\n\
+Reply + reaction\n\
+\n\
+--YiEDa0DAkWCtVeE4\n\
+Content-Type: text/plain; charset=utf-8\n\
+Content-Disposition: reaction\n\
+\n\
+\u{1F44D}\n\
+\n\
+--YiEDa0DAkWCtVeE4--"
+                .as_bytes(),
+            false,
+        )
+        .await?
+        .unwrap();
+        let msg_bob = Message::load_from_db(&alice, msg_bob.msg_ids[0]).await?;
+        assert_eq!(msg_bob.from_id, bob_id);
+        assert_eq!(msg_bob.chat_id, msg.chat_id);
+        assert_eq!(msg_bob.viewtype, Viewtype::Text);
+        assert_eq!(msg_bob.state, MessageState::InFresh);
+        assert_eq!(msg_bob.hidden, false);
+        assert_eq!(msg_bob.text, "Reply + reaction");
+        let reactions = get_msg_reactions(&alice, msg.id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
 
         Ok(())
     }
