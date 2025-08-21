@@ -3697,8 +3697,13 @@ pub async fn create_group_ex(
     encryption: Option<ProtectionStatus>,
     name: &str,
 ) -> Result<ChatId> {
-    let chat_name = sanitize_single_line(name);
-    ensure!(!chat_name.is_empty(), "Invalid chat name");
+    let mut chat_name = sanitize_single_line(name);
+    if chat_name.is_empty() {
+        // We can't just fail because the user would lose the work already done in the UI like
+        // selecting members.
+        error!(context, "Invalid chat name: {name}.");
+        chat_name = "…".to_string();
+    }
 
     let grpid = match encryption {
         Some(_) => create_id(),
