@@ -1295,23 +1295,6 @@ async fn test_import_vcard_key_change() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_self_is_verified() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-
-    let contact = Contact::get_by_id(&alice, ContactId::SELF).await?;
-    assert_eq!(contact.is_verified(&alice).await?, true);
-    assert!(contact.is_profile_verified(&alice).await?);
-    assert!(contact.get_verifier_id(&alice).await?.is_none());
-    assert!(contact.is_key_contact());
-
-    let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
-    assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
-
-    Ok(())
-}
-
 /// Tests that importing a vCard with a key creates a key-contact.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_vcard_creates_key_contact() -> Result<()> {

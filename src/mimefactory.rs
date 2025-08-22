@@ -1088,6 +1088,17 @@ impl MimeFactory {
                                             .is_none_or(|ts| now >= ts + gossip_period || now < ts)
                                 };
 
+                            let verifier_id: Option<u32> = context
+                                .sql
+                                .query_get_value(
+                                    "SELECT verifier FROM contacts WHERE fingerprint=?",
+                                    (&fingerprint,),
+                                )
+                                .await?;
+
+                            let is_verified =
+                                verifier_id.is_some_and(|verifier_id| verifier_id != 0);
+
                             if !should_do_gossip {
                                 continue;
                             }
@@ -1098,6 +1109,7 @@ impl MimeFactory {
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
                                 EncryptPreference::NoPreference,
+                                is_verified,
                             )
                             .to_string();
 
@@ -1321,20 +1333,6 @@ impl MimeFactory {
         let msg = msg.clone();
         let command = msg.param.get_cmd();
         let mut placeholdertext = None;
-
-        let send_verified_headers = match chat.typ {
-            Chattype::Single => true,
-            Chattype::Group => true,
-            // Mailinglists and broadcast channels can actually never be verified:
-            Chattype::Mailinglist => false,
-            Chattype::OutBroadcast | Chattype::InBroadcast => false,
-        };
-        if chat.is_protected() && send_verified_headers {
-            headers.push((
-                "Chat-Verified",
-                mail_builder::headers::raw::Raw::new("1").into(),
-            ));
-        }
 
         if chat.typ == Chattype::Group {
             // Send group ID unless it is an ad hoc group that has no ID.

@@ -1696,15 +1696,12 @@ dc_chat_t*      dc_get_chat                  (dc_context_t* context, uint32_t ch
  *
  * @memberof dc_context_t
  * @param context The context object.
- * @param protect If set to 1 the function creates group with protection initially enabled.
- *     Only verified members are allowed in these groups
- *     and end-to-end-encryption is always enabled.
  * @param name The name of the group chat to create.
  *     The name may be changed later using dc_set_chat_name().
  *     To find out the name of a group later, see dc_chat_get_name()
  * @return The chat ID of the new group chat, 0 on errors.
  */
-uint32_t        dc_create_group_chat         (dc_context_t* context, int protect, const char* name);
+uint32_t        dc_create_group_chat         (dc_context_t* context, const char* name);
 
 
 /**
@@ -3828,23 +3825,6 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 
 
 /**
- * Check if a chat is protected.
- *
- * Only verified contacts
- * as determined by dc_contact_is_verified()
- * can be added to protected chats.
- *
- * Protected chats are created using dc_create_group_chat()
- * by setting the 'protect' parameter to 1.
- *
- * @memberof dc_chat_t
- * @param chat The chat object.
- * @return 1=chat protected, 0=chat is not protected.
- */
-int             dc_chat_is_protected         (const dc_chat_t* chat);
-
-
-/**
  * Check if the chat is encrypted.
  *
  * 1:1 chats with key-contacts and group chats with key-contacts
@@ -3857,28 +3837,6 @@ int             dc_chat_is_protected         (const dc_chat_t* chat);
  * @return 1=chat is encrypted, 0=chat is not encrypted.
  */
 int             dc_chat_is_encrypted         (const dc_chat_t *chat);
-
-
-/**
- * Checks if the chat was protected, and then an incoming message broke this protection.
- *
- * This function is only useful if the UI enabled the `verified_one_on_one_chats` feature flag,
- * otherwise it will return false for all chats.
- *
- * 1:1 chats are automatically set as protected when a contact is verified.
- * When a message comes in that is not encrypted / signed correctly,
- * the chat is automatically set as unprotected again.
- * dc_chat_is_protection_broken() will return true until dc_accept_chat() is called.
- *
- * The UI should let the user confirm that this is OK with a message like
- * `Bob sent a message from another device. Tap to learn more` and then call dc_accept_chat().
- *
- * @deprecated 2025-07 chats protection cannot break any longer
- * @memberof dc_chat_t
- * @param chat The chat object.
- * @return 1=chat protection broken, 0=otherwise.
- */
-int             dc_chat_is_protection_broken (const dc_chat_t* chat);
 
 
 /**
@@ -7056,6 +7014,8 @@ void dc_event_unref(dc_event_t* event);
 /// "Unknown sender for this chat. See 'info' for more details."
 ///
 /// Use as message text if assigning the message to a chat is not totally correct.
+///
+/// @deprecated 2025-08-18
 #define DC_STR_UNKNOWN_SENDER_FOR_CHAT    72
 
 /// "Message from %1$s"

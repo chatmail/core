@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 use crate::accounts::Accounts;
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, ChatId, ProtectionStatus};
+use crate::chat::{self, Chat, ChatId};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -122,9 +122,6 @@ pub enum StockMessage {
                     Recipients don't need to install Delta Chat, visit websites or sign up anywhere - \
                     however, of course, if they like, you may point them to 👉 https://get.delta.chat"))]
     WelcomeMessage = 71,
-
-    #[strum(props(fallback = "Unknown sender for this chat."))]
-    UnknownSenderForChat = 72,
 
     #[strum(props(fallback = "Message from %1$s"))]
     SubjectForNewContact = 73,
@@ -909,11 +906,6 @@ pub(crate) async fn welcome_message(context: &Context) -> String {
     translated(context, StockMessage::WelcomeMessage).await
 }
 
-/// Stock string: `Unknown sender for this chat.`.
-pub(crate) async fn unknown_sender_for_chat(context: &Context) -> String {
-    translated(context, StockMessage::UnknownSenderForChat).await
-}
-
 /// Stock string: `Message from %1$s`.
 // TODO: This can compute `self_name` itself instead of asking the caller to do this.
 pub(crate) async fn subject_for_new_contact(context: &Context, self_name: &str) -> String {
@@ -1049,13 +1041,6 @@ pub(crate) async fn error_no_network(context: &Context) -> String {
 /// Stock string: `Messages are end-to-end encrypted.`
 pub(crate) async fn messages_e2e_encrypted(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
-}
-
-/// Stock string: `%1$s sent a message from another device.`
-pub(crate) async fn chat_protection_disabled(context: &Context, contact_id: ContactId) -> String {
-    translated(context, StockMessage::ChatProtectionDisabled)
-        .await
-        .replace1(&contact_id.get_stock_name(context).await)
 }
 
 /// Stock string: `Reply`.
@@ -1300,26 +1285,6 @@ impl Context {
             .set_stock_translation(id, stockstring)
             .await?;
         Ok(())
-    }
-
-    /// Returns a stock message saying that protection status has changed.
-    pub(crate) async fn stock_protection_msg(
-        &self,
-        protect: ProtectionStatus,
-        contact_id: Option<ContactId>,
-    ) -> String {
-        match protect {
-            ProtectionStatus::Unprotected => {
-                if let Some(contact_id) = contact_id {
-                    chat_protection_disabled(self, contact_id).await
-                } else {
-                    // In a group chat, it's not possible to downgrade verification.
-                    // In a 1:1 chat, the `contact_id` always has to be provided.
-                    "[Error] No contact_id given".to_string()
-                }
-            }
-            ProtectionStatus::Protected => messages_e2e_encrypted(self).await,
-        }
     }
 
     pub(crate) async fn update_device_chats(&self) -> Result<()> {
