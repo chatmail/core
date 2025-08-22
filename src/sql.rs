@@ -277,6 +277,12 @@ impl Sql {
         info!(context, "Opened database {:?}.", self.dbfile);
         *self.is_encrypted.write().await = Some(passphrase_nonempty);
 
+        // Some migrations want housekeeping to run. Also if housekeeping failed before, fixing the
+        // reason and restarting the program is the most natural way to retry it.
+        context
+            .set_config_internal(Config::LastHousekeeping, None)
+            .await?;
+
         // setup debug logging if there is an entry containing its id
         if let Some(xdc_id) = self
             .get_raw_config_u32(Config::DebugLogging.as_ref())
@@ -729,6 +735,7 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
          PRAGMA busy_timeout = 0; -- fail immediately
          PRAGMA soft_heap_limit = 8388608; -- 8 MiB limit, same as set in Android SQLiteDatabase.
          PRAGMA foreign_keys=on;
+         PRAGMA wal_autocheckpoint=N;
          ",
     )?;
 
