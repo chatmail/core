@@ -87,7 +87,7 @@ impl Smtp {
             return Ok(());
         }
 
-        self.connectivity.set_connecting(context).await;
+        self.connectivity.set_connecting(context);
         let lp = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
@@ -187,7 +187,7 @@ pub(crate) async fn smtp_send(
         info!(context, "SMTP-sending out mime message:\n{message}");
     }
 
-    smtp.connectivity.set_working(context).await;
+    smtp.connectivity.set_working(context);
 
     if let Err(err) = smtp
         .connect_configured(context)

@@ -1908,7 +1908,7 @@ impl CommandApi {
     /// If the connectivity changes, a #DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
     async fn get_connectivity(&self, account_id: u32) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        Ok(ctx.get_connectivity().await as u32)
+        Ok(ctx.get_connectivity() as u32)
     }
 
     /// Get an overview of the current connectivity, and possibly more statistics.
