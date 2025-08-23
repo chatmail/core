@@ -60,8 +60,8 @@ async fn test_statistics_one_contact() -> Result<()> {
     let r2: serde_json::Value = serde_json::from_str(&stats)?;
 
     assert_eq!(
-        r.get("key_created").unwrap(),
-        r2.get("key_created").unwrap()
+        r.get("key_create_timestamps").unwrap(),
+        r2.get("key_create_timestamps").unwrap()
     );
     assert_eq!(
         r.get("statistics_id").unwrap(),
@@ -500,9 +500,9 @@ async fn test_statistics_key_creation_timestamp() -> Result<()> {
 
     let r = get_statistics(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
-    let key_created = r.get("key_created").unwrap().as_array().unwrap();
+    let key_create_timestamps = r.get("key_create_timestamps").unwrap().as_array().unwrap();
     assert_eq!(
-        key_created,
+        key_create_timestamps,
         &vec![Value::Number(
             Number::from_u128(ALICE_KEY_CREATION_TIME).unwrap()
         )]
