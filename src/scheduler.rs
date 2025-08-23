@@ -227,7 +227,7 @@ impl SchedulerState {
             _ => return,
         };
         drop(inner);
-        connectivity::idle_interrupted(inbox, oboxes).await;
+        connectivity::idle_interrupted(inbox, oboxes);
     }
 
     /// Indicate that the network likely is lost.
@@ -244,7 +244,7 @@ impl SchedulerState {
             _ => return,
         };
         drop(inner);
-        connectivity::maybe_network_lost(context, stores).await;
+        connectivity::maybe_network_lost(context, stores);
     }
 
     pub(crate) async fn interrupt_inbox(&self) {

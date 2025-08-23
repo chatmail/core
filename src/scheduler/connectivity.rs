@@ -202,7 +202,7 @@ impl ConnectivityStore {
 /// Set all folder states to InterruptingIdle in case they were `Idle` before.
 /// Called during `dc_maybe_network()` to make sure that `all_work_done()`
 /// returns false immediately after `dc_maybe_network()`.
-pub(crate) async fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<ConnectivityStore>) {
+pub(crate) fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<ConnectivityStore>) {
     let mut connectivity_lock = inbox.0.lock();
     // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
     // NotConfigured before: If all folders are NotConfigured, dc_get_connectivity()
@@ -229,7 +229,7 @@ pub(crate) async fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<Conne
 /// Set the connectivity to "Not connected" after a call to dc_maybe_network_lost().
 /// If we did not do this, the connectivity would stay "Connected" for quite a long time
 /// after `maybe_network_lost()` was called.
-pub(crate) async fn maybe_network_lost(context: &Context, stores: Vec<ConnectivityStore>) {
+pub(crate) fn maybe_network_lost(context: &Context, stores: Vec<ConnectivityStore>) {
     for store in &stores {
         let mut connectivity_lock = store.0.lock();
         if !matches!(
@@ -269,7 +269,7 @@ impl Context {
     /// e.g. in the title of the main screen.
     ///
     /// If the connectivity changes, a DC_EVENT_CONNECTIVITY_CHANGED will be emitted.
-    pub async fn get_connectivity(&self) -> Connectivity {
+    pub fn get_connectivity(&self) -> Connectivity {
         let stores = self.connectivities.lock().clone();
         let mut connectivities = Vec::new();
         for s in stores {

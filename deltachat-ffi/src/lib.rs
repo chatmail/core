@@ -375,7 +375,7 @@ pub unsafe extern "C" fn dc_get_connectivity(context: *const dc_context_t) -> li
         return 0;
     }
     let ctx = &*context;
-    block_on(ctx.get_connectivity()) as u32 as libc::c_int
+    ctx.get_connectivity() as u32 as libc::c_int
 }
 
 #[no_mangle]
