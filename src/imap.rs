@@ -634,6 +634,9 @@ impl Imap {
             let target = if let Some(message_id) = &message_id {
                 let msg_info =
                     message::rfc724_mid_exists_ex(context, message_id, "deleted=1").await?;
+                if msg_info.is_some_and(|(_, ts_sent, _)| ts_sent == 0) {
+                    message::prune_tombstone(context, message_id).await?;
+                }
                 let delete = if let Some((_, _, true)) = msg_info {
                     info!(context, "Deleting locally deleted message {message_id}.");
                     true
@@ -2342,10 +2345,16 @@ pub(crate) async fn prefetch_should_download(
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
-    if message::rfc724_mid_exists(context, message_id)
-        .await?
-        .is_some()
+    if let Some((_, _, is_trash)) = message::rfc724_mid_exists_ex(
+        context,
+        message_id,
+        "chat_id=3", // Trash
+    )
+    .await?
     {
+        if is_trash {
+            message::prune_tombstone(context, message_id).await?;
+        }
         markseen_on_imap_table(context, message_id).await?;
         return Ok(false);
     }

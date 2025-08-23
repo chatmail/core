@@ -112,18 +112,20 @@ impl MsgId {
             .unwrap_or_default())
     }
 
-    /// Put message into trash chat and delete message text.
+    /// Put message into trash chat or delete it.
     ///
     /// It means the message is deleted locally, but not on the server.
-    /// We keep some infos to
-    /// 1. not download the same message again
-    /// 2. be able to delete the message on the server if we want to
     ///
-    /// * `on_server`: Delete the message on the server also if it is seen on IMAP later, but only
-    ///   if all parts of the message are trashed with this flag. `true` if the user explicitly
-    ///   deletes the message. As for trashing a partially downloaded message when replacing it with
-    ///   a fully downloaded one, see `receive_imf::add_parts()`.
+    /// * `on_server`: Keep some info to delete the message on the server also if it is seen on IMAP
+    ///   later.
     pub(crate) async fn trash(self, context: &Context, on_server: bool) -> Result<()> {
+        if !on_server {
+            context
+                .sql
+                .execute("DELETE FROM msgs WHERE id=?1", (self,))
+                .await?;
+            return Ok(());
+        }
         context
             .sql
             .execute(
@@ -132,7 +134,7 @@ impl MsgId {
                 // still adds to the db if chat_id is TRASH.
                 "INSERT OR REPLACE INTO msgs (id, rfc724_mid, timestamp, chat_id, deleted)
                  SELECT ?1, rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1",
-                (self, DC_CHAT_ID_TRASH, on_server),
+                (self, DC_CHAT_ID_TRASH, true),
             )
             .await?;
 
@@ -1590,11 +1592,15 @@ pub(crate) async fn get_mime_headers(context: &Context, msg_id: MsgId) -> Result
 
 /// Delete a single message from the database, including references in other tables.
 /// This may be called in batches; the final events are emitted in delete_msgs_locally_done() then.
-pub(crate) async fn delete_msg_locally(context: &Context, msg: &Message) -> Result<()> {
+pub(crate) async fn delete_msg_locally(
+    context: &Context,
+    msg: &Message,
+    keep_tombstone: bool,
+) -> Result<()> {
     if msg.location_id > 0 {
         delete_poi_location(context, msg.location_id).await?;
     }
-    let on_server = true;
+    let on_server = keep_tombstone;
     msg.id
         .trash(context, on_server)
         .await
@@ -1662,6 +1668,7 @@ pub async fn delete_msgs_ex(
     let mut modified_chat_ids = HashSet::new();
     let mut deleted_rfc724_mid = Vec::new();
     let mut res = Ok(());
+    let mut msgs = Vec::with_capacity(msg_ids.len());
 
     for &msg_id in msg_ids {
         let msg = Message::load_from_db(context, msg_id).await?;
@@ -1679,18 +1686,24 @@ pub async fn delete_msgs_ex(
 
         let target = context.get_delete_msgs_target().await?;
         let update_db = |trans: &mut rusqlite::Transaction| {
-            trans.execute(
+            // NB: If the message isn't sent yet, keeping its tombstone is unnecessary, but safe.
+            let keep_tombstone = trans.execute(
                 "UPDATE imap SET target=? WHERE rfc724_mid=?",
-                (target, msg.rfc724_mid),
-            )?;
+                (&target, msg.rfc724_mid),
+            )? == 0
+                || !target.is_empty();
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
-            Ok(())
+            Ok(keep_tombstone)
         };
-        if let Err(e) = context.sql.transaction(update_db).await {
-            error!(context, "delete_msgs: failed to update db: {e:#}.");
-            res = Err(e);
-            continue;
-        }
+        let keep_tombstone = match context.sql.transaction(update_db).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(context, "delete_msgs: failed to update db: {e:#}.");
+                res = Err(e);
+                continue;
+            }
+        };
+        msgs.push((msg_id, keep_tombstone));
     }
     res?;
 
@@ -1719,15 +1732,32 @@ pub async fn delete_msgs_ex(
             .await?;
     }
 
-    for &msg_id in msg_ids {
+    for (msg_id, keep_tombstone) in msgs {
         let msg = Message::load_from_db(context, msg_id).await?;
-        delete_msg_locally(context, &msg).await?;
+        delete_msg_locally(context, &msg, keep_tombstone).await?;
     }
     delete_msgs_locally_done(context, msg_ids, modified_chat_ids).await?;
 
     // Interrupt Inbox loop to start message deletion, run housekeeping and call send_sync_msg().
     context.scheduler.interrupt_inbox().await;
 
+    Ok(())
+}
+
+/// Removes from the database a locally deleted message that also doesn't have a server UID.
+pub(crate) async fn prune_tombstone(context: &Context, rfc724_mid: &str) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "DELETE FROM msgs
+            WHERE rfc724_mid=?
+            AND chat_id=?
+            AND NOT EXISTS (
+                SELECT * FROM imap WHERE msgs.rfc724_mid=rfc724_mid AND target!=''
+            )",
+            (rfc724_mid, DC_CHAT_ID_TRASH),
+        )
+        .await?;
     Ok(())
 }
 
