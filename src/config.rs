@@ -433,20 +433,20 @@ pub enum Config {
 
     /// Send statistics to Delta Chat's developers.
     /// Can be exposed to the user as a setting.
-    SendStatistics,
+    StatsSending,
 
     /// Last time statistics were sent to Delta Chat's developers
-    LastStatisticsSent,
+    StatsLastSent,
 
     /// This key is sent to the statistics bot so that the bot can recognize the user
     /// without storing the email address
-    StatisticsId,
+    StatsId,
 
     /// The last message id that was already included in the previously sent statistics,
     /// or that already existed before the user opted in.
     /// Only messages with an id larger than this
     /// will be counted in the next statistics.
-    StatsLastExcludedMsgId,
+    StatsLastCountedMsgId,
 
     /// The last contact id that already existed when statistics-sending was enabled.
     /// All newer contacts get the `"new": true` attribute.
@@ -844,9 +844,9 @@ impl Context {
                     .await?;
                 }
             }
-            Config::SendStatistics => {
+            Config::StatsSending => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
-                statistics::set_last_excluded_msg_id(self).await?;
+                statistics::set_last_counted_msg_id(self).await?;
                 statistics::set_last_old_contact_id(self).await?;
             }
             _ => {

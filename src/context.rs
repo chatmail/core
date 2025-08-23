@@ -1077,18 +1077,16 @@ impl Context {
                 .unwrap_or_default(),
         );
         res.insert(
-            "statistics_id",
-            self.get_config_bool(Config::StatisticsId)
-                .await?
-                .to_string(),
+            "stats_id",
+            self.get_config_bool(Config::StatsId).await?.to_string(),
         );
         res.insert(
-            "send_statistics",
+            "stats_sending",
             statistics::should_send_statistics(self).await?.to_string(),
         );
         res.insert(
-            "last_statistics_sent",
-            self.get_config_i64(Config::LastStatisticsSent)
+            "stats_last_sent",
+            self.get_config_i64(Config::StatsLastSent)
                 .await?
                 .to_string(),
         );

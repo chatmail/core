@@ -14,7 +14,7 @@ use serde_json::{Number, Value};
 async fn test_maybe_send_statistics() -> Result<()> {
     let alice = &TestContext::new_alice().await;
 
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let chat_id = maybe_send_statistics(alice).await?.unwrap();
     let msg = get_chat_msg(alice, chat_id, 0, 2).await;
@@ -48,7 +48,7 @@ async fn test_statistics_one_contact() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let stats = get_statistics(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&stats)?;
@@ -114,7 +114,7 @@ async fn test_message_stats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
     let email_chat = alice.create_email_chat(bob).await;
     let encrypted_chat = alice.create_chat(bob).await;
 
@@ -264,7 +264,7 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let mut expected = SecurejoinSources {
         unknown: 0,
@@ -350,7 +350,7 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let mut expected = SecurejoinUIPaths {
         other: 0,
@@ -415,7 +415,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let mut expected = vec![];
 
@@ -475,7 +475,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_statistics_is_chatmail() -> Result<()> {
     let alice = &TestContext::new_alice().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let r = get_statistics(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
@@ -496,7 +496,7 @@ async fn test_statistics_key_creation_timestamp() -> Result<()> {
     const ALICE_KEY_CREATION_TIME: u128 = 1582855645;
 
     let alice = &TestContext::new_alice().await;
-    alice.set_config_bool(Config::SendStatistics, true).await?;
+    alice.set_config_bool(Config::StatsSending, true).await?;
 
     let r = get_statistics(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;

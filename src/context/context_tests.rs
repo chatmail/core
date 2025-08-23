@@ -295,7 +295,7 @@ async fn test_get_info_completeness() {
         "webxdc_integration",
         "device_token",
         "encrypted_device_token",
-        "stats_last_excluded_msg_id",
+        "stats_last_counted_msg_id",
         "stats_last_old_contact_id",
     ];
     let t = TestContext::new().await;

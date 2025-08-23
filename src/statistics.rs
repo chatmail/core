@@ -156,7 +156,7 @@ struct JoinedInvite {
 /// to Delta Chat's developers.
 pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> {
     if should_send_statistics(context).await? {
-        let last_sending_time = context.get_config_i64(Config::LastStatisticsSent).await?;
+        let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
         let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
         if next_sending_time <= time() {
             return Ok(Some(send_statistics(context).await?));
@@ -169,7 +169,7 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
 pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
     #[cfg(any(target_os = "android", test))]
     {
-        context.get_config_bool(Config::SendStatistics).await
+        context.get_config_bool(Config::StatsSending).await
     }
 
     // If the user enables statistics-sending on Android,
@@ -187,7 +187,7 @@ async fn send_statistics(context: &Context) -> Result<ChatId> {
     // Setting this config at the beginning avoids endless loops when things do not
     // work out for whatever reason.
     context
-        .set_config_internal(Config::LastStatisticsSent, Some(&time().to_string()))
+        .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
         .await
         .log_err(context)
         .ok();
@@ -218,12 +218,12 @@ See TODO[blog post] for more information."
         .log_err(context)
         .ok();
 
-    set_last_excluded_msg_id(context).await?;
+    set_last_counted_msg_id(context).await?;
 
     Ok(chat_id)
 }
 
-pub(crate) async fn set_last_excluded_msg_id(context: &Context) -> Result<()> {
+pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
     let last_msgid: u64 = context
         .sql
         .query_get_value("SELECT MAX(id) FROM msgs", ())
@@ -233,7 +233,7 @@ pub(crate) async fn set_last_excluded_msg_id(context: &Context) -> Result<()> {
     context
         .sql
         .set_raw_config(
-            Config::StatsLastExcludedMsgId.as_ref(),
+            Config::StatsLastCountedMsgId.as_ref(),
             Some(&last_msgid.to_string()),
         )
         .await?;
@@ -273,8 +273,8 @@ pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
 async fn get_statistics(context: &Context) -> Result<String> {
     // The ID of the last msg that was already counted in the previously sent statistics.
     // Only newer messages will be counted in the current statistics.
-    let last_excluded_msg = context
-        .get_config_u32(Config::StatsLastExcludedMsgId)
+    let last_counted_msg = context
+        .get_config_u32(Config::StatsLastCountedMsgId)
         .await?;
 
     // The Id of the last contact that already existed when the user enabled the setting.
@@ -289,12 +289,12 @@ async fn get_statistics(context: &Context) -> Result<String> {
         .map(|k| k.created_at().timestamp())
         .collect();
 
-    let statistics_id = match context.get_config(Config::StatisticsId).await? {
+    let statistics_id = match context.get_config(Config::StatsId).await? {
         Some(id) => id,
         None => {
             let id = create_id();
             context
-                .set_config_internal(Config::StatisticsId, Some(&id))
+                .set_config_internal(Config::StatsId, Some(&id))
                 .await?;
             id
         }
@@ -306,8 +306,8 @@ async fn get_statistics(context: &Context) -> Result<String> {
         statistics_id,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
-        message_stats_one_one: get_message_stats(context, last_excluded_msg, true).await?,
-        message_stats_multi_user: get_message_stats(context, last_excluded_msg, false).await?,
+        message_stats_one_one: get_message_stats(context, last_counted_msg, true).await?,
+        message_stats_multi_user: get_message_stats(context, last_counted_msg, false).await?,
         securejoin_sources: get_securejoin_source_stats(context).await?,
         securejoin_uipaths: get_securejoin_uipath_stats(context).await?,
         securejoin_invites: get_securejoin_invite_stats(context).await?,
@@ -453,11 +453,11 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
 ///   If false, only messages in other chats (groups and broadcast channels) are counted.
 async fn get_message_stats(
     context: &Context,
-    last_excluded_msg: u32,
+    last_counted_msg: u32,
     one_one_chats: bool,
 ) -> Result<MessageStats> {
     ensure!(
-        last_excluded_msg >= 9,
+        last_counted_msg >= 9,
         "Last_msgid < 9 would mean including 'special' messages in the statistics"
     );
 
@@ -543,7 +543,7 @@ async fn get_message_stats(
         } else {
             general_requirements += " AND chat_id NOT IN temp.one_one_chats";
         }
-        let params = (ContactId::SELF, statistics_bot_chat_id, last_excluded_msg);
+        let params = (ContactId::SELF, statistics_bot_chat_id, last_counted_msg);
 
         let to_verified = t.query_row(
             &format!(
