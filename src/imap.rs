@@ -325,7 +325,7 @@ impl Imap {
         }
 
         info!(context, "Connecting to IMAP server.");
-        self.connectivity.set_connecting(context).await;
+        self.connectivity.set_connecting(context);
 
         self.conn_last_try = tools::Time::now();
         const BACKOFF_MIN_MS: u64 = 2000;
@@ -408,7 +408,7 @@ impl Imap {
                         "IMAP-LOGIN as {}",
                         lp.user
                     )));
-                    self.connectivity.set_preparing(context).await;
+                    self.connectivity.set_preparing(context);
                     info!(context, "Successfully logged into IMAP server.");
                     return Ok(session);
                 }
@@ -466,7 +466,7 @@ impl Imap {
         let mut session = match self.connect(context, configuring).await {
             Ok(session) => session,
             Err(err) => {
-                self.connectivity.set_err(context, &err).await;
+                self.connectivity.set_err(context, &err);
                 return Err(err);
             }
         };
@@ -692,7 +692,7 @@ impl Imap {
         }
 
         if !uids_fetch.is_empty() {
-            self.connectivity.set_working(context).await;
+            self.connectivity.set_working(context);
         }
 
         let (sender, receiver) = async_channel::unbounded();

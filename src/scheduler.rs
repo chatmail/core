@@ -569,7 +569,7 @@ async fn fetch_idle(
         // The folder is not configured.
         // For example, this happens if the server does not have Sent folder
         // but watching Sent folder is enabled.
-        connection.connectivity.set_not_configured(ctx).await;
+        connection.connectivity.set_not_configured(ctx);
         connection.idle_interrupt_receiver.recv().await.ok();
         bail!("Cannot fetch folder {folder_meaning} because it is not configured");
     };
@@ -659,7 +659,7 @@ async fn fetch_idle(
         .log_err(ctx)
         .ok();
 
-    connection.connectivity.set_idle(ctx).await;
+    connection.connectivity.set_idle(ctx);
 
     ctx.emit_event(EventType::ImapInboxIdle);
 
@@ -810,8 +810,8 @@ async fn smtp_loop(
             // Fake Idle
             info!(ctx, "SMTP fake idle started.");
             match &connection.last_send_error {
-                None => connection.connectivity.set_idle(&ctx).await,
-                Some(err) => connection.connectivity.set_err(&ctx, err).await,
+                None => connection.connectivity.set_idle(&ctx),
+                Some(err) => connection.connectivity.set_err(&ctx, err),
             }
 
             // If send_smtp_messages() failed, we set a timeout for the fake-idle so that

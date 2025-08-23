@@ -4,7 +4,6 @@ use std::{iter::once, ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use humansize::{BINARY, format_size};
-use tokio::sync::Mutex;
 
 use crate::events::EventType;
 use crate::imap::{FolderMeaning, scan_folders::get_watched_folder_configs};
@@ -160,44 +159,43 @@ impl DetailedConnectivity {
 }
 
 #[derive(Clone, Default)]
-pub(crate) struct ConnectivityStore(Arc<Mutex<DetailedConnectivity>>);
+pub(crate) struct ConnectivityStore(Arc<parking_lot::Mutex<DetailedConnectivity>>);
 
 impl ConnectivityStore {
-    async fn set(&self, context: &Context, v: DetailedConnectivity) {
+    fn set(&self, context: &Context, v: DetailedConnectivity) {
         {
-            *self.0.lock().await = v;
+            *self.0.lock() = v;
         }
         context.emit_event(EventType::ConnectivityChanged);
     }
 
-    pub(crate) async fn set_err(&self, context: &Context, e: impl ToString) {
-        self.set(context, DetailedConnectivity::Error(e.to_string()))
-            .await;
+    pub(crate) fn set_err(&self, context: &Context, e: impl ToString) {
+        self.set(context, DetailedConnectivity::Error(e.to_string()));
     }
-    pub(crate) async fn set_connecting(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::Connecting).await;
+    pub(crate) fn set_connecting(&self, context: &Context) {
+        self.set(context, DetailedConnectivity::Connecting);
     }
-    pub(crate) async fn set_working(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::Working).await;
+    pub(crate) fn set_working(&self, context: &Context) {
+        self.set(context, DetailedConnectivity::Working);
     }
-    pub(crate) async fn set_preparing(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::Preparing).await;
+    pub(crate) fn set_preparing(&self, context: &Context) {
+        self.set(context, DetailedConnectivity::Preparing);
     }
-    pub(crate) async fn set_not_configured(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::NotConfigured).await;
+    pub(crate) fn set_not_configured(&self, context: &Context) {
+        self.set(context, DetailedConnectivity::NotConfigured);
     }
-    pub(crate) async fn set_idle(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::Idle).await;
+    pub(crate) fn set_idle(&self, context: &Context) {
+        self.set(context, DetailedConnectivity::Idle);
     }
 
-    async fn get_detailed(&self) -> DetailedConnectivity {
-        self.0.lock().await.deref().clone()
+    fn get_detailed(&self) -> DetailedConnectivity {
+        self.0.lock().deref().clone()
     }
-    async fn get_basic(&self) -> Option<Connectivity> {
-        self.0.lock().await.to_basic()
+    fn get_basic(&self) -> Option<Connectivity> {
+        self.0.lock().to_basic()
     }
-    async fn get_all_work_done(&self) -> bool {
-        self.0.lock().await.all_work_done()
+    fn get_all_work_done(&self) -> bool {
+        self.0.lock().all_work_done()
     }
 }
 
@@ -205,7 +203,7 @@ impl ConnectivityStore {
 /// Called during `dc_maybe_network()` to make sure that `all_work_done()`
 /// returns false immediately after `dc_maybe_network()`.
 pub(crate) async fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<ConnectivityStore>) {
-    let mut connectivity_lock = inbox.0.lock().await;
+    let mut connectivity_lock = inbox.0.lock();
     // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
     // NotConfigured before: If all folders are NotConfigured, dc_get_connectivity()
     // returns Connected. But after dc_maybe_network(), dc_get_connectivity() must not
@@ -219,7 +217,7 @@ pub(crate) async fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<Conne
     drop(connectivity_lock);
 
     for state in oboxes {
-        let mut connectivity_lock = state.0.lock().await;
+        let mut connectivity_lock = state.0.lock();
         if *connectivity_lock == DetailedConnectivity::Idle {
             *connectivity_lock = DetailedConnectivity::InterruptingIdle;
         }
@@ -233,7 +231,7 @@ pub(crate) async fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<Conne
 /// after `maybe_network_lost()` was called.
 pub(crate) async fn maybe_network_lost(context: &Context, stores: Vec<ConnectivityStore>) {
     for store in &stores {
-        let mut connectivity_lock = store.0.lock().await;
+        let mut connectivity_lock = store.0.lock();
         if !matches!(
             *connectivity_lock,
             DetailedConnectivity::Uninitialized
@@ -248,7 +246,7 @@ pub(crate) async fn maybe_network_lost(context: &Context, stores: Vec<Connectivi
 
 impl fmt::Debug for ConnectivityStore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Ok(guard) = self.0.try_lock() {
+        if let Some(guard) = self.0.try_lock() {
             write!(f, "ConnectivityStore {:?}", &*guard)
         } else {
             write!(f, "ConnectivityStore [LOCKED]")
@@ -275,7 +273,7 @@ impl Context {
         let stores = self.connectivities.lock().clone();
         let mut connectivities = Vec::new();
         for s in stores {
-            if let Some(connectivity) = s.get_basic().await {
+            if let Some(connectivity) = s.get_basic() {
                 connectivities.push(connectivity);
             }
         }
@@ -393,7 +391,7 @@ impl Context {
                 let f = self.get_config(config).await.log_err(self).ok().flatten();
 
                 if let Some(foldername) = f {
-                    let detailed = &state.get_detailed().await;
+                    let detailed = &state.get_detailed();
                     ret += "<li>";
                     ret += &*detailed.to_icon();
                     ret += " <b>";
@@ -407,7 +405,7 @@ impl Context {
             }
 
             if !folder_added && folder == &FolderMeaning::Inbox {
-                let detailed = &state.get_detailed().await;
+                let detailed = &state.get_detailed();
                 if let DetailedConnectivity::Error(_) = detailed {
                     // On the inbox thread, we also do some other things like scan_folders and run jobs
                     // so, maybe, the inbox is not watched, but something else went wrong
@@ -429,7 +427,7 @@ impl Context {
 
         let outgoing_messages = stock_str::outgoing_messages(self).await;
         ret += &format!("<h3>{outgoing_messages}</h3><ul><li>");
-        let detailed = smtp.get_detailed().await;
+        let detailed = smtp.get_detailed();
         ret += &*detailed.to_icon();
         ret += " ";
         ret += &*escaper::encode_minimal(&detailed.to_string_smtp(self).await);
@@ -553,7 +551,7 @@ impl Context {
         drop(lock);
 
         for s in &stores {
-            if !s.get_all_work_done().await {
+            if !s.get_all_work_done() {
                 return false;
             }
         }
