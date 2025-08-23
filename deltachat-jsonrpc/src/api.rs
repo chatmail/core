@@ -884,6 +884,39 @@ impl CommandApi {
     /// Like `secure_join()`, but allows to pass a source and a UI-path.
     /// You only need this if your UI has an option to send statistics
     /// to Delta Chat's developers.
+    ///
+    /// **source**: The source where the QR code came from. One of:
+    /// ```rust
+    /// enum SecurejoinSource {
+    ///     /// Because of some problem, it is unknown where the QR code came from.
+    ///     Unknown = 0,
+    ///     /// The user opened a link somewhere outside Delta Chat
+    ///     ExternalLink = 1,
+    ///     /// The user clicked on a link in a message inside Delta Chat
+    ///     InternalLink = 2,
+    ///     /// The user clicked "Paste from Clipboard" in the QR scan activity
+    ///     Clipboard = 3,
+    ///     /// The user clicked "Load QR code as image" in the QR scan activity
+    ///     ImageLoaded = 4,
+    ///     /// The user scanned a QR code
+    ///     Scan = 5,
+    /// }
+    /// ```
+    ///
+    /// **uipath**: Which UI path did the user use to arrive at the QR code screen.
+    /// If the SecurejoinSource was ExternalLink or InternalLink,
+    /// you can just pass 0 here, because the QR code screen wasn't even opened.
+    /// ```rust
+    /// enum SecurejoinUIPath {
+    ///     /// The UI path is unknown, or the user didn't open the QR code screen at all.
+    ///     Unknown = 0,
+    ///     /// The user directly clicked on the QR icon in the main screen
+    ///     QrIcon = 1,
+    ///     /// The user first clicked on the `+` button in the main screen,
+    ///     /// and then on "New Contact"
+    ///     NewContact = 2,
+    /// }
+    /// ```
     async fn secure_join_with_ux_info(
         &self,
         account_id: u32,
