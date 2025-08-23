@@ -449,7 +449,6 @@ pub enum Config {
     StatsLastCountedMsgId,
 
     /// The last contact id that already existed when statistics-sending was enabled.
-    /// All newer contacts get the `"new": true` attribute.
     StatsLastOldContactId,
 
     /// MsgId of webxdc map integration.

@@ -28,7 +28,7 @@ const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 #[derive(Serialize)]
 struct Statistics {
     core_version: String,
-    key_created: Vec<i64>,
+    key_create_timestamps: Vec<i64>,
     statistics_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
@@ -283,7 +283,7 @@ async fn get_statistics(context: &Context) -> Result<String> {
         .get_config_u32(Config::StatsLastOldContactId)
         .await?;
 
-    let key_created: Vec<i64> = load_self_public_keyring(context)
+    let key_create_timestamps: Vec<i64> = load_self_public_keyring(context)
         .await?
         .iter()
         .map(|k| k.created_at().timestamp())
@@ -302,7 +302,7 @@ async fn get_statistics(context: &Context) -> Result<String> {
 
     let statistics = Statistics {
         core_version: get_version_str().to_string(),
-        key_created,
+        key_create_timestamps,
         statistics_id,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
