@@ -2255,6 +2255,41 @@ sig thursday",
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_contact_status_from_encrypted_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice.create_chat(bob).await.id;
+    let sent = alice.send_text(alice_chat_id, "hi").await;
+    bob.recv_msg(&sent).await;
+    alice.set_config(Config::Selfstatus, Some("status")).await?;
+    let sent = alice.send_text(alice_chat_id, "I've set self-status").await;
+    bob.recv_msg(&sent).await;
+    let bob_alice = bob.add_or_lookup_contact(alice).await;
+    assert_eq!(bob_alice.get_status(), "status");
+
+    alice
+        .set_config(Config::Selfstatus, Some("status1"))
+        .await?;
+    alice
+        .send_text(alice_chat_id, "I changed self-status")
+        .await;
+
+    // Currently we send self-status in every appropriate message.
+    let sent = alice
+        .send_text(alice_chat_id, "This message also contains my status")
+        .await;
+    let parsed_msg = bob.parse_msg(&sent).await;
+    assert!(parsed_msg.was_encrypted());
+    assert!(parsed_msg.get_header(HeaderDef::ChatUserAvatar).is_none());
+    bob.recv_msg(&sent).await;
+    let bob_alice = bob.add_or_lookup_contact(alice).await;
+    assert_eq!(bob_alice.get_status(), "status1");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_assignment_private_classical_reply() {
     for outgoing_is_classical in &[true, false] {
         let t = TestContext::new_alice().await;
