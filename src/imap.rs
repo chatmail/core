@@ -2352,11 +2352,11 @@ pub(crate) async fn prefetch_should_download(
     )
     .await?
     {
-        if is_trash {
-            message::prune_tombstone(context, message_id).await?;
+        let should = is_trash && !message::prune_tombstone(context, message_id).await?;
+        if !should {
+            markseen_on_imap_table(context, message_id).await?;
         }
-        markseen_on_imap_table(context, message_id).await?;
-        return Ok(false);
+        return Ok(should);
     }
 
     // We do not know the Message-ID or the Message-ID is missing (in this case, we create one in
@@ -2429,8 +2429,11 @@ pub(crate) async fn prefetch_should_download(
 pub(crate) fn is_dup_msg(is_chat_msg: bool, ts_sent: i64, ts_sent_old: i64) -> bool {
     // If the existing message has timestamp_sent == 0, that means we don't know its actual sent
     // timestamp, so don't delete the new message. E.g. outgoing messages have zero timestamp_sent
-    // because they are stored to the db before sending. Also consider as duplicates only messages
-    // with greater timestamp to avoid deleting both messages in a multi-device setting.
+    // because they are stored to the db before sending. Trashed messages also have zero
+    // timestamp_sent and mustn't make new messages "duplicates", otherwise if a webxdc message is
+    // deleted because of DeleteDeviceAfter set, it won't be recovered from a re-sent message. Also
+    // consider as duplicates only messages with greater timestamp to avoid deleting both messages
+    // in a multi-device setting.
     is_chat_msg && ts_sent_old != 0 && ts_sent > ts_sent_old
 }
 

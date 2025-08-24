@@ -1745,8 +1745,9 @@ pub async fn delete_msgs_ex(
 }
 
 /// Removes from the database a locally deleted message that also doesn't have a server UID.
-pub(crate) async fn prune_tombstone(context: &Context, rfc724_mid: &str) -> Result<()> {
-    context
+/// Returns whether the removal happened.
+pub(crate) async fn prune_tombstone(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    Ok(context
         .sql
         .execute(
             "DELETE FROM msgs
@@ -1757,8 +1758,8 @@ pub(crate) async fn prune_tombstone(context: &Context, rfc724_mid: &str) -> Resu
             )",
             (rfc724_mid, DC_CHAT_ID_TRASH),
         )
-        .await?;
-    Ok(())
+        .await?
+        > 0)
 }
 
 /// Marks requested messages as seen.
