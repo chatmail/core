@@ -560,10 +560,13 @@ pub(crate) async fn receive_imf_inner(
             return Ok(None);
         }
         let msg = Message::load_from_db_optional(context, old_msg_id).await?;
-        if msg.is_none() {
-            message::prune_tombstone(context, rfc724_mid).await?;
+        // The tombstone being pruned means that we expected the message to appear on IMAP after
+        // deletion. NB: Not all such messages have `msgs.deleted=1`, see how external deletion
+        // requests deal with message reordering.
+        match msg.is_none() && !message::prune_tombstone(context, rfc724_mid).await? {
+            true => replace_msg_id = None,
+            false => replace_msg_id = Some(old_msg_id),
         }
-        replace_msg_id = Some(old_msg_id);
         if let Some(msg) = msg.filter(|msg| msg.download_state() != DownloadState::Done) {
             // the message was partially downloaded before and is fully downloaded now.
             info!(
@@ -574,32 +577,39 @@ pub(crate) async fn receive_imf_inner(
         } else {
             replace_chat_id = None;
         }
-    } else {
-        replace_msg_id = if rfc724_mid_orig == rfc724_mid {
-            None
-        } else if let Some((old_msg_id, old_ts_sent)) =
-            message::rfc724_mid_exists(context, rfc724_mid_orig).await?
-        {
-            message::prune_tombstone(context, rfc724_mid_orig).await?;
-            if imap::is_dup_msg(
-                mime_parser.has_chat_version(),
-                mime_parser.timestamp_sent,
-                old_ts_sent,
-            ) {
-                info!(context, "Deleting duplicate message {rfc724_mid_orig}.");
-                let target = context.get_delete_msgs_target().await?;
-                context
-                    .sql
-                    .execute(
-                        "UPDATE imap SET target=? WHERE folder=? AND uidvalidity=? AND uid=?",
-                        (target, folder, uidvalidity, uid),
-                    )
-                    .await?;
-            }
-            Some(old_msg_id)
+    } else if rfc724_mid_orig == rfc724_mid {
+        replace_msg_id = None;
+        replace_chat_id = None;
+    } else if let Some((old_msg_id, old_ts_sent, is_trash)) = message::rfc724_mid_exists_ex(
+        context,
+        rfc724_mid_orig,
+        "chat_id=3", // Trash
+    )
+    .await?
+    {
+        if is_trash && !message::prune_tombstone(context, rfc724_mid_orig).await? {
+            replace_msg_id = None;
+        } else if imap::is_dup_msg(
+            mime_parser.has_chat_version(),
+            mime_parser.timestamp_sent,
+            old_ts_sent,
+        ) {
+            info!(context, "Deleting duplicate message {rfc724_mid_orig}.");
+            let target = context.get_delete_msgs_target().await?;
+            context
+                .sql
+                .execute(
+                    "UPDATE imap SET target=? WHERE folder=? AND uidvalidity=? AND uid=?",
+                    (target, folder, uidvalidity, uid),
+                )
+                .await?;
+            replace_msg_id = Some(old_msg_id);
         } else {
-            None
-        };
+            replace_msg_id = Some(old_msg_id);
+        }
+        replace_chat_id = None;
+    } else {
+        replace_msg_id = None;
         replace_chat_id = None;
     }
 
