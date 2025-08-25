@@ -196,7 +196,7 @@ pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
 async fn send_statistics(context: &Context) -> Result<ChatId> {
     info!(context, "Sending statistics.");
 
-    let chat_id = get_statistics_bot(context).await?;
+    let chat_id = get_statistics_chat_id(context).await?;
 
     let mut msg = Message::new(Viewtype::File);
     msg.set_text(
@@ -320,7 +320,7 @@ async fn get_statistics(context: &Context) -> Result<String> {
     Ok(serde_json::to_string_pretty(&statistics)?)
 }
 
-async fn get_statistics_bot(context: &Context) -> Result<ChatId, anyhow::Error> {
+async fn get_statistics_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
     let contact_id: ContactId = *import_vcard(context, STATISTICS_BOT_VCARD)
         .await?
         .first()
@@ -465,7 +465,7 @@ async fn get_message_stats(
         "Last_msgid < 9 would mean including 'special' messages in the statistics"
     );
 
-    let statistics_bot_chat_id = get_statistics_bot(context).await?;
+    let statistics_bot_chat_id = get_statistics_chat_id(context).await?;
 
     let trans_fn = |t: &mut rusqlite::Transaction| {
         t.pragma_update(None, "query_only", "0")?;
