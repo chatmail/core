@@ -1217,17 +1217,21 @@ async fn decide_chat_assignment(
     //
     // The chat may not exist yet, i.e. there may be
     // no database row and ChatId yet.
-    let mut num_recipients = mime_parser.recipients.len();
-    if from_id != ContactId::SELF {
-        let mut has_self_addr = false;
-        for recipient in &mime_parser.recipients {
-            if context.is_self_addr(&recipient.addr).await? {
-                has_self_addr = true;
-            }
+    let mut num_recipients = 0;
+    let mut has_self_addr = false;
+    for recipient in &mime_parser.recipients {
+        if addr_cmp(&recipient.addr, &mime_parser.from.addr) {
+            continue;
         }
-        if !has_self_addr {
-            num_recipients += 1;
+
+        if context.is_self_addr(&recipient.addr).await? {
+            has_self_addr = true;
         }
+
+        num_recipients += 1;
+    }
+    if from_id != ContactId::SELF && !has_self_addr {
+        num_recipients += 1;
     }
 
     let chat_assignment = if should_trash {
