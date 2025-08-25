@@ -44,7 +44,7 @@ use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on
 use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, remove_subject_prefix};
+use crate::tools::{self, buf_compress, remove_subject_prefix, time};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 use crate::{contact, imap};
 
@@ -559,43 +559,57 @@ pub(crate) async fn receive_imf_inner(
             );
             return Ok(None);
         }
-        let msg = Message::load_from_db(context, old_msg_id).await?;
-        replace_msg_id = Some(old_msg_id);
-        replace_chat_id = if msg.download_state() != DownloadState::Done {
+        let msg = Message::load_from_db_optional(context, old_msg_id).await?;
+        // The tombstone being pruned means that we expected the message to appear on IMAP after
+        // deletion. NB: Not all such messages have `msgs.deleted=1`, see how external deletion
+        // requests deal with message reordering.
+        match msg.is_none() && !message::prune_tombstone(context, rfc724_mid).await? {
+            true => replace_msg_id = None,
+            false => replace_msg_id = Some(old_msg_id),
+        }
+        if let Some(msg) = msg.filter(|msg| msg.download_state() != DownloadState::Done) {
             // the message was partially downloaded before and is fully downloaded now.
             info!(
                 context,
                 "Message already partly in DB, replacing by full message."
             );
-            Some(msg.chat_id)
+            replace_chat_id = Some(msg.chat_id);
         } else {
-            None
-        };
+            replace_chat_id = None;
+        }
+    } else if rfc724_mid_orig == rfc724_mid {
+        replace_msg_id = None;
+        replace_chat_id = None;
+    } else if let Some((old_msg_id, old_ts_sent, is_trash)) = message::rfc724_mid_exists_ex(
+        context,
+        rfc724_mid_orig,
+        "chat_id=3", // Trash
+    )
+    .await?
+    {
+        if is_trash && !message::prune_tombstone(context, rfc724_mid_orig).await? {
+            replace_msg_id = None;
+        } else if imap::is_dup_msg(
+            mime_parser.has_chat_version(),
+            mime_parser.timestamp_sent,
+            old_ts_sent,
+        ) {
+            info!(context, "Deleting duplicate message {rfc724_mid_orig}.");
+            let target = context.get_delete_msgs_target().await?;
+            context
+                .sql
+                .execute(
+                    "UPDATE imap SET target=? WHERE folder=? AND uidvalidity=? AND uid=?",
+                    (target, folder, uidvalidity, uid),
+                )
+                .await?;
+            replace_msg_id = Some(old_msg_id);
+        } else {
+            replace_msg_id = Some(old_msg_id);
+        }
+        replace_chat_id = None;
     } else {
-        replace_msg_id = if rfc724_mid_orig == rfc724_mid {
-            None
-        } else if let Some((old_msg_id, old_ts_sent)) =
-            message::rfc724_mid_exists(context, rfc724_mid_orig).await?
-        {
-            if imap::is_dup_msg(
-                mime_parser.has_chat_version(),
-                mime_parser.timestamp_sent,
-                old_ts_sent,
-            ) {
-                info!(context, "Deleting duplicate message {rfc724_mid_orig}.");
-                let target = context.get_delete_msgs_target().await?;
-                context
-                    .sql
-                    .execute(
-                        "UPDATE imap SET target=? WHERE folder=? AND uidvalidity=? AND uid=?",
-                        (target, folder, uidvalidity, uid),
-                    )
-                    .await?;
-            }
-            Some(old_msg_id)
-        } else {
-            None
-        };
+        replace_msg_id = None;
         replace_chat_id = None;
     }
 
@@ -2194,10 +2208,7 @@ RETURNING id
     }
 
     if let Some(replace_msg_id) = replace_msg_id {
-        // Trash the "replace" placeholder with a message that has no parts. If it has the original
-        // "Message-ID", mark the placeholder for server-side deletion so as if the user deletes the
-        // fully downloaded message later, the server-side deletion is issued.
-        let on_server = rfc724_mid == rfc724_mid_orig;
+        let on_server = false;
         replace_msg_id.trash(context, on_server).await?;
     }
 
@@ -2305,7 +2316,8 @@ async fn handle_edit_delete(
                     {
                         if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
                             if msg.from_id == from_id {
-                                message::delete_msg_locally(context, &msg).await?;
+                                let keep_tombstone = false;
+                                message::delete_msg_locally(context, &msg, keep_tombstone).await?;
                                 msg_ids.push(msg.id);
                                 modified_chat_ids.insert(msg.chat_id);
                             } else {
@@ -2316,6 +2328,14 @@ async fn handle_edit_delete(
                         }
                     } else {
                         warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                        context
+                            .sql
+                            .execute(
+                                "INSERT INTO msgs (rfc724_mid, timestamp, chat_id)
+                                VALUES (?, ?, ?)",
+                                (rfc724_mid, time(), DC_CHAT_ID_TRASH),
+                            )
+                            .await?;
                     }
                 }
                 message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
