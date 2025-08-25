@@ -44,6 +44,28 @@ async fn test_maybe_send_statistics() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rewound_time() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    alice.set_config_bool(Config::StatsSending, true).await?;
+
+    const EIGHT_DAYS: Duration = Duration::from_secs(3600 * 24 * 14);
+    SystemTime::shift(EIGHT_DAYS);
+
+    maybe_send_statistics(alice).await?.unwrap();
+
+    // The system's time is rewound
+    SystemTime::shift_backwards(EIGHT_DAYS);
+
+    assert!(maybe_send_statistics(alice).await?.is_none());
+
+    // After eight days pass again, statistics are sent again
+    SystemTime::shift(EIGHT_DAYS);
+    maybe_send_statistics(alice).await?.unwrap();
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_statistics_one_contact() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;

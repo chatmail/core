@@ -159,7 +159,19 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
         let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
         let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
         if next_sending_time <= time() {
+            // Setting this config at the beginning avoids endless loops when things do not
+            // work out for whatever reason.
+            context
+                .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
+                .await?;
+
             return Ok(Some(send_statistics(context).await?));
+        } else if time() < last_sending_time {
+            // The clock was rewound.
+            // Reset the config, so that the statistics will be sent normally in a week.
+            context
+                .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
+                .await?;
         }
     }
     Ok(None)
@@ -183,14 +195,6 @@ pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
 
 async fn send_statistics(context: &Context) -> Result<ChatId> {
     info!(context, "Sending statistics.");
-
-    // Setting this config at the beginning avoids endless loops when things do not
-    // work out for whatever reason.
-    context
-        .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
-        .await
-        .log_err(context)
-        .ok();
 
     let chat_id = get_statistics_bot(context).await?;
 
