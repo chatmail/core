@@ -49,9 +49,11 @@ async-native-tls = { version = "0.5", default-features = false, features = ["run
 async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
+blake3 = "1.8.2"
 brotli = { version = "8", default-features=false, features = ["std"] }
 bytes = "1"
 chrono = { workspace = true, features = ["alloc", "clock", "std"] }
+colorutils-rs = { version = "0.7.5", default-features = false }
 data-encoding = "2.9.0"
 escaper = "0.1"
 fast-socks5 = "0.10"
@@ -85,7 +87,6 @@ quoted_printable = "0.5"
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
-rust-hsluv = "0.1"
 rustls-pki-types = "1.12.0"
 rustls = { version = "0.23.22", default-features = false }
 sanitize-filename = { workspace = true }
@@ -112,7 +113,6 @@ tracing = "0.1.41"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webpki-roots = "0.26.8"
-blake3 = "1.8.2"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
