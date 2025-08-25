@@ -5500,6 +5500,38 @@ async fn test_small_unencrypted_group() -> Result<()> {
     Ok(())
 }
 
+/// Tests that if the sender includes self
+/// in the `To` field, we do not count
+/// it as a third recipient in addition to ourselves
+/// and the sender and do not create a group chat.
+///
+/// This is a regression test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_bcc_not_a_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let received = receive_imf(
+        alice,
+        b"From: \"\"<foobar@example.org>\n\
+          To: <foobar@example.org>\n\
+          Subject: Hello, this is not a group\n\
+          Message-ID: <abcdef@example.org>\n\
+          Chat-Version: 1.0\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          hello\n",
+        false,
+    )
+    .await?
+    .unwrap();
+
+    let received_chat = Chat::load_from_db(alice, received.chat_id).await?;
+    assert_eq!(received_chat.typ, Chattype::Single);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_lookup_key_contact_by_address_self() -> Result<()> {
     let mut tcm = TestContextManager::new();
