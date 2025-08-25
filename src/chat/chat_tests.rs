@@ -32,7 +32,7 @@ async fn test_chat_info() {
   "archived": false,
   "param": "",
   "is_sending_locations": false,
-  "color": 35391,
+  "color": 29377,
   "profile_image": {},
   "draft": "",
   "is_muted": false,
@@ -1931,7 +1931,7 @@ async fn test_chat_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group_ex(&t, None, "a chat").await?;
     let color1 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
-    assert_eq!(color1, 0x008772);
+    assert_eq!(color1, 0x613dd7);
 
     // upper-/lowercase makes a difference for the colors, these are different groups
     // (in contrast to email addresses, where upper-/lowercase is ignored in practise)
