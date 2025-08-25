@@ -18,7 +18,7 @@ pub enum QrInvite {
     Contact {
         contact_id: ContactId,
         fingerprint: Fingerprint,
-        invitenumber: String,
+        invitenumber: Option<String>,
         authcode: String,
     },
     Group {
@@ -26,7 +26,14 @@ pub enum QrInvite {
         fingerprint: Fingerprint,
         name: String,
         grpid: String,
-        invitenumber: String,
+        invitenumber: Option<String>,
+        authcode: String,
+    },
+    Broadcast {
+        contact_id: ContactId,
+        fingerprint: Fingerprint,
+        broadcast_name: String,
+        grpid: String,
         authcode: String,
     },
 }
@@ -38,29 +45,49 @@ impl QrInvite {
     /// translated to a contact ID.
     pub fn contact_id(&self) -> ContactId {
         match self {
-            Self::Contact { contact_id, .. } | Self::Group { contact_id, .. } => *contact_id,
+            Self::Contact { contact_id, .. }
+            | Self::Group { contact_id, .. }
+            | Self::Broadcast { contact_id, .. } => *contact_id,
         }
     }
 
     /// The fingerprint of the inviter.
     pub fn fingerprint(&self) -> &Fingerprint {
         match self {
-            Self::Contact { fingerprint, .. } | Self::Group { fingerprint, .. } => fingerprint,
+            Self::Contact { fingerprint, .. }
+            | Self::Group { fingerprint, .. }
+            | Self::Broadcast { fingerprint, .. } => fingerprint,
         }
     }
 
     /// The `INVITENUMBER` of the setup-contact/secure-join protocol.
-    pub fn invitenumber(&self) -> &str {
+    pub fn invitenumber(&self) -> Option<&str> {
         match self {
-            Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => invitenumber,
+            Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => {
+                invitenumber.as_deref()
+            }
+            Self::Broadcast { .. } => None,
         }
     }
 
     /// The `AUTH` code of the setup-contact/secure-join protocol.
     pub fn authcode(&self) -> &str {
         match self {
-            Self::Contact { authcode, .. } | Self::Group { authcode, .. } => authcode,
+            Self::Contact { authcode, .. }
+            | Self::Group { authcode, .. }
+            | Self::Broadcast { authcode, .. } => authcode,
         }
+    }
+
+    /// Whether this QR code uses the faster "version 2" protocol,
+    /// where the first message from Bob to Alice is symmetrically encrypted
+    /// with the AUTH code.
+    /// We may decide in the future to backwards-compatibly mark QR codes as V2,
+    /// but for now, everything without an invite number
+    /// is definitely V2,
+    /// because the invite number is needed for V1.
+    pub(crate) fn is_v2(&self) -> bool {
+        self.invitenumber().is_none()
     }
 }
 
@@ -77,7 +104,7 @@ impl TryFrom<Qr> for QrInvite {
             } => Ok(QrInvite::Contact {
                 contact_id,
                 fingerprint,
-                invitenumber,
+                invitenumber: Some(invitenumber),
                 authcode,
             }),
             Qr::AskVerifyGroup {
@@ -92,10 +119,23 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 name: grpname,
                 grpid,
-                invitenumber,
+                invitenumber: Some(invitenumber),
                 authcode,
             }),
-            _ => bail!("Unsupported QR type"),
+            Qr::AskJoinBroadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                authcode,
+            } => Ok(QrInvite::Broadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                authcode,
+            }),
+            _ => bail!("Unsupported QR type: {qr:?}"),
         }
     }
 }

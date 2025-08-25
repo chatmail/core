@@ -18,7 +18,6 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
-use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
@@ -35,6 +34,7 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, stock_str, tools};
+use crate::{constants, token};
 
 /// A parsed MIME message.
 ///
@@ -338,9 +338,22 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let mut secrets: Vec<String> = context
+            .sql
+            .query_map(
+                "SELECT secret FROM broadcasts_shared_secrets",
+                (),
+                |row| row.get(0),
+                |rows| {
+                    rows.collect::<std::result::Result<Vec<_>, _>>()
+                        .map_err(Into::into)
+                },
+            )
+            .await?;
+        secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
 
         let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
+            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
                 Ok(Some(mut msg)) => {
                     mail_raw = msg.as_data_vec().unwrap_or_default();
 

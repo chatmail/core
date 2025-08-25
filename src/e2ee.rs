@@ -59,6 +59,28 @@ impl EncryptHelper {
         Ok(ctext)
     }
 
+    /// Symmetrically encrypt the message to be sent into a broadcast channel,
+    /// or for version 2 of the Securejoin protocol.
+    /// `shared secret` is the secret that will be used for symmetric encryption.
+    pub async fn encrypt_symmetrically(
+        self,
+        context: &Context,
+        shared_secret: &str,
+        mail_to_encrypt: MimePart<'static>,
+        compress: bool,
+    ) -> Result<String> {
+        let sign_key = load_self_secret_key(context).await?;
+
+        let mut raw_message = Vec::new();
+        let cursor = Cursor::new(&mut raw_message);
+        mail_to_encrypt.clone().write_part(cursor).ok();
+
+        let ctext =
+            pgp::encrypt_symmetrically(raw_message, shared_secret, sign_key, compress).await?;
+
+        Ok(ctext)
+    }
+
     /// Signs the passed-in `mail` using the private key from `context`.
     /// Returns the payload and the signature.
     pub async fn sign(self, context: &Context, mail: &MimePart<'static>) -> Result<String> {
