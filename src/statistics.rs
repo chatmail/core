@@ -198,7 +198,7 @@ async fn send_statistics(context: &Context) -> Result<ChatId> {
     msg.set_text(
         "The attachment contains anonymous usage statistics, \
 because you enabled this in the settings. \
-This helps us improve the security of Delta Chat. \
+This helps us improve Delta Chat. \
 See TODO[blog post] for more information."
             .to_string(),
     );
