@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.12.0] - 2025-08-26
+
+### API-Changes
+
+- api!(python): remove remaining broken API for reactions
+
+### Features / Changes
+
+- Use Group ID for chat color generation instead of the name for encrypted groups.
+- Use key fingerprints instead of addresses for key-contacts color generation.
+- Replace HSLuv colors with OKLCh.
+- `wal_checkpoint()`: Do `wal_checkpoint(PASSIVE)` and `wal_checkpoint(FULL)` before `wal_checkpoint(TRUNCATE)`.
+- Assign messages to key-contacts based on Issuer Fingerprint.
+- Create_group_ex(): Log and replace invalid chat name with "…".
+
+### Fixes
+
+- Do not create a group if the sender includes self in the `To` field.
+- Do not reverify already verified contacts via gossip.
+- `get_connectivity()`: Get rid of locking SchedulerState::inner ([#7124](https://github.com/chatmail/core/pull/7124)).
+- Make reaction message hidden only if there are no other parts.
+
+### Refactor
+
+- Do not return `Result` from `valid_signature_fingerprints()`.
+- Make `ConnectivityStore` use a non-async lock ([#7129](https://github.com/chatmail/core/pull/7129)).
+
+### Documentation
+
+- Remove broken link from documentation comments.
+- Remove the comment about Color Vision Deficiency correction.
+
 ## [2.11.0] - 2025-08-13
 
 ### Features / Changes
@@ -6646,3 +6678,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.9.0]: https://github.com/chatmail/core/compare/v2.8.0..v2.9.0
 [2.10.0]: https://github.com/chatmail/core/compare/v2.9.0..v2.10.0
 [2.11.0]: https://github.com/chatmail/core/compare/v2.10.0..v2.11.0
+[2.12.0]: https://github.com/chatmail/core/compare/v2.11.0..v2.12.0
