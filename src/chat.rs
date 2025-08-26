@@ -1797,7 +1797,8 @@ impl Chat {
 
     /// Returns chat avatar color.
     ///
-    /// For 1:1 chats, the color is calculated from the contact's address.
+    /// For 1:1 chats, the color is calculated from the contact's address
+    /// for address-contacts and from the OpenPGP key fingerprint for key-contacts.
     /// For group chats the color is calculated from the grpid, if present, or the chat name.
     pub async fn get_color(&self, context: &Context) -> Result<u32> {
         let mut color = 0;
