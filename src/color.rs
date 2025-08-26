@@ -3,9 +3,6 @@
 //! This is similar to Consistent Color Generation defined in XEP-0392,
 //! but uses OKLCh colorspace instead of HSLuv
 //! to ensure that colors have the same lightness.
-//!
-//! Color Vision Deficiency correction is not implemented as Delta Chat does not offer
-//! corresponding settings.
 use colorutils_rs::{Oklch, Rgb, TransferFunction};
 use sha1::{Digest, Sha1};
 
