@@ -1575,11 +1575,16 @@ impl Contact {
     }
 
     /// Get a color for the contact.
-    /// The color is calculated from the contact's email address
-    /// and can be used for an fallback avatar with white initials
+    /// The color is calculated from the contact's fingerprint (for key-contacts)
+    /// or email address (for address-contacts) and can be used
+    /// for an fallback avatar with white initials
     /// as well as for headlines in bubbles of group chats.
     pub fn get_color(&self) -> u32 {
-        str_to_color(&self.addr.to_lowercase())
+        if let Some(fingerprint) = self.fingerprint() {
+            str_to_color(&fingerprint.hex())
+        } else {
+            str_to_color(&self.addr.to_lowercase())
+        }
     }
 
     /// Gets the contact's status.
