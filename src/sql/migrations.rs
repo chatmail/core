@@ -1273,7 +1273,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
                 count INTEGER NOT NULL DEFAULT 0
             ) STRICT;
             CREATE TABLE statistics_securejoin_invites(
-                contact_created INTEGER NOT NULL,
+                already_existed INTEGER NOT NULL,
                 already_verified INTEGER NOT NULL,
                 type TEXT NOT NULL
             ) STRICT;",

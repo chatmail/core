@@ -54,7 +54,7 @@ async fn test_rewound_time() -> Result<()> {
     maybe_send_statistics(alice).await?.unwrap();
 
     // The system's time is rewound
-    SystemTime::shift_backwards(EIGHT_DAYS);
+    SystemTime::shift_back(EIGHT_DAYS);
 
     assert!(maybe_send_statistics(alice).await?.is_none());
 
@@ -449,7 +449,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
-        contact_created: true,
+        already_existed: false,
         already_verified: false,
         typ: "contact".to_string(),
     });
@@ -458,7 +458,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
-        contact_created: false,
+        already_existed: true,
         already_verified: true,
         typ: "contact".to_string(),
     });
@@ -470,7 +470,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
-        contact_created: false,
+        already_existed: true,
         already_verified: true,
         typ: "group".to_string(),
     });
@@ -485,7 +485,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
-        contact_created: false,
+        already_existed: true,
         already_verified: false,
         typ: "group".to_string(),
     });

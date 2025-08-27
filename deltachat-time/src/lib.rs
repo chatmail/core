@@ -22,7 +22,7 @@ impl SystemTimeTools {
     }
 
     /// Simulates the system clock being rewound by `duration`.
-    pub fn shift_backwards(duration: Duration) {
+    pub fn shift_back(duration: Duration) {
         *SYSTEM_TIME_SHIFT.write().unwrap() -= duration;
     }
 }

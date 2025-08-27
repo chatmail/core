@@ -135,9 +135,9 @@ struct SecurejoinUIPaths {
 /// (i.e. a qr scan or a clicked link).
 #[derive(Serialize)]
 struct JoinedInvite {
-    /// Whether the contact was newly created right now.
-    /// If this is false, then a contact existed already before.
-    contact_created: bool,
+    /// Whether the contact already existed before.
+    /// If this is false, then a contact was newly created.
+    already_existed: bool,
     /// If a contact already existed,
     /// this tells us whether the contact was verified already.
     already_verified: bool,
@@ -711,7 +711,7 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     // but it was not visible in the contacts list in the UI
     // e.g. because it's a past contact of a group we're in),
     // then its origin is UnhandledSecurejoinQrScan.
-    let contact_created = contact.origin == Origin::UnhandledSecurejoinQrScan;
+    let already_existed = contact.origin > Origin::UnhandledSecurejoinQrScan;
 
     // Check whether the contact was verified already before the QR scan.
     let already_verified = contact.is_verified(context).await?;
@@ -724,9 +724,9 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     context
         .sql
         .execute(
-            "INSERT INTO statistics_securejoin_invites (contact_created, already_verified, type)
+            "INSERT INTO statistics_securejoin_invites (already_existed, already_verified, type)
             VALUES (?, ?, ?)",
-            (contact_created, already_verified, typ),
+            (already_existed, already_verified, typ),
         )
         .await?;
 
@@ -737,15 +737,15 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
     let qr_scans: Vec<JoinedInvite> = context
         .sql
         .query_map(
-            "SELECT contact_created, already_verified, type FROM statistics_securejoin_invites",
+            "SELECT already_existed, already_verified, type FROM statistics_securejoin_invites",
             (),
             |row| {
-                let contact_created: bool = row.get(0)?;
+                let already_existed: bool = row.get(0)?;
                 let already_verified: bool = row.get(1)?;
                 let typ: String = row.get(2)?;
 
                 Ok(JoinedInvite {
-                    contact_created,
+                    already_existed,
                     already_verified,
                     typ,
                 })
