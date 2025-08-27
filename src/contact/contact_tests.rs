@@ -758,17 +758,26 @@ async fn test_lookup_id_by_addr() {
 async fn test_contact_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "name", "name@example.net").await?;
-    let color1 = Contact::get_by_id(&t, contact_id).await?.get_color();
+    let color1 = Contact::get_by_id(&t, contact_id)
+        .await?
+        .get_color(&t)
+        .await?;
     assert_eq!(color1, 0x4947dc);
 
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "prename name", "name@example.net").await?;
-    let color2 = Contact::get_by_id(&t, contact_id).await?.get_color();
+    let color2 = Contact::get_by_id(&t, contact_id)
+        .await?
+        .get_color(&t)
+        .await?;
     assert_eq!(color2, color1);
 
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "Name", "nAme@exAmple.NET").await?;
-    let color3 = Contact::get_by_id(&t, contact_id).await?.get_color();
+    let color3 = Contact::get_by_id(&t, contact_id)
+        .await?
+        .get_color(&t)
+        .await?;
     assert_eq!(color3, color1);
     Ok(())
 }

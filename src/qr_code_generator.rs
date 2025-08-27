@@ -161,7 +161,7 @@ async fn self_info(context: &Context) -> Result<(Option<Vec<u8>>, String, String
         None => contact.get_addr().to_string(),
     };
     let addr = contact.get_addr().to_string();
-    let color = color_int_to_hex_string(contact.get_color());
+    let color = color_int_to_hex_string(contact.get_color(context).await?);
     Ok((avatar, displayname, addr, color))
 }
 

@@ -162,7 +162,9 @@ impl MessageObject {
                         message_id: quote.get_id().to_u32(),
                         chat_id: quote.get_chat_id().to_u32(),
                         author_display_name: quote_author.get_display_name().to_owned(),
-                        author_display_color: color_int_to_hex_string(quote_author.get_color()),
+                        author_display_color: color_int_to_hex_string(
+                            quote_author.get_color(context).await?,
+                        ),
                         override_sender_name: quote.get_override_sender_name(),
                         image: if quote.get_viewtype() == Viewtype::Image
                             || quote.get_viewtype() == Viewtype::Gif
@@ -581,7 +583,7 @@ impl MessageSearchResult {
             id: msg_id.to_u32(),
             author_profile_image: profile_image,
             author_name,
-            author_color: color_int_to_hex_string(sender.get_color()),
+            author_color: color_int_to_hex_string(sender.get_color(context).await?),
             author_id: sender.id.to_u32(),
             chat_id: chat.id.to_u32(),
             chat_name: chat.get_name().to_owned(),

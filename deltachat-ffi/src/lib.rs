@@ -4311,7 +4311,8 @@ pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32
         return 0;
     }
     let ffi_contact = &*contact;
-    ffi_contact.contact.get_color()
+    let ctx = &*ffi_contact.context;
+    block_on(ffi_contact.contact.get_color(ctx)).unwrap_or_log_default(ctx, "Failed get_color")
 }
 
 #[no_mangle]

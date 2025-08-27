@@ -245,6 +245,7 @@ async fn test_sync() -> Result<()> {
         Ok(())
     }
     test_config_str(&alice0, &alice1, Config::Displayname, "Alice Sync").await?;
+    test_config_str(&alice0, &alice1, Config::Selfcolor, "255").await?;
     test_config_str(&alice0, &alice1, Config::Selfstatus, "My status").await?;
 
     assert!(alice0.get_config(Config::Selfavatar).await?.is_none());

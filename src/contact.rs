@@ -1579,11 +1579,17 @@ impl Contact {
     /// or email address (for address-contacts) and can be used
     /// for an fallback avatar with white initials
     /// as well as for headlines in bubbles of group chats.
-    pub fn get_color(&self) -> u32 {
+    pub async fn get_color(&self, context: &Context) -> Result<u32> {
+        if self.id == ContactId::SELF {
+            if let Some(v) = context.get_config_opt_parsed(Config::Selfcolor).await? {
+                return Ok(v);
+            }
+        }
+
         if let Some(fingerprint) = self.fingerprint() {
-            str_to_color(&fingerprint.hex())
+            Ok(str_to_color(&fingerprint.hex()))
         } else {
-            str_to_color(&self.addr.to_lowercase())
+            Ok(str_to_color(&self.addr.to_lowercase()))
         }
     }
 

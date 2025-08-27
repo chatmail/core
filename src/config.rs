@@ -136,6 +136,9 @@ pub enum Config {
     /// Own name to use in the `From:` field when sending messages.
     Displayname,
 
+    /// Own color to use in the avatar placeholder and replies to outgoing messages.
+    Selfcolor,
+
     /// Own status to display, sent in message footer.
     Selfstatus,
 
@@ -474,6 +477,7 @@ impl Config {
                 | Self::MvboxMove
                 | Self::ShowEmails
                 | Self::Selfavatar
+                | Self::Selfcolor
                 | Self::Selfstatus,
         )
     }
@@ -833,7 +837,7 @@ impl Context {
         }
         if matches!(
             key,
-            Config::Displayname | Config::Selfavatar | Config::PrivateTag
+            Config::Displayname | Config::Selfavatar | Config::Selfcolor | Config::PrivateTag
         ) {
             self.emit_event(EventType::AccountsItemChanged);
         }

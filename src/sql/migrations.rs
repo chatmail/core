@@ -1261,6 +1261,30 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 134)?;
+    if dbversion < migration_version {
+        let trans_fn = |t: &mut rusqlite::Transaction| {
+            let Some(addr): Option<String> = t
+                .query_row(
+                    "SELECT value FROM config WHERE keyname='configured_addr'",
+                    (),
+                    |row| row.get(0),
+                )
+                .optional()?
+            else {
+                return Ok(());
+            };
+            let color = crate::color::str_to_color(&addr.to_lowercase());
+            t.execute(
+                "INSERT OR IGNORE INTO config (keyname, value) VALUES ('selfcolor', ?)",
+                (color,),
+            )?;
+            Ok(())
+        };
+        sql.execute_migration_transaction(trans_fn, migration_version)
+            .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
