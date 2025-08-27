@@ -277,6 +277,7 @@ async fn test_get_info_completeness() {
         "mail_security",
         "notify_about_wrong_pw",
         "self_reporting_id",
+        "selfcolor",
         "selfstatus",
         "send_server",
         "send_user",
