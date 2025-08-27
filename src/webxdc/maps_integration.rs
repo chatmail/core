@@ -112,7 +112,7 @@ pub(crate) async fn intercept_get_updates(
                 hash_map::Entry::Vacant(e) => {
                     let contact = Contact::get_by_id(context, location.contact_id).await?;
                     let name = contact.get_display_name().to_string();
-                    let color = color_int_to_hex_string(contact.get_color());
+                    let color = color_int_to_hex_string(contact.get_color(context).await?);
                     e.insert((name, color)).clone()
                 }
                 hash_map::Entry::Occupied(e) => e.get().clone(),

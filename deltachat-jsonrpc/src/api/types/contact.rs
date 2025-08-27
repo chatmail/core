@@ -97,7 +97,7 @@ impl ContactObject {
 
         Ok(ContactObject {
             address: contact.get_addr().to_owned(),
-            color: color_int_to_hex_string(contact.get_color()),
+            color: color_int_to_hex_string(contact.get_color(context).await?),
             auth_name: contact.get_authname().to_owned(),
             status: contact.get_status().to_owned(),
             display_name: contact.get_display_name().to_owned(),

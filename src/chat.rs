@@ -1807,7 +1807,7 @@ impl Chat {
             let contacts = get_chat_contacts(context, self.id).await?;
             if let Some(contact_id) = contacts.first() {
                 if let Ok(contact) = Contact::get_by_id(context, *contact_id).await {
-                    color = contact.get_color();
+                    color = contact.get_color(context).await?;
                 }
             }
         } else if !self.grpid.is_empty() {
