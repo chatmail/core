@@ -1078,7 +1078,9 @@ impl Context {
         );
         res.insert(
             "stats_id",
-            self.get_config_bool(Config::StatsId).await?.to_string(),
+            self.get_config(Config::StatsId)
+                .await?
+                .unwrap_or_else(|| "<unset>".to_string()),
         );
         res.insert(
             "stats_sending",
