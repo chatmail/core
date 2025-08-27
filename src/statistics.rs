@@ -159,13 +159,20 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
         let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
         let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
         if next_sending_time <= time() {
-            // Setting this config at the beginning avoids endless loops when things do not
-            // work out for whatever reason.
+            // If something goes wrong, try again in 1 minute.
+            // This prevents infinite loops in the (unlikely) case of an error:
+            let one_minute_later = last_sending_time.saturating_add(60).to_string();
+            context
+                .set_config_internal(Config::StatsLastSent, Some(&one_minute_later))
+                .await?;
+
+            let chat_id = Some(send_statistics(context).await?);
+
             context
                 .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
                 .await?;
 
-            return Ok(Some(send_statistics(context).await?));
+            return Ok(chat_id);
         } else if time() < last_sending_time {
             // The clock was rewound.
             // Reset the config, so that the statistics will be sent normally in a week.
