@@ -5236,8 +5236,7 @@ int             dc_contact_is_blocked        (const dc_contact_t* contact);
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
- * @return 0: contact is not verified.
- *    2: SELF and contact have verified their fingerprints in both directions.
+ * @return 1=contact is verified, 0=contact is not verified.
  */
 int             dc_contact_is_verified       (dc_contact_t* contact);
 

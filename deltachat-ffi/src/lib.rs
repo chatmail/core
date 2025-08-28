@@ -4250,17 +4250,10 @@ pub unsafe extern "C" fn dc_contact_is_verified(contact: *mut dc_contact_t) -> l
     let ffi_contact = &*contact;
     let ctx = &*ffi_contact.context;
 
-    if block_on(ffi_contact.contact.is_verified(ctx))
+    block_on(ffi_contact.contact.is_verified(ctx))
         .context("is_verified failed")
         .log_err(ctx)
-        .unwrap_or_default()
-    {
-        // Return value is essentially a boolean,
-        // but we return 2 for true for backwards compatibility.
-        2
-    } else {
-        0
-    }
+        .unwrap_or_default() as libc::c_int
 }
 
 #[no_mangle]
