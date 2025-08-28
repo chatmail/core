@@ -419,7 +419,9 @@ pub enum EventType {
 
     /// Incoming call.
     IncomingCall {
+        /// ID of the message referring to the call.
         msg_id: u32,
+        /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
     },
 
