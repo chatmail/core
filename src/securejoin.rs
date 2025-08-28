@@ -210,7 +210,7 @@ async fn verify_sender_by_fingerprint(
     let contact = Contact::get_by_id(context, contact_id).await?;
     let is_verified = contact.fingerprint().is_some_and(|fp| &fp == fingerprint);
     if is_verified {
-        mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+        mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
     }
     Ok(is_verified)
 }
@@ -548,7 +548,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         return Ok(HandshakeMessage::Ignore);
     }
 
-    mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+    mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
 
     ChatId::set_protection_for_contact(context, contact_id, mime_message.timestamp_sent).await?;
 
