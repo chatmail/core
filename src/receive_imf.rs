@@ -1007,7 +1007,9 @@ pub(crate) async fn receive_imf_inner(
     } else if let Some(replace_chat_id) = replace_chat_id {
         context.emit_msgs_changed_without_msg_id(replace_chat_id);
     } else if !chat_id.is_trash() {
-        let fresh = received_msg.state == MessageState::InFresh;
+        let fresh = received_msg.state == MessageState::InFresh
+            && mime_parser.is_system_message != SystemMessage::CallAccepted
+            && mime_parser.is_system_message != SystemMessage::CallEnded;
         for msg_id in &received_msg.msg_ids {
             chat_id.emit_msg_event(context, *msg_id, mime_parser.incoming && fresh);
         }
