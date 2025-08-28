@@ -1300,7 +1300,7 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * all participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
   * For not accepted calls, only the caller will inform the callee.
   *
-  * If the callee rejects, the caller will get an timeout or give up at some point -
+  * If the callee rejects, the caller will get a timeout or give up at some point -
   * same as for all other reasons the call cannot be established: Device not in reach, device muted, connectivity etc.
   * This is to protect privacy of the callee, avoiding to check if callee is online.
   *
