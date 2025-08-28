@@ -6784,6 +6784,7 @@ void dc_event_unref(dc_event_t* event);
 
 /**
  * An incoming or outgoing call was ended using dc_end_call().
+ * Moreover, the event is sent when the call was not accepted within 1 minute timeout.
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
