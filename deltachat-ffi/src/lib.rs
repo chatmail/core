@@ -1209,6 +1209,8 @@ pub unsafe extern "C" fn dc_place_outgoing_call(
     let place_call_info = to_string_lossy(place_call_info);
 
     block_on(ctx.place_outgoing_call(chat_id, place_call_info))
+        .context("Failed to place call")
+        .log_err(ctx)
         .map(|msg_id| msg_id.to_u32())
         .unwrap_or_log_default(ctx, "Failed to place call")
 }
@@ -1227,7 +1229,9 @@ pub unsafe extern "C" fn dc_accept_incoming_call(
     let msg_id = MsgId::new(msg_id);
     let accept_call_info = to_string_lossy(accept_call_info);
 
-    block_on(ctx.accept_incoming_call(msg_id, accept_call_info)).is_ok() as libc::c_int
+    block_on(ctx.accept_incoming_call(msg_id, accept_call_info))
+        .context("Failed to accept call")
+        .is_ok() as libc::c_int
 }
 
 #[no_mangle]
@@ -1239,7 +1243,10 @@ pub unsafe extern "C" fn dc_end_call(context: *mut dc_context_t, msg_id: u32) ->
     let ctx = &*context;
     let msg_id = MsgId::new(msg_id);
 
-    block_on(ctx.end_call(msg_id)).is_ok() as libc::c_int
+    block_on(ctx.end_call(msg_id))
+        .context("Failed to end call")
+        .log_err(ctx)
+        .is_ok() as libc::c_int
 }
 
 #[no_mangle]
