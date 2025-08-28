@@ -64,7 +64,7 @@ impl CallInfo {
         context
             .sql
             .execute(
-                "UPDATE msgs SET txt=?, txt_normalized=? WHERE id=?;",
+                "UPDATE msgs SET txt=?, txt_normalized=? WHERE id=?",
                 (text, message::normalize_text(text), self.msg.id),
             )
             .await?;
