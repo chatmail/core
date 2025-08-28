@@ -5155,6 +5155,32 @@ async fn test_unverified_member_msg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = chat::create_group_chat(bob, ProtectionStatus::Protected, "Group").await?;
+    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
+    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
+    tcm.exec_securejoin_qr(a0, bob, &qr).await;
+    tcm.exec_securejoin_qr(a1, bob, &qr).await;
+
+    let a0_chat_id = a0.get_last_msg().await.chat_id;
+    let a0_sent_msg = a0.send_text(a0_chat_id, "Hi").await;
+    a1.recv_msg(&a0_sent_msg).await;
+    let a1_bob_id = a1.add_or_lookup_contact_id(bob).await;
+    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
+    assert_eq!(
+        a1_fiona.get_verifier_id(a1).await?.unwrap().unwrap(),
+        a1_bob_id
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sanitize_filename_in_received() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let raw = b"Message-ID: Mr.XA6y3og8-az.WGbH9_dNcQx@testr
