@@ -1263,7 +1263,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * @param context The context object.
  * @param chat_id The chat to place a call for.
  *     This needs to be a one-to-one chat.
- * @param place_call_info any data that other devices receives
+ * @param place_call_info any data that other devices receive
  *     in #DC_EVENT_INCOMING_CALL.
  * @return ID of the system message announcing the call.
  */
