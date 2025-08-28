@@ -245,10 +245,7 @@ impl Context {
 
     pub(crate) async fn sync_call_rejection(&self, rfc724_mid: &str) -> Result<()> {
         if let Some((msg_id, _)) = rfc724_mid_exists(self, rfc724_mid).await? {
-            let call = self.load_call_by_root_id(msg_id).await?;
-            self.emit_event(EventType::CallEnded {
-                msg_id: call.msg.id,
-            });
+            self.emit_event(EventType::CallEnded { msg_id });
         }
         Ok(())
     }
