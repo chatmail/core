@@ -33,7 +33,7 @@ const RINGING_SECONDS: i64 = 60;
 /// Information about the status of a call.
 #[derive(Debug, Default)]
 pub struct CallInfo {
-    /// Incoming our outgoing call?
+    /// Incoming or outgoing call?
     pub incoming: bool,
 
     /// Was an incoming call accepted on this device?
