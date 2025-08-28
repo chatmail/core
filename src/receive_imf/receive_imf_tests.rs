@@ -5479,7 +5479,7 @@ async fn test_small_unencrypted_group() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = chat::create_group_ex(alice, None, "Unencrypted group").await?;
+    let alice_chat_id = chat::create_group(alice, None, "Unencrypted group").await?;
     let alice_bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
     send_text_msg(alice, alice_chat_id, "Hello!".to_string()).await?;

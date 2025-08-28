@@ -9,7 +9,7 @@ use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
-    TimeShiftFalsePositiveNote, sync,
+    TimeShiftFalsePositiveNote, mark_as_verified, sync,
 };
 use pretty_assertions::assert_eq;
 use strum::IntoEnumIterator;
@@ -1929,14 +1929,14 @@ async fn test_classic_email_chat() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_get_color() -> Result<()> {
     let t = TestContext::new().await;
-    let chat_id = create_group_ex(&t, None, "a chat").await?;
+    let chat_id = create_group(&t, None, "a chat").await?;
     let color1 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
     assert_eq!(color1, 0x613dd7);
 
     // upper-/lowercase makes a difference for the colors, these are different groups
     // (in contrast to email addresses, where upper-/lowercase is ignored in practise)
     let t = TestContext::new().await;
-    let chat_id = create_group_ex(&t, None, "A CHAT").await?;
+    let chat_id = create_group(&t, None, "A CHAT").await?;
     let color2 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
     assert_ne!(color2, color1);
     Ok(())
@@ -1946,7 +1946,7 @@ async fn test_chat_get_color() -> Result<()> {
 async fn test_chat_get_color_encrypted() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
-    let chat_id = create_group_ex(t, Some(ProtectionStatus::Unprotected), "a chat").await?;
+    let chat_id = create_group(t, Some(ProtectionStatus::Unprotected), "a chat").await?;
     let color1 = Chat::load_from_db(t, chat_id).await?.get_color(t).await?;
     set_chat_name(t, chat_id, "A CHAT").await?;
     let color2 = Chat::load_from_db(t, chat_id).await?.get_color(t).await?;
@@ -3831,6 +3831,67 @@ async fn test_sync_name() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_create_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
+    for a in [alice0, alice1] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    let bob = &tcm.bob().await;
+    let a0_bob_contact_id = alice0.add_or_lookup_contact_id(bob).await;
+    let a1_bob_contact_id = alice1.add_or_lookup_contact_id(bob).await;
+    for protection in [ProtectionStatus::Unprotected, ProtectionStatus::Protected] {
+        let a0_chat_id = create_group(alice0, Some(protection), "grp").await?;
+        sync(alice0, alice1).await;
+        let a0_chat = Chat::load_from_db(alice0, a0_chat_id).await?;
+        let a1_chat_id = get_chat_id_by_grpid(alice1, &a0_chat.grpid)
+            .await?
+            .unwrap()
+            .0;
+        let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+        assert_eq!(a1_chat.get_type(), Chattype::Group);
+        assert_eq!(a1_chat.protected, protection);
+        assert_eq!(a1_chat.is_promoted(), false);
+        assert_eq!(a1_chat.get_name(), "grp");
+
+        set_chat_name(alice0, a0_chat_id, "renamed").await?;
+        sync(alice0, alice1).await;
+        let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+        assert_eq!(a1_chat.is_promoted(), false);
+        assert_eq!(a1_chat.get_name(), "renamed");
+
+        if protection == ProtectionStatus::Protected {
+            mark_as_verified(alice0, bob).await;
+        }
+        add_contact_to_chat(alice0, a0_chat_id, a0_bob_contact_id).await?;
+        sync(alice0, alice1).await;
+        let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+        assert_eq!(a1_chat.is_promoted(), false);
+        assert_eq!(
+            get_chat_contacts(alice1, a1_chat_id).await?,
+            [a1_bob_contact_id, ContactId::SELF]
+        );
+
+        // Let's test a contact removal from another device.
+        remove_contact_from_chat(alice1, a1_chat_id, a1_bob_contact_id).await?;
+        sync(alice1, alice0).await;
+        let a0_chat = Chat::load_from_db(alice0, a0_chat_id).await?;
+        assert_eq!(a0_chat.is_promoted(), false);
+        assert_eq!(
+            get_chat_contacts(alice0, a0_chat_id).await?,
+            [ContactId::SELF]
+        );
+
+        let sent_msg = alice0.send_text(a0_chat_id, "hi").await;
+        let msg = alice1.recv_msg(&sent_msg).await;
+        assert_eq!(msg.chat_id, a1_chat_id);
+        assert_eq!(a1_chat_id.is_promoted(alice1).await?, true);
+    }
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed
@@ -4744,7 +4805,7 @@ async fn test_create_unencrypted_group_chat() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
 
-    let chat_id = create_group_ex(alice, None, "Group chat").await?;
+    let chat_id = create_group(alice, None, "Group chat").await?;
     let bob_key_contact_id = alice.add_or_lookup_contact_id(bob).await;
     let charlie_address_contact_id = alice.add_or_lookup_address_contact_id(charlie).await;
 
@@ -4765,7 +4826,7 @@ async fn test_create_unencrypted_group_chat() -> Result<()> {
 async fn test_create_group_invalid_name() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    let chat_id = create_group_ex(alice, None, " ").await?;
+    let chat_id = create_group(alice, None, " ").await?;
     let chat = Chat::load_from_db(alice, chat_id).await?;
     assert_eq!(chat.get_name(), "…");
     Ok(())
