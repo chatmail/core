@@ -107,7 +107,7 @@ impl Context {
         call_id: MsgId,
         accept_call_info: String,
     ) -> Result<()> {
-        let call: CallInfo = self.load_call_by_root_id(call_id).await?;
+        let mut call: CallInfo = self.load_call_by_root_id(call_id).await?;
         ensure!(call.incoming);
 
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
@@ -116,7 +116,6 @@ impl Context {
         }
 
         call.msg
-            .clone()
             .mark_call_as_accepted(self, accept_call_info.to_string())
             .await?;
 
