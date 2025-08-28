@@ -6760,7 +6760,7 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_INCOMING_CALL                            2550
 
 /**
- * The callee accepted an incoming call on another another device using dc_accept_incoming_call().
+ * The callee accepted an incoming call on another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
  *
  * The event is sent unconditionally when the corresponding message is received.
