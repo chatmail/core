@@ -1230,7 +1230,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   callee's devices receive #DC_EVENT_INCOMING_CALL_ACCEPTED, call starts
  *
  * - callee rejects using dc_end_call():
- *   caller does _not_ receive #DC_EVENT_CALL_ENDED but times out.
+ *   caller receives #DC_EVENT_CALL_ENDED after 1 minute timeout.
  *   callee's other devices receive #DC_EVENT_CALL_ENDED
  *
  * - callee is already in a call:
