@@ -183,17 +183,17 @@ impl Context {
     pub(crate) async fn handle_call_msg(
         &self,
         mime_message: &MimeMessage,
-        call_or_child_id: MsgId,
+        call_id: MsgId,
     ) -> Result<()> {
         match mime_message.is_system_message {
             SystemMessage::IncomingCall => {
-                let call = self.load_call_by_root_id(call_or_child_id).await?;
+                let call = self.load_call_by_root_id(call_id).await?;
                 if call.incoming {
                     if call.is_stale_call() {
                         call.update_text(self, "Missed call").await?;
-                        self.emit_incoming_msg(call.msg.chat_id, call_or_child_id);
+                        self.emit_incoming_msg(call.msg.chat_id, call_id);
                     } else {
-                        self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
+                        self.emit_msgs_changed(call.msg.chat_id, call_id);
                         self.emit_event(EventType::IncomingCall {
                             msg_id: call.msg.id,
                             place_call_info: call.place_call_info.to_string(),
@@ -206,12 +206,12 @@ impl Context {
                         ));
                     }
                 } else {
-                    self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
+                    self.emit_msgs_changed(call.msg.chat_id, call_id);
                 }
             }
             SystemMessage::CallAccepted => {
-                let call = self.load_call_by_root_id(call_or_child_id).await?;
-                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
+                let call = self.load_call_by_root_id(call_id).await?;
+                self.emit_msgs_changed(call.msg.chat_id, call_id);
                 if call.incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
                         msg_id: call.msg.id,
@@ -232,8 +232,8 @@ impl Context {
                 }
             }
             SystemMessage::CallEnded => {
-                let call = self.load_call_by_root_id(call_or_child_id).await?;
-                self.emit_msgs_changed(call.msg.chat_id, call_or_child_id);
+                let call = self.load_call_by_root_id(call_id).await?;
+                self.emit_msgs_changed(call.msg.chat_id, call_id);
                 self.emit_event(EventType::CallEnded {
                     msg_id: call.msg.id,
                 });
