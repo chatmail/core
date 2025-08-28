@@ -73,7 +73,7 @@ class Contact:
 
     def is_verified(self) -> bool:
         """Return True if the contact is verified."""
-        return lib.dc_contact_is_verified(self._dc_contact) == 2
+        return bool(lib.dc_contact_is_verified(self._dc_contact))
 
     def get_verifier(self, contact) -> Optional["Contact"]:
         """Return the address of the contact that verified the contact."""

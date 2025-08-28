@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -14,9 +14,7 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, ProtectionStatus, remove_from_chat_contacts_table,
-};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, remove_from_chat_contacts_table};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -28,14 +26,14 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::self_fingerprint_opt;
-use crate::key::{DcKey, Fingerprint, SignedPublicKey};
+use crate::key::{DcKey, Fingerprint};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
-use crate::mimeparser::{AvatarAction, MimeMessage, SystemMessage, parse_message_ids};
+use crate::mimeparser::{AvatarAction, GossipedKey, MimeMessage, SystemMessage, parse_message_ids};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{Reaction, set_msg_reaction};
@@ -248,9 +246,7 @@ async fn get_to_and_past_contact_ids(
     let chat_id = match chat_assignment {
         ChatAssignment::Trash => None,
         ChatAssignment::GroupChat { grpid } => {
-            if let Some((chat_id, _protected, _blocked)) =
-                chat::get_chat_id_by_grpid(context, grpid).await?
-            {
+            if let Some((chat_id, _blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some(chat_id)
             } else {
                 None
@@ -743,7 +739,7 @@ pub(crate) async fn receive_imf_inner(
     let verified_encryption = has_verified_encryption(context, &mime_parser, from_id).await?;
 
     if verified_encryption == VerifiedEncryption::Verified {
-        mark_recipients_as_verified(context, from_id, &to_ids, &mime_parser).await?;
+        mark_recipients_as_verified(context, from_id, &mime_parser).await?;
     }
 
     let received_msg = if let Some(received_msg) = received_msg {
@@ -795,7 +791,6 @@ pub(crate) async fn receive_imf_inner(
             allow_creation,
             &mut mime_parser,
             is_partial_download,
-            &verified_encryption,
             parent_message,
         )
         .await?;
@@ -813,7 +808,6 @@ pub(crate) async fn receive_imf_inner(
             is_partial_download,
             replace_msg_id,
             prevent_rename,
-            verified_encryption,
             chat_id,
             chat_id_blocked,
             is_dc_message,
@@ -835,7 +829,7 @@ pub(crate) async fn receive_imf_inner(
             context
                 .sql
                 .transaction(move |transaction| {
-                    let fingerprint = gossiped_key.dc_fingerprint().hex();
+                    let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
                     transaction.execute(
                         "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
                          VALUES                       (?, ?, ?)
@@ -1305,7 +1299,6 @@ async fn do_chat_assignment(
     allow_creation: bool,
     mime_parser: &mut MimeMessage,
     is_partial_download: Option<u32>,
-    verified_encryption: &VerifiedEncryption,
     parent_message: Option<Message>,
 ) -> Result<(ChatId, Blocked)> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
@@ -1348,9 +1341,7 @@ async fn do_chat_assignment(
             }
             ChatAssignment::GroupChat { grpid } => {
                 // Try to assign to a chat based on Chat-Group-ID.
-                if let Some((id, _protected, blocked)) =
-                    chat::get_chat_id_by_grpid(context, grpid).await?
-                {
+                if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
                 } else if allow_creation || test_normal_chat.is_some() {
@@ -1362,7 +1353,6 @@ async fn do_chat_assignment(
                         from_id,
                         to_ids,
                         past_ids,
-                        verified_encryption,
                         grpid,
                     )
                     .await?
@@ -1464,45 +1454,6 @@ async fn do_chat_assignment(
                         );
                     }
                 }
-
-                // Check if the message was sent with verified encryption and set the protection of
-                // the 1:1 chat accordingly.
-                let chat = match is_partial_download.is_none()
-                    && mime_parser.get_header(HeaderDef::SecureJoin).is_none()
-                {
-                    true => Some(Chat::load_from_db(context, chat_id).await?)
-                        .filter(|chat| chat.typ == Chattype::Single),
-                    false => None,
-                };
-                if let Some(chat) = chat {
-                    ensure_and_debug_assert!(
-                        chat.typ == Chattype::Single,
-                        "Chat {chat_id} is not Single",
-                    );
-                    let new_protection = match verified_encryption {
-                        VerifiedEncryption::Verified => ProtectionStatus::Protected,
-                        VerifiedEncryption::NotVerified(_) => ProtectionStatus::Unprotected,
-                    };
-
-                    ensure_and_debug_assert!(
-                        chat.protected == ProtectionStatus::Unprotected
-                            || new_protection == ProtectionStatus::Protected,
-                        "Chat {chat_id} can't downgrade to Unprotected",
-                    );
-                    if chat.protected != new_protection {
-                        // The message itself will be sorted under the device message since the device
-                        // message is `MessageState::InNoticed`, which means that all following
-                        // messages are sorted under it.
-                        chat_id
-                            .set_protection(
-                                context,
-                                new_protection,
-                                mime_parser.timestamp_sent,
-                                Some(from_id),
-                            )
-                            .await?;
-                    }
-                }
             }
         }
     } else {
@@ -1519,9 +1470,7 @@ async fn do_chat_assignment(
                 chat_id = Some(DC_CHAT_ID_TRASH);
             }
             ChatAssignment::GroupChat { grpid } => {
-                if let Some((id, _protected, blocked)) =
-                    chat::get_chat_id_by_grpid(context, grpid).await?
-                {
+                if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
                 } else if allow_creation {
@@ -1533,7 +1482,6 @@ async fn do_chat_assignment(
                         from_id,
                         to_ids,
                         past_ids,
-                        verified_encryption,
                         grpid,
                     )
                     .await?
@@ -1589,7 +1537,7 @@ async fn do_chat_assignment(
             if chat_id.is_none() && allow_creation {
                 let to_contact = Contact::get_by_id(context, to_id).await?;
                 if let Some(list_id) = to_contact.param.get(Param::ListId) {
-                    if let Some((id, _, blocked)) =
+                    if let Some((id, blocked)) =
                         chat::get_chat_id_by_grpid(context, list_id).await?
                     {
                         chat_id = Some(id);
@@ -1655,7 +1603,6 @@ async fn add_parts(
     is_partial_download: Option<u32>,
     mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
-    verified_encryption: VerifiedEncryption,
     chat_id: ChatId,
     chat_id_blocked: Blocked,
     is_dc_message: MessengerMessage,
@@ -1689,12 +1636,6 @@ async fn add_parts(
             let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
             for part in &mut mime_parser.parts {
                 part.param.set(Param::OverrideSenderDisplayname, name);
-
-                if chat.is_protected() {
-                    // In protected chat, also mark the message with an error.
-                    let s = stock_str::unknown_sender_for_chat(context).await;
-                    part.error = Some(s);
-                }
             }
         }
     }
@@ -1710,16 +1651,7 @@ async fn add_parts(
             apply_out_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
         }
         Chattype::Group => {
-            apply_group_changes(
-                context,
-                mime_parser,
-                &mut chat,
-                from_id,
-                to_ids,
-                past_ids,
-                &verified_encryption,
-            )
-            .await?
+            apply_group_changes(context, mime_parser, &mut chat, from_id, to_ids, past_ids).await?
         }
         Chattype::InBroadcast => {
             apply_in_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
@@ -1866,25 +1798,6 @@ async fn add_parts(
         None
     };
 
-    let mut verification_failed = false;
-    if !chat_id.is_special() && is_partial_download.is_none() {
-        // For outgoing emails in the 1:1 chat we have an exception that
-        // they are allowed to be unencrypted:
-        // 1. They can't be an attack (they are outgoing, not incoming)
-        // 2. Probably the unencryptedness is just a temporary state, after all
-        //    the user obviously still uses DC
-        //    -> Showing info messages every time would be a lot of noise
-        // 3. The info messages that are shown to the user ("Your chat partner
-        //    likely reinstalled DC" or similar) would be wrong.
-        if chat.is_protected() && (mime_parser.incoming || chat.typ != Chattype::Single) {
-            if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-                verification_failed = true;
-                warn!(context, "Verification problem: {err:#}.");
-                let s = format!("{err}. Re-download the message or see 'Info' for more details");
-                mime_parser.replace_msg_by_error(&s);
-            }
-        }
-    }
     drop(chat); // Avoid using stale `chat` object.
 
     let sort_timestamp = tweak_sort_timestamp(
@@ -2142,10 +2055,6 @@ RETURNING id
                         DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
-                    } else if verification_failed {
-                        // Verification can fail because of message reordering. Re-downloading the
-                        // message should help if so.
-                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
@@ -2628,26 +2537,11 @@ async fn create_group(
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
-    verified_encryption: &VerifiedEncryption,
     grpid: &str,
 ) -> Result<Option<(ChatId, Blocked)>> {
     let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
-
-    let create_protected = if mime_parser.get_header(HeaderDef::ChatVerified).is_some() {
-        if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-            warn!(
-                context,
-                "Creating unprotected group because of the verification problem: {err:#}."
-            );
-            ProtectionStatus::Unprotected
-        } else {
-            ProtectionStatus::Protected
-        }
-    } else {
-        ProtectionStatus::Unprotected
-    };
 
     async fn self_explicitly_added(
         context: &Context,
@@ -2684,7 +2578,6 @@ async fn create_group(
             grpid,
             grpname,
             create_blocked,
-            create_protected,
             None,
             mime_parser.timestamp_sent,
         )
@@ -2856,7 +2749,6 @@ async fn apply_group_changes(
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
-    verified_encryption: &VerifiedEncryption,
 ) -> Result<GroupChangesInfo> {
     let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     ensure!(chat.typ == Chattype::Group);
@@ -2879,24 +2771,6 @@ async fn apply_group_changes(
         HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
     let is_from_in_chat =
         !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
-
-    if mime_parser.get_header(HeaderDef::ChatVerified).is_some() && !chat.is_protected() {
-        if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-            warn!(
-                context,
-                "Not marking chat {} as protected due to verification problem: {err:#}.", chat.id,
-            );
-        } else {
-            chat.id
-                .set_protection(
-                    context,
-                    ProtectionStatus::Protected,
-                    mime_parser.timestamp_sent,
-                    Some(from_id),
-                )
-                .await?;
-        }
-    }
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
         // TODO: if address "alice@example.org" is a member of the group twice,
@@ -2926,7 +2800,7 @@ async fn apply_group_changes(
             // highest `add_timestamp` to disambiguate.
             // The result of the error is that info message
             // may contain display name of the wrong contact.
-            let fingerprint = key.dc_fingerprint().hex();
+            let fingerprint = key.public_key.dc_fingerprint().hex();
             if let Some(contact_id) =
                 lookup_key_contact_by_fingerprint(context, &fingerprint).await?
             {
@@ -3269,7 +3143,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
 ) -> Result<Option<(ChatId, Blocked)>> {
     let listid = mailinglist_header_listid(list_id_header)?;
 
-    if let Some((chat_id, _, blocked)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+    if let Some((chat_id, blocked)) = chat::get_chat_id_by_grpid(context, &listid).await? {
         return Ok(Some((chat_id, blocked)));
     }
 
@@ -3307,7 +3181,6 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             &listid,
             name,
             blocked,
-            ProtectionStatus::Unprotected,
             param,
             mime_parser.timestamp_sent,
         )
@@ -3589,7 +3462,6 @@ async fn create_adhoc_group(
         "", // Ad hoc groups have no ID.
         grpname,
         create_blocked,
-        ProtectionStatus::Unprotected,
         None,
         mime_parser.timestamp_sent,
     )
@@ -3665,19 +3537,35 @@ async fn has_verified_encryption(
 async fn mark_recipients_as_verified(
     context: &Context,
     from_id: ContactId,
-    to_ids: &[Option<ContactId>],
     mimeparser: &MimeMessage,
 ) -> Result<()> {
-    if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
-        return Ok(());
-    }
-    for to_id in to_ids.iter().filter_map(|&x| x) {
+    for gossiped_key in mimeparser
+        .gossiped_keys
+        .values()
+        .filter(|gossiped_key| gossiped_key.is_verified)
+    {
+        let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
+        let Some(to_id) = lookup_key_contact_by_fingerprint(context, &fingerprint).await? else {
+            continue;
+        };
+
         if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
 
-        mark_contact_id_as_verified(context, to_id, from_id).await?;
-        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
+        if from_id == ContactId::SELF {
+            // Mark the contact as verified.
+            // We don't know however if the contact was directly verified
+            // as we did not observe SecureJoin, so mark as verified by unknown contact.
+            // `verifier` equal to contact ID itself means that the contact
+            // is verified, but it is not known by whom.
+            context
+                .sql
+                .execute("UPDATE contacts SET verifier=?1 WHERE id=?1", (to_id,))
+                .await?;
+        } else {
+            mark_contact_id_as_verified(context, to_id, from_id).await?;
+        }
     }
 
     Ok(())
@@ -3763,7 +3651,7 @@ async fn add_or_lookup_contacts_by_address_list(
 async fn add_or_lookup_key_contacts(
     context: &Context,
     address_list: &[SingleInfo],
-    gossiped_keys: &HashMap<String, SignedPublicKey>,
+    gossiped_keys: &BTreeMap<String, GossipedKey>,
     fingerprints: &[Fingerprint],
     origin: Origin,
 ) -> Result<Vec<Option<ContactId>>> {
@@ -3779,7 +3667,7 @@ async fn add_or_lookup_key_contacts(
             // Iterator has not ran out of fingerprints yet.
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
-            key.dc_fingerprint().hex()
+            key.public_key.dc_fingerprint().hex()
         } else if context.is_self_addr(addr).await? {
             contact_ids.push(Some(ContactId::SELF));
             continue;

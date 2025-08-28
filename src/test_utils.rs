@@ -21,8 +21,8 @@ use tokio::runtime::Handle;
 use tokio::{fs, task};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, ProtectionStatus,
-    add_to_chat_contacts_table, create_group_chat,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table,
+    create_group_chat,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -186,8 +186,8 @@ impl TestContextManager {
             msg,
             to.name()
         ));
-        let chat = from.create_chat(to).await;
-        let sent = from.send_text(chat.id, msg).await;
+        let chat_id = from.create_chat_id(to).await;
+        let sent = from.send_text(chat_id, msg).await;
         to.recv_msg(&sent).await
     }
 
@@ -852,14 +852,23 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
+    /// Creates or returns an existing 1:1 [`ChatId`] with another account.
+    ///
+    /// This first creates a contact by exporting a vCard from the `other`
+    /// and importing it into `self`,
+    /// then creates a 1:1 chat with this contact.
+    pub async fn create_chat_id(&self, other: &TestContext) -> ChatId {
+        let contact_id = self.add_or_lookup_contact_id(other).await;
+        ChatId::create_for_contact(self, contact_id).await.unwrap()
+    }
+
     /// Creates or returns an existing 1:1 [`Chat`] with another account.
     ///
     /// This first creates a contact by exporting a vCard from the `other`
     /// and importing it into `self`,
     /// then creates a 1:1 chat with this contact.
     pub async fn create_chat(&self, other: &TestContext) -> Chat {
-        let contact_id = self.add_or_lookup_contact_id(other).await;
-        let chat_id = ChatId::create_for_contact(self, contact_id).await.unwrap();
+        let chat_id = self.create_chat_id(other).await;
         Chat::load_from_db(self, chat_id).await.unwrap()
     }
 
@@ -997,7 +1006,7 @@ impl TestContext {
         };
         writeln!(
             res,
-            "{}#{}: {} [{}]{}{}{} {}",
+            "{}#{}: {} [{}]{}{}{}",
             sel_chat.typ,
             sel_chat.get_id(),
             sel_chat.get_name(),
@@ -1014,11 +1023,6 @@ impl TestContext {
                     _ => " Icon: Err".to_string(),
                 },
                 _ => "".to_string(),
-            },
-            if sel_chat.is_protected() {
-                "🛡️"
-            } else {
-                ""
             },
         )
         .unwrap();
@@ -1050,11 +1054,10 @@ impl TestContext {
 
     pub async fn create_group_with_members(
         &self,
-        protect: ProtectionStatus,
         chat_name: &str,
         members: &[&TestContext],
     ) -> ChatId {
-        let chat_id = create_group_chat(self, protect, chat_name).await.unwrap();
+        let chat_id = create_group_chat(self, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
             let contact_id = self.add_or_lookup_contact_id(member).await;

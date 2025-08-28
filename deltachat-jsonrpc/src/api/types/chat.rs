@@ -19,18 +19,6 @@ pub struct FullChat {
     id: u32,
     name: String,
 
-    /// True if the chat is protected.
-    ///
-    /// Only verified contacts
-    /// as determined by [`ContactObject::is_verified`] / `Contact.isVerified`
-    /// can be added to protected chats.
-    ///
-    /// Protected chats are created using [`create_group_chat`] / `createGroupChat()`
-    /// by setting the 'protect' parameter to true.
-    ///
-    /// [`create_group_chat`]: crate::api::CommandApi::create_group_chat
-    is_protected: bool,
-
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
     /// and all contacts in the chat are "key-contacts",
@@ -71,8 +59,6 @@ pub struct FullChat {
     fresh_message_counter: usize,
     // is_group - please check over chat.type in frontend instead
     is_contact_request: bool,
-    /// Deprecated 2025-07. Chats protection cannot break any longer.
-    is_protection_broken: bool,
 
     is_device_chat: bool,
     self_in_group: bool,
@@ -133,7 +119,6 @@ impl FullChat {
         Ok(FullChat {
             id: chat_id,
             name: chat.name.clone(),
-            is_protected: chat.is_protected(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
@@ -147,7 +132,6 @@ impl FullChat {
             color,
             fresh_message_counter,
             is_contact_request: chat.is_contact_request(),
-            is_protection_broken: chat.is_protection_broken(),
             is_device_chat: chat.is_device_talk(),
             self_in_group: contact_ids.contains(&ContactId::SELF),
             is_muted: chat.is_muted(),
@@ -174,18 +158,6 @@ impl FullChat {
 pub struct BasicChat {
     id: u32,
     name: String,
-
-    /// True if the chat is protected.
-    ///
-    /// UI should display a green checkmark
-    /// in the chat title,
-    /// in the chat profile title and
-    /// in the chatlist item
-    /// if chat protection is enabled.
-    /// UI should also display a green checkmark
-    /// in the contact profile
-    /// if 1:1 chat with this contact exists and is protected.
-    is_protected: bool,
 
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
@@ -218,8 +190,6 @@ pub struct BasicChat {
     is_self_talk: bool,
     color: String,
     is_contact_request: bool,
-    /// Deprecated 2025-07. Chats protection cannot break any longer.
-    is_protection_broken: bool,
 
     is_device_chat: bool,
     is_muted: bool,
@@ -239,7 +209,6 @@ impl BasicChat {
         Ok(BasicChat {
             id: chat_id,
             name: chat.name.clone(),
-            is_protected: chat.is_protected(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
@@ -249,7 +218,6 @@ impl BasicChat {
             is_self_talk: chat.is_self_talk(),
             color,
             is_contact_request: chat.is_contact_request(),
-            is_protection_broken: chat.is_protection_broken(),
             is_device_chat: chat.is_device_talk(),
             is_muted: chat.is_muted(),
         })
