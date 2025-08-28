@@ -1948,16 +1948,21 @@ pub(crate) async fn update_last_seen(
 }
 
 /// Marks contact `contact_id` as verified by `verifier_id`.
+///
+/// `verifier_id == None` means that the verifier is unknown.
 pub(crate) async fn mark_contact_id_as_verified(
     context: &Context,
     contact_id: ContactId,
-    verifier_id: ContactId,
+    verifier_id: Option<ContactId>,
 ) -> Result<()> {
+    ensure_and_debug_assert_ne!(contact_id, ContactId::SELF,);
     ensure_and_debug_assert_ne!(
-        contact_id,
+        Some(contact_id),
         verifier_id,
         "Contact cannot be verified by self",
     );
+    let update = verifier_id == Some(ContactId::SELF);
+    let verifier_id = verifier_id.unwrap_or(contact_id);
     context
         .sql
         .transaction(|transaction| {
@@ -1983,8 +1988,8 @@ pub(crate) async fn mark_contact_id_as_verified(
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=?1
-                 WHERE id=?2 AND (verifier=0 OR ?1=?3)",
-                (verifier_id, contact_id, ContactId::SELF),
+                 WHERE id=?2 AND (verifier=0 OR ?3)",
+                (verifier_id, contact_id, update),
             )?;
             Ok(())
         })

@@ -1215,7 +1215,7 @@ impl Context {
             .await?
             .first()
             .context("Self reporting bot vCard does not contain a contact")?;
-        mark_contact_id_as_verified(self, contact_id, ContactId::SELF).await?;
+        mark_contact_id_as_verified(self, contact_id, Some(ContactId::SELF)).await?;
 
         let chat_id = ChatId::create_for_contact(self, contact_id).await?;
         chat_id

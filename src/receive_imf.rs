@@ -3691,12 +3691,13 @@ async fn mark_recipients_as_verified(
     if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
         return Ok(());
     }
+    let verifier_id = Some(from_id).filter(|&id| id != ContactId::SELF);
     for to_id in to_ids.iter().filter_map(|&x| x) {
         if to_id == ContactId::SELF || to_id == from_id {
             continue;
         }
 
-        mark_contact_id_as_verified(context, to_id, from_id).await?;
+        mark_contact_id_as_verified(context, to_id, verifier_id).await?;
         ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
     }
 
