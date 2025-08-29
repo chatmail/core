@@ -34,11 +34,12 @@ const RINGING_SECONDS: i64 = 60;
 #[derive(Debug, Default)]
 pub struct CallInfo {
     /// Incoming or outgoing call?
-    pub incoming: bool,
+    pub is_incoming: bool,
 
     /// Was an incoming call accepted on this device?
-    /// On other devices, this is never set and for outgoing calls, this is never set.
-    pub accepted: bool,
+    /// For privacy reasons, only for accepted incoming calls, callee sends a message to caller on `end_call()`.
+    /// On other devices and for outgoing calls, `is_accepted` is never set.
+    pub is_accepted: bool,
 
     /// User-defined text as given to place_outgoing_call()
     pub place_call_info: String,
@@ -108,7 +109,7 @@ impl Context {
         accept_call_info: String,
     ) -> Result<()> {
         let mut call: CallInfo = self.load_call_by_id(call_id).await?;
-        ensure!(call.incoming);
+        ensure!(call.is_incoming);
 
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
         if chat.is_contact_request() {
@@ -141,7 +142,7 @@ impl Context {
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let call: CallInfo = self.load_call_by_id(call_id).await?;
 
-        if call.accepted || !call.incoming {
+        if call.is_accepted || !call.is_incoming {
             let mut msg = Message {
                 viewtype: Viewtype::Text,
                 text: "Call ended".into(),
@@ -150,7 +151,7 @@ impl Context {
             msg.param.set_cmd(SystemMessage::CallEnded);
             msg.set_quote(self, Some(&call.msg)).await?;
             msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
-        } else if call.incoming {
+        } else if call.is_incoming {
             // to protect privacy, we do not send a message to others from callee for unaccepted calls
             self.add_sync_item(SyncData::RejectIncomingCall {
                 msg: call.msg.rfc724_mid,
@@ -172,7 +173,7 @@ impl Context {
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
         let call = context.load_call_by_id(call_id).await?;
-        if !call.accepted {
+        if !call.is_accepted {
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
             });
@@ -188,7 +189,7 @@ impl Context {
         match mime_message.is_system_message {
             SystemMessage::IncomingCall => {
                 let call = self.load_call_by_id(call_id).await?;
-                if call.incoming {
+                if call.is_incoming {
                     if call.is_stale_call() {
                         call.update_text(self, "Missed call").await?;
                         self.emit_incoming_msg(call.msg.chat_id, call_id);
@@ -212,7 +213,7 @@ impl Context {
             SystemMessage::CallAccepted => {
                 let call = self.load_call_by_id(call_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
-                if call.incoming {
+                if call.is_incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
                         msg_id: call.msg.id,
                         accept_call_info: call.accept_call_info,
@@ -262,8 +263,8 @@ impl Context {
         );
 
         Ok(CallInfo {
-            incoming: call.get_info_type() == SystemMessage::IncomingCall,
-            accepted: call.is_call_accepted()?,
+            is_incoming: call.get_info_type() == SystemMessage::IncomingCall,
+            is_accepted: call.is_call_accepted()?,
             place_call_info: call
                 .param
                 .get(Param::WebrtcRoom)
