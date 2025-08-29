@@ -1964,7 +1964,7 @@ pub(crate) async fn mark_contact_id_as_verified(
         "Contact cannot be verified by self",
     );
     let update = verifier_id == Some(ContactId::SELF);
-    let verifier_id = verifier_id.unwrap_or(contact_id);
+    let mut verifier_id = verifier_id.unwrap_or(contact_id);
     context
         .sql
         .transaction(|transaction| {
@@ -1992,6 +1992,12 @@ pub(crate) async fn mark_contact_id_as_verified(
                     verifier_id == contact_id || verifier_verifier_id != ContactId::UNDEFINED,
                     "Contact {contact_id} cannot be verified by unverified contact {verifier_id}",
                 );
+                if verifier_verifier_id == verifier_id {
+                    // Avoid introducing incorrect reverse chains: if the verifier itself has an
+                    // unknown verifier, it may be `contact_id` actually (directly or indirectly) on
+                    // the other device.
+                    verifier_id = contact_id;
+                }
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=?1
