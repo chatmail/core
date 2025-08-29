@@ -1961,7 +1961,7 @@ pub(crate) async fn mark_contact_id_as_verified(
         verifier_id,
         "Contact cannot be verified by self",
     );
-    let update = verifier_id == Some(ContactId::SELF);
+    let by_self = verifier_id == Some(ContactId::SELF);
     let mut verifier_id = verifier_id.unwrap_or(contact_id);
     context
         .sql
@@ -2000,8 +2000,8 @@ pub(crate) async fn mark_contact_id_as_verified(
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=?1
-                 WHERE id=?2 AND (verifier=0 OR ?3)",
-                (verifier_id, contact_id, update),
+                 WHERE id=?2 AND (verifier=0 OR verifier=id OR ?3)",
+                (verifier_id, contact_id, by_self),
             )?;
             Ok(())
         })
