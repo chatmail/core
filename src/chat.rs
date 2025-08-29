@@ -4974,7 +4974,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
 }
 
 /// Sets chat contacts by their fingerprints creating the corresponding contacts if necessary and
-/// verifying contacts by `SELF` if the chat is protected.
+/// verifying unverified contacts by themselves if the chat is protected.
 ///
 /// `fingerprint_addrs` is a list of pairs of fingerprint and address.
 async fn set_contacts_by_fingerprints(
@@ -5008,7 +5008,7 @@ async fn set_contacts_by_fingerprints(
             if contact_id == ContactId::SELF {
                 continue;
             }
-            mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+            mark_contact_id_as_verified(context, contact_id, None).await?;
             ChatId::set_protection_for_contact(context, contact_id, now).await?;
         }
     }

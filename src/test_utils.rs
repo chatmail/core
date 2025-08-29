@@ -1420,7 +1420,7 @@ fn print_logevent(logevent: &LogEvent) {
 /// Saves the other account's public key as verified
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
     let contact_id = this.add_or_lookup_contact_id(other).await;
-    mark_contact_id_as_verified(this, contact_id, ContactId::SELF)
+    mark_contact_id_as_verified(this, contact_id, Some(ContactId::SELF))
         .await
         .unwrap();
 }
