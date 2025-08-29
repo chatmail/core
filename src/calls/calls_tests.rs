@@ -86,7 +86,9 @@ async fn accept_call() -> Result<(
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
 
-    bob2.recv_msg(&sent2).await;
+    let bob_accept_msg = bob2.recv_msg(&sent2).await;
+    assert!(bob_accept_msg.is_info());
+    assert_eq!(bob_accept_msg.get_info_type(), SystemMessage::CallAccepted);
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
@@ -94,7 +96,12 @@ async fn accept_call() -> Result<(
     assert!(!info.is_accepted); // "accepted" is only true on the device that does the call
 
     // Alice receives the acceptance message
-    alice.recv_msg(&sent2).await;
+    let alice_accept_msg = alice.recv_msg(&sent2).await;
+    assert!(alice_accept_msg.is_info());
+    assert_eq!(
+        alice_accept_msg.get_info_type(),
+        SystemMessage::CallAccepted
+    );
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
