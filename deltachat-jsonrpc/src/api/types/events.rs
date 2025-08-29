@@ -419,7 +419,7 @@ pub enum EventType {
 
     /// Incoming call.
     IncomingCall {
-        /// ID of the message referring to the call.
+        /// ID of the info message referring to the call.
         msg_id: u32,
         /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
@@ -428,18 +428,25 @@ pub enum EventType {
     /// Incoming call accepted.
     /// This is esp. interesting to stop ringing on other devices.
     IncomingCallAccepted {
+        /// ID of the info message referring to the call.
         msg_id: u32,
+        /// User-defined info passed to dc_accept_incoming_call()
         accept_call_info: String,
     },
 
     /// Outgoing call accepted.
     OutgoingCallAccepted {
+        /// ID of the info message referring to the call.
         msg_id: u32,
+        /// User-defined info passed to dc_accept_incoming_call(
         accept_call_info: String,
     },
 
     /// Call ended.
-    CallEnded { msg_id: u32 },
+    CallEnded {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+    },
 }
 
 impl From<CoreEventType> for EventType {
