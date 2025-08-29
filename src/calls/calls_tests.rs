@@ -29,18 +29,14 @@ async fn setup_call() -> Result<(
     let sent1 = alice.pop_sent_msg().await;
     assert_eq!(sent1.sender_msg_id, test_msg_id);
     let alice_call = Message::load_from_db(&alice, sent1.sender_msg_id).await?;
-    assert!(alice_call.is_info());
-    assert_eq!(alice_call.get_info_type(), SystemMessage::OutgoingCall);
-    let info = alice.load_call_by_id(alice_call.id).await?;
-    assert!(!info.is_accepted);
-    assert_eq!(info.place_call_info, "place_info");
-
     let alice2_call = alice2.recv_msg(&sent1).await;
-    assert!(alice2_call.is_info());
-    assert_eq!(alice2_call.get_info_type(), SystemMessage::OutgoingCall);
-    let info = alice2.load_call_by_id(alice2_call.id).await?;
-    assert!(!info.is_accepted);
-    assert_eq!(info.place_call_info, "place_info");
+    for (t, m) in [(&alice, &alice_call), (&alice2, &alice2_call)] {
+        assert!(m.is_info());
+        assert_eq!(m.get_info_type(), SystemMessage::OutgoingCall);
+        let info = t.load_call_by_id(m.id).await?;
+        assert!(!info.is_accepted);
+        assert_eq!(info.place_call_info, "place_info");
+    }
 
     // Bob receives the message referring to the call on two devices;
     // it is an incoming call from the view of Bob
