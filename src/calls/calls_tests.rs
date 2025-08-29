@@ -27,8 +27,8 @@ async fn setup_call() -> Result<(
         .place_outgoing_call(alice_chat.id, "place_info".to_string())
         .await?;
     let sent1 = alice.pop_sent_msg().await;
-    let alice_call = Message::load_from_db(&alice, sent1.sender_msg_id).await?;
     assert_eq!(sent1.sender_msg_id, test_msg_id);
+    let alice_call = Message::load_from_db(&alice, sent1.sender_msg_id).await?;
     assert!(alice_call.is_info());
     assert_eq!(alice_call.get_info_type(), SystemMessage::OutgoingCall);
     let info = alice.load_call_by_id(alice_call.id).await?;
@@ -111,7 +111,12 @@ async fn accept_call() -> Result<(
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
 
-    alice2.recv_msg(&sent2).await;
+    let alice2_accept_msg = alice2.recv_msg(&sent2).await;
+    assert!(alice2_accept_msg.is_info());
+    assert_eq!(
+        alice2_accept_msg.get_info_type(),
+        SystemMessage::CallAccepted
+    );
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
@@ -132,19 +137,28 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         .await;
     let sent3 = bob.pop_sent_msg().await;
 
-    bob2.recv_msg(&sent3).await;
+    let bob2_end_call_msg = bob2.recv_msg(&sent3).await;
+    assert!(bob2_end_call_msg.is_info());
+    assert_eq!(bob2_end_call_msg.get_info_type(), SystemMessage::CallEnded);
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     // Alice receives the ending message
-    alice.recv_msg(&sent3).await;
+    let alice_end_call_msg = alice.recv_msg(&sent3).await;
+    assert!(alice_end_call_msg.is_info());
+    assert_eq!(alice_end_call_msg.get_info_type(), SystemMessage::CallEnded);
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
-    alice2.recv_msg(&sent3).await;
+    let alice2_end_call_msg = alice2.recv_msg(&sent3).await;
+    assert!(alice2_end_call_msg.is_info());
+    assert_eq!(
+        alice2_end_call_msg.get_info_type(),
+        SystemMessage::CallEnded
+    );
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
