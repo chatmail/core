@@ -45,11 +45,11 @@ async fn setup_call() -> Result<(
     // Bob receives the message referring to the call on two devices;
     // it is an incoming call from the view of Bob
     let bob_call = bob.recv_msg(&sent1).await;
+    assert!(bob_call.is_info());
+    assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
         .await;
-    assert!(bob_call.is_info());
-    assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
     let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(!info.is_accepted);
     assert_eq!(info.place_call_info, "place_info");
@@ -125,6 +125,11 @@ async fn accept_call() -> Result<(
     Ok((alice, alice2, alice_call, bob, bob2, bob_call))
 }
 
+fn assert_is_call_ended_info_msg(msg: Message) {
+    assert!(msg.is_info());
+    assert_eq!(msg.get_info_type(), SystemMessage::CallEnded);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_accept_call_callee_ends() -> Result<()> {
     // Alice calls Bob, Bob accepts
@@ -138,27 +143,21 @@ async fn test_accept_call_callee_ends() -> Result<()> {
     let sent3 = bob.pop_sent_msg().await;
 
     let bob2_end_call_msg = bob2.recv_msg(&sent3).await;
-    assert!(bob2_end_call_msg.is_info());
-    assert_eq!(bob2_end_call_msg.get_info_type(), SystemMessage::CallEnded);
+    assert_is_call_ended_info_msg(bob2_end_call_msg);
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     // Alice receives the ending message
     let alice_end_call_msg = alice.recv_msg(&sent3).await;
-    assert!(alice_end_call_msg.is_info());
-    assert_eq!(alice_end_call_msg.get_info_type(), SystemMessage::CallEnded);
+    assert_is_call_ended_info_msg(alice_end_call_msg);
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     let alice2_end_call_msg = alice2.recv_msg(&sent3).await;
-    assert!(alice2_end_call_msg.is_info());
-    assert_eq!(
-        alice2_end_call_msg.get_info_type(),
-        SystemMessage::CallEnded
-    );
+    assert_is_call_ended_info_msg(alice2_end_call_msg);
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -180,19 +179,22 @@ async fn test_accept_call_caller_ends() -> Result<()> {
         .await;
     let sent3 = alice.pop_sent_msg().await;
 
-    alice2.recv_msg(&sent3).await;
+    let alice2_end_call_msg = alice2.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(alice2_end_call_msg);
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     // Bob receives the ending message
-    bob.recv_msg(&sent3).await;
+    let bob_end_call_msg = bob.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(bob_end_call_msg);
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
-    bob2.recv_msg(&sent3).await;
+    let bob2_end_call_msg = bob2.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(bob2_end_call_msg);
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
@@ -234,19 +236,22 @@ async fn test_caller_cancels_call() -> Result<()> {
         .await;
     let sent3 = alice.pop_sent_msg().await;
 
-    alice2.recv_msg(&sent3).await;
+    let alice2_call_ended_msg = alice2.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(alice2_call_ended_msg);
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     // Bob receives the ending message
-    bob.recv_msg(&sent3).await;
+    let bob_call_ended_msg = bob.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(bob_call_ended_msg);
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
-    bob2.recv_msg(&sent3).await;
+    let bob2_call_ended_msg = bob2.recv_msg(&sent3).await;
+    assert_is_call_ended_info_msg(bob2_call_ended_msg);
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
