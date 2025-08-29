@@ -1975,16 +1975,21 @@ pub(crate) async fn mark_contact_id_as_verified(
                 bail!("Non-key-contact {contact_id} cannot be verified");
             }
             if verifier_id != ContactId::SELF {
-                let verifier_fingerprint: String = transaction.query_row(
-                    "SELECT fingerprint FROM contacts WHERE id=?",
-                    (verifier_id,),
-                    |row| row.get(0),
-                )?;
+                let (verifier_fingerprint, verifier_verifier_id): (String, ContactId) = transaction
+                    .query_row(
+                        "SELECT fingerprint, verifier FROM contacts WHERE id=?",
+                        (verifier_id,),
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )?;
                 if verifier_fingerprint.is_empty() {
                     bail!(
                         "Contact {contact_id} cannot be verified by non-key-contact {verifier_id}"
                     );
                 }
+                ensure!(
+                    verifier_id == contact_id || verifier_verifier_id != ContactId::UNDEFINED,
+                    "Contact {contact_id} cannot be verified by unverified contact {verifier_id}",
+                );
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=?1
