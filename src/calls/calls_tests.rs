@@ -31,14 +31,14 @@ async fn setup_call() -> Result<(
     assert_eq!(sent1.sender_msg_id, test_msg_id);
     assert!(alice_call.is_info());
     assert_eq!(alice_call.get_info_type(), SystemMessage::OutgoingCall);
-    let info = alice.load_call_by_root_id(alice_call.id).await?;
+    let info = alice.load_call_by_id(alice_call.id).await?;
     assert!(!info.accepted);
     assert_eq!(info.place_call_info, "place_info");
 
     let alice2_call = alice2.recv_msg(&sent1).await;
     assert!(alice2_call.is_info());
     assert_eq!(alice2_call.get_info_type(), SystemMessage::OutgoingCall);
-    let info = alice2.load_call_by_root_id(alice2_call.id).await?;
+    let info = alice2.load_call_by_id(alice2_call.id).await?;
     assert!(!info.accepted);
     assert_eq!(info.place_call_info, "place_info");
 
@@ -50,14 +50,14 @@ async fn setup_call() -> Result<(
         .await;
     assert!(bob_call.is_info());
     assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
-    let info = bob.load_call_by_root_id(bob_call.id).await?;
+    let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(!info.accepted);
     assert_eq!(info.place_call_info, "place_info");
 
     let bob2_call = bob2.recv_msg(&sent1).await;
     assert!(bob2_call.is_info());
     assert_eq!(bob2_call.get_info_type(), SystemMessage::IncomingCall);
-    let info = bob2.load_call_by_root_id(bob2_call.id).await?;
+    let info = bob2.load_call_by_id(bob2_call.id).await?;
     assert!(!info.accepted);
     assert_eq!(info.place_call_info, "place_info");
 
@@ -81,7 +81,7 @@ async fn accept_call() -> Result<(
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let sent2 = bob.pop_sent_msg().await;
-    let info = bob.load_call_by_root_id(bob_call.id).await?;
+    let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(info.accepted);
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
@@ -90,7 +90,7 @@ async fn accept_call() -> Result<(
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
-    let info = bob2.load_call_by_root_id(bob2_call.id).await?;
+    let info = bob2.load_call_by_id(bob2_call.id).await?;
     assert!(!info.accepted); // "accepted" is only true on the device that does the call
 
     // Alice receives the acceptance message
@@ -99,7 +99,7 @@ async fn accept_call() -> Result<(
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
-    let info = alice.load_call_by_root_id(alice_call.id).await?;
+    let info = alice.load_call_by_id(alice_call.id).await?;
     assert!(info.accepted);
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
@@ -293,7 +293,7 @@ async fn test_mark_call_as_accepted() -> Result<()> {
 async fn test_udpate_call_text() -> Result<()> {
     let (alice, _alice2, alice_call, _bob, _bob2, _bob_call, _bob2_call) = setup_call().await?;
 
-    let call_info = alice.load_call_by_root_id(alice_call.id).await?;
+    let call_info = alice.load_call_by_id(alice_call.id).await?;
     call_info.update_text(&alice, "foo bar").await?;
 
     let alice_call = Message::load_from_db(&alice, alice_call.id).await?;

@@ -107,7 +107,7 @@ impl Context {
         call_id: MsgId,
         accept_call_info: String,
     ) -> Result<()> {
-        let mut call: CallInfo = self.load_call_by_root_id(call_id).await?;
+        let mut call: CallInfo = self.load_call_by_id(call_id).await?;
         ensure!(call.incoming);
 
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
@@ -139,7 +139,7 @@ impl Context {
 
     /// Cancel, reject or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
-        let call: CallInfo = self.load_call_by_root_id(call_id).await?;
+        let call: CallInfo = self.load_call_by_id(call_id).await?;
 
         if call.accepted || !call.incoming {
             let mut msg = Message {
@@ -171,7 +171,7 @@ impl Context {
         call_id: MsgId,
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
-        let call = context.load_call_by_root_id(call_id).await?;
+        let call = context.load_call_by_id(call_id).await?;
         if !call.accepted {
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
@@ -187,7 +187,7 @@ impl Context {
     ) -> Result<()> {
         match mime_message.is_system_message {
             SystemMessage::IncomingCall => {
-                let call = self.load_call_by_root_id(call_id).await?;
+                let call = self.load_call_by_id(call_id).await?;
                 if call.incoming {
                     if call.is_stale_call() {
                         call.update_text(self, "Missed call").await?;
@@ -210,7 +210,7 @@ impl Context {
                 }
             }
             SystemMessage::CallAccepted => {
-                let call = self.load_call_by_root_id(call_id).await?;
+                let call = self.load_call_by_id(call_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
                 if call.incoming {
                     self.emit_event(EventType::IncomingCallAccepted {
@@ -232,7 +232,7 @@ impl Context {
                 }
             }
             SystemMessage::CallEnded => {
-                let call = self.load_call_by_root_id(call_id).await?;
+                let call = self.load_call_by_id(call_id).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
                 self.emit_event(EventType::CallEnded {
                     msg_id: call.msg.id,
@@ -250,7 +250,7 @@ impl Context {
         Ok(())
     }
 
-    async fn load_call_by_root_id(&self, call_id: MsgId) -> Result<CallInfo> {
+    async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
         let call = Message::load_from_db(self, call_id).await?;
         self.load_call_by_message(call)
     }
