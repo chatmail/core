@@ -5,7 +5,7 @@ use crate::test_utils::{TestContext, TestContextManager, sync};
 async fn setup_call() -> Result<(
     TestContext, // Alice's 1st device
     TestContext, // Alice's 2nd device
-    Message,     // Call message from view of Alice
+    Message,     // Call message from view of Alice's 1st device
     TestContext, // Bob's 1st device
     TestContext, // Bob's 2nd device
     Message,     // Call message from view of Bob
