@@ -45,21 +45,17 @@ async fn setup_call() -> Result<(
     // Bob receives the message referring to the call on two devices;
     // it is an incoming call from the view of Bob
     let bob_call = bob.recv_msg(&sent1).await;
-    assert!(bob_call.is_info());
-    assert_eq!(bob_call.get_info_type(), SystemMessage::IncomingCall);
-    bob.evtracker
-        .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
-        .await;
-    let info = bob.load_call_by_id(bob_call.id).await?;
-    assert!(!info.is_accepted);
-    assert_eq!(info.place_call_info, "place_info");
-
     let bob2_call = bob2.recv_msg(&sent1).await;
-    assert!(bob2_call.is_info());
-    assert_eq!(bob2_call.get_info_type(), SystemMessage::IncomingCall);
-    let info = bob2.load_call_by_id(bob2_call.id).await?;
-    assert!(!info.is_accepted);
-    assert_eq!(info.place_call_info, "place_info");
+    for (t, m) in [(&bob, &bob_call), (&bob2, &bob2_call)] {
+        assert!(m.is_info());
+        assert_eq!(m.get_info_type(), SystemMessage::IncomingCall);
+        t.evtracker
+            .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
+            .await;
+        let info = t.load_call_by_id(m.id).await?;
+        assert!(!info.is_accepted);
+        assert_eq!(info.place_call_info, "place_info");
+    }
 
     Ok((alice, alice2, alice_call, bob, bob2, bob_call, bob2_call))
 }
