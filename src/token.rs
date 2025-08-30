@@ -86,24 +86,6 @@ pub async fn exists(context: &Context, namespace: Namespace, token: &str) -> Res
     Ok(exists)
 }
 
-/// Looks up foreign key by auth token.
-///
-/// Returns None if auth token is not valid.
-/// Returns an empty string if the token corresponds to "setup contact" rather than group join.
-pub async fn auth_foreign_key(context: &Context, token: &str) -> Result<Option<String>> {
-    context
-        .sql
-        .query_row_optional(
-            "SELECT foreign_key FROM tokens WHERE namespc=? AND token=?",
-            (Namespace::Auth, token),
-            |row| {
-                let foreign_key: String = row.get(0)?;
-                Ok(foreign_key)
-            },
-        )
-        .await
-}
-
 /// Resets all tokens corresponding to the `foreign_key`.
 ///
 /// `foreign_key` is a group ID to reset all group tokens
