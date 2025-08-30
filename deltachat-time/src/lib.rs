@@ -20,6 +20,11 @@ impl SystemTimeTools {
     pub fn shift(duration: Duration) {
         *SYSTEM_TIME_SHIFT.write().unwrap() += duration;
     }
+
+    /// Simulates the system clock being rewound by `duration`.
+    pub fn shift_back(duration: Duration) {
+        *SYSTEM_TIME_SHIFT.write().unwrap() -= duration;
+    }
 }
 
 #[cfg(test)]
