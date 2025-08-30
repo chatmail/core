@@ -23,6 +23,7 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::token;
+use crate::tools::time;
 
 mod bob;
 mod qrinvite;
@@ -364,7 +365,19 @@ pub(crate) async fn handle_securejoin_handshake(
                 );
                 return Ok(HandshakeMessage::Ignore);
             };
-            let Some(grpid) = token::auth_foreign_key(context, auth).await? else {
+            let Some((grpid, timestamp)) = context
+                .sql
+                .query_row_optional(
+                    "SELECT foreign_key, timestamp FROM tokens WHERE namespc=? AND token=?",
+                    (Namespace::Auth, auth),
+                    |row| {
+                        let foreign_key: String = row.get(0)?;
+                        let timestamp: i64 = row.get(1)?;
+                        Ok((foreign_key, timestamp))
+                    },
+                )
+                .await?
+            else {
                 warn!(
                     context,
                     "Ignoring {step} message because of invalid auth code."
@@ -382,7 +395,11 @@ pub(crate) async fn handle_securejoin_handshake(
                 }
             };
 
-            if !verify_sender_by_fingerprint(context, &fingerprint, contact_id).await? {
+            let sender_contact = Contact::get_by_id(context, contact_id).await?;
+            let sender_is_verified = sender_contact
+                .fingerprint()
+                .is_some_and(|fp| fp == fingerprint);
+            if !sender_is_verified {
                 warn!(
                     context,
                     "Ignoring {step} message because of fingerprint mismatch."
@@ -390,6 +407,11 @@ pub(crate) async fn handle_securejoin_handshake(
                 return Ok(HandshakeMessage::Ignore);
             }
             info!(context, "Fingerprint verified via Auth code.",);
+
+            // Mark the contact as verified if auth code is 600 second old.
+            if time() < timestamp + 600 {
+                mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+            }
             contact_id.regossip_keys(context).await?;
             ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
