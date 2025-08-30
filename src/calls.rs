@@ -2,8 +2,6 @@
 //!
 //! Internally, calls are bound to the user-visible info message initializing the call.
 //! This means, the "Call ID" is a "Message ID" currently - similar to webxdc.
-//! So, no database changes are needed at this stage.
-//! When it comes to relay calls over iroh, we may need a dedicated table, and this may change.
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::constants::Chattype;
 use crate::context::Context;
