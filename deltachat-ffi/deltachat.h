@@ -6482,7 +6482,7 @@ void dc_event_unref(dc_event_t* event);
  * @param data1 (int) The ID of the contact that wants to join.
  * @param data2 (int) The progress as:
  *     300=vg-/vc-request received, typically shown as "bob@addr joins".
- *     600=vg-/vc-request-with-auth received, vg-member-added/vc-contact-confirm sent, typically shown as "bob@addr verified".
+ *     600=vg-/vc-request-with-auth received and verified, typically shown as "bob@addr verified".
  *     800=contact added to chat, shown as "bob@addr securely joined GROUP". Only for the verified-group-protocol.
  *     1000=Protocol finished for this contact.
  */
