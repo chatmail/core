@@ -216,6 +216,22 @@ pub enum SystemMessage {
 
     /// "Messages are end-to-end encrypted."
     ChatE2ee = 50,
+
+    /// This system message represents an outgoing call.
+    /// This message is visible to the user as an "info" message.
+    OutgoingCall = 60,
+
+    /// This system message represents an incoming call.
+    /// This message is visible to the user as an "info" message.
+    IncomingCall = 65,
+
+    /// Message indicating that a call was accepted.
+    /// While the 1:1 call may be established elsewhere,
+    /// the message is still needed for a multidevice setup, so that other devices stop ringing.
+    CallAccepted = 66,
+
+    /// Message indicating that a call was ended.
+    CallEnded = 67,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -676,6 +692,16 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::ChatProtectionDisabled;
             } else if value == "group-avatar-changed" {
                 self.is_system_message = SystemMessage::GroupImageChanged;
+            } else if value == "call" {
+                self.is_system_message = if self.incoming {
+                    SystemMessage::IncomingCall
+                } else {
+                    SystemMessage::OutgoingCall
+                };
+            } else if value == "call-accepted" {
+                self.is_system_message = SystemMessage::CallAccepted;
+            } else if value == "call-ended" {
+                self.is_system_message = SystemMessage::CallEnded;
             }
         } else if self.get_header(HeaderDef::ChatGroupMemberRemoved).is_some() {
             self.is_system_message = SystemMessage::MemberRemovedFromGroup;
@@ -698,16 +724,24 @@ impl MimeMessage {
     }
 
     fn parse_videochat_headers(&mut self) {
-        if let Some(value) = self.get_header(HeaderDef::ChatContent) {
-            if value == "videochat-invitation" {
-                let instance = self
-                    .get_header(HeaderDef::ChatWebrtcRoom)
-                    .map(|s| s.to_string());
-                if let Some(part) = self.parts.first_mut() {
+        let content = self
+            .get_header(HeaderDef::ChatContent)
+            .unwrap_or_default()
+            .to_string();
+        let room = self
+            .get_header(HeaderDef::ChatWebrtcRoom)
+            .map(|s| s.to_string());
+        let accepted = self
+            .get_header(HeaderDef::ChatWebrtcAccepted)
+            .map(|s| s.to_string());
+        if let Some(part) = self.parts.first_mut() {
+            if let Some(room) = room {
+                if content == "videochat-invitation" {
                     part.typ = Viewtype::VideochatInvitation;
-                    part.param
-                        .set(Param::WebrtcRoom, instance.unwrap_or_default());
                 }
+                part.param.set(Param::WebrtcRoom, room);
+            } else if let Some(accepted) = accepted {
+                part.param.set(Param::WebrtcAccepted, accepted);
             }
         }
     }

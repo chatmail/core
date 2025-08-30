@@ -376,6 +376,36 @@ pub enum EventType {
     /// This event is emitted from the account whose property changed.
     AccountsItemChanged,
 
+    /// Incoming call.
+    IncomingCall {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+        /// User-defined info as passed to place_outgoing_call()
+        place_call_info: String,
+    },
+
+    /// Incoming call accepted.
+    IncomingCallAccepted {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+        /// User-defined info as passed to accept_incoming_call()
+        accept_call_info: String,
+    },
+
+    /// Outgoing call accepted.
+    OutgoingCallAccepted {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+        /// User-defined info as passed to accept_incoming_call()
+        accept_call_info: String,
+    },
+
+    /// Call ended.
+    CallEnded {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+    },
+
     /// Event for using in tests, e.g. as a fence between normally generated events.
     #[cfg(test)]
     Test,

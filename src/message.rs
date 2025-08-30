@@ -973,6 +973,10 @@ impl Message {
             | SystemMessage::WebxdcStatusUpdate
             | SystemMessage::WebxdcInfoMessage
             | SystemMessage::IrohNodeAddr
+            | SystemMessage::OutgoingCall
+            | SystemMessage::IncomingCall
+            | SystemMessage::CallAccepted
+            | SystemMessage::CallEnded
             | SystemMessage::Unknown => Ok(None),
         }
     }
