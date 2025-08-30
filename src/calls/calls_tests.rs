@@ -66,14 +66,7 @@ async fn setup_call() -> Result<CallSetup> {
     })
 }
 
-async fn accept_call() -> Result<(
-    TestContext,
-    TestContext,
-    Message,
-    TestContext,
-    TestContext,
-    Message,
-)> {
+async fn accept_call() -> Result<CallSetup> {
     let CallSetup {
         alice,
         alice2,
@@ -132,7 +125,15 @@ async fn accept_call() -> Result<(
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
 
-    Ok((alice, alice2, alice_call, bob, bob2, bob_call))
+    Ok(CallSetup {
+        alice,
+        alice2,
+        alice_call,
+        bob,
+        bob2,
+        bob_call,
+        bob2_call,
+    })
 }
 
 fn assert_is_call_ended_info_msg(msg: Message) {
@@ -143,7 +144,14 @@ fn assert_is_call_ended_info_msg(msg: Message) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_accept_call_callee_ends() -> Result<()> {
     // Alice calls Bob, Bob accepts
-    let (alice, alice2, _alice_call, bob, bob2, bob_call) = accept_call().await?;
+    let CallSetup {
+        alice,
+        alice2,
+        bob,
+        bob2,
+        bob_call,
+        ..
+    } = accept_call().await?;
 
     // Bob has accepted the call and also ends it
     bob.end_call(bob_call.id).await?;
@@ -179,7 +187,14 @@ async fn test_accept_call_callee_ends() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_accept_call_caller_ends() -> Result<()> {
     // Alice calls Bob, Bob accepts
-    let (alice, alice2, _alice_call, bob, bob2, bob_call) = accept_call().await?;
+    let CallSetup {
+        alice,
+        alice2,
+        bob,
+        bob2,
+        bob_call,
+        ..
+    } = accept_call().await?;
 
     // Bob has accepted the call but Alice ends it
     alice.end_call(bob_call.id).await?;
