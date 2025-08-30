@@ -23,6 +23,7 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::token;
+use crate::tools::create_id;
 use crate::tools::time;
 
 mod bob;
@@ -76,10 +77,21 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
     let sync_token = token::lookup(context, Namespace::InviteNumber, grpid)
         .await?
         .is_none();
-    // invitenumber will be used to allow starting the handshake,
-    // auth will be used to verify the fingerprint
+    // Invite number is used to request the inviter key.
     let invitenumber = token::lookup_or_new(context, Namespace::InviteNumber, grpid).await?;
-    let auth = token::lookup_or_new(context, Namespace::Auth, grpid).await?;
+
+    // Auth token is used to verify the key-contact
+    // if the token is not old
+    // and add the contact to the group
+    // if there is an associated group ID.
+    //
+    // We always generate a new auth token
+    // because auth tokens "expire"
+    // and can only be used to join groups
+    // without verification afterwards.
+    let auth = create_id();
+    token::save(context, Namespace::Auth, grpid, &auth).await?;
+
     let self_addr = context.get_primary_self_addr().await?;
     let self_name = context
         .get_config(Config::Displayname)
