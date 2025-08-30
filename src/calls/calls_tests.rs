@@ -2,15 +2,17 @@ use super::*;
 use crate::config::Config;
 use crate::test_utils::{TestContext, TestContextManager, sync};
 
-async fn setup_call() -> Result<(
-    TestContext, // Alice's 1st device
-    TestContext, // Alice's 2nd device
-    Message,     // Call message from view of Alice's 1st device
-    TestContext, // Bob's 1st device
-    TestContext, // Bob's 2nd device
-    Message,     // Call message from view of Bob
-    Message,     // Call message from view of Bob's 2nd device
-)> {
+struct CallSetup {
+    pub alice: TestContext,
+    pub alice2: TestContext,
+    pub alice_call: Message,
+    pub bob: TestContext,
+    pub bob2: TestContext,
+    pub bob_call: Message,
+    pub bob2_call: Message,
+}
+
+async fn setup_call() -> Result<CallSetup> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let alice2 = tcm.alice().await;
@@ -53,7 +55,15 @@ async fn setup_call() -> Result<(
         assert_eq!(info.place_call_info, "place_info");
     }
 
-    Ok((alice, alice2, alice_call, bob, bob2, bob_call, bob2_call))
+    Ok(CallSetup {
+        alice,
+        alice2,
+        alice_call,
+        bob,
+        bob2,
+        bob_call,
+        bob2_call,
+    })
 }
 
 async fn accept_call() -> Result<(
@@ -64,7 +74,15 @@ async fn accept_call() -> Result<(
     TestContext,
     Message,
 )> {
-    let (alice, alice2, alice_call, bob, bob2, bob_call, bob2_call) = setup_call().await?;
+    let CallSetup {
+        alice,
+        alice2,
+        alice_call,
+        bob,
+        bob2,
+        bob_call,
+        bob2_call,
+    } = setup_call().await?;
 
     // Bob accepts the incoming call, this does not add an additional message to the chat
     bob.accept_incoming_call(bob_call.id, "accepted_info".to_string())
@@ -197,7 +215,12 @@ async fn test_accept_call_caller_ends() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_callee_rejects_call() -> Result<()> {
     // Alice calls Bob
-    let (_alice, _alice2, _alice_call, bob, bob2, bob_call, _bob2_call) = setup_call().await?;
+    let CallSetup {
+        bob,
+        bob2,
+        bob_call,
+        ..
+    } = setup_call().await?;
 
     // Bob does not want to talk with Alice.
     // To protect Bob's privacy, no message is sent to Alice (who will time out).
@@ -218,7 +241,14 @@ async fn test_callee_rejects_call() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_caller_cancels_call() -> Result<()> {
     // Alice calls Bob
-    let (alice, alice2, alice_call, bob, bob2, _bob_call, _bob2_call) = setup_call().await?;
+    let CallSetup {
+        alice,
+        alice2,
+        alice_call,
+        bob,
+        bob2,
+        ..
+    } = setup_call().await?;
 
     // Alice changes their mind before Bob picks up
     alice.end_call(alice_call.id).await?;
@@ -291,7 +321,9 @@ async fn test_is_stale_call() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mark_call_as_accepted() -> Result<()> {
-    let (alice, _alice2, alice_call, _bob, _bob2, _bob_call, _bob2_call) = setup_call().await?;
+    let CallSetup {
+        alice, alice_call, ..
+    } = setup_call().await?;
     assert!(!alice_call.is_call_accepted()?);
 
     let mut alice_call = Message::load_from_db(&alice, alice_call.id).await?;
@@ -309,7 +341,9 @@ async fn test_mark_call_as_accepted() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_udpate_call_text() -> Result<()> {
-    let (alice, _alice2, alice_call, _bob, _bob2, _bob_call, _bob2_call) = setup_call().await?;
+    let CallSetup {
+        alice, alice_call, ..
+    } = setup_call().await?;
 
     let call_info = alice.load_call_by_id(alice_call.id).await?;
     call_info.update_text(&alice, "foo bar").await?;
