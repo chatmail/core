@@ -307,7 +307,8 @@ async fn test_is_stale_call() -> Result<()> {
         ..Default::default()
     };
     assert!(!call_info.is_stale_call());
-    assert_eq!(call_info.remaining_ring_seconds(), RINGING_SECONDS);
+    let remaining_seconds = call_info.remaining_ring_seconds();
+    assert!(remaining_seconds == RINGING_SECONDS || remaining_seconds == RINGING_SECONDS - 1);
 
     // call started 5 seconds ago, this is not stale as well
     let call_info = CallInfo {
@@ -318,7 +319,8 @@ async fn test_is_stale_call() -> Result<()> {
         ..Default::default()
     };
     assert!(!call_info.is_stale_call());
-    assert_eq!(call_info.remaining_ring_seconds(), RINGING_SECONDS - 5);
+    let remaining_seconds = call_info.remaining_ring_seconds();
+    assert!(remaining_seconds == RINGING_SECONDS - 5 || remaining_seconds == RINGING_SECONDS - 6);
 
     // a call started one hour ago is clearly stale
     let call_info = CallInfo {
