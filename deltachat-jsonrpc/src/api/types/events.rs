@@ -416,6 +416,37 @@ pub enum EventType {
         /// Number of events skipped.
         n: u64,
     },
+
+    /// Incoming call.
+    IncomingCall {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// User-defined info as passed to place_outgoing_call()
+        place_call_info: String,
+    },
+
+    /// Incoming call accepted.
+    /// This is esp. interesting to stop ringing on other devices.
+    IncomingCallAccepted {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// User-defined info passed to dc_accept_incoming_call()
+        accept_call_info: String,
+    },
+
+    /// Outgoing call accepted.
+    OutgoingCallAccepted {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// User-defined info passed to dc_accept_incoming_call(
+        accept_call_info: String,
+    },
+
+    /// Call ended.
+    CallEnded {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+    },
 }
 
 impl From<CoreEventType> for EventType {
@@ -566,6 +597,30 @@ impl From<CoreEventType> for EventType {
             CoreEventType::EventChannelOverflow { n } => EventChannelOverflow { n },
             CoreEventType::AccountsChanged => AccountsChanged,
             CoreEventType::AccountsItemChanged => AccountsItemChanged,
+            CoreEventType::IncomingCall {
+                msg_id,
+                place_call_info,
+            } => IncomingCall {
+                msg_id: msg_id.to_u32(),
+                place_call_info,
+            },
+            CoreEventType::IncomingCallAccepted {
+                msg_id,
+                accept_call_info,
+            } => IncomingCallAccepted {
+                msg_id: msg_id.to_u32(),
+                accept_call_info,
+            },
+            CoreEventType::OutgoingCallAccepted {
+                msg_id,
+                accept_call_info,
+            } => OutgoingCallAccepted {
+                msg_id: msg_id.to_u32(),
+                accept_call_info,
+            },
+            CoreEventType::CallEnded { msg_id } => CallEnded {
+                msg_id: msg_id.to_u32(),
+            },
             #[allow(unreachable_patterns)]
             #[cfg(test)]
             _ => unreachable!("This is just to silence a rust_analyzer false-positive"),

@@ -160,32 +160,6 @@ def test_html_message(acfactory, lp):
     assert html_text in msg2.html
 
 
-def test_videochat_invitation_message(acfactory, lp):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    text = "You are invited to a video chat, click https://meet.jit.si/WxEGad0gGzX to join."
-
-    lp.sec("ac1: prepare and send text message to ac2")
-    msg1 = chat.send_text("message0")
-    assert not msg1.is_videochat_invitation()
-
-    lp.sec("wait for ac2 to receive message")
-    msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert msg2.text == "message0"
-    assert not msg2.is_videochat_invitation()
-
-    lp.sec("ac1: prepare and send videochat invitation to ac2")
-    msg1 = Message.new_empty(ac1, "videochat")
-    msg1.set_text(text)
-    msg1 = chat.send_msg(msg1)
-    assert msg1.is_videochat_invitation()
-
-    lp.sec("wait for ac2 to receive message")
-    msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert msg2.text == text
-    assert msg2.is_videochat_invitation()
-
-
 def test_webxdc_message(acfactory, data, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
