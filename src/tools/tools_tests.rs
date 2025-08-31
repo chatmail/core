@@ -3,6 +3,7 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::chatlist::Chatlist;
+use crate::test_utils::TimeShiftFalsePositiveNote;
 use crate::{chat, test_utils};
 use crate::{receive_imf::receive_imf, test_utils::TestContext};
 
@@ -431,6 +432,8 @@ async fn test_maybe_warn_on_bad_time() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_maybe_warn_on_outdated() {
+    let _n = TimeShiftFalsePositiveNote;
+
     let t = TestContext::new().await;
     let timestamp_now: i64 = time();
 
