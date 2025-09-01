@@ -5155,6 +5155,58 @@ async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = chat::create_group(bob, "Group").await?;
+    bob.set_chat_protected(bob_chat_id).await;
+    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
+    tcm.exec_securejoin_qr(a0, bob, &qr).await;
+
+    let qr = get_securejoin_qr(bob, None).await?;
+    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
+
+    // Bob verifies Fiona for Alice#0.
+    let bob_fiona_id = bob.add_or_lookup_contact_id(fiona).await;
+    add_contact_to_chat(bob, bob_chat_id, bob_fiona_id).await?;
+    let sent_msg = bob.pop_sent_msg().await;
+    a0.recv_msg(&sent_msg).await;
+    fiona.recv_msg(&sent_msg).await;
+    let a0_bob = a0.add_or_lookup_contact(bob).await;
+    let a0_fiona = a0.add_or_lookup_contact(fiona).await;
+    assert_eq!(a0_fiona.get_verifier_id(a0).await?, Some(Some(a0_bob.id)));
+
+    let chat_id = a0.create_group_with_members("", &[fiona]).await;
+    a0.set_chat_protected(chat_id).await;
+    a1.recv_msg(&a0.send_text(chat_id, "Hi").await).await;
+    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
+    assert_eq!(a1_fiona.get_verifier_id(a1).await?, Some(None));
+
+    let some_time_to_regossip = Duration::from_secs(20 * 24 * 3600);
+    SystemTime::shift(some_time_to_regossip);
+    let fiona_chat_id = fiona.get_last_msg().await.chat_id;
+    fiona.set_chat_protected(fiona_chat_id).await;
+    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
+        .await;
+    let a1_bob = a1.add_or_lookup_contact(bob).await;
+    // There was a bug that Bob is verified by Fiona on Alice's other device.
+    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(None));
+
+    SystemTime::shift(some_time_to_regossip);
+    tcm.execute_securejoin(a1, fiona).await;
+    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
+        .await;
+    // But now Bob's verifier id must be updated because Fiona is verified by a known verifier
+    // (moreover, directly), so Alice has reverse verification chains on her devices.
+    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(Some(a1_fiona.id)));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sanitize_filename_in_received() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let raw = b"Message-ID: Mr.XA6y3og8-az.WGbH9_dNcQx@testr
