@@ -437,11 +437,10 @@ async fn test_maybe_warn_on_outdated() {
     let t = TestContext::new().await;
     let timestamp_now: i64 = time();
 
-    // in about 6 months, the app should not be outdated
-    // (if this fails, provider-db is not updated since 6 months)
+    // in about 3 months, the app should not be outdated
     maybe_warn_on_outdated(
         &t,
-        timestamp_now + 180 * 24 * 60 * 60,
+        timestamp_now + 90 * 24 * 60 * 60,
         get_release_timestamp(),
     )
     .await;
