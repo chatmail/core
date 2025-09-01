@@ -3481,7 +3481,6 @@ async fn apply_out_broadcast_changes(
     chat: &mut Chat,
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
-    // TODO code duplication with apply_in_broadcast_changes()
     ensure!(chat.typ == Chattype::OutBroadcast);
 
     let mut send_event_chat_modified = false;
