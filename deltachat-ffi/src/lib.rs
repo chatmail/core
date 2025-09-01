@@ -1758,7 +1758,7 @@ pub unsafe extern "C" fn dc_create_group_chat(
     };
 
     block_on(async move {
-        chat::create_group_chat(ctx, protect, &to_string_lossy(name))
+        chat::create_group(ctx, Some(protect), &to_string_lossy(name))
             .await
             .context("Failed to create group chat")
             .log_err(ctx)
