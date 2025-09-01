@@ -182,7 +182,7 @@ impl MimeFactory {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
         let attach_profile_data = Self::should_attach_profile_data(&msg);
-        let undisclosed_recipients = chat.typ == Chattype::OutBroadcast;
+        let undisclosed_recipients = should_hide_recipients(&msg, &chat);
 
         let from_addr = context.get_primary_self_addr().await?;
         let config_displayname = context
@@ -1100,7 +1100,7 @@ impl MimeFactory {
 
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
-                    if chat.typ != Chattype::OutBroadcast {
+                    if !should_hide_recipients(msg, chat) {
                         for (addr, key) in &encryption_keys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
@@ -1920,10 +1920,15 @@ fn should_encrypt_with_auth_token(msg: &Message) -> bool {
 }
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
-    chat.is_any_broadcast()
+    chat.is_out_broadcast()
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
-        // The member-added message in a broadcast must be asymmetrirally encrypted:
+        // The member-added message in a broadcast must be asymmetrically encrypted,
+        // because the newly-added member doesn't know the broadcast shared secret yet:
         && msg.param.get_cmd() != SystemMessage::MemberAddedToGroup
+}
+
+fn should_hide_recipients(msg: &Message, chat: &Chat) -> bool {
+    should_encrypt_with_broadcast_secret(msg, chat)
 }
 
 fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {

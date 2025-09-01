@@ -283,14 +283,28 @@ pub(crate) async fn handle_securejoin_handshake(
 
     info!(context, "Received secure-join message {step:?}.");
 
-    // TODO talk with link2xt about whether we need to protect against this identity-misbinding attack,
-    // and if so, how
-    // -> just put Alice's fingerprint into a header (can't put the gossip header bc we don't have this)
-    // -> or just ignore the problem for now - we will need to solve it for all messages anyways: https://github.com/chatmail/core/issues/7057
-    if !matches!(
-        step,
-        "vg-request" | "vc-request" | "vb-request-with-auth" | "vb-member-added"
-    ) {
+    // Opportunistically protect against a theoretical 'surreptitious forwarding' attack:
+    // If Eve obtains a QR code from Alice and starts a securejoin with her,
+    // and also lets Bob scan a manipulated QR code,
+    // she could reencrypt the v*-request-with-auth message to Bob while maintaining the signature,
+    // and Bob would regard the message as valid.
+    //
+    // This attack is not actually relevant in any threat model,
+    // because if Eve can see Alice's QR code and have Bob scan a manipulated QR code,
+    // she can just do a classical MitM attack.
+    //
+    // Protecting all messages sent by Delta Chat against 'surreptitious forwarding'
+    // by checking the 'intended recipient fingerprint'
+    // will improve security (completely unrelated to the securejoin protocol)
+    // and is something we want to do in the future:
+    // https://www.rfc-editor.org/rfc/rfc9580.html#name-surreptitious-forwarding
+    if !matches!(step, "vg-request" | "vc-request" | "vb-request-with-auth") {
+        // We don't perform this check for `vb-request-with-auth`:
+        // Since the message is encrypted symmetrically,
+        // there are no gossip headers,
+        // so we can't easily do the same check as for asymmetrically encrypted secure-join messages.
+        // Because this check doesn't add protection in any threat model,
+        // we just skip it for vb-request-with-auth.
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
