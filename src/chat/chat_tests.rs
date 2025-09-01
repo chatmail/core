@@ -4045,62 +4045,77 @@ async fn test_sync_muted() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sync_broadcast() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice0 = &tcm.alice().await;
     let alice1 = &tcm.alice().await;
-    for a in [alice0, alice1] {
+    let alice2 = &tcm.alice().await;
+    for a in [alice1, alice2] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
     }
     let bob = &tcm.bob().await;
-    let a0b_contact_id = alice0.add_or_lookup_contact(bob).await.id;
+    let a1b_contact_id = alice1.add_or_lookup_contact(bob).await.id;
 
-    let a0_broadcast_id = create_broadcast(alice0, "Channel".to_string()).await?;
-    sync(alice0, alice1).await;
-    let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
-    let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)
+    tcm.section("Alice creates a channel on her first device");
+    let a1_broadcast_id = create_broadcast(alice1, "Channel".to_string()).await?;
+
+    tcm.section("The channel syncs to her second device");
+    sync(alice1, alice2).await;
+    let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
+    let a2_broadcast_id = get_chat_id_by_grpid(alice2, &a1_broadcast_chat.grpid)
         .await?
         .unwrap()
         .0;
-    let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
-    assert_eq!(a1_broadcast_chat.get_type(), Chattype::OutBroadcast);
-    assert_eq!(a1_broadcast_chat.get_name(), a0_broadcast_chat.get_name());
-    assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
+    let a2_broadcast_chat = Chat::load_from_db(alice2, a2_broadcast_id).await?;
+    assert_eq!(a2_broadcast_chat.get_type(), Chattype::OutBroadcast);
+    assert_eq!(a2_broadcast_chat.get_name(), a1_broadcast_chat.get_name());
+    assert!(get_chat_contacts(alice2, a2_broadcast_id).await?.is_empty());
 
-    let qr = get_securejoin_qr(alice0, Some(a0_broadcast_id))
+    tcm.section("Bob scans Alice's QR code, both of Alice's devices answer");
+    let qr = get_securejoin_qr(alice1, Some(a1_broadcast_id))
         .await
         .unwrap();
-    sync(alice0, alice1).await; // Sync QR code
+    sync(alice1, alice2).await; // Sync QR code
     let bob_broadcast_id = tcm
-        .exec_securejoin_qr_multi_device(bob, &[alice0, alice1], &qr)
+        .exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr)
         .await;
 
-    let a1b_contact_id = alice1.add_or_lookup_contact_no_key(bob).await.id;
+    let a2b_contact_id = alice2.add_or_lookup_contact_no_key(bob).await.id;
     assert_eq!(
-        get_chat_contacts(alice1, a1_broadcast_id).await?,
-        vec![a1b_contact_id]
+        get_chat_contacts(alice2, a2_broadcast_id).await?,
+        vec![a2b_contact_id]
     );
-    let sent_msg = alice1.send_text(a1_broadcast_id, "hi").await;
+
+    tcm.section("Alice's second device sends a message to the channel");
+    let sent_msg = alice2.send_text(a2_broadcast_id, "hi").await;
     let msg = bob.recv_msg(&sent_msg).await;
     let chat = Chat::load_from_db(bob, msg.chat_id).await?;
     assert_eq!(chat.get_type(), Chattype::InBroadcast);
-    let msg = alice0.recv_msg(&sent_msg).await;
-    assert_eq!(msg.chat_id, a0_broadcast_id);
-    remove_contact_from_chat(alice0, a0_broadcast_id, a0b_contact_id).await?;
-    let sent = alice0.pop_sent_msg().await;
-    alice1.recv_msg(&sent).await;
-    assert!(get_chat_contacts(alice1, a1_broadcast_id).await?.is_empty());
+    let msg = alice1.recv_msg(&sent_msg).await;
+    assert_eq!(msg.chat_id, a1_broadcast_id);
+
+    tcm.section("Alice's first device removes Bob");
+    remove_contact_from_chat(alice1, a1_broadcast_id, a1b_contact_id).await?;
+    let sent = alice1.pop_sent_msg().await;
+
+    tcm.section("Alice's second device receives the removal-message");
+    alice2.recv_msg(&sent).await;
+    assert!(get_chat_contacts(alice2, a2_broadcast_id).await?.is_empty());
     // TODO do we want to make sure that there is no trace of a member?
     // assert!(
     //     get_past_chat_contacts(alice1, a1_broadcast_id)
     //         .await?
     //         .is_empty()
     // );
+
+    tcm.section("Bob receives the removal-message");
     bob.recv_msg(&sent).await;
     let bob_chat = Chat::load_from_db(bob, bob_broadcast_id).await?;
     assert!(!bob_chat.is_self_in_chat(bob).await?);
 
-    a0_broadcast_id.delete(alice0).await?;
-    sync(alice0, alice1).await;
-    alice1.assert_no_chat(a1_broadcast_id).await;
+    tcm.section("Alice's first device deletes the chat");
+    a1_broadcast_id.delete(alice1).await?;
+    sync(alice1, alice2).await;
+    alice2.assert_no_chat(a2_broadcast_id).await;
+
+    // TODO test if Alice's second device shows duplicate member-added messages
 
     bob.golden_test_chat(bob_broadcast_id, "test_sync_broadcast_bob")
         .await;
