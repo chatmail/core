@@ -4110,15 +4110,21 @@ async fn test_sync_broadcast() -> Result<()> {
     let bob_chat = Chat::load_from_db(bob, bob_broadcast_id).await?;
     assert!(!bob_chat.is_self_in_chat(bob).await?);
 
+    bob.golden_test_chat(bob_broadcast_id, "test_sync_broadcast_bob")
+        .await;
+
+    // Alice1 and Alice2 are supposed to show the chat in the same way:
+    alice1
+        .golden_test_chat(a1_broadcast_id, "test_sync_broadcast_alice")
+        .await;
+    alice2
+        .golden_test_chat(a2_broadcast_id, "test_sync_broadcast_alice")
+        .await;
+
     tcm.section("Alice's first device deletes the chat");
     a1_broadcast_id.delete(alice1).await?;
     sync(alice1, alice2).await;
     alice2.assert_no_chat(a2_broadcast_id).await;
-
-    // TODO test if Alice's second device shows duplicate member-added messages
-
-    bob.golden_test_chat(bob_broadcast_id, "test_sync_broadcast_bob")
-        .await;
 
     Ok(())
 }
