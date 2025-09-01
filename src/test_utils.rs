@@ -984,9 +984,15 @@ impl TestContext {
                 .await
                 .unwrap_or_else(|e| panic!("Error writing {filename:?}: {e}"));
         } else {
+            let green = Color::Green.normal();
+            let red = Color::Red.normal();
             assert_eq!(
-                actual, expected,
-                "To update the expected value, run `UPDATE_GOLDEN_TESTS=1 cargo test`"
+                actual,
+                expected,
+                "{} != {} on {}'s device.\nTo update the expected value, run with `UPDATE_GOLDEN_TESTS=1` environment variable",
+                red.paint("actual chat content (shown in red)"),
+                green.paint("expected chat content (shown in green)"),
+                self.name(),
             );
         }
     }
