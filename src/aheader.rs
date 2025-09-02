@@ -48,21 +48,6 @@ pub struct Aheader {
     pub prefer_encrypt: EncryptPreference,
 }
 
-impl Aheader {
-    /// Creates new autocrypt header
-    pub fn new(
-        addr: String,
-        public_key: SignedPublicKey,
-        prefer_encrypt: EncryptPreference,
-    ) -> Self {
-        Aheader {
-            addr,
-            public_key,
-            prefer_encrypt,
-        }
-    }
-}
-
 impl fmt::Display for Aheader {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write!(fmt, "addr={};", self.addr.to_lowercase())?;
@@ -243,11 +228,11 @@ mod tests {
         assert!(
             format!(
                 "{}",
-                Aheader::new(
-                    "test@example.com".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::Mutual
-                )
+                Aheader {
+                    addr: "test@example.com".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::Mutual
+                }
             )
             .contains("prefer-encrypt=mutual;")
         );
@@ -258,11 +243,11 @@ mod tests {
         assert!(
             !format!(
                 "{}",
-                Aheader::new(
-                    "test@example.com".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::NoPreference
-                )
+                Aheader {
+                    addr: "test@example.com".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::NoPreference
+                }
             )
             .contains("prefer-encrypt")
         );
@@ -271,11 +256,11 @@ mod tests {
         assert!(
             format!(
                 "{}",
-                Aheader::new(
-                    "TeSt@eXaMpLe.cOm".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::Mutual
-                )
+                Aheader {
+                    addr: "TeSt@eXaMpLe.cOm".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::Mutual
+                }
             )
             .contains("test@example.com")
         );

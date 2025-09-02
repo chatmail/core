@@ -1092,13 +1092,13 @@ impl MimeFactory {
                                 continue;
                             }
 
-                            let header = Aheader::new(
-                                addr.clone(),
-                                key.clone(),
+                            let header = Aheader {
+                                addr: addr.clone(),
+                                public_key: key.clone(),
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
-                                EncryptPreference::NoPreference,
-                            )
+                                prefer_encrypt: EncryptPreference::NoPreference,
+                            }
                             .to_string();
 
                             message = message.header(
