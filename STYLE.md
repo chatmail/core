@@ -112,6 +112,18 @@ Follow
 <https://doc.rust-lang.org/core/error/index.html#common-message-styles>
 for `.expect` message style.
 
+## BTreeMap vs HashMap
+
+Prefer [BTreeMap](https://doc.rust-lang.org/std/collections/struct.BTreeMap.html)
+over [HashMap](https://doc.rust-lang.org/std/collections/struct.HashMap.html)
+and [BTreeSet](https://doc.rust-lang.org/std/collections/struct.BTreeSet.html)
+over [HashSet](https://doc.rust-lang.org/std/collections/struct.HashSet.html)
+as iterating over these structures returns items in deterministic order.
+
+Non-deterministic code may result in difficult to reproduce bugs,
+flaky tests, regression tests that miss bugs
+or different behavior on different devices when processing the same messages.
+
 ## Logging
 
 For logging, use `info!`, `warn!` and `error!` macros.
