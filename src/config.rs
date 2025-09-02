@@ -413,16 +413,6 @@ pub enum Config {
     #[strum(props(default = "172800"))]
     GossipPeriod,
 
-    /// Deprecated 2025-07. Feature flag for verified 1:1 chats; the UI should set it
-    /// to 1 if it supports verified 1:1 chats.
-    /// Regardless of this setting, `chat.is_protected()` returns true while the key is verified,
-    /// and when the key changes, an info message is posted into the chat.
-    /// 0=Nothing else happens when the key changes.
-    /// 1=After the key changed, `can_send()` returns false
-    /// until `chat_id.accept()` is called.
-    #[strum(props(default = "0"))]
-    VerifiedOneOnOneChats,
-
     /// Row ID of the key in the `keypairs` table
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
