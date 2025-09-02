@@ -1055,12 +1055,6 @@ impl Context {
             self.get_config_int(Config::GossipPeriod).await?.to_string(),
         );
         res.insert(
-            "verified_one_on_one_chats", // deprecated 2025-07
-            self.get_config_bool(Config::VerifiedOneOnOneChats)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "webxdc_realtime_enabled",
             self.get_config_bool(Config::WebxdcRealtimeEnabled)
                 .await?
