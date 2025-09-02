@@ -437,7 +437,8 @@ async fn test_maybe_warn_on_outdated() {
     let t = TestContext::new().await;
     let timestamp_now: i64 = time();
 
-    // in about 3 months, the app should not be outdated
+    // in about 3 months, the app should not be outdated.
+    // "90 days" has proven to be too short at some point - user were informed but there was no update
     maybe_warn_on_outdated(
         &t,
         timestamp_now + 90 * 24 * 60 * 60,
