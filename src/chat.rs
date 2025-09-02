@@ -3003,7 +3003,16 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     }
 
     let needs_encryption = msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default();
-    let mimefactory = MimeFactory::from_msg(context, msg.clone()).await?;
+    let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
+        Ok(mf) => mf,
+        Err(err) => {
+            // Mark message as failed
+            message::set_msg_failed(context, msg, &err.to_string())
+                .await
+                .ok();
+            return Err(err);
+        }
+    };
     let attach_selfavatar = mimefactory.attach_selfavatar;
     let mut recipients = mimefactory.recipients();
 
