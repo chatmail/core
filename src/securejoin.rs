@@ -545,7 +545,6 @@ pub(crate) async fn handle_securejoin_handshake(
 /// we know that we are Alice (inviter-observer)
 /// that just marked peer (Bob) as verified
 /// in response to correct vc-request-with-auth message.
-// TODO here I may be able to fix some multi-device things
 pub(crate) async fn observe_securejoin_on_other_device(
     context: &Context,
     mime_message: &MimeMessage,
@@ -561,13 +560,18 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     if !matches!(
         step,
-        "vg-request-with-auth"
-            | "vc-request-with-auth"
-            | "vg-member-added"
-            | "vb-member-added"
-            | "vc-contact-confirm"
+        "vg-request-with-auth" | "vc-request-with-auth" | "vg-member-added" | "vc-contact-confirm"
     ) {
+        // `vb-request-with-auth` can be ignored
+        // because we wouldn't be able to decrypt the message
+        // (it's symmetrically encrypted with the AUTH token, which only the scanning device knows);
+        // instead, the verification is transferred via a `MarkVerified` sync message.
+        // `vb-member-added` can be ignored
+        // because all devices receive the `vb-request-with-auth` message
+        // and mark Bob as verified because of this.
         return Ok(HandshakeMessage::Ignore);
+        // TODO for `vb-member-added`, we probably need to return HandshakeMessage::Propagate,
+        // because otherwise, Bob's second device won't receive the message correctly
     };
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
@@ -605,6 +609,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     if step == "vg-member-added" {
         inviter_progress(context, contact_id, 800);
     }
+    // TODO superflous vb-member-added (we're early-returning above):
     if step == "vg-member-added" || step == "vb-member-added" || step == "vc-contact-confirm" {
         inviter_progress(context, contact_id, 1000);
     }
@@ -617,6 +622,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     }
 
     if step == "vg-member-added" || step == "vb-member-added" {
+        // TODO superflous vb-member-added (we're early-returning above)
         Ok(HandshakeMessage::Propagate)
     } else {
         Ok(HandshakeMessage::Ignore)
