@@ -182,7 +182,7 @@ deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
 futures = "0.3.31"
-futures-lite = "2.6.0"
+futures-lite = "2.6.1"
 libc = "0.2"
 log = "0.4"
 mailparse = "0.16.1"
