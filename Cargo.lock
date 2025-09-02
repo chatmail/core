@@ -1337,7 +1337,7 @@ dependencies = [
  "mail-builder",
  "mailparse",
  "mime",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "num-derive",
  "num-traits",
  "num_cpus",
@@ -1434,7 +1434,7 @@ dependencies = [
  "deltachat",
  "dirs",
  "log",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "qr2term",
  "rusqlite",
  "rustyline",
@@ -3729,16 +3729,6 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
-dependencies = [
- "overload",
- "winapi",
-]
-
-[[package]]
-name = "nu-ansi-term"
 version = "0.50.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
@@ -3974,12 +3964,6 @@ dependencies = [
  "serde",
  "windows-sys 0.52.0",
 ]
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "p256"
@@ -6334,7 +6318,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "matchers",
- "nu-ansi-term 0.50.1",
+ "nu-ansi-term",
  "once_cell",
  "regex-automata",
  "sharded-slab",
