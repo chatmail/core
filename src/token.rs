@@ -104,13 +104,14 @@ pub async fn auth_foreign_key(context: &Context, token: &str) -> Result<Option<S
         .await
 }
 
-pub async fn delete(context: &Context, namespace: Namespace, token: &str) -> Result<()> {
+/// Resets all tokens corresponding to the `foreign_key`.
+///
+/// `foreign_key` is a group ID to reset all group tokens
+/// or empty string to reset all setup contact tokens.
+pub async fn delete(context: &Context, foreign_key: &str) -> Result<()> {
     context
         .sql
-        .execute(
-            "DELETE FROM tokens WHERE namespc=? AND token=?;",
-            (namespace, token),
-        )
+        .execute("DELETE FROM tokens WHERE foreign_key=?", (foreign_key,))
         .await?;
     Ok(())
 }
