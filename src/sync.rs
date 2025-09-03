@@ -292,8 +292,15 @@ impl Context {
     }
 
     async fn delete_qr_token(&self, token: &QrTokenData) -> Result<()> {
-        token::delete(self, Namespace::InviteNumber, &token.invitenumber).await?;
-        token::delete(self, Namespace::Auth, &token.auth).await?;
+        self.sql
+            .execute(
+                "DELETE FROM tokens
+                 WHERE foreign_key IN
+                 (SELECT foreign_key FROM tokens
+                  WHERE token=? OR token=?)",
+                (&token.invitenumber, &token.auth),
+            )
+            .await?;
         Ok(())
     }
 
@@ -564,8 +571,8 @@ mod tests {
                 .await?
                 .is_none()
         );
-        assert!(token::exists(&t, Namespace::InviteNumber, "yip-in").await?);
-        assert!(token::exists(&t, Namespace::Auth, "yip-auth").await?);
+        assert!(!token::exists(&t, Namespace::InviteNumber, "yip-in").await?);
+        assert!(!token::exists(&t, Namespace::Auth, "yip-auth").await?);
         assert!(!token::exists(&t, Namespace::Auth, "non-existent").await?);
         assert!(!token::exists(&t, Namespace::Auth, "directly deleted").await?);
 
