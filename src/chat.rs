@@ -601,11 +601,23 @@ impl ChatId {
             || chat.is_device_talk()
             || chat.is_self_talk()
             || (!chat.can_send(context).await? && !chat.is_contact_request())
+            // For chattype InBrodacast, the info message is added when the member-added message is received
+            // by directly calling add_encrypted_msg():
+            || chat.typ == Chattype::InBroadcast
             || chat.blocked == Blocked::Yes
         {
             return Ok(());
         }
 
+        self.add_encrypted_msg(context, timestamp_sort).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_encrypted_msg(
+        self,
+        context: &Context,
+        timestamp_sort: i64,
+    ) -> Result<()> {
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
@@ -3817,10 +3829,17 @@ pub(crate) async fn create_broadcast_ex(
     chat_name: String,
     secret: String,
 ) -> Result<ChatId> {
-    let row_id = {
+    let chat_name = sanitize_single_line(&chat_name);
+    if chat_name.is_empty() {
+        bail!("Invalid broadcast channel name: {chat_name}.");
+    }
+
+    let timestamp = create_smeared_timestamp(context);
+    let chat_id = {
         let chat_name = &chat_name;
         let grpid = &grpid;
-        let trans_fn = |t: &mut rusqlite::Transaction| {
+        let trans_fn = |t: &mut rusqlite::Transaction| -> Result<u32> {
+            // TODO it's not needed to lookup an existing broadcast here
             let cnt = t.execute("UPDATE chats SET name=? WHERE grpid=?", (chat_name, grpid))?;
             ensure!(cnt <= 1, "{cnt} chats exist with grpid {grpid}");
             if cnt == 1 {
@@ -3828,7 +3847,7 @@ pub(crate) async fn create_broadcast_ex(
                     "SELECT id FROM chats WHERE grpid=? AND type=?",
                     (grpid, Chattype::OutBroadcast),
                     |row| {
-                        let id: isize = row.get(0)?;
+                        let id: u32 = row.get(0)?;
                         Ok(id)
                     },
                 )?);
@@ -3837,23 +3856,20 @@ pub(crate) async fn create_broadcast_ex(
                 "INSERT INTO chats \
                 (type, name, grpid, created_timestamp) \
                 VALUES(?, ?, ?, ?);",
-                (
-                    Chattype::OutBroadcast,
-                    &chat_name,
-                    &grpid,
-                    create_smeared_timestamp(context),
-                ),
+                (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
             )?;
             let chat_id = t.last_insert_rowid();
             t.execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, &secret))?;
-            Ok(t.last_insert_rowid().try_into()?)
+            Ok(chat_id.try_into()?)
         };
         context.sql.transaction(trans_fn).await?
     };
-    let chat_id = ChatId::new(u32::try_from(row_id)?);
+    let chat_id = ChatId::new(chat_id);
+    chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
 
     context.emit_msgs_changed_without_ids();
     chatlist_events::emit_chatlist_changed(context);
+    chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
     if sync.into() {
         let id = SyncId::Grpid(grpid);
