@@ -3172,6 +3172,30 @@ async fn test_chat_get_encryption_info() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_out_failed_on_all_keys_missing() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = bob
+        .create_group_with_members(ProtectionStatus::Unprotected, "", &[alice, fiona])
+        .await;
+    bob.send_text(bob_chat_id, "Gossiping Fiona's key").await;
+    alice
+        .recv_msg(&bob.send_text(bob_chat_id, "No key gossip").await)
+        .await;
+    SystemTime::shift(Duration::from_secs(60));
+    remove_contact_from_chat(bob, bob_chat_id, ContactId::SELF).await?;
+    let alice_chat_id = alice.recv_msg(&bob.pop_sent_msg().await).await.chat_id;
+    alice_chat_id.accept(alice).await?;
+    let mut msg = Message::new_text("Hi".to_string());
+    send_msg(alice, alice_chat_id, &mut msg).await.ok();
+    assert_eq!(msg.id.get_state(alice).await?, MessageState::OutFailed);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_chat_media() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id1 = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
