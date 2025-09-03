@@ -112,6 +112,98 @@ def test_qr_securejoin(acfactory, protect):
     fiona.wait_for_securejoin_joiner_success()
 
 
+@pytest.mark.parametrize("all_devices_online", [True, False])
+def test_qr_securejoin_broadcast(acfactory, all_devices_online):
+    alice, bob, fiona = acfactory.get_online_accounts(3)
+
+    alice2 = alice.clone()
+    bob2 = bob.clone()
+
+    if all_devices_online:
+        alice2.start_io()
+        bob2.start_io()
+
+    logging.info("Alice creates a broadcast")
+    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+
+    logging.info("Bob joins the broadcast")
+
+    qr_code = alice_chat.get_qr_code()
+    bob.secure_join(qr_code)
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
+
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+
+    alice_chat.send_text("Hello everyone!")
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "Hello everyone!"
+
+    def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
+        # Check that the chat partner is verified.
+        contact_snapshot = contact.get_snapshot()
+        assert contact_snapshot.is_verified
+
+        chat = ac.get_chatlist()[0]
+        chat_msgs = chat.get_messages()
+
+        if please_wait_info_msg:
+            first_msg = chat_msgs.pop(0).get_snapshot()
+            assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
+            assert first_msg.is_info
+
+        encrypted_msg = chat_msgs[0].get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
+        member_added_msg = chat_msgs[1].get_snapshot()
+        if inviter_side:
+            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+        else:
+            assert member_added_msg.text == f"Member Me added by {contact_snapshot.display_name}."
+        assert member_added_msg.is_info
+
+        hello_msg = chat_msgs[2].get_snapshot()
+        assert hello_msg.text == "Hello everyone!"
+        assert not hello_msg.is_info
+
+        assert len(chat_msgs) == 3
+
+        chat_snapshot = chat.get_basic_snapshot()  # TODO or get_full_snapshot()
+        assert chat_snapshot.is_encrypted
+
+        # TODO check more things
+
+    check_account(alice, alice.create_contact(bob), inviter_side=True)
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
+
+    logging.info("===================== Test Alice's second device =====================")
+
+    # Start second Alice device, if it wasn't started already.
+    alice2.start_io()
+    alice2.wait_for_securejoin_inviter_success()
+    alice2.wait_for_imap_inbox_idle()
+    check_account(alice2, alice2.create_contact(bob), inviter_side=True)
+
+    logging.info("===================== Test Bob's second device =====================")
+
+    # Start second Bob device, if it wasn't started already.
+    bob2.start_io()
+    bob2.wait_for_securejoin_joiner_success()
+    bob2.wait_for_imap_inbox_idle()
+    check_account(bob2, bob2.create_contact(alice), inviter_side=False)
+
+    # The QR code token is synced, so alice2 must be able to handle join requests.
+    logging.info("Fiona joins the group via alice2")
+    alice.stop_io()
+    fiona.secure_join(qr_code)
+    alice2.wait_for_securejoin_inviter_success()
+    fiona.wait_for_securejoin_joiner_success()
+
+    # TODO test that Fiona is in the channel correctly
+
+
 def test_qr_securejoin_contact_request(acfactory) -> None:
     """Alice invites Bob to a group when Bob's chat with Alice is in a contact request mode."""
     alice, bob = acfactory.get_online_accounts(2)

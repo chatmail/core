@@ -439,6 +439,12 @@ class Account:
         """Wait for reaction change event."""
         return self.wait_for_event(EventType.REACTIONS_CHANGED)
 
+    def wait_for_imap_inbox_idle(self):
+        """Wait until all messages are fetched,
+        and the IMAP loop enters IDLE mode.
+        """
+        self.wait_for_event(EventType.IMAP_INBOX_IDLE)
+
     def get_fresh_messages_in_arrival_order(self) -> list[Message]:
         """Return fresh messages list sorted in the order of their arrival, with ascending IDs."""
         warn(
