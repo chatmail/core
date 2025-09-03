@@ -5182,7 +5182,7 @@ impl Context {
                         return contact::mark_contact_id_as_verified(
                             self,
                             contact_id,
-                            ContactId::SELF,
+                            Some(ContactId::SELF),
                         )
                         .await;
                     }

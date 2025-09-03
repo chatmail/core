@@ -1595,6 +1595,15 @@ impl MimeMessage {
         }
     }
 
+    pub fn replace_msg_by_error(&mut self, error_msg: &str) {
+        self.is_system_message = SystemMessage::Unknown;
+        if let Some(part) = self.parts.first_mut() {
+            part.typ = Viewtype::Text;
+            part.msg = format!("[{error_msg}]");
+            self.parts.truncate(1);
+        }
+    }
+
     pub(crate) fn get_rfc724_mid(&self) -> Option<String> {
         self.get_header(HeaderDef::MessageId)
             .and_then(|msgid| parse_message_id(msgid).ok())
