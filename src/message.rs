@@ -1385,6 +1385,19 @@ impl Message {
     pub fn error(&self) -> Option<String> {
         self.error.clone()
     }
+
+    /// Returns `true` if this message is a `vb-request-with-auth` SecureJoin message.
+    pub(crate) fn is_vb_request_with_auth(&self) -> bool {
+        if self.param.get_cmd() == SystemMessage::SecurejoinMessage {
+            // CAVE: You can't check in the same way whether the message
+            // is a `v{g|b}-member-added` message,
+            // because for these messages,
+            // `param.get_cmd()` returns `SystemMessage::MemberAddedToGroup`.
+            self.param.get(Param::Arg) == Some("vb-request-with-auth")
+        } else {
+            false
+        }
+    }
 }
 
 /// State of the message.

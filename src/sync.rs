@@ -1,6 +1,6 @@
 //! # Synchronize items between devices.
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 
@@ -274,6 +274,7 @@ impl Context {
                     Ok(())
                 }
             }
+            .with_context(|| format!("Sync data {:?}", item.data))
             .log_err(self)
             .ok();
         }

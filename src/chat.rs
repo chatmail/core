@@ -31,6 +31,7 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
+use crate::key::self_fingerprint;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::logged_debug_assert;
@@ -43,9 +44,9 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    IsNoneOrEmpty, SystemTime, buf_compress, create_id, create_outgoing_rfc724_mid,
-    create_smeared_timestamp, create_smeared_timestamps, get_abs_path, gm2local_offset,
-    smeared_time, time, truncate_msg_text,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_shared_secret, create_id,
+    create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
+    gm2local_offset, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -600,11 +601,23 @@ impl ChatId {
             || chat.is_device_talk()
             || chat.is_self_talk()
             || (!chat.can_send(context).await? && !chat.is_contact_request())
+            // For chattype InBrodacast, the info message is added when the member-added message is received
+            // by directly calling add_encrypted_msg():
+            || chat.typ == Chattype::InBroadcast
             || chat.blocked == Blocked::Yes
         {
             return Ok(());
         }
 
+        self.add_encrypted_msg(context, timestamp_sort).await?;
+        Ok(())
+    }
+
+    pub(crate) async fn add_encrypted_msg(
+        self,
+        context: &Context,
+        timestamp_sort: i64,
+    ) -> Result<()> {
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
@@ -1646,6 +1659,18 @@ impl Chat {
         self.typ == Chattype::Mailinglist
     }
 
+    /// Returns true if chat is an outgoing broadcast channel.
+    pub fn is_out_broadcast(&self) -> bool {
+        self.typ == Chattype::OutBroadcast
+    }
+
+    /// Returns true if the chat is a broadcast channel,
+    /// regardless of whether self is on the sending
+    /// or receiving side.
+    pub fn is_any_broadcast(&self) -> bool {
+        matches!(self.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
+    }
+
     /// Returns None if user can send messages to this chat.
     ///
     /// Otherwise returns a reason useful for logging.
@@ -1725,8 +1750,9 @@ impl Chat {
     pub(crate) async fn is_self_in_chat(&self, context: &Context) -> Result<bool> {
         match self.typ {
             Chattype::Single | Chattype::OutBroadcast | Chattype::Mailinglist => Ok(true),
-            Chattype::Group => is_contact_in_chat(context, self.id, ContactId::SELF).await,
-            Chattype::InBroadcast => Ok(false),
+            Chattype::Group | Chattype::InBroadcast => {
+                is_contact_in_chat(context, self.id, ContactId::SELF).await
+            }
         }
     }
 
@@ -2916,18 +2942,26 @@ async fn prepare_send_msg(
         CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
+
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         }
         // Allow to send "Member removed" messages so we can leave the group/broadcast.
         // Necessary checks should be made anyway before removing contact
         // from the chat.
-        CantSendReason::NotAMember | CantSendReason::InBroadcast => {
-            msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup
+        CantSendReason::NotAMember => msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup,
+        CantSendReason::InBroadcast => {
+            matches!(
+                msg.param.get_cmd(),
+                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+            )
         }
-        CantSendReason::MissingKey => msg
-            .param
-            .get_bool(Param::ForcePlaintext)
-            .unwrap_or_default(),
+        CantSendReason::MissingKey => {
+            msg.param
+                .get_bool(Param::ForcePlaintext)
+                .unwrap_or_default()
+                // V2 securejoin messages are symmetrically encrypted, no need for the public key:
+                || msg.is_vb_request_with_auth()
+        }
         _ => false,
     };
     if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
@@ -3030,6 +3064,9 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     if (context.get_config_bool(Config::BccSelf).await?
         || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage)
         && (context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty())
+        // `vb-request-with-auth` messages are symmetrically encrypted
+        // with a secret which the other device doesn't have:
+        && !msg.is_vb_request_with_auth()
     {
         recipients.push(from);
     }
@@ -3777,19 +3814,32 @@ pub async fn create_group_ex(
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    create_broadcast_ex(context, Sync, grpid, chat_name).await
+    let secret = create_broadcast_shared_secret();
+    create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
+
+const SQL_INSERT_BROADCAST_SECRET: &str =
+    "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret";
 
 pub(crate) async fn create_broadcast_ex(
     context: &Context,
     sync: sync::Sync,
     grpid: String,
     chat_name: String,
+    secret: String,
 ) -> Result<ChatId> {
-    let row_id = {
+    let chat_name = sanitize_single_line(&chat_name);
+    if chat_name.is_empty() {
+        bail!("Invalid broadcast channel name: {chat_name}.");
+    }
+
+    let timestamp = create_smeared_timestamp(context);
+    let chat_id = {
         let chat_name = &chat_name;
         let grpid = &grpid;
-        let trans_fn = |t: &mut rusqlite::Transaction| {
+        let trans_fn = |t: &mut rusqlite::Transaction| -> Result<u32> {
+            // TODO it's not needed to lookup an existing broadcast here
             let cnt = t.execute("UPDATE chats SET name=? WHERE grpid=?", (chat_name, grpid))?;
             ensure!(cnt <= 1, "{cnt} chats exist with grpid {grpid}");
             if cnt == 1 {
@@ -3797,38 +3847,67 @@ pub(crate) async fn create_broadcast_ex(
                     "SELECT id FROM chats WHERE grpid=? AND type=?",
                     (grpid, Chattype::OutBroadcast),
                     |row| {
-                        let id: isize = row.get(0)?;
+                        let id: u32 = row.get(0)?;
                         Ok(id)
                     },
                 )?);
             }
             t.execute(
                 "INSERT INTO chats \
-                (type, name, grpid, param, created_timestamp) \
-                VALUES(?, ?, ?, \'U=1\', ?);",
-                (
-                    Chattype::OutBroadcast,
-                    &chat_name,
-                    &grpid,
-                    create_smeared_timestamp(context),
-                ),
+                (type, name, grpid, created_timestamp) \
+                VALUES(?, ?, ?, ?);",
+                (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
             )?;
-            Ok(t.last_insert_rowid().try_into()?)
+            let chat_id = t.last_insert_rowid();
+            t.execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, &secret))?;
+            Ok(chat_id.try_into()?)
         };
         context.sql.transaction(trans_fn).await?
     };
-    let chat_id = ChatId::new(u32::try_from(row_id)?);
+    let chat_id = ChatId::new(chat_id);
+    chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
 
     context.emit_msgs_changed_without_ids();
     chatlist_events::emit_chatlist_changed(context);
+    chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
     if sync.into() {
         let id = SyncId::Grpid(grpid);
-        let action = SyncAction::CreateBroadcast(chat_name);
+        let action = SyncAction::CreateOutBroadcast {
+            chat_name,
+            shared_secret: secret,
+        };
         self::sync(context, id, action).await.log_err(context).ok();
     }
 
     Ok(chat_id)
+}
+
+pub(crate) async fn load_broadcast_shared_secret(
+    context: &Context,
+    chat_id: ChatId,
+) -> Result<Option<String>> {
+    context
+        .sql
+        .query_get_value(
+            "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
+            (chat_id,),
+        )
+        .await
+}
+
+pub(crate) async fn save_broadcast_shared_secret(
+    context: &Context,
+    chat_id: ChatId,
+    secret: &str,
+) -> Result<()> {
+    info!(context, "Saving broadcast secret for chat {chat_id}");
+    context
+        .sql
+        .execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, secret))
+        .await?;
+
+    Ok(())
 }
 
 /// Set chat contacts in the `chats_contacts` table.
@@ -3945,19 +4024,14 @@ pub(crate) async fn add_contact_to_chat_ex(
     // this also makes sure, no contacts are added to special or normal chats
     let mut chat = Chat::load_from_db(context, chat_id).await?;
     ensure!(
-        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
-        "{} is not a group/broadcast where one can add members",
+        chat.typ == Chattype::Group || (from_handshake && chat.typ == Chattype::OutBroadcast),
+        "{} is not a group where one can add members",
         chat_id
     );
     ensure!(
         Contact::real_exists_by_id(context, contact_id).await? || contact_id == ContactId::SELF,
         "invalid contact_id {} for adding to group",
         contact_id
-    );
-    ensure!(!chat.is_mailing_list(), "Mailing lists can't be changed");
-    ensure!(
-        chat.typ != Chattype::OutBroadcast || contact_id != ContactId::SELF,
-        "Cannot add SELF to broadcast channel."
     );
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),
@@ -4005,21 +4079,32 @@ pub(crate) async fn add_contact_to_chat_ex(
             );
             return Ok(false);
         }
-        if is_contact_in_chat(context, chat_id, contact_id).await? {
-            return Ok(false);
-        }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;
     }
-    if chat.typ == Chattype::Group && chat.is_promoted() {
+    if chat.is_promoted() {
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
-        msg.text = stock_str::msg_add_member_local(context, contact.id, ContactId::SELF).await;
+        let added_by = if from_handshake && chat.is_out_broadcast() {
+            // The contact was added via a QR code rather than explicit user action,
+            // and there is no useful information in saying 'You added member Alice'
+            // if self is the only one who can add members.
+            ContactId::UNDEFINED
+        } else {
+            ContactId::SELF
+        };
+        msg.text = stock_str::msg_add_member_local(context, contact.id, added_by).await;
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
         msg.param
             .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
+        if chat.is_out_broadcast() {
+            let secret = load_broadcast_shared_secret(context, chat_id)
+                .await?
+                .context("Failed to find broadcast shared secret")?;
+            msg.param.set(Param::Arg3, secret);
+        }
         send_msg(context, chat_id, &mut msg).await?;
 
         sync = Nosync;
@@ -4201,10 +4286,18 @@ pub async fn remove_contact_from_chat(
             // This allows to delete dangling references to deleted contacts
             // in case of the database becoming inconsistent due to a bug.
             if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
-                if chat.typ == Chattype::Group && chat.is_promoted() {
+                if chat.is_promoted() {
                     let addr = contact.get_addr();
+                    let fingerprint = contact.fingerprint().map(|f| f.hex());
 
-                    let res = send_member_removal_msg(context, chat_id, contact_id, addr).await;
+                    let res = send_member_removal_msg(
+                        context,
+                        chat_id,
+                        contact_id,
+                        addr,
+                        fingerprint.as_deref(),
+                    )
+                    .await;
 
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4228,7 +4321,9 @@ pub async fn remove_contact_from_chat(
         // For incoming broadcast channels, it's not possible to remove members,
         // but it's possible to leave:
         let self_addr = context.get_primary_self_addr().await?;
-        send_member_removal_msg(context, chat_id, contact_id, &self_addr).await?;
+        let fingerprint = self_fingerprint(context).await?;
+        send_member_removal_msg(context, chat_id, contact_id, &self_addr, Some(fingerprint))
+            .await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
@@ -4241,6 +4336,7 @@ async fn send_member_removal_msg(
     chat_id: ChatId,
     contact_id: ContactId,
     addr: &str,
+    fingerprint: Option<&str>,
 ) -> Result<MsgId> {
     let mut msg = Message::new(Viewtype::Text);
 
@@ -4252,6 +4348,7 @@ async fn send_member_removal_msg(
 
     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
     msg.param.set(Param::Arg, addr.to_lowercase());
+    msg.param.set_optional(Param::Arg2, fingerprint);
     msg.param
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 
@@ -5036,7 +5133,12 @@ pub(crate) enum SyncAction {
     SetVisibility(ChatVisibility),
     SetMuted(MuteDuration),
     /// Create broadcast channel with the given name.
-    CreateBroadcast(String),
+    CreateOutBroadcast {
+        chat_name: String,
+        shared_secret: String,
+    },
+    /// Mark the contact with the given fingerprint as verified by self.
+    MarkVerified,
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5092,6 +5194,14 @@ impl Context {
                     SyncAction::Unblock => {
                         return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
+                    SyncAction::MarkVerified => {
+                        return contact::mark_contact_id_as_verified(
+                            self,
+                            contact_id,
+                            Some(ContactId::SELF),
+                        )
+                        .await;
+                    }
                     _ => (),
                 }
                 ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
@@ -5099,8 +5209,8 @@ impl Context {
                     .id
             }
             SyncId::Grpid(grpid) => {
-                if let SyncAction::CreateBroadcast(name) = action {
-                    create_broadcast_ex(self, Nosync, grpid.clone(), name.clone()).await?;
+                let handled = self.handle_sync_create_chat(action, grpid).await?;
+                if handled {
                     return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)
@@ -5123,7 +5233,9 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateBroadcast(_) => {
+            SyncAction::CreateOutBroadcast { .. } | SyncAction::MarkVerified => {
+                // Create action should have been handled by handle_sync_create_chat() already.
+                // MarkVerified action should have been handled by mark_contact_id_as_verified() already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
@@ -5132,6 +5244,26 @@ impl Context {
                 set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await
             }
             SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
+        }
+    }
+
+    async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &str) -> Result<bool> {
+        match action {
+            SyncAction::CreateOutBroadcast {
+                chat_name,
+                shared_secret,
+            } => {
+                create_broadcast_ex(
+                    self,
+                    Nosync,
+                    grpid.to_string(),
+                    chat_name.clone(),
+                    shared_secret.to_string(),
+                )
+                .await?;
+                Ok(true)
+            }
+            _ => Ok(false),
         }
     }
 
