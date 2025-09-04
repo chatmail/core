@@ -86,31 +86,14 @@ pub async fn exists(context: &Context, namespace: Namespace, token: &str) -> Res
     Ok(exists)
 }
 
-/// Looks up foreign key by auth token.
+/// Resets all tokens corresponding to the `foreign_key`.
 ///
-/// Returns None if auth token is not valid.
-/// Returns an empty string if the token corresponds to "setup contact" rather than group join.
-pub async fn auth_foreign_key(context: &Context, token: &str) -> Result<Option<String>> {
+/// `foreign_key` is a group ID to reset all group tokens
+/// or empty string to reset all setup contact tokens.
+pub async fn delete(context: &Context, foreign_key: &str) -> Result<()> {
     context
         .sql
-        .query_row_optional(
-            "SELECT foreign_key FROM tokens WHERE namespc=? AND token=?",
-            (Namespace::Auth, token),
-            |row| {
-                let foreign_key: String = row.get(0)?;
-                Ok(foreign_key)
-            },
-        )
-        .await
-}
-
-pub async fn delete(context: &Context, namespace: Namespace, token: &str) -> Result<()> {
-    context
-        .sql
-        .execute(
-            "DELETE FROM tokens WHERE namespc=? AND token=?;",
-            (namespace, token),
-        )
+        .execute("DELETE FROM tokens WHERE foreign_key=?", (foreign_key,))
         .await?;
     Ok(())
 }

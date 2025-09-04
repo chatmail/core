@@ -766,19 +766,18 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             authcode,
             ..
         } => {
-            token::delete(context, token::Namespace::InviteNumber, &invitenumber).await?;
-            token::delete(context, token::Namespace::Auth, &authcode).await?;
+            token::delete(context, "").await?;
             context
                 .sync_qr_code_token_deletion(invitenumber, authcode)
                 .await?;
         }
         Qr::WithdrawVerifyGroup {
+            grpid,
             invitenumber,
             authcode,
             ..
         } => {
-            token::delete(context, token::Namespace::InviteNumber, &invitenumber).await?;
-            token::delete(context, token::Namespace::Auth, &authcode).await?;
+            token::delete(context, &grpid).await?;
             context
                 .sync_qr_code_token_deletion(invitenumber, authcode)
                 .await?;

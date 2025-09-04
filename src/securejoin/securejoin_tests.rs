@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use deltachat_contact_tools::EmailAddress;
 
 use super::*;
@@ -5,12 +7,13 @@ use crate::chat::{CantSendReason, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
-use crate::mimeparser::GossipedKey;
+use crate::mimeparser::{GossipedKey, SystemMessage};
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
     TestContext, TestContextManager, TimeShiftFalsePositiveNote, get_chat_msg,
 };
+use crate::tools::SystemTime;
 
 #[derive(PartialEq)]
 enum SetupContactCase {
@@ -797,6 +800,81 @@ async fn test_wrong_auth_token() -> Result<()> {
 
     let alice_bob_contact = alice.add_or_lookup_contact(bob).await;
     assert!(!alice_bob_contact.is_verified(alice).await?);
+
+    Ok(())
+}
+
+/// Tests that scanning a QR code week later
+/// allows Bob to establish a contact with Alice,
+/// but does not mark Bob as verified for Alice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_expired_contact_auth_token() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice creates a QR code.
+    let qr = get_securejoin_qr(alice, None).await?;
+
+    // One week passes, QR code expires.
+    SystemTime::shift(Duration::from_secs(7 * 24 * 3600));
+
+    // Bob scans the QR code.
+    join_securejoin(bob, &qr).await?;
+
+    // vc-request
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+
+    // vc-auth-requried
+    bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+
+    // vc-request-with-auth
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+
+    // Bob should not be verified for Alice.
+    let contact_bob = alice.add_or_lookup_contact_no_key(bob).await;
+    assert_eq!(contact_bob.is_verified(alice).await.unwrap(), false);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_expired_group_auth_token() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_group_chat(alice, "Group").await?;
+
+    // Alice creates a group QR code.
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+
+    // One week passes, QR code expires.
+    SystemTime::shift(Duration::from_secs(7 * 24 * 3600));
+
+    // Bob scans the QR code.
+    join_securejoin(bob, &qr).await?;
+
+    // vg-request
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+
+    // vg-auth-requried
+    bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+
+    // vg-request-with-auth
+    alice.recv_msg_trash(&bob.pop_sent_msg().await).await;
+
+    // vg-member-added
+    let bob_member_added_msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
+    assert!(bob_member_added_msg.is_info());
+    assert_eq!(
+        bob_member_added_msg.get_info_type(),
+        SystemMessage::MemberAddedToGroup
+    );
+
+    // Bob should not be verified for Alice.
+    let contact_bob = alice.add_or_lookup_contact_no_key(bob).await;
+    assert_eq!(contact_bob.is_verified(alice).await.unwrap(), false);
 
     Ok(())
 }
