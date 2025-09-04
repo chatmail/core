@@ -1281,6 +1281,9 @@ impl Session {
             context.on_archived_chats_maybe_noticed();
         }
         for updated_chat_id in updated_chat_ids {
+            // NB: There are no other events that remove notifications at least for messages seen on
+            // other devices, so while we may also remove useful notifications for newer messages,
+            // we have no other choice.
             context.emit_event(EventType::MsgsNoticed(updated_chat_id));
             chatlist_events::emit_chatlist_item_changed(context, updated_chat_id);
         }
