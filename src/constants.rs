@@ -98,6 +98,7 @@ pub(crate) const DC_RESEND_USER_AVATAR_DAYS: i64 = 14;
 // reference is the release date.
 // as not all system get speedy updates,
 // do not use too small value that will annoy users checking for nonexistent updates.
+// "90 days" has proven to be too short at some point (user were informed but there was no update)
 pub(crate) const DC_OUTDATED_WARNING_DAYS: i64 = 183;
 
 /// messages that should be deleted get this chat_id; the messages are deleted from the working thread later then. This is also needed as rfc724_mid should be preset as long as the message is not deleted on the server (otherwise it is downloaded again)
