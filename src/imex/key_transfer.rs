@@ -93,10 +93,7 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
         bail!("Passphrase must be at least 2 chars long.");
     };
     let private_key = load_self_secret_key(context).await?;
-    let ac_headers = match context.get_config_bool(Config::E2eeEnabled).await? {
-        false => None,
-        true => Some(("Autocrypt-Prefer-Encrypt", "mutual")),
-    };
+    let ac_headers = Some(("Autocrypt-Prefer-Encrypt", "mutual"));
     let private_key_asc = private_key.to_asc(ac_headers);
     let encr = pgp::symm_encrypt(passphrase, private_key_asc.into_bytes())
         .await?

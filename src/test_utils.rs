@@ -1245,9 +1245,8 @@ impl SentMessage<'_> {
 ///
 /// The keypair was created using the crate::key::tests::gen_key test.
 pub fn alice_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1256,9 +1255,8 @@ pub fn alice_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn bob_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1269,8 +1267,7 @@ pub fn bob_keypair() -> KeyPair {
 pub fn charlie_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
-            .unwrap()
-            .0;
+            .unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1279,9 +1276,8 @@ pub fn charlie_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn dom_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1290,9 +1286,8 @@ pub fn dom_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn elena_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1301,9 +1296,8 @@ pub fn elena_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn fiona_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }

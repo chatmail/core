@@ -4,10 +4,8 @@ use std::io::Cursor;
 
 use anyhow::Result;
 use mail_builder::mime::MimePart;
-use num_traits::FromPrimitive;
 
 use crate::aheader::{Aheader, EncryptPreference};
-use crate::config::Config;
 use crate::context::Context;
 use crate::key::{SignedPublicKey, load_self_public_key, load_self_secret_key};
 use crate::pgp;
@@ -21,9 +19,7 @@ pub struct EncryptHelper {
 
 impl EncryptHelper {
     pub async fn new(context: &Context) -> Result<EncryptHelper> {
-        let prefer_encrypt =
-            EncryptPreference::from_i32(context.get_config_int(Config::E2eeEnabled).await?)
-                .unwrap_or_default();
+        let prefer_encrypt = EncryptPreference::Mutual;
         let addr = context.get_primary_self_addr().await?;
         let public_key = load_self_public_key(context).await?;
 

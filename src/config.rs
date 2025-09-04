@@ -151,10 +151,6 @@ pub enum Config {
     /// setting up a second device, or receiving a sync message.
     BccSelf,
 
-    /// True if encryption is preferred according to Autocrypt standard.
-    #[strum(props(default = "1"))]
-    E2eeEnabled,
-
     /// True if Message Delivery Notifications (read receipts) should
     /// be sent and requested.
     #[strum(props(default = "1"))]
@@ -705,7 +701,6 @@ impl Context {
             Config::Socks5Enabled
             | Config::ProxyEnabled
             | Config::BccSelf
-            | Config::E2eeEnabled
             | Config::MdnsEnabled
             | Config::SentboxWatch
             | Config::MvboxMove

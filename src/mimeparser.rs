@@ -1519,7 +1519,7 @@ impl MimeMessage {
                 );
                 return Ok(false);
             }
-            Ok((key, _)) => key,
+            Ok(key) => key,
         };
         if let Err(err) = key.verify() {
             warn!(context, "Attached PGP key verification failed: {err:#}.");
