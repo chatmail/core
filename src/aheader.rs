@@ -17,7 +17,6 @@ pub enum EncryptPreference {
     #[default]
     NoPreference = 0,
     Mutual = 1,
-    Reset = 20,
 }
 
 impl fmt::Display for EncryptPreference {
@@ -25,7 +24,6 @@ impl fmt::Display for EncryptPreference {
         match *self {
             EncryptPreference::Mutual => write!(fmt, "mutual"),
             EncryptPreference::NoPreference => write!(fmt, "nopreference"),
-            EncryptPreference::Reset => write!(fmt, "reset"),
         }
     }
 }
@@ -155,7 +153,7 @@ mod tests {
         Ok(())
     }
 
-    // EncryptPreference::Reset is an internal value, parser should never return it
+    // Non-standard values of prefer-encrypt such as `reset` are treated as no preference.
     #[test]
     fn test_from_str_reset() -> Result<()> {
         let raw = format!("addr=reset@example.com; prefer-encrypt=reset; keydata={RAWKEY}");
