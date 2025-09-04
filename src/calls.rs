@@ -114,6 +114,7 @@ impl Context {
             chat.id.accept(self).await?;
         }
 
+        call.update_text(self, "Call accepted").await?;
         call.msg
             .mark_call_as_accepted(self, accept_call_info.to_string())
             .await?;
@@ -125,6 +126,7 @@ impl Context {
             ..Default::default()
         };
         msg.param.set_cmd(SystemMessage::CallAccepted);
+        msg.hidden = true;
         msg.param
             .set(Param::WebrtcAccepted, accept_call_info.to_string());
         msg.set_quote(self, Some(&call.msg)).await?;
@@ -133,12 +135,15 @@ impl Context {
             msg_id: call.msg.id,
             accept_call_info,
         });
+        self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
     }
 
     /// Cancel, reject or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let call: CallInfo = self.load_call_by_id(call_id).await?;
+
+        call.update_text(self, "Call ended").await?;
 
         if call.is_accepted || !call.is_incoming {
             let mut msg = Message {
@@ -147,6 +152,7 @@ impl Context {
                 ..Default::default()
             };
             msg.param.set_cmd(SystemMessage::CallEnded);
+            msg.hidden = true;
             msg.set_quote(self, Some(&call.msg)).await?;
             msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         } else if call.is_incoming {
@@ -161,6 +167,7 @@ impl Context {
         self.emit_event(EventType::CallEnded {
             msg_id: call.msg.id,
         });
+        self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
     }
 
@@ -189,9 +196,9 @@ impl Context {
             if call.is_incoming {
                 if call.is_stale_call() {
                     call.update_text(self, "Missed call").await?;
-                    self.emit_incoming_msg(call.msg.chat_id, call_id);
+                    self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
                 } else {
-                    self.emit_msgs_changed(call.msg.chat_id, call_id);
+                    self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
                         place_call_info: call.place_call_info.to_string(),
@@ -210,6 +217,7 @@ impl Context {
             match mime_message.is_system_message {
                 SystemMessage::CallAccepted => {
                     let call = self.load_call_by_id(call_id).await?;
+                    call.update_text(self, "Call accepted").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming {
                         self.emit_event(EventType::IncomingCallAccepted {
@@ -232,6 +240,7 @@ impl Context {
                 }
                 SystemMessage::CallEnded => {
                     let call = self.load_call_by_id(call_id).await?;
+                    call.update_text(self, "Call ended").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
@@ -245,7 +254,10 @@ impl Context {
 
     pub(crate) async fn sync_call_rejection(&self, rfc724_mid: &str) -> Result<()> {
         if let Some((msg_id, _)) = rfc724_mid_exists(self, rfc724_mid).await? {
+            let call = self.load_call_by_id(msg_id).await?;
+            call.update_text(self, "Call ended").await?;
             self.emit_event(EventType::CallEnded { msg_id });
+            self.emit_msgs_changed(call.msg.chat_id, msg_id);
         }
         Ok(())
     }
