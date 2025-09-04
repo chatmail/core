@@ -97,7 +97,7 @@ impl Summary {
         let prefix = if msg.state == MessageState::OutDraft {
             Some(SummaryPrefix::Draft(stock_str::draft(context).await))
         } else if msg.from_id == ContactId::SELF {
-            if msg.is_info() {
+            if msg.is_info() || msg.viewtype == Viewtype::Call {
                 None
             } else {
                 Some(SummaryPrefix::Me(stock_str::self_msg(context).await))
@@ -232,6 +232,16 @@ impl Message {
                 type_name = None;
                 type_file = self.param.get(Param::Summary1).map(|s| s.to_string());
                 append_text = true;
+            }
+            Viewtype::Call => {
+                emoji = Some("📞");
+                type_name = Some(if self.from_id == ContactId::SELF {
+                    "Outgoing call".to_string()
+                } else {
+                    "Incoming call".to_string()
+                });
+                type_file = None;
+                append_text = false
             }
             Viewtype::Text | Viewtype::Unknown => {
                 emoji = None;

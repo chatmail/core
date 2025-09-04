@@ -217,17 +217,7 @@ pub enum SystemMessage {
     /// "Messages are end-to-end encrypted."
     ChatE2ee = 50,
 
-    /// This system message represents an outgoing call.
-    /// This message is visible to the user as an "info" message.
-    OutgoingCall = 60,
-
-    /// This system message represents an incoming call.
-    /// This message is visible to the user as an "info" message.
-    IncomingCall = 65,
-
     /// Message indicating that a call was accepted.
-    /// While the 1:1 call may be established elsewhere,
-    /// the message is still needed for a multidevice setup, so that other devices stop ringing.
     CallAccepted = 66,
 
     /// Message indicating that a call was ended.
@@ -692,12 +682,6 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::ChatProtectionDisabled;
             } else if value == "group-avatar-changed" {
                 self.is_system_message = SystemMessage::GroupImageChanged;
-            } else if value == "call" {
-                self.is_system_message = if self.incoming {
-                    SystemMessage::IncomingCall
-                } else {
-                    SystemMessage::OutgoingCall
-                };
             } else if value == "call-accepted" {
                 self.is_system_message = SystemMessage::CallAccepted;
             } else if value == "call-ended" {
@@ -738,6 +722,8 @@ impl MimeMessage {
             if let Some(room) = room {
                 if content == "videochat-invitation" {
                     part.typ = Viewtype::VideochatInvitation;
+                } else if content == "call" {
+                    part.typ = Viewtype::Call
                 }
                 part.param.set(Param::WebrtcRoom, room);
             } else if let Some(accepted) = accepted {
@@ -767,7 +753,10 @@ impl MimeMessage {
                     | Viewtype::Vcard
                     | Viewtype::File
                     | Viewtype::Webxdc => true,
-                    Viewtype::Unknown | Viewtype::Text | Viewtype::VideochatInvitation => false,
+                    Viewtype::Unknown
+                    | Viewtype::Text
+                    | Viewtype::VideochatInvitation
+                    | Viewtype::Call => false,
                 })
         {
             let mut parts = std::mem::take(&mut self.parts);
@@ -1580,6 +1569,13 @@ impl MimeMessage {
         } else {
             false
         }
+    }
+
+    /// Check if a message is a call.
+    pub(crate) fn is_call(&self) -> bool {
+        self.parts
+            .first()
+            .is_some_and(|part| part.typ == Viewtype::Call)
     }
 
     pub(crate) fn get_rfc724_mid(&self) -> Option<String> {
