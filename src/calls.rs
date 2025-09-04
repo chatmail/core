@@ -84,7 +84,7 @@ impl Context {
 
         let mut call = Message {
             viewtype: Viewtype::Call,
-            text: "📞 Calling...".into(),
+            text: "Calling...".into(),
             ..Default::default()
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
