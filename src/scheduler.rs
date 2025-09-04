@@ -661,6 +661,7 @@ async fn fetch_idle(
 
     connection.connectivity.set_idle(ctx);
 
+    // Maybe we'll remove watching other folders soon, so use this event for all folders for now.
     ctx.emit_event(EventType::ImapInboxIdle);
 
     if !session.can_idle() {

@@ -71,10 +71,14 @@ impl Imap {
                 _ => folder_meaning,
             };
 
+            // Scan folders for incoming messages. As for outgoing ones, users should CC/BCC/To
+            // themselves so that Delta Chat sees such messages in Inbox.
+            //
             // Don't scan folders that are watched anyway
             if !watched_folders.contains(&folder.name().to_string())
                 && folder_meaning != FolderMeaning::Drafts
                 && folder_meaning != FolderMeaning::Trash
+                && folder_meaning != FolderMeaning::Sent
             {
                 self.fetch_move_delete(context, session, folder.name(), folder_meaning)
                     .await

@@ -665,18 +665,15 @@ impl Imap {
             // message, move it to the movebox and then download the second message before
             // downloading the first one, if downloading from inbox before moving is allowed.
             if folder == target
-                // Never download messages directly from the spam folder.
-                // If the sender is known, the message will be moved to the Inbox or Mvbox
-                // and then we download the message from there.
-                // Also see `spam_target_folder_cfg()`.
-                && folder_meaning != FolderMeaning::Spam
                 && prefetch_should_download(
                     context,
+                    folder_meaning,
                     &headers,
                     &message_id,
                     fetch_response.flags(),
                 )
-                .await.context("prefetch_should_download")?
+                .await
+                .context("prefetch_should_download")?
             {
                 match download_limit {
                     Some(download_limit) => uids_fetch.push((
@@ -2244,10 +2241,34 @@ async fn prefetch_get_chat(
 /// Determines whether the message should be downloaded based on prefetched headers.
 pub(crate) async fn prefetch_should_download(
     context: &Context,
+    folder_meaning: FolderMeaning,
     headers: &[mailparse::MailHeader<'_>],
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
+    // Never download messages directly from the spam folder.
+    // If the sender is known, the message will be moved to the Inbox or Mvbox
+    // and then we download the message from there.
+    // Also see `spam_target_folder_cfg()`.
+    if folder_meaning == FolderMeaning::Spam {
+        return Ok(false);
+    }
+
+    // Download outgoing messages only from Inbox and Mvbox (and Sent -- until
+    // `Config::SentboxWatch` is dropped) to ensure they are sorted correctly with incoming
+    // messages. This way we actually do server-side sorting. Otherwise it's possible that outgoing
+    // replies from other devices appear before incoming messages. Users should CC/BCC/To themselves
+    // to see sent messages in Delta Chat.
+    if matches!(
+        folder_meaning,
+        FolderMeaning::Inbox | FolderMeaning::Mvbox | FolderMeaning::Sent
+    ) {
+    } else if let Some(from) = mimeparser::get_from(headers) {
+        if context.is_self_addr(&from.addr).await? {
+            return Ok(false);
+        }
+    }
+
     if message::rfc724_mid_exists(context, message_id)
         .await?
         .is_some()

@@ -12,7 +12,7 @@ use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::download::MIN_DOWNLOAD_LIMIT;
-use crate::imap::prefetch_should_download;
+use crate::imap::{FolderMeaning, prefetch_should_download};
 use crate::imex::{ImexMode, imex};
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
@@ -672,9 +672,15 @@ async fn test_parse_ndn(
     // Check that the ndn would be downloaded:
     let headers = mailparse::parse_mail(raw_ndn).unwrap().headers;
     assert!(
-        prefetch_should_download(&t, &headers, "some-other-message-id", std::iter::empty(),)
-            .await
-            .unwrap()
+        prefetch_should_download(
+            &t,
+            FolderMeaning::Inbox,
+            &headers,
+            "some-other-message-id",
+            std::iter::empty(),
+        )
+        .await
+        .unwrap()
     );
 
     receive_imf(&t, raw_ndn, false).await.unwrap();

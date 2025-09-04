@@ -846,6 +846,7 @@ def test_dont_show_emails(acfactory, lp):
     ac1.direct_imap.create_folder("Sent")
     ac1.direct_imap.create_folder("Spam")
     ac1.direct_imap.create_folder("Junk")
+    ac1.set_config("sentbox_watch", "1")
 
     acfactory.bring_accounts_online()
     ac1.stop_io()
@@ -955,7 +956,10 @@ def test_dont_show_emails(acfactory, lp):
 
     msg = ac1._evtracker.wait_next_messages_changed()
 
-    # Wait until each folder was scanned, this is necessary for this test to test what it should test:
+    # Wait until each folder was scanned, this is necessary for this test to test what it should
+    # test. Need to wait two times because of "sentbox_watch" set (the same event is emitted for
+    # Sentbox currently).
+    ac1._evtracker.wait_idle_inbox_ready()
     ac1._evtracker.wait_idle_inbox_ready()
 
     assert msg.text == "subj – message in Sent"
