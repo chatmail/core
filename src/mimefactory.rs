@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 
-use anyhow::{Context as _, Result, anyhow, bail, ensure};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -1533,15 +1533,6 @@ impl MimeFactory {
                     .into(),
                 ));
             }
-            SystemMessage::OutgoingCall => {
-                headers.push((
-                    "Chat-Content",
-                    mail_builder::headers::raw::Raw::new("call").into(),
-                ));
-            }
-            SystemMessage::IncomingCall => {
-                return Err(anyhow!("Unexpected incoming call rendering."));
-            }
             SystemMessage::CallAccepted => {
                 headers.push((
                     "Chat-Content",
@@ -1577,6 +1568,11 @@ impl MimeFactory {
             headers.push((
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
+            ));
+        } else if msg.viewtype == Viewtype::Call {
+            headers.push((
+                "Chat-Content",
+                mail_builder::headers::raw::Raw::new("call").into(),
             ));
         }
 

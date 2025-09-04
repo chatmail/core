@@ -1000,7 +1000,7 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if mime_parser.is_system_message == SystemMessage::IncomingCall {
+    if mime_parser.is_call() {
         context.handle_call_msg(&mime_parser, insert_msg_id).await?;
     } else if received_msg.hidden {
         // No need to emit an event about the changed message

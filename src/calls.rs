@@ -4,6 +4,7 @@
 //! This means, the "Call ID" is a "Message ID" currently - similar to webxdc.
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::constants::Chattype;
+use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
@@ -82,11 +83,10 @@ impl Context {
         ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
 
         let mut call = Message {
-            viewtype: Viewtype::Text,
-            text: "Calling...".into(),
+            viewtype: Viewtype::Call,
+            text: "📞 Calling...".into(),
             ..Default::default()
         };
-        call.param.set_cmd(SystemMessage::OutgoingCall);
         call.param.set(Param::WebrtcRoom, &place_call_info);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
@@ -184,60 +184,61 @@ impl Context {
         mime_message: &MimeMessage,
         call_id: MsgId,
     ) -> Result<()> {
-        match mime_message.is_system_message {
-            SystemMessage::IncomingCall => {
-                let call = self.load_call_by_id(call_id).await?;
-                if call.is_incoming {
-                    if call.is_stale_call() {
-                        call.update_text(self, "Missed call").await?;
-                        self.emit_incoming_msg(call.msg.chat_id, call_id);
-                    } else {
-                        self.emit_msgs_changed(call.msg.chat_id, call_id);
-                        self.emit_event(EventType::IncomingCall {
-                            msg_id: call.msg.id,
-                            place_call_info: call.place_call_info.to_string(),
-                        });
-                        let wait = call.remaining_ring_seconds();
-                        task::spawn(Context::emit_end_call_if_unaccepted(
-                            self.clone(),
-                            wait.try_into()?,
-                            call.msg.id,
-                        ));
-                    }
+        if mime_message.is_call() {
+            let call = self.load_call_by_id(call_id).await?;
+            if call.is_incoming {
+                if call.is_stale_call() {
+                    call.update_text(self, "Missed call").await?;
+                    self.emit_incoming_msg(call.msg.chat_id, call_id);
                 } else {
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
-                }
-            }
-            SystemMessage::CallAccepted => {
-                let call = self.load_call_by_id(call_id).await?;
-                self.emit_msgs_changed(call.msg.chat_id, call_id);
-                if call.is_incoming {
-                    self.emit_event(EventType::IncomingCallAccepted {
+                    self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
-                        accept_call_info: call.accept_call_info,
+                        place_call_info: call.place_call_info.to_string(),
                     });
-                } else {
-                    let accept_call_info = mime_message
-                        .get_header(HeaderDef::ChatWebrtcAccepted)
-                        .unwrap_or_default();
-                    call.msg
-                        .clone()
-                        .mark_call_as_accepted(self, accept_call_info.to_string())
-                        .await?;
-                    self.emit_event(EventType::OutgoingCallAccepted {
+                    let wait = call.remaining_ring_seconds();
+                    task::spawn(Context::emit_end_call_if_unaccepted(
+                        self.clone(),
+                        wait.try_into()?,
+                        call.msg.id,
+                    ));
+                }
+            } else {
+                self.emit_msgs_changed(call.msg.chat_id, call_id);
+            }
+        } else {
+            match mime_message.is_system_message {
+                SystemMessage::CallAccepted => {
+                    let call = self.load_call_by_id(call_id).await?;
+                    self.emit_msgs_changed(call.msg.chat_id, call_id);
+                    if call.is_incoming {
+                        self.emit_event(EventType::IncomingCallAccepted {
+                            msg_id: call.msg.id,
+                            accept_call_info: call.accept_call_info,
+                        });
+                    } else {
+                        let accept_call_info = mime_message
+                            .get_header(HeaderDef::ChatWebrtcAccepted)
+                            .unwrap_or_default();
+                        call.msg
+                            .clone()
+                            .mark_call_as_accepted(self, accept_call_info.to_string())
+                            .await?;
+                        self.emit_event(EventType::OutgoingCallAccepted {
+                            msg_id: call.msg.id,
+                            accept_call_info: accept_call_info.to_string(),
+                        });
+                    }
+                }
+                SystemMessage::CallEnded => {
+                    let call = self.load_call_by_id(call_id).await?;
+                    self.emit_msgs_changed(call.msg.chat_id, call_id);
+                    self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
-                        accept_call_info: accept_call_info.to_string(),
                     });
                 }
+                _ => {}
             }
-            SystemMessage::CallEnded => {
-                let call = self.load_call_by_id(call_id).await?;
-                self.emit_msgs_changed(call.msg.chat_id, call_id);
-                self.emit_event(EventType::CallEnded {
-                    msg_id: call.msg.id,
-                });
-            }
-            _ => {}
         }
         Ok(())
     }
@@ -255,13 +256,10 @@ impl Context {
     }
 
     fn load_call_by_message(&self, call: Message) -> Result<CallInfo> {
-        ensure!(
-            call.get_info_type() == SystemMessage::IncomingCall
-                || call.get_info_type() == SystemMessage::OutgoingCall
-        );
+        ensure!(call.viewtype == Viewtype::Call);
 
         Ok(CallInfo {
-            is_incoming: call.get_info_type() == SystemMessage::IncomingCall,
+            is_incoming: call.get_from_id() != ContactId::SELF,
             is_accepted: call.is_call_accepted()?,
             place_call_info: call
                 .param
@@ -284,10 +282,7 @@ impl Message {
         context: &Context,
         accept_call_info: String,
     ) -> Result<()> {
-        ensure!(
-            self.get_info_type() == SystemMessage::IncomingCall
-                || self.get_info_type() == SystemMessage::OutgoingCall
-        );
+        ensure!(self.viewtype == Viewtype::Call);
         self.param.set_int(Param::Arg, 1);
         self.param.set(Param::WebrtcAccepted, accept_call_info);
         self.update_param(context).await?;
@@ -295,10 +290,7 @@ impl Message {
     }
 
     fn is_call_accepted(&self) -> Result<bool> {
-        ensure!(
-            self.get_info_type() == SystemMessage::IncomingCall
-                || self.get_info_type() == SystemMessage::OutgoingCall
-        );
+        ensure!(self.viewtype == Viewtype::Call);
         Ok(self.param.get_int(Param::Arg) == Some(1))
     }
 }

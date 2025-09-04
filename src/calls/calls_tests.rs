@@ -33,9 +33,10 @@ async fn setup_call() -> Result<CallSetup> {
     let alice_call = Message::load_from_db(&alice, sent1.sender_msg_id).await?;
     let alice2_call = alice2.recv_msg(&sent1).await;
     for (t, m) in [(&alice, &alice_call), (&alice2, &alice2_call)] {
-        assert!(m.is_info());
-        assert_eq!(m.get_info_type(), SystemMessage::OutgoingCall);
+        assert!(!m.is_info());
+        assert_eq!(m.viewtype, Viewtype::Call);
         let info = t.load_call_by_id(m.id).await?;
+        assert!(!info.is_incoming);
         assert!(!info.is_accepted);
         assert_eq!(info.place_call_info, "place_info");
     }
@@ -45,12 +46,13 @@ async fn setup_call() -> Result<CallSetup> {
     let bob_call = bob.recv_msg(&sent1).await;
     let bob2_call = bob2.recv_msg(&sent1).await;
     for (t, m) in [(&bob, &bob_call), (&bob2, &bob2_call)] {
-        assert!(m.is_info());
-        assert_eq!(m.get_info_type(), SystemMessage::IncomingCall);
+        assert!(!m.is_info());
+        assert_eq!(m.viewtype, Viewtype::Call);
         t.evtracker
             .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
             .await;
         let info = t.load_call_by_id(m.id).await?;
+        assert!(info.is_incoming);
         assert!(!info.is_accepted);
         assert_eq!(info.place_call_info, "place_info");
     }
