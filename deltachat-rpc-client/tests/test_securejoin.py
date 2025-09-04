@@ -3,6 +3,7 @@ import logging
 import pytest
 
 from deltachat_rpc_client import Chat, EventType, SpecialContactId
+from deltachat_rpc_client.const import ChatType
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -170,10 +171,24 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
         assert len(chat_msgs) == 3
 
-        chat_snapshot = chat.get_basic_snapshot()  # TODO or get_full_snapshot()
+        chat_snapshot = chat.get_full_snapshot()
         assert chat_snapshot.is_encrypted
+        assert chat_snapshot.name == "Broadcast channel for everyone!"
+        if inviter_side:
+            assert chat_snapshot.chat_type == ChatType.OUT_BROADCAST
+        else:
+            assert chat_snapshot.chat_type == ChatType.IN_BROADCAST
+        # TODO `assert not chat_snapshot.is_contact_request` doesn't work
+        assert chat_snapshot.can_send == inviter_side
 
-        # TODO check more things
+        chat_contacts = chat_snapshot.contact_ids
+        assert contact.id in chat_contacts
+        if inviter_side:
+            assert len(chat_contacts) == 1
+        else:
+            assert len(chat_contacts) == 2
+            assert SpecialContactId.SELF in chat_contacts
+            assert chat_snapshot.self_in_group
 
     check_account(alice, alice.create_contact(bob), inviter_side=True)
     check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
