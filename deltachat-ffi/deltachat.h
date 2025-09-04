@@ -415,7 +415,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    As for `displayname` and `selfstatus`, also the avatar is sent to the recipients.
  *                    To save traffic, however, the avatar is attached only as needed
  *                    and also recoded to a reasonable size.
- * - `e2ee_enabled` = 0=no end-to-end-encryption, 1=prefer end-to-end-encryption (default)
  * - `mdns_enabled` = 0=do not send or request read receipts,
  *                    1=send and request read receipts
  *                    default=send and request read receipts, only send but not request if `bot` is set
