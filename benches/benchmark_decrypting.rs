@@ -83,16 +83,14 @@ fn criterion_benchmark(c: &mut Criterion) {
         let secrets = generate_secrets();
         let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
             let secret = secrets[NUM_SECRETS / 2].clone();
-            let encrypted = symm_encrypt_message(
+            symm_encrypt_message(
                 plain.clone(),
                 black_box(&secret),
                 create_dummy_keypair("alice@example.org").unwrap().secret,
                 true,
             )
             .await
-            .unwrap();
-
-            encrypted
+            .unwrap()
         });
 
         b.iter(|| {
@@ -109,22 +107,20 @@ fn criterion_benchmark(c: &mut Criterion) {
         let key_pair = create_dummy_keypair("alice@example.org").unwrap();
         let secrets = generate_secrets();
         let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let encrypted = pk_encrypt(
+            pk_encrypt(
                 plain.clone(),
                 vec![black_box(key_pair.public.clone())],
                 Some(key_pair.secret.clone()),
                 true,
             )
             .await
-            .unwrap();
-
-            encrypted
+            .unwrap()
         });
 
         b.iter(|| {
             let mut msg = decrypt(
                 encrypted.clone().into_bytes(),
-                &[key_pair.secret.clone()],
+                std::slice::from_ref(&key_pair.secret),
                 black_box(&secrets),
             )
             .unwrap();
@@ -148,7 +144,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let context = rt.block_on(async {
         let context = create_context().await;
         for (i, secret) in secrets.iter().enumerate() {
-            save_broadcast_shared_secret(&context, ChatId::new(10 + i as u32), &secret)
+            save_broadcast_shared_secret(&context, ChatId::new(10 + i as u32), secret)
                 .await
                 .unwrap();
         }
