@@ -1276,6 +1276,8 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  * All affected devices will receive
  * either #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
  *
+ * If the call is already accepted or ended, nothing happens.
+ *
  * @memberof dc_context_t
  * @param context The context object.
  * @param msg_id The ID of the call to accept.
