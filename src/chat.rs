@@ -5195,6 +5195,8 @@ impl Context {
                         return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
                     SyncAction::MarkVerified => {
+                        ContactId::scaleup_origin(self, &[contact_id], Origin::SecurejoinJoined)
+                            .await?;
                         return contact::mark_contact_id_as_verified(
                             self,
                             contact_id,

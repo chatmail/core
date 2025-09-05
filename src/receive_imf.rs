@@ -1385,6 +1385,7 @@ async fn do_chat_assignment(
                         create_or_lookup_mailinglist_or_broadcast(
                             context,
                             allow_creation,
+                            create_blocked,
                             mailinglist_header,
                             from_id,
                             mime_parser,
@@ -3265,6 +3266,7 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
 async fn create_or_lookup_mailinglist_or_broadcast(
     context: &Context,
     allow_creation: bool,
+    create_blocked: Blocked,
     list_id_header: &str,
     from_id: ContactId,
     mime_parser: &MimeMessage,
@@ -3297,18 +3299,12 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             p.to_string()
         });
 
-        let is_bot = context.get_config_bool(Config::Bot).await?;
-        let blocked = if is_bot {
-            Blocked::Not
-        } else {
-            Blocked::Request
-        };
         let chat_id = ChatId::create_multiuser_record(
             context,
             chattype,
             &listid,
             name,
-            blocked,
+            create_blocked,
             ProtectionStatus::Unprotected,
             param,
             mime_parser.timestamp_sent,
@@ -3330,7 +3326,12 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             )
             .await?;
         }
-        Ok(Some((chat_id, blocked)))
+
+        context.emit_event(EventType::ChatModified(chat_id));
+        chatlist_events::emit_chatlist_changed(context);
+        chatlist_events::emit_chatlist_item_changed(context, chat_id);
+
+        Ok(Some((chat_id, create_blocked)))
     } else {
         info!(context, "Creating list forbidden by caller.");
         Ok(None)
