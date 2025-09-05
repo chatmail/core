@@ -1575,6 +1575,9 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("call").into(),
             ));
+            placeholdertext = Some(
+                "[This is a 'Call'. The sender uses an experiment not supported on your version yet]".to_string(),
+            );
         }
 
         if msg.param.exists(Param::WebrtcRoom) {

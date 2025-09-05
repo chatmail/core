@@ -779,6 +779,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
+        | EventType::IncomingCallAccepted { .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { .. } => ptr::null_mut(),
         EventType::IncomingCall {
             place_call_info, ..
@@ -786,10 +787,7 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
             let data2 = place_call_info.to_c_string().unwrap_or_default();
             data2.into_raw()
         }
-        EventType::IncomingCallAccepted {
-            accept_call_info, ..
-        }
-        | EventType::OutgoingCallAccepted {
+        EventType::OutgoingCallAccepted {
             accept_call_info, ..
         } => {
             let data2 = accept_call_info.to_c_string().unwrap_or_default();
