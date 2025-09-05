@@ -1792,9 +1792,7 @@ dc_chat_t*      dc_get_chat                  (dc_context_t* context, uint32_t ch
  *
  * @memberof dc_context_t
  * @param context The context object.
- * @param protect If set to 1 the function creates group with protection initially enabled.
- *     Only verified members are allowed in these groups
- *     and end-to-end-encryption is always enabled.
+ * @param protect Deprecated 2025-08-31, ignored.
  * @param name The name of the group chat to create.
  *     The name may be changed later using dc_set_chat_name().
  *     To find out the name of a group later, see dc_chat_get_name()
@@ -3921,23 +3919,6 @@ int             dc_chat_is_device_talk       (const dc_chat_t* chat);
  * @return 1=chat is writable, 0=chat is not writable.
  */
 int             dc_chat_can_send              (const dc_chat_t* chat);
-
-
-/**
- * Check if a chat is protected.
- *
- * Only verified contacts
- * as determined by dc_contact_is_verified()
- * can be added to protected chats.
- *
- * Protected chats are created using dc_create_group_chat()
- * by setting the 'protect' parameter to 1.
- *
- * @memberof dc_chat_t
- * @param chat The chat object.
- * @return 1=chat protected, 0=chat is not protected.
- */
-int             dc_chat_is_protected         (const dc_chat_t* chat);
 
 
 /**

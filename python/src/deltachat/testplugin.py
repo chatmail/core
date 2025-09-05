@@ -604,20 +604,6 @@ class ACFactory:
         ac2.create_chat(ac1)
         return ac1.create_chat(ac2)
 
-    def get_protected_chat(self, ac1: Account, ac2: Account):
-        chat = ac1.create_group_chat("Protected Group", verified=True)
-        qr = chat.get_join_qr()
-        ac2.qr_join_chat(qr)
-        ac2._evtracker.wait_securejoin_joiner_progress(1000)
-        ev = ac2._evtracker.get_matching("DC_EVENT_MSGS_CHANGED")
-        msg = ac2.get_message_by_id(ev.data2)
-        assert msg is not None
-        assert msg.text == "Messages are end-to-end encrypted."
-        msg = ac2._evtracker.wait_next_incoming_message()
-        assert msg is not None
-        assert "Member Me " in msg.text and " added by " in msg.text
-        return chat
-
     def introduce_each_other(self, accounts, sending=True):
         to_wait = []
         for i, acc in enumerate(accounts):
