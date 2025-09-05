@@ -35,7 +35,7 @@ pub enum EventType {
     /// Emitted when an IMAP message has been moved
     ImapMessageMoved(String),
 
-    /// Emitted before going into IDLE on the Inbox folder.
+    /// Emitted before going into IDLE on any folder.
     ImapInboxIdle,
 
     /// Emitted when an new file in the $BLOBDIR was created
