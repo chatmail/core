@@ -37,7 +37,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!m.is_info());
         assert_eq!(m.viewtype, Viewtype::Call);
         let info = t.load_call_by_id(m.id).await?;
-        assert!(!info.is_incoming);
+        assert!(!info.is_incoming());
         assert!(!info.is_accepted_here());
         assert_eq!(info.place_call_info, "place_info");
     }
@@ -53,7 +53,7 @@ async fn setup_call() -> Result<CallSetup> {
             .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
             .await;
         let info = t.load_call_by_id(m.id).await?;
-        assert!(info.is_incoming);
+        assert!(info.is_incoming());
         assert!(!info.is_accepted_here());
         assert_eq!(info.place_call_info, "place_info");
     }

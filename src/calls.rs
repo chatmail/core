@@ -37,9 +37,6 @@ const CALL_ENDED: Param = Param::Arg4;
 /// Information about the status of a call.
 #[derive(Debug, Default)]
 pub struct CallInfo {
-    /// Incoming or outgoing call?
-    pub is_incoming: bool,
-
     /// User-defined text as given to place_outgoing_call()
     pub place_call_info: String,
 
@@ -52,6 +49,10 @@ pub struct CallInfo {
 }
 
 impl CallInfo {
+    fn is_incoming(&self) -> bool {
+        self.msg.from_id != ContactId::SELF
+    }
+
     fn is_stale(&self) -> bool {
         self.remaining_ring_seconds() <= 0
     }
@@ -136,7 +137,7 @@ impl Context {
         accept_call_info: String,
     ) -> Result<()> {
         let mut call: CallInfo = self.load_call_by_id(call_id).await?;
-        ensure!(call.is_incoming);
+        ensure!(call.is_incoming());
 
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
         if chat.is_contact_request() {
@@ -178,7 +179,7 @@ impl Context {
         }
         call.mark_as_ended(self).await?;
 
-        if call.is_accepted_here() || !call.is_incoming {
+        if call.is_accepted_here() || !call.is_incoming() {
             call.update_text(self, "Call ended").await?;
             let mut msg = Message {
                 viewtype: Viewtype::Text,
@@ -189,7 +190,7 @@ impl Context {
             msg.hidden = true;
             msg.set_quote(self, Some(&call.msg)).await?;
             msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
-        } else if call.is_incoming {
+        } else if call.is_incoming() {
             // to protect privacy, we do not send a message to others from callee for unaccepted calls
             call.update_text(self, "Call rejected").await?;
             self.add_sync_item(SyncData::RejectIncomingCall {
@@ -216,7 +217,7 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted_here() {
-            if call.is_incoming {
+            if call.is_incoming() {
                 call.update_text(&context, "Missed call").await?;
                 context.emit_msgs_changed(call.msg.chat_id, call_id);
             }
@@ -234,7 +235,7 @@ impl Context {
     ) -> Result<()> {
         if mime_message.is_call() {
             let call = self.load_call_by_id(call_id).await?;
-            if call.is_incoming {
+            if call.is_incoming() {
                 if call.is_stale() {
                     call.update_text(self, "Missed call").await?;
                     self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
@@ -262,7 +263,7 @@ impl Context {
                     let mut call = self.load_call_by_id(call_id).await?;
                     call.update_text(self, "Call accepted").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
-                    if call.is_incoming {
+                    if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
                             accept_call_info: call.accept_call_info,
@@ -312,7 +313,6 @@ impl Context {
         ensure!(call.viewtype == Viewtype::Call);
 
         Ok(CallInfo {
-            is_incoming: call.get_from_id() != ContactId::SELF,
             place_call_info: call
                 .param
                 .get(Param::WebrtcRoom)
