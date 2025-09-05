@@ -133,14 +133,17 @@ impl Context {
     ) -> Result<()> {
         let mut call: CallInfo = self.load_call_by_id(call_id).await?;
         ensure!(call.is_incoming());
+        if call.is_accepted_here() || call.is_ended() {
+            info!(self, "Call already accepted/ended");
+            return Ok(());
+        }
 
+        call.mark_as_accepted_here(self).await?;
+        call.update_text(self, "Call accepted").await?;
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
         if chat.is_contact_request() {
             chat.id.accept(self).await?;
         }
-
-        call.update_text(self, "Call accepted").await?;
-        call.mark_as_accepted_here(self).await?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -164,8 +167,6 @@ impl Context {
     /// Cancel, reject or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let mut call: CallInfo = self.load_call_by_id(call_id).await?;
-
-        // it is sometimes hard to track all states and flows in UI, be generous on multiple calls to end_call() therefore
         if call.is_ended() {
             info!(self, "Call already ended");
             return Ok(());
@@ -209,7 +210,7 @@ impl Context {
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
         let call = context.load_call_by_id(call_id).await?;
-        if !call.is_accepted_here() {
+        if !call.is_accepted_here() && !call.is_ended() {
             if call.is_incoming() {
                 call.update_text(&context, "Missed call").await?;
                 context.emit_msgs_changed(call.msg.chat_id, call_id);
@@ -254,6 +255,11 @@ impl Context {
             match mime_message.is_system_message {
                 SystemMessage::CallAccepted => {
                     let call = self.load_call_by_id(call_id).await?;
+                    if call.is_ended() || call.is_accepted_here() {
+                        info!(self, "CallAccepted received for accepted/ended call");
+                        return Ok(());
+                    }
+
                     call.update_text(self, "Call accepted").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming() {
@@ -272,6 +278,12 @@ impl Context {
                 }
                 SystemMessage::CallEnded => {
                     let mut call = self.load_call_by_id(call_id).await?;
+                    if call.is_ended() {
+                        // may happen eg. if a caller does not get rejection of callee
+                        info!(self, "CallEnded received for ended call");
+                        return Ok(());
+                    }
+
                     call.mark_as_ended(self).await?;
                     call.update_text(self, "Call ended").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
