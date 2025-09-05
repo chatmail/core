@@ -271,7 +271,8 @@ impl Context {
                     }
                 }
                 SystemMessage::CallEnded => {
-                    let call = self.load_call_by_id(call_id).await?;
+                    let mut call = self.load_call_by_id(call_id).await?;
+                    call.mark_as_ended(self).await?;
                     call.update_text(self, "Call ended").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
