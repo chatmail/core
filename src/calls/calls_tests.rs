@@ -38,7 +38,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert_eq!(m.viewtype, Viewtype::Call);
         let info = t.load_call_by_id(m.id).await?;
         assert!(!info.is_incoming());
-        assert!(!info.is_accepted_here());
+        assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -54,7 +54,7 @@ async fn setup_call() -> Result<CallSetup> {
             .await;
         let info = t.load_call_by_id(m.id).await?;
         assert!(info.is_incoming());
-        assert!(!info.is_accepted_here());
+        assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -90,7 +90,7 @@ async fn accept_call() -> Result<CallSetup> {
         .await;
     let sent2 = bob.pop_sent_msg().await;
     let info = bob.load_call_by_id(bob_call.id).await?;
-    assert!(info.is_accepted_here());
+    assert!(info.is_accepted());
     assert_eq!(info.place_call_info, "place_info");
 
     bob2.recv_msg_trash(&sent2).await;
@@ -102,7 +102,7 @@ async fn accept_call() -> Result<CallSetup> {
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let info = bob2.load_call_by_id(bob2_call.id).await?;
-    assert!(!info.is_accepted_here()); // "accepted" is only true on the device that does the call
+    assert!(!info.is_accepted());
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;
@@ -122,7 +122,7 @@ async fn accept_call() -> Result<CallSetup> {
         }
     );
     let info = alice.load_call_by_id(alice_call.id).await?;
-    assert!(!info.is_accepted_here());
+    assert!(info.is_accepted());
     assert_eq!(info.place_call_info, "place_info");
 
     alice2.recv_msg_trash(&sent2).await;
@@ -373,18 +373,18 @@ async fn test_mark_calls() -> Result<()> {
     } = setup_call().await?;
 
     let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
-    assert!(!call_info.is_accepted_here());
+    assert!(!call_info.is_accepted());
     assert!(!call_info.is_ended());
-    call_info.mark_as_accepted_here(&alice).await?;
-    assert!(call_info.is_accepted_here());
+    call_info.mark_as_accepted(&alice).await?;
+    assert!(call_info.is_accepted());
     assert!(!call_info.is_ended());
 
     let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
-    assert!(call_info.is_accepted_here());
+    assert!(call_info.is_accepted());
     assert!(!call_info.is_ended());
 
     call_info.mark_as_ended(&alice).await?;
-    assert!(call_info.is_accepted_here());
+    assert!(call_info.is_accepted());
     assert!(call_info.is_ended());
 
     Ok(())
