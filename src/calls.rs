@@ -76,13 +76,8 @@ impl CallInfo {
     /// Mark incoming call accepted on this device.
     /// For privacy reasons, only for accepted incoming calls, callee sends a message to caller on `end_call()`.
     /// On other devices and for outgoing calls, `is_accepted_here` is never set.
-    async fn mark_as_accepted_here(
-        &mut self,
-        context: &Context,
-        accept_call_info: String,
-    ) -> Result<()> {
+    async fn mark_as_accepted_here(&mut self, context: &Context) -> Result<()> {
         self.msg.param.set_int(CALL_ACCEPTED_HERE, 1);
-        self.msg.param.set(Param::WebrtcAccepted, accept_call_info);
         self.msg.update_param(context).await?;
         Ok(())
     }
@@ -145,8 +140,7 @@ impl Context {
         }
 
         call.update_text(self, "Call accepted").await?;
-        call.mark_as_accepted_here(self, accept_call_info.to_string())
-            .await?;
+        call.mark_as_accepted_here(self).await?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -162,7 +156,6 @@ impl Context {
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
-            accept_call_info,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -260,20 +253,17 @@ impl Context {
         } else {
             match mime_message.is_system_message {
                 SystemMessage::CallAccepted => {
-                    let mut call = self.load_call_by_id(call_id).await?;
+                    let call = self.load_call_by_id(call_id).await?;
                     call.update_text(self, "Call accepted").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
-                            accept_call_info: call.accept_call_info,
                         });
                     } else {
                         let accept_call_info = mime_message
                             .get_header(HeaderDef::ChatWebrtcAccepted)
                             .unwrap_or_default();
-                        call.mark_as_accepted_here(self, accept_call_info.to_string())
-                            .await?;
                         self.emit_event(EventType::OutgoingCallAccepted {
                             msg_id: call.msg.id,
                             accept_call_info: accept_call_info.to_string(),

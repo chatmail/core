@@ -83,7 +83,7 @@ async fn accept_call() -> Result<CallSetup> {
     } = setup_call().await?;
 
     // Bob accepts the incoming call
-    bob.accept_incoming_call(bob_call.id, "accepted_info".to_string())
+    bob.accept_incoming_call(bob_call.id, "accepted-info-123456".to_string())
         .await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
@@ -92,7 +92,6 @@ async fn accept_call() -> Result<CallSetup> {
     let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(info.is_accepted_here());
     assert_eq!(info.place_call_info, "place_info");
-    assert_eq!(info.accept_call_info, "accepted_info");
 
     bob2.recv_msg_trash(&sent2).await;
     assert_eq!(
@@ -111,14 +110,20 @@ async fn accept_call() -> Result<CallSetup> {
         Message::load_from_db(&alice, alice_call.id).await?.text,
         "Call accepted"
     );
-    alice
+    let ev = alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
+    assert_eq!(
+        ev,
+        EventType::OutgoingCallAccepted {
+            msg_id: alice2_call.id,
+            accept_call_info: "accepted-info-123456".to_string()
+        }
+    );
     let info = alice.load_call_by_id(alice_call.id).await?;
-    assert!(info.is_accepted_here());
+    assert!(!info.is_accepted_here());
     assert_eq!(info.place_call_info, "place_info");
-    assert_eq!(info.accept_call_info, "accepted_info");
 
     alice2.recv_msg_trash(&sent2).await;
     assert_eq!(
@@ -370,9 +375,7 @@ async fn test_mark_calls() -> Result<()> {
     let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
     assert!(!call_info.is_accepted_here());
     assert!(!call_info.is_ended());
-    call_info
-        .mark_as_accepted_here(&alice, "accepted_info".to_string())
-        .await?;
+    call_info.mark_as_accepted_here(&alice).await?;
     assert!(call_info.is_accepted_here());
     assert!(!call_info.is_ended());
 

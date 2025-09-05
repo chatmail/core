@@ -430,8 +430,6 @@ pub enum EventType {
     IncomingCallAccepted {
         /// ID of the info message referring to the call.
         msg_id: u32,
-        /// User-defined info passed to dc_accept_incoming_call()
-        accept_call_info: String,
     },
 
     /// Outgoing call accepted.
@@ -604,12 +602,8 @@ impl From<CoreEventType> for EventType {
                 msg_id: msg_id.to_u32(),
                 place_call_info,
             },
-            CoreEventType::IncomingCallAccepted {
-                msg_id,
-                accept_call_info,
-            } => IncomingCallAccepted {
+            CoreEventType::IncomingCallAccepted { msg_id } => IncomingCallAccepted {
                 msg_id: msg_id.to_u32(),
-                accept_call_info,
             },
             CoreEventType::OutgoingCallAccepted {
                 msg_id,

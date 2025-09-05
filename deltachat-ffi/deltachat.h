@@ -1282,7 +1282,7 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  *     This is the ID reported by #DC_EVENT_INCOMING_CALL
  *     and equals to the ID of the corresponding info message.
  * @param accept_call_info any data that other devices receive
- *     in #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
+ *     in #DC_EVENT_OUTGOING_CALL_ACCEPTED.
  * @return 1=success, 0=error
  */
  int            dc_accept_incoming_call      (dc_context_t* context, uint32_t msg_id, const char* accept_call_info);
@@ -6741,14 +6741,13 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_INCOMING_CALL                            2550
 
 /**
- * The callee accepted an incoming call on another device using dc_accept_incoming_call().
+ * The callee accepted an incoming call on this or another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the info-message referring to the call
- * @param data2 (char*) accept_call_info, text passed to dc_place_outgoing_call()
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 
