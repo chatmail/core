@@ -38,7 +38,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert_eq!(m.viewtype, Viewtype::Call);
         let info = t.load_call_by_id(m.id).await?;
         assert!(!info.is_incoming);
-        assert!(!info.is_accepted);
+        assert!(!info.is_accepted_here());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -54,7 +54,7 @@ async fn setup_call() -> Result<CallSetup> {
             .await;
         let info = t.load_call_by_id(m.id).await?;
         assert!(info.is_incoming);
-        assert!(!info.is_accepted);
+        assert!(!info.is_accepted_here());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -90,7 +90,7 @@ async fn accept_call() -> Result<CallSetup> {
         .await;
     let sent2 = bob.pop_sent_msg().await;
     let info = bob.load_call_by_id(bob_call.id).await?;
-    assert!(info.is_accepted);
+    assert!(info.is_accepted_here());
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
 
@@ -103,7 +103,7 @@ async fn accept_call() -> Result<CallSetup> {
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let info = bob2.load_call_by_id(bob2_call.id).await?;
-    assert!(!info.is_accepted); // "accepted" is only true on the device that does the call
+    assert!(!info.is_accepted_here()); // "accepted" is only true on the device that does the call
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;
@@ -116,7 +116,7 @@ async fn accept_call() -> Result<CallSetup> {
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
     let info = alice.load_call_by_id(alice_call.id).await?;
-    assert!(info.is_accepted);
+    assert!(info.is_accepted_here());
     assert_eq!(info.place_call_info, "place_info");
     assert_eq!(info.accept_call_info, "accepted_info");
 
@@ -331,7 +331,7 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(!call_info.is_stale_call());
+    assert!(!call_info.is_stale());
     let remaining_seconds = call_info.remaining_ring_seconds();
     assert!(remaining_seconds == RINGING_SECONDS || remaining_seconds == RINGING_SECONDS - 1);
 
@@ -343,7 +343,7 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(!call_info.is_stale_call());
+    assert!(!call_info.is_stale());
     let remaining_seconds = call_info.remaining_ring_seconds();
     assert!(remaining_seconds == RINGING_SECONDS - 5 || remaining_seconds == RINGING_SECONDS - 6);
 
@@ -355,28 +355,34 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(call_info.is_stale_call());
+    assert!(call_info.is_stale());
     assert_eq!(call_info.remaining_ring_seconds(), 0);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_mark_call_as_accepted() -> Result<()> {
+async fn test_mark_calls() -> Result<()> {
     let CallSetup {
         alice, alice_call, ..
     } = setup_call().await?;
-    assert!(!alice_call.is_call_accepted()?);
 
-    let mut alice_call = Message::load_from_db(&alice, alice_call.id).await?;
-    assert!(!alice_call.is_call_accepted()?);
-    alice_call
-        .mark_call_as_accepted(&alice, "accepted_info".to_string())
+    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    assert!(!call_info.is_accepted_here());
+    assert!(!call_info.is_ended());
+    call_info
+        .mark_as_accepted_here(&alice, "accepted_info".to_string())
         .await?;
-    assert!(alice_call.is_call_accepted()?);
+    assert!(call_info.is_accepted_here());
+    assert!(!call_info.is_ended());
 
-    let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
-    assert!(alice_call.is_call_accepted()?);
+    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    assert!(call_info.is_accepted_here());
+    assert!(!call_info.is_ended());
+
+    call_info.mark_as_ended(&alice).await?;
+    assert!(call_info.is_accepted_here());
+    assert!(call_info.is_ended());
 
     Ok(())
 }
