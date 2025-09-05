@@ -1450,17 +1450,23 @@ impl ChatId {
             // received message purely by timestamp. We could place it just before that seen
             // message, but anyway the user may not notice it.
             //
-            // NB: Received outgoing messages may break sorting of fresh incoming ones, but this
-            // shouldn't happen frequently. Seen incoming messages don't really break sorting of
-            // fresh ones, they rather mean that older incoming messages are actually seen as well.
+            // NB: Seen incoming messages don't really break sorting of fresh ones, they rather mean
+            // that older incoming messages are actually seen as well.
+            // NB: Locally sent messages have zero `timestamp_sent`.
             context
                 .sql
                 .query_row_optional(
                     "SELECT MAX(timestamp), MAX(IIF(state=?,timestamp_sent,0))
                      FROM msgs
                      WHERE chat_id=? AND hidden=0 AND state>?
+                         AND (state!=? OR timestamp_sent=0)
                      HAVING COUNT(*) > 0",
-                    (MessageState::InSeen, self, MessageState::InFresh),
+                    (
+                        MessageState::InSeen,
+                        self,
+                        MessageState::InFresh,
+                        MessageState::OutDelivered,
+                    ),
                     |row| {
                         let ts: i64 = row.get(0)?;
                         let ts_sent_seen: i64 = row.get(1)?;

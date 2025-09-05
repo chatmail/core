@@ -1521,7 +1521,7 @@ async fn write_msg(context: &Context, prefix: &str, msg: &Message, buf: &mut Str
 
     let statestr = match msg.get_state() {
         MessageState::OutPending => " o",
-        MessageState::OutDelivered => " √",
+        MessageState::OutDelivered if msg.timestamp_sent == 0 => " √",
         MessageState::OutMdnRcvd => " √√",
         MessageState::OutFailed => " !!",
         _ => "",
