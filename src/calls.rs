@@ -84,7 +84,7 @@ impl Context {
 
         let mut call = Message {
             viewtype: Viewtype::Call,
-            text: "Calling...".into(),
+            text: "Outgoing call".into(),
             ..Default::default()
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
@@ -198,6 +198,7 @@ impl Context {
                     call.update_text(self, "Missed call").await?;
                     self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
                 } else {
+                    call.update_text(self, "Incoming call").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
@@ -211,6 +212,7 @@ impl Context {
                     ));
                 }
             } else {
+                call.update_text(self, "Outgoing call").await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
             }
         } else {
