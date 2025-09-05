@@ -143,9 +143,8 @@ impl Context {
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let call: CallInfo = self.load_call_by_id(call_id).await?;
 
-        call.update_text(self, "Call ended").await?;
-
         if call.is_accepted || !call.is_incoming {
+            call.update_text(self, "Call ended").await?;
             let mut msg = Message {
                 viewtype: Viewtype::Text,
                 text: "Call ended".into(),
@@ -157,11 +156,14 @@ impl Context {
             msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         } else if call.is_incoming {
             // to protect privacy, we do not send a message to others from callee for unaccepted calls
+            call.update_text(self, "Call rejected").await?;
             self.add_sync_item(SyncData::RejectIncomingCall {
                 msg: call.msg.rfc724_mid,
             })
             .await?;
             self.scheduler.interrupt_inbox().await;
+        } else {
+            call.update_text(self, "Call ended").await?;
         }
 
         self.emit_event(EventType::CallEnded {
@@ -257,7 +259,7 @@ impl Context {
     pub(crate) async fn sync_call_rejection(&self, rfc724_mid: &str) -> Result<()> {
         if let Some((msg_id, _)) = rfc724_mid_exists(self, rfc724_mid).await? {
             let call = self.load_call_by_id(msg_id).await?;
-            call.update_text(self, "Call ended").await?;
+            call.update_text(self, "Call rejected").await?;
             self.emit_event(EventType::CallEnded { msg_id });
             self.emit_msgs_changed(call.msg.chat_id, msg_id);
         }

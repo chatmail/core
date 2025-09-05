@@ -254,13 +254,19 @@ async fn test_callee_rejects_call() -> Result<()> {
     // To protect Bob's privacy, no message is sent to Alice (who will time out).
     // To let Bob close the call window on all devices, a sync message is used instead.
     bob.end_call(bob_call.id).await?;
-    assert_is_call_ended(&bob, bob_call.id).await?;
+    assert_eq!(
+        Message::load_from_db(&bob, bob_call.id).await?.text,
+        "Call rejected"
+    );
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
     sync(&bob, &bob2).await;
-    assert_is_call_ended(&bob2, bob2_call.id).await?;
+    assert_eq!(
+        Message::load_from_db(&bob2, bob2_call.id).await?.text,
+        "Call rejected"
+    );
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
