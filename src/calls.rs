@@ -1,7 +1,7 @@
 //! # Handle calls.
 //!
-//! Internally, calls are bound to the user-visible info message initializing the call.
-//! This means, the "Call ID" is a "Message ID" currently - similar to webxdc.
+//! Internally, calls are bound a user-visible message initializing the call.
+//! This means, the "Call ID" is a "Message ID" - similar to Webxdc IDs.
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::constants::Chattype;
 use crate::contact::ContactId;
