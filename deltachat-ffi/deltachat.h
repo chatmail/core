@@ -1303,6 +1303,8 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * same as for all other reasons the call cannot be established: Device not in reach, device muted, connectivity etc.
   * This is to protect privacy of the callee, avoiding to check if callee is online.
   *
+  * If the call is already ended, nothing happens.
+  *
   * @memberof dc_context_t
   * @param context The context object.
   * @param msg_id the ID of the call.

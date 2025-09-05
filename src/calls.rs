@@ -8,6 +8,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
+use crate::log::info;
 use crate::message::{self, Message, MsgId, Viewtype, rfc724_mid_exists};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -29,6 +30,10 @@ use tokio::time::sleep;
 /// as the callee won't start the call afterwards.
 const RINGING_SECONDS: i64 = 60;
 
+/// For persisting parameters in the call, we use Param::Arg
+const CALL_ACCEPTED_HERE: Param = Param::Arg;
+const CALL_ENDED: Param = Param::Arg4;
+
 /// Information about the status of a call.
 #[derive(Debug, Default)]
 pub struct CallInfo {
@@ -47,6 +52,7 @@ pub struct CallInfo {
     pub accept_call_info: String,
 
     /// Info message referring to the call.
+    /// Data are persisted along with the message.
     pub msg: Message,
 }
 
@@ -68,6 +74,16 @@ impl CallInfo {
                 (text, message::normalize_text(text), self.msg.id),
             )
             .await?;
+        Ok(())
+    }
+
+    fn is_ended(&self) -> Result<bool> {
+        Ok(self.msg.param.get_int(CALL_ENDED) == Some(1))
+    }
+
+    async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
+        self.msg.param.set_int(CALL_ENDED, 1);
+        self.msg.update_param(context).await?;
         Ok(())
     }
 }
@@ -141,7 +157,14 @@ impl Context {
 
     /// Cancel, reject or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
-        let call: CallInfo = self.load_call_by_id(call_id).await?;
+        let mut call: CallInfo = self.load_call_by_id(call_id).await?;
+
+        // it is sometimes hard to track all states and flows in UI, be generous on multiple calls to end_call() therefore
+        if call.is_ended()? {
+            info!(self, "Call already ended");
+            return Ok(());
+        }
+        call.mark_as_ended(self).await?;
 
         if call.is_accepted || !call.is_incoming {
             call.update_text(self, "Call ended").await?;
@@ -303,7 +326,7 @@ impl Message {
         accept_call_info: String,
     ) -> Result<()> {
         ensure!(self.viewtype == Viewtype::Call);
-        self.param.set_int(Param::Arg, 1);
+        self.param.set_int(CALL_ACCEPTED_HERE, 1);
         self.param.set(Param::WebrtcAccepted, accept_call_info);
         self.update_param(context).await?;
         Ok(())
@@ -311,7 +334,7 @@ impl Message {
 
     fn is_call_accepted(&self) -> Result<bool> {
         ensure!(self.viewtype == Viewtype::Call);
-        Ok(self.param.get_int(Param::Arg) == Some(1))
+        Ok(self.param.get_int(CALL_ACCEPTED_HERE) == Some(1))
     }
 }
 
