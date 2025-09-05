@@ -1153,6 +1153,11 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
+    } else if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        info!(context, "Call state changed (TRASH).");
+        true
     } else if mime_parser.decrypting_failed && !mime_parser.incoming {
         // Outgoing undecryptable message.
         let last_time = context
