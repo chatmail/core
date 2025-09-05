@@ -181,6 +181,10 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted {
+            if call.is_incoming {
+                call.update_text(&context, "Missed call").await?;
+                context.emit_msgs_changed(call.msg.chat_id, call_id);
+            }
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
             });
