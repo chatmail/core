@@ -172,9 +172,9 @@ impl Context {
 
         if !call.is_accepted() {
             if call.is_incoming() {
-                call.update_text(self, "Call declined").await?;
+                call.update_text(self, "Declined Call").await?;
             } else {
-                call.update_text(self, "Call cancelled").await?;
+                call.update_text(self, "Cancelled Call").await?;
             }
         }
 
@@ -282,12 +282,12 @@ impl Context {
                     if !call.is_accepted() {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
-                                call.update_text(self, "Declined call").await?;
+                                call.update_text(self, "Declined Call").await?;
                             } else {
                                 call.update_text(self, "Missed call").await?;
                             }
                         } else {
-                            call.update_text(self, "Call declined").await?;
+                            call.update_text(self, "Declined Call").await?;
                         }
                     }
 
