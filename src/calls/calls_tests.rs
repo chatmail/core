@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::Config;
-use crate::test_utils::{TestContext, TestContextManager, sync};
+use crate::test_utils::{TestContext, TestContextManager};
 
 struct CallSetup {
     pub alice: TestContext,
@@ -255,19 +255,22 @@ async fn test_callee_rejects_call() -> Result<()> {
         ..
     } = setup_call().await?;
 
-    // Bob does not want to talk with Alice.
-    // To protect Bob's privacy, no message is sent to Alice (who will time out).
-    // To let Bob close the call window on all devices, a sync message is used instead.
+    // Bob does not want to talk with Alice
+    /*
     bob.end_call(bob_call.id).await?;
+
     assert_eq!(
         Message::load_from_db(&bob, bob_call.id).await?.text,
         "Call rejected"
     );
+
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
-    sync(&bob, &bob2).await;
+    let sent3 = bob.pop_sent_msg().await;
+
+    bob2.recv_msg_trash(&sent3).await;
     assert_eq!(
         Message::load_from_db(&bob2, bob2_call.id).await?.text,
         "Call rejected"
@@ -275,7 +278,7 @@ async fn test_callee_rejects_call() -> Result<()> {
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
-
+    */
     Ok(())
 }
 

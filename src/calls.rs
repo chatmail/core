@@ -9,10 +9,9 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::log::info;
-use crate::message::{self, Message, MsgId, Viewtype, rfc724_mid_exists};
+use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
-use crate::sync::SyncData;
 use crate::tools::time;
 use anyhow::{Result, ensure};
 use std::time::Duration;
@@ -75,7 +74,6 @@ impl CallInfo {
 
     /// Mark calls as accepted.
     /// This is needed for all devices where a stale-timer runs, to prevent accepted calls being terminated as stale.
-    /// For privacy reasons, only for accepted incoming calls, callee sends a message to caller on `end_call()`.
     async fn mark_as_accepted(&mut self, context: &Context) -> Result<()> {
         self.msg.param.set_int(CALL_ACCEPTED, 1);
         self.msg.update_param(context).await?;
@@ -139,7 +137,6 @@ impl Context {
         }
 
         call.mark_as_accepted(self).await?;
-        call.update_text(self, "Call accepted").await?;
         let chat = Chat::load_from_db(self, call.msg.chat_id).await?;
         if chat.is_contact_request() {
             chat.id.accept(self).await?;
@@ -148,7 +145,7 @@ impl Context {
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
             viewtype: Viewtype::Text,
-            text: "Call accepted".into(),
+            text: "[Call accepted]".into(),
             ..Default::default()
         };
         msg.param.set_cmd(SystemMessage::CallAccepted);
@@ -173,28 +170,19 @@ impl Context {
         }
         call.mark_as_ended(self).await?;
 
-        if call.is_accepted() || !call.is_incoming() {
-            call.update_text(self, "Call ended").await?;
-            let mut msg = Message {
-                viewtype: Viewtype::Text,
-                text: "Call ended".into(),
-                ..Default::default()
-            };
-            msg.param.set_cmd(SystemMessage::CallEnded);
-            msg.hidden = true;
-            msg.set_quote(self, Some(&call.msg)).await?;
-            msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
-        } else if call.is_incoming() {
-            // to protect privacy, we do not send a message to others from callee for unaccepted calls
+        if !call.is_accepted() {
             call.update_text(self, "Call rejected").await?;
-            self.add_sync_item(SyncData::RejectIncomingCall {
-                msg: call.msg.rfc724_mid,
-            })
-            .await?;
-            self.scheduler.interrupt_inbox().await;
-        } else {
-            call.update_text(self, "Call ended").await?;
         }
+
+        let mut msg = Message {
+            viewtype: Viewtype::Text,
+            text: "[Call ended]".into(),
+            ..Default::default()
+        };
+        msg.param.set_cmd(SystemMessage::CallEnded);
+        msg.hidden = true;
+        msg.set_quote(self, Some(&call.msg)).await?;
+        msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
 
         self.emit_event(EventType::CallEnded {
             msg_id: call.msg.id,
@@ -209,9 +197,10 @@ impl Context {
         call_id: MsgId,
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
-        let call = context.load_call_by_id(call_id).await?;
+        let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
             if call.is_incoming() {
+                call.mark_as_ended(&context).await?;
                 call.update_text(&context, "Missed call").await?;
                 context.emit_msgs_changed(call.msg.chat_id, call_id);
             }
@@ -260,14 +249,13 @@ impl Context {
                         return Ok(());
                     }
 
-                    call.update_text(self, "Call accepted").await?;
+                    call.mark_as_accepted(self).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
                         });
                     } else {
-                        call.mark_as_accepted(self).await?;
                         let accept_call_info = mime_message
                             .get_header(HeaderDef::ChatWebrtcAccepted)
                             .unwrap_or_default();
@@ -286,7 +274,10 @@ impl Context {
                     }
 
                     call.mark_as_ended(self).await?;
-                    call.update_text(self, "Call ended").await?;
+                    if !call.is_accepted() {
+                        call.update_text(self, "Call rejected").await?;
+                    }
+
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
@@ -294,16 +285,6 @@ impl Context {
                 }
                 _ => {}
             }
-        }
-        Ok(())
-    }
-
-    pub(crate) async fn sync_call_rejection(&self, rfc724_mid: &str) -> Result<()> {
-        if let Some((msg_id, _)) = rfc724_mid_exists(self, rfc724_mid).await? {
-            let call = self.load_call_by_id(msg_id).await?;
-            call.update_text(self, "Call rejected").await?;
-            self.emit_event(EventType::CallEnded { msg_id });
-            self.emit_msgs_changed(call.msg.chat_id, msg_id);
         }
         Ok(())
     }
