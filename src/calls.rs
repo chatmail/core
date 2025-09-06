@@ -30,8 +30,8 @@ use tokio::time::sleep;
 const RINGING_SECONDS: i64 = 60;
 
 /// For persisting parameters in the call, we use Param::Arg*
-const CALL_ACCEPTED: Param = Param::Arg;
-const CALL_ENDED: Param = Param::Arg4;
+const CALL_ACCEPTED_TIMESTAMP: Param = Param::Arg;
+const CALL_ENDED_TIMESTAMP: Param = Param::Arg4;
 
 /// Information about the status of a call.
 #[derive(Debug, Default)]
@@ -72,26 +72,58 @@ impl CallInfo {
         Ok(())
     }
 
+    async fn update_text_duration(&self, context: &Context) -> Result<()> {
+        let minutes = self.get_duration_seconds() / 60;
+        let duration = match minutes {
+            0 => "<1 minute".to_string(),
+            1 => "1 minute".to_string(),
+            n => format!("{} minutes", n),
+        };
+
+        if self.is_incoming() {
+            self.update_text(context, &format!("Incoming call\n{duration}"))
+                .await?;
+        } else {
+            self.update_text(context, &format!("Outgoing call\n{duration}"))
+                .await?;
+        }
+        Ok(())
+    }
+
     /// Mark calls as accepted.
     /// This is needed for all devices where a stale-timer runs, to prevent accepted calls being terminated as stale.
     async fn mark_as_accepted(&mut self, context: &Context) -> Result<()> {
-        self.msg.param.set_int(CALL_ACCEPTED, 1);
+        self.msg.param.set_i64(CALL_ACCEPTED_TIMESTAMP, time());
         self.msg.update_param(context).await?;
         Ok(())
     }
 
     fn is_accepted(&self) -> bool {
-        self.msg.param.exists(CALL_ACCEPTED)
+        self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
     }
 
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
-        self.msg.param.set_int(CALL_ENDED, 1);
+        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, time());
         self.msg.update_param(context).await?;
         Ok(())
     }
 
     fn is_ended(&self) -> bool {
-        self.msg.param.exists(CALL_ENDED)
+        self.msg.param.exists(CALL_ENDED_TIMESTAMP)
+    }
+
+    fn get_duration_seconds(&self) -> i64 {
+        if let (Some(start), Some(end)) = (
+            self.msg.param.get_i64(CALL_ACCEPTED_TIMESTAMP),
+            self.msg.param.get_i64(CALL_ENDED_TIMESTAMP),
+        ) {
+            let seconds = end - start;
+            if seconds <= 0 {
+                return 1;
+            }
+            return seconds;
+        }
+        0
     }
 }
 
@@ -176,6 +208,8 @@ impl Context {
             } else {
                 call.update_text(self, "Cancelled call").await?;
             }
+        } else {
+            call.update_text_duration(self).await?;
         }
 
         let mut msg = Message {
@@ -296,6 +330,8 @@ impl Context {
                                 call.update_text(self, "Declined call").await?;
                             }
                         }
+                    } else {
+                        call.update_text_duration(self).await?;
                     }
 
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
