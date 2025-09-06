@@ -1228,7 +1228,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED.
  *   callee's devices receive #DC_EVENT_INCOMING_CALL_ACCEPTED, call starts
  *
- * - callee rejects using dc_end_call():
+ * - callee declines using dc_end_call():
  *   caller receives #DC_EVENT_CALL_ENDED after 1 minute timeout.
  *   callee's other devices receive #DC_EVENT_CALL_ENDED
  *
@@ -1294,14 +1294,14 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * End incoming or outgoing call.
   *
   * From the view of the caller, a "cancellation",
-  * from the view of callee, a "rejection".
+  * from the view of callee, a "decline".
   * If the call was accepted, this is a "hangup".
   *
   * For accepted calls,
   * all participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
   * For not accepted calls, only the caller will inform the callee.
   *
-  * If the callee rejects, the caller will get a timeout or give up at some point -
+  * If the callee declines, the caller will get a timeout or give up at some point -
   * same as for all other reasons the call cannot be established: Device not in reach, device muted, connectivity etc.
   * This is to protect privacy of the callee, avoiding to check if callee is online.
   *

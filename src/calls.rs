@@ -161,7 +161,7 @@ impl Context {
         Ok(())
     }
 
-    /// Cancel, reject or hangup an incoming or outgoing call.
+    /// Cancel, decline or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
         let mut call: CallInfo = self.load_call_by_id(call_id).await?;
         if call.is_ended() {
@@ -171,7 +171,11 @@ impl Context {
         call.mark_as_ended(self).await?;
 
         if !call.is_accepted() {
-            call.update_text(self, "Call rejected").await?;
+            if call.is_incoming() {
+                call.update_text(self, "Call declined").await?;
+            } else {
+                call.update_text(self, "Call cancelled").await?;
+            }
         }
 
         let mut msg = Message {
@@ -199,8 +203,8 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
+            call.mark_as_ended(&context).await?;
             if call.is_incoming() {
-                call.mark_as_ended(&context).await?;
                 call.update_text(&context, "Missed call").await?;
                 context.emit_msgs_changed(call.msg.chat_id, call_id);
             }
@@ -213,8 +217,9 @@ impl Context {
 
     pub(crate) async fn handle_call_msg(
         &self,
-        mime_message: &MimeMessage,
         call_id: MsgId,
+        mime_message: &MimeMessage,
+        from_id: ContactId,
     ) -> Result<()> {
         if mime_message.is_call() {
             let call = self.load_call_by_id(call_id).await?;
@@ -268,14 +273,22 @@ impl Context {
                 SystemMessage::CallEnded => {
                     let mut call = self.load_call_by_id(call_id).await?;
                     if call.is_ended() {
-                        // may happen eg. if a caller does not get rejection of callee
+                        // may happen eg. if a caller does not get "Call declined" of callee
                         info!(self, "CallEnded received for ended call");
                         return Ok(());
                     }
 
                     call.mark_as_ended(self).await?;
                     if !call.is_accepted() {
-                        call.update_text(self, "Call rejected").await?;
+                        if call.is_incoming() {
+                            if from_id == ContactId::SELF {
+                                call.update_text(self, "Declined call").await?;
+                            } else {
+                                call.update_text(self, "Missed call").await?;
+                            }
+                        } else {
+                            call.update_text(self, "Call declined").await?;
+                        }
                     }
 
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
