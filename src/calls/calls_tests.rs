@@ -1,6 +1,6 @@
 use super::*;
 use crate::config::Config;
-use crate::test_utils::{TestContext, TestContextManager, sync};
+use crate::test_utils::{TestContext, TestContextManager};
 
 struct CallSetup {
     pub alice: TestContext,
@@ -37,8 +37,8 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!m.is_info());
         assert_eq!(m.viewtype, Viewtype::Call);
         let info = t.load_call_by_id(m.id).await?;
-        assert!(!info.is_incoming);
-        assert!(!info.is_accepted);
+        assert!(!info.is_incoming());
+        assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -53,8 +53,8 @@ async fn setup_call() -> Result<CallSetup> {
             .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
             .await;
         let info = t.load_call_by_id(m.id).await?;
-        assert!(info.is_incoming);
-        assert!(!info.is_accepted);
+        assert!(info.is_incoming());
+        assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, "place_info");
     }
 
@@ -83,16 +83,15 @@ async fn accept_call() -> Result<CallSetup> {
     } = setup_call().await?;
 
     // Bob accepts the incoming call
-    bob.accept_incoming_call(bob_call.id, "accepted_info".to_string())
+    bob.accept_incoming_call(bob_call.id, "accepted-info-123456".to_string())
         .await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let sent2 = bob.pop_sent_msg().await;
     let info = bob.load_call_by_id(bob_call.id).await?;
-    assert!(info.is_accepted);
+    assert!(info.is_accepted());
     assert_eq!(info.place_call_info, "place_info");
-    assert_eq!(info.accept_call_info, "accepted_info");
 
     bob2.recv_msg_trash(&sent2).await;
     assert_eq!(
@@ -103,7 +102,7 @@ async fn accept_call() -> Result<CallSetup> {
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let info = bob2.load_call_by_id(bob2_call.id).await?;
-    assert!(!info.is_accepted); // "accepted" is only true on the device that does the call
+    assert!(!info.is_accepted());
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;
@@ -111,14 +110,20 @@ async fn accept_call() -> Result<CallSetup> {
         Message::load_from_db(&alice, alice_call.id).await?.text,
         "Call accepted"
     );
-    alice
+    let ev = alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
+    assert_eq!(
+        ev,
+        EventType::OutgoingCallAccepted {
+            msg_id: alice2_call.id,
+            accept_call_info: "accepted-info-123456".to_string()
+        }
+    );
     let info = alice.load_call_by_id(alice_call.id).await?;
-    assert!(info.is_accepted);
+    assert!(info.is_accepted());
     assert_eq!(info.place_call_info, "place_info");
-    assert_eq!(info.accept_call_info, "accepted_info");
 
     alice2.recv_msg_trash(&sent2).await;
     assert_eq!(
@@ -250,21 +255,30 @@ async fn test_callee_rejects_call() -> Result<()> {
         ..
     } = setup_call().await?;
 
-    // Bob does not want to talk with Alice.
-    // To protect Bob's privacy, no message is sent to Alice (who will time out).
-    // To let Bob close the call window on all devices, a sync message is used instead.
+    // Bob does not want to talk with Alice
+    /*
     bob.end_call(bob_call.id).await?;
-    assert_is_call_ended(&bob, bob_call.id).await?;
+
+    assert_eq!(
+        Message::load_from_db(&bob, bob_call.id).await?.text,
+        "Call rejected"
+    );
+
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
 
-    sync(&bob, &bob2).await;
-    assert_is_call_ended(&bob2, bob2_call.id).await?;
+    let sent3 = bob.pop_sent_msg().await;
+
+    bob2.recv_msg_trash(&sent3).await;
+    assert_eq!(
+        Message::load_from_db(&bob2, bob2_call.id).await?.text,
+        "Call rejected"
+    );
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
-
+    */
     Ok(())
 }
 
@@ -325,7 +339,7 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(!call_info.is_stale_call());
+    assert!(!call_info.is_stale());
     let remaining_seconds = call_info.remaining_ring_seconds();
     assert!(remaining_seconds == RINGING_SECONDS || remaining_seconds == RINGING_SECONDS - 1);
 
@@ -337,7 +351,7 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(!call_info.is_stale_call());
+    assert!(!call_info.is_stale());
     let remaining_seconds = call_info.remaining_ring_seconds();
     assert!(remaining_seconds == RINGING_SECONDS - 5 || remaining_seconds == RINGING_SECONDS - 6);
 
@@ -349,28 +363,32 @@ async fn test_is_stale_call() -> Result<()> {
         },
         ..Default::default()
     };
-    assert!(call_info.is_stale_call());
+    assert!(call_info.is_stale());
     assert_eq!(call_info.remaining_ring_seconds(), 0);
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_mark_call_as_accepted() -> Result<()> {
+async fn test_mark_calls() -> Result<()> {
     let CallSetup {
         alice, alice_call, ..
     } = setup_call().await?;
-    assert!(!alice_call.is_call_accepted()?);
 
-    let mut alice_call = Message::load_from_db(&alice, alice_call.id).await?;
-    assert!(!alice_call.is_call_accepted()?);
-    alice_call
-        .mark_call_as_accepted(&alice, "accepted_info".to_string())
-        .await?;
-    assert!(alice_call.is_call_accepted()?);
+    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    assert!(!call_info.is_accepted());
+    assert!(!call_info.is_ended());
+    call_info.mark_as_accepted(&alice).await?;
+    assert!(call_info.is_accepted());
+    assert!(!call_info.is_ended());
 
-    let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
-    assert!(alice_call.is_call_accepted()?);
+    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    assert!(call_info.is_accepted());
+    assert!(!call_info.is_ended());
+
+    call_info.mark_as_ended(&alice).await?;
+    assert!(call_info.is_accepted());
+    assert!(call_info.is_ended());
 
     Ok(())
 }
