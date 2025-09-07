@@ -217,9 +217,11 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
 /// This test tests that the messages are still in the right order.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_old_message_4() -> Result<()> {
-    let alice = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
     let msg_incoming = receive_imf(
-        &alice,
+        alice,
         b"From: Bob <bob@example.net>\n\
           To: alice@example.org\n\
           Message-ID: <1234-2-3@example.org>\n\
@@ -232,7 +234,7 @@ async fn test_old_message_4() -> Result<()> {
     .unwrap();
 
     let msg_sent = receive_imf(
-        &alice,
+        alice,
         b"From: alice@example.org\n\
           To: Bob <bob@example.net>\n\
           Message-ID: <1234-2-4@example.org>\n\
@@ -247,6 +249,16 @@ async fn test_old_message_4() -> Result<()> {
     // The "Happy birthday" message should be shown first, and then the "Thanks" message
     assert!(msg_sent.sort_timestamp < msg_incoming.sort_timestamp);
 
+    // And now the same for encrypted messages.
+    let msg_incoming = tcm.send_recv(bob, alice, "Thanks, Alice!").await;
+    message::markseen_msgs(alice, vec![msg_incoming.id]).await?;
+    let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
+    let msg_sent = receive_imf(alice, raw, true).await?.unwrap();
+    assert_eq!(msg_sent.chat_id, msg_incoming.chat_id);
+    assert!(msg_sent.sort_timestamp < msg_incoming.timestamp_sort);
+    alice
+        .golden_test_chat(msg_sent.chat_id, "test_old_message_4")
+        .await;
     Ok(())
 }
 

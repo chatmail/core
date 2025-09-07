@@ -298,7 +298,10 @@ impl ChatId {
         let chat = Chat::load_from_db(context, chat_id).await?;
 
         if chat.is_encrypted(context).await? {
-            chat_id.add_encrypted_msg(context, timestamp).await?;
+            let respect_delayed_msgs = true;
+            chat_id
+                .add_encrypted_msg(context, timestamp, respect_delayed_msgs)
+                .await?;
         }
 
         info!(
@@ -459,15 +462,23 @@ impl ChatId {
     }
 
     /// Adds message "Messages are end-to-end encrypted".
-    async fn add_encrypted_msg(self, context: &Context, timestamp_sort: i64) -> Result<()> {
+    async fn add_encrypted_msg(
+        self,
+        context: &Context,
+        timestamp_sent: i64,
+        respect_delayed_msgs: bool,
+    ) -> Result<()> {
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
             self,
             &text,
             SystemMessage::ChatE2ee,
-            timestamp_sort,
-            None,
+            // Create a time window for delayed encrypted messages so that they are sorted under
+            // "Messages are end-to-end encrypted." This way time still monotonically increases and
+            // there's no magic "N years ago" which should be adjusted in the future.
+            timestamp_sent / if respect_delayed_msgs { 2 } else { 1 },
+            Some(timestamp_sent),
             None,
             None,
             None,
@@ -1220,12 +1231,11 @@ impl ChatId {
                 )
                 .await?
         } else if received {
-            // Received messages shouldn't mingle with just sent ones and appear somewhere in the
-            // middle of the chat, so we go after the newest non fresh message.
-            //
-            // But if a received outgoing message is older than some seen message, better sort the
-            // received message purely by timestamp. We could place it just before that seen
-            // message, but anyway the user may not notice it.
+            // Received incoming messages shouldn't mingle with just sent ones and appear somewhere
+            // in the middle of the chat, so we go after the newest non fresh message. Received
+            // outgoing messages are allowed to mingle with seen messages though to avoid seen
+            // replies appearing before messages sent from another device (cases like the user
+            // sharing the account with others or bots are rare, so let them break sometimes).
             //
             // NB: Received outgoing messages may break sorting of fresh incoming ones, but this
             // shouldn't happen frequently. Seen incoming messages don't really break sorting of
@@ -1233,24 +1243,23 @@ impl ChatId {
             context
                 .sql
                 .query_row_optional(
-                    "SELECT MAX(timestamp), MAX(IIF(state=?,timestamp_sent,0))
+                    "SELECT MAX(timestamp)
                      FROM msgs
                      WHERE chat_id=? AND hidden=0 AND state>?
                      HAVING COUNT(*) > 0",
-                    (MessageState::InSeen, self, MessageState::InFresh),
+                    (
+                        self,
+                        match incoming {
+                            true => MessageState::InFresh,
+                            false => MessageState::InSeen,
+                        },
+                    ),
                     |row| {
                         let ts: i64 = row.get(0)?;
-                        let ts_sent_seen: i64 = row.get(1)?;
-                        Ok((ts, ts_sent_seen))
+                        Ok(ts)
                     },
                 )
                 .await?
-                .and_then(|(ts, ts_sent_seen)| {
-                    match incoming || ts_sent_seen <= message_timestamp {
-                        true => Some(ts),
-                        false => None,
-                    }
-                })
         } else {
             None
         };
@@ -2425,7 +2434,10 @@ impl ChatIdBlocked {
             && !chat.param.exists(Param::Devicetalk)
             && !chat.param.exists(Param::Selftalk)
         {
-            chat_id.add_encrypted_msg(context, smeared_time).await?;
+            let respect_delayed_msgs = true;
+            chat_id
+                .add_encrypted_msg(context, smeared_time, respect_delayed_msgs)
+                .await?;
         }
 
         Ok(Self {
@@ -3487,8 +3499,10 @@ pub(crate) async fn create_group_ex(
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
     if is_encrypted {
-        // Add "Messages are end-to-end encrypted." message.
-        chat_id.add_encrypted_msg(context, timestamp).await?;
+        let respect_delayed_msgs = false;
+        chat_id
+            .add_encrypted_msg(context, timestamp, respect_delayed_msgs)
+            .await?;
     }
 
     if !context.get_config_bool(Config::Bot).await?
