@@ -1,4 +1,5 @@
 use deltachat::{Event as CoreEvent, EventType as CoreEventType};
+use num_traits::ToPrimitive;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
@@ -303,6 +304,11 @@ pub enum EventType {
         /// ID of the contact that wants to join.
         contact_id: u32,
 
+        /// The type of the joined chat.
+        /// This can take the same values
+        /// as `BasicChat.chatType` ([`crate::api::types::chat::BasicChat::chat_type`]).
+        chat_type: u32,
+
         /// Progress as:
         /// 300=vg-/vc-request received, typically shown as "bob@addr joins".
         /// 600=vg-/vc-request-with-auth received and verified, typically shown as "bob@addr verified".
@@ -553,9 +559,11 @@ impl From<CoreEventType> for EventType {
             },
             CoreEventType::SecurejoinInviterProgress {
                 contact_id,
+                chat_type,
                 progress,
             } => SecurejoinInviterProgress {
                 contact_id: contact_id.to_u32(),
+                chat_type: chat_type.to_u32().unwrap_or(0),
                 progress,
             },
             CoreEventType::SecurejoinJoinerProgress {

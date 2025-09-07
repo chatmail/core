@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use crate::chat::ChatId;
 use crate::config::Config;
+use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::message::MsgId;
@@ -271,6 +272,9 @@ pub enum EventType {
     SecurejoinInviterProgress {
         /// ID of the contact that wants to join.
         contact_id: ContactId,
+
+        /// The type of the joined chat.
+        chat_type: Chattype,
 
         /// Progress as:
         /// 300=vg-/vc-request received, typically shown as "bob@addr joins".
