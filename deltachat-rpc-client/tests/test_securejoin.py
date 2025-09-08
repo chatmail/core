@@ -133,13 +133,14 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     bob.secure_join(qr_code)
     alice.wait_for_securejoin_inviter_success()
     bob.wait_for_securejoin_joiner_success()
-
-    snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
-
     alice_chat.send_text("Hello everyone!")
-    snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == "Hello everyone!"
+
+    def wait_for_group_messages(ac):
+        snapshot = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+
+        snapshot = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot.text == "Hello everyone!"
 
     def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
         # Check that the chat partner is verified.
@@ -178,7 +179,6 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
             assert chat_snapshot.chat_type == ChatType.OUT_BROADCAST
         else:
             assert chat_snapshot.chat_type == ChatType.IN_BROADCAST
-        # TODO `assert not chat_snapshot.is_contact_request` doesn't work
         assert chat_snapshot.can_send == inviter_side
 
         chat_contacts = chat_snapshot.contact_ids
@@ -190,6 +190,8 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
             assert SpecialContactId.SELF in chat_contacts
             assert chat_snapshot.self_in_group
 
+    wait_for_group_messages(bob)
+
     check_account(alice, alice.create_contact(bob), inviter_side=True)
     check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
@@ -198,7 +200,14 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     # Start second Alice device, if it wasn't started already.
     alice2.start_io()
     alice2.wait_for_securejoin_inviter_success()
-    alice2.wait_for_imap_inbox_idle()
+
+    while True:
+        msg_id = alice2.wait_for_msgs_changed_event().msg_id
+        if msg_id:
+            snapshot = alice2.get_message_by_id(msg_id).get_snapshot()
+            if snapshot.text == "Hello everyone!":
+                break
+
     check_account(alice2, alice2.create_contact(bob), inviter_side=True)
 
     logging.info("===================== Test Bob's second device =====================")
@@ -206,7 +215,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     # Start second Bob device, if it wasn't started already.
     bob2.start_io()
     bob2.wait_for_securejoin_joiner_success()
-    bob2.wait_for_imap_inbox_idle()
+    wait_for_group_messages(bob2)
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
     # The QR code token is synced, so alice2 must be able to handle join requests.
@@ -216,7 +225,14 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     alice2.wait_for_securejoin_inviter_success()
     fiona.wait_for_securejoin_joiner_success()
 
-    # TODO test that Fiona is in the channel correctly
+    snapshot = fiona.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+
+    alice2.get_chatlist()[0].get_messages()[2].resend()
+    snapshot = fiona.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "Hello everyone!"
+
+    check_account(fiona, fiona.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
 
 def test_qr_securejoin_contact_request(acfactory) -> None:
