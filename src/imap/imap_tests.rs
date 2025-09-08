@@ -183,10 +183,6 @@ const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
     ("INBOX", true, true, "DeltaChat"),
-    ("Sent", false, false, "Sent"),
-    ("Sent", false, true, "Sent"),
-    ("Sent", true, false, "Sent"),
-    ("Sent", true, true, "Sent"),
     ("Spam", false, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
@@ -199,10 +195,6 @@ const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
     ("INBOX", true, true, "DeltaChat"),
-    ("Sent", false, false, "Sent"),
-    ("Sent", false, true, "Sent"),
-    ("Sent", true, false, "Sent"),
-    ("Sent", true, true, "Sent"),
     ("Spam", false, false, "Spam"),
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "Spam"),
