@@ -1001,7 +1001,9 @@ pub(crate) async fn receive_imf_inner(
     }
 
     if mime_parser.is_call() {
-        context.handle_call_msg(&mime_parser, insert_msg_id).await?;
+        context
+            .handle_call_msg(insert_msg_id, &mime_parser, from_id)
+            .await?;
     } else if received_msg.hidden {
         // No need to emit an event about the changed message
     } else if let Some(replace_chat_id) = replace_chat_id {
@@ -1989,7 +1991,9 @@ async fn add_parts(
             if let Some(call) =
                 message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
             {
-                context.handle_call_msg(mime_parser, call.get_id()).await?;
+                context
+                    .handle_call_msg(call.get_id(), mime_parser, from_id)
+                    .await?;
             } else {
                 warn!(context, "Call: Cannot load parent.")
             }

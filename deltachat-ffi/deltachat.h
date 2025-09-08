@@ -1216,21 +1216,21 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
 
 /**
  * Start an outgoing call.
- * This sends a message with all relevant information to the callee,
+ * This sends a message of type #DC_MSG_CALL with all relevant information to the callee,
  * who will get informed by an #DC_EVENT_INCOMING_CALL event and rings.
  *
  * Possible actions during ringing:
  *
  * - caller cancels the call using dc_end_call():
- *   callee receives #DC_EVENT_CALL_ENDED
+ *   callee receives #DC_EVENT_CALL_ENDED and has a "Missed Call"
  *
  * - callee accepts using dc_accept_incoming_call():
  *   caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED.
  *   callee's devices receive #DC_EVENT_INCOMING_CALL_ACCEPTED, call starts
  *
- * - callee rejects using dc_end_call():
- *   caller receives #DC_EVENT_CALL_ENDED after 1 minute timeout.
- *   callee's other devices receive #DC_EVENT_CALL_ENDED
+ * - callee declines using dc_end_call():
+ *   caller receives #DC_EVENT_CALL_ENDED and has a "Declinced Call".
+ *   callee's other devices receive #DC_EVENT_CALL_ENDED and have a "Cancelled Call",
  *
  * - callee is already in a call:
  *   in this case, UI may decide to show a notification instead of ringing.
@@ -1240,7 +1240,9 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   after 1 minute without action,
  *   caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
- *   in case caller got offline without being able to send cancellation message
+ *   in case caller got offline without being able to send cancellation message.
+ *   for caller, this is a "Cancelled Call";
+ *   for callee, this is a "Missed Call"
  *
  * Actions during the call:
  *
@@ -1276,13 +1278,15 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  * All affected devices will receive
  * either #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
  *
+ * If the call is already accepted or ended, nothing happens.
+ *
  * @memberof dc_context_t
  * @param context The context object.
  * @param msg_id The ID of the call to accept.
  *     This is the ID reported by #DC_EVENT_INCOMING_CALL
  *     and equals to the ID of the corresponding info message.
  * @param accept_call_info any data that other devices receive
- *     in #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
+ *     in #DC_EVENT_OUTGOING_CALL_ACCEPTED.
  * @return 1=success, 0=error
  */
  int            dc_accept_incoming_call      (dc_context_t* context, uint32_t msg_id, const char* accept_call_info);
@@ -1291,17 +1295,13 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  /**
   * End incoming or outgoing call.
   *
-  * From the view of the caller, a "cancellation",
-  * from the view of callee, a "rejection".
+  * For unaccepted calls ended by the caller, this is a "cancellation".
+  * Unaccepted calls ended by the callee are a "decline".
   * If the call was accepted, this is a "hangup".
   *
-  * For accepted calls,
-  * all participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
-  * For not accepted calls, only the caller will inform the callee.
+  * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
   *
-  * If the callee rejects, the caller will get a timeout or give up at some point -
-  * same as for all other reasons the call cannot be established: Device not in reach, device muted, connectivity etc.
-  * This is to protect privacy of the callee, avoiding to check if callee is online.
+  * If the call is already ended, nothing happens.
   *
   * @memberof dc_context_t
   * @param context The context object.
@@ -6724,29 +6724,27 @@ void dc_event_unref(dc_event_t* event);
  * or show a notification if there is already a call in some profile.
  *
  * Together with this event,
- * an info-message is added to the corresponding chat.
- * The info-message, however, is _not_ additionally notified using #DC_EVENT_INCOMING_MSG,
- * if needed, this has to be done by the UI explicitly.
+ * a message of type #DC_MSG_CALL is added to the corresponding chat;
+ * this message is announced and updated by the usual even as #DC_EVENT_MSGS_CHANGED.
  *
  * If user takes action, dc_accept_incoming_call() or dc_end_call() should be called.
  *
  * Otherwise, ringing should end on #DC_EVENT_CALL_ENDED
  * or #DC_EVENT_INCOMING_CALL_ACCEPTED
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call.
+ * @param data1 (int) msg_id ID of the message referring to the call.
  * @param data2 (char*) place_call_info, text passed to dc_place_outgoing_call()
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 
 /**
- * The callee accepted an incoming call on another device using dc_accept_incoming_call().
+ * The callee accepted an incoming call on this or another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
  *
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call
- * @param data2 (char*) accept_call_info, text passed to dc_place_outgoing_call()
+ * @param data1 (int) msg_id ID of the message referring to the call
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 
@@ -6756,7 +6754,7 @@ void dc_event_unref(dc_event_t* event);
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call
+ * @param data1 (int) msg_id ID of the message referring to the call
  * @param data2 (char*) accept_call_info, text passed to dc_accept_incoming_call()
  */
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
@@ -6768,7 +6766,7 @@ void dc_event_unref(dc_event_t* event);
  * The event is sent unconditionally when the corresponding message is received.
  * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
  *
- * @param data1 (int) msg_id ID of the info-message referring to the call
+ * @param data1 (int) msg_id ID of the message referring to the call
  */
 #define DC_EVENT_CALL_ENDED                               2580
 
