@@ -254,7 +254,7 @@ impl SchedulerState {
         }
     }
 
-    /// Interrupt optional boxes (mvbox, sentbox) loops.
+    /// Interrupt optional boxes (mvbox currently) loops.
     pub(crate) async fn interrupt_oboxes(&self) {
         let inner = self.inner.read().await;
         if let InnerSchedulerState::Started(ref scheduler) = *inner {
@@ -333,7 +333,7 @@ struct SchedBox {
 #[derive(Debug)]
 pub(crate) struct Scheduler {
     inbox: SchedBox,
-    /// Optional boxes -- mvbox, sentbox.
+    /// Optional boxes -- mvbox.
     oboxes: Vec<SchedBox>,
     smtp: SmtpConnectionState,
     smtp_handle: task::JoinHandle<()>,
@@ -875,22 +875,18 @@ impl Scheduler {
         };
         start_recvs.push(inbox_start_recv);
 
-        for (meaning, should_watch) in [
-            (FolderMeaning::Mvbox, ctx.should_watch_mvbox().await),
-            (FolderMeaning::Sent, ctx.should_watch_sentbox().await),
-        ] {
-            if should_watch? {
-                let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
-                let (start_send, start_recv) = oneshot::channel();
-                let ctx = ctx.clone();
-                let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
-                oboxes.push(SchedBox {
-                    meaning,
-                    conn_state,
-                    handle,
-                });
-                start_recvs.push(start_recv);
-            }
+        if ctx.should_watch_mvbox().await? {
+            let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
+            let (start_send, start_recv) = oneshot::channel();
+            let ctx = ctx.clone();
+            let meaning = FolderMeaning::Mvbox;
+            let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
+            oboxes.push(SchedBox {
+                meaning,
+                conn_state,
+                handle,
+            });
+            start_recvs.push(start_recv);
         }
 
         let smtp_handle = {
