@@ -294,7 +294,7 @@ async fn test_old_message_5() -> Result<()> {
     .await?
     .unwrap();
 
-    assert!(msg_sent.sort_timestamp == msg_incoming.sort_timestamp);
+    assert_eq!(msg_sent.sort_timestamp, msg_incoming.sort_timestamp);
     alice
         .golden_test_chat(msg_sent.chat_id, "test_old_message_5")
         .await;
