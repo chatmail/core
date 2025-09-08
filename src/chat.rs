@@ -1220,20 +1220,19 @@ impl ChatId {
             // NB: Received outgoing messages may break sorting of fresh incoming ones, but this
             // shouldn't happen frequently. Seen incoming messages don't really break sorting of
             // fresh ones, they rather mean that older incoming messages are actually seen as well.
+            let states = match incoming {
+                true => "13, 16, 18, 20, 24, 26", // `> MessageState::InFresh`
+                false => "18, 20, 24, 26",        // `> MessageState::InSeen`
+            };
             context
                 .sql
                 .query_row_optional(
-                    "SELECT MAX(timestamp)
-                     FROM msgs
-                     WHERE chat_id=? AND hidden=0 AND state>?
-                     HAVING COUNT(*) > 0",
-                    (
-                        self,
-                        match incoming {
-                            true => MessageState::InFresh,
-                            false => MessageState::InSeen,
-                        },
+                    &format!(
+                        "SELECT MAX(timestamp) FROM msgs
+                        WHERE state IN ({states}) AND hidden=0 AND chat_id=?
+                        HAVING COUNT(*) > 0"
                     ),
+                    (self,),
                     |row| {
                         let ts: i64 = row.get(0)?;
                         Ok(ts)
