@@ -108,9 +108,6 @@ impl Imap {
 
 pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
     let mut res = vec![Config::ConfiguredInboxFolder];
-    if context.get_config_bool(Config::SentboxWatch).await? {
-        res.push(Config::ConfiguredSentboxFolder);
-    }
     if context.should_watch_mvbox().await? {
         res.push(Config::ConfiguredMvboxFolder);
     }

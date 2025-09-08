@@ -269,19 +269,21 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_mvbox_sentbox_threads(acfactory, lp):
+def test_mvbox_thread_and_sentbox(acfactory, lp):
     lp.sec("ac1: start with mvbox thread")
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True, sentbox_watch=False)
+    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
 
-    lp.sec("ac2: start without mvbox/sentbox threads")
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=False, sentbox_watch=False)
+    lp.sec("ac2: start without a mvbox thread")
+    ac2 = acfactory.new_online_configuring_account(mvbox_move=False)
 
     lp.sec("ac2 and ac1: waiting for configuration")
     acfactory.bring_accounts_online()
 
-    lp.sec("ac1: create and configure sentbox")
+    lp.sec("ac1: create sentbox")
     ac1.direct_imap.create_folder("Sent")
-    ac1.set_config("sentbox_watch", "1")
+    ac1.set_config("scan_all_folders_debounce_secs", "0")
+    ac1.stop_io()
+    ac1.start_io()
 
     lp.sec("ac1: send message and wait for ac2 to receive it")
     acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
