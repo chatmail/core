@@ -1,5 +1,51 @@
 # Changelog
 
+## [2.13.0] - 2025-09-09
+
+### API-Changes
+
+- [**breaking**] Remove `is_profile_verified` APIs.
+- [**breaking**] Remove deprecated `is_protection_broken`.
+- [**breaking**] Remove `e2ee_enabled` preference.
+
+### Features / Changes
+
+- Add call ringing API ([#6650](https://github.com/chatmail/core/pull/6650), [#7174](https://github.com/chatmail/core/pull/7174), [#7175](https://github.com/chatmail/core/pull/7175), [#7179](https://github.com/chatmail/core/pull/7179))
+- Warn for outdated versions after 6 months instead of 1 year ([#7144](https://github.com/chatmail/core/pull/7144)).
+- Do not set "unknown sender for this chat" error.
+- Do not replace messages with an error on verification failure.
+- Support receiving Autocrypt-Gossip with `_verified` attribute.
+- Withdraw all QR codes when one is withdrawn.
+
+### Fixes
+
+- Don't reverify contacts by SELF on receipt of a message from another device.
+- Don't verify contacts by others having an unknown verifier.
+- Update verifier_id if it's "unknown" and new verifier has known verifier.
+- Mark message as failed if it can't be sent ([#7143](https://github.com/chatmail/core/pull/7143)).
+- Add "Messages are end-to-end encrypted." to non-protected groups.
+
+### Documentation
+
+- Fix for SecurejoinInviterProgress with progress == 600.
+- STYLE.md: Prefer BTreeMap and BTreeSet over hash variants.
+
+### Miscellaneous Tasks
+
+- Update provider database.
+- Update dependencies.
+
+### Refactor
+
+- Check that verifier is verified in turn.
+- Remove unused `EncryptPreference::Reset`.
+- Remove `Aheader::new`.
+
+### Tests
+
+- Add another TimeShiftFalsePositiveNote ([#7142](https://github.com/chatmail/core/pull/7142)).
+- Add TestContext.create_chat_id.
+
 ## [2.12.0] - 2025-08-26
 
 ### API-Changes
