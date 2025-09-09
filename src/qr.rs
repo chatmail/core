@@ -20,7 +20,7 @@ use crate::message::Message;
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
-use crate::tools::validate_id;
+use crate::tools::{time, validate_id};
 
 const OPENPGP4FPR_SCHEME: &str = "OPENPGP4FPR:"; // yes: uppercase
 const IDELTACHAT_SCHEME: &str = "https://i.delta.chat/#";
@@ -787,8 +787,16 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             authcode,
             ..
         } => {
-            token::save(context, token::Namespace::InviteNumber, None, &invitenumber).await?;
-            token::save(context, token::Namespace::Auth, None, &authcode).await?;
+            let timestamp = time();
+            token::save(
+                context,
+                token::Namespace::InviteNumber,
+                None,
+                &invitenumber,
+                timestamp,
+            )
+            .await?;
+            token::save(context, token::Namespace::Auth, None, &authcode, timestamp).await?;
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;
         }
@@ -798,14 +806,23 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             grpid,
             ..
         } => {
+            let timestamp = time();
             token::save(
                 context,
                 token::Namespace::InviteNumber,
                 Some(&grpid),
                 &invitenumber,
+                timestamp,
             )
             .await?;
-            token::save(context, token::Namespace::Auth, Some(&grpid), &authcode).await?;
+            token::save(
+                context,
+                token::Namespace::Auth,
+                Some(&grpid),
+                &authcode,
+                timestamp,
+            )
+            .await?;
             context.sync_qr_code_tokens(Some(&grpid)).await?;
             context.scheduler.interrupt_inbox().await;
         }

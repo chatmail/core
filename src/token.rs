@@ -28,12 +28,13 @@ pub async fn save(
     namespace: Namespace,
     foreign_key: Option<&str>,
     token: &str,
+    timestamp: i64,
 ) -> Result<()> {
     context
         .sql
         .execute(
             "INSERT INTO tokens (namespc, foreign_key, token, timestamp) VALUES (?, ?, ?, ?)",
-            (namespace, foreign_key.unwrap_or(""), token, time()),
+            (namespace, foreign_key.unwrap_or(""), token, timestamp),
         )
         .await?;
     Ok(())
@@ -71,7 +72,8 @@ pub async fn lookup_or_new(
     }
 
     let token = create_id();
-    save(context, namespace, foreign_key, &token).await?;
+    let timestamp = time();
+    save(context, namespace, foreign_key, &token, timestamp).await?;
     Ok(token)
 }
 
