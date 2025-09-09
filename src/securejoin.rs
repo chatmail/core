@@ -586,8 +586,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
         // because all devices receive the `vb-request-with-auth` message
         // and mark Bob as verified because of this.
         return Ok(HandshakeMessage::Ignore);
-        // TODO for `vb-member-added`, we probably need to return HandshakeMessage::Propagate,
-        // because otherwise, Bob's second device won't receive the message correctly
     };
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
