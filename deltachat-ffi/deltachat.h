@@ -1233,8 +1233,9 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   callee's other devices receive #DC_EVENT_CALL_ENDED and have a "Cancelled Call",
  *
  * - callee is already in a call:
- *   in this case, UI may decide to show a notification instead of ringing.
- *   otherwise, this is same as timeout
+ *   what to do depends on the capabilities of UI to handle calls.
+ *   if UI cannot handle multiple calls, an easy approach would be to decline the new call automatically
+ *   and make that visble to the user in the call, e.g. by a notification
  *
  * - timeout:
  *   after 1 minute without action,
@@ -1251,6 +1252,13 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *
  * - callee ends the call using dc_end_call():
  *   caller receives #DC_EVENT_CALL_ENDED
+ *
+ * Contact request handling:
+ *
+ * - placing or accepting calls implies accepting contact requests
+ *
+ * - ending a call does not accept a contact request;
+ *   instead, the call will timeout on all affected devices.
  *
  * Note, that the events are for updating the call screen,
  * possible status messages are added and updated as usual, including the known events.
@@ -1279,6 +1287,7 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  * either #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
  *
  * If the call is already accepted or ended, nothing happens.
+ * If the chat is a contact request, it is accepted implicitly.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -1299,7 +1308,12 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * Unaccepted calls ended by the callee are a "decline".
   * If the call was accepted, this is a "hangup".
   *
-  * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
+  * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED unless they are contact requests.
+  * For contact requests, the call times out on all other affected devices.
+  *
+  * If the message ID is wrong or does not exist for whatever reasons, nothing happends.
+  * Therefore, and for resilience, UI should remove the call UI directly when calling
+  * this function and not only on the event.
   *
   * If the call is already ended, nothing happens.
   *
@@ -5714,6 +5728,18 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 
 /**
  * Message indicating an incoming or outgoing call.
+ *
+ * These messages are created by dc_place_outgoing_call()
+ * and should be rendered by UI similar to text messages,
+ * maybe with some "phone icon" at the side.
+ *
+ * The message text is updated as needed
+ * and UI will be informed via #DC_EVENT_MSGS_CHANGED as usual.
+ *
+ * Do not start ringing when seeing this message;
+ * the mesage may belong e.g. to an old missed call.
+ *
+ * Instead, ringing should start on the event #DC_EVENT_INCOMING_CALL
  */
 #define DC_MSG_CALL 71
 
@@ -6721,7 +6747,8 @@ void dc_event_unref(dc_event_t* event);
  *
  * Together with this event,
  * a message of type #DC_MSG_CALL is added to the corresponding chat;
- * this message is announced and updated by the usual even as #DC_EVENT_MSGS_CHANGED.
+ * this message is announced and updated by the usual event as #DC_EVENT_MSGS_CHANGED,
+ * there is usually no need to take care of this message from any of the CALL events.
  *
  * If user takes action, dc_accept_incoming_call() or dc_end_call() should be called.
  *
@@ -6738,8 +6765,7 @@ void dc_event_unref(dc_event_t* event);
  * The callee accepted an incoming call on this or another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  */
@@ -6748,8 +6774,7 @@ void dc_event_unref(dc_event_t* event);
 /**
  * A call placed using dc_place_outgoing_call() was accepted by the callee using dc_accept_incoming_call().
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  * @param data2 (char*) accept_call_info, text passed to dc_accept_incoming_call()
@@ -6757,11 +6782,10 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
 
 /**
- * An incoming or outgoing call was ended using dc_end_call().
+ * An incoming or outgoing call was ended using dc_end_call() on this or another device, by caller or callee.
  * Moreover, the event is sent when the call was not accepted within 1 minute timeout.
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  */
