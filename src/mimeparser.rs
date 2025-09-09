@@ -1,7 +1,7 @@
 //! # MIME message parsing module.
 
 use std::cmp::min;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::str;
 use std::str::FromStr;
@@ -35,6 +35,17 @@ use crate::tools::{
 };
 use crate::{chatlist_events, location, stock_str, tools};
 use crate::{constants, token};
+
+/// Public key extracted from `Autocrypt-Gossip`
+/// header with associated information.
+#[derive(Debug)]
+pub struct GossipedKey {
+    /// Public key extracted from `keydata` attribute.
+    pub public_key: SignedPublicKey,
+
+    /// True if `Autocrypt-Gossip` has a `_verified` attribute.
+    pub verified: bool,
+}
 
 /// A parsed MIME message.
 ///
@@ -85,7 +96,7 @@ pub(crate) struct MimeMessage {
 
     /// The addresses for which there was a gossip header
     /// and their respective gossiped keys.
-    pub gossiped_keys: HashMap<String, SignedPublicKey>,
+    pub gossiped_keys: BTreeMap<String, GossipedKey>,
 
     /// Fingerprint of the key in the Autocrypt header.
     ///
@@ -217,17 +228,7 @@ pub enum SystemMessage {
     /// "Messages are end-to-end encrypted."
     ChatE2ee = 50,
 
-    /// This system message represents an outgoing call.
-    /// This message is visible to the user as an "info" message.
-    OutgoingCall = 60,
-
-    /// This system message represents an incoming call.
-    /// This message is visible to the user as an "info" message.
-    IncomingCall = 65,
-
     /// Message indicating that a call was accepted.
-    /// While the 1:1 call may be established elsewhere,
-    /// the message is still needed for a multidevice setup, so that other devices stop ringing.
     CallAccepted = 66,
 
     /// Message indicating that a call was ended.
@@ -705,12 +706,6 @@ impl MimeMessage {
                 self.is_system_message = SystemMessage::ChatProtectionDisabled;
             } else if value == "group-avatar-changed" {
                 self.is_system_message = SystemMessage::GroupImageChanged;
-            } else if value == "call" {
-                self.is_system_message = if self.incoming {
-                    SystemMessage::IncomingCall
-                } else {
-                    SystemMessage::OutgoingCall
-                };
             } else if value == "call-accepted" {
                 self.is_system_message = SystemMessage::CallAccepted;
             } else if value == "call-ended" {
@@ -751,6 +746,8 @@ impl MimeMessage {
             if let Some(room) = room {
                 if content == "videochat-invitation" {
                     part.typ = Viewtype::VideochatInvitation;
+                } else if content == "call" {
+                    part.typ = Viewtype::Call
                 }
                 part.param.set(Param::WebrtcRoom, room);
             } else if let Some(accepted) = accepted {
@@ -780,7 +777,10 @@ impl MimeMessage {
                     | Viewtype::Vcard
                     | Viewtype::File
                     | Viewtype::Webxdc => true,
-                    Viewtype::Unknown | Viewtype::Text | Viewtype::VideochatInvitation => false,
+                    Viewtype::Unknown
+                    | Viewtype::Text
+                    | Viewtype::VideochatInvitation
+                    | Viewtype::Call => false,
                 })
         {
             let mut parts = std::mem::take(&mut self.parts);
@@ -1532,7 +1532,7 @@ impl MimeMessage {
                 );
                 return Ok(false);
             }
-            Ok((key, _)) => key,
+            Ok(key) => key,
         };
         if let Err(err) = key.verify() {
             warn!(context, "Attached PGP key verification failed: {err:#}.");
@@ -1593,6 +1593,13 @@ impl MimeMessage {
         } else {
             false
         }
+    }
+
+    /// Check if a message is a call.
+    pub(crate) fn is_call(&self) -> bool {
+        self.parts
+            .first()
+            .is_some_and(|part| part.typ == Viewtype::Call)
     }
 
     pub fn replace_msg_by_error(&mut self, error_msg: &str) {
@@ -1989,9 +1996,9 @@ async fn parse_gossip_headers(
     from: &str,
     recipients: &[SingleInfo],
     gossip_headers: Vec<String>,
-) -> Result<HashMap<String, SignedPublicKey>> {
+) -> Result<BTreeMap<String, GossipedKey>> {
     // XXX split the parsing from the modification part
-    let mut gossiped_keys: HashMap<String, SignedPublicKey> = Default::default();
+    let mut gossiped_keys: BTreeMap<String, GossipedKey> = Default::default();
 
     for value in &gossip_headers {
         let header = match value.parse::<Aheader>() {
@@ -2033,7 +2040,12 @@ async fn parse_gossip_headers(
             )
             .await?;
 
-        gossiped_keys.insert(header.addr.to_lowercase(), header.public_key);
+        let gossiped_key = GossipedKey {
+            public_key: header.public_key,
+
+            verified: header.verified,
+        };
+        gossiped_keys.insert(header.addr.to_lowercase(), gossiped_key);
     }
 
     Ok(gossiped_keys)

@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, bail};
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -1132,13 +1132,14 @@ impl MimeFactory {
                                 continue;
                             }
 
-                            let header = Aheader::new(
-                                addr.clone(),
-                                key.clone(),
+                            let header = Aheader {
+                                addr: addr.clone(),
+                                public_key: key.clone(),
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
-                                EncryptPreference::NoPreference,
-                            )
+                                prefer_encrypt: EncryptPreference::NoPreference,
+                                verified: false,
+                            }
                             .to_string();
 
                             message = message.header(
@@ -1614,15 +1615,6 @@ impl MimeFactory {
                     .into(),
                 ));
             }
-            SystemMessage::OutgoingCall => {
-                headers.push((
-                    "Chat-Content",
-                    mail_builder::headers::raw::Raw::new("call").into(),
-                ));
-            }
-            SystemMessage::IncomingCall => {
-                return Err(anyhow!("Unexpected incoming call rendering."));
-            }
             SystemMessage::CallAccepted => {
                 headers.push((
                     "Chat-Content",
@@ -1659,6 +1651,14 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
             ));
+        } else if msg.viewtype == Viewtype::Call {
+            headers.push((
+                "Chat-Content",
+                mail_builder::headers::raw::Raw::new("call").into(),
+            ));
+            placeholdertext = Some(
+                "[This is a 'Call'. The sender uses an experiment not supported on your version yet]".to_string(),
+            );
         }
 
         if msg.param.exists(Param::WebrtcRoom) {

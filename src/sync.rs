@@ -71,9 +71,6 @@ pub(crate) enum SyncData {
     DeleteMessages {
         msgs: Vec<String>, // RFC724 id (i.e. "Message-Id" header)
     },
-    RejectIncomingCall {
-        msg: String, // RFC724 id (i.e. "Message-Id" header)
-    },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -267,7 +264,6 @@ impl Context {
                     SyncData::Config { key, val } => self.sync_config(key, val).await,
                     SyncData::SaveMessage { src, dest } => self.save_message(src, dest).await,
                     SyncData::DeleteMessages { msgs } => self.sync_message_deletion(msgs).await,
-                    SyncData::RejectIncomingCall { msg } => self.sync_call_rejection(msg).await,
                 },
                 SyncDataOrUnknown::Unknown(data) => {
                     warn!(self, "Ignored unknown sync item: {data}.");
@@ -297,8 +293,15 @@ impl Context {
     }
 
     async fn delete_qr_token(&self, token: &QrTokenData) -> Result<()> {
-        token::delete(self, Namespace::InviteNumber, &token.invitenumber).await?;
-        token::delete(self, Namespace::Auth, &token.auth).await?;
+        self.sql
+            .execute(
+                "DELETE FROM tokens
+                 WHERE foreign_key IN
+                 (SELECT foreign_key FROM tokens
+                  WHERE token=? OR token=?)",
+                (&token.invitenumber, &token.auth),
+            )
+            .await?;
         Ok(())
     }
 
@@ -569,8 +572,8 @@ mod tests {
                 .await?
                 .is_none()
         );
-        assert!(token::exists(&t, Namespace::InviteNumber, "yip-in").await?);
-        assert!(token::exists(&t, Namespace::Auth, "yip-auth").await?);
+        assert!(!token::exists(&t, Namespace::InviteNumber, "yip-in").await?);
+        assert!(!token::exists(&t, Namespace::Auth, "yip-auth").await?);
         assert!(!token::exists(&t, Namespace::Auth, "non-existent").await?);
         assert!(!token::exists(&t, Namespace::Auth, "directly deleted").await?);
 

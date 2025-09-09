@@ -57,9 +57,7 @@ async fn create_context() -> Context {
         .set_config(Config::ConfiguredAddr, Some("bob@example.net"))
         .await
         .unwrap();
-    let secret = key_from_asc(include_str!("../test-data/key/bob-secret.asc"))
-        .unwrap()
-        .0;
+    let secret = key_from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
     let public = secret.signed_public_key();
     let key_pair = KeyPair { public, secret };
     store_self_keypair(&context, &key_pair)

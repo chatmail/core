@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
-use std::collections::BTreeMap;
 
 use crate::chat::ChatId;
 use crate::context::Context;
@@ -14,7 +13,7 @@ pub use crate::pgp;
 
 use self::pgp::KeyPair;
 
-pub fn key_from_asc(data: &str) -> Result<(key::SignedSecretKey, BTreeMap<String, String>)> {
+pub fn key_from_asc(data: &str) -> Result<key::SignedSecretKey> {
     key::SignedSecretKey::from_asc(data)
 }
 

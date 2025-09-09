@@ -5,6 +5,7 @@ use crate::chat::{CantSendReason, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
+use crate::mimeparser::GossipedKey;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
@@ -186,7 +187,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
 
     if case == SetupContactCase::WrongAliceGossip {
-        let wrong_pubkey = load_self_public_key(&bob).await.unwrap();
+        let wrong_pubkey = GossipedKey {
+            public_key: load_self_public_key(&bob).await.unwrap(),
+            verified: false,
+        };
         let alice_pubkey = msg
             .gossiped_keys
             .insert(alice_addr.to_string(), wrong_pubkey)

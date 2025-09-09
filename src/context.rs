@@ -833,7 +833,6 @@ impl Context {
             .query_get_value("PRAGMA journal_mode;", ())
             .await?
             .unwrap_or_else(|| "unknown".to_string());
-        let e2ee_enabled = self.get_config_int(Config::E2eeEnabled).await?;
         let mdns_enabled = self.get_config_int(Config::MdnsEnabled).await?;
         let bcc_self = self.get_config_int(Config::BccSelf).await?;
         let sync_msgs = self.get_config_int(Config::SyncMsgs).await?;
@@ -967,7 +966,6 @@ impl Context {
         res.insert("configured_mvbox_folder", configured_mvbox_folder);
         res.insert("configured_trash_folder", configured_trash_folder);
         res.insert("mdns_enabled", mdns_enabled.to_string());
-        res.insert("e2ee_enabled", e2ee_enabled.to_string());
         res.insert("bcc_self", bcc_self.to_string());
         res.insert("sync_msgs", sync_msgs.to_string());
         res.insert("disable_idle", disable_idle.to_string());

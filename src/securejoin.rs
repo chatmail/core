@@ -308,7 +308,9 @@ pub(crate) async fn handle_securejoin_handshake(
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
-            if key.dc_fingerprint() == self_fingerprint && context.is_self_addr(addr).await? {
+            if key.public_key.dc_fingerprint() == self_fingerprint
+                && context.is_self_addr(addr).await?
+            {
                 self_found = true;
                 break;
             }
@@ -596,7 +598,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         return Ok(HandshakeMessage::Ignore);
     };
 
-    if key.dc_fingerprint() != contact_fingerprint {
+    if key.public_key.dc_fingerprint() != contact_fingerprint {
         // Fingerprint does not match, ignore.
         warn!(context, "Fingerprint does not match.");
         return Ok(HandshakeMessage::Ignore);

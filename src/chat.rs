@@ -2717,7 +2717,10 @@ impl ChatIdBlocked {
 }
 
 async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
-    if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::VideochatInvitation {
+    if msg.viewtype == Viewtype::Text
+        || msg.viewtype == Viewtype::VideochatInvitation
+        || msg.viewtype == Viewtype::Call
+    {
         // the caller should check if the message text is empty
     } else if msg.viewtype.has_file() {
         let viewtype_orig = msg.viewtype;
@@ -3204,6 +3207,7 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
         original_msg.viewtype != Viewtype::VideochatInvitation,
         "Cannot edit videochat invitations"
     );
+    ensure!(original_msg.viewtype != Viewtype::Call, "Cannot edit calls");
     ensure!(
         !original_msg.text.is_empty(), // avoid complexity in UI element changes. focus is typos and rewordings
         "Cannot add text"
