@@ -623,8 +623,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
     if step == "vg-member-added" {
         inviter_progress(context, contact_id, step, 800)?;
     }
-    // TODO superflous vb-member-added (we're early-returning above):
-    if step == "vg-member-added" || step == "vb-member-added" || step == "vc-contact-confirm" {
+    if step == "vg-member-added" || step == "vc-contact-confirm" {
         inviter_progress(context, contact_id, step, 1000)?;
     }
 
@@ -635,8 +634,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Not).await?;
     }
 
-    if step == "vg-member-added" || step == "vb-member-added" {
-        // TODO superflous vb-member-added (we're early-returning above)
+    if step == "vg-member-added" {
         Ok(HandshakeMessage::Propagate)
     } else {
         Ok(HandshakeMessage::Ignore)
