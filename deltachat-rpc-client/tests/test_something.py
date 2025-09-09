@@ -882,7 +882,7 @@ def test_broadcast(acfactory):
     alice_chat = alice.create_broadcast("My great channel")
     snapshot = alice_chat.get_basic_snapshot()
     assert snapshot.name == "My great channel"
-    assert snapshot.is_unpromoted
+    assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
     assert snapshot.is_encrypted
     assert snapshot.chat_type == ChatType.OUT_BROADCAST
 
