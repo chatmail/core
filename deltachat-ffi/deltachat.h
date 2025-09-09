@@ -3924,18 +3924,12 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 
 
 /**
- * Check if a chat is protected.
- *
- * Only verified contacts
- * as determined by dc_contact_is_verified()
- * can be added to protected chats.
- *
- * Protected chats are created using dc_create_group_chat()
- * by setting the 'protect' parameter to 1.
+ * Deprecated, always returns 0.
  *
  * @memberof dc_chat_t
  * @param chat The chat object.
- * @return 1=chat protected, 0=chat is not protected.
+ * @return Always 0.
+ * @deprecated 2025-09-09
  */
 int             dc_chat_is_protected         (const dc_chat_t* chat);
 
