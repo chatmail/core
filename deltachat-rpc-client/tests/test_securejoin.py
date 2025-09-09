@@ -126,6 +126,8 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
     logging.info("Alice creates a broadcast")
     alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+    snapshot = alice_chat.get_basic_snapshot()
+    assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
 
     logging.info("Bob joins the broadcast")
 
@@ -169,6 +171,8 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         hello_msg = chat_msgs[2].get_snapshot()
         assert hello_msg.text == "Hello everyone!"
         assert not hello_msg.is_info
+        assert hello_msg.show_padlock
+        assert hello_msg.error is None
 
         assert len(chat_msgs) == 3
 

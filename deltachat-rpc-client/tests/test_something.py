@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import Contact, EventType, Message, events
-from deltachat_rpc_client.const import ChatType, DownloadState, MessageState
+from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
@@ -874,36 +874,3 @@ def test_delete_deltachat_folder(acfactory, direct_imap):
     assert msg.text == "hello"
 
     assert "DeltaChat" in ac1_direct_imap.list_folders()
-
-
-def test_broadcast(acfactory):
-    alice, bob = acfactory.get_online_accounts(2)
-
-    alice_chat = alice.create_broadcast("My great channel")
-    snapshot = alice_chat.get_basic_snapshot()
-    assert snapshot.name == "My great channel"
-    assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
-    assert snapshot.is_encrypted
-    assert snapshot.chat_type == ChatType.OUT_BROADCAST
-
-    alice_contact_bob = alice.create_contact(bob, "Bob")
-    alice_chat.add_contact(alice_contact_bob)
-
-    alice_msg = alice_chat.send_message(text="hello").get_snapshot()
-    assert alice_msg.text == "hello"
-    assert alice_msg.show_padlock
-
-    bob_msg = bob.wait_for_incoming_msg().get_snapshot()
-    assert bob_msg.text == "hello"
-    assert bob_msg.show_padlock
-    assert bob_msg.error is None
-
-    bob_chat = bob.get_chat_by_id(bob_msg.chat_id)
-    bob_chat_snapshot = bob_chat.get_basic_snapshot()
-    assert bob_chat_snapshot.name == "My great channel"
-    assert not bob_chat_snapshot.is_unpromoted
-    assert bob_chat_snapshot.is_encrypted
-    assert bob_chat_snapshot.chat_type == ChatType.IN_BROADCAST
-    assert bob_chat_snapshot.is_contact_request
-
-    assert not bob_chat.can_send()
