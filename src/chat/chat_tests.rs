@@ -4115,10 +4115,10 @@ async fn test_sync_broadcast() -> Result<()> {
 
     // Alice1 and Alice2 are supposed to show the chat in the same way:
     alice1
-        .golden_test_chat(a1_broadcast_id, "test_sync_broadcast_alice")
+        .golden_test_chat(a1_broadcast_id, "test_sync_broadcast_alice1")
         .await;
     alice2
-        .golden_test_chat(a2_broadcast_id, "test_sync_broadcast_alice")
+        .golden_test_chat(a2_broadcast_id, "test_sync_broadcast_alice2")
         .await;
 
     tcm.section("Alice's first device deletes the chat");
