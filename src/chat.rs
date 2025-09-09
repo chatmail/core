@@ -1983,7 +1983,7 @@ impl Chat {
     }
 
     /// Adds missing values to the msg object,
-    /// writes the record to the database and returns its msg_id.
+    /// writes the record to the database.
     ///
     /// If `update_msg_id` is set, that record is reused;
     /// if `update_msg_id` is None, a new record is created.
@@ -1992,7 +1992,7 @@ impl Chat {
         context: &Context,
         msg: &mut Message,
         update_msg_id: Option<MsgId>,
-    ) -> Result<MsgId> {
+    ) -> Result<()> {
         let mut to_id = 0;
         let mut location_id = 0;
 
@@ -2270,7 +2270,7 @@ impl Chat {
                 .await?;
         }
         context.scheduler.interrupt_ephemeral_task().await;
-        Ok(msg.id)
+        Ok(())
     }
 
     /// Sends a `SyncAction` synchronising chat contacts to other devices.
@@ -3006,8 +3006,7 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    msg.id = chat.prepare_msg_raw(context, msg, update_msg_id).await?;
-    msg.chat_id = chat_id;
+    chat.prepare_msg_raw(context, msg, update_msg_id).await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await
@@ -4561,13 +4560,13 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.timestamp_sort = curr_timestamp;
-        let new_msg_id = chat.prepare_msg_raw(context, &mut msg, None).await?;
+        chat.prepare_msg_raw(context, &mut msg, None).await?;
 
         curr_timestamp += 1;
         if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             context.scheduler.interrupt_smtp().await;
         }
-        created_msgs.push(new_msg_id);
+        created_msgs.push(msg.id);
     }
     for msg_id in created_msgs {
         context.emit_msgs_changed(chat_id, msg_id);
