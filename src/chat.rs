@@ -3832,42 +3832,35 @@ pub(crate) async fn create_broadcast_ex(
     chat_name: String,
     secret: String,
 ) -> Result<ChatId> {
+    // TODO check why create_group() is duplicated in receive_imf.rs, but this fn here is not
+    // e.g. do we need a create_blocked param?
     let chat_name = sanitize_single_line(&chat_name);
     if chat_name.is_empty() {
         bail!("Invalid broadcast channel name: {chat_name}.");
     }
 
     let timestamp = create_smeared_timestamp(context);
-    let chat_id = {
-        let chat_name = &chat_name;
-        let grpid = &grpid;
-        let trans_fn = |t: &mut rusqlite::Transaction| -> Result<u32> {
-            // TODO it's not needed to lookup an existing broadcast here
-            let cnt = t.execute("UPDATE chats SET name=? WHERE grpid=?", (chat_name, grpid))?;
-            ensure!(cnt <= 1, "{cnt} chats exist with grpid {grpid}");
-            if cnt == 1 {
-                return Ok(t.query_row(
-                    "SELECT id FROM chats WHERE grpid=? AND type=?",
-                    (grpid, Chattype::OutBroadcast),
-                    |row| {
-                        let id: u32 = row.get(0)?;
-                        Ok(id)
-                    },
-                )?);
-            }
-            t.execute(
-                "INSERT INTO chats \
-                (type, name, grpid, created_timestamp) \
-                VALUES(?, ?, ?, ?);",
-                (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
-            )?;
-            let chat_id = t.last_insert_rowid();
-            t.execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, &secret))?;
-            Ok(chat_id.try_into()?)
-        };
-        context.sql.transaction(trans_fn).await?
+    let trans_fn = |t: &mut rusqlite::Transaction| -> Result<ChatId> {
+        let cnt: u32 = t.query_row(
+            "SELECT COUNT(*) FROM chats WHERE grpid=?",
+            (&grpid,),
+            |row| row.get(0),
+        )?;
+        ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
+
+        // TODO check if this should use create_multiuser_record()
+        t.execute(
+            "INSERT INTO chats \
+            (type, name, grpid, created_timestamp) \
+            VALUES(?, ?, ?, ?);",
+            (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
+        )?;
+        let chat_id = ChatId::new(t.last_insert_rowid().try_into()?);
+
+        t.execute(SQL_INSERT_BROADCAST_SECRET, (chat_id, &secret))?;
+        Ok(chat_id)
     };
-    let chat_id = ChatId::new(chat_id);
+    let chat_id = context.sql.transaction(trans_fn).await?;
     chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
 
     context.emit_msgs_changed_without_ids();
