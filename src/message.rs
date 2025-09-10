@@ -85,7 +85,7 @@ impl MsgId {
             .sql
             .query_row_optional(
                 concat!(
-                    "SELECT m.state, mdns.msg_id",
+                    "SELECT m.state, m.from_id, mdns.msg_id",
                     " FROM msgs m LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id",
                     " WHERE id=?",
                     " LIMIT 1",
@@ -93,8 +93,9 @@ impl MsgId {
                 (self,),
                 |row| {
                     let state: MessageState = row.get(0)?;
-                    let mdn_msg_id: Option<MsgId> = row.get(1)?;
-                    Ok(state.with_mdns(mdn_msg_id.is_some()))
+                    let from_id: ContactId = row.get(1)?;
+                    let mdn_msg_id: Option<MsgId> = row.get(2)?;
+                    Ok(state.with(from_id, mdn_msg_id.is_some()))
                 },
             )
             .await?
@@ -551,6 +552,7 @@ impl Message {
                         }
                         _ => String::new(),
                     };
+                    let from_id = row.get("from_id")?;
                     let msg = Message {
                         id: row.get("id")?,
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
@@ -558,7 +560,7 @@ impl Message {
                             .get::<_, Option<String>>("mime_in_reply_to")?
                             .and_then(|in_reply_to| parse_message_id(&in_reply_to).ok()),
                         chat_id: row.get("chat_id")?,
-                        from_id: row.get("from_id")?,
+                        from_id,
                         to_id: row.get("to_id")?,
                         timestamp_sort: row.get("timestamp")?,
                         timestamp_sent: row.get("timestamp_sent")?,
@@ -566,7 +568,7 @@ impl Message {
                         ephemeral_timer: row.get("ephemeral_timer")?,
                         ephemeral_timestamp: row.get("ephemeral_timestamp")?,
                         viewtype: row.get("type").unwrap_or_default(),
-                        state: state.with_mdns(mdn_msg_id.is_some()),
+                        state: state.with(from_id, mdn_msg_id.is_some()),
                         download_state: row.get("download_state")?,
                         error: Some(row.get::<_, String>("error")?)
                             .filter(|error| !error.is_empty()),
@@ -1410,10 +1412,16 @@ impl MessageState {
         )
     }
 
-    /// Returns adjusted message state if the message has MDNs.
-    pub(crate) fn with_mdns(self, has_mdns: bool) -> Self {
+    /// Returns adjusted message state.
+    pub(crate) fn with(mut self, from_id: ContactId, has_mdns: bool) -> Self {
+        if MessageState::InFresh <= self
+            && self <= MessageState::InSeen
+            && from_id == ContactId::SELF
+        {
+            self = MessageState::OutDelivered;
+        }
         if self == MessageState::OutDelivered && has_mdns {
-            return MessageState::OutMdnRcvd;
+            self = MessageState::OutMdnRcvd;
         }
         self
     }
