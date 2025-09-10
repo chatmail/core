@@ -152,7 +152,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
-            // TODO code duplication with previous block
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
