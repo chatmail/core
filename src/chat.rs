@@ -3846,7 +3846,6 @@ pub(crate) async fn create_out_broadcast_ex(
         )?;
         ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
 
-        // TODO check if this should use create_multiuser_record()
         t.execute(
             "INSERT INTO chats \
             (type, name, grpid, created_timestamp) \
