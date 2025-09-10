@@ -1580,27 +1580,15 @@ impl MimeFactory {
             );
         }
 
-        if msg.param.exists(Param::WebrtcRoom) {
+        if let Some(offer) = msg.param.get(Param::WebrtcRoom) {
             headers.push((
                 "Chat-Webrtc-Room",
-                mail_builder::headers::raw::Raw::new(
-                    msg.param
-                        .get(Param::WebrtcRoom)
-                        .unwrap_or_default()
-                        .to_string(),
-                )
-                .into(),
+                mail_builder::headers::raw::Raw::new(b_encode(offer)).into(),
             ));
-        } else if msg.param.exists(Param::WebrtcAccepted) {
+        } else if let Some(answer) = msg.param.get(Param::WebrtcAccepted) {
             headers.push((
                 "Chat-Webrtc-Accepted",
-                mail_builder::headers::raw::Raw::new(
-                    msg.param
-                        .get(Param::WebrtcAccepted)
-                        .unwrap_or_default()
-                        .to_string(),
-                )
-                .into(),
+                mail_builder::headers::raw::Raw::new(b_encode(answer)).into(),
             ));
         }
 
@@ -1892,6 +1880,18 @@ fn render_rfc724_mid(rfc724_mid: &str) -> String {
     } else {
         format!("<{rfc724_mid}>")
     }
+}
+
+/// Encodes UTF-8 string as a single B-encoded-word.
+///
+/// We manually encode some headers because as of
+/// version 0.4.4 mail-builder crate does not encode
+/// newlines correctly if they appear in a text header.
+fn b_encode(value: &str) -> String {
+    format!(
+        "=?utf-8?B?{}?=",
+        base64::engine::general_purpose::STANDARD.encode(value)
+    )
 }
 
 #[cfg(test)]
