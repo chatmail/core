@@ -400,7 +400,6 @@ pub async fn symm_encrypt_message(
             hash_alg: HashAlgorithm::default(),
             salt,
         };
-        // TODO ask whether it's actually good to use Seidp_v2 here
         let mut msg = msg.seipd_v2(
             &mut rng,
             SymmetricKeyAlgorithm::AES128,
