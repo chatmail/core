@@ -1578,7 +1578,8 @@ async fn do_chat_assignment(
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
                             let secret = create_broadcast_shared_secret();
-                            chat::create_broadcast_ex(context, Nosync, listid, name, secret).await?
+                            chat::create_out_broadcast_ex(context, Nosync, listid, name, secret)
+                                .await?
                         },
                     );
                 }

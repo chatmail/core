@@ -3800,7 +3800,7 @@ pub async fn create_group_ex(
     Ok(chat_id)
 }
 
-/// Create a new **broadcast channel**
+/// Create a new, outgoing **broadcast channel**
 /// (called "Channel" in the UI).
 ///
 /// Broadcast channels are similar to groups on the sending device,
@@ -3818,22 +3818,20 @@ pub async fn create_group_ex(
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
     let secret = create_broadcast_shared_secret();
-    create_broadcast_ex(context, Sync, grpid, chat_name, secret).await
+    create_out_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
 const SQL_INSERT_BROADCAST_SECRET: &str =
     "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret";
 
-pub(crate) async fn create_broadcast_ex(
+pub(crate) async fn create_out_broadcast_ex(
     context: &Context,
     sync: sync::Sync,
     grpid: String,
     chat_name: String,
     secret: String,
 ) -> Result<ChatId> {
-    // TODO check why create_group() is duplicated in receive_imf.rs, but this fn here is not
-    // e.g. do we need a create_blocked param?
     let chat_name = sanitize_single_line(&chat_name);
     if chat_name.is_empty() {
         bail!("Invalid broadcast channel name: {chat_name}.");
@@ -5251,7 +5249,7 @@ impl Context {
                 chat_name,
                 shared_secret,
             } => {
-                create_broadcast_ex(
+                create_out_broadcast_ex(
                     self,
                     Nosync,
                     grpid.to_string(),
