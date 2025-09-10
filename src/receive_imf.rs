@@ -3512,11 +3512,12 @@ async fn apply_out_broadcast_changes(
         if removed_id == Some(from_id) {
             // The sender of the message left the broadcast channel
             // Silently remove them without notifying the user
-            chat::remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+            chat::remove_from_chat_contacts_table_without_trace(context, chat.id, from_id).await?;
             better_msg = Some("".to_string());
         } else if from_id == ContactId::SELF {
             if let Some(removed_id) = removed_id {
-                chat::remove_from_chat_contacts_table(context, chat.id, removed_id).await?;
+                chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
+                    .await?;
 
                 better_msg.get_or_insert(
                     stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,

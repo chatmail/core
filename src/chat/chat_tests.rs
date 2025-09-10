@@ -3090,7 +3090,12 @@ async fn test_leave_broadcast() -> Result<()> {
     let leave_msg = bob.pop_sent_msg().await;
     alice.recv_msg_trash(&leave_msg).await;
 
-    assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 0);
+    assert!(get_chat_contacts(alice, alice_chat_id).await?.is_empty());
+    assert!(
+        get_past_chat_contacts(alice, alice_chat_id)
+            .await?
+            .is_empty()
+    );
 
     alice.emit_event(EventType::Test);
     alice
@@ -4122,12 +4127,11 @@ async fn test_sync_broadcast() -> Result<()> {
     tcm.section("Alice's second device receives the removal-message");
     alice2.recv_msg(&sent).await;
     assert!(get_chat_contacts(alice2, a2_broadcast_id).await?.is_empty());
-    // TODO do we want to make sure that there is no trace of a member?
-    // assert!(
-    //     get_past_chat_contacts(alice1, a1_broadcast_id)
-    //         .await?
-    //         .is_empty()
-    // );
+    assert!(
+        get_past_chat_contacts(alice2, a2_broadcast_id)
+            .await?
+            .is_empty()
+    );
 
     tcm.section("Bob receives the removal-message");
     bob.recv_msg(&sent).await;

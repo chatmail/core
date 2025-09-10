@@ -3990,6 +3990,30 @@ pub(crate) async fn remove_from_chat_contacts_table(
     Ok(())
 }
 
+/// Removes a contact from the chat
+/// without leaving a trace.
+///
+/// Note that if we receive a message
+/// from another device that doesn't know that this this member was removed
+/// then the group membership algorithm won't remember that this member was removed,
+/// so that the member will be wrongly re-added
+pub(crate) async fn remove_from_chat_contacts_table_without_trace(
+    context: &Context,
+    chat_id: ChatId,
+    contact_id: ContactId,
+) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "DELETE FROM chats_contacts
+                WHERE chat_id=? AND contact_id=?",
+            (chat_id, contact_id),
+        )
+        .await?;
+
+    Ok(())
+}
+
 /// Adds a contact to the chat.
 /// If the group is promoted, also sends out a system message to all group members
 pub async fn add_contact_to_chat(
@@ -4265,14 +4289,7 @@ pub async fn remove_contact_from_chat(
             if chat.is_promoted() {
                 remove_from_chat_contacts_table(context, chat_id, contact_id).await?;
             } else {
-                context
-                    .sql
-                    .execute(
-                        "DELETE FROM chats_contacts
-                         WHERE chat_id=? AND contact_id=?",
-                        (chat_id, contact_id),
-                    )
-                    .await?;
+                remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?;
             }
 
             // We do not return an error if the contact does not exist in the database.
