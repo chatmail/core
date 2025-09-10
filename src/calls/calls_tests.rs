@@ -18,6 +18,10 @@ async fn assert_text(t: &TestContext, call_id: MsgId, text: &str) -> Result<()> 
     Ok(())
 }
 
+// Offer and answer examples from <https://www.rfc-editor.org/rfc/rfc3264>
+const PLACE_INFO: &str = "v=0\r\no=alice 2890844526 2890844526 IN IP4 host.anywhere.com\r\ns=\r\nc=IN IP4 host.anywhere.com\r\nt=0 0\r\nm=audio 62986 RTP/AVP 0 4 18\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=rtpmap:18 G729/8000\r\na=inactive\r\n";
+const ACCEPT_INFO: &str = "v=0\r\no=bob 2890844730 2890844731 IN IP4 host.example.com\r\ns=\r\nc=IN IP4 host.example.com\r\nt=0 0\r\nm=audio 54344 RTP/AVP 0 4\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=inactive\r\n";
+
 async fn setup_call() -> Result<CallSetup> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
@@ -32,7 +36,7 @@ async fn setup_call() -> Result<CallSetup> {
     // Alice's other device sees the same message as an outgoing call.
     let alice_chat = alice.create_chat(&bob).await;
     let test_msg_id = alice
-        .place_outgoing_call(alice_chat.id, "place-info-123".to_string())
+        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string())
         .await?;
     let sent1 = alice.pop_sent_msg().await;
     assert_eq!(sent1.sender_msg_id, test_msg_id);
@@ -44,7 +48,7 @@ async fn setup_call() -> Result<CallSetup> {
         let info = t.load_call_by_id(m.id).await?;
         assert!(!info.is_incoming());
         assert!(!info.is_accepted());
-        assert_eq!(info.place_call_info, "place-info-123");
+        assert_eq!(info.place_call_info, PLACE_INFO);
         assert_text(t, m.id, "Outgoing call").await?;
     }
 
@@ -61,7 +65,7 @@ async fn setup_call() -> Result<CallSetup> {
         let info = t.load_call_by_id(m.id).await?;
         assert!(info.is_incoming());
         assert!(!info.is_accepted());
-        assert_eq!(info.place_call_info, "place-info-123");
+        assert_eq!(info.place_call_info, PLACE_INFO);
         assert_text(t, m.id, "Incoming call").await?;
     }
 
@@ -90,7 +94,7 @@ async fn accept_call() -> Result<CallSetup> {
     } = setup_call().await?;
 
     // Bob accepts the incoming call
-    bob.accept_incoming_call(bob_call.id, "accept-info-456".to_string())
+    bob.accept_incoming_call(bob_call.id, ACCEPT_INFO.to_string())
         .await?;
     assert_text(&bob, bob_call.id, "Incoming call").await?;
     bob.evtracker
@@ -99,7 +103,7 @@ async fn accept_call() -> Result<CallSetup> {
     let sent2 = bob.pop_sent_msg().await;
     let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(info.is_accepted());
-    assert_eq!(info.place_call_info, "place-info-123");
+    assert_eq!(info.place_call_info, PLACE_INFO);
 
     bob2.recv_msg_trash(&sent2).await;
     assert_text(&bob, bob_call.id, "Incoming call").await?;
@@ -120,12 +124,12 @@ async fn accept_call() -> Result<CallSetup> {
         ev,
         EventType::OutgoingCallAccepted {
             msg_id: alice2_call.id,
-            accept_call_info: "accept-info-456".to_string()
+            accept_call_info: ACCEPT_INFO.to_string()
         }
     );
     let info = alice.load_call_by_id(alice_call.id).await?;
     assert!(info.is_accepted());
-    assert_eq!(info.place_call_info, "place-info-123");
+    assert_eq!(info.place_call_info, PLACE_INFO);
 
     alice2.recv_msg_trash(&sent2).await;
     assert_text(&alice2, alice2_call.id, "Outgoing call").await?;
