@@ -265,7 +265,7 @@ impl str::FromStr for Params {
     /// or from an upgrade (when a key is dropped but was used in the past)
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let mut inner = BTreeMap::new();
-        let mut lines = s.lines().peekable();
+        let mut lines = s.split('\n').peekable();
 
         while let Some(line) = lines.next() {
             if let [key, value] = line.splitn(2, '=').collect::<Vec<_>>()[..] {
@@ -457,6 +457,7 @@ mod tests {
         let mut params = Params::new();
         params.set(Param::Height, "foo\nbar=baz\nquux");
         params.set(Param::Width, "\n\n\na=\n=");
+        params.set(Param::WebrtcRoom, "foo\r\nbar\r\n\r\nbaz\r\n");
         assert_eq!(params.to_string().parse::<Params>().unwrap(), params);
     }
 
