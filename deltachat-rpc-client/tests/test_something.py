@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deltachat_rpc_client import Contact, EventType, Message, events
+from deltachat_rpc_client import Contact, EventType, Message, SpecialContactId, events
 from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
@@ -934,6 +934,19 @@ def test_leave_broadcast(acfactory, all_devices_online):
 
         assert len(chat_msgs) == 0
 
+        chat_snapshot = chat.get_full_snapshot()
+
+        # On Alice's side, SELF is not in the list of contact ids
+        # because OutBroadcast chats never contain SELF in the list.
+        # On Bob's side, SELF is not in the list because he left.
+        assert SpecialContactId.SELF not in chat_snapshot.contact_ids
+
+        if inviter_side:
+            assert len(chat_snapshot.contact_ids) == 0
+        else:
+            assert contact.id in chat_snapshot.contact_ids
+            assert len(chat_snapshot.contact_ids) == 1
+
     logging.info("===================== Bob leaves the broadcast =====================")
     bob_chat = get_broadcast(bob)
     assert bob_chat.get_full_snapshot().self_in_group
@@ -953,6 +966,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
     check_account(alice, alice.create_contact(bob), inviter_side=True)
 
     logging.info("===================== Test Bob's second device =====================")
+    # Start second Bob device, if it wasn't started already.
     bob2.start_io()
 
     member_added_msg = bob2.wait_for_incoming_msg()
