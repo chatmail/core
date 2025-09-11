@@ -281,9 +281,6 @@ pub enum Config {
     /// Configured folder for chat messages.
     ConfiguredMvboxFolder,
 
-    /// Configured "Sent" folder.
-    ConfiguredSentboxFolder,
-
     /// Configured "Trash" folder.
     ConfiguredTrashFolder,
 

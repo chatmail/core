@@ -156,7 +156,6 @@ pub enum FolderMeaning {
     Spam,
     Inbox,
     Mvbox,
-    Sent,
     Trash,
 
     /// Virtual folders.
@@ -175,7 +174,6 @@ impl FolderMeaning {
             FolderMeaning::Spam => None,
             FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
             FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
-            FolderMeaning::Sent => Some(Config::ConfiguredSentboxFolder),
             FolderMeaning::Trash => Some(Config::ConfiguredTrashFolder),
             FolderMeaning::Virtual => None,
         }
@@ -798,9 +796,6 @@ impl Imap {
         context: &Context,
         session: &mut Session,
     ) -> Result<()> {
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredSentboxFolder)
-            .await
-            .context("failed to get recipients from the sentbox")?;
         add_all_recipients_as_contacts(context, session, Config::ConfiguredMvboxFolder)
             .await
             .context("failed to get recipients from the movebox")?;
@@ -2053,7 +2048,7 @@ async fn spam_target_folder_cfg(
     }
 }
 
-/// Returns `ConfiguredInboxFolder`, `ConfiguredMvboxFolder` or `ConfiguredSentboxFolder` if
+/// Returns `ConfiguredInboxFolder` or `ConfiguredMvboxFolder` if
 /// the message needs to be moved from `folder`. Otherwise returns `None`.
 pub async fn target_folder_cfg(
     context: &Context,
@@ -2142,38 +2137,6 @@ async fn needs_move_to_mvbox(
 // but sth. different in others - a hard job.
 fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
     // source: <https://stackoverflow.com/questions/2185391/localized-gmail-imap-folders>
-    const SENT_NAMES: &[&str] = &[
-        "sent",
-        "sentmail",
-        "sent objects",
-        "gesendet",
-        "Sent Mail",
-        "Sendte e-mails",
-        "Enviados",
-        "Messages envoyés",
-        "Messages envoyes",
-        "Posta inviata",
-        "Verzonden berichten",
-        "Wyslane",
-        "E-mails enviados",
-        "Correio enviado",
-        "Enviada",
-        "Enviado",
-        "Gönderildi",
-        "Inviati",
-        "Odeslaná pošta",
-        "Sendt",
-        "Skickat",
-        "Verzonden",
-        "Wysłane",
-        "Éléments envoyés",
-        "Απεσταλμένα",
-        "Отправленные",
-        "寄件備份",
-        "已发送邮件",
-        "送信済み",
-        "보낸편지함",
-    ];
     const SPAM_NAMES: &[&str] = &[
         "spam",
         "junk",
@@ -2219,8 +2182,6 @@ fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
 
     if lower == "inbox" {
         FolderMeaning::Inbox
-    } else if SENT_NAMES.iter().any(|s| s.to_lowercase() == lower) {
-        FolderMeaning::Sent
     } else if SPAM_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Spam
     } else if TRASH_NAMES.iter().any(|s| s.to_lowercase() == lower) {
@@ -2234,7 +2195,6 @@ fn get_folder_meaning_by_attrs(folder_attrs: &[NameAttribute]) -> FolderMeaning 
     for attr in folder_attrs {
         match attr {
             NameAttribute::Trash => return FolderMeaning::Trash,
-            NameAttribute::Sent => return FolderMeaning::Sent,
             NameAttribute::Junk => return FolderMeaning::Spam,
             NameAttribute::All | NameAttribute::Flagged => return FolderMeaning::Virtual,
             NameAttribute::Extension(label) => {

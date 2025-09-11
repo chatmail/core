@@ -3,17 +3,6 @@ use crate::test_utils::TestContext;
 
 #[test]
 fn test_get_folder_meaning_by_name() {
-    assert_eq!(get_folder_meaning_by_name("Gesendet"), FolderMeaning::Sent);
-    assert_eq!(get_folder_meaning_by_name("GESENDET"), FolderMeaning::Sent);
-    assert_eq!(get_folder_meaning_by_name("gesendet"), FolderMeaning::Sent);
-    assert_eq!(
-        get_folder_meaning_by_name("Messages envoyés"),
-        FolderMeaning::Sent
-    );
-    assert_eq!(
-        get_folder_meaning_by_name("mEsSaGes envoyÉs"),
-        FolderMeaning::Sent
-    );
     assert_eq!(get_folder_meaning_by_name("xxx"), FolderMeaning::Unknown);
     assert_eq!(get_folder_meaning_by_name("SPAM"), FolderMeaning::Spam);
     assert_eq!(get_folder_meaning_by_name("Trash"), FolderMeaning::Trash);
@@ -118,9 +107,6 @@ async fn check_target_folder_combination(
     let t = TestContext::new_alice().await;
     t.ctx
         .set_config(Config::ConfiguredMvboxFolder, Some("DeltaChat"))
-        .await?;
-    t.ctx
-        .set_config(Config::ConfiguredSentboxFolder, Some("Sent"))
         .await?;
     t.ctx
         .set_config(Config::MvboxMove, Some(if mvbox_move { "1" } else { "0" }))
