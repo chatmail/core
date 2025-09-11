@@ -1658,11 +1658,6 @@ impl Chat {
         self.typ == Chattype::Mailinglist
     }
 
-    /// Returns true if chat is an outgoing broadcast channel.
-    pub fn is_out_broadcast(&self) -> bool {
-        self.typ == Chattype::OutBroadcast
-    }
-
     /// Returns None if user can send messages to this chat.
     ///
     /// Otherwise returns a reason useful for logging.
@@ -4095,7 +4090,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.viewtype = Viewtype::Text;
 
         let contact_addr = contact.get_addr().to_lowercase();
-        let added_by = if from_handshake && chat.is_out_broadcast() {
+        let added_by = if from_handshake && chat.typ == Chattype::OutBroadcast {
             // The contact was added via a QR code rather than explicit user action,
             // and there is no useful information in saying 'You added member Alice'
             // if self is the only one who can add members.
@@ -4109,7 +4104,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param.set_int(Param::Arg2, from_handshake.into());
         msg.param
             .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
-        if chat.is_out_broadcast() {
+        if chat.typ == Chattype::OutBroadcast {
             let secret = load_broadcast_shared_secret(context, chat_id)
                 .await?
                 .context("Failed to find broadcast shared secret")?;
