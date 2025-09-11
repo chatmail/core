@@ -3508,11 +3508,13 @@ async fn apply_out_broadcast_changes(
     .await?;
 
     if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
+        send_event_chat_modified = true;
         let removed_id = lookup_key_contact_by_fingerprint(context, removed_fpr).await?;
         if removed_id == Some(from_id) {
             // The sender of the message left the broadcast channel
             // Silently remove them without notifying the user
             chat::remove_from_chat_contacts_table_without_trace(context, chat.id, from_id).await?;
+            info!(context, "Broadcast leave message (TRASH)");
             better_msg = Some("".to_string());
         } else if from_id == ContactId::SELF {
             if let Some(removed_id) = removed_id {

@@ -124,12 +124,12 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         alice2.start_io()
         bob2.start_io()
 
-    logging.info("Alice creates a broadcast")
+    logging.info("===================== Alice creates a broadcast =====================")
     alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
     snapshot = alice_chat.get_basic_snapshot()
     assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
 
-    logging.info("Bob joins the broadcast")
+    logging.info("===================== Bob joins the broadcast =====================")
 
     qr_code = alice_chat.get_qr_code()
     bob.secure_join(qr_code)
@@ -223,7 +223,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
     # The QR code token is synced, so alice2 must be able to handle join requests.
-    logging.info("Fiona joins the group via alice2")
+    logging.info("===================== Fiona joins the group via alice2 =====================")
     alice.stop_io()
     fiona.secure_join(qr_code)
     alice2.wait_for_securejoin_inviter_success()

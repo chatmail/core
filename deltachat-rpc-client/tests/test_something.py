@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deltachat_rpc_client import Contact, EventType, Message, events
+from deltachat_rpc_client import Chat, Contact, EventType, Message, events
 from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
@@ -874,3 +874,46 @@ def test_delete_deltachat_folder(acfactory, direct_imap):
     assert msg.text == "hello"
 
     assert "DeltaChat" in ac1_direct_imap.list_folders()
+
+
+@pytest.mark.parametrize("all_devices_online", [True, False])
+def test_leave_broadcast(acfactory, all_devices_online):
+    alice, bob = acfactory.get_online_accounts(2)
+
+    bob2 = bob.clone()
+
+    if all_devices_online:
+        bob2.start_io()
+
+    logging.info("===================== Alice creates a broadcast =====================")
+    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+
+    logging.info("===================== Bob joins the broadcast =====================")
+    qr_code = alice_chat.get_qr_code()
+    bob.secure_join(qr_code)
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
+
+    alice_bob_contact = alice.create_contact(bob)
+    alice_contacts = alice_chat.get_contacts()
+    assert len(alice_contacts) == 1  # 1 recipient
+    assert alice_contacts[0].id == alice_bob_contact.id
+
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+    bob_chat = Chat(bob, snapshot.chat_id)
+
+    logging.info("===================== Bob leaves the broadcast =====================")
+    assert bob_chat.get_full_snapshot().self_in_group
+    assert len(bob_chat.get_contacts()) == 2  # Alice and Bob
+
+    bob_chat.leave()
+    assert not bob_chat.get_full_snapshot().self_in_group
+    assert len(bob_chat.get_contacts()) == 1  # Only Alice
+
+    logging.info("===================== Test Alice's device =====================")
+    while len(alice_chat.get_contacts()) != 0:  # After Bob left, there will be 0 recipients
+        alice.wait_for_event(EventType.CHAT_MODIFIED)
+
+    # TODO check that the devices show the correct msgs
+    # TODO check Bob's second device

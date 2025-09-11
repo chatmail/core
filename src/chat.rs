@@ -31,7 +31,6 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
-use crate::key::self_fingerprint;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::logged_debug_assert;
@@ -2859,8 +2858,9 @@ pub async fn is_contact_in_chat(
 ) -> Result<bool> {
     // this function works for group and for normal chats, however, it is more useful
     // for group chats.
-    // ContactId::SELF may be used to check, if the user itself is in a group
-    // chat (ContactId::SELF is not added to normal chats)
+    // ContactId::SELF may be used to check, if the user itself is in a
+    // group or incoming broadcast chat
+    // (ContactId::SELF is not added to 1:1 chats or outgoing broadcast channels)
 
     let exists = context
         .sql
@@ -4274,9 +4274,16 @@ pub async fn remove_contact_from_chat(
         !contact_id.is_special() || contact_id == ContactId::SELF,
         "Cannot remove special contact"
     );
-
     let chat = Chat::load_from_db(context, chat_id).await?;
-    if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
+
+    if chat.typ == Chattype::InBroadcast {
+        ensure!(
+            contact_id == ContactId::SELF,
+            "Cannot remove other member from incoming broadcast channel"
+        );
+    }
+
+    if chat.typ == Chattype::Group || chat.is_any_broadcast() {
         if !chat.is_self_in_chat(context).await? {
             let err_msg = format!(
                 "Cannot remove contact {contact_id} from chat {chat_id}: self not in group."
@@ -4327,13 +4334,6 @@ pub async fn remove_contact_from_chat(
                 chat.sync_contacts(context).await.log_err(context).ok();
             }
         }
-    } else if chat.typ == Chattype::InBroadcast && contact_id == ContactId::SELF {
-        // For incoming broadcast channels, it's not possible to remove members,
-        // but it's possible to leave:
-        let self_addr = context.get_primary_self_addr().await?;
-        let fingerprint = self_fingerprint(context).await?;
-        send_member_removal_msg(context, chat_id, contact_id, &self_addr, Some(fingerprint))
-            .await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
