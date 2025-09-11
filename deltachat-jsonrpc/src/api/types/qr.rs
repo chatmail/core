@@ -38,11 +38,15 @@ pub enum QrObject {
     AskJoinBroadcast {
         /// Chat name.
         broadcast_name: String,
-        /// Group ID.
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel in the database.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
         grpid: String,
-        /// ID of the contact.
+        /// ID of the contact who owns the channel and created the QR code.
         contact_id: u32,
-        /// Fingerprint of the contact key as scanned from the QR code.
+        /// Fingerprint of the contact's key as scanned from the QR code.
         fingerprint: String,
 
         authcode: String,

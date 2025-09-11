@@ -96,10 +96,10 @@ pub enum Qr {
         /// because groups were once the only multi-user chats.
         grpid: String,
 
-        /// The contact id of the inviter
+        /// ID of the contact who owns the channel and created the QR code.
         contact_id: ContactId,
 
-        /// The PGP fingerprint of the inviter
+        /// Fingerprint of the contact's key as scanned from the QR code.
         fingerprint: Fingerprint,
 
         /// The AUTH code from the secure-join protocol,
