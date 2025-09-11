@@ -3592,6 +3592,7 @@ async fn apply_in_broadcast_changes(
             }
 
             better_msg.get_or_insert(msg);
+            send_event_chat_modified = true;
         }
     }
 
@@ -3608,7 +3609,9 @@ async fn apply_in_broadcast_changes(
             );
         }
 
-        chat::remove_from_chat_contacts_table(context, chat.id, ContactId::SELF).await?;
+        chat::remove_from_chat_contacts_table_without_trace(context, chat.id, ContactId::SELF)
+            .await?;
+        send_event_chat_modified = true;
     } else if !chat.is_self_in_chat(context).await? {
         // Apparently, self is in the chat now, because we're receiving messages
         chat::add_to_chat_contacts_table(
@@ -3618,6 +3621,7 @@ async fn apply_in_broadcast_changes(
             &[ContactId::SELF],
         )
         .await?;
+        send_event_chat_modified = true;
     }
 
     if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {

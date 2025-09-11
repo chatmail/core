@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from deltachat_rpc_client import Chat, Contact, EventType, Message, events
+from deltachat_rpc_client import Contact, EventType, Message, events
 from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
@@ -899,21 +899,69 @@ def test_leave_broadcast(acfactory, all_devices_online):
     assert len(alice_contacts) == 1  # 1 recipient
     assert alice_contacts[0].id == alice_bob_contact.id
 
-    snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
-    bob_chat = Chat(bob, snapshot.chat_id)
+    member_added_msg = bob.wait_for_incoming_msg()
+    assert member_added_msg.get_snapshot().text == f"Member Me added by {alice.get_config('addr')}."
+
+    def get_broadcast(ac):
+        chat = ac.get_chatlist()[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        return chat
+
+    def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
+        chat = get_broadcast(ac)
+        contact_snapshot = contact.get_snapshot()
+        chat_msgs = chat.get_messages()
+
+        if please_wait_info_msg:
+            first_msg = chat_msgs.pop(0).get_snapshot()
+            assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
+            assert first_msg.is_info
+
+        encrypted_msg = chat_msgs.pop(0).get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
+        member_added_msg = chat_msgs.pop(0).get_snapshot()
+        if inviter_side:
+            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+        else:
+            assert member_added_msg.text == f"Member Me added by {contact_snapshot.display_name}."
+        assert member_added_msg.is_info
+
+        if not inviter_side:
+            leave_msg = chat_msgs.pop(0).get_snapshot()
+            assert leave_msg.text == "You left."
+
+        assert len(chat_msgs) == 0
 
     logging.info("===================== Bob leaves the broadcast =====================")
+    bob_chat = get_broadcast(bob)
     assert bob_chat.get_full_snapshot().self_in_group
     assert len(bob_chat.get_contacts()) == 2  # Alice and Bob
 
     bob_chat.leave()
     assert not bob_chat.get_full_snapshot().self_in_group
-    assert len(bob_chat.get_contacts()) == 1  # Only Alice
+    # After Bob left, only Alice will be left in Bob's memberlist
+    assert len(bob_chat.get_contacts()) == 1
+
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
     logging.info("===================== Test Alice's device =====================")
     while len(alice_chat.get_contacts()) != 0:  # After Bob left, there will be 0 recipients
         alice.wait_for_event(EventType.CHAT_MODIFIED)
 
-    # TODO check that the devices show the correct msgs
-    # TODO check Bob's second device
+    check_account(alice, alice.create_contact(bob), inviter_side=True)
+
+    logging.info("===================== Test Bob's second device =====================")
+    bob2.start_io()
+
+    member_added_msg = bob2.wait_for_incoming_msg()
+    assert member_added_msg.get_snapshot().text == f"Member Me added by {alice.get_config('addr')}."
+
+    bob2_chat = get_broadcast(bob2)
+
+    # After Bob left, only Alice will be left in Bob's memberlist
+    while len(bob2_chat.get_contacts()) != 1:
+        bob2.wait_for_event(EventType.CHAT_MODIFIED)
+
+    check_account(bob2, bob2.create_contact(alice), inviter_side=False)
