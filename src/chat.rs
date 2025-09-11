@@ -601,7 +601,7 @@ impl ChatId {
             || chat.is_self_talk()
             || (!chat.can_send(context).await? && !chat.is_contact_request())
             // For chattype InBrodacast, the info message is added when the member-added message is received
-            // by directly calling add_encrypted_msg():
+            // by directly calling add_encrypted_msg()
             || chat.typ == Chattype::InBroadcast
             || chat.blocked == Blocked::Yes
         {
@@ -1661,13 +1661,6 @@ impl Chat {
     /// Returns true if chat is an outgoing broadcast channel.
     pub fn is_out_broadcast(&self) -> bool {
         self.typ == Chattype::OutBroadcast
-    }
-
-    /// Returns true if the chat is a broadcast channel,
-    /// regardless of whether self is on the sending
-    /// or receiving side.
-    pub fn is_any_broadcast(&self) -> bool {
-        matches!(self.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
     }
 
     /// Returns None if user can send messages to this chat.
@@ -4283,7 +4276,10 @@ pub async fn remove_contact_from_chat(
         );
     }
 
-    if chat.typ == Chattype::Group || chat.is_any_broadcast() {
+    if matches!(
+        chat.typ,
+        Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast
+    ) {
         if !chat.is_self_in_chat(context).await? {
             let err_msg = format!(
                 "Cannot remove contact {contact_id} from chat {chat_id}: self not in group."
