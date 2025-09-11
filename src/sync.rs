@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::chat::{self, ChatId};
 use crate::config::Config;
-use crate::constants::Blocked;
+use crate::constants::{self, Blocked};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::log::LogExt;
@@ -317,14 +317,21 @@ impl Context {
         for rfc724_mid in msgs {
             if let Some((msg_id, _)) = message::rfc724_mid_exists(self, rfc724_mid).await? {
                 if let Some(msg) = Message::load_from_db_optional(self, msg_id).await? {
-                    message::delete_msg_locally(self, &msg).await?;
+                    let keep_tombstone = false;
+                    message::delete_msg_locally(self, &msg, keep_tombstone).await?;
                     msg_ids.push(msg.id);
                     modified_chat_ids.insert(msg.chat_id);
                 } else {
                     warn!(self, "Sync message delete: Database entry does not exist.");
                 }
             } else {
-                warn!(self, "Sync message delete: {rfc724_mid:?} not found.");
+                info!(self, "sync_message_deletion: {rfc724_mid:?} not found.");
+                self.sql
+                    .execute(
+                        "INSERT INTO msgs (rfc724_mid, timestamp, chat_id) VALUES (?, ?, ?)",
+                        (rfc724_mid, time(), constants::DC_CHAT_ID_TRASH),
+                    )
+                    .await?;
             }
         }
         message::delete_msgs_locally_done(self, &msg_ids, modified_chat_ids).await?;
