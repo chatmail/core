@@ -269,7 +269,7 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_mvbox_thread_and_sentbox(acfactory, lp):
+def test_mvbox_thread_and_trash(acfactory, lp):
     lp.sec("ac1: start with mvbox thread")
     ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
 
@@ -279,8 +279,8 @@ def test_mvbox_thread_and_sentbox(acfactory, lp):
     lp.sec("ac2 and ac1: waiting for configuration")
     acfactory.bring_accounts_online()
 
-    lp.sec("ac1: create sentbox")
-    ac1.direct_imap.create_folder("Sent")
+    lp.sec("ac1: create trash")
+    ac1.direct_imap.create_folder("Trash")
     ac1.set_config("scan_all_folders_debounce_secs", "0")
     ac1.stop_io()
     ac1.start_io()
@@ -290,7 +290,7 @@ def test_mvbox_thread_and_sentbox(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
     assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
-    while ac1.get_config("configured_sentbox_folder") != "Sent":
+    while ac1.get_config("configured_trash_folder") != "Trash":
         ac1._evtracker.get_matching("DC_EVENT_CONNECTIVITY_CHANGED")
 
 
@@ -855,9 +855,9 @@ def test_no_draft_if_cant_send(acfactory):
 
 def test_dont_show_emails(acfactory, lp):
     """Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them.
-    So: If it's outgoing AND there is no Received header AND it's not in the sentbox, then ignore the email.
+    So: If it's outgoing AND there is no Received header, then ignore the email.
 
-    If the draft email is sent out later (i.e. moved to "Sent"), it must be shown.
+    If the draft email is sent out and received later (i.e. it's in "Inbox"), it must be shown.
 
     Also, test that unknown emails in the Spam folder are not shown."""
     ac1 = acfactory.new_online_configuring_account()
@@ -866,7 +866,6 @@ def test_dont_show_emails(acfactory, lp):
 
     acfactory.wait_configured(ac1)
     ac1.direct_imap.create_folder("Drafts")
-    ac1.direct_imap.create_folder("Sent")
     ac1.direct_imap.create_folder("Spam")
     ac1.direct_imap.create_folder("Junk")
 
@@ -882,21 +881,7 @@ def test_dont_show_emails(acfactory, lp):
         Message-ID: <aepiors@example.org>
         Content-Type: text/plain; charset=utf-8
 
-        message in Drafts that is moved to Sent later
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Sent",
-        """
-        From: ac1 <{}>
-        Subject: subj
-        To: alice@example.org
-        Message-ID: <hsabaeni@example.org>
-        Content-Type: text/plain; charset=utf-8
-
-        message in Sent
+        message in Drafts received later
     """.format(
             ac1.get_config("configured_addr"),
         ),
@@ -976,14 +961,13 @@ def test_dont_show_emails(acfactory, lp):
     lp.sec("All prepared, now let DC find the message")
     ac1.start_io()
 
-    msg = ac1._evtracker.wait_next_messages_changed()
-
     # Wait until each folder was scanned, this is necessary for this test to test what it should test:
     ac1._evtracker.wait_idle_inbox_ready()
 
-    assert msg.text == "subj – message in Sent"
+    fresh_msgs = list(ac1.get_fresh_messages())
+    msg = fresh_msgs[0]
     chat_msgs = msg.chat.get_messages()
-    assert len(chat_msgs) == 2
+    assert len(chat_msgs) == 1
     assert any(msg.text == "subj – Actually interesting message in Spam" for msg in chat_msgs)
 
     assert not any("unknown.address" in c.get_name() for c in ac1.get_chats())
@@ -991,16 +975,16 @@ def test_dont_show_emails(acfactory, lp):
     assert ac1.direct_imap.get_uid_by_message_id("spam.message@junk.org")
 
     ac1.stop_io()
-    lp.sec("'Send out' the draft, i.e. move it to the Sent folder, and wait for DC to display it this time")
+    lp.sec("'Send out' the draft by moving it to Inbox, and wait for DC to display it this time")
     ac1.direct_imap.select_folder("Drafts")
     uid = ac1.direct_imap.get_uid_by_message_id("aepiors@example.org")
-    ac1.direct_imap.conn.move(uid, "Sent")
+    ac1.direct_imap.conn.move(uid, "Inbox")
 
     ac1.start_io()
     msg2 = ac1._evtracker.wait_next_messages_changed()
 
-    assert msg2.text == "subj – message in Drafts that is moved to Sent later"
-    assert len(msg.chat.get_messages()) == 3
+    assert msg2.text == "subj – message in Drafts received later"
+    assert len(msg.chat.get_messages()) == 2
 
 
 def test_bot(acfactory, lp):
