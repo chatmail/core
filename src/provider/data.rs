@@ -511,10 +511,6 @@ static P_FIVE_CHAT: Provider = Provider {
             value: "1",
         },
         ConfigDefault {
-            key: Config::SentboxWatch,
-            value: "0",
-        },
-        ConfigDefault {
             key: Config::MvboxMove,
             value: "0",
         },
@@ -1085,10 +1081,6 @@ static P_NAUTA_CU: Provider = Provider {
             value: "1",
         },
         ConfigDefault {
-            key: Config::SentboxWatch,
-            value: "0",
-        },
-        ConfigDefault {
             key: Config::MvboxMove,
             value: "0",
         },
@@ -1630,10 +1622,6 @@ static P_TESTRUN: Provider = Provider {
             value: "1",
         },
         ConfigDefault {
-            key: Config::SentboxWatch,
-            value: "0",
-        },
-        ConfigDefault {
             key: Config::MvboxMove,
             value: "0",
         },
@@ -1898,11 +1886,11 @@ static P_WKPB_DE: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-// yahoo.md: yahoo.com, yahoo.de, yahoo.it, yahoo.fr, yahoo.es, yahoo.se, yahoo.co.uk, yahoo.co.nz, yahoo.com.au, yahoo.com.ar, yahoo.com.br, yahoo.com.mx, ymail.com, rocketmail.com, yahoodns.net
+// yahoo.md: yahoo.com, yahoo.de, yahoo.it, yahoo.fr, yahoo.es, yahoo.se, yahoo.co.uk, yahoo.co.nz, yahoo.com.au, yahoo.com.ar, yahoo.com.br, yahoo.com.mx, myyahoo.com, ymail.com, rocketmail.com, yahoodns.net
 static P_YAHOO: Provider = Provider {
     id: "yahoo",
     status: Status::Preparation,
-    before_login_hint: "To use your Yahoo email address you have to create an \"App-Password\" in the account security screen.",
+    before_login_hint: "To use your Yahoo email address you have to create an app password in the Yahoo account security screen.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/yahoo",
     server: &[
@@ -2041,7 +2029,7 @@ static P_ZOHO: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-pub(crate) static PROVIDER_DATA: [(&str, &Provider); 533] = [
+pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
     ("163.com", &P_163),
     ("aktivix.org", &P_AKTIVIX_ORG),
     ("aliyun.com", &P_ALIYUN),
@@ -2560,6 +2548,7 @@ pub(crate) static PROVIDER_DATA: [(&str, &Provider); 533] = [
     ("yahoo.com.ar", &P_YAHOO),
     ("yahoo.com.br", &P_YAHOO),
     ("yahoo.com.mx", &P_YAHOO),
+    ("myyahoo.com", &P_YAHOO),
     ("ymail.com", &P_YAHOO),
     ("rocketmail.com", &P_YAHOO),
     ("yahoodns.net", &P_YAHOO),
@@ -2658,4 +2647,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2025, 9, 4).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2025, 9, 10).unwrap());
