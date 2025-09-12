@@ -2068,6 +2068,40 @@ impl CommandApi {
             .map(|msg_id| msg_id.to_u32()))
     }
 
+    /// Starts an outgoing call.
+    async fn place_outgoing_call(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        place_call_info: String,
+    ) -> Result<u32> {
+        let ctx = self.get_context(account_id).await?;
+        let msg_id = ctx
+            .place_outgoing_call(ChatId::new(chat_id), place_call_info)
+            .await?;
+        Ok(msg_id.to_u32())
+    }
+
+    /// Accepts an incoming call.
+    async fn accept_incoming_call(
+        &self,
+        account_id: u32,
+        msg_id: u32,
+        accept_call_info: String,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.accept_incoming_call(MsgId::new(msg_id), accept_call_info)
+            .await?;
+        Ok(())
+    }
+
+    /// Ends incoming or outgoing call.
+    async fn end_call(&self, account_id: u32, msg_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.end_call(MsgId::new(msg_id)).await?;
+        Ok(())
+    }
+
     /// Makes an HTTP GET request and returns a response.
     ///
     /// `url` is the HTTP or HTTPS URL.
