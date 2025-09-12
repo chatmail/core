@@ -34,6 +34,23 @@ pub enum QrObject {
         /// Authentication code.
         authcode: String,
     },
+    /// Ask the user whether to join the broadcast channel.
+    AskJoinBroadcast {
+        /// Chat name.
+        broadcast_name: String,
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel in the database.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
+        grpid: String,
+        /// ID of the contact who owns the channel and created the QR code.
+        contact_id: u32,
+        /// Fingerprint of the contact's key as scanned from the QR code.
+        fingerprint: String,
+
+        authcode: String,
+    },
     /// Contact fingerprint is verified.
     ///
     /// Ask the user if they want to start chatting.
@@ -204,6 +221,23 @@ impl From<Qr> for QrObject {
                     contact_id,
                     fingerprint,
                     invitenumber,
+                    authcode,
+                }
+            }
+            Qr::AskJoinBroadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                authcode,
+            } => {
+                let contact_id = contact_id.to_u32();
+                let fingerprint = fingerprint.to_string();
+                QrObject::AskJoinBroadcast {
+                    broadcast_name,
+                    grpid,
+                    contact_id,
+                    fingerprint,
                     authcode,
                 }
             }
