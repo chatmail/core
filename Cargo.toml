@@ -83,7 +83,6 @@ pgp = { version = "0.16.0", default-features = false }
 pin-project = "1"
 qrcodegen = "1.7.0"
 quick-xml = "0.37"
-quoted_printable = "0.5"
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
