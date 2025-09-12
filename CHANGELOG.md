@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.14.0] - 2025-09-12
+
+### API-Changes
+
+- Put the chattype into the SecurejoinInviterProgress event ([#7181](https://github.com/chatmail/core/pull/7181)).
+
+### Fixes
+
+- param: Split params only on \n.
+- B-encode SDP offer and answer sent in headers.
+
+### Refactor
+
+- Use recv_msg_trash() instead of recv_msg_opt().
+- Prepare_msg_raw(): don't return MsgId.
+
+### Tests
+
+- Message is OutFailed if all keys are missing ([#6849](https://github.com/chatmail/core/pull/6849)).
+- Test sending SDP offer and answer with newlines.
+
 ## [2.13.0] - 2025-09-09
 
 ### API-Changes
@@ -6725,3 +6746,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.10.0]: https://github.com/chatmail/core/compare/v2.9.0..v2.10.0
 [2.11.0]: https://github.com/chatmail/core/compare/v2.10.0..v2.11.0
 [2.12.0]: https://github.com/chatmail/core/compare/v2.11.0..v2.12.0
+[2.13.0]: https://github.com/chatmail/core/compare/v2.12.0..v2.13.0
+[2.14.0]: https://github.com/chatmail/core/compare/v2.13.0..v2.14.0
