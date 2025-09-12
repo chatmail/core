@@ -666,7 +666,7 @@ async fn test_selfavatar_unencrypted_signed() {
     assert_eq!(part.match_indices("From:").count(), 1);
     assert_eq!(part.match_indices("Message-ID:").count(), 0);
     assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 0);
+    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
     assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
 
     let part = payload.next().unwrap();
@@ -717,7 +717,7 @@ async fn test_selfavatar_unencrypted_signed() {
     assert_eq!(part.match_indices("From:").count(), 1);
     assert_eq!(part.match_indices("Message-ID:").count(), 0);
     assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 0);
+    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
     assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
 
     let part = payload.next().unwrap();
