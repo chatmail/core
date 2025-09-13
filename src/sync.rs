@@ -253,13 +253,19 @@ impl Context {
     /// If an error is returned, the caller shall not try over because some sync items could be
     /// already executed. Sync items are considered independent and executed in the given order but
     /// regardless of whether executing of the previous items succeeded.
-    pub(crate) async fn execute_sync_items(&self, items: &SyncItems) {
+    pub(crate) async fn execute_sync_items(&self, items: &SyncItems, timestamp_sent: i64) {
         info!(self, "executing {} sync item(s)", items.items.len());
         for item in &items.items {
+            // Limit the timestamp to ensure it is not in the future.
+            //
+            // `sent_timestamp` should be already corrected
+            // if the `Date` header is in the future.
+            let timestamp = std::cmp::min(item.timestamp, timestamp_sent);
+
             match &item.data {
                 SyncDataOrUnknown::SyncData(data) => match data {
-                    AddQrToken(token) => self.add_qr_token(token, item.timestamp).await,
-                    DeleteQrToken(token) => self.delete_qr_token(token, item.timestamp).await,
+                    AddQrToken(token) => self.add_qr_token(token, timestamp).await,
+                    DeleteQrToken(token) => self.delete_qr_token(token, timestamp).await,
                     AlterChat { id, action } => self.sync_alter_chat(id, action).await,
                     SyncData::Config { key, val } => self.sync_config(key, val).await,
                     SyncData::SaveMessage { src, dest } => self.save_message(src, dest).await,
@@ -557,6 +563,7 @@ mod tests {
 
         assert!(!token::exists(&t, Namespace::Auth, "yip-auth").await?);
 
+        let timestamp_sent = time();
         let sync_items = t
             .parse_sync_items(
                 r#"{"items":[
@@ -571,7 +578,7 @@ mod tests {
                 .to_string(),
             )
             ?;
-        t.execute_sync_items(&sync_items).await;
+        t.execute_sync_items(&sync_items, timestamp_sent).await;
 
         assert!(
             Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Unknown)
