@@ -289,3 +289,8 @@ class Chat:
             f.write(vcard.encode())
             f.flush()
             self._rpc.send_msg(self.account.id, self.id, {"viewtype": ViewType.VCARD, "file": f.name})
+
+    def place_outgoing_call(self, place_call_info: str) -> Message:
+        """Starts an outgoing call."""
+        msg_id = self._rpc.place_outgoing_call(self.account.id, self.id, place_call_info)
+        return Message(self.account, msg_id)

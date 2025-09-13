@@ -102,3 +102,11 @@ class Message:
     def send_webxdc_realtime_data(self, data) -> None:
         """Send data to the realtime channel."""
         yield self._rpc.send_webxdc_realtime_data.future(self.account.id, self.id, list(data))
+
+    def accept_incoming_call(self, accept_call_info):
+        """Accepts an incoming call."""
+        self._rpc.accept_incoming_call(self.account.id, self.id, accept_call_info)
+
+    def end_call(self):
+        """Ends incoming or outgoing call."""
+        self._rpc.end_call(self.account.id, self.id)
