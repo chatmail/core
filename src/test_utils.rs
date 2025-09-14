@@ -21,8 +21,7 @@ use tokio::runtime::Handle;
 use tokio::{fs, task};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table,
-    create_group_chat,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -1111,7 +1110,7 @@ impl TestContext {
         chat_name: &str,
         members: &[&TestContext],
     ) -> ChatId {
-        let chat_id = create_group_chat(self, chat_name).await.unwrap();
+        let chat_id = create_group(self, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
             let contact_id = self.add_or_lookup_contact_id(member).await;

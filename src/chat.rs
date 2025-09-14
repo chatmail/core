@@ -3401,12 +3401,12 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
 }
 
 /// Creates an encrypted group chat.
-pub async fn create_group_chat(context: &Context, name: &str) -> Result<ChatId> {
+pub async fn create_group(context: &Context, name: &str) -> Result<ChatId> {
     create_group_ex(context, Sync, create_id(), name).await
 }
 
 /// Creates an unencrypted group chat.
-pub async fn create_group_chat_unencrypted(context: &Context, name: &str) -> Result<ChatId> {
+pub async fn create_group_unencrypted(context: &Context, name: &str) -> Result<ChatId> {
     create_group_ex(context, Sync, String::new(), name).await
 }
 
@@ -3479,7 +3479,7 @@ pub(crate) async fn create_group_ex(
 /// which would make it hard to grep for it.
 ///
 /// After creation, the chat contains no recipients and is in _unpromoted_ state;
-/// see [`create_group_chat`] for more information on the unpromoted state.
+/// see [`create_group`] for more information on the unpromoted state.
 ///
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
