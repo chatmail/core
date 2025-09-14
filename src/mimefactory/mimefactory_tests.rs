@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    self, ChatId, add_contact_to_chat, create_group_chat, remove_contact_from_chat, send_text_msg,
+    self, ChatId, add_contact_to_chat, create_group, remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
@@ -351,7 +351,7 @@ async fn test_subject_in_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = tcm.alice().await;
     let bob = tcm.bob().await;
-    let group_id = chat::create_group_chat(&t, "groupname").await.unwrap();
+    let group_id = chat::create_group(&t, "groupname").await.unwrap();
     let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
     chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
@@ -753,7 +753,7 @@ async fn test_remove_member_bcc() -> Result<()> {
     let charlie_contact = Contact::get_by_id(alice, charlie_id).await?;
     let charlie_addr = charlie_contact.get_addr();
 
-    let alice_chat_id = create_group_chat(alice, "foo").await?;
+    let alice_chat_id = create_group(alice, "foo").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
     send_text_msg(alice, alice_chat_id, "Creating a group".to_string()).await?;

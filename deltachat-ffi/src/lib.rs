@@ -1730,7 +1730,7 @@ pub unsafe extern "C" fn dc_create_group_chat(
     }
     let ctx = &*context;
 
-    block_on(chat::create_group_chat(ctx, &to_string_lossy(name)))
+    block_on(chat::create_group(ctx, &to_string_lossy(name)))
         .context("Failed to create group chat")
         .log_err(ctx)
         .map(|id| id.to_u32())

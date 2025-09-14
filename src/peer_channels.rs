@@ -962,7 +962,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &mut tcm.alice().await;
         let bob = &mut tcm.bob().await;
-        let group = chat::create_group_chat(alice, "group chat").await.unwrap();
+        let group = chat::create_group(alice, "group chat").await.unwrap();
 
         // Alice sends webxdc to bob
         let mut instance = Message::new(Viewtype::File);

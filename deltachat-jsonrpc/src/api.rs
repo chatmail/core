@@ -968,9 +968,7 @@ impl CommandApi {
     /// This may be useful if you want to show some help for just created groups.
     async fn create_group_chat(&self, account_id: u32, name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_group_chat(&ctx, &name)
-            .await
-            .map(|id| id.to_u32())
+        chat::create_group(&ctx, &name).await.map(|id| id.to_u32())
     }
 
     /// Create a new unencrypted group chat.
@@ -979,7 +977,7 @@ impl CommandApi {
     /// address-contacts.
     async fn create_group_chat_unencrypted(&self, account_id: u32, name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        chat::create_group_chat_unencrypted(&ctx, &name)
+        chat::create_group_unencrypted(&ctx, &name)
             .await
             .map(|id| id.to_u32())
     }
