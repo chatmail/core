@@ -432,7 +432,7 @@ async fn test_secure_join() -> Result<()> {
     assert_eq!(Chatlist::try_load(&alice, 0, None, None).await?.len(), 0);
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 0);
 
-    let alice_chatid = chat::create_group_chat(&alice, "the chat").await?;
+    let alice_chatid = chat::create_group(&alice, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
     let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
@@ -715,8 +715,8 @@ async fn test_parallel_securejoin() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat1_id = chat::create_group_chat(alice, "First chat").await?;
-    let alice_chat2_id = chat::create_group_chat(alice, "Second chat").await?;
+    let alice_chat1_id = chat::create_group(alice, "First chat").await?;
+    let alice_chat2_id = chat::create_group(alice, "Second chat").await?;
 
     let qr1 = get_securejoin_qr(alice, Some(alice_chat1_id)).await?;
     let qr2 = get_securejoin_qr(alice, Some(alice_chat2_id)).await?;
@@ -883,7 +883,7 @@ async fn test_expired_group_auth_token() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = chat::create_group_chat(alice, "Group").await?;
+    let alice_chat_id = chat::create_group(alice, "Group").await?;
 
     // Alice creates a group QR code.
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
