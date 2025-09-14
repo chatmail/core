@@ -3833,6 +3833,61 @@ async fn test_sync_name() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_create_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice0 = &tcm.alice().await;
+    let alice1 = &tcm.alice().await;
+    for a in [alice0, alice1] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+    let bob = &tcm.bob().await;
+    let a0_bob_contact_id = alice0.add_or_lookup_contact_id(bob).await;
+    let a1_bob_contact_id = alice1.add_or_lookup_contact_id(bob).await;
+    let a0_chat_id = create_group_chat(alice0, "grp").await?;
+    sync(alice0, alice1).await;
+    let a0_chat = Chat::load_from_db(alice0, a0_chat_id).await?;
+    let a1_chat_id = get_chat_id_by_grpid(alice1, &a0_chat.grpid)
+        .await?
+        .unwrap()
+        .0;
+    let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+    assert_eq!(a1_chat.get_type(), Chattype::Group);
+    assert_eq!(a1_chat.is_promoted(), false);
+    assert_eq!(a1_chat.get_name(), "grp");
+
+    set_chat_name(alice0, a0_chat_id, "renamed").await?;
+    sync(alice0, alice1).await;
+    let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+    assert_eq!(a1_chat.is_promoted(), false);
+    assert_eq!(a1_chat.get_name(), "renamed");
+
+    add_contact_to_chat(alice0, a0_chat_id, a0_bob_contact_id).await?;
+    sync(alice0, alice1).await;
+    let a1_chat = Chat::load_from_db(alice1, a1_chat_id).await?;
+    assert_eq!(a1_chat.is_promoted(), false);
+    assert_eq!(
+        get_chat_contacts(alice1, a1_chat_id).await?,
+        [a1_bob_contact_id, ContactId::SELF]
+    );
+
+    // Let's test a contact removal from another device.
+    remove_contact_from_chat(alice1, a1_chat_id, a1_bob_contact_id).await?;
+    sync(alice1, alice0).await;
+    let a0_chat = Chat::load_from_db(alice0, a0_chat_id).await?;
+    assert_eq!(a0_chat.is_promoted(), false);
+    assert_eq!(
+        get_chat_contacts(alice0, a0_chat_id).await?,
+        [ContactId::SELF]
+    );
+
+    let sent_msg = alice0.send_text(a0_chat_id, "hi").await;
+    let msg = alice1.recv_msg(&sent_msg).await;
+    assert_eq!(msg.chat_id, a1_chat_id);
+    assert_eq!(a1_chat_id.is_promoted(alice1).await?, true);
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed
