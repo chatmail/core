@@ -6734,6 +6734,7 @@ void dc_event_unref(dc_event_t* event);
  *
  * @param data1 (int) msg_id ID of the message referring to the call.
  * @param data2 (char*) place_call_info, text passed to dc_place_outgoing_call()
+ * @param data2 (int) 1 if incoming call is a video call, 0 otherwise
  */
 #define DC_EVENT_INCOMING_CALL                            2550
 

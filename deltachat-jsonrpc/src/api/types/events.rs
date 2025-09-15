@@ -429,6 +429,8 @@ pub enum EventType {
         msg_id: u32,
         /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
+        /// True if incoming call is a video call.
+        has_video: bool,
     },
 
     /// Incoming call accepted.
@@ -606,9 +608,11 @@ impl From<CoreEventType> for EventType {
             CoreEventType::IncomingCall {
                 msg_id,
                 place_call_info,
+                has_video,
             } => IncomingCall {
                 msg_id: msg_id.to_u32(),
                 place_call_info,
+                has_video,
             },
             CoreEventType::IncomingCallAccepted { msg_id } => IncomingCallAccepted {
                 msg_id: msg_id.to_u32(),

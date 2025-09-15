@@ -386,6 +386,8 @@ pub enum EventType {
         msg_id: MsgId,
         /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
+        /// True if incoming call is a video call.
+        has_video: bool,
     },
 
     /// Incoming call accepted.
