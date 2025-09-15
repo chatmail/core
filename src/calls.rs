@@ -8,12 +8,14 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::log::info;
+use crate::log::{info, warn};
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::tools::time;
-use anyhow::{Result, ensure};
+use anyhow::{Context as _, Result, ensure};
+use sdp::SessionDescription;
+use std::io::Cursor;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -259,6 +261,7 @@ impl Context {
     ) -> Result<()> {
         if mime_message.is_call() {
             let call = self.load_call_by_id(call_id).await?;
+
             if call.is_incoming() {
                 if call.is_stale() {
                     call.update_text(self, "Missed call").await?;
@@ -266,9 +269,17 @@ impl Context {
                 } else {
                     call.update_text(self, "Incoming call").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
+                    let has_video = match sdp_has_video(&call.place_call_info) {
+                        Ok(has_video) => has_video,
+                        Err(err) => {
+                            warn!(self, "Failed to determine if SDP offer has video: {err:#}.");
+                            false
+                        }
+                    };
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
                         place_call_info: call.place_call_info.to_string(),
+                        has_video,
                     });
                     let wait = call.remaining_ring_seconds();
                     task::spawn(Context::emit_end_call_if_unaccepted(
@@ -367,6 +378,19 @@ impl Context {
             msg: call,
         })
     }
+}
+
+/// Returns true if SDP offer has a video.
+fn sdp_has_video(sdp: &str) -> Result<bool> {
+    let mut cursor = Cursor::new(sdp);
+    let session_description =
+        SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
+    for media_description in &session_description.media_descriptions {
+        if media_description.media_name.media == "video" {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 #[cfg(test)]

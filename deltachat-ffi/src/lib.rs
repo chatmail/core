@@ -679,7 +679,6 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::ChatModified(_)
         | EventType::ChatDeleted { .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
-        | EventType::IncomingCall { .. }
         | EventType::IncomingCallAccepted { .. }
         | EventType::OutgoingCallAccepted { .. }
         | EventType::CallEnded { .. }
@@ -701,6 +700,8 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
             ..
         } => status_update_serial.to_u32() as libc::c_int,
         EventType::WebxdcRealtimeData { data, .. } => data.len() as libc::c_int,
+        EventType::IncomingCall { has_video, .. } => *has_video as libc::c_int,
+
         #[allow(unreachable_patterns)]
         #[cfg(test)]
         _ => unreachable!("This is just to silence a rust_analyzer false-positive"),
