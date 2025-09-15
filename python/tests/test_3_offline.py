@@ -271,10 +271,9 @@ class TestOfflineChat:
         chat.set_name("Homework")
         assert chat.get_messages()[-1].text == "abc homework xyz Homework"
 
-    @pytest.mark.parametrize("verified", [True, False])
-    def test_group_chat_qr(self, acfactory, ac1, verified):
+    def test_group_chat_qr(self, acfactory, ac1):
         ac2 = acfactory.get_pseudo_configured_account()
-        chat = ac1.create_group_chat(name="title1", verified=verified)
+        chat = ac1.create_group_chat(name="title1")
         assert chat.is_group()
         qr = chat.get_join_qr()
         assert ac2.check_qr(qr).is_ask_verifygroup

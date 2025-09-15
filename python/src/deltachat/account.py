@@ -404,18 +404,16 @@ class Account:
         self,
         name: str,
         contacts: Optional[List[Contact]] = None,
-        verified: bool = False,
     ) -> Chat:
         """create a new group chat object.
 
         Chats are unpromoted until the first message is sent.
 
         :param contacts: list of contacts to add
-        :param verified: if true only verified contacts can be added.
         :returns: a :class:`deltachat.chat.Chat` object.
         """
         bytes_name = name.encode("utf8")
-        chat_id = lib.dc_create_group_chat(self._dc_context, int(verified), bytes_name)
+        chat_id = lib.dc_create_group_chat(self._dc_context, 0, bytes_name)
         chat = Chat(self, chat_id)
         if contacts is not None:
             for contact in contacts:

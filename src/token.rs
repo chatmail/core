@@ -28,12 +28,13 @@ pub async fn save(
     namespace: Namespace,
     foreign_key: Option<&str>,
     token: &str,
+    timestamp: i64,
 ) -> Result<()> {
     context
         .sql
         .execute(
             "INSERT INTO tokens (namespc, foreign_key, token, timestamp) VALUES (?, ?, ?, ?)",
-            (namespace, foreign_key.unwrap_or(""), token, time()),
+            (namespace, foreign_key.unwrap_or(""), token, timestamp),
         )
         .await?;
     Ok(())
@@ -71,7 +72,8 @@ pub async fn lookup_or_new(
     }
 
     let token = create_id();
-    save(context, namespace, foreign_key, &token).await?;
+    let timestamp = time();
+    save(context, namespace, foreign_key, &token, timestamp).await?;
     Ok(token)
 }
 
@@ -84,24 +86,6 @@ pub async fn exists(context: &Context, namespace: Namespace, token: &str) -> Res
         )
         .await?;
     Ok(exists)
-}
-
-/// Looks up foreign key by auth token.
-///
-/// Returns None if auth token is not valid.
-/// Returns an empty string if the token corresponds to "setup contact" rather than group join.
-pub async fn auth_foreign_key(context: &Context, token: &str) -> Result<Option<String>> {
-    context
-        .sql
-        .query_row_optional(
-            "SELECT foreign_key FROM tokens WHERE namespc=? AND token=?",
-            (Namespace::Auth, token),
-            |row| {
-                let foreign_key: String = row.get(0)?;
-                Ok(foreign_key)
-            },
-        )
-        .await
 }
 
 /// Resets all tokens corresponding to the `foreign_key`.

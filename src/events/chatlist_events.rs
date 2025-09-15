@@ -66,8 +66,8 @@ mod test_chatlist_events {
     use crate::{
         EventType,
         chat::{
-            self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus, create_broadcast,
-            create_group_chat, set_muted,
+            self, ChatId, ChatVisibility, MuteDuration, create_broadcast, create_group_chat,
+            set_muted,
         },
         config::Config,
         constants::*,
@@ -138,12 +138,7 @@ mod test_chatlist_events {
     async fn test_change_chat_visibility() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat_id = create_group_chat(
-            &alice,
-            crate::chat::ProtectionStatus::Unprotected,
-            "my_group",
-        )
-        .await?;
+        let chat_id = create_group_chat(&alice, "my_group").await?;
 
         chat_id
             .set_visibility(&alice, ChatVisibility::Pinned)
@@ -289,7 +284,7 @@ mod test_chatlist_events {
     async fn test_delete_chat() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         alice.evtracker.clear_events();
         chat.delete(&alice).await?;
@@ -303,7 +298,7 @@ mod test_chatlist_events {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         alice.evtracker.clear_events();
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
         wait_for_chatlist_and_specific_item(&alice, chat).await;
         Ok(())
     }
@@ -324,7 +319,7 @@ mod test_chatlist_events {
     async fn test_mute_chat() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         alice.evtracker.clear_events();
         chat::set_muted(&alice, chat, MuteDuration::Forever).await?;
@@ -343,7 +338,7 @@ mod test_chatlist_events {
     async fn test_mute_chat_expired() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         let mute_duration = MuteDuration::Until(
             std::time::SystemTime::now()
@@ -363,7 +358,7 @@ mod test_chatlist_events {
     async fn test_change_chat_name() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         alice.evtracker.clear_events();
         chat::set_chat_name(&alice, chat, "New Name").await?;
@@ -377,7 +372,7 @@ mod test_chatlist_events {
     async fn test_change_chat_profile_image() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         alice.evtracker.clear_events();
         let file = alice.dir.path().join("avatar.png");
@@ -395,9 +390,7 @@ mod test_chatlist_events {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
-        let chat = alice
-            .create_group_with_members(ProtectionStatus::Unprotected, "My Group", &[&bob])
-            .await;
+        let chat = alice.create_group_with_members("My Group", &[&bob]).await;
 
         let sent_msg = alice.send_text(chat, "Hello").await;
         let chat_id_for_bob = bob.recv_msg(&sent_msg).await.chat_id;
@@ -419,9 +412,7 @@ mod test_chatlist_events {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
-        let chat = alice
-            .create_group_with_members(ProtectionStatus::Unprotected, "My Group", &[&bob])
-            .await;
+        let chat = alice.create_group_with_members("My Group", &[&bob]).await;
         let sent_msg = alice.send_text(chat, "Hello").await;
         let chat_id_for_bob = bob.recv_msg(&sent_msg).await.chat_id;
 
@@ -438,9 +429,7 @@ mod test_chatlist_events {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
-        let chat = alice
-            .create_group_with_members(ProtectionStatus::Unprotected, "My Group", &[&bob])
-            .await;
+        let chat = alice.create_group_with_members("My Group", &[&bob]).await;
         let sent_msg = alice.send_text(chat, "Hello").await;
         let chat_id_for_bob = bob.recv_msg(&sent_msg).await.chat_id;
 
@@ -456,7 +445,7 @@ mod test_chatlist_events {
     async fn test_delete_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
         let message = chat::send_text_msg(&alice, chat, "Hello World".to_owned()).await?;
 
         alice.evtracker.clear_events();
@@ -473,9 +462,7 @@ mod test_chatlist_events {
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
 
-        let chat = alice
-            .create_group_with_members(ProtectionStatus::Unprotected, "My Group", &[&bob])
-            .await;
+        let chat = alice.create_group_with_members("My Group", &[&bob]).await;
         let sent_msg = alice.send_text(chat, "Hello").await;
         let chat_id_for_bob = bob.recv_msg(&sent_msg).await.chat_id;
         chat_id_for_bob.accept(&bob).await?;
@@ -516,7 +503,7 @@ mod test_chatlist_events {
     async fn test_update_after_ephemeral_messages() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
         chat.set_ephemeral_timer(&alice, crate::ephemeral::Timer::Enabled { duration: 60 })
             .await?;
         alice
@@ -560,8 +547,7 @@ First thread."#;
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
 
-        let alice_chatid =
-            chat::create_group_chat(&alice.ctx, ProtectionStatus::Protected, "the chat").await?;
+        let alice_chatid = chat::create_group_chat(&alice.ctx, "the chat").await?;
 
         // Step 1: Generate QR-code, secure-join implied by chatid
         let qr = get_securejoin_qr(&alice.ctx, Some(alice_chatid)).await?;
@@ -608,7 +594,7 @@ First thread."#;
     async fn test_resend_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
 
         let msg_id = chat::send_text_msg(&alice, chat, "Hello".to_owned()).await?;
         let _ = alice.pop_sent_msg().await;
@@ -628,7 +614,7 @@ First thread."#;
     async fn test_reaction() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
-        let chat = create_group_chat(&alice, ProtectionStatus::Protected, "My Group").await?;
+        let chat = create_group_chat(&alice, "My Group").await?;
         let msg_id = chat::send_text_msg(&alice, chat, "Hello".to_owned()).await?;
         let _ = alice.pop_sent_msg().await;
 
