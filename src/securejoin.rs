@@ -35,7 +35,7 @@ use crate::token::Namespace;
 fn inviter_progress(
     context: &Context,
     contact_id: ContactId,
-    step: &str,
+    is_group: bool,
     progress: usize,
 ) -> Result<()> {
     logged_debug_assert!(
@@ -43,11 +43,12 @@ fn inviter_progress(
         progress == 0 || progress == 1000,
         "inviter_progress: contact {contact_id}, progress={progress}, but value is not 0 (error) or 1000 (success)."
     );
-    let chat_type = match step.get(..3) {
-        Some("vc-") => Chattype::Single,
-        Some("vg-") => Chattype::Group,
-        _ => bail!("Unknown securejoin step {step}"),
+    let chat_type = if is_group {
+        Chattype::Group
+    } else {
+        Chattype::Single
     };
+
     context.emit_event(EventType::SecurejoinInviterProgress {
         contact_id,
         chat_type,
@@ -425,7 +426,8 @@ pub(crate) async fn handle_securejoin_handshake(
                 .await?;
                 chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
                     .await?;
-                inviter_progress(context, contact_id, step, 1000)?;
+                let is_group = true;
+                inviter_progress(context, contact_id, is_group, 1000)?;
                 // IMAP-delete the message to avoid handling it by another device and adding the
                 // member twice. Another device will know the member's key from Autocrypt-Gossip.
                 Ok(HandshakeMessage::Done)
@@ -442,7 +444,8 @@ pub(crate) async fn handle_securejoin_handshake(
                     .await
                     .context("failed sending vc-contact-confirm message")?;
 
-                inviter_progress(context, contact_id, step, 1000)?;
+                let is_group = false;
+                inviter_progress(context, contact_id, is_group, 1000)?;
                 Ok(HandshakeMessage::Ignore) // "Done" would delete the message and break multi-device (the key from Autocrypt-header is needed)
             }
         }
@@ -562,7 +565,10 @@ pub(crate) async fn observe_securejoin_on_other_device(
     ChatId::set_protection_for_contact(context, contact_id, mime_message.timestamp_sent).await?;
 
     if step == "vg-member-added" || step == "vc-contact-confirm" {
-        inviter_progress(context, contact_id, step, 1000)?;
+        let is_group = mime_message
+            .get_header(HeaderDef::ChatGroupMemberAdded)
+            .is_some();
+        inviter_progress(context, contact_id, is_group, 1000)?;
     }
 
     if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
