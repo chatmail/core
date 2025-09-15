@@ -279,8 +279,6 @@ pub(crate) async fn handle_securejoin_handshake(
 
     info!(context, "Received secure-join message {step:?}.");
 
-    let join_vg = step.starts_with("vg-");
-
     if !matches!(step, "vg-request" | "vc-request") {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
@@ -414,7 +412,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
             // (secure-join-information are shown in the group chat)
-            if !join_vg {
+            if grpid.is_empty() {
                 ChatId::create_for_contact(context, contact_id).await?;
             }
             context.emit_event(EventType::ContactsChanged(Some(contact_id)));
