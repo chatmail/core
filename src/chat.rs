@@ -2846,8 +2846,8 @@ pub async fn is_contact_in_chat(
 ) -> Result<bool> {
     // this function works for group and for normal chats, however, it is more useful
     // for group chats.
-    // ContactId::SELF may be used to check, if the user itself is in a
-    // group or incoming broadcast chat
+    // ContactId::SELF may be used to check whether oneself
+    // is in a group or incoming broadcast chat
     // (ContactId::SELF is not added to 1:1 chats or outgoing broadcast channels)
 
     let exists = context
@@ -2933,7 +2933,6 @@ async fn prepare_send_msg(
         CantSendReason::ContactRequest => {
             // Allow securejoin messages, they are supposed to repair the verification.
             // If the chat is a contact request, let the user accept it later.
-
             msg.param.get_cmd() == SystemMessage::SecurejoinMessage
         }
         // Allow to send "Member removed" messages so we can leave the group/broadcast.
@@ -2950,7 +2949,7 @@ async fn prepare_send_msg(
             msg.param
                 .get_bool(Param::ForcePlaintext)
                 .unwrap_or_default()
-                // V2 securejoin messages are symmetrically encrypted, no need for the public key:
+                // "vb-request-with-auth" is symmetrically encrypted, no need for the public key:
                 || msg.is_vb_request_with_auth()
         }
         _ => false,
@@ -3981,10 +3980,10 @@ pub(crate) async fn remove_from_chat_contacts_table(
 /// Removes a contact from the chat
 /// without leaving a trace.
 ///
-/// Note that if we receive a message
-/// from another device that doesn't know that this this member was removed
-/// then the group membership algorithm won't remember that this member was removed,
-/// so that the member will be wrongly re-added
+/// Note that if we call this function,
+/// and then receive a message from another device
+/// that doesn't know that this this member was removed
+/// then the group membership algorithm will wrongly re-add this member.
 pub(crate) async fn remove_from_chat_contacts_table_without_trace(
     context: &Context,
     chat_id: ChatId,
@@ -3994,7 +3993,7 @@ pub(crate) async fn remove_from_chat_contacts_table_without_trace(
         .sql
         .execute(
             "DELETE FROM chats_contacts
-                WHERE chat_id=? AND contact_id=?",
+            WHERE chat_id=? AND contact_id=?",
             (chat_id, contact_id),
         )
         .await?;
@@ -4037,6 +4036,10 @@ pub(crate) async fn add_contact_to_chat_ex(
         Contact::real_exists_by_id(context, contact_id).await? || contact_id == ContactId::SELF,
         "invalid contact_id {} for adding to group",
         contact_id
+    );
+    ensure!(
+        chat.typ != Chattype::OutBroadcast || contact_id != ContactId::SELF,
+        "Cannot add SELF to broadcast channel."
     );
     ensure!(
         chat.is_encrypted(context).await? == contact.is_key_contact(),
@@ -4092,8 +4095,9 @@ pub(crate) async fn add_contact_to_chat_ex(
         let contact_addr = contact.get_addr().to_lowercase();
         let added_by = if from_handshake && chat.typ == Chattype::OutBroadcast {
             // The contact was added via a QR code rather than explicit user action,
-            // and there is no useful information in saying 'You added member Alice'
-            // if self is the only one who can add members.
+            // so it could be confusing to say 'You added member Alice'.
+            // And in a broadcast, SELF is the only one who can add members,
+            // so, no information is lost by just writing 'Member Alice added' instead.
             ContactId::UNDEFINED
         } else {
             ContactId::SELF
@@ -4262,8 +4266,8 @@ pub async fn remove_contact_from_chat(
         !contact_id.is_special() || contact_id == ContactId::SELF,
         "Cannot remove special contact"
     );
-    let chat = Chat::load_from_db(context, chat_id).await?;
 
+    let chat = Chat::load_from_db(context, chat_id).await?;
     if chat.typ == Chattype::InBroadcast {
         ensure!(
             contact_id == ContactId::SELF,
