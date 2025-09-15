@@ -404,7 +404,7 @@ async fn test_mark_calls() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_udpate_call_text() -> Result<()> {
+async fn test_update_call_text() -> Result<()> {
     let CallSetup {
         alice, alice_call, ..
     } = setup_call().await?;
