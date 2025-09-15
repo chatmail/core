@@ -10,7 +10,7 @@ use crate::pgp;
 
 /// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
 ///
-/// If successful and the message is encrypted,
+/// If successful and the message was encrypted,
 /// returns the decrypted and decompressed message.
 pub fn try_decrypt<'a>(
     mail: &'a ParsedMail<'a>,

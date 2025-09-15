@@ -9,16 +9,15 @@ use crate::context::Context;
 use crate::key;
 use crate::key::DcKey;
 use crate::mimeparser::MimeMessage;
-pub use crate::pgp;
-
-use self::pgp::KeyPair;
+use crate::pgp;
+use crate::pgp::KeyPair;
 
 pub fn key_from_asc(data: &str) -> Result<key::SignedSecretKey> {
     key::SignedSecretKey::from_asc(data)
 }
 
 pub async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<()> {
-    crate::key::store_self_keypair(context, keypair).await
+    key::store_self_keypair(context, keypair).await
 }
 
 pub async fn parse_and_get_text(context: &Context, imf_raw: &[u8]) -> Result<String> {

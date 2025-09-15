@@ -232,11 +232,11 @@ pub fn pk_calc_signature(
     Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
-/// Decrypts the message with keys from the private key keyring.
-///
-/// Receiver private keys are passed in `private_keys_for_decryption`,
-/// shared secrets used for symmetric encryption
-/// are passed in `shared_secrets`.
+/// Decrypts the message:
+/// - with keys from the private key keyring (passed in `private_keys_for_decryption`)
+///   if the message was asymmetrically encrypted,
+/// - with a shared secret/password (passed in `shared_secrets`),
+///   if the message was symmetrically encrypted.
 ///
 /// Returns the decrypted and decompressed message.
 pub fn decrypt(

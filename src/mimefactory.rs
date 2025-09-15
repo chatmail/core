@@ -1921,6 +1921,9 @@ fn should_encrypt_with_auth_token(msg: &Message) -> bool {
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
     chat.typ == Chattype::OutBroadcast
+        // The only `SystemMessage::SecurejoinMessage` that is ever sent into a broadcast,
+        // which is `vb-request-with-auth`,
+        // should be encrypted with the AUTH token rather than the broadcast secret.
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
         // The member-added message in a broadcast must be asymmetrically encrypted,
         // because the newly-added member doesn't know the broadcast shared secret yet:
