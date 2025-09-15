@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.15.0] - 2025-09-15
+
+### API-Changes
+
+- Add JSON-RPC API for calls ([#7194](https://github.com/chatmail/core/pull/7194)).
+
+### Build system
+
+- Remove unused `quoted_printable` dependency.
+
 ## [2.14.0] - 2025-09-12
 
 ### API-Changes
@@ -6748,3 +6758,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.12.0]: https://github.com/chatmail/core/compare/v2.11.0..v2.12.0
 [2.13.0]: https://github.com/chatmail/core/compare/v2.12.0..v2.13.0
 [2.14.0]: https://github.com/chatmail/core/compare/v2.13.0..v2.14.0
+[2.15.0]: https://github.com/chatmail/core/compare/v2.14.0..v2.15.0
