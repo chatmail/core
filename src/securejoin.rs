@@ -40,8 +40,8 @@ fn inviter_progress(
 ) -> Result<()> {
     logged_debug_assert!(
         context,
-        progress <= 1000,
-        "inviter_progress: contact {contact_id}, progress={progress}, but value in range 0..1000 expected with: 0=error, 1..999=progress, 1000=success."
+        progress == 0 || progress == 1000,
+        "inviter_progress: contact {contact_id}, progress={progress}, but value is not 0 (error) or 1000 (success)."
     );
     let chat_type = match step.get(..3) {
         Some("vc-") => Chattype::Single,
@@ -321,8 +321,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 return Ok(HandshakeMessage::Ignore);
             }
 
-            inviter_progress(context, contact_id, step, 300)?;
-
             let from_addr = ContactAddress::new(&mime_message.from.addr)?;
             let autocrypt_fingerprint = mime_message.autocrypt_fingerprint.as_deref().unwrap_or("");
             let (autocrypt_contact_id, _) = Contact::add_or_lookup_ex(
@@ -416,7 +414,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 ChatId::create_for_contact(context, contact_id).await?;
             }
             context.emit_event(EventType::ContactsChanged(Some(contact_id)));
-            inviter_progress(context, contact_id, step, 600)?;
             if let Some(group_chat_id) = group_chat_id {
                 // Join group.
                 secure_connection_established(
@@ -428,7 +425,6 @@ pub(crate) async fn handle_securejoin_handshake(
                 .await?;
                 chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
                     .await?;
-                inviter_progress(context, contact_id, step, 800)?;
                 inviter_progress(context, contact_id, step, 1000)?;
                 // IMAP-delete the message to avoid handling it by another device and adding the
                 // member twice. Another device will know the member's key from Autocrypt-Gossip.
@@ -565,9 +561,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     ChatId::set_protection_for_contact(context, contact_id, mime_message.timestamp_sent).await?;
 
-    if step == "vg-member-added" {
-        inviter_progress(context, contact_id, step, 800)?;
-    }
     if step == "vg-member-added" || step == "vc-contact-confirm" {
         inviter_progress(context, contact_id, step, 1000)?;
     }
