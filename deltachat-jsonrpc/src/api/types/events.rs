@@ -310,9 +310,7 @@ pub enum EventType {
         chat_type: u32,
 
         /// Progress as:
-        /// 300=vg-/vc-request received, typically shown as "bob@addr joins".
-        /// 600=vg-/vc-request-with-auth received and verified, typically shown as "bob@addr verified".
-        /// 800=contact added to chat, shown as "bob@addr securely joined GROUP". Only for the verified-group-protocol.
+        /// 0=Error.
         /// 1000=Protocol finished for this contact.
         progress: usize,
     },
