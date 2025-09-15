@@ -93,6 +93,17 @@ class Message:
             if event.kind == EventType.MSG_DELIVERED and event.msg_id == self.id:
                 break
 
+    def resend(self) -> None:
+        """Resend messages and make information available for newly added chat members.
+        Resending sends out the original message, however, recipients and webxdc-status may differ.
+        Clients that already have the original message can still ignore the resent message as
+        they have tracked the state by dedicated updates.
+
+        Some messages cannot be resent, eg. info-messages, drafts, already pending messages,
+        or messages that are not sent by SELF.
+        """
+        self._rpc.resend_messages(self.account.id, [self.id])
+
     @futuremethod
     def send_webxdc_realtime_advertisement(self):
         """Send an advertisement to join the realtime channel."""

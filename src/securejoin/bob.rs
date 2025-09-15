@@ -1,6 +1,6 @@
 //! Bob's side of SecureJoin handling, the joiner-side.
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
@@ -10,14 +10,14 @@ use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
-use crate::log::info;
+use crate::log::{LogExt as _, info};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{create_smeared_timestamp, time};
+use crate::tools::{smeared_time, time};
 
 /// Starts the securejoin protocol with the QR `invite`.
 ///
@@ -47,16 +47,49 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     let hidden = match invite {
         QrInvite::Contact { .. } => Blocked::Not,
         QrInvite::Group { .. } => Blocked::Yes,
+        QrInvite::Broadcast { .. } => Blocked::Yes,
     };
-    let chat_id = ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
-        .await
-        .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
+
+    // The 1:1 chat with the inviter
+    let private_chat_id =
+        ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
+            .await
+            .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
+
+    // The chat id of the 1:1 chat, group or broadcast that is being joined
+    let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
 
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
 
-    // Now start the protocol and initialise the state.
-    {
+    if invite.is_v2() {
+        if !verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id()).await?
+        {
+            bail!("V2 protocol failed because of fingerprint mismatch");
+        }
+        info!(context, "Using fast securejoin with symmetric encryption");
+
+        send_handshake_message(
+            context,
+            &invite,
+            private_chat_id,
+            BobHandshakeMsg::RequestWithAuth,
+        )
+        .await?;
+
+        context.emit_event(EventType::SecurejoinJoinerProgress {
+            contact_id: invite.contact_id(),
+            progress: JoinerProgress::RequestWithAuthSent.to_usize(),
+        });
+
+        // Our second device won't be able to decrypt the outgoing message
+        // because it will be symmetrically encrypted with the AUTH token.
+        // So, we need to send a sync message:
+        let id = chat::SyncId::ContactFingerprint(invite.fingerprint().hex());
+        let action = chat::SyncAction::MarkVerified;
+        chat::sync(context, id, action).await.log_err(context).ok();
+    } else {
+        // Start the version 1 protocol and initialise the state.
         let has_key = context
             .sql
             .exists(
@@ -71,11 +104,16 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         {
             // The scanned fingerprint matches Alice's key, we can proceed to step 4b.
             info!(context, "Taking securejoin protocol shortcut");
-            send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth)
-                .await?;
+            send_handshake_message(
+                context,
+                &invite,
+                private_chat_id,
+                BobHandshakeMsg::RequestWithAuth,
+            )
+            .await?;
 
             // Mark 1:1 chat as verified already.
-            chat_id
+            private_chat_id
                 .set_protection(
                     context,
                     ProtectionStatus::Protected,
@@ -89,9 +127,10 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 progress: JoinerProgress::RequestWithAuthSent.to_usize(),
             });
         } else {
-            send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::Request).await?;
+            send_handshake_message(context, &invite, private_chat_id, BobHandshakeMsg::Request)
+                .await?;
 
-            insert_new_db_entry(context, invite.clone(), chat_id).await?;
+            insert_new_db_entry(context, invite.clone(), private_chat_id).await?;
         }
     }
 
@@ -99,19 +138,35 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Group { .. } => {
             // For a secure-join we need to create the group and add the contact.  The group will
             // only become usable once the protocol is finished.
-            let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
-            if !is_contact_in_chat(context, group_chat_id, invite.contact_id()).await? {
+            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
                     time(),
-                    group_chat_id,
+                    joining_chat_id,
                     &[invite.contact_id()],
                 )
                 .await?;
             }
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
-            chat::add_info_msg(context, group_chat_id, &msg, time()).await?;
-            Ok(group_chat_id)
+            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            Ok(joining_chat_id)
+        }
+        QrInvite::Broadcast { .. } => {
+            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
+                chat::add_to_chat_contacts_table(
+                    context,
+                    time(),
+                    joining_chat_id,
+                    &[invite.contact_id()],
+                )
+                .await?;
+            }
+
+            if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
+                let msg = stock_str::securejoin_wait(context).await;
+                chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            }
+            Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
@@ -120,14 +175,14 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // race with its change, we don't add our message below the protection message.
             let sort_to_bottom = true;
             let (received, incoming) = (false, false);
-            let ts_sort = chat_id
+            let ts_sort = private_chat_id
                 .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
                 .await?;
-            if chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
+            if private_chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
                 let ts_start = time();
                 chat::add_info_msg_with_cmd(
                     context,
-                    chat_id,
+                    private_chat_id,
                     &stock_str::securejoin_wait(context).await,
                     SystemMessage::SecurejoinWait,
                     ts_sort,
@@ -138,7 +193,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 )
                 .await?;
             }
-            Ok(chat_id)
+            Ok(private_chat_id)
         }
     }
 }
@@ -204,7 +259,7 @@ pub(super) async fn handle_auth_required(
             .await?;
 
         match invite {
-            QrInvite::Contact { .. } => {}
+            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
                 // so only show it on secure-join and not on setup-contact.
@@ -253,19 +308,19 @@ pub(crate) async fn send_handshake_message(
 ) -> Result<()> {
     let mut msg = Message {
         viewtype: Viewtype::Text,
-        text: step.body_text(invite),
+        text: step.body_text(invite)?,
         hidden: true,
         ..Default::default()
     };
     msg.param.set_cmd(SystemMessage::SecurejoinMessage);
 
     // Sends the step in Secure-Join header.
-    msg.param.set(Param::Arg, step.securejoin_header(invite));
+    msg.param.set(Param::Arg, step.securejoin_header(invite)?);
 
     match step {
         BobHandshakeMsg::Request => {
             // Sends the Secure-Join-Invitenumber header in mimefactory.rs.
-            msg.param.set(Param::Arg2, invite.invitenumber());
+            msg.param.set_optional(Param::Arg2, invite.invitenumber());
             msg.force_plaintext();
         }
         BobHandshakeMsg::RequestWithAuth => {
@@ -299,7 +354,7 @@ pub(crate) async fn send_handshake_message(
 pub(crate) enum BobHandshakeMsg {
     /// vc-request or vg-request
     Request,
-    /// vc-request-with-auth or vg-request-with-auth
+    /// vc-request-with-auth, vg-request-with-auth, or vb-request-with-auth
     RequestWithAuth,
 }
 
@@ -309,8 +364,8 @@ impl BobHandshakeMsg {
     /// This text has no significance to the protocol, but would be visible if users see
     /// this email message directly, e.g. when accessing their email without using
     /// DeltaChat.
-    fn body_text(&self, invite: &QrInvite) -> String {
-        format!("Secure-Join: {}", self.securejoin_header(invite))
+    fn body_text(&self, invite: &QrInvite) -> Result<String> {
+        Ok(format!("Secure-Join: {}", self.securejoin_header(invite)?))
     }
 
     /// Returns the `Secure-Join` header value.
@@ -318,17 +373,22 @@ impl BobHandshakeMsg {
     /// This identifies the step this message is sending information about.  Most protocol
     /// steps include additional information into other headers, see
     /// [`send_handshake_message`] for these.
-    fn securejoin_header(&self, invite: &QrInvite) -> &'static str {
-        match self {
+    fn securejoin_header(&self, invite: &QrInvite) -> Result<&'static str> {
+        let res = match self {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
+                QrInvite::Broadcast { .. } => {
+                    bail!("There is no request-with-auth for broadcasts")
+                }
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
+                QrInvite::Broadcast { .. } => "vb-request-with-auth",
             },
-        }
+        };
+        Ok(res)
     }
 }
 
@@ -346,8 +406,19 @@ async fn joining_chat_id(
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
-        QrInvite::Group { grpid, name, .. } => {
-            let group_chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
+        QrInvite::Group { grpid, name, .. }
+        | QrInvite::Broadcast {
+            broadcast_name: name,
+            grpid,
+            ..
+        } => {
+            let chattype = if matches!(invite, QrInvite::Group { .. }) {
+                Chattype::Group
+            } else {
+                Chattype::InBroadcast
+            };
+
+            let chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some((chat_id, _protected, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;
                     chat_id
@@ -355,18 +426,18 @@ async fn joining_chat_id(
                 None => {
                     ChatId::create_multiuser_record(
                         context,
-                        Chattype::Group,
+                        chattype,
                         grpid,
                         name,
                         Blocked::Not,
                         ProtectionStatus::Unprotected, // protection is added later as needed
                         None,
-                        create_smeared_timestamp(context),
+                        smeared_time(context),
                     )
                     .await?
                 }
             };
-            Ok(group_chat_id)
+            Ok(chat_id)
         }
     }
 }

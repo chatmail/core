@@ -999,7 +999,7 @@ impl CommandApi {
             .await
     }
 
-    /// Create a new **broadcast channel**
+    /// Create a new, outgoing **broadcast channel**
     /// (called "Channel" in the UI).
     ///
     /// Broadcast channels are similar to groups on the sending device,
