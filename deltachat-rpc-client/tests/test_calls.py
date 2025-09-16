@@ -66,3 +66,10 @@ a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
     assert incoming_call_event.place_call_info == place_call_info
     assert incoming_call_event.has_video
+
+
+def test_ice_servers(acfactory) -> None:
+    alice = acfactory.get_online_account()
+
+    ice_servers = alice.ice_servers()
+    assert len(ice_servers) == 1
