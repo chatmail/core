@@ -419,9 +419,6 @@ def test_send_and_receive_message_markseen(acfactory, lp):
         assert ev.data2 > dc.const.DC_MSG_ID_LAST_SPECIAL
     lp.step("2")
 
-    # Check that ac1 marks the read receipt as read.
-    ac1._evtracker.get_info_contains("Marked messages .* in folder INBOX as seen.")
-
     assert msg1.is_out_mdn_received()
     assert msg3.is_out_mdn_received()
 
@@ -506,10 +503,15 @@ def test_mdn_asymmetric(acfactory, lp):
     ac1.set_config("mdns_enabled", "1")
     ac2.set_config("mdns_enabled", "1")
 
+    ac1.set_config("bcc_self", "1")
+
     lp.sec("sending text message from ac1 to ac2")
     msg_out = chat.send_text("message1")
 
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
+
+    # Wait for the message to be marked as seen on IMAP.
+    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     lp.sec("disable ac1 MDNs")
     ac1.set_config("mdns_enabled", "0")
@@ -522,13 +524,14 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("ac2: mark incoming message as seen")
     ac2.mark_seen_messages([msg])
 
+    # Wait for the message to be marked as seen on IMAP.
+    ac2._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
+
     lp.sec("ac1: waiting for incoming activity")
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
-    # Wait for the message to be marked as seen on IMAP.
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-
     # MDN is received even though MDNs are already disabled
+    ac1._evtracker.get_matching("DC_EVENT_MSG_READ")
     assert msg_out.is_out_mdn_received()
 
 
