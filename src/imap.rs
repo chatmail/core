@@ -2397,6 +2397,11 @@ async fn mark_seen_by_uid(
 /// Schedule marking the message as Seen on IMAP by adding all known IMAP messages corresponding to
 /// the given Message-ID to `imap_markseen` table.
 pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) -> Result<()> {
+    if !context.get_config_bool(Config::BccSelf).await?
+        || context.get_config_bool(Config::Bot).await?
+    {
+        return Ok(());
+    }
     context
         .sql
         .execute(
