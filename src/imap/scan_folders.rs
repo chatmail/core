@@ -75,6 +75,7 @@ impl Imap {
             if !watched_folders.contains(&folder.name().to_string())
                 && folder_meaning != FolderMeaning::Drafts
                 && folder_meaning != FolderMeaning::Trash
+                && folder_meaning != FolderMeaning::Unknown
             {
                 self.fetch_move_delete(context, session, folder.name(), folder_meaning)
                     .await
