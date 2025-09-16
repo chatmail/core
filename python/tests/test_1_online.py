@@ -572,9 +572,6 @@ def test_send_and_receive_message_markseen(acfactory, lp):
         assert ev.data2 > dc.const.DC_MSG_ID_LAST_SPECIAL
     lp.step("2")
 
-    # Check that ac1 marks the read receipt as read.
-    ac1._evtracker.get_info_contains("Marked messages .* in folder INBOX as seen.")
-
     assert msg1.is_out_mdn_received()
     assert msg3.is_out_mdn_received()
 
@@ -655,7 +652,7 @@ def test_message_override_sender_name(acfactory, lp):
 
 
 @pytest.mark.parametrize("mvbox_move", [True, False])
-def test_markseen_message_and_mdn(acfactory, mvbox_move):
+def test_markseen_message(acfactory, mvbox_move):
     # Please only change this test if you are very sure that it will still catch the issues it catches now.
     # We had so many problems with markseen, if in doubt, rather create another test, it can't harm.
     ac1 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
@@ -674,16 +671,16 @@ def test_markseen_message_and_mdn(acfactory, mvbox_move):
     ac2.mark_seen_messages([msg])
 
     folder = "mvbox" if mvbox_move else "inbox"
-    for ac in [ac1, ac2]:
-        if mvbox_move:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
-        else:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
+    if mvbox_move:
+        ac2._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
+    else:
+        ac2._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
+    ac1._evtracker.get_matching("DC_EVENT_MSG_READ")
     ac1.direct_imap.select_config_folder(folder)
     ac2.direct_imap.select_config_folder(folder)
 
-    # Check that the mdn is marked as seen
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
+    # Check that the mdn isn't marked as seen
+    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 0
     # Check original message is marked as seen
     assert len(list(ac2.direct_imap.conn.fetch(AND(seen=True)))) == 1
 
@@ -730,6 +727,9 @@ def test_mdn_asymmetric(acfactory, lp):
 
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
+    # Wait for the message to be marked as seen on IMAP.
+    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
+
     lp.sec("disable ac1 MDNs")
     ac1.set_config("mdns_enabled", "0")
 
@@ -741,16 +741,17 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("ac2: mark incoming message as seen")
     ac2.mark_seen_messages([msg])
 
+    # Wait for the message to be marked as seen on IMAP.
+    ac2._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
+
     lp.sec("ac1: waiting for incoming activity")
     # MDN should be moved even though MDNs are already disabled
     ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
 
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
-    # Wait for the message to be marked as seen on IMAP.
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
-
     # MDN is received even though MDNs are already disabled
+    ac1._evtracker.get_matching("DC_EVENT_MSG_READ")
     assert msg_out.is_out_mdn_received()
 
     ac1.direct_imap.select_config_folder("mvbox")

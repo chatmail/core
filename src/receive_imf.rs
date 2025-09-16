@@ -993,11 +993,6 @@ pub(crate) async fn receive_imf_inner(
                 )
                 .await?;
         }
-        if target.is_none() && !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version()
-        {
-            // This is a Delta Chat MDN. Mark as read.
-            markseen_on_imap_table(context, rfc724_mid_orig).await?;
-        }
     }
 
     if mime_parser.is_call() {
