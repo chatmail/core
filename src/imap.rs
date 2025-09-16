@@ -814,7 +814,10 @@ impl Session {
             .context("listing folders for resync")?;
         for folder in all_folders {
             let folder_meaning = get_folder_meaning(&folder);
-            if folder_meaning != FolderMeaning::Virtual {
+            if !matches!(
+                folder_meaning,
+                FolderMeaning::Virtual | FolderMeaning::Unknown | FolderMeaning::Drafts
+            ) {
                 self.resync_folder_uids(context, folder.name(), folder_meaning)
                     .await?;
             }
