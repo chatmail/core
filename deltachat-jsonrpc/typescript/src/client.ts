@@ -36,6 +36,10 @@ export class BaseDeltaChat<
 
   constructor(
     public transport: Transport,
+    /**
+     * Whether to start calling {@linkcode RawClient.getNextEvent}
+     * and emitting the respective events on this class.
+     */
     startEventLoop: boolean,
   ) {
     super();
@@ -45,6 +49,9 @@ export class BaseDeltaChat<
     }
   }
 
+  /**
+   * @see the constructor's `startEventLoop`
+   */
   async eventLoop(): Promise<void> {
     while (true) {
       const event = await this.rpc.getNextEvent();
@@ -63,10 +70,17 @@ export class BaseDeltaChat<
     }
   }
 
+  /**
+   * @deprecated use {@linkcode BaseDeltaChat.rpc.getAllAccounts} instead.
+   */
   async listAccounts(): Promise<T.Account[]> {
     return await this.rpc.getAllAccounts();
   }
 
+  /**
+   * A convenience function to listen on events binned by `account_id`
+   * (see {@linkcode RawClient.getAllAccounts}).
+   */
   getContextEvents(account_id: number) {
     if (this.contextEmitters[account_id]) {
       return this.contextEmitters[account_id];
