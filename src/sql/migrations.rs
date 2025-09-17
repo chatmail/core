@@ -1310,6 +1310,32 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 137)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "DELETE FROM config WHERE keyname IN (
+                'configured',
+                'configured_imap_certificate_checks',
+                'configured_imap_servers',
+                'configured_mail_port',
+                'configured_mail_pw',
+                'configured_mail_security',
+                'configured_mail_server',
+                'configured_mail_user',
+                'configured_send_port',
+                'configured_send_pw',
+                'configured_send_security',
+                'configured_send_server',
+                'configured_send_user',
+                'configured_server_flags',
+                'configured_smtp_certificate_checks',
+                'configured_smtp_servers'
+            )",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
