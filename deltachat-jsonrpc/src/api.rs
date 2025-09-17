@@ -91,7 +91,8 @@ pub struct CommandApi {
 
     /// Receiver side of the event channel.
     ///
-    /// Events from it can be received by calling `get_next_event` method.
+    /// Events from it can be received by calling
+    /// [`CommandApi::get_next_event`] method.
     event_emitter: Arc<EventEmitter>,
 
     states: Arc<Mutex<BTreeMap<u32, AccountState>>>,
@@ -173,7 +174,15 @@ impl CommandApi {
         get_info()
     }
 
-    /// Get the next event.
+    /// Get the next event, and remove it from the event queue.
+    ///
+    /// If no events have happened since the last `get_next_event`
+    /// (i.e. if the event queue is empty), the response will be returned
+    /// only when a new event fires.
+    ///
+    /// Note that if you are using the `BaseDeltaChat` JavaScript class
+    /// or the `Rpc` Python class, this function will be invoked
+    /// by those classes internally and should not be used manually.
     async fn get_next_event(&self) -> Result<Event> {
         self.event_emitter
             .recv()
