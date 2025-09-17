@@ -873,6 +873,9 @@ def test_delete_deltachat_folder(acfactory, direct_imap):
     msg = ac1.wait_for_incoming_msg().get_snapshot()
     assert msg.text == "hello"
 
+    # Recreate direct IMAP connection,
+    # otherwise the folder may be not visible.
+    ac1_direct_imap = direct_imap(ac1)
     assert "DeltaChat" in ac1_direct_imap.list_folders()
 
 
