@@ -28,7 +28,6 @@ export class BaseDeltaChat<
   Transport extends BaseTransport<any>,
 > extends TinyEmitter<Events> {
   rpc: RawClient;
-  account?: T.Account;
   private contextEmitters: { [key: number]: TinyEmitter<ContextEvents> } = {};
 
   //@ts-ignore
