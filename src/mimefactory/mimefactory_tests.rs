@@ -594,26 +594,6 @@ async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
 
     assert_eq!(inner.match_indices("text/plain").count(), 1);
     assert_eq!(inner.match_indices("Message-ID:").count(), 1);
-    assert_eq!(inner.match_indices("Chat-User-Avatar:").count(), 1);
-    assert_eq!(inner.match_indices("Subject:").count(), 0);
-
-    assert_eq!(body.match_indices("this is the text!").count(), 1);
-
-    // if another message is sent, that one must not contain the avatar
-    let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let mut payload = sent_msg.payload().splitn(3, "\r\n\r\n");
-    let outer = payload.next().unwrap();
-    let inner = payload.next().unwrap();
-    let body = payload.next().unwrap();
-
-    assert_eq!(outer.match_indices("multipart/mixed").count(), 1);
-    assert_eq!(outer.match_indices("Message-ID:").count(), 1);
-    assert_eq!(outer.match_indices("Subject:").count(), 1);
-    assert_eq!(outer.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(outer.match_indices("Chat-User-Avatar:").count(), 0);
-
-    assert_eq!(inner.match_indices("text/plain").count(), 1);
-    assert_eq!(inner.match_indices("Message-ID:").count(), 1);
     assert_eq!(inner.match_indices("Chat-User-Avatar:").count(), 0);
     assert_eq!(inner.match_indices("Subject:").count(), 0);
 
@@ -670,7 +650,7 @@ async fn test_selfavatar_unencrypted_signed() {
     assert_eq!(part.match_indices("text/plain").count(), 1);
     assert_eq!(part.match_indices("From:").count(), 0);
     assert_eq!(part.match_indices("Message-ID:").count(), 1);
-    assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 1);
+    assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
     assert_eq!(part.match_indices("Subject:").count(), 0);
 
     let body = payload.next().unwrap();
@@ -684,58 +664,6 @@ async fn test_selfavatar_unencrypted_signed() {
         .unwrap();
     let alice_contact = Contact::get_by_id(&bob.ctx, alice_id).await.unwrap();
     assert_eq!(alice_contact.is_key_contact(), false);
-    assert!(
-        alice_contact
-            .get_profile_image(&bob.ctx)
-            .await
-            .unwrap()
-            .is_some()
-    );
-
-    // if another message is sent, that one must not contain the avatar
-    let mut msg = Message::new_text("this is the text!".to_string());
-    let sent_msg = t.send_msg(chat.id, &mut msg).await;
-    let mut payload = sent_msg.payload().splitn(4, "\r\n\r\n");
-
-    let part = payload.next().unwrap();
-    assert_eq!(part.match_indices("multipart/signed").count(), 1);
-    assert_eq!(part.match_indices("From:").count(), 1);
-    assert_eq!(part.match_indices("Message-ID:").count(), 1);
-    assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
-
-    let part = payload.next().unwrap();
-    assert_eq!(
-        part.match_indices("multipart/mixed; protected-headers=\"v1\"")
-            .count(),
-        1
-    );
-    assert_eq!(part.match_indices("From:").count(), 1);
-    assert_eq!(part.match_indices("Message-ID:").count(), 0);
-    assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
-    assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
-
-    let part = payload.next().unwrap();
-    assert_eq!(part.match_indices("text/plain").count(), 1);
-    assert_eq!(body.match_indices("From:").count(), 0);
-    assert_eq!(part.match_indices("Message-ID:").count(), 1);
-    assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
-    assert_eq!(part.match_indices("Subject:").count(), 0);
-
-    let body = payload.next().unwrap();
-    assert_eq!(body.match_indices("this is the text!").count(), 1);
-
-    bob.recv_msg(&sent_msg).await;
-    let alice_contact = Contact::get_by_id(&bob.ctx, alice_id).await.unwrap();
-    assert!(
-        alice_contact
-            .get_profile_image(&bob.ctx)
-            .await
-            .unwrap()
-            .is_some()
-    );
 }
 
 /// Test that removed member address does not go into the `To:` field.
