@@ -464,7 +464,10 @@ impl MimeFactory {
                 .unwrap_or_default(),
             false => "".to_string(),
         };
-        let attach_selfavatar = should_attach_profile;
+        // We don't display avatars for address-contacts, so sending avatars w/o encryption is not
+        // useful and causes e.g. Outlook to reject a message with a big header, see
+        // https://support.delta.chat/t/invalid-mime-content-single-text-value-size-32822-exceeded-allowed-maximum-32768-for-the-chat-user-avatar-header/4067.
+        let attach_selfavatar = should_attach_profile && encryption_keys.is_some();
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
