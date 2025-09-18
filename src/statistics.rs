@@ -229,12 +229,21 @@ See TODO[blog post] for more information."
         .log_err(context)
         .ok();
 
-    set_last_counted_msg_id(context).await?;
+    set_last_counted_msg_id(context, true).await?;
 
     Ok(chat_id)
 }
 
-pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
+pub(crate) async fn set_last_counted_msg_id(
+    context: &Context,
+    update_existing_value: bool,
+) -> Result<()> {
+    if !update_existing_value && config_exits(context, Config::StatsLastCountedMsgId).await? {
+        // The user had statistics-sending enabled already in the past,
+        // keep the 'last counted message id' as-is
+        return Ok(());
+    }
+
     let last_msgid: u64 = context
         .sql
         .query_get_value("SELECT MAX(id) FROM msgs", ())
@@ -253,12 +262,7 @@ pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
 }
 
 pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
-    let config_exists = context
-        .sql
-        .get_raw_config(Config::StatsLastOldContactId.as_ref())
-        .await?
-        .is_some();
-    if config_exists {
+    if config_exits(context, Config::StatsLastOldContactId).await? {
         // The user had statistics-sending enabled already in the past,
         // keep the 'last old contact id' as-is
         return Ok(());
@@ -279,6 +283,11 @@ pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+async fn config_exits(context: &Context, config: Config) -> Result<bool, anyhow::Error> {
+    let config_exists = context.sql.get_raw_config(config.as_ref()).await?.is_some();
+    Ok(config_exists)
 }
 
 async fn get_statistics(context: &Context) -> Result<String> {
@@ -545,7 +554,8 @@ async fn get_message_stats(
         // - `from_id=?` is to count only outgoing messages.
         // - `chat_id<>?` excludes the chat with the statistics bot itself,
         // - `id>?` excludes messages that were already counted in the previously sent statistics, or messages sent before the config was enabled
-        // - `hidden=0` excludes hidden system messages, which are not actually shown to the user
+        // - `hidden=0` excludes hidden system messages, which are not actually shown to the user.
+        //   Note that reactions are also not counted as a message.
         // - `chat_id>9` excludes messages in the 'Trash' chat, which is an internal chat assigned to messages that are not shown to the user
         let mut general_requirements =
             "from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id>9".to_string();
@@ -631,27 +641,29 @@ pub(crate) async fn count_securejoin_ux_info(
         .log_err(context)
         .unwrap_or(0);
 
-    context
-        .sql
-        .execute(
-            "INSERT INTO statistics_securejoin_sources VALUES (?, 1)
-                ON CONFLICT (source) DO UPDATE SET count=count+1;",
-            (source,),
-        )
-        .await?;
-
     // We only get a UI path if the source is a QR code scan,
     // a loaded image, or a link pasted from the QR code,
     // so, no need to log an error if `uipath` is None:
     let uipath = uipath.unwrap_or(0);
+
     context
         .sql
-        .execute(
-            "INSERT INTO statistics_securejoin_uipaths VALUES (?, 1)
+        .transaction(|conn| {
+            conn.execute(
+                "INSERT INTO statistics_securejoin_sources VALUES (?, 1)
+                ON CONFLICT (source) DO UPDATE SET count=count+1;",
+                (source,),
+            )?;
+
+            conn.execute(
+                "INSERT INTO statistics_securejoin_uipaths VALUES (?, 1)
                 ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
-            (uipath,),
-        )
+                (uipath,),
+            )?;
+            Ok(())
+        })
         .await?;
+
     Ok(())
 }
 

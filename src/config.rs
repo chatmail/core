@@ -839,9 +839,9 @@ impl Context {
                 }
             }
             Config::StatsSending => {
-                self.sql.set_raw_config(key.as_ref(), value).await?;
-                statistics::set_last_counted_msg_id(self).await?;
+                statistics::set_last_counted_msg_id(self, false).await?;
                 statistics::set_last_old_contact_id(self).await?;
+                self.sql.set_raw_config(key.as_ref(), value).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
