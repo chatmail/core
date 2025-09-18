@@ -663,4 +663,4 @@ class TestOfflineChat:
 
         lp.sec("check message count of only system messages (without daymarkers)")
         sysmessages = [x for x in chat.get_messages() if x.is_system_message()]
-        assert len(sysmessages) == 3
+        assert len(sysmessages) == 4

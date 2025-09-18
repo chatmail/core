@@ -2,7 +2,7 @@ use super::*;
 use crate::chat::{ProtectionStatus, create_group_chat};
 use crate::config::Config;
 use crate::securejoin::get_securejoin_qr;
-use crate::test_utils::{TestContext, TestContextManager};
+use crate::test_utils::{TestContext, TestContextManager, sync};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_http() -> Result<()> {
@@ -505,6 +505,77 @@ async fn test_withdraw_verifygroup() -> Result<()> {
         bail!("Wrong QR type, expected AskVerifyGroup");
     }
     assert!(set_config_from_qr(&bob, &qr).await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_withdraw_multidevice() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+
+    alice.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+    // Alice creates two QR codes on the first device:
+    // group QR code and contact QR code.
+    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let chat2_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group 2").await?;
+    let contact_qr = get_securejoin_qr(alice, None).await?;
+    let group_qr = get_securejoin_qr(alice, Some(chat_id)).await?;
+    let group2_qr = get_securejoin_qr(alice, Some(chat2_id)).await?;
+
+    assert!(matches!(
+        check_qr(alice, &contact_qr).await?,
+        Qr::WithdrawVerifyContact { .. }
+    ));
+    assert!(matches!(
+        check_qr(alice, &group_qr).await?,
+        Qr::WithdrawVerifyGroup { .. }
+    ));
+
+    // Sync group QR codes.
+    sync(alice, alice2).await;
+    assert!(matches!(
+        check_qr(alice2, &group_qr).await?,
+        Qr::WithdrawVerifyGroup { .. }
+    ));
+    assert!(matches!(
+        check_qr(alice2, &group2_qr).await?,
+        Qr::WithdrawVerifyGroup { .. }
+    ));
+
+    // Alice creates a contact QR code on second device
+    // and withdraws it.
+    let contact_qr2 = get_securejoin_qr(alice2, None).await?;
+    set_config_from_qr(alice2, &contact_qr2).await?;
+    assert!(matches!(
+        check_qr(alice2, &contact_qr2).await?,
+        Qr::ReviveVerifyContact { .. }
+    ));
+
+    // Alice also withdraws second group QR code on second device.
+    set_config_from_qr(alice2, &group2_qr).await?;
+
+    // Sync messages are sent from Alice's second device to first device.
+    sync(alice2, alice).await;
+
+    // Now first device has reset all contact QR codes
+    // and second group QR code,
+    // but first group QR code is still valid.
+    assert!(matches!(
+        check_qr(alice, &contact_qr2).await?,
+        Qr::ReviveVerifyContact { .. }
+    ));
+    assert!(matches!(
+        check_qr(alice, &group_qr).await?,
+        Qr::WithdrawVerifyGroup { .. }
+    ));
+    assert!(matches!(
+        check_qr(alice, &group2_qr).await?,
+        Qr::ReviveVerifyGroup { .. }
+    ));
 
     Ok(())
 }

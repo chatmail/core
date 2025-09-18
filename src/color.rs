@@ -1,38 +1,39 @@
-//! Implementation of Consistent Color Generation.
+//! Color generation.
 //!
-//! Consistent Color Generation is defined in XEP-0392.
-//!
-//! Color Vision Deficiency correction is not implemented as Delta Chat does not offer
-//! corresponding settings.
-use hsluv::hsluv_to_rgb;
+//! This is similar to Consistent Color Generation defined in XEP-0392,
+//! but uses OKLCh colorspace instead of HSLuv
+//! to ensure that colors have the same lightness.
+use colorutils_rs::{Oklch, Rgb, TransferFunction};
 use sha1::{Digest, Sha1};
 
 /// Converts an identifier to Hue angle.
-fn str_to_angle(s: &str) -> f64 {
+fn str_to_angle(s: &str) -> f32 {
     let bytes = s.as_bytes();
     let result = Sha1::digest(bytes);
     let checksum: u16 = result.first().map_or(0, |&x| u16::from(x))
         + 256 * result.get(1).map_or(0, |&x| u16::from(x));
-    f64::from(checksum) / 65536.0 * 360.0
+    f32::from(checksum) / 65536.0 * 360.0
 }
 
 /// Converts RGB tuple to a 24-bit number.
 ///
 /// Returns a 24-bit number with 8 least significant bits corresponding to the blue color and 8
 /// most significant bits corresponding to the red color.
-fn rgb_to_u32((r, g, b): (f64, f64, f64)) -> u32 {
-    let r = ((r * 256.0) as u32).min(255);
-    let g = ((g * 256.0) as u32).min(255);
-    let b = ((b * 256.0) as u32).min(255);
-    65536 * r + 256 * g + b
+fn rgb_to_u32(rgb: Rgb<u8>) -> u32 {
+    65536 * u32::from(rgb.r) + 256 * u32::from(rgb.g) + u32::from(rgb.b)
 }
 
 /// Converts an identifier to RGB color.
 ///
-/// Saturation is set to maximum (100.0) to make colors distinguishable, and lightness is set to
-/// half (50.0) to make colors suitable both for light and dark theme.
+/// Lightness is set to half (0.5) to make colors suitable both for light and dark theme.
 pub fn str_to_color(s: &str) -> u32 {
-    rgb_to_u32(hsluv_to_rgb((str_to_angle(s), 100.0, 50.0)))
+    let lightness = 0.5;
+    let chroma = 0.22;
+    let angle = str_to_angle(s);
+    let oklch = Oklch::new(lightness, chroma, angle);
+    let rgb = oklch.to_rgb(TransferFunction::Srgb);
+
+    rgb_to_u32(rgb)
 }
 
 /// Returns color as a "#RRGGBB" `String` where R, G, B are hex digits.
@@ -45,6 +46,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[allow(clippy::excessive_precision)]
     fn test_str_to_angle() {
         // Test against test vectors from
         // <https://xmpp.org/extensions/xep-0392.html#testvectors-fullrange-no-cvd>
@@ -57,11 +59,11 @@ mod tests {
 
     #[test]
     fn test_rgb_to_u32() {
-        assert_eq!(rgb_to_u32((0.0, 0.0, 0.0)), 0);
-        assert_eq!(rgb_to_u32((1.0, 1.0, 1.0)), 0xffffff);
-        assert_eq!(rgb_to_u32((0.0, 0.0, 1.0)), 0x0000ff);
-        assert_eq!(rgb_to_u32((0.0, 1.0, 0.0)), 0x00ff00);
-        assert_eq!(rgb_to_u32((1.0, 0.0, 0.0)), 0xff0000);
-        assert_eq!(rgb_to_u32((1.0, 0.5, 0.0)), 0xff8000);
+        assert_eq!(rgb_to_u32(Rgb::new(0, 0, 0)), 0);
+        assert_eq!(rgb_to_u32(Rgb::new(0xff, 0xff, 0xff)), 0xffffff);
+        assert_eq!(rgb_to_u32(Rgb::new(0, 0, 0xff)), 0x0000ff);
+        assert_eq!(rgb_to_u32(Rgb::new(0, 0xff, 0)), 0x00ff00);
+        assert_eq!(rgb_to_u32(Rgb::new(0xff, 0, 0)), 0xff0000);
+        assert_eq!(rgb_to_u32(Rgb::new(0xff, 0x80, 0)), 0xff8000);
     }
 }

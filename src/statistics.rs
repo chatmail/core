@@ -332,7 +332,7 @@ async fn get_statistics_chat_id(context: &Context) -> Result<ChatId, anyhow::Err
         .await?
         .first()
         .context("Statistics bot vCard does not contain a contact")?;
-    mark_contact_id_as_verified(context, contact_id, ContactId::SELF).await?;
+    mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
 
     let chat_id = if let Some(res) = ChatId::lookup_by_contact(context, contact_id).await? {
         // Already exists, no need to create.

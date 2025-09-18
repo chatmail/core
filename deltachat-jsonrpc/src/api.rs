@@ -91,7 +91,8 @@ pub struct CommandApi {
 
     /// Receiver side of the event channel.
     ///
-    /// Events from it can be received by calling `get_next_event` method.
+    /// Events from it can be received by calling
+    /// [`CommandApi::get_next_event`] method.
     event_emitter: Arc<EventEmitter>,
 
     states: Arc<Mutex<BTreeMap<u32, AccountState>>>,
@@ -173,7 +174,15 @@ impl CommandApi {
         get_info()
     }
 
-    /// Get the next event.
+    /// Get the next event, and remove it from the event queue.
+    ///
+    /// If no events have happened since the last `get_next_event`
+    /// (i.e. if the event queue is empty), the response will be returned
+    /// only when a new event fires.
+    ///
+    /// Note that if you are using the `BaseDeltaChat` JavaScript class
+    /// or the `Rpc` Python class, this function will be invoked
+    /// by those classes internally and should not be used manually.
     async fn get_next_event(&self) -> Result<Event> {
         self.event_emitter
             .recv()
@@ -2109,6 +2118,40 @@ impl CommandApi {
             .init_webxdc_integration(chat_id.map(ChatId::new))
             .await?
             .map(|msg_id| msg_id.to_u32()))
+    }
+
+    /// Starts an outgoing call.
+    async fn place_outgoing_call(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        place_call_info: String,
+    ) -> Result<u32> {
+        let ctx = self.get_context(account_id).await?;
+        let msg_id = ctx
+            .place_outgoing_call(ChatId::new(chat_id), place_call_info)
+            .await?;
+        Ok(msg_id.to_u32())
+    }
+
+    /// Accepts an incoming call.
+    async fn accept_incoming_call(
+        &self,
+        account_id: u32,
+        msg_id: u32,
+        accept_call_info: String,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.accept_incoming_call(MsgId::new(msg_id), accept_call_info)
+            .await?;
+        Ok(())
+    }
+
+    /// Ends incoming or outgoing call.
+    async fn end_call(&self, account_id: u32, msg_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.end_call(MsgId::new(msg_id)).await?;
+        Ok(())
     }
 
     /// Makes an HTTP GET request and returns a response.

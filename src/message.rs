@@ -973,6 +973,8 @@ impl Message {
             | SystemMessage::WebxdcStatusUpdate
             | SystemMessage::WebxdcInfoMessage
             | SystemMessage::IrohNodeAddr
+            | SystemMessage::CallAccepted
+            | SystemMessage::CallEnded
             | SystemMessage::Unknown => Ok(None),
         }
     }
@@ -2276,6 +2278,9 @@ pub enum Viewtype {
     /// Message is an invitation to a videochat.
     VideochatInvitation = 70,
 
+    /// Message is an incoming or outgoing call.
+    Call = 71,
+
     /// Message is an webxdc instance.
     Webxdc = 80,
 
@@ -2299,6 +2304,7 @@ impl Viewtype {
             Viewtype::Video => true,
             Viewtype::File => true,
             Viewtype::VideochatInvitation => false,
+            Viewtype::Call => false,
             Viewtype::Webxdc => true,
             Viewtype::Vcard => true,
         }

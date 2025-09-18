@@ -151,10 +151,6 @@ pub enum Config {
     /// setting up a second device, or receiving a sync message.
     BccSelf,
 
-    /// True if encryption is preferred according to Autocrypt standard.
-    #[strum(props(default = "1"))]
-    E2eeEnabled,
-
     /// True if Message Delivery Notifications (read receipts) should
     /// be sent and requested.
     #[strum(props(default = "1"))]
@@ -422,7 +418,7 @@ pub enum Config {
     /// Regardless of this setting, `chat.is_protected()` returns true while the key is verified,
     /// and when the key changes, an info message is posted into the chat.
     /// 0=Nothing else happens when the key changes.
-    /// 1=After the key changed, `can_send()` returns false and `is_protection_broken()` returns true
+    /// 1=After the key changed, `can_send()` returns false
     /// until `chat_id.accept()` is called.
     #[strum(props(default = "0"))]
     VerifiedOneOnOneChats,
@@ -721,7 +717,6 @@ impl Context {
             Config::Socks5Enabled
             | Config::ProxyEnabled
             | Config::BccSelf
-            | Config::E2eeEnabled
             | Config::MdnsEnabled
             | Config::SentboxWatch
             | Config::MvboxMove

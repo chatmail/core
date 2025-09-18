@@ -186,8 +186,8 @@ impl TestContextManager {
             msg,
             to.name()
         ));
-        let chat = from.create_chat(to).await;
-        let sent = from.send_text(chat.id, msg).await;
+        let chat_id = from.create_chat_id(to).await;
+        let sent = from.send_text(chat_id, msg).await;
         to.recv_msg(&sent).await
     }
 
@@ -852,14 +852,23 @@ impl TestContext {
         Chat::load_from_db(&self.ctx, chat_id).await.unwrap()
     }
 
+    /// Creates or returns an existing 1:1 [`ChatId`] with another account.
+    ///
+    /// This first creates a contact by exporting a vCard from the `other`
+    /// and importing it into `self`,
+    /// then creates a 1:1 chat with this contact.
+    pub async fn create_chat_id(&self, other: &TestContext) -> ChatId {
+        let contact_id = self.add_or_lookup_contact_id(other).await;
+        ChatId::create_for_contact(self, contact_id).await.unwrap()
+    }
+
     /// Creates or returns an existing 1:1 [`Chat`] with another account.
     ///
     /// This first creates a contact by exporting a vCard from the `other`
     /// and importing it into `self`,
     /// then creates a 1:1 chat with this contact.
     pub async fn create_chat(&self, other: &TestContext) -> Chat {
-        let contact_id = self.add_or_lookup_contact_id(other).await;
-        let chat_id = ChatId::create_for_contact(self, contact_id).await.unwrap();
+        let chat_id = self.create_chat_id(other).await;
         Chat::load_from_db(self, chat_id).await.unwrap()
     }
 
@@ -1236,9 +1245,8 @@ impl SentMessage<'_> {
 ///
 /// The keypair was created using the crate::key::tests::gen_key test.
 pub fn alice_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1247,9 +1255,8 @@ pub fn alice_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn bob_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1260,8 +1267,7 @@ pub fn bob_keypair() -> KeyPair {
 pub fn charlie_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
-            .unwrap()
-            .0;
+            .unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1270,9 +1276,8 @@ pub fn charlie_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn dom_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1281,9 +1286,8 @@ pub fn dom_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn elena_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1292,9 +1296,8 @@ pub fn elena_keypair() -> KeyPair {
 ///
 /// Like [alice_keypair] but a different key and identity.
 pub fn fiona_keypair() -> KeyPair {
-    let secret = key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc"))
-        .unwrap()
-        .0;
+    let secret =
+        key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap();
     let public = secret.split_public_key().unwrap();
     KeyPair { public, secret }
 }
@@ -1420,7 +1423,7 @@ fn print_logevent(logevent: &LogEvent) {
 /// Saves the other account's public key as verified
 pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
     let contact_id = this.add_or_lookup_contact_id(other).await;
-    mark_contact_id_as_verified(this, contact_id, ContactId::SELF)
+    mark_contact_id_as_verified(this, contact_id, Some(ContactId::SELF))
         .await
         .unwrap();
 }
@@ -1430,8 +1433,7 @@ pub(crate) async fn mark_as_verified(this: &TestContext, other: &TestContext) {
 pub(crate) async fn sync(alice0: &TestContext, alice1: &TestContext) {
     alice0.send_sync_msg().await.unwrap();
     let sync_msg = alice0.pop_sent_sync_msg().await;
-    let no_msg = alice1.recv_msg_opt(&sync_msg).await;
-    assert!(no_msg.is_none());
+    alice1.recv_msg_trash(&sync_msg).await;
 }
 
 /// Pretty-print an event to stdout

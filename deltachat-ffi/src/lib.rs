@@ -556,6 +556,10 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::AccountsChanged => 2302,
         EventType::AccountsItemChanged => 2303,
         EventType::EventChannelOverflow { .. } => 2400,
+        EventType::IncomingCall { .. } => 2550,
+        EventType::IncomingCallAccepted { .. } => 2560,
+        EventType::OutgoingCallAccepted { .. } => 2570,
+        EventType::CallEnded { .. } => 2580,
         #[allow(unreachable_patterns)]
         #[cfg(test)]
         _ => unreachable!("This is just to silence a rust_analyzer false-positive"),
@@ -619,7 +623,11 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         EventType::WebxdcRealtimeData { msg_id, .. }
         | EventType::WebxdcStatusUpdate { msg_id, .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { msg_id }
-        | EventType::WebxdcInstanceDeleted { msg_id, .. } => msg_id.to_u32() as libc::c_int,
+        | EventType::WebxdcInstanceDeleted { msg_id, .. }
+        | EventType::IncomingCall { msg_id, .. }
+        | EventType::IncomingCallAccepted { msg_id, .. }
+        | EventType::OutgoingCallAccepted { msg_id, .. }
+        | EventType::CallEnded { msg_id, .. } => msg_id.to_u32() as libc::c_int,
         EventType::ChatlistItemChanged { chat_id } => {
             chat_id.unwrap_or_default().to_u32() as libc::c_int
         }
@@ -671,6 +679,9 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::ChatModified(_)
         | EventType::ChatDeleted { .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
+        | EventType::IncomingCallAccepted { .. }
+        | EventType::OutgoingCallAccepted { .. }
+        | EventType::CallEnded { .. }
         | EventType::EventChannelOverflow { .. } => 0,
         EventType::MsgsChanged { msg_id, .. }
         | EventType::ReactionsChanged { msg_id, .. }
@@ -689,6 +700,8 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
             ..
         } => status_update_serial.to_u32() as libc::c_int,
         EventType::WebxdcRealtimeData { data, .. } => data.len() as libc::c_int,
+        EventType::IncomingCall { has_video, .. } => *has_video as libc::c_int,
+
         #[allow(unreachable_patterns)]
         #[cfg(test)]
         _ => unreachable!("This is just to silence a rust_analyzer false-positive"),
@@ -767,8 +780,21 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
-        | EventType::WebxdcRealtimeAdvertisementReceived { .. }
-        | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
+        | EventType::IncomingCallAccepted { .. }
+        | EventType::WebxdcRealtimeAdvertisementReceived { .. } => ptr::null_mut(),
+        EventType::IncomingCall {
+            place_call_info, ..
+        } => {
+            let data2 = place_call_info.to_c_string().unwrap_or_default();
+            data2.into_raw()
+        }
+        EventType::OutgoingCallAccepted {
+            accept_call_info, ..
+        } => {
+            let data2 = accept_call_info.to_c_string().unwrap_or_default();
+            data2.into_raw()
+        }
+        EventType::CallEnded { .. } | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
         EventType::ConfigureProgress { comment, .. } => {
             if let Some(comment) = comment {
                 comment.to_c_string().unwrap_or_default().into_raw()
@@ -1165,6 +1191,61 @@ pub unsafe extern "C" fn dc_init_webxdc_integration(
         .log_err(ctx)
         .map(|msg_id| msg_id.map(|id| id.to_u32()).unwrap_or_default())
         .unwrap_or(0)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_place_outgoing_call(
+    context: *mut dc_context_t,
+    chat_id: u32,
+    place_call_info: *const libc::c_char,
+) -> u32 {
+    if context.is_null() || chat_id == 0 {
+        eprintln!("ignoring careless call to dc_place_outgoing_call()");
+        return 0;
+    }
+    let ctx = &*context;
+    let chat_id = ChatId::new(chat_id);
+    let place_call_info = to_string_lossy(place_call_info);
+
+    block_on(ctx.place_outgoing_call(chat_id, place_call_info))
+        .context("Failed to place call")
+        .log_err(ctx)
+        .map(|msg_id| msg_id.to_u32())
+        .unwrap_or_log_default(ctx, "Failed to place call")
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_accept_incoming_call(
+    context: *mut dc_context_t,
+    msg_id: u32,
+    accept_call_info: *const libc::c_char,
+) -> libc::c_int {
+    if context.is_null() || msg_id == 0 {
+        eprintln!("ignoring careless call to dc_accept_incoming_call()");
+        return 0;
+    }
+    let ctx = &*context;
+    let msg_id = MsgId::new(msg_id);
+    let accept_call_info = to_string_lossy(accept_call_info);
+
+    block_on(ctx.accept_incoming_call(msg_id, accept_call_info))
+        .context("Failed to accept call")
+        .is_ok() as libc::c_int
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_end_call(context: *mut dc_context_t, msg_id: u32) -> libc::c_int {
+    if context.is_null() || msg_id == 0 {
+        eprintln!("ignoring careless call to dc_end_call()");
+        return 0;
+    }
+    let ctx = &*context;
+    let msg_id = MsgId::new(msg_id);
+
+    block_on(ctx.end_call(msg_id))
+        .context("Failed to end call")
+        .log_err(ctx)
+        .is_ok() as libc::c_int
 }
 
 #[no_mangle]
@@ -3163,16 +3244,6 @@ pub unsafe extern "C" fn dc_chat_is_encrypted(chat: *mut dc_chat_t) -> libc::c_i
 
     block_on(ffi_chat.chat.is_encrypted(&ffi_chat.context))
         .unwrap_or_log_default(&ffi_chat.context, "Failed dc_chat_is_encrypted") as libc::c_int
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn dc_chat_is_protection_broken(chat: *mut dc_chat_t) -> libc::c_int {
-    if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_protection_broken()");
-        return 0;
-    }
-    let ffi_chat = &*chat;
-    ffi_chat.chat.is_protection_broken() as libc::c_int
 }
 
 #[no_mangle]

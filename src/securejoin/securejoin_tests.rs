@@ -5,6 +5,7 @@ use crate::chat::{CantSendReason, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
+use crate::mimeparser::GossipedKey;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
@@ -185,7 +186,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
 
     if case == SetupContactCase::WrongAliceGossip {
-        let wrong_pubkey = load_self_public_key(&bob).await.unwrap();
+        let wrong_pubkey = GossipedKey {
+            public_key: load_self_public_key(&bob).await.unwrap(),
+            verified: false,
+        };
         let alice_pubkey = msg
             .gossiped_keys
             .insert(alice_addr.to_string(), wrong_pubkey)
@@ -361,6 +365,29 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(alice).await?, true);
 
+    // Check Alice signalled success via the SecurejoinInviterProgress event.
+    let event = alice
+        .evtracker
+        .get_matching(|evt| {
+            matches!(
+                evt,
+                EventType::SecurejoinInviterProgress { progress: 1000, .. }
+            )
+        })
+        .await;
+    match event {
+        EventType::SecurejoinInviterProgress {
+            contact_id,
+            chat_type,
+            progress,
+        } => {
+            assert_eq!(contact_id, contact_bob.id);
+            assert_eq!(chat_type, Chattype::Single);
+            assert_eq!(progress, 1000);
+        }
+        _ => unreachable!(),
+    }
+
     let sent = alice.pop_sent_msg().await;
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -511,6 +538,29 @@ async fn test_secure_join() -> Result<()> {
     alice.recv_msg_trash(&sent).await;
     assert_eq!(contact_bob.is_verified(&alice).await?, true);
 
+    // Check Alice signalled success via the SecurejoinInviterProgress event.
+    let event = alice
+        .evtracker
+        .get_matching(|evt| {
+            matches!(
+                evt,
+                EventType::SecurejoinInviterProgress { progress: 1000, .. }
+            )
+        })
+        .await;
+    match event {
+        EventType::SecurejoinInviterProgress {
+            contact_id,
+            chat_type,
+            progress,
+        } => {
+            assert_eq!(contact_id, contact_bob.id);
+            assert_eq!(chat_type, Chattype::Group);
+            assert_eq!(progress, 1000);
+        }
+        _ => unreachable!(),
+    }
+
     let sent = alice.pop_sent_msg().await;
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -634,7 +684,7 @@ async fn test_unknown_sender() -> Result<()> {
     // The message from Bob is delivered late, Bob is already removed.
     let msg = alice.recv_msg(&sent).await;
     assert_eq!(msg.text, "Hi hi!");
-    assert_eq!(msg.error.unwrap(), "Unknown sender for this chat.");
+    assert_eq!(msg.get_override_sender_name().unwrap(), "bob@example.net");
 
     Ok(())
 }

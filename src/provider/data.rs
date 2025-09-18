@@ -13,8 +13,8 @@ use std::sync::LazyLock;
 // 163.md: 163.com
 static P_163: Provider = Provider {
     id: "163",
-    status: Status::Ok,
-    before_login_hint: "",
+    status: Status::Preparation,
+    before_login_hint: "Enable \"POP3/SMTP/IMAP\" on the website, add a third-party auth code and use that as the login password",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/163",
     server: &[
@@ -98,7 +98,7 @@ static P_ALIYUN: Provider = Provider {
 static P_AOL: Provider = Provider {
     id: "aol",
     status: Status::Preparation,
-    before_login_hint: "To log in to AOL with Delta Chat, you need to set up an app password in the AOL web interface.",
+    before_login_hint: "To log in to AOL, you need to set up an app password in the AOL web interface.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/aol",
     server: &[
@@ -432,7 +432,7 @@ static P_EXAMPLE_COM: Provider = Provider {
     id: "example.com",
     status: Status::Broken,
     before_login_hint: "Hush this provider doesn't exist!",
-    after_login_hint: "This provider doesn't really exist, so you can't use it :/ If you need an email provider for Delta Chat, take a look at providers.delta.chat!",
+    after_login_hint: "This provider doesn't really exist, so you can't use it :/ If you need an email provider, take a look at providers.delta.chat!",
     overview_page: "https://providers.delta.chat/example-com",
     server: &[
         Server {
@@ -459,7 +459,7 @@ static P_EXAMPLE_COM: Provider = Provider {
 static P_FASTMAIL: Provider = Provider {
     id: "fastmail",
     status: Status::Preparation,
-    before_login_hint: "You must create an app-specific password for Delta Chat before you can log in.",
+    before_login_hint: "You must create an app-specific password before you can log in.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/fastmail",
     server: &[
@@ -526,7 +526,7 @@ static P_FIVE_CHAT: Provider = Provider {
 static P_FREENET_DE: Provider = Provider {
     id: "freenet.de",
     status: Status::Preparation,
-    before_login_hint: "Um deine freenet.de E-Mail-Adresse mit Delta Chat zu benutzen, musst du erst auf der freenet.de-Webseite \"POP3/IMAP/SMTP\" aktivieren.",
+    before_login_hint: "Um deine freenet.de E-Mail-Adresse zu benutzen, musst du erst auf der freenet.de-Webseite \"POP3/IMAP/SMTP\" aktivieren.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/freenet-de",
     server: &[
@@ -648,10 +648,6 @@ static P_HERMES_RADIO: Provider = Provider {
             value: "0",
         },
         ConfigDefault {
-            key: Config::E2eeEnabled,
-            value: "0",
-        },
-        ConfigDefault {
             key: Config::ShowEmails,
             value: "2",
         },
@@ -663,7 +659,7 @@ static P_HERMES_RADIO: Provider = Provider {
 static P_HEY_COM: Provider = Provider {
     id: "hey.com",
     status: Status::Broken,
-    before_login_hint: "hey.com does not offer the standard IMAP e-mail protocol, so you cannot log in with Delta Chat to hey.com.",
+    before_login_hint: "hey.com does not offer the standard IMAP e-mail protocol, so you cannot log in to hey.com.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/hey-com",
     server: &[],
@@ -702,7 +698,7 @@ static P_I3_NET: Provider = Provider {
 static P_ICLOUD: Provider = Provider {
     id: "icloud",
     status: Status::Preparation,
-    before_login_hint: "You must create an app-specific password for Delta Chat before login.",
+    before_login_hint: "You must create an app-specific password before login.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/icloud",
     server: &[
@@ -787,7 +783,7 @@ static P_KONTENT_COM: Provider = Provider {
 static P_MAIL_COM: Provider = Provider {
     id: "mail.com",
     status: Status::Preparation,
-    before_login_hint: "To log in with Delta Chat, you first need to activate POP3/IMAP in your mail.com settings. Note that this is a mail.com Premium feature only.",
+    before_login_hint: "To log in, you first need to activate POP3/IMAP in your mail.com settings. Note that this is a mail.com Premium feature only.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/mail-com",
     server: &[],
@@ -828,7 +824,7 @@ static P_MAIL_DE: Provider = Provider {
 static P_MAIL_RU: Provider = Provider {
     id: "mail.ru",
     status: Status::Preparation,
-    before_login_hint: "Вам необходимо сгенерировать \"пароль для внешнего приложения\" в веб-интерфейсе mail.ru, чтобы mail.ru работал с Delta Chat.",
+    before_login_hint: "Вам необходимо сгенерировать \"пароль для внешнего приложения\" в веб-интерфейсе mail.ru, чтобы mail.ru работал с chatmail.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/mail-ru",
     server: &[
@@ -1222,8 +1218,8 @@ static P_NUBO_COOP: Provider = Provider {
 // outlook.com.md: hotmail.com, outlook.com, office365.com, outlook.com.tr, live.com, outlook.de
 static P_OUTLOOK_COM: Provider = Provider {
     id: "outlook.com",
-    status: Status::Ok,
-    before_login_hint: "",
+    status: Status::Broken,
+    before_login_hint: "Unfortunately, Outlook does not allow using passwords anymore, per-app-passwords are currently not working.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/outlook-com",
     server: &[
@@ -1321,8 +1317,8 @@ static P_POSTEO: Provider = Provider {
 static P_PROTONMAIL: Provider = Provider {
     id: "protonmail",
     status: Status::Broken,
-    before_login_hint: "Protonmail does not offer the standard IMAP e-mail protocol, so you cannot log in with Delta Chat to Protonmail.",
-    after_login_hint: "To use Delta Chat with Protonmail, the IMAP bridge must be running in the background. If you have connectivity issues, double check whether it works as expected.",
+    before_login_hint: "Protonmail does not offer the standard IMAP e-mail protocol, so you cannot log in with to Protonmail.",
+    after_login_hint: "To use Protonmail, the IMAP bridge must be running in the background. If you have connectivity issues, double check whether it works as expected.",
     overview_page: "https://providers.delta.chat/protonmail",
     server: &[],
     opt: ProviderOptions::new(),
@@ -1362,7 +1358,7 @@ static P_PURELYMAIL_COM: Provider = Provider {
 static P_QQ: Provider = Provider {
     id: "qq",
     status: Status::Preparation,
-    before_login_hint: "Manually enabling IMAP/SMTP and creating an app-specific password for Delta Chat are required.",
+    before_login_hint: "Manually enabling IMAP/SMTP and creating an app-specific password are required.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/qq",
     server: &[
@@ -1390,7 +1386,7 @@ static P_QQ: Provider = Provider {
 static P_RAMBLER_RU: Provider = Provider {
     id: "rambler.ru",
     status: Status::Preparation,
-    before_login_hint: "Чтобы войти в Рамблер/почта через Delta Chat, необходимо предварительно включить доступ с помощью почтовых клиентов на сайте mail.rambler.ru",
+    before_login_hint: "Чтобы войти в Рамблер/почта, необходимо предварительно включить доступ с помощью почтовых клиентов на сайте mail.rambler.ru",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/rambler-ru",
     server: &[
@@ -1566,7 +1562,7 @@ static P_SYSTEMLI_ORG: Provider = Provider {
 static P_T_ONLINE: Provider = Provider {
     id: "t-online",
     status: Status::Preparation,
-    before_login_hint: "To use Delta Chat with a T-Online email address, you need to create an app password in the web interface.",
+    before_login_hint: "To use a T-Online email address, you need to create an app password in the web interface.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/t-online",
     server: &[
@@ -1677,7 +1673,7 @@ static P_TISCALI_IT: Provider = Provider {
 static P_TUTANOTA: Provider = Provider {
     id: "tutanota",
     status: Status::Broken,
-    before_login_hint: "Tutanota does not offer the standard IMAP e-mail protocol, so you cannot log in with Delta Chat to Tutanota.",
+    before_login_hint: "Tutanota does not offer the standard IMAP e-mail protocol, so you cannot log in to Tutanota.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/tutanota",
     server: &[],
@@ -1787,7 +1783,7 @@ static P_VIVALDI: Provider = Provider {
 static P_VK_COM: Provider = Provider {
     id: "vk.com",
     status: Status::Preparation,
-    before_login_hint: "Вам необходимо сгенерировать \"пароль для внешнего приложения\" в веб-интерфейсе mail.ru https://account.mail.ru/user/2-step-auth/passwords/ чтобы vk.com работал с Delta Chat.",
+    before_login_hint: "Вам необходимо сгенерировать \"пароль для внешнего приложения\" в веб-интерфейсе mail.ru https://account.mail.ru/user/2-step-auth/passwords/ чтобы vk.com работал с chatmail.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/vk-com",
     server: &[
@@ -1906,7 +1902,7 @@ static P_WKPB_DE: Provider = Provider {
 static P_YAHOO: Provider = Provider {
     id: "yahoo",
     status: Status::Preparation,
-    before_login_hint: "To use Delta Chat with your Yahoo email address you have to create an \"App-Password\" in the account security screen.",
+    before_login_hint: "To use your Yahoo email address you have to create an \"App-Password\" in the account security screen.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/yahoo",
     server: &[
@@ -2662,4 +2658,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2024, 9, 13).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2025, 9, 4).unwrap());

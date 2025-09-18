@@ -21,7 +21,7 @@ use tokio::task;
 use tokio::time::{Duration, timeout};
 
 use crate::blob::BlobObject;
-use crate::chat::{ChatId, ChatIdBlocked, ProtectionStatus};
+use crate::chat::ChatId;
 use crate::color::str_to_color;
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype};
@@ -1575,11 +1575,16 @@ impl Contact {
     }
 
     /// Get a color for the contact.
-    /// The color is calculated from the contact's email address
-    /// and can be used for an fallback avatar with white initials
+    /// The color is calculated from the contact's fingerprint (for key-contacts)
+    /// or email address (for address-contacts) and can be used
+    /// for an fallback avatar with white initials
     /// as well as for headlines in bubbles of group chats.
     pub fn get_color(&self) -> u32 {
-        str_to_color(&self.addr.to_lowercase())
+        if let Some(fingerprint) = self.fingerprint() {
+            str_to_color(&fingerprint.hex())
+        } else {
+            str_to_color(&self.addr.to_lowercase())
+        }
     }
 
     /// Gets the contact's status.
@@ -1642,29 +1647,6 @@ impl Contact {
             Ok(Some(None))
         } else {
             Ok(Some(Some(ContactId::new(verifier_id))))
-        }
-    }
-
-    /// Returns if the contact profile title should display a green checkmark.
-    ///
-    /// This generally should be consistent with the 1:1 chat with the contact
-    /// so 1:1 chat with the contact and the contact profile
-    /// either both display the green checkmark or both don't display a green checkmark.
-    ///
-    /// UI often knows beforehand if a chat exists and can also call
-    /// `chat.is_protected()` (if there is a chat)
-    /// or `contact.is_verified()` (if there is no chat) directly.
-    /// This is often easier and also skips some database calls.
-    pub async fn is_profile_verified(&self, context: &Context) -> Result<bool> {
-        let contact_id = self.id;
-
-        if let Some(ChatIdBlocked { id: chat_id, .. }) =
-            ChatIdBlocked::lookup_by_contact(context, contact_id).await?
-        {
-            Ok(chat_id.is_protected(context).await? == ProtectionStatus::Protected)
-        } else {
-            // 1:1 chat does not exist.
-            Ok(self.is_verified(context).await?)
         }
     }
 
@@ -1943,16 +1925,21 @@ pub(crate) async fn update_last_seen(
 }
 
 /// Marks contact `contact_id` as verified by `verifier_id`.
+///
+/// `verifier_id == None` means that the verifier is unknown.
 pub(crate) async fn mark_contact_id_as_verified(
     context: &Context,
     contact_id: ContactId,
-    verifier_id: ContactId,
+    verifier_id: Option<ContactId>,
 ) -> Result<()> {
+    ensure_and_debug_assert_ne!(contact_id, ContactId::SELF,);
     ensure_and_debug_assert_ne!(
-        contact_id,
+        Some(contact_id),
         verifier_id,
         "Contact cannot be verified by self",
     );
+    let by_self = verifier_id == Some(ContactId::SELF);
+    let mut verifier_id = verifier_id.unwrap_or(contact_id);
     context
         .sql
         .transaction(|transaction| {
@@ -1965,21 +1952,33 @@ pub(crate) async fn mark_contact_id_as_verified(
                 bail!("Non-key-contact {contact_id} cannot be verified");
             }
             if verifier_id != ContactId::SELF {
-                let verifier_fingerprint: String = transaction.query_row(
-                    "SELECT fingerprint FROM contacts WHERE id=?",
-                    (verifier_id,),
-                    |row| row.get(0),
-                )?;
+                let (verifier_fingerprint, verifier_verifier_id): (String, ContactId) = transaction
+                    .query_row(
+                        "SELECT fingerprint, verifier FROM contacts WHERE id=?",
+                        (verifier_id,),
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )?;
                 if verifier_fingerprint.is_empty() {
                     bail!(
                         "Contact {contact_id} cannot be verified by non-key-contact {verifier_id}"
                     );
                 }
+                ensure!(
+                    verifier_id == contact_id || verifier_verifier_id != ContactId::UNDEFINED,
+                    "Contact {contact_id} cannot be verified by unverified contact {verifier_id}",
+                );
+                if verifier_verifier_id == verifier_id {
+                    // Avoid introducing incorrect reverse chains: if the verifier itself has an
+                    // unknown verifier, it may be `contact_id` actually (directly or indirectly) on
+                    // the other device (which is needed for getting "verified by unknown contact"
+                    // in the first place).
+                    verifier_id = contact_id;
+                }
             }
             transaction.execute(
                 "UPDATE contacts SET verifier=?1
-                 WHERE id=?2 AND (verifier=0 OR ?1=?3)",
-                (verifier_id, contact_id, ContactId::SELF),
+                 WHERE id=?2 AND (verifier=0 OR verifier=id OR ?3)",
+                (verifier_id, contact_id, by_self),
             )?;
             Ok(())
         })

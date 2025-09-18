@@ -1797,7 +1797,8 @@ impl Chat {
 
     /// Returns chat avatar color.
     ///
-    /// For 1:1 chats, the color is calculated from the contact's address.
+    /// For 1:1 chats, the color is calculated from the contact's address
+    /// for address-contacts and from the OpenPGP key fingerprint for key-contacts.
     /// For group chats the color is calculated from the grpid, if present, or the chat name.
     pub async fn get_color(&self, context: &Context) -> Result<u32> {
         let mut color = 0;
@@ -1919,11 +1920,6 @@ impl Chat {
         Ok(is_encrypted)
     }
 
-    /// Deprecated 2025-07. Returns false.
-    pub fn is_protection_broken(&self) -> bool {
-        false
-    }
-
     /// Returns true if location streaming is enabled in the chat.
     pub fn is_sending_locations(&self) -> bool {
         self.is_sending_locations
@@ -1961,7 +1957,7 @@ impl Chat {
     }
 
     /// Adds missing values to the msg object,
-    /// writes the record to the database and returns its msg_id.
+    /// writes the record to the database.
     ///
     /// If `update_msg_id` is set, that record is reused;
     /// if `update_msg_id` is None, a new record is created.
@@ -1970,7 +1966,7 @@ impl Chat {
         context: &Context,
         msg: &mut Message,
         update_msg_id: Option<MsgId>,
-    ) -> Result<MsgId> {
+    ) -> Result<()> {
         let mut to_id = 0;
         let mut location_id = 0;
 
@@ -2248,7 +2244,7 @@ impl Chat {
                 .await?;
         }
         context.scheduler.interrupt_ephemeral_task().await;
-        Ok(msg.id)
+        Ok(())
     }
 
     /// Sends a `SyncAction` synchronising chat contacts to other devices.
@@ -2695,7 +2691,10 @@ impl ChatIdBlocked {
 }
 
 async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
-    if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::VideochatInvitation {
+    if msg.viewtype == Viewtype::Text
+        || msg.viewtype == Viewtype::VideochatInvitation
+        || msg.viewtype == Viewtype::Call
+    {
         // the caller should check if the message text is empty
     } else if msg.viewtype.has_file() {
         let viewtype_orig = msg.viewtype;
@@ -2973,8 +2972,7 @@ async fn prepare_send_msg(
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
-    msg.id = chat.prepare_msg_raw(context, msg, update_msg_id).await?;
-    msg.chat_id = chat_id;
+    chat.prepare_msg_raw(context, msg, update_msg_id).await?;
 
     let row_ids = create_send_msg_jobs(context, msg)
         .await
@@ -3002,7 +3000,16 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     }
 
     let needs_encryption = msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default();
-    let mimefactory = MimeFactory::from_msg(context, msg.clone()).await?;
+    let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
+        Ok(mf) => mf,
+        Err(err) => {
+            // Mark message as failed
+            message::set_msg_failed(context, msg, &err.to_string())
+                .await
+                .ok();
+            return Err(err);
+        }
+    };
     let attach_selfavatar = mimefactory.attach_selfavatar;
     let mut recipients = mimefactory.recipients();
 
@@ -3162,6 +3169,7 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
         original_msg.viewtype != Viewtype::VideochatInvitation,
         "Cannot edit videochat invitations"
     );
+    ensure!(original_msg.viewtype != Viewtype::Call, "Cannot edit calls");
     ensure!(
         !original_msg.text.is_empty(), // avoid complexity in UI element changes. focus is typos and rewordings
         "Cannot add text"
@@ -3730,11 +3738,19 @@ pub async fn create_group_ex(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    if encryption == Some(ProtectionStatus::Protected) {
-        let protect = ProtectionStatus::Protected;
-        chat_id
-            .set_protection_for_timestamp_sort(context, protect, timestamp, None)
-            .await?;
+    match encryption {
+        Some(ProtectionStatus::Protected) => {
+            let protect = ProtectionStatus::Protected;
+            chat_id
+                .set_protection_for_timestamp_sort(context, protect, timestamp, None)
+                .await?;
+        }
+        Some(ProtectionStatus::Unprotected) => {
+            // Add "Messages are end-to-end encrypted." message
+            // even to unprotected chats.
+            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
+        }
+        None => {}
     }
 
     if !context.get_config_bool(Config::Bot).await?
@@ -4447,13 +4463,13 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.timestamp_sort = curr_timestamp;
-        let new_msg_id = chat.prepare_msg_raw(context, &mut msg, None).await?;
+        chat.prepare_msg_raw(context, &mut msg, None).await?;
 
         curr_timestamp += 1;
         if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             context.scheduler.interrupt_smtp().await;
         }
-        created_msgs.push(new_msg_id);
+        created_msgs.push(msg.id);
     }
     for msg_id in created_msgs {
         context.emit_msgs_changed(chat_id, msg_id);

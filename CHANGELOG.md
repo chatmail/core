@@ -1,5 +1,114 @@
 # Changelog
 
+## [2.15.0] - 2025-09-15
+
+### API-Changes
+
+- Add JSON-RPC API for calls ([#7194](https://github.com/chatmail/core/pull/7194)).
+
+### Build system
+
+- Remove unused `quoted_printable` dependency.
+
+## [2.14.0] - 2025-09-12
+
+### API-Changes
+
+- Put the chattype into the SecurejoinInviterProgress event ([#7181](https://github.com/chatmail/core/pull/7181)).
+
+### Fixes
+
+- param: Split params only on \n.
+- B-encode SDP offer and answer sent in headers.
+
+### Refactor
+
+- Use recv_msg_trash() instead of recv_msg_opt().
+- Prepare_msg_raw(): don't return MsgId.
+
+### Tests
+
+- Message is OutFailed if all keys are missing ([#6849](https://github.com/chatmail/core/pull/6849)).
+- Test sending SDP offer and answer with newlines.
+
+## [2.13.0] - 2025-09-09
+
+### API-Changes
+
+- [**breaking**] Remove `is_profile_verified` APIs.
+- [**breaking**] Remove deprecated `is_protection_broken`.
+- [**breaking**] Remove `e2ee_enabled` preference.
+
+### Features / Changes
+
+- Add call ringing API ([#6650](https://github.com/chatmail/core/pull/6650), [#7174](https://github.com/chatmail/core/pull/7174), [#7175](https://github.com/chatmail/core/pull/7175), [#7179](https://github.com/chatmail/core/pull/7179))
+- Warn for outdated versions after 6 months instead of 1 year ([#7144](https://github.com/chatmail/core/pull/7144)).
+- Do not set "unknown sender for this chat" error.
+- Do not replace messages with an error on verification failure.
+- Support receiving Autocrypt-Gossip with `_verified` attribute.
+- Withdraw all QR codes when one is withdrawn.
+
+### Fixes
+
+- Don't reverify contacts by SELF on receipt of a message from another device.
+- Don't verify contacts by others having an unknown verifier.
+- Update verifier_id if it's "unknown" and new verifier has known verifier.
+- Mark message as failed if it can't be sent ([#7143](https://github.com/chatmail/core/pull/7143)).
+- Add "Messages are end-to-end encrypted." to non-protected groups.
+
+### Documentation
+
+- Fix for SecurejoinInviterProgress with progress == 600.
+- STYLE.md: Prefer BTreeMap and BTreeSet over hash variants.
+
+### Miscellaneous Tasks
+
+- Update provider database.
+- Update dependencies.
+
+### Refactor
+
+- Check that verifier is verified in turn.
+- Remove unused `EncryptPreference::Reset`.
+- Remove `Aheader::new`.
+
+### Tests
+
+- Add another TimeShiftFalsePositiveNote ([#7142](https://github.com/chatmail/core/pull/7142)).
+- Add TestContext.create_chat_id.
+
+## [2.12.0] - 2025-08-26
+
+### API-Changes
+
+- api!(python): remove remaining broken API for reactions
+
+### Features / Changes
+
+- Use Group ID for chat color generation instead of the name for encrypted groups.
+- Use key fingerprints instead of addresses for key-contacts color generation.
+- Replace HSLuv colors with OKLCh.
+- `wal_checkpoint()`: Do `wal_checkpoint(PASSIVE)` and `wal_checkpoint(FULL)` before `wal_checkpoint(TRUNCATE)`.
+- Assign messages to key-contacts based on Issuer Fingerprint.
+- Create_group_ex(): Log and replace invalid chat name with "…".
+
+### Fixes
+
+- Do not create a group if the sender includes self in the `To` field.
+- Do not reverify already verified contacts via gossip.
+- `get_connectivity()`: Get rid of locking SchedulerState::inner ([#7124](https://github.com/chatmail/core/pull/7124)).
+- Make reaction message hidden only if there are no other parts.
+
+### Refactor
+
+- Do not return `Result` from `valid_signature_fingerprints()`.
+- Make `ConnectivityStore` use a non-async lock ([#7129](https://github.com/chatmail/core/pull/7129)).
+
+### Documentation
+
+- Remove broken link from documentation comments.
+- Remove the comment about Color Vision Deficiency correction.
+
 ## [2.11.0] - 2025-08-13
 
 ### Features / Changes
@@ -6646,3 +6755,7 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.9.0]: https://github.com/chatmail/core/compare/v2.8.0..v2.9.0
 [2.10.0]: https://github.com/chatmail/core/compare/v2.9.0..v2.10.0
 [2.11.0]: https://github.com/chatmail/core/compare/v2.10.0..v2.11.0
+[2.12.0]: https://github.com/chatmail/core/compare/v2.11.0..v2.12.0
+[2.13.0]: https://github.com/chatmail/core/compare/v2.12.0..v2.13.0
+[2.14.0]: https://github.com/chatmail/core/compare/v2.13.0..v2.14.0
+[2.15.0]: https://github.com/chatmail/core/compare/v2.14.0..v2.15.0

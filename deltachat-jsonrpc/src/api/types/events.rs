@@ -1,4 +1,5 @@
 use deltachat::{Event as CoreEvent, EventType as CoreEventType};
+use num_traits::ToPrimitive;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
@@ -303,10 +304,13 @@ pub enum EventType {
         /// ID of the contact that wants to join.
         contact_id: u32,
 
+        /// The type of the joined chat.
+        /// This can take the same values
+        /// as `BasicChat.chatType` ([`crate::api::types::chat::BasicChat::chat_type`]).
+        chat_type: u32,
+
         /// Progress as:
-        /// 300=vg-/vc-request received, typically shown as "bob@addr joins".
-        /// 600=vg-/vc-request-with-auth received, vg-member-added/vc-contact-confirm sent, typically shown as "bob@addr verified".
-        /// 800=contact added to chat, shown as "bob@addr securely joined GROUP". Only for the verified-group-protocol.
+        /// 0=Error.
         /// 1000=Protocol finished for this contact.
         progress: usize,
     },
@@ -416,6 +420,37 @@ pub enum EventType {
         /// Number of events skipped.
         n: u64,
     },
+
+    /// Incoming call.
+    IncomingCall {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// User-defined info as passed to place_outgoing_call()
+        place_call_info: String,
+        /// True if incoming call is a video call.
+        has_video: bool,
+    },
+
+    /// Incoming call accepted.
+    /// This is esp. interesting to stop ringing on other devices.
+    IncomingCallAccepted {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+    },
+
+    /// Outgoing call accepted.
+    OutgoingCallAccepted {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// User-defined info passed to dc_accept_incoming_call(
+        accept_call_info: String,
+    },
+
+    /// Call ended.
+    CallEnded {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+    },
 }
 
 impl From<CoreEventType> for EventType {
@@ -522,9 +557,11 @@ impl From<CoreEventType> for EventType {
             },
             CoreEventType::SecurejoinInviterProgress {
                 contact_id,
+                chat_type,
                 progress,
             } => SecurejoinInviterProgress {
                 contact_id: contact_id.to_u32(),
+                chat_type: chat_type.to_u32().unwrap_or(0),
                 progress,
             },
             CoreEventType::SecurejoinJoinerProgress {
@@ -566,6 +603,28 @@ impl From<CoreEventType> for EventType {
             CoreEventType::EventChannelOverflow { n } => EventChannelOverflow { n },
             CoreEventType::AccountsChanged => AccountsChanged,
             CoreEventType::AccountsItemChanged => AccountsItemChanged,
+            CoreEventType::IncomingCall {
+                msg_id,
+                place_call_info,
+                has_video,
+            } => IncomingCall {
+                msg_id: msg_id.to_u32(),
+                place_call_info,
+                has_video,
+            },
+            CoreEventType::IncomingCallAccepted { msg_id } => IncomingCallAccepted {
+                msg_id: msg_id.to_u32(),
+            },
+            CoreEventType::OutgoingCallAccepted {
+                msg_id,
+                accept_call_info,
+            } => OutgoingCallAccepted {
+                msg_id: msg_id.to_u32(),
+                accept_call_info,
+            },
+            CoreEventType::CallEnded { msg_id } => CallEnded {
+                msg_id: msg_id.to_u32(),
+            },
             #[allow(unreachable_patterns)]
             #[cfg(test)]
             _ => unreachable!("This is just to silence a rust_analyzer false-positive"),

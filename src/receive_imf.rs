@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -28,14 +28,14 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::self_fingerprint_opt;
-use crate::key::{DcKey, Fingerprint, SignedPublicKey};
+use crate::key::{DcKey, Fingerprint};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
-use crate::mimeparser::{AvatarAction, MimeMessage, SystemMessage, parse_message_ids};
+use crate::mimeparser::{AvatarAction, GossipedKey, MimeMessage, SystemMessage, parse_message_ids};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{Reaction, set_msg_reaction};
@@ -836,7 +836,7 @@ pub(crate) async fn receive_imf_inner(
             context
                 .sql
                 .transaction(move |transaction| {
-                    let fingerprint = gossiped_key.dc_fingerprint().hex();
+                    let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
                     transaction.execute(
                         "INSERT INTO gossip_timestamp (chat_id, fingerprint, timestamp)
                          VALUES                       (?, ?, ?)
@@ -1001,12 +1001,18 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if received_msg.hidden {
+    if mime_parser.is_call() {
+        context
+            .handle_call_msg(insert_msg_id, &mime_parser, from_id)
+            .await?;
+    } else if received_msg.hidden {
         // No need to emit an event about the changed message
     } else if let Some(replace_chat_id) = replace_chat_id {
         context.emit_msgs_changed_without_msg_id(replace_chat_id);
     } else if !chat_id.is_trash() {
-        let fresh = received_msg.state == MessageState::InFresh;
+        let fresh = received_msg.state == MessageState::InFresh
+            && mime_parser.is_system_message != SystemMessage::CallAccepted
+            && mime_parser.is_system_message != SystemMessage::CallEnded;
         for msg_id in &received_msg.msg_ids {
             chat_id.emit_msg_event(context, *msg_id, mime_parser.incoming && fresh);
         }
@@ -1150,6 +1156,11 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
+    } else if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        info!(context, "Call state changed (TRASH).");
+        true
     } else if mime_parser.decrypting_failed && !mime_parser.incoming {
         // Outgoing undecryptable message.
         let last_time = context
@@ -1218,17 +1229,21 @@ async fn decide_chat_assignment(
     //
     // The chat may not exist yet, i.e. there may be
     // no database row and ChatId yet.
-    let mut num_recipients = mime_parser.recipients.len();
-    if from_id != ContactId::SELF {
-        let mut has_self_addr = false;
-        for recipient in &mime_parser.recipients {
-            if context.is_self_addr(&recipient.addr).await? {
-                has_self_addr = true;
-            }
+    let mut num_recipients = 0;
+    let mut has_self_addr = false;
+    for recipient in &mime_parser.recipients {
+        if addr_cmp(&recipient.addr, &mime_parser.from.addr) {
+            continue;
         }
-        if !has_self_addr {
-            num_recipients += 1;
+
+        if context.is_self_addr(&recipient.addr).await? {
+            has_self_addr = true;
         }
+
+        num_recipients += 1;
+    }
+    if from_id != ContactId::SELF && !has_self_addr {
+        num_recipients += 1;
     }
 
     let chat_assignment = if should_trash {
@@ -1686,12 +1701,6 @@ async fn add_parts(
             let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
             for part in &mut mime_parser.parts {
                 part.param.set(Param::OverrideSenderDisplayname, name);
-
-                if chat.is_protected() {
-                    // In protected chat, also mark the message with an error.
-                    let s = stock_str::unknown_sender_for_chat(context).await;
-                    part.error = Some(s);
-                }
             }
         }
     }
@@ -1867,25 +1876,6 @@ async fn add_parts(
         None
     };
 
-    let mut verification_failed = false;
-    if !chat_id.is_special() && is_partial_download.is_none() {
-        // For outgoing emails in the 1:1 chat we have an exception that
-        // they are allowed to be unencrypted:
-        // 1. They can't be an attack (they are outgoing, not incoming)
-        // 2. Probably the unencryptedness is just a temporary state, after all
-        //    the user obviously still uses DC
-        //    -> Showing info messages every time would be a lot of noise
-        // 3. The info messages that are shown to the user ("Your chat partner
-        //    likely reinstalled DC" or similar) would be wrong.
-        if chat.is_protected() && (mime_parser.incoming || chat.typ != Chattype::Single) {
-            if let VerifiedEncryption::NotVerified(err) = verified_encryption {
-                verification_failed = true;
-                warn!(context, "Verification problem: {err:#}.");
-                let s = format!("{err}. Re-download the message or see 'Info' for more details");
-                mime_parser.replace_msg_by_error(&s);
-            }
-        }
-    }
     drop(chat); // Avoid using stale `chat` object.
 
     let sort_timestamp = tweak_sort_timestamp(
@@ -1998,6 +1988,24 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
+
+    if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
+    {
+        if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
+            if let Some(call) =
+                message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
+            {
+                context
+                    .handle_call_msg(call.get_id(), mime_parser, from_id)
+                    .await?;
+            } else {
+                warn!(context, "Call: Cannot load parent.")
+            }
+        } else {
+            warn!(context, "Call: Not a reply.")
+        }
+    }
 
     let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);
     let mut parts = mime_parser.parts.iter().peekable();
@@ -2143,10 +2151,6 @@ RETURNING id
                         DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
-                    } else if verification_failed {
-                        // Verification can fail because of message reordering. Re-downloading the
-                        // message should help if so.
-                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
@@ -2927,7 +2931,7 @@ async fn apply_group_changes(
             // highest `add_timestamp` to disambiguate.
             // The result of the error is that info message
             // may contain display name of the wrong contact.
-            let fingerprint = key.dc_fingerprint().hex();
+            let fingerprint = key.public_key.dc_fingerprint().hex();
             if let Some(contact_id) =
                 lookup_key_contact_by_fingerprint(context, &fingerprint).await?
             {
@@ -3669,6 +3673,25 @@ async fn mark_recipients_as_verified(
     to_ids: &[Option<ContactId>],
     mimeparser: &MimeMessage,
 ) -> Result<()> {
+    let verifier_id = Some(from_id).filter(|&id| id != ContactId::SELF);
+    for gossiped_key in mimeparser
+        .gossiped_keys
+        .values()
+        .filter(|gossiped_key| gossiped_key.verified)
+    {
+        let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
+        let Some(to_id) = lookup_key_contact_by_fingerprint(context, &fingerprint).await? else {
+            continue;
+        };
+
+        if to_id == ContactId::SELF || to_id == from_id {
+            continue;
+        }
+
+        mark_contact_id_as_verified(context, to_id, verifier_id).await?;
+        ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
+    }
+
     if mimeparser.get_header(HeaderDef::ChatVerified).is_none() {
         return Ok(());
     }
@@ -3677,7 +3700,7 @@ async fn mark_recipients_as_verified(
             continue;
         }
 
-        mark_contact_id_as_verified(context, to_id, from_id).await?;
+        mark_contact_id_as_verified(context, to_id, verifier_id).await?;
         ChatId::set_protection_for_contact(context, to_id, mimeparser.timestamp_sent).await?;
     }
 
@@ -3764,7 +3787,7 @@ async fn add_or_lookup_contacts_by_address_list(
 async fn add_or_lookup_key_contacts(
     context: &Context,
     address_list: &[SingleInfo],
-    gossiped_keys: &HashMap<String, SignedPublicKey>,
+    gossiped_keys: &BTreeMap<String, GossipedKey>,
     fingerprints: &[Fingerprint],
     origin: Origin,
 ) -> Result<Vec<Option<ContactId>>> {
@@ -3780,7 +3803,7 @@ async fn add_or_lookup_key_contacts(
             // Iterator has not ran out of fingerprints yet.
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
-            key.dc_fingerprint().hex()
+            key.public_key.dc_fingerprint().hex()
         } else if context.is_self_addr(addr).await? {
             contact_ids.push(Some(ContactId::SELF));
             continue;

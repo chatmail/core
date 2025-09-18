@@ -1,6 +1,6 @@
 [package]
 name = "deltachat"
-version = "2.11.0"
+version = "2.15.0"
 edition = "2024"
 license = "MPL-2.0"
 rust-version = "1.85"
@@ -49,9 +49,11 @@ async-native-tls = { version = "0.5", default-features = false, features = ["run
 async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
 async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
+blake3 = "1.8.2"
 brotli = { version = "8", default-features=false, features = ["std"] }
 bytes = "1"
 chrono = { workspace = true, features = ["alloc", "clock", "std"] }
+colorutils-rs = { version = "0.7.5", default-features = false }
 data-encoding = "2.9.0"
 escaper = "0.1"
 fast-socks5 = "0.10"
@@ -81,14 +83,13 @@ pgp = { version = "0.16.0", default-features = false }
 pin-project = "1"
 qrcodegen = "1.7.0"
 quick-xml = "0.37"
-quoted_printable = "0.5"
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
-rust-hsluv = "0.1"
 rustls-pki-types = "1.12.0"
 rustls = { version = "0.23.22", default-features = false }
 sanitize-filename = { workspace = true }
+sdp = "0.8.0"
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 serde = { workspace = true, features = ["derive"] }
@@ -112,7 +113,6 @@ tracing = "0.1.41"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 webpki-roots = "0.26.8"
-blake3 = "1.8.2"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
@@ -182,11 +182,11 @@ deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
 futures = "0.3.31"
-futures-lite = "2.6.0"
+futures-lite = "2.6.1"
 libc = "0.2"
 log = "0.4"
 mailparse = "0.16.1"
-nu-ansi-term = "0.46"
+nu-ansi-term = "0.50"
 num-traits = "0.2"
 rand = "0.8"
 regex = "1.10"
@@ -194,10 +194,10 @@ rusqlite = "0.36"
 sanitize-filename = "0.5"
 serde = "1.0"
 serde_json = "1"
-tempfile = "3.20.0"
+tempfile = "3.21.0"
 thiserror = "2"
 tokio = "1"
-tokio-util = "0.7.14"
+tokio-util = "0.7.16"
 tracing-subscriber = "0.3"
 yerpc = "0.6.4"
 

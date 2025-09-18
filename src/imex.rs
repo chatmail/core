@@ -140,32 +140,8 @@ pub async fn has_backup(_context: &Context, dir_name: &Path) -> Result<String> {
 }
 
 async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
-    // try hard to only modify key-state
-    let (private_key, header) = SignedSecretKey::from_asc(armored)?;
+    let private_key = SignedSecretKey::from_asc(armored)?;
     let public_key = private_key.split_public_key()?;
-    if let Some(preferencrypt) = header.get("Autocrypt-Prefer-Encrypt") {
-        let e2ee_enabled = match preferencrypt.as_str() {
-            "nopreference" => 0,
-            "mutual" => 1,
-            _ => {
-                bail!("invalid Autocrypt-Prefer-Encrypt header: {:?}", header);
-            }
-        };
-        context
-            .sql
-            .set_raw_config_int("e2ee_enabled", e2ee_enabled)
-            .await?;
-    } else {
-        // `Autocrypt-Prefer-Encrypt` is not included
-        // in keys exported to file.
-        //
-        // `Autocrypt-Prefer-Encrypt` also SHOULD be sent
-        // in Autocrypt Setup Message according to Autocrypt specification,
-        // but K-9 6.802 does not include this header.
-        //
-        // We keep current setting in this case.
-        info!(context, "No Autocrypt-Prefer-Encrypt header.");
-    };
 
     let keypair = pgp::KeyPair {
         public: public_key,

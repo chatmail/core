@@ -74,7 +74,7 @@ fn pad_device_token(s: &str) -> String {
 ///
 /// The result is base64-encoded and not ASCII armored to avoid dealing with newlines.
 pub(crate) fn encrypt_device_token(device_token: &str) -> Result<String> {
-    let public_key = pgp::composed::SignedPublicKey::from_asc(NOTIFIERS_PUBLIC_KEY)?.0;
+    let public_key = pgp::composed::SignedPublicKey::from_asc(NOTIFIERS_PUBLIC_KEY)?;
     let encryption_subkey = public_key
         .public_subkeys
         .first()

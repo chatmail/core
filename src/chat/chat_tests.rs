@@ -11,7 +11,9 @@ use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, E2EE_INFO_MSGS, TestContext, TestContextManager,
     TimeShiftFalsePositiveNote, sync,
 };
+use crate::tools::SystemTime;
 use pretty_assertions::assert_eq;
+use std::time::Duration;
 use strum::IntoEnumIterator;
 use tokio::fs;
 
@@ -32,7 +34,7 @@ async fn test_chat_info() {
   "archived": false,
   "param": "",
   "is_sending_locations": false,
-  "color": 35391,
+  "color": 29377,
   "profile_image": {},
   "draft": "",
   "is_muted": false,
@@ -1644,7 +1646,7 @@ async fn test_set_mute_duration() {
 async fn test_add_info_msg() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
-    add_info_msg(&t, chat_id, "foo info", 200000).await?;
+    add_info_msg(&t, chat_id, "foo info", time()).await?;
 
     let msg = t.get_last_msg_in(chat_id).await;
     assert_eq!(msg.get_chat_id(), chat_id);
@@ -1666,7 +1668,7 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         chat_id,
         "foo bar info",
         SystemMessage::EphemeralTimerChanged,
-        10000,
+        time(),
         None,
         None,
         None,
@@ -1931,7 +1933,7 @@ async fn test_chat_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group_ex(&t, None, "a chat").await?;
     let color1 = Chat::load_from_db(&t, chat_id).await?.get_color(&t).await?;
-    assert_eq!(color1, 0x008772);
+    assert_eq!(color1, 0x613dd7);
 
     // upper-/lowercase makes a difference for the colors, these are different groups
     // (in contrast to email addresses, where upper-/lowercase is ignored in practise)
@@ -3168,6 +3170,30 @@ async fn test_chat_get_encryption_info() -> Result<()> {
          65F1 DB18 B18C BCF7 0487"
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_out_failed_on_all_keys_missing() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = bob
+        .create_group_with_members(ProtectionStatus::Unprotected, "", &[alice, fiona])
+        .await;
+    bob.send_text(bob_chat_id, "Gossiping Fiona's key").await;
+    alice
+        .recv_msg(&bob.send_text(bob_chat_id, "No key gossip").await)
+        .await;
+    SystemTime::shift(Duration::from_secs(60));
+    remove_contact_from_chat(bob, bob_chat_id, ContactId::SELF).await?;
+    let alice_chat_id = alice.recv_msg(&bob.pop_sent_msg().await).await.chat_id;
+    alice_chat_id.accept(alice).await?;
+    let mut msg = Message::new_text("Hi".to_string());
+    send_msg(alice, alice_chat_id, &mut msg).await.ok();
+    assert_eq!(msg.id.get_state(alice).await?, MessageState::OutFailed);
     Ok(())
 }
 

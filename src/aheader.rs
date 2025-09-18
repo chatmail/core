@@ -17,7 +17,6 @@ pub enum EncryptPreference {
     #[default]
     NoPreference = 0,
     Mutual = 1,
-    Reset = 20,
 }
 
 impl fmt::Display for EncryptPreference {
@@ -25,7 +24,6 @@ impl fmt::Display for EncryptPreference {
         match *self {
             EncryptPreference::Mutual => write!(fmt, "mutual"),
             EncryptPreference::NoPreference => write!(fmt, "nopreference"),
-            EncryptPreference::Reset => write!(fmt, "reset"),
         }
     }
 }
@@ -48,21 +46,13 @@ pub struct Aheader {
     pub addr: String,
     pub public_key: SignedPublicKey,
     pub prefer_encrypt: EncryptPreference,
-}
 
-impl Aheader {
-    /// Creates new autocrypt header
-    pub fn new(
-        addr: String,
-        public_key: SignedPublicKey,
-        prefer_encrypt: EncryptPreference,
-    ) -> Self {
-        Aheader {
-            addr,
-            public_key,
-            prefer_encrypt,
-        }
-    }
+    // Whether `_verified` attribute is present.
+    //
+    // `_verified` attribute is an extension to `Autocrypt-Gossip`
+    // header that is used to tell that the sender
+    // marked this key as verified.
+    pub verified: bool,
 }
 
 impl fmt::Display for Aheader {
@@ -70,6 +60,9 @@ impl fmt::Display for Aheader {
         write!(fmt, "addr={};", self.addr.to_lowercase())?;
         if self.prefer_encrypt == EncryptPreference::Mutual {
             write!(fmt, " prefer-encrypt=mutual;")?;
+        }
+        if self.verified {
+            write!(fmt, " _verified=1;")?;
         }
 
         // adds a whitespace every 78 characters, this allows
@@ -125,6 +118,8 @@ impl FromStr for Aheader {
             .and_then(|raw| raw.parse().ok())
             .unwrap_or_default();
 
+        let verified = attributes.remove("_verified").is_some();
+
         // Autocrypt-Level0: unknown attributes starting with an underscore can be safely ignored
         // Autocrypt-Level0: unknown attribute, treat the header as invalid
         if attributes.keys().any(|k| !k.starts_with('_')) {
@@ -135,6 +130,7 @@ impl FromStr for Aheader {
             addr,
             public_key,
             prefer_encrypt,
+            verified,
         })
     }
 }
@@ -152,10 +148,11 @@ mod tests {
 
         assert_eq!(h.addr, "me@mail.com");
         assert_eq!(h.prefer_encrypt, EncryptPreference::Mutual);
+        assert_eq!(h.verified, false);
         Ok(())
     }
 
-    // EncryptPreference::Reset is an internal value, parser should never return it
+    // Non-standard values of prefer-encrypt such as `reset` are treated as no preference.
     #[test]
     fn test_from_str_reset() -> Result<()> {
         let raw = format!("addr=reset@example.com; prefer-encrypt=reset; keydata={RAWKEY}");
@@ -245,11 +242,12 @@ mod tests {
         assert!(
             format!(
                 "{}",
-                Aheader::new(
-                    "test@example.com".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::Mutual
-                )
+                Aheader {
+                    addr: "test@example.com".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::Mutual,
+                    verified: false
+                }
             )
             .contains("prefer-encrypt=mutual;")
         );
@@ -260,11 +258,12 @@ mod tests {
         assert!(
             !format!(
                 "{}",
-                Aheader::new(
-                    "test@example.com".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::NoPreference
-                )
+                Aheader {
+                    addr: "test@example.com".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::NoPreference,
+                    verified: false
+                }
             )
             .contains("prefer-encrypt")
         );
@@ -273,13 +272,27 @@ mod tests {
         assert!(
             format!(
                 "{}",
-                Aheader::new(
-                    "TeSt@eXaMpLe.cOm".to_string(),
-                    SignedPublicKey::from_base64(RAWKEY).unwrap(),
-                    EncryptPreference::Mutual
-                )
+                Aheader {
+                    addr: "TeSt@eXaMpLe.cOm".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::Mutual,
+                    verified: false
+                }
             )
             .contains("test@example.com")
+        );
+
+        assert!(
+            format!(
+                "{}",
+                Aheader {
+                    addr: "test@example.com".to_string(),
+                    public_key: SignedPublicKey::from_base64(RAWKEY).unwrap(),
+                    prefer_encrypt: EncryptPreference::NoPreference,
+                    verified: true
+                }
+            )
+            .contains("_verified")
         );
     }
 }

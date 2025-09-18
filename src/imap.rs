@@ -146,7 +146,6 @@ pub enum FolderMeaning {
     Mvbox,
     Sent,
     Trash,
-    Drafts,
 
     /// Virtual folders.
     ///
@@ -166,7 +165,6 @@ impl FolderMeaning {
             FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
             FolderMeaning::Sent => Some(Config::ConfiguredSentboxFolder),
             FolderMeaning::Trash => Some(Config::ConfiguredTrashFolder),
-            FolderMeaning::Drafts => None,
             FolderMeaning::Virtual => None,
         }
     }
@@ -814,7 +812,10 @@ impl Session {
             .context("listing folders for resync")?;
         for folder in all_folders {
             let folder_meaning = get_folder_meaning(&folder);
-            if folder_meaning != FolderMeaning::Virtual {
+            if !matches!(
+                folder_meaning,
+                FolderMeaning::Virtual | FolderMeaning::Unknown
+            ) {
                 self.resync_folder_uids(context, folder.name(), folder_meaning)
                     .await?;
             }
@@ -2120,27 +2121,6 @@ fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
         "迷惑メール",
         "스팸",
     ];
-    const DRAFT_NAMES: &[&str] = &[
-        "Drafts",
-        "Kladder",
-        "Entw?rfe",
-        "Borradores",
-        "Brouillons",
-        "Bozze",
-        "Concepten",
-        "Wersje robocze",
-        "Rascunhos",
-        "Entwürfe",
-        "Koncepty",
-        "Kopie robocze",
-        "Taslaklar",
-        "Utkast",
-        "Πρόχειρα",
-        "Черновики",
-        "下書き",
-        "草稿",
-        "임시보관함",
-    ];
     const TRASH_NAMES: &[&str] = &[
         "Trash",
         "Bin",
@@ -2167,8 +2147,6 @@ fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
         FolderMeaning::Sent
     } else if SPAM_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Spam
-    } else if DRAFT_NAMES.iter().any(|s| s.to_lowercase() == lower) {
-        FolderMeaning::Drafts
     } else if TRASH_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Trash
     } else {
@@ -2182,7 +2160,6 @@ fn get_folder_meaning_by_attrs(folder_attrs: &[NameAttribute]) -> FolderMeaning 
             NameAttribute::Trash => return FolderMeaning::Trash,
             NameAttribute::Sent => return FolderMeaning::Sent,
             NameAttribute::Junk => return FolderMeaning::Spam,
-            NameAttribute::Drafts => return FolderMeaning::Drafts,
             NameAttribute::All | NameAttribute::Flagged => return FolderMeaning::Virtual,
             NameAttribute::Extension(label) => {
                 match label.as_ref() {

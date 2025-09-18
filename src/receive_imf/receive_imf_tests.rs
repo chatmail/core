@@ -5133,24 +5133,38 @@ async fn test_unverified_member_msg() -> Result<()> {
     let fiona_chat_id = fiona.get_last_msg().await.chat_id;
     let fiona_sent_msg = fiona.send_text(fiona_chat_id, "Hi").await;
 
-    // The message can't be verified, but the user can re-download it.
-    let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
-    assert_eq!(bob_msg.download_state, DownloadState::Available);
-    assert!(
-        bob_msg
-            .text
-            .contains("Re-download the message or see 'Info' for more details")
-    );
-
-    let alice_sent_msg = alice
-        .send_text(alice_chat_id, "Hi all, it's Alice introducing Fiona")
-        .await;
-    bob.recv_msg(&alice_sent_msg).await;
-
-    // Now Bob has Fiona's key and can verify the message.
+    // The message is by non-verified member,
+    // but the checks have been removed
+    // and the message should be downloaded as usual.
     let bob_msg = bob.recv_msg(&fiona_sent_msg).await;
     assert_eq!(bob_msg.download_state, DownloadState::Done);
     assert_eq!(bob_msg.text, "Hi");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = chat::create_group_chat(bob, ProtectionStatus::Protected, "Group").await?;
+    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
+    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
+    tcm.exec_securejoin_qr(a0, bob, &qr).await;
+    tcm.exec_securejoin_qr(a1, bob, &qr).await;
+
+    let a0_chat_id = a0.get_last_msg().await.chat_id;
+    let a0_sent_msg = a0.send_text(a0_chat_id, "Hi").await;
+    a1.recv_msg(&a0_sent_msg).await;
+    let a1_bob_id = a1.add_or_lookup_contact_id(bob).await;
+    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
+    assert_eq!(
+        a1_fiona.get_verifier_id(a1).await?.unwrap().unwrap(),
+        a1_bob_id
+    );
     Ok(())
 }
 
@@ -5496,6 +5510,38 @@ async fn test_small_unencrypted_group() -> Result<()> {
     let sent_msg = bob.pop_sent_msg().await;
     let alice_rcvd_msg = alice.recv_msg(&sent_msg).await;
     assert_eq!(alice_rcvd_msg.chat_id, alice_chat_id);
+
+    Ok(())
+}
+
+/// Tests that if the sender includes self
+/// in the `To` field, we do not count
+/// it as a third recipient in addition to ourselves
+/// and the sender and do not create a group chat.
+///
+/// This is a regression test.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_bcc_not_a_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let received = receive_imf(
+        alice,
+        b"From: \"\"<foobar@example.org>\n\
+          To: <foobar@example.org>\n\
+          Subject: Hello, this is not a group\n\
+          Message-ID: <abcdef@example.org>\n\
+          Chat-Version: 1.0\n\
+          Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+          \n\
+          hello\n",
+        false,
+    )
+    .await?
+    .unwrap();
+
+    let received_chat = Chat::load_from_db(alice, received.chat_id).await?;
+    assert_eq!(received_chat.typ, Chattype::Single);
 
     Ok(())
 }

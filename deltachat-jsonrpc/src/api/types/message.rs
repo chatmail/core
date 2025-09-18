@@ -324,6 +324,9 @@ pub enum MessageViewtype {
     /// Message is an invitation to a videochat.
     VideochatInvitation,
 
+    /// Message is a call.
+    Call,
+
     /// Message is an webxdc instance.
     Webxdc,
 
@@ -346,6 +349,7 @@ impl From<Viewtype> for MessageViewtype {
             Viewtype::Video => MessageViewtype::Video,
             Viewtype::File => MessageViewtype::File,
             Viewtype::VideochatInvitation => MessageViewtype::VideochatInvitation,
+            Viewtype::Call => MessageViewtype::Call,
             Viewtype::Webxdc => MessageViewtype::Webxdc,
             Viewtype::Vcard => MessageViewtype::Vcard,
         }
@@ -365,6 +369,7 @@ impl From<MessageViewtype> for Viewtype {
             MessageViewtype::Video => Viewtype::Video,
             MessageViewtype::File => Viewtype::File,
             MessageViewtype::VideochatInvitation => Viewtype::VideochatInvitation,
+            MessageViewtype::Call => Viewtype::Call,
             MessageViewtype::Webxdc => Viewtype::Webxdc,
             MessageViewtype::Vcard => Viewtype::Vcard,
         }
@@ -437,6 +442,9 @@ pub enum SystemMessageType {
 
     /// This message contains a users iroh node address.
     IrohNodeAddr,
+
+    CallAccepted,
+    CallEnded,
 }
 
 impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
@@ -463,6 +471,8 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
             SystemMessage::IrohNodeAddr => SystemMessageType::IrohNodeAddr,
             SystemMessage::SecurejoinWait => SystemMessageType::SecurejoinWait,
             SystemMessage::SecurejoinWaitTimeout => SystemMessageType::SecurejoinWaitTimeout,
+            SystemMessage::CallAccepted => SystemMessageType::CallAccepted,
+            SystemMessage::CallEnded => SystemMessageType::CallEnded,
         }
     }
 }

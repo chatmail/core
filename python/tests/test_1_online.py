@@ -160,32 +160,6 @@ def test_html_message(acfactory, lp):
     assert html_text in msg2.html
 
 
-def test_videochat_invitation_message(acfactory, lp):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    text = "You are invited to a video chat, click https://meet.jit.si/WxEGad0gGzX to join."
-
-    lp.sec("ac1: prepare and send text message to ac2")
-    msg1 = chat.send_text("message0")
-    assert not msg1.is_videochat_invitation()
-
-    lp.sec("wait for ac2 to receive message")
-    msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert msg2.text == "message0"
-    assert not msg2.is_videochat_invitation()
-
-    lp.sec("ac1: prepare and send videochat invitation to ac2")
-    msg1 = Message.new_empty(ac1, "videochat")
-    msg1.set_text(text)
-    msg1 = chat.send_msg(msg1)
-    assert msg1.is_videochat_invitation()
-
-    lp.sec("wait for ac2 to receive message")
-    msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert msg2.text == text
-    assert msg2.is_videochat_invitation()
-
-
 def test_webxdc_message(acfactory, data, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
@@ -432,7 +406,7 @@ def test_forward_messages(acfactory, lp):
     lp.sec("ac2: check new chat has a forwarded message")
     assert chat3.is_promoted()
     messages = chat3.get_messages()
-    assert len(messages) == 2
+    assert len(messages) == 3
     msg = messages[-1]
     assert msg.is_forwarded()
     ac2.delete_messages(messages)
@@ -1781,12 +1755,12 @@ def test_group_quote(acfactory, lp):
             "xyz",
             False,
             "xyz",
-        ),  # Test that emails are recognized in a random folder but not moved
+        ),  # Test that emails aren't found in a random folder
         (
-            "xyz",
+            "Spam",
             True,
             "DeltaChat",
-        ),  # ...emails are found in a random folder and moved to DeltaChat
+        ),  # ...emails are moved from the spam folder to "DeltaChat"
         (
             "Spam",
             False,
@@ -1811,7 +1785,7 @@ def test_scan_folders(acfactory, lp, folder, move, expected_destination):
     ac1.stop_io()
     assert folder in ac1.direct_imap.list_folders()
 
-    lp.sec("Send a message to from ac2 to ac1 and manually move it to the mvbox")
+    lp.sec("Send a message to from ac2 to ac1 and manually move it to `folder`")
     ac1.direct_imap.select_config_folder("inbox")
     with ac1.direct_imap.idle() as idle1:
         acfactory.get_accepted_chat(ac2, ac1).send_text("hello")
@@ -1821,10 +1795,17 @@ def test_scan_folders(acfactory, lp, folder, move, expected_destination):
     lp.sec("start_io() and see if DeltaChat finds the message (" + variant + ")")
     ac1.set_config("scan_all_folders_debounce_secs", "0")
     ac1.start_io()
-    msg = ac1._evtracker.wait_next_incoming_message()
-    assert msg.text == "hello"
+    chat = ac1.create_chat(ac2)
+    n_msgs = 1  # "Messages are end-to-end encrypted."
+    if folder == "Spam":
+        msg = ac1._evtracker.wait_next_incoming_message()
+        assert msg.text == "hello"
+        n_msgs += 1
+    else:
+        ac1._evtracker.wait_idle_inbox_ready()
+    assert len(chat.get_messages()) == n_msgs
 
-    # The message has been downloaded, which means it has reached its destination.
+    # The message has reached its destination.
     ac1.direct_imap.select_folder(expected_destination)
     assert len(ac1.direct_imap.get_all_messages()) == 1
     if folder != expected_destination:

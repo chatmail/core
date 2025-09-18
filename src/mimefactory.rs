@@ -1092,13 +1092,14 @@ impl MimeFactory {
                                 continue;
                             }
 
-                            let header = Aheader::new(
-                                addr.clone(),
-                                key.clone(),
+                            let header = Aheader {
+                                addr: addr.clone(),
+                                public_key: key.clone(),
                                 // Autocrypt 1.1.0 specification says that
                                 // `prefer-encrypt` attribute SHOULD NOT be included.
-                                EncryptPreference::NoPreference,
-                            )
+                                prefer_encrypt: EncryptPreference::NoPreference,
+                                verified: false,
+                            }
                             .to_string();
 
                             message = message.header(
@@ -1533,6 +1534,18 @@ impl MimeFactory {
                     .into(),
                 ));
             }
+            SystemMessage::CallAccepted => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-accepted").into(),
+                ));
+            }
+            SystemMessage::CallEnded => {
+                headers.push((
+                    "Chat-Content",
+                    mail_builder::headers::raw::Raw::new("call-ended").into(),
+                ));
+            }
             _ => {}
         }
 
@@ -1557,15 +1570,25 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
             ));
+        } else if msg.viewtype == Viewtype::Call {
+            headers.push((
+                "Chat-Content",
+                mail_builder::headers::raw::Raw::new("call").into(),
+            ));
+            placeholdertext = Some(
+                "[This is a 'Call'. The sender uses an experiment not supported on your version yet]".to_string(),
+            );
+        }
+
+        if let Some(offer) = msg.param.get(Param::WebrtcRoom) {
             headers.push((
                 "Chat-Webrtc-Room",
-                mail_builder::headers::raw::Raw::new(
-                    msg.param
-                        .get(Param::WebrtcRoom)
-                        .unwrap_or_default()
-                        .to_string(),
-                )
-                .into(),
+                mail_builder::headers::raw::Raw::new(b_encode(offer)).into(),
+            ));
+        } else if let Some(answer) = msg.param.get(Param::WebrtcAccepted) {
+            headers.push((
+                "Chat-Webrtc-Accepted",
+                mail_builder::headers::raw::Raw::new(b_encode(answer)).into(),
             ));
         }
 
@@ -1857,6 +1880,18 @@ fn render_rfc724_mid(rfc724_mid: &str) -> String {
     } else {
         format!("<{rfc724_mid}>")
     }
+}
+
+/// Encodes UTF-8 string as a single B-encoded-word.
+///
+/// We manually encode some headers because as of
+/// version 0.4.4 mail-builder crate does not encode
+/// newlines correctly if they appear in a text header.
+fn b_encode(value: &str) -> String {
+    format!(
+        "=?utf-8?B?{}?=",
+        base64::engine::general_purpose::STANDARD.encode(value)
+    )
 }
 
 #[cfg(test)]
