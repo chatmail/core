@@ -486,7 +486,7 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
 
 /// Leave the gossip of the webxdc with given [MsgId].
 pub async fn leave_webxdc_realtime(ctx: &Context, msg_id: MsgId) -> Result<()> {
-    let Some(iroh) = ctx.get_peer_channel().await else {
+    let Some(iroh) = ctx.get_peer_channels().await else {
         warn!(
             ctx,
             "IROH_REALTIME: tried to leave channel, but Iroh is already not initialized {msg_id}"
