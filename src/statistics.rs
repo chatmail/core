@@ -5,9 +5,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result};
 use deltachat_derive::FromSql;
 use pgp::types::PublicKeyTrait;
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 
 use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
@@ -24,6 +25,7 @@ use crate::tools::{create_id, time};
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
 const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 3600; // 1 hour
 
 #[derive(Serialize)]
 struct Statistics {
@@ -32,8 +34,7 @@ struct Statistics {
     statistics_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
-    message_stats_one_one: MessageStats,
-    message_stats_multi_user: MessageStats,
+    message_stats: BTreeMap<Chattype, MessageStats>,
     securejoin_sources: SecurejoinSources,
     securejoin_uipaths: SecurejoinUIPaths,
     securejoin_invites: Vec<JoinedInvite>,
@@ -78,9 +79,9 @@ fn is_false(b: &bool) -> bool {
     !b
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Default)]
 struct MessageStats {
-    to_verified: u32,
+    verified: u32,
     unverified_encrypted: u32,
     unencrypted: u32,
     only_to_self: u32,
@@ -180,8 +181,18 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
                 .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
                 .await?;
         }
+    } else if should_update_message_stats(context).await? {
+        update_message_statistics(context).await?;
     }
     Ok(None)
+}
+
+async fn should_update_message_stats(context: &Context) -> Result<bool> {
+    let last_time = context
+        .get_config_i64(Config::StatsLastUpdateMessage)
+        .await?;
+    let next_time = last_time.saturating_add(MESSAGE_STATS_UPDATE_INTERVAL_SECONDS);
+    Ok(next_time <= time())
 }
 
 #[allow(clippy::unused_async, unused)]
@@ -202,6 +213,8 @@ pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
 
 async fn send_statistics(context: &Context) -> Result<ChatId> {
     info!(context, "Sending statistics.");
+
+    update_message_statistics(context).await?;
 
     let chat_id = get_statistics_chat_id(context).await?;
 
@@ -229,32 +242,17 @@ See TODO[blog post] for more information."
         .log_err(context)
         .ok();
 
-    set_last_counted_msg_id(context, true).await?;
-
     Ok(chat_id)
 }
 
-pub(crate) async fn set_last_counted_msg_id(
-    context: &Context,
-    update_existing_value: bool,
-) -> Result<()> {
-    if !update_existing_value && config_exits(context, Config::StatsLastCountedMsgId).await? {
-        // The user had statistics-sending enabled already in the past,
-        // keep the 'last counted message id' as-is
-        return Ok(());
-    }
-
-    let last_msgid: u64 = context
-        .sql
-        .query_get_value("SELECT MAX(id) FROM msgs", ())
-        .await?
-        .unwrap_or(0);
-
+pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
     context
         .sql
-        .set_raw_config(
-            Config::StatsLastCountedMsgId.as_ref(),
-            Some(&last_msgid.to_string()),
+        .execute(
+            "UPDATE statistics_messages
+            SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
+            WHERE last_counted_msg_id=0",
+            (),
         )
         .await?;
 
@@ -262,7 +260,7 @@ pub(crate) async fn set_last_counted_msg_id(
 }
 
 pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
-    if config_exits(context, Config::StatsLastOldContactId).await? {
+    if context.config_exists(Config::StatsLastOldContactId).await? {
         // The user had statistics-sending enabled already in the past,
         // keep the 'last old contact id' as-is
         return Ok(());
@@ -285,18 +283,7 @@ pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
     Ok(())
 }
 
-async fn config_exits(context: &Context, config: Config) -> Result<bool, anyhow::Error> {
-    let config_exists = context.sql.get_raw_config(config.as_ref()).await?.is_some();
-    Ok(config_exists)
-}
-
 async fn get_statistics(context: &Context) -> Result<String> {
-    // The ID of the last msg that was already counted in the previously sent statistics.
-    // Only newer messages will be counted in the current statistics.
-    let last_counted_msg = context
-        .get_config_u32(Config::StatsLastCountedMsgId)
-        .await?;
-
     // The Id of the last contact that already existed when the user enabled the setting.
     // Newer contacts will get the `new` flag set.
     let last_old_contact = context
@@ -326,8 +313,7 @@ async fn get_statistics(context: &Context) -> Result<String> {
         statistics_id,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
-        message_stats_one_one: get_message_stats(context, last_counted_msg, true).await?,
-        message_stats_multi_user: get_message_stats(context, last_counted_msg, false).await?,
+        message_stats: get_message_stats(context).await?,
         securejoin_sources: get_securejoin_source_stats(context).await?,
         securejoin_uipaths: get_securejoin_uipath_stats(context).await?,
         securejoin_invites: get_securejoin_invite_stats(context).await?,
@@ -471,20 +457,69 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
 ///   Only messages newer than that will be counted.
 /// - `one_one_chats`: If true, only messages in 1:1 chats are counted.
 ///   If false, only messages in other chats (groups and broadcast channels) are counted.
-async fn get_message_stats(
-    context: &Context,
-    last_counted_msg: u32,
-    one_one_chats: bool,
-) -> Result<MessageStats> {
-    ensure!(
-        last_counted_msg >= 9,
-        "Last_msgid < 9 would mean including 'special' messages in the statistics"
-    );
+async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, MessageStats>> {
+    let mut map: BTreeMap<Chattype, MessageStats> = context
+        .sql
+        .query_map(
+            "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
+            FROM statistics_messages",
+            (),
+            |row| {
+                let chattype: Chattype = row.get(0)?;
+                let verified: u32 = row.get(1)?;
+                let unverified_encrypted: u32 = row.get(2)?;
+                let unencrypted: u32 = row.get(3)?;
+                let only_to_self: u32 = row.get(4)?;
+                let message_stats = MessageStats {
+                    verified,
+                    unverified_encrypted,
+                    unencrypted,
+                    only_to_self,
+                };
+                Ok((chattype, message_stats))
+            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
+        )
+        .await?;
 
+    // Fill zeroes if a chattype wasn't present:
+    for chattype in [Chattype::Group, Chattype::Single, Chattype::OutBroadcast] {
+        map.entry(chattype).or_insert_with(MessageStats::default);
+    }
+
+    return Ok(map);
+}
+
+pub(crate) async fn update_message_statistics(context: &Context) -> Result<()> {
+    for chattype in [Chattype::Single, Chattype::Group, Chattype::OutBroadcast] {
+        update_message_stats_inner(context, chattype).await?;
+    }
+    context
+        .set_config_internal(Config::StatsLastUpdateMessage, Some(&time().to_string()))
+        .await?;
+    Ok(())
+}
+
+async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Result<()> {
     let statistics_bot_chat_id = get_statistics_chat_id(context).await?;
 
     let trans_fn = |t: &mut rusqlite::Transaction| {
-        t.pragma_update(None, "query_only", "0")?;
+        // The ID of the last msg that was already counted in the previously sent statistics.
+        // Only newer messages will be counted in the current statistics.
+        let last_counted_msg_id: u32 = t
+            .query_row(
+                "SELECT last_counted_msg_id FROM statistics_messages WHERE chattype=?",
+                (chattype,),
+                |row| row.get(0),
+            )
+            .optional()?
+            .unwrap_or(0);
+        t.execute(
+            "UPDATE statistics_messages
+            SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
+            WHERE chattype=?",
+            (chattype,),
+        )?;
 
         // This table will hold all empty chats,
         // i.e. all chats that do not contain any members except for self.
@@ -538,17 +573,17 @@ async fn get_message_stats(
 
         // This table will hold all 1:1 chats.
         t.execute(
-            "CREATE TEMP TABLE temp.one_one_chats (
+            "CREATE TEMP TABLE temp.chat_with_correct_type (
                 id INTEGER PRIMARY KEY
             ) STRICT",
             (),
         )?;
 
         t.execute(
-            "INSERT INTO temp.one_one_chats
+            "INSERT INTO temp.chat_with_correct_type
             SELECT id FROM chats
             WHERE type=?;",
-            (Chattype::Single,),
+            (chattype,),
         )?;
 
         // - `from_id=?` is to count only outgoing messages.
@@ -557,16 +592,12 @@ async fn get_message_stats(
         // - `hidden=0` excludes hidden system messages, which are not actually shown to the user.
         //   Note that reactions are also not counted as a message.
         // - `chat_id>9` excludes messages in the 'Trash' chat, which is an internal chat assigned to messages that are not shown to the user
-        let mut general_requirements =
-            "from_id=? AND chat_id<>? AND id>? AND hidden=0 AND chat_id>9".to_string();
-        if one_one_chats {
-            general_requirements += " AND chat_id IN temp.one_one_chats";
-        } else {
-            general_requirements += " AND chat_id NOT IN temp.one_one_chats";
-        }
-        let params = (ContactId::SELF, statistics_bot_chat_id, last_counted_msg);
+        let general_requirements = "id>? AND from_id=? AND chat_id<>?
+            AND hidden=0 AND chat_id>9 AND chat_id IN temp.chat_with_correct_type"
+            .to_string();
+        let params = (last_counted_msg_id, ContactId::SELF, statistics_bot_chat_id);
 
-        let to_verified = t.query_row(
+        let verified: u32 = t.query_row(
             &format!(
                 "SELECT COUNT(*) FROM msgs
                 WHERE chat_id IN temp.verified_chats
@@ -576,7 +607,7 @@ async fn get_message_stats(
             |row| row.get(0),
         )?;
 
-        let unverified_encrypted = t.query_row(
+        let unverified_encrypted: u32 = t.query_row(
             &format!(
                 // (param GLOB '*\nc=1*' OR param GLOB 'c=1*') matches all messages that are end-to-end encrypted
                 "SELECT COUNT(*) FROM msgs
@@ -588,7 +619,7 @@ async fn get_message_stats(
             |row| row.get(0),
         )?;
 
-        let unencrypted = t.query_row(
+        let unencrypted: u32 = t.query_row(
             &format!(
                 "SELECT COUNT(*) FROM msgs
                 WHERE chat_id NOT IN temp.verified_chats AND chat_id NOT IN temp.empty_chats
@@ -599,7 +630,7 @@ async fn get_message_stats(
             |row| row.get(0),
         )?;
 
-        let only_to_self = t.query_row(
+        let only_to_self: u32 = t.query_row(
             &format!(
                 "SELECT COUNT(*) FROM msgs
                 WHERE chat_id IN temp.empty_chats
@@ -611,20 +642,35 @@ async fn get_message_stats(
 
         t.execute("DROP TABLE temp.verified_chats", ())?;
         t.execute("DROP TABLE temp.empty_chats", ())?;
-        t.execute("DROP TABLE temp.one_one_chats", ())?;
+        t.execute("DROP TABLE temp.chat_with_correct_type", ())?;
 
-        Ok(MessageStats {
-            to_verified,
-            unverified_encrypted,
-            unencrypted,
-            only_to_self,
-        })
+        t.execute(
+            "INSERT INTO statistics_messages(chattype) VALUES (?)
+            ON CONFLICT(chattype) DO NOTHING",
+            (chattype,),
+        )?;
+        t.execute(
+            "UPDATE statistics_messages SET 
+            verified=verified+?,
+            unverified_encrypted=unverified_encrypted+?,
+            unencrypted=unencrypted+?,
+            only_to_self=only_to_self+?
+            WHERE chattype=?",
+            (
+                verified,
+                unverified_encrypted,
+                unencrypted,
+                only_to_self,
+                chattype,
+            ),
+        )?;
+
+        Ok(())
     };
 
-    let query_only = true;
-    let message_stats: MessageStats = context.sql.transaction_ex(query_only, trans_fn).await?;
+    context.sql.transaction(trans_fn).await?;
 
-    Ok(message_stats)
+    Ok(())
 }
 
 pub(crate) async fn count_securejoin_ux_info(

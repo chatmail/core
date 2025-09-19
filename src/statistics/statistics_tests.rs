@@ -113,24 +113,19 @@ async fn test_statistics_one_contact() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_stats() -> Result<()> {
     #[track_caller]
-    fn check_statistics(
-        stats: &str,
-        expected_one_one: &MessageStats,
-        expected_multi_user: &MessageStats,
-    ) {
+    fn check_statistics(stats: &str, expected: &BTreeMap<Chattype, MessageStats>) {
         let actual: serde_json::Value = serde_json::from_str(stats).unwrap();
+        let actual = &actual["message_stats"];
 
-        for (expected, key) in [
-            (expected_one_one, "message_stats_one_one"),
-            (expected_multi_user, "message_stats_multi_user"),
-        ] {
-            let actual = &actual[key];
+        let expected = serde_json::to_string_pretty(&expected).unwrap();
+        let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
 
-            let expected = serde_json::to_string_pretty(&expected).unwrap();
-            let expected: serde_json::Value = serde_json::from_str(&expected).unwrap();
+        assert_eq!(actual, &expected);
+    }
 
-            assert_eq!(actual, &expected, "Wrong {key}");
-        }
+    async fn get_stats(context: &Context) -> String {
+        update_message_statistics(context).await.unwrap();
+        get_statistics(context).await.unwrap()
     }
 
     let mut tcm = TestContextManager::new();
@@ -140,82 +135,83 @@ async fn test_message_stats() -> Result<()> {
     let email_chat = alice.create_email_chat(bob).await;
     let encrypted_chat = alice.create_chat(bob).await;
 
-    let mut one_one = MessageStats {
-        to_verified: 0,
-        unverified_encrypted: 0,
-        unencrypted: 0,
-        only_to_self: 0,
-    };
-    let mut multi_user = MessageStats {
-        to_verified: 0,
-        unverified_encrypted: 0,
-        unencrypted: 0,
-        only_to_self: 0,
-    };
+    let mut expected: BTreeMap<Chattype, MessageStats> = BTreeMap::from_iter([
+        (Chattype::Single, MessageStats::default()),
+        (Chattype::Group, MessageStats::default()),
+        (Chattype::OutBroadcast, MessageStats::default()),
+    ]);
 
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    check_statistics(&get_stats(alice).await, &expected);
 
     alice.send_text(email_chat.id, "foo").await;
-    one_one.unencrypted += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected.get_mut(&Chattype::Single).unwrap().unencrypted += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
-    one_one.unverified_encrypted += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected
+        .get_mut(&Chattype::Single)
+        .unwrap()
+        .unverified_encrypted += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
-    one_one.unverified_encrypted += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected
+        .get_mut(&Chattype::Single)
+        .unwrap()
+        .unverified_encrypted += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     let group = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "Pizza", &[bob])
         .await;
     alice.send_text(group, "foo").await;
-    multi_user.unverified_encrypted += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected
+        .get_mut(&Chattype::Group)
+        .unwrap()
+        .unverified_encrypted += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     tcm.execute_securejoin(alice, bob).await;
-    one_one.to_verified = one_one.unverified_encrypted;
-    one_one.unverified_encrypted = 0;
-    multi_user.to_verified = multi_user.unverified_encrypted;
-    multi_user.unverified_encrypted = 0;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    check_statistics(&get_stats(alice).await, &expected);
 
     alice.send_text(alice.get_self_chat().await.id, "foo").await;
-    one_one.only_to_self += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected.get_mut(&Chattype::Single).unwrap().only_to_self += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     let empty_group = create_group_chat(alice, ProtectionStatus::Unprotected, "Notes").await?;
     alice.send_text(empty_group, "foo").await;
-    multi_user.only_to_self += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     let empty_unencrypted = create_group_ex(alice, None, "Email thread").await?;
     alice.send_text(empty_unencrypted, "foo").await;
-    multi_user.only_to_self += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     let group = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "Pizza 2", &[bob])
         .await;
     alice.send_text(group, "foo").await;
-    multi_user.to_verified += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected.get_mut(&Chattype::Group).unwrap().verified += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     let empty_broadcast = create_broadcast(alice, "Channel".to_string()).await?;
     alice.send_text(empty_broadcast, "foo").await;
-    multi_user.only_to_self += 1;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    expected
+        .get_mut(&Chattype::OutBroadcast)
+        .unwrap()
+        .only_to_self += 1;
+    check_statistics(&get_stats(alice).await, &expected);
 
     // Incoming messages are not counted:
     let rcvd = tcm.send_recv(bob, alice, "bar").await;
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    check_statistics(&get_stats(alice).await, &expected);
 
     // Reactions are not counted:
     crate::reaction::send_reaction(alice, rcvd.id, "👍")
         .await
         .unwrap();
-    check_statistics(&get_statistics(alice).await?, &one_one, &multi_user);
+    check_statistics(&get_stats(alice).await, &expected);
 
     tcm.section("Test that after actually sending statistics, the message numbers are reset.");
     let before_sending = get_statistics(alice).await.unwrap();
@@ -228,33 +224,21 @@ async fn test_message_stats() -> Result<()> {
     SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
 
     let stats = send_and_read_statistics(alice).await;
-    assert_ne!(before_sending, stats);
+    assert_eq!(before_sending, stats);
 
-    one_one = MessageStats {
-        to_verified: 0,
-        unverified_encrypted: 0,
-        unencrypted: 0,
-        only_to_self: 0,
-    };
-    multi_user = MessageStats {
-        to_verified: 0,
-        unverified_encrypted: 0,
-        unencrypted: 0,
-        only_to_self: 0,
-    };
-    check_statistics(&stats, &one_one, &multi_user);
+    check_statistics(&stats, &expected);
 
-    tcm.section(
-        "Test that after sending a message again, the message statistics start to fill again.",
-    );
     SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
     tcm.send_recv(alice, bob, "Hi").await;
-    one_one.to_verified += 1;
-    check_statistics(
-        &send_and_read_statistics(alice).await,
-        &one_one,
-        &multi_user,
-    );
+    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+    update_message_statistics(alice).await?;
+    update_message_statistics(alice).await?;
+    tcm.send_recv(alice, bob, "Hi").await;
+    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+    tcm.send_recv(alice, bob, "Hi").await;
+    expected.get_mut(&Chattype::Single).unwrap().verified += 1;
+
+    check_statistics(&send_and_read_statistics(alice).await, &expected);
 
     Ok(())
 }
