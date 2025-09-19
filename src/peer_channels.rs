@@ -485,6 +485,10 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
 }
 
 /// Leave the gossip of the webxdc with given [MsgId].
+///
+/// NB: When this is called before closing a webxdc app in UIs, it must be guaranteed that
+/// `send_webxdc_realtime_*()` functions aren't called for the given `msg_id` anymore until the app
+/// is open again.
 pub async fn leave_webxdc_realtime(ctx: &Context, msg_id: MsgId) -> Result<()> {
     let Some(iroh) = ctx.get_peer_channels().await else {
         return Ok(());
