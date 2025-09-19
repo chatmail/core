@@ -22,7 +22,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
-use crate::{constants, statistics};
+use crate::{constants, stats};
 
 /// The available configuration keys.
 #[derive(
@@ -836,8 +836,8 @@ impl Context {
                 }
             }
             Config::StatsSending => {
-                statistics::set_last_counted_msg_id(self).await?;
-                statistics::set_last_old_contact_id(self).await?;
+                stats::set_last_counted_msg_id(self).await?;
+                stats::set_last_old_contact_id(self).await?;
                 self.sql.set_raw_config(key.as_ref(), value).await?;
             }
             _ => {

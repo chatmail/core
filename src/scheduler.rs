@@ -27,7 +27,7 @@ use crate::log::{LogExt, error, info, warn};
 use crate::message::MsgId;
 use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
-use crate::statistics::maybe_send_statistics;
+use crate::stats::maybe_send_stats;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
 
 pub(crate) mod connectivity;
@@ -514,7 +514,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     };
 
-    maybe_send_statistics(ctx).await.log_err(ctx).ok();
+    maybe_send_stats(ctx).await.log_err(ctx).ok();
     match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
         Ok(fetched_existing_msgs) => {
             if !fetched_existing_msgs {

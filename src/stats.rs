@@ -31,7 +31,7 @@ const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 3600; // 1 hour
 struct Statistics {
     core_version: String,
     key_create_timestamps: Vec<i64>,
-    statistics_id: String,
+    stats_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
     message_stats: BTreeMap<Chattype, MessageStats>,
@@ -155,8 +155,8 @@ struct JoinedInvite {
 ///
 /// On the other end, a bot will receive the message and make it available
 /// to Delta Chat's developers.
-pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> {
-    if should_send_statistics(context).await? {
+pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
+    if should_send_stats(context).await? {
         let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
         let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
         if next_sending_time <= time() {
@@ -167,7 +167,7 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
                 .set_config_internal(Config::StatsLastSent, Some(&one_minute_later))
                 .await?;
 
-            let chat_id = Some(send_statistics(context).await?);
+            let chat_id = Some(send_stats(context).await?);
 
             context
                 .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
@@ -182,7 +182,7 @@ pub async fn maybe_send_statistics(context: &Context) -> Result<Option<ChatId>> 
                 .await?;
         }
     } else if should_update_message_stats(context).await? {
-        update_message_statistics(context).await?;
+        update_message_stats(context).await?;
     }
     Ok(None)
 }
@@ -196,7 +196,7 @@ async fn should_update_message_stats(context: &Context) -> Result<bool> {
 }
 
 #[allow(clippy::unused_async, unused)]
-pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
+pub(crate) async fn should_send_stats(context: &Context) -> Result<bool> {
     #[cfg(any(target_os = "android", test))]
     {
         context.get_config_bool(Config::StatsSending).await
@@ -211,12 +211,12 @@ pub(crate) async fn should_send_statistics(context: &Context) -> Result<bool> {
     }
 }
 
-async fn send_statistics(context: &Context) -> Result<ChatId> {
+async fn send_stats(context: &Context) -> Result<ChatId> {
     info!(context, "Sending statistics.");
 
-    update_message_statistics(context).await?;
+    update_message_stats(context).await?;
 
-    let chat_id = get_statistics_chat_id(context).await?;
+    let chat_id = get_stats_chat_id(context).await?;
 
     let mut msg = Message::new(Viewtype::File);
     msg.set_text(
@@ -227,14 +227,9 @@ See TODO[blog post] for more information."
             .to_string(),
     );
 
-    let statistics = get_statistics(context).await?;
+    let stats = get_stats(context).await?;
 
-    msg.set_file_from_bytes(
-        context,
-        "statistics.txt",
-        statistics.as_bytes(),
-        Some("text/plain"),
-    )?;
+    msg.set_file_from_bytes(context, "statistics.txt", stats.as_bytes(), Some("text/plain"))?;
 
     chat::send_msg(context, chat_id, &mut msg)
         .await
@@ -249,7 +244,7 @@ pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
     context
         .sql
         .execute(
-            "UPDATE statistics_messages
+            "UPDATE stats_messages
             SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
             WHERE last_counted_msg_id=0",
             (),
@@ -283,7 +278,7 @@ pub(crate) async fn set_last_old_contact_id(context: &Context) -> Result<()> {
     Ok(())
 }
 
-async fn get_statistics(context: &Context) -> Result<String> {
+async fn get_stats(context: &Context) -> Result<String> {
     // The Id of the last contact that already existed when the user enabled the setting.
     // Newer contacts will get the `new` flag set.
     let last_old_contact = context
@@ -296,7 +291,7 @@ async fn get_statistics(context: &Context) -> Result<String> {
         .map(|k| k.created_at().timestamp())
         .collect();
 
-    let statistics_id = match context.get_config(Config::StatsId).await? {
+    let stats_id = match context.get_config(Config::StatsId).await? {
         Some(id) => id,
         None => {
             let id = create_id();
@@ -307,10 +302,10 @@ async fn get_statistics(context: &Context) -> Result<String> {
         }
     };
 
-    let statistics = Statistics {
+    let stats = Statistics {
         core_version: get_version_str().to_string(),
         key_create_timestamps,
-        statistics_id,
+        stats_id,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
         message_stats: get_message_stats(context).await?,
@@ -319,10 +314,10 @@ async fn get_statistics(context: &Context) -> Result<String> {
         securejoin_invites: get_securejoin_invite_stats(context).await?,
     };
 
-    Ok(serde_json::to_string_pretty(&statistics)?)
+    Ok(serde_json::to_string_pretty(&stats)?)
 }
 
-async fn get_statistics_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
+async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
     let contact_id: ContactId = *import_vcard(context, STATISTICS_BOT_VCARD)
         .await?
         .first()
@@ -462,7 +457,7 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
         .sql
         .query_map(
             "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
-            FROM statistics_messages",
+            FROM stats_messages",
             (),
             |row| {
                 let chattype: Chattype = row.get(0)?;
@@ -490,7 +485,7 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
     return Ok(map);
 }
 
-pub(crate) async fn update_message_statistics(context: &Context) -> Result<()> {
+pub(crate) async fn update_message_stats(context: &Context) -> Result<()> {
     for chattype in [Chattype::Single, Chattype::Group, Chattype::OutBroadcast] {
         update_message_stats_inner(context, chattype).await?;
     }
@@ -501,21 +496,21 @@ pub(crate) async fn update_message_statistics(context: &Context) -> Result<()> {
 }
 
 async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Result<()> {
-    let statistics_bot_chat_id = get_statistics_chat_id(context).await?;
+    let stats_bot_chat_id = get_stats_chat_id(context).await?;
 
     let trans_fn = |t: &mut rusqlite::Transaction| {
-        // The ID of the last msg that was already counted in the previously sent statistics.
+        // The ID of the last msg that was already counted in the previously sent stats.
         // Only newer messages will be counted in the current statistics.
         let last_counted_msg_id: u32 = t
             .query_row(
-                "SELECT last_counted_msg_id FROM statistics_messages WHERE chattype=?",
+                "SELECT last_counted_msg_id FROM stats_messages WHERE chattype=?",
                 (chattype,),
                 |row| row.get(0),
             )
             .optional()?
             .unwrap_or(0);
         t.execute(
-            "UPDATE statistics_messages
+            "UPDATE stats_messages
             SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
             WHERE chattype=?",
             (chattype,),
@@ -595,7 +590,7 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         let general_requirements = "id>? AND from_id=? AND chat_id<>?
             AND hidden=0 AND chat_id>9 AND chat_id IN temp.chat_with_correct_type"
             .to_string();
-        let params = (last_counted_msg_id, ContactId::SELF, statistics_bot_chat_id);
+        let params = (last_counted_msg_id, ContactId::SELF, stats_bot_chat_id);
 
         let verified: u32 = t.query_row(
             &format!(
@@ -645,12 +640,12 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         t.execute("DROP TABLE temp.chat_with_correct_type", ())?;
 
         t.execute(
-            "INSERT INTO statistics_messages(chattype) VALUES (?)
+            "INSERT INTO stats_messages(chattype) VALUES (?)
             ON CONFLICT(chattype) DO NOTHING",
             (chattype,),
         )?;
         t.execute(
-            "UPDATE statistics_messages SET 
+            "UPDATE stats_messages SET
             verified=verified+?,
             unverified_encrypted=unverified_encrypted+?,
             unencrypted=unencrypted+?,
@@ -678,7 +673,7 @@ pub(crate) async fn count_securejoin_ux_info(
     source: Option<u32>,
     uipath: Option<u32>,
 ) -> Result<()> {
-    if !should_send_statistics(context).await? {
+    if !should_send_stats(context).await? {
         return Ok(());
     }
 
@@ -696,13 +691,13 @@ pub(crate) async fn count_securejoin_ux_info(
         .sql
         .transaction(|conn| {
             conn.execute(
-                "INSERT INTO statistics_securejoin_sources VALUES (?, 1)
+                "INSERT INTO stats_securejoin_sources VALUES (?, 1)
                 ON CONFLICT (source) DO UPDATE SET count=count+1;",
                 (source,),
             )?;
 
             conn.execute(
-                "INSERT INTO statistics_securejoin_uipaths VALUES (?, 1)
+                "INSERT INTO stats_securejoin_uipaths VALUES (?, 1)
                 ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
                 (uipath,),
             )?;
@@ -717,7 +712,7 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
     let map = context
         .sql
         .query_map(
-            "SELECT source, count FROM statistics_securejoin_sources",
+            "SELECT source, count FROM stats_securejoin_sources",
             (),
             |row| {
                 let source: SecurejoinSource = row.get(0)?;
@@ -744,7 +739,7 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPa
     let map = context
         .sql
         .query_map(
-            "SELECT uipath, count FROM statistics_securejoin_uipaths",
+            "SELECT uipath, count FROM stats_securejoin_uipaths",
             (),
             |row| {
                 let uipath: SecurejoinUIPath = row.get(0)?;
@@ -765,7 +760,7 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPa
 }
 
 pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite) -> Result<()> {
-    if !should_send_statistics(context).await? {
+    if !should_send_stats(context).await? {
         return Ok(());
     }
 
@@ -789,7 +784,7 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
     context
         .sql
         .execute(
-            "INSERT INTO statistics_securejoin_invites (already_existed, already_verified, type)
+            "INSERT INTO stats_securejoin_invites (already_existed, already_verified, type)
             VALUES (?, ?, ?)",
             (already_existed, already_verified, typ),
         )
@@ -802,7 +797,7 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
     let qr_scans: Vec<JoinedInvite> = context
         .sql
         .query_map(
-            "SELECT already_existed, already_verified, type FROM statistics_securejoin_invites",
+            "SELECT already_existed, already_verified, type FROM stats_securejoin_invites",
             (),
             |row| {
                 let already_existed: bool = row.get(0)?;
@@ -826,4 +821,4 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
 }
 
 #[cfg(test)]
-mod statistics_tests;
+mod stats_tests;

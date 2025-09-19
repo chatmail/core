@@ -24,7 +24,7 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::token;
-use crate::{chatlist_events, statistics};
+use crate::{chatlist_events, stats};
 
 mod bob;
 mod qrinvite;
@@ -187,7 +187,7 @@ pub async fn join_securejoin_with_ux_info(
         err
     })?;
 
-    statistics::count_securejoin_ux_info(context, source, uipath)
+    stats::count_securejoin_ux_info(context, source, uipath)
         .await
         .log_err(context)
         .ok();
@@ -206,7 +206,7 @@ async fn securejoin(context: &Context, qr: &str) -> Result<ChatId> {
 
     let invite = QrInvite::try_from(qr_scan)?;
 
-    statistics::count_securejoin_invite(context, &invite)
+    stats::count_securejoin_invite(context, &invite)
         .await
         .log_err(context)
         .ok();

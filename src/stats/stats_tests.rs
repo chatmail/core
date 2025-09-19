@@ -11,12 +11,12 @@ use pretty_assertions::assert_eq;
 use serde_json::{Number, Value};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_maybe_send_statistics() -> Result<()> {
+async fn test_maybe_send_stats() -> Result<()> {
     let alice = &TestContext::new_alice().await;
 
     alice.set_config_bool(Config::StatsSending, true).await?;
 
-    let chat_id = maybe_send_statistics(alice).await?.unwrap();
+    let chat_id = maybe_send_stats(alice).await?.unwrap();
     let msg = get_chat_msg(alice, chat_id, 0, 2).await;
     assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
 
@@ -38,7 +38,7 @@ async fn test_maybe_send_statistics() -> Result<()> {
     );
     assert_eq!(r.get("core_version").unwrap(), get_version_str());
 
-    assert_eq!(maybe_send_statistics(alice).await?, None);
+    assert_eq!(maybe_send_stats(alice).await?, None);
 
     Ok(())
 }
@@ -51,33 +51,33 @@ async fn test_rewound_time() -> Result<()> {
     const EIGHT_DAYS: Duration = Duration::from_secs(3600 * 24 * 14);
     SystemTime::shift(EIGHT_DAYS);
 
-    maybe_send_statistics(alice).await?.unwrap();
+    maybe_send_stats(alice).await?.unwrap();
 
     // The system's time is rewound
     SystemTime::shift_back(EIGHT_DAYS);
 
-    assert!(maybe_send_statistics(alice).await?.is_none());
+    assert!(maybe_send_stats(alice).await?.is_none());
 
-    // After eight days pass again, statistics are sent again
+    // After eight days pass again, stats are sent again
     SystemTime::shift(EIGHT_DAYS);
-    maybe_send_statistics(alice).await?.unwrap();
+    maybe_send_stats(alice).await?.unwrap();
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_one_contact() -> Result<()> {
+async fn test_stats_one_contact() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
 
-    let stats = get_statistics(alice).await?;
+    let stats = get_stats(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&stats)?;
 
     tcm.send_recv_accept(bob, alice, "Hi!").await;
 
-    let stats = get_statistics(alice).await?;
+    let stats = get_stats(alice).await?;
     println!("\nWith Bob:\n{stats}\n");
     let r2: serde_json::Value = serde_json::from_str(&stats)?;
 
@@ -85,10 +85,7 @@ async fn test_statistics_one_contact() -> Result<()> {
         r.get("key_create_timestamps").unwrap(),
         r2.get("key_create_timestamps").unwrap()
     );
-    assert_eq!(
-        r.get("statistics_id").unwrap(),
-        r2.get("statistics_id").unwrap()
-    );
+    assert_eq!(r.get("stats_id").unwrap(), r2.get("stats_id").unwrap());
     let contact_stats = r2.get("contact_stats").unwrap().as_array().unwrap();
     assert_eq!(contact_stats.len(), 1);
     let contact_info = &contact_stats[0];
@@ -113,7 +110,7 @@ async fn test_statistics_one_contact() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_message_stats() -> Result<()> {
     #[track_caller]
-    fn check_statistics(stats: &str, expected: &BTreeMap<Chattype, MessageStats>) {
+    fn check_stats(stats: &str, expected: &BTreeMap<Chattype, MessageStats>) {
         let actual: serde_json::Value = serde_json::from_str(stats).unwrap();
         let actual = &actual["message_stats"];
 
@@ -123,9 +120,9 @@ async fn test_message_stats() -> Result<()> {
         assert_eq!(actual, &expected);
     }
 
-    async fn get_stats(context: &Context) -> String {
-        update_message_statistics(context).await.unwrap();
-        get_statistics(context).await.unwrap()
+    async fn update_get_stats(context: &Context) -> String {
+        update_message_stats(context).await.unwrap();
+        get_stats(context).await.unwrap()
     }
 
     let mut tcm = TestContextManager::new();
@@ -141,25 +138,25 @@ async fn test_message_stats() -> Result<()> {
         (Chattype::OutBroadcast, MessageStats::default()),
     ]);
 
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(email_chat.id, "foo").await;
     expected.get_mut(&Chattype::Single).unwrap().unencrypted += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
     expected
         .get_mut(&Chattype::Single)
         .unwrap()
         .unverified_encrypted += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(encrypted_chat.id, "foo").await;
     expected
         .get_mut(&Chattype::Single)
         .unwrap()
         .unverified_encrypted += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     let group = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "Pizza", &[bob])
@@ -169,31 +166,31 @@ async fn test_message_stats() -> Result<()> {
         .get_mut(&Chattype::Group)
         .unwrap()
         .unverified_encrypted += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     tcm.execute_securejoin(alice, bob).await;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     alice.send_text(alice.get_self_chat().await.id, "foo").await;
     expected.get_mut(&Chattype::Single).unwrap().only_to_self += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     let empty_group = create_group_chat(alice, ProtectionStatus::Unprotected, "Notes").await?;
     alice.send_text(empty_group, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     let empty_unencrypted = create_group_ex(alice, None, "Email thread").await?;
     alice.send_text(empty_unencrypted, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     let group = alice
         .create_group_with_members(ProtectionStatus::Unprotected, "Pizza 2", &[bob])
         .await;
     alice.send_text(group, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().verified += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     let empty_broadcast = create_broadcast(alice, "Channel".to_string()).await?;
     alice.send_text(empty_broadcast, "foo").await;
@@ -201,50 +198,49 @@ async fn test_message_stats() -> Result<()> {
         .get_mut(&Chattype::OutBroadcast)
         .unwrap()
         .only_to_self += 1;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     // Incoming messages are not counted:
     let rcvd = tcm.send_recv(bob, alice, "bar").await;
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
     // Reactions are not counted:
     crate::reaction::send_reaction(alice, rcvd.id, "👍")
         .await
         .unwrap();
-    check_statistics(&get_stats(alice).await, &expected);
+    check_stats(&update_get_stats(alice).await, &expected);
 
-    tcm.section("Test that after actually sending statistics, the message numbers are reset.");
-    let before_sending = get_statistics(alice).await.unwrap();
+    let before_sending = get_stats(alice).await.unwrap();
 
-    let stats = send_and_read_statistics(alice).await;
-    // The statistics are supposed not to have changed yet
+    let stats = send_and_read_stats(alice).await;
+    // The stats are supposed not to have changed yet
     assert_eq!(before_sending, stats);
 
-    // Shift by 8 days so that the next statistics-sending is due:
+    // Shift by 8 days so that the next stats-sending is due:
     SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
 
-    let stats = send_and_read_statistics(alice).await;
+    let stats = send_and_read_stats(alice).await;
     assert_eq!(before_sending, stats);
 
-    check_statistics(&stats, &expected);
+    check_stats(&stats, &expected);
 
     SystemTime::shift(Duration::from_secs(8 * 24 * 3600));
     tcm.send_recv(alice, bob, "Hi").await;
     expected.get_mut(&Chattype::Single).unwrap().verified += 1;
-    update_message_statistics(alice).await?;
-    update_message_statistics(alice).await?;
+    update_message_stats(alice).await?;
+    update_message_stats(alice).await?;
     tcm.send_recv(alice, bob, "Hi").await;
     expected.get_mut(&Chattype::Single).unwrap().verified += 1;
     tcm.send_recv(alice, bob, "Hi").await;
     expected.get_mut(&Chattype::Single).unwrap().verified += 1;
 
-    check_statistics(&send_and_read_statistics(alice).await, &expected);
+    check_stats(&send_and_read_stats(alice).await, &expected);
 
     Ok(())
 }
 
-async fn send_and_read_statistics(context: &TestContext) -> String {
-    let chat_id = maybe_send_statistics(context).await.unwrap().unwrap();
+async fn send_and_read_stats(context: &TestContext) -> String {
+    let chat_id = maybe_send_stats(context).await.unwrap().unwrap();
     let msg = context.get_last_msg_in(chat_id).await;
     assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
 
@@ -255,10 +251,10 @@ async fn send_and_read_statistics(context: &TestContext) -> String {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_securejoin_sources() -> Result<()> {
-    async fn check_statistics(context: &TestContext, expected: &SecurejoinSources) {
-        let statistics = get_statistics(context).await.unwrap();
-        let actual: serde_json::Value = serde_json::from_str(&statistics).unwrap();
+async fn test_stats_securejoin_sources() -> Result<()> {
+    async fn check_stats(context: &TestContext, expected: &SecurejoinSources) {
+        let stats = get_stats(context).await.unwrap();
+        let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
         let actual = &actual["securejoin_sources"];
 
         let expected = serde_json::to_string_pretty(&expected).unwrap();
@@ -281,22 +277,22 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
         scan: 0,
     };
 
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     let qr = get_securejoin_qr(bob, None).await?;
 
     join_securejoin(alice, &qr).await?;
     expected.unknown += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin(alice, &qr).await?;
     expected.unknown += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
         .await?;
     expected.clipboard += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(
         alice,
@@ -306,7 +302,7 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     )
     .await?;
     expected.external_link += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(
         alice,
@@ -316,34 +312,34 @@ async fn test_statistics_securejoin_sources() -> Result<()> {
     )
     .await?;
     expected.internal_link += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32), None)
         .await?;
     expected.image_loaded += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Scan as u32), None).await?;
     expected.scan += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
         .await?;
     expected.clipboard += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
         .await?;
     expected.clipboard += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_securejoin_uipaths() -> Result<()> {
-    async fn check_statistics(context: &TestContext, expected: &SecurejoinUIPaths) {
-        let stats = get_statistics(context).await.unwrap();
+async fn test_stats_securejoin_uipaths() -> Result<()> {
+    async fn check_stats(context: &TestContext, expected: &SecurejoinUIPaths) {
+        let stats = get_stats(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
         let actual = &actual["securejoin_uipaths"];
 
@@ -364,17 +360,17 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
         new_contact: 0,
     };
 
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     let qr = get_securejoin_qr(bob, None).await?;
 
     join_securejoin(alice, &qr).await?;
     expected.other += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin(alice, &qr).await?;
     expected.other += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(
         alice,
@@ -384,7 +380,7 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     )
     .await?;
     expected.new_contact += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(
         alice,
@@ -394,20 +390,20 @@ async fn test_statistics_securejoin_uipaths() -> Result<()> {
     )
     .await?;
     expected.new_contact += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     join_securejoin_with_ux_info(alice, &qr, Some(0), Some(SecurejoinUIPath::QrIcon as u32))
         .await?;
     expected.qr_icon += 1;
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_securejoin_invites() -> Result<()> {
-    async fn check_statistics(context: &TestContext, expected: &[JoinedInvite]) {
-        let stats = get_statistics(context).await.unwrap();
+async fn test_stats_securejoin_invites() -> Result<()> {
+    async fn check_stats(context: &TestContext, expected: &[JoinedInvite]) {
+        let stats = get_stats(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
         let actual = &actual["securejoin_invites"];
 
@@ -425,11 +421,11 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
 
     let mut expected = vec![];
 
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     let qr = get_securejoin_qr(bob, None).await?;
 
-    // The UI will call `check_qr()` first, which must not make the statistics wrong:
+    // The UI will call `check_qr()` first, which must not make the stats wrong:
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
     expected.push(JoinedInvite {
@@ -437,7 +433,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
         already_verified: false,
         typ: "contact".to_string(),
     });
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     check_qr(alice, &qr).await?;
     tcm.exec_securejoin_qr(alice, bob, &qr).await;
@@ -446,7 +442,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
         already_verified: true,
         typ: "contact".to_string(),
     });
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     let group_id = create_group_chat(bob, ProtectionStatus::Unprotected, "Group chat").await?;
     let qr = get_securejoin_qr(bob, Some(group_id)).await?;
@@ -458,7 +454,7 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
         already_verified: true,
         typ: "group".to_string(),
     });
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     // A contact with Charlie exists already:
     alice.add_or_lookup_contact(charlie).await;
@@ -473,23 +469,23 @@ async fn test_statistics_securejoin_invites() -> Result<()> {
         already_verified: false,
         typ: "group".to_string(),
     });
-    check_statistics(alice, &expected).await;
+    check_stats(alice, &expected).await;
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_is_chatmail() -> Result<()> {
+async fn test_stats_is_chatmail() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
 
-    let r = get_statistics(alice).await?;
+    let r = get_stats(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
     assert_eq!(r.get("is_chatmail").unwrap().as_bool().unwrap(), false);
 
     alice.set_config_bool(Config::IsChatmail, true).await?;
 
-    let r = get_statistics(alice).await?;
+    let r = get_stats(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
     assert_eq!(r.get("is_chatmail").unwrap().as_bool().unwrap(), true);
 
@@ -497,14 +493,14 @@ async fn test_statistics_is_chatmail() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_statistics_key_creation_timestamp() -> Result<()> {
+async fn test_stats_key_creation_timestamp() -> Result<()> {
     // Alice uses a pregenerated key. It was created at this timestamp:
     const ALICE_KEY_CREATION_TIME: u128 = 1582855645;
 
     let alice = &TestContext::new_alice().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
 
-    let r = get_statistics(alice).await?;
+    let r = get_stats(alice).await?;
     let r: serde_json::Value = serde_json::from_str(&r)?;
     let key_create_timestamps = r.get("key_create_timestamps").unwrap().as_array().unwrap();
     assert_eq!(

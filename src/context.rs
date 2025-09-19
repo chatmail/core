@@ -33,7 +33,7 @@ use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
 use crate::tools::{self, duration_to_str, time, time_elapsed};
-use crate::{chatlist_events, statistics};
+use crate::{chatlist_events, stats};
 
 /// Builder for the [`Context`].
 ///
@@ -1082,7 +1082,7 @@ impl Context {
         );
         res.insert(
             "stats_sending",
-            statistics::should_send_statistics(self).await?.to_string(),
+            stats::should_send_stats(self).await?.to_string(),
         );
         res.insert(
             "stats_last_sent",
