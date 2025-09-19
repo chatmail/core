@@ -110,3 +110,7 @@ class Message:
     def end_call(self):
         """Ends incoming or outgoing call."""
         self._rpc.end_call(self.account.id, self.id)
+
+    def get_call_info(self) -> AttrDict:
+        """Return information about the call."""
+        return AttrDict(self._rpc.call_info(self.account.id, self.id))
