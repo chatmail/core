@@ -278,8 +278,8 @@ impl Context {
         })
     }
 
-    /// Returns [`None`] if the peer channel has not been created.
-    pub async fn get_peer_channel(&self) -> Option<tokio::sync::RwLockReadGuard<'_, Iroh>> {
+    /// Returns [`None`] if the peer channels has not been initialized.
+    pub async fn get_peer_channels(&self) -> Option<tokio::sync::RwLockReadGuard<'_, Iroh>> {
         tokio::sync::RwLockReadGuard::<'_, std::option::Option<Iroh>>::try_map(
             self.iroh.read().await,
             |opt_iroh| opt_iroh.as_ref(),
