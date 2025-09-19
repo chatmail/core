@@ -18,6 +18,7 @@ use anyhow::{Context as _, Result, ensure};
 use sdp::SessionDescription;
 use serde::Serialize;
 use std::io::Cursor;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -37,6 +38,8 @@ const RINGING_SECONDS: i64 = 60;
 
 const CALL_ACCEPTED_TIMESTAMP: Param = Param::Arg;
 const CALL_ENDED_TIMESTAMP: Param = Param::Arg4;
+
+const STUN_PORT: u16 = 3478;
 
 /// Set if incoming call was ended explicitly
 /// by the other side before we accepted it.
@@ -536,21 +539,14 @@ struct IceServer {
     pub credential: Option<String>,
 }
 
-/// Returns JSON with ICE servers.
-///
-/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
-///
-/// All returned servers are resolved to their IP addresses.
-/// The primary point of DNS lookup is that Delta Chat Desktop
-/// relies on the servers being specified by IP,
-/// because it itself cannot utilize DNS. See
-/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
-pub async fn ice_servers(context: &Context) -> Result<String> {
-    let hostname = "ci-chatmail.testrun.org";
-    let port = 3478;
-    let username = "ohV8aec1".to_string();
-    let password = "zo3theiY".to_string();
-
+/// Creates JSON with ICE servers.
+async fn create_ice_servers(
+    context: &Context,
+    hostname: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+) -> Result<String> {
     // Do not use cache because there is no TLS.
     let load_cache = false;
     let urls: Vec<String> = lookup_host_with_cache(context, hostname, port, "", load_cache)
@@ -561,12 +557,75 @@ pub async fn ice_servers(context: &Context) -> Result<String> {
 
     let ice_server = IceServer {
         urls,
-        username: Some(username),
-        credential: Some(password),
+        username: Some(username.to_string()),
+        credential: Some(password.to_string()),
     };
 
     let json = serde_json::to_string(&[ice_server])?;
     Ok(json)
+}
+
+/// Creates JSON with ICE servers from a line received over IMAP METADATA.
+///
+/// IMAP METADATA returns a line such as
+/// `example.com:3478:1758650868:8Dqkyyu11MVESBqjbIylmB06rv8=`
+///
+/// 1758650868 is the username and expiration timestamp
+/// at the same time,
+/// while `8Dqkyyu11MVESBqjbIylmB06rv8=`
+/// is the password.
+pub(crate) async fn create_ice_servers_from_metadata(
+    context: &Context,
+    metadata: &str,
+) -> Result<(i64, String)> {
+    let (hostname, rest) = metadata.split_once(':').context("Missing hostname")?;
+    let (port, rest) = rest.split_once(':').context("Missing port")?;
+    let port = u16::from_str(port).context("Failed to parse the port")?;
+    let (ts, password) = rest.split_once(':').context("Missing timestamp")?;
+    let expiration_timestamp = i64::from_str(ts).context("Failed to parse the timestamp")?;
+    let ice_servers = create_ice_servers(context, hostname, port, ts, password).await?;
+    Ok((expiration_timestamp, ice_servers))
+}
+
+/// Creates JSON with ICE servers when no TURN servers are known.
+pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<String> {
+    // Public STUN server from https://stunprotocol.org/,
+    // an open source STUN server.
+    let hostname = "stunserver2025.stunprotocol.org";
+
+    // Do not use cache because there is no TLS.
+    let load_cache = false;
+    let urls: Vec<String> = lookup_host_with_cache(context, hostname, STUN_PORT, "", load_cache)
+        .await?
+        .into_iter()
+        .map(|addr| format!("stun:{addr}"))
+        .collect();
+
+    let ice_server = IceServer {
+        urls,
+        username: None,
+        credential: None,
+    };
+
+    let json = serde_json::to_string(&[ice_server])?;
+    Ok(json)
+}
+
+/// Returns JSON with ICE servers.
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
+///
+/// All returned servers are resolved to their IP addresses.
+/// The primary point of DNS lookup is that Delta Chat Desktop
+/// relies on the servers being specified by IP,
+/// because it itself cannot utilize DNS. See
+/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
+pub async fn ice_servers(context: &Context) -> Result<String> {
+    if let Some(ref metadata) = *context.metadata.read().await {
+        Ok(metadata.ice_servers.clone())
+    } else {
+        Ok("[]".to_string())
+    }
 }
 
 #[cfg(test)]
