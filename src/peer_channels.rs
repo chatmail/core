@@ -295,7 +295,7 @@ impl Context {
             bail!("Attempt to initialize Iroh when realtime is disabled");
         }
 
-        if let Some(lock) = self.get_peer_channel().await {
+        if let Some(lock) = self.get_peer_channels().await {
             return Ok(lock);
         }
 
