@@ -1586,7 +1586,7 @@ impl MimeFactory {
                         "Chat-Content",
                         mail_builder::headers::text::Text::new("group-avatar-changed").into(),
                     ));
-                    if grpimage.is_none() {
+                    if grpimage.is_none() && is_encrypted {
                         headers.push((
                             "Chat-Group-Avatar",
                             mail_builder::headers::raw::Raw::new("0").into(),
@@ -1713,7 +1713,9 @@ impl MimeFactory {
             _ => {}
         }
 
-        if let Some(grpimage) = grpimage {
+        if let Some(grpimage) = grpimage
+            && is_encrypted
+        {
             info!(context, "setting group image '{}'", grpimage);
             let avatar = build_avatar_file(context, grpimage)
                 .await
