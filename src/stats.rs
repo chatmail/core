@@ -25,7 +25,7 @@ use crate::tools::{create_id, time};
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
 const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
-const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 3600; // 1 hour
+const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less than the lowest ephemeral messages timeout)
 
 #[derive(Serialize)]
 struct Statistics {
@@ -159,10 +159,11 @@ pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
     if should_send_stats(context).await? {
         let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
         let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
+        // TODO is this comparison wrong???
         if next_sending_time <= time() {
-            // If something goes wrong, try again in 1 minute.
+            // If something goes wrong, try again in 1 hour.
             // This prevents infinite loops in the (unlikely) case of an error:
-            let one_minute_later = last_sending_time.saturating_add(60).to_string();
+            let one_minute_later = last_sending_time.saturating_add(3600).to_string();
             context
                 .set_config_internal(Config::StatsLastSent, Some(&one_minute_later))
                 .await?;
@@ -181,18 +182,22 @@ pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
                 .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
                 .await?;
         }
-    } else if should_update_message_stats(context).await? {
-        update_message_stats(context).await?;
     }
     Ok(None)
 }
 
-async fn should_update_message_stats(context: &Context) -> Result<bool> {
+pub(crate) async fn maybe_update_message_stats(context: &Context) -> Result<()> {
     let last_time = context
         .get_config_i64(Config::StatsLastUpdateMessage)
         .await?;
     let next_time = last_time.saturating_add(MESSAGE_STATS_UPDATE_INTERVAL_SECONDS);
-    Ok(next_time <= time())
+
+    // TODO is this comparison wrong???
+    if next_time <= time() {
+        update_message_stats(context).await?;
+    }
+
+    Ok(())
 }
 
 #[allow(clippy::unused_async, unused)]
@@ -229,7 +234,12 @@ See TODO[blog post] for more information."
 
     let stats = get_stats(context).await?;
 
-    msg.set_file_from_bytes(context, "statistics.txt", stats.as_bytes(), Some("text/plain"))?;
+    msg.set_file_from_bytes(
+        context,
+        "statistics.txt",
+        stats.as_bytes(),
+        Some("text/plain"),
+    )?;
 
     chat::send_msg(context, chat_id, &mut msg)
         .await

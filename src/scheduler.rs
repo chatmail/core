@@ -15,7 +15,6 @@ use tokio_util::task::TaskTracker;
 
 pub(crate) use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
-use crate::constants;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{DownloadState, download_msg};
@@ -29,6 +28,7 @@ use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
+use crate::{constants, stats};
 
 pub(crate) mod connectivity;
 
@@ -808,6 +808,11 @@ async fn smtp_loop(
                     continue;
                 }
             }
+
+            stats::maybe_update_message_stats(&ctx)
+                .await
+                .log_err(&ctx)
+                .ok();
 
             // Fake Idle
             info!(ctx, "SMTP fake idle started.");

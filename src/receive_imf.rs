@@ -1753,14 +1753,12 @@ async fn add_parts(
 
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
-    } else if seen
-        || is_mdn
-        || chat_id_blocked == Blocked::Yes
-        || group_changes.silent
-        || mime_parser.from.addr == STATISTICS_BOT_EMAIL
+    } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL {
+        MessageState::InNoticed
     } else {
         MessageState::InFresh
     };
