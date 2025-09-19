@@ -24,6 +24,7 @@ use rand::Rng;
 use ratelimit::Ratelimit;
 use url::Url;
 
+use crate::calls::create_ice_servers_from_metadata;
 use crate::chat::{self, ChatId, ChatIdBlocked};
 use crate::chatlist_events;
 use crate::config::Config;
@@ -47,7 +48,7 @@ use crate::receive_imf::{
 };
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::stock_str;
-use crate::tools::{self, create_id, duration_to_str};
+use crate::tools::{self, create_id, duration_to_str, time};
 
 pub(crate) mod capabilities;
 mod client;
@@ -123,6 +124,18 @@ pub(crate) struct ServerMetadata {
     pub admin: Option<String>,
 
     pub iroh_relay: Option<Url>,
+
+    /// JSON with ICE servers for WebRTC calls
+    /// and the expiration timestamp.
+    ///
+    /// If JSON is about to expire, new TURN credentials
+    /// should be fetched from the server
+    /// to be ready for WebRTC calls.
+    pub ice_servers: String,
+
+    /// Timestamp when ICE servers are considered
+    /// expired and should be updated.
+    pub ice_servers_expiration_timestamp: i64,
 }
 
 impl async_imap::Authenticator for OAuth2 {
@@ -1535,7 +1548,35 @@ impl Session {
         }
 
         let mut lock = context.metadata.write().await;
-        if (*lock).is_some() {
+        if let Some(ref mut old_metadata) = *lock {
+            let now = time();
+
+            // Refresh TURN server credentials if they expire in 12 hours.
+            if now + 3600 * 12 < old_metadata.ice_servers_expiration_timestamp {
+                return Ok(());
+            }
+
+            info!(context, "ICE servers expired, requesting new credentials.");
+            let mailbox = "";
+            let options = "";
+            let metadata = self
+                .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
+                .await?;
+            for m in metadata {
+                if m.entry == "/shared/vendor/deltachat/turn" {
+                    if let Some(value) = m.value {
+                        match create_ice_servers_from_metadata(context, &value).await {
+                            Ok((parsed_timestamp, parsed_ice_servers)) => {
+                                old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
+                                old_metadata.ice_servers = parsed_ice_servers;
+                            }
+                            Err(err) => {
+                                warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+                            }
+                        }
+                    }
+                }
+            }
             return Ok(());
         }
 
@@ -1547,6 +1588,8 @@ impl Session {
         let mut comment = None;
         let mut admin = None;
         let mut iroh_relay = None;
+        let mut ice_servers = String::new();
+        let mut ice_servers_expiration_timestamp = 0;
 
         let mailbox = "";
         let options = "";
@@ -1554,7 +1597,7 @@ impl Session {
             .get_metadata(
                 mailbox,
                 options,
-                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay)",
+                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn)",
             )
             .await?;
         for m in metadata {
@@ -1577,6 +1620,19 @@ impl Session {
                         }
                     }
                 }
+                "/shared/vendor/deltachat/turn" => {
+                    if let Some(value) = m.value {
+                        match create_ice_servers_from_metadata(context, &value).await {
+                            Ok((parsed_timestamp, parsed_ice_servers)) => {
+                                ice_servers_expiration_timestamp = parsed_timestamp;
+                                ice_servers = parsed_ice_servers;
+                            }
+                            Err(err) => {
+                                warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+                            }
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1584,6 +1640,8 @@ impl Session {
             comment,
             admin,
             iroh_relay,
+            ice_servers,
+            ice_servers_expiration_timestamp,
         });
         Ok(())
     }
