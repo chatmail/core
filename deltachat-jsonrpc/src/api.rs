@@ -8,6 +8,7 @@ use std::{collections::HashMap, str::FromStr};
 use anyhow::{anyhow, bail, ensure, Context, Result};
 pub use deltachat::accounts::Accounts;
 use deltachat::blob::BlobObject;
+use deltachat::calls::ice_servers;
 use deltachat::chat::{
     self, add_contact_to_chat, forward_msgs, get_chat_media, get_chat_msgs, get_chat_msgs_ex,
     marknoticed_chat, remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
@@ -2152,6 +2153,12 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
         ctx.end_call(MsgId::new(msg_id)).await?;
         Ok(())
+    }
+
+    /// Returns JSON with ICE servers, to be used for WebRTC video calls.
+    async fn ice_servers(&self, account_id: u32) -> Result<String> {
+        let ctx = self.get_context(account_id).await?;
+        ice_servers(&ctx).await
     }
 
     /// Makes an HTTP GET request and returns a response.

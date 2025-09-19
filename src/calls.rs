@@ -11,10 +11,12 @@ use crate::headerdef::HeaderDef;
 use crate::log::{info, warn};
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
+use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
 use crate::tools::time;
 use anyhow::{Context as _, Result, ensure};
 use sdp::SessionDescription;
+use serde::Serialize;
 use std::io::Cursor;
 use std::time::Duration;
 use tokio::task;
@@ -391,6 +393,52 @@ fn sdp_has_video(sdp: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+/// ICE server for JSON serialization.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+struct IceServer {
+    /// STUN or TURN URLs.
+    pub urls: Vec<String>,
+
+    /// Username for TURN server authentication.
+    pub username: Option<String>,
+
+    /// Password for logging into the server.
+    pub credential: Option<String>,
+}
+
+/// Returns JSON with ICE servers.
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
+///
+/// All returned servers are resolved to their IP addresses.
+/// The primary point of DNS lookup is that Delta Chat Desktop
+/// relies on the servers being specified by IP,
+/// because it itself cannot utilize DNS. See
+/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
+pub async fn ice_servers(context: &Context) -> Result<String> {
+    let hostname = "ci-chatmail.testrun.org";
+    let port = 3478;
+    let username = "ohV8aec1".to_string();
+    let password = "zo3theiY".to_string();
+
+    // Do not use cache because there is no TLS.
+    let load_cache = false;
+    let urls: Vec<String> = lookup_host_with_cache(context, hostname, port, "", load_cache)
+        .await?
+        .into_iter()
+        .map(|addr| format!("turn:{addr}"))
+        .collect();
+
+    let ice_server = IceServer {
+        urls,
+        username: Some(username),
+        credential: Some(password),
+    };
+
+    let json = serde_json::to_string(&[ice_server])?;
+    Ok(json)
 }
 
 #[cfg(test)]
