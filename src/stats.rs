@@ -156,48 +156,55 @@ struct JoinedInvite {
 /// On the other end, a bot will receive the message and make it available
 /// to Delta Chat's developers.
 pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
-    if should_send_stats(context).await? {
-        let last_sending_time = context.get_config_i64(Config::StatsLastSent).await?;
-        let next_sending_time = last_sending_time.saturating_add(SENDING_INTERVAL_SECONDS);
-        // TODO is this comparison wrong???
-        if next_sending_time <= time() {
-            // If something goes wrong, try again in 1 hour.
-            // This prevents infinite loops in the (unlikely) case of an error:
-            let one_minute_later = last_sending_time.saturating_add(3600).to_string();
-            context
-                .set_config_internal(Config::StatsLastSent, Some(&one_minute_later))
-                .await?;
+    if should_send_stats(context).await?
+        && has_time_passed(context, Config::StatsLastSent, SENDING_INTERVAL_SECONDS).await?
+    {
+        let chat_id = send_stats(context).await?;
 
-            let chat_id = Some(send_stats(context).await?);
-
-            context
-                .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
-                .await?;
-
-            return Ok(chat_id);
-        } else if time() < last_sending_time {
-            // The clock was rewound.
-            // Reset the config, so that the statistics will be sent normally in a week.
-            context
-                .set_config_internal(Config::StatsLastSent, Some(&time().to_string()))
-                .await?;
-        }
+        return Ok(Some(chat_id));
     }
     Ok(None)
 }
 
 pub(crate) async fn maybe_update_message_stats(context: &Context) -> Result<()> {
-    let last_time = context
-        .get_config_i64(Config::StatsLastUpdateMessage)
-        .await?;
-    let next_time = last_time.saturating_add(MESSAGE_STATS_UPDATE_INTERVAL_SECONDS);
-
-    // TODO is this comparison wrong???
-    if next_time <= time() {
+    if should_send_stats(context).await?
+        && has_time_passed(
+            context,
+            Config::StatsLastUpdate,
+            MESSAGE_STATS_UPDATE_INTERVAL_SECONDS,
+        )
+        .await?
+    {
         update_message_stats(context).await?;
     }
 
     Ok(())
+}
+
+async fn has_time_passed(context: &Context, config: Config, seconds: i64) -> Result<bool> {
+    let last_time = context.get_config_i64(config).await?;
+    let next_time = last_time.saturating_add(seconds);
+
+    let res = if next_time <= time() {
+        // Already set the config to the current time.
+        // This prevents infinite loops in the (unlikely) case of an error:
+        context
+            .set_config_internal(config, Some(&time().to_string()))
+            .await?;
+        true
+    } else {
+        if time() < last_time {
+            // The clock was rewound.
+            // Reset the config, so that the statistics will be sent normally in a week,
+            // or be normally updated in a few minutes.
+            context
+                .set_config_internal(config, Some(&time().to_string()))
+                .await?;
+        }
+        false
+    };
+
+    Ok(res)
 }
 
 #[allow(clippy::unused_async, unused)]
@@ -489,10 +496,10 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
 
     // Fill zeroes if a chattype wasn't present:
     for chattype in [Chattype::Group, Chattype::Single, Chattype::OutBroadcast] {
-        map.entry(chattype).or_insert_with(MessageStats::default);
+        map.entry(chattype).or_default();
     }
 
-    return Ok(map);
+    Ok(map)
 }
 
 pub(crate) async fn update_message_stats(context: &Context) -> Result<()> {
@@ -500,7 +507,7 @@ pub(crate) async fn update_message_stats(context: &Context) -> Result<()> {
         update_message_stats_inner(context, chattype).await?;
     }
     context
-        .set_config_internal(Config::StatsLastUpdateMessage, Some(&time().to_string()))
+        .set_config_internal(Config::StatsLastUpdate, Some(&time().to_string()))
         .await?;
     Ok(())
 }

@@ -435,7 +435,7 @@ pub enum Config {
     StatsLastSent,
 
     /// Last time `update_message_stats()` was called
-    StatsLastUpdateMessage,
+    StatsLastUpdate,
 
     /// This key is sent to the statistics bot so that the bot can recognize the user
     /// without storing the email address
