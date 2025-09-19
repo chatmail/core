@@ -52,11 +52,13 @@ pub struct CallInfo {
 }
 
 impl CallInfo {
-    fn is_incoming(&self) -> bool {
+    /// Returns true if the call is an incoming call.
+    pub fn is_incoming(&self) -> bool {
         self.msg.from_id != ContactId::SELF
     }
 
-    fn is_stale(&self) -> bool {
+    /// Returns true if the call should not ring anymore.
+    pub fn is_stale(&self) -> bool {
         self.remaining_ring_seconds() <= 0
     }
 
@@ -77,7 +79,7 @@ impl CallInfo {
     }
 
     async fn update_text_duration(&self, context: &Context) -> Result<()> {
-        let minutes = self.get_duration_seconds() / 60;
+        let minutes = self.duration_seconds() / 60;
         let duration = match minutes {
             0 => "<1 minute".to_string(),
             1 => "1 minute".to_string(),
@@ -102,7 +104,8 @@ impl CallInfo {
         Ok(())
     }
 
-    fn is_accepted(&self) -> bool {
+    /// Returns true if the call is accepted.
+    pub fn is_accepted(&self) -> bool {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
     }
 
@@ -112,11 +115,13 @@ impl CallInfo {
         Ok(())
     }
 
-    fn is_ended(&self) -> bool {
+    /// Returns true if the call is ended.
+    pub fn is_ended(&self) -> bool {
         self.msg.param.exists(CALL_ENDED_TIMESTAMP)
     }
 
-    fn get_duration_seconds(&self) -> i64 {
+    /// Returns call duration in seconds.
+    pub fn duration_seconds(&self) -> i64 {
         if let (Some(start), Some(end)) = (
             self.msg.param.get_i64(CALL_ACCEPTED_TIMESTAMP),
             self.msg.param.get_i64(CALL_ENDED_TIMESTAMP),
@@ -358,7 +363,8 @@ impl Context {
         Ok(())
     }
 
-    async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
+    /// Loads information about the call given its ID.
+    pub async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
         let call = Message::load_from_db(self, call_id).await?;
         self.load_call_by_message(call)
     }

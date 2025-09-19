@@ -48,6 +48,7 @@ pub mod types;
 
 use num_traits::FromPrimitive;
 use types::account::Account;
+use types::calls::JsonrpcCallInfo;
 use types::chat::FullChat;
 use types::contact::{ContactObject, VcardContact};
 use types::events::Event;
@@ -2110,6 +2111,13 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
         ctx.end_call(MsgId::new(msg_id)).await?;
         Ok(())
+    }
+
+    /// Returns information about the call.
+    async fn call_info(&self, account_id: u32, msg_id: u32) -> Result<JsonrpcCallInfo> {
+        let ctx = self.get_context(account_id).await?;
+        let call_info = JsonrpcCallInfo::from_msg_id(&ctx, MsgId::new(msg_id)).await?;
+        Ok(call_info)
     }
 
     /// Returns JSON with ICE servers, to be used for WebRTC video calls.
