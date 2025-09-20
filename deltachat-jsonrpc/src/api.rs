@@ -2001,7 +2001,7 @@ impl CommandApi {
         Ok(())
     }
 
-    /// Leave the gossip of the webxdc with the given message id.
+    /// Leaves the gossip of the webxdc with the given message id.
     ///
     /// NB: When this is called before closing a webxdc app in UIs, it must be guaranteed that
     /// `send_webxdc_realtime_*()` functions aren't called for the given `instance_message_id`
