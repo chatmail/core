@@ -2001,6 +2001,11 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Leaves the gossip of the webxdc with the given message id.
+    ///
+    /// NB: When this is called before closing a webxdc app in UIs, it must be guaranteed that
+    /// `send_webxdc_realtime_*()` functions aren't called for the given `instance_message_id`
+    /// anymore until the app is open again.
     async fn leave_webxdc_realtime(&self, account_id: u32, instance_message_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         leave_webxdc_realtime(&ctx, MsgId::new(instance_message_id)).await

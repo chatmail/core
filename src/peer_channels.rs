@@ -278,18 +278,24 @@ impl Context {
         })
     }
 
+    /// Returns [`None`] if the peer channels has not been initialized.
+    pub async fn get_peer_channels(&self) -> Option<tokio::sync::RwLockReadGuard<'_, Iroh>> {
+        tokio::sync::RwLockReadGuard::<'_, std::option::Option<Iroh>>::try_map(
+            self.iroh.read().await,
+            |opt_iroh| opt_iroh.as_ref(),
+        )
+        .ok()
+    }
+
     /// Get or initialize the iroh peer channel.
     pub async fn get_or_try_init_peer_channel(
         &self,
     ) -> Result<tokio::sync::RwLockReadGuard<'_, Iroh>> {
         if !self.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
-            bail!("Attempt to get Iroh when realtime is disabled");
+            bail!("Attempt to initialize Iroh when realtime is disabled");
         }
 
-        if let Ok(lock) = tokio::sync::RwLockReadGuard::<'_, std::option::Option<Iroh>>::try_map(
-            self.iroh.read().await,
-            |opt_iroh| opt_iroh.as_ref(),
-        ) {
+        if let Some(lock) = self.get_peer_channels().await {
             return Ok(lock);
         }
 
@@ -479,14 +485,17 @@ pub async fn send_webxdc_realtime_data(ctx: &Context, msg_id: MsgId, data: Vec<u
 }
 
 /// Leave the gossip of the webxdc with given [MsgId].
+///
+/// NB: When this is called before closing a webxdc app in UIs, it must be guaranteed that
+/// `send_webxdc_realtime_*()` functions aren't called for the given `msg_id` anymore until the app
+/// is open again.
 pub async fn leave_webxdc_realtime(ctx: &Context, msg_id: MsgId) -> Result<()> {
-    if !ctx.get_config_bool(Config::WebxdcRealtimeEnabled).await? {
+    let Some(iroh) = ctx.get_peer_channels().await else {
         return Ok(());
-    }
-    let topic = get_iroh_topic_for_msg(ctx, msg_id)
-        .await?
-        .with_context(|| format!("Message {msg_id} has no gossip topic"))?;
-    let iroh = ctx.get_or_try_init_peer_channel().await?;
+    };
+    let Some(topic) = get_iroh_topic_for_msg(ctx, msg_id).await? else {
+        return Ok(());
+    };
     iroh.leave_realtime(topic).await?;
     info!(ctx, "IROH_REALTIME: Left gossip for message {msg_id}");
 
@@ -1110,7 +1119,6 @@ mod tests {
 
         assert!(alice.ctx.iroh.read().await.is_none());
 
-        // creates iroh endpoint as side effect
         leave_webxdc_realtime(alice, MsgId::new(1)).await.unwrap();
 
         assert!(alice.ctx.iroh.read().await.is_none());
@@ -1118,5 +1126,20 @@ mod tests {
         // This internal function should return error
         // if accidentally called with the setting disabled.
         assert!(alice.ctx.get_or_try_init_peer_channel().await.is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_leave_webxdc_realtime_uninitialized() {
+        let mut tcm = TestContextManager::new();
+        let alice = &mut tcm.alice().await;
+
+        alice
+            .set_config_bool(Config::WebxdcRealtimeEnabled, true)
+            .await
+            .unwrap();
+
+        assert!(alice.ctx.iroh.read().await.is_none());
+        leave_webxdc_realtime(alice, MsgId::new(1)).await.unwrap();
+        assert!(alice.ctx.iroh.read().await.is_none());
     }
 }
