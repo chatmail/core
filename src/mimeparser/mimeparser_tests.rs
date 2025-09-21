@@ -1990,6 +1990,27 @@ async fn test_chat_edit_imf_header() -> Result<()> {
     Ok(())
 }
 
+/// Tests that the last valid Autocrypt header is taken:
+/// - The 3rd header is skipped because of the unknown critical attribute.
+/// - The 2nd header is taken despite it has an unknown non-critical attribute.
+/// - The 1st header shouldn't be looked at.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_multiple_autocrypt_hdrs() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+    let msg_id = receive_imf(
+        bob,
+        include_bytes!("../../test-data/message/thunderbird_with_multiple_autocrypts.eml"),
+        false,
+    )
+    .await?
+    .unwrap()
+    .msg_ids[0];
+    let msg = Message::load_from_db(bob, msg_id).await?;
+    assert!(msg.get_showpadlock());
+    Ok(())
+}
+
 /// Tests that timestamp of signed but not encrypted message is protected.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_protected_date() -> Result<()> {
