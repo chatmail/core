@@ -815,6 +815,31 @@ async fn test_concat_multiple_ndns() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_receive_resent_deleted_msg() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+    let bob = &TestContext::new_bob().await;
+    let alice_bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let alice_chat_id = ChatId::create_for_contact(alice, alice_bob_id).await?;
+    let sent = alice.send_text(alice_chat_id, "hi").await;
+    let alice_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
+    bob.sql
+        .execute(
+            "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
+            VALUES            (?1,         ?2,     ?3,  ?4,          ?5)",
+            (&alice_msg.rfc724_mid, "INBOX", 1, 1, "INBOX"),
+        )
+        .await?;
+    let bob_msg = bob.recv_msg(&sent).await;
+    let bob_chat_id = bob_msg.chat_id;
+    message::delete_msgs(bob, &[bob_msg.id]).await?;
+    chat::resend_msgs(alice, &[alice_msg.id]).await?;
+    let bob_msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
+    assert_eq!(bob_msg.chat_id, bob_chat_id);
+    assert_eq!(bob_msg.text, "hi");
+    Ok(())
+}
+
 async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
     context
         .set_config(Config::ShowEmails, Some("2"))
