@@ -849,7 +849,6 @@ impl Context {
             Err(err) => format!("<key failure: {err}>"),
         };
 
-        let sentbox_watch = self.get_config_int(Config::SentboxWatch).await?;
         let mvbox_move = self.get_config_int(Config::MvboxMove).await?;
         let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
         let folders_configured = self
@@ -860,10 +859,6 @@ impl Context {
 
         let configured_inbox_folder = self
             .get_config(Config::ConfiguredInboxFolder)
-            .await?
-            .unwrap_or_else(|| "<unset>".to_string());
-        let configured_sentbox_folder = self
-            .get_config(Config::ConfiguredSentboxFolder)
             .await?
             .unwrap_or_else(|| "<unset>".to_string());
         let configured_mvbox_folder = self
@@ -954,7 +949,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert("sentbox_watch", sentbox_watch.to_string());
         res.insert("mvbox_move", mvbox_move.to_string());
         res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
         res.insert(
@@ -962,7 +956,6 @@ impl Context {
             folders_configured.to_string(),
         );
         res.insert("configured_inbox_folder", configured_inbox_folder);
-        res.insert("configured_sentbox_folder", configured_sentbox_folder);
         res.insert("configured_mvbox_folder", configured_mvbox_folder);
         res.insert("configured_trash_folder", configured_trash_folder);
         res.insert("mdns_enabled", mdns_enabled.to_string());
@@ -1426,12 +1419,6 @@ impl Context {
     pub async fn is_inbox(&self, folder_name: &str) -> Result<bool> {
         let inbox = self.get_config(Config::ConfiguredInboxFolder).await?;
         Ok(inbox.as_deref() == Some(folder_name))
-    }
-
-    /// Returns true if given folder name is the name of the "sent" folder.
-    pub async fn is_sentbox(&self, folder_name: &str) -> Result<bool> {
-        let sentbox = self.get_config(Config::ConfiguredSentboxFolder).await?;
-        Ok(sentbox.as_deref() == Some(folder_name))
     }
 
     /// Returns true if given folder name is the name of the "DeltaChat" folder.

@@ -84,21 +84,15 @@ impl Imap {
             }
         }
 
-        // Set configs for necessary folders. Or reset if the folder was deleted.
-        for conf in [
-            Config::ConfiguredSentboxFolder,
-            Config::ConfiguredTrashFolder,
-        ] {
-            let val = folder_configs.get(&conf).map(|s| s.as_str());
-            let interrupt = conf == Config::ConfiguredTrashFolder
-                && val.is_some()
-                && context.get_config(conf).await?.is_none();
-            context.set_config_internal(conf, val).await?;
-            if interrupt {
-                // `Imap::fetch_move_delete()` is possible now for other folders (NB: we are in the
-                // Inbox loop).
-                context.scheduler.interrupt_oboxes().await;
-            }
+        // Set config for the Trash folder. Or reset if the folder was deleted.
+        let conf = Config::ConfiguredTrashFolder;
+        let val = folder_configs.get(&conf).map(|s| s.as_str());
+        let interrupt = val.is_some() && context.get_config(conf).await?.is_none();
+        context.set_config_internal(conf, val).await?;
+        if interrupt {
+            // `Imap::fetch_move_delete()`, particularly message deletion, is possible now for other
+            // folders (NB: we are in the Inbox loop).
+            context.scheduler.interrupt_oboxes().await;
         }
 
         info!(context, "Found folders: {folder_names:?}.");
@@ -108,9 +102,6 @@ impl Imap {
 
 pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
     let mut res = vec![Config::ConfiguredInboxFolder];
-    if context.get_config_bool(Config::SentboxWatch).await? {
-        res.push(Config::ConfiguredSentboxFolder);
-    }
     if context.should_watch_mvbox().await? {
         res.push(Config::ConfiguredMvboxFolder);
     }
