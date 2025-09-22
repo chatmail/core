@@ -425,6 +425,8 @@ pub enum EventType {
     IncomingCall {
         /// ID of the info message referring to the call.
         msg_id: u32,
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
         /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
         /// True if incoming call is a video call.
@@ -436,12 +438,16 @@ pub enum EventType {
     IncomingCallAccepted {
         /// ID of the info message referring to the call.
         msg_id: u32,
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
     },
 
     /// Outgoing call accepted.
     OutgoingCallAccepted {
         /// ID of the info message referring to the call.
         msg_id: u32,
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
         /// User-defined info passed to dc_accept_incoming_call(
         accept_call_info: String,
     },
@@ -450,6 +456,8 @@ pub enum EventType {
     CallEnded {
         /// ID of the info message referring to the call.
         msg_id: u32,
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
     },
 }
 
@@ -605,25 +613,31 @@ impl From<CoreEventType> for EventType {
             CoreEventType::AccountsItemChanged => AccountsItemChanged,
             CoreEventType::IncomingCall {
                 msg_id,
+                chat_id,
                 place_call_info,
                 has_video,
             } => IncomingCall {
                 msg_id: msg_id.to_u32(),
+                chat_id: chat_id.to_u32(),
                 place_call_info,
                 has_video,
             },
-            CoreEventType::IncomingCallAccepted { msg_id } => IncomingCallAccepted {
+            CoreEventType::IncomingCallAccepted { msg_id, chat_id } => IncomingCallAccepted {
                 msg_id: msg_id.to_u32(),
+                chat_id: chat_id.to_u32(),
             },
             CoreEventType::OutgoingCallAccepted {
                 msg_id,
+                chat_id,
                 accept_call_info,
             } => OutgoingCallAccepted {
                 msg_id: msg_id.to_u32(),
+                chat_id: chat_id.to_u32(),
                 accept_call_info,
             },
-            CoreEventType::CallEnded { msg_id } => CallEnded {
+            CoreEventType::CallEnded { msg_id, chat_id } => CallEnded {
                 msg_id: msg_id.to_u32(),
+                chat_id: chat_id.to_u32(),
             },
             #[allow(unreachable_patterns)]
             #[cfg(test)]
