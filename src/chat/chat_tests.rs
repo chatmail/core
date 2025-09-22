@@ -4160,7 +4160,7 @@ async fn test_past_members() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn non_member_cannot_modify_member_list() -> Result<()> {
+async fn test_non_member_cannot_modify_member_list() -> Result<()> {
     let mut tcm = TestContextManager::new();
 
     let alice = &tcm.alice().await;
@@ -4192,6 +4192,12 @@ async fn non_member_cannot_modify_member_list() -> Result<()> {
     alice.recv_msg_trash(&bob_sent_add_msg).await;
     assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
+    // The same for removal.
+    let bob_alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
+    remove_contact_from_chat(bob, bob_chat_id, bob_alice_contact_id).await?;
+    let bob_sent_add_msg = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&bob_sent_add_msg).await;
+    assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
     Ok(())
 }
 

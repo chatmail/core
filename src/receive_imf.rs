@@ -2907,8 +2907,12 @@ async fn apply_group_changes(
         // rather than old display name.
         // This could be fixed by looking up the contact with the highest
         // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
-        removed_id = lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?;
-        if let Some(id) = removed_id {
+        if !is_from_in_chat {
+            better_msg = Some(String::new());
+        } else if let Some(id) =
+            lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?
+        {
+            removed_id = Some(id);
             better_msg = if id == from_id {
                 silent = true;
                 Some(stock_str::msg_group_left_local(context, from_id).await)
@@ -2919,7 +2923,9 @@ async fn apply_group_changes(
             warn!(context, "Removed {removed_addr:?} has no contact id.")
         }
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
+        if !is_from_in_chat {
+            better_msg = Some(String::new());
+        } else if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
             // TODO: if gossiped keys contain the same address multiple times,
             // we may lookup the wrong contact.
             // This could be fixed by looking up the contact with
