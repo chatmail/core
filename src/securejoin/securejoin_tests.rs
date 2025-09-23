@@ -380,6 +380,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
             contact_id,
             chat_type,
             progress,
+            ..
         } => {
             assert_eq!(contact_id, contact_bob.id);
             assert_eq!(chat_type, Chattype::Single);
@@ -552,10 +553,12 @@ async fn test_secure_join() -> Result<()> {
         EventType::SecurejoinInviterProgress {
             contact_id,
             chat_type,
+            chat_id,
             progress,
         } => {
             assert_eq!(contact_id, contact_bob.id);
             assert_eq!(chat_type, Chattype::Group);
+            assert_eq!(chat_id, alice_chatid);
             assert_eq!(progress, 1000);
         }
         _ => unreachable!(),
