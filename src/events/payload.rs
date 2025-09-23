@@ -273,6 +273,9 @@ pub enum EventType {
         /// ID of the contact that wants to join.
         contact_id: ContactId,
 
+        /// ID of the chat in case of success.
+        chat_id: ChatId,
+
         /// The type of the joined chat.
         chat_type: Chattype,
 

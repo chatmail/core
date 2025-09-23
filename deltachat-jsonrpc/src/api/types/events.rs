@@ -308,6 +308,8 @@ pub enum EventType {
         /// This can take the same values
         /// as `BasicChat.chatType` ([`crate::api::types::chat::BasicChat::chat_type`]).
         chat_type: u32,
+        /// ID of the chat in case of success.
+        chat_id: u32,
 
         /// Progress, always 1000.
         progress: usize,
@@ -556,10 +558,12 @@ impl From<CoreEventType> for EventType {
             CoreEventType::SecurejoinInviterProgress {
                 contact_id,
                 chat_type,
+                chat_id,
                 progress,
             } => SecurejoinInviterProgress {
                 contact_id: contact_id.to_u32(),
                 chat_type: chat_type.to_u32().unwrap_or(0),
+                chat_id: chat_id.to_u32(),
                 progress,
             },
             CoreEventType::SecurejoinJoinerProgress {
