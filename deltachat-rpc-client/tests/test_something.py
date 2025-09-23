@@ -252,6 +252,7 @@ def test_chat(acfactory) -> None:
     bob_chat_alice.get_encryption_info()
 
     group = alice.create_group("test group")
+    to_resend = group.send_text("will be resent")
     group.add_contact(alice_contact_bob)
     group.get_qr_code()
 
@@ -263,6 +264,7 @@ def test_chat(acfactory) -> None:
 
     msg = group.send_message(text="hi")
     assert (msg.get_snapshot()).text == "hi"
+    group.resend_messages([to_resend])
     group.forward_messages([msg])
 
     group.set_draft(text="test draft")
