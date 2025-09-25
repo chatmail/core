@@ -33,9 +33,19 @@ use tokio::time::sleep;
 /// as the callee won't start the call afterwards.
 const RINGING_SECONDS: i64 = 60;
 
-/// For persisting parameters in the call, we use Param::Arg*
+// For persisting parameters in the call, we use Param::Arg*
+
 const CALL_ACCEPTED_TIMESTAMP: Param = Param::Arg;
 const CALL_ENDED_TIMESTAMP: Param = Param::Arg4;
+
+/// Set if incoming call was ended explicitly
+/// by the other side before we accepted it.
+///
+/// It is used to distinguish "ended" calls
+/// that are rejected by us from the calls
+/// cancelled by the other side
+/// immediately after ringing started.
+const CALL_CANCELLED_TIMESTAMP: Param = Param::Arg2;
 
 /// Information about the status of a call.
 #[derive(Debug, Default)]
@@ -109,8 +119,34 @@ impl CallInfo {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
     }
 
+    /// Returns true if the call is missed
+    /// because the caller cancelled it
+    /// explicitly before ringing stopped.
+    ///
+    /// For outgoing calls this means
+    /// the receiver has rejected the call
+    /// explicitly.
+    pub fn is_cancelled(&self) -> bool {
+        self.msg.param.exists(CALL_CANCELLED_TIMESTAMP)
+    }
+
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, time());
+        self.msg.update_param(context).await?;
+        Ok(())
+    }
+
+    /// Explicitly mark the call as cancelled.
+    ///
+    /// For incoming calls this should be called
+    /// when "call ended" message is received
+    /// from the caller before we picked up the call.
+    /// In this case the call becomes "missed" early
+    /// before the ringing timeout.
+    async fn mark_as_cancelled(&mut self, context: &Context) -> Result<()> {
+        let now = time();
+        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
+        self.msg.param.set_i64(CALL_CANCELLED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
         Ok(())
     }
@@ -209,15 +245,17 @@ impl Context {
             info!(self, "Call already ended");
             return Ok(());
         }
-        call.mark_as_ended(self).await?;
 
         if !call.is_accepted() {
             if call.is_incoming() {
+                call.mark_as_ended(self).await?;
                 call.update_text(self, "Declined call").await?;
             } else {
+                call.mark_as_cancelled(self).await?;
                 call.update_text(self, "Cancelled call").await?;
             }
         } else {
+            call.mark_as_ended(self).await?;
             call.update_text_duration(self).await?;
         }
 
@@ -246,10 +284,11 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
-            call.mark_as_ended(&context).await?;
             if call.is_incoming() {
+                call.mark_as_cancelled(&context).await?;
                 call.update_text(&context, "Missed call").await?;
             } else {
+                call.mark_as_ended(&context).await?;
                 call.update_text(&context, "Cancelled call").await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
@@ -332,23 +371,27 @@ impl Context {
                         return Ok(());
                     }
 
-                    call.mark_as_ended(self).await?;
                     if !call.is_accepted() {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             } else {
+                                call.mark_as_cancelled(self).await?;
                                 call.update_text(self, "Missed call").await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
+                                call.mark_as_cancelled(self).await?;
                                 call.update_text(self, "Cancelled call").await?;
                             } else {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             }
                         }
                     } else {
+                        call.mark_as_ended(self).await?;
                         call.update_text_duration(self).await?;
                     }
 
@@ -399,6 +442,85 @@ fn sdp_has_video(sdp: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+/// State of the call for display in the message bubble.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallState {
+    /// Fresh incoming or outgoing call that is still ringing.
+    ///
+    /// There is no separate state for outgoing call
+    /// that has been dialled but not ringing on the other side yet
+    /// as we don't know whether the other side received our call.
+    Alerting,
+
+    /// Active call.
+    Active,
+
+    /// Completed call that was once active
+    /// and then was terminated for any reason.
+    Completed {
+        /// Call duration in seconds.
+        duration: i64,
+    },
+
+    /// Incoming call that was not picked up within a timeout
+    /// or was explicitly ended by the caller before we picked up.
+    Missed,
+
+    /// Incoming call that was explicitly ended on our side
+    /// before picking up or outgoing call
+    /// that was declined before the timeout.
+    Declined,
+
+    /// Outgoing call that has been cancelled on our side
+    /// before receiving a response.
+    ///
+    /// Incoming calls cannot be cancelled,
+    /// on the receiver side cancelled calls
+    /// usually result in missed calls.
+    Cancelled,
+}
+
+/// Returns call state given the message ID.
+pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
+    let call = context.load_call_by_id(msg_id).await?;
+    let state = if call.is_incoming() {
+        if call.is_accepted() {
+            if call.is_ended() {
+                CallState::Completed {
+                    duration: call.duration_seconds(),
+                }
+            } else {
+                CallState::Active
+            }
+        } else if call.is_cancelled() {
+            // Call was explicitly cancelled
+            // by the caller before we picked it up.
+            CallState::Missed
+        } else if call.is_ended() {
+            CallState::Declined
+        } else if call.is_stale() {
+            CallState::Missed
+        } else {
+            CallState::Alerting
+        }
+    } else if call.is_accepted() {
+        if call.is_ended() {
+            CallState::Completed {
+                duration: call.duration_seconds(),
+            }
+        } else {
+            CallState::Active
+        }
+    } else if call.is_cancelled() {
+        CallState::Cancelled
+    } else if call.is_ended() || call.is_stale() {
+        CallState::Declined
+    } else {
+        CallState::Alerting
+    };
+    Ok(state)
 }
 
 /// ICE server for JSON serialization.
