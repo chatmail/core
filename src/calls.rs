@@ -69,7 +69,7 @@ impl CallInfo {
 
     /// Returns true if the call should not ring anymore.
     pub fn is_stale(&self) -> bool {
-        self.remaining_ring_seconds() <= 0
+        (self.is_incoming() || self.msg.timestamp_sent != 0) && self.remaining_ring_seconds() <= 0
     }
 
     fn remaining_ring_seconds(&self) -> i64 {
