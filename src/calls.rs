@@ -197,6 +197,7 @@ impl Context {
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -233,6 +234,7 @@ impl Context {
 
         self.emit_event(EventType::CallEnded {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -255,6 +257,7 @@ impl Context {
             context.emit_msgs_changed(call.msg.chat_id, call_id);
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
+                chat_id: call.msg.chat_id,
             });
         }
         Ok(())
@@ -285,6 +288,7 @@ impl Context {
                     };
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                         place_call_info: call.place_call_info.to_string(),
                         has_video,
                     });
@@ -313,6 +317,7 @@ impl Context {
                     if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                         });
                     } else {
                         let accept_call_info = mime_message
@@ -320,6 +325,7 @@ impl Context {
                             .unwrap_or_default();
                         self.emit_event(EventType::OutgoingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                             accept_call_info: accept_call_info.to_string(),
                         });
                     }
@@ -355,6 +361,7 @@ impl Context {
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                     });
                 }
                 _ => {}
