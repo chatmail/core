@@ -575,6 +575,13 @@ impl TestContext {
             update_msg_state(&self.ctx, msg_id, MessageState::OutDelivered)
                 .await
                 .expect("failed to update message state");
+            self.sql
+                .execute(
+                    "UPDATE msgs SET timestamp_sent=? WHERE id=?",
+                    (time(), msg_id),
+                )
+                .await
+                .expect("Failed to update timestamp_sent");
         }
 
         let payload_headers = payload.split("\r\n\r\n").next().unwrap().lines();
