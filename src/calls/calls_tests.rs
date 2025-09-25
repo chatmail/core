@@ -130,7 +130,7 @@ async fn accept_call() -> Result<CallSetup> {
     assert_eq!(
         ev,
         EventType::OutgoingCallAccepted {
-            msg_id: alice2_call.id,
+            msg_id: alice_call.id,
             accept_call_info: ACCEPT_INFO.to_string()
         }
     );
