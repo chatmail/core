@@ -10,23 +10,27 @@ def test_calls(acfactory) -> None:
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     outgoing_call_message = alice_chat_bob.place_outgoing_call(place_call_info)
+    assert outgoing_call_message.get_call_info().state.kind == "Alerting"
 
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
     assert incoming_call_event.place_call_info == place_call_info
     assert not incoming_call_event.has_video  # Cannot be parsed as SDP, so false by default
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
-    assert not incoming_call_message.get_call_info().is_accepted
+    assert incoming_call_message.get_call_info().state.kind == "Alerting"
 
     incoming_call_message.accept_incoming_call(accept_call_info)
-    assert incoming_call_message.get_call_info().is_accepted
     assert incoming_call_message.get_call_info().sdp_offer == place_call_info
+    assert incoming_call_message.get_call_info().state.kind == "Active"
     outgoing_call_accepted_event = alice.wait_for_event(EventType.OUTGOING_CALL_ACCEPTED)
     assert outgoing_call_accepted_event.accept_call_info == accept_call_info
+    assert outgoing_call_message.get_call_info().state.kind == "Active"
 
     outgoing_call_message.end_call()
+    assert outgoing_call_message.get_call_info().state.kind == "Completed"
 
     end_call_event = bob.wait_for_event(EventType.CALL_ENDED)
     assert end_call_event.msg_id == outgoing_call_message.id
+    assert incoming_call_message.get_call_info().state.kind == "Completed"
 
 
 def test_video_call(acfactory) -> None:
