@@ -514,6 +514,11 @@ pub(crate) async fn receive_imf_inner(
             String::from_utf8_lossy(imf_raw),
         );
     }
+    if partial.is_none() {
+        context
+            .inject_fault_if(|cfg| cfg == "receive_imf::receive_imf_inner-full-msg")
+            .await?;
+    }
 
     let is_partial_download = partial.as_ref().map(|(msg_size, _err)| *msg_size);
     let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, partial).await {
