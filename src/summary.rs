@@ -4,6 +4,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 
+use crate::calls::{CallState, call_state};
 use crate::chat::Chat;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
@@ -234,11 +235,21 @@ impl Message {
                 append_text = true;
             }
             Viewtype::Call => {
+                let call_state = call_state(context, self.id)
+                    .await
+                    .unwrap_or(CallState::Alerting);
                 emoji = Some("📞");
-                type_name = Some(if self.from_id == ContactId::SELF {
-                    "Outgoing call".to_string()
-                } else {
-                    "Incoming call".to_string()
+                type_name = Some(match call_state {
+                    CallState::Alerting | CallState::Active | CallState::Completed { .. } => {
+                        if self.from_id == ContactId::SELF {
+                            stock_str::outgoing_call(context).await
+                        } else {
+                            stock_str::incoming_call(context).await
+                        }
+                    }
+                    CallState::Missed => stock_str::missed_call(context).await,
+                    CallState::Declined => stock_str::declined_call(context).await,
+                    CallState::Canceled => stock_str::canceled_call(context).await,
                 });
                 type_file = None;
                 append_text = false
