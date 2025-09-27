@@ -14,7 +14,6 @@ use tokio::fs;
 
 use crate::blob::BlobObject;
 use crate::configure::EnteredLoginParam;
-use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{LogExt, info};
@@ -23,6 +22,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
+use crate::{constants, stats};
 
 /// The available configuration keys.
 #[derive(
@@ -427,9 +427,22 @@ pub enum Config {
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
 
-    /// This key is sent to the self_reporting bot so that the bot can recognize the user
+    /// Send statistics to Delta Chat's developers.
+    /// Can be exposed to the user as a setting.
+    StatsSending,
+
+    /// Last time statistics were sent to Delta Chat's developers
+    StatsLastSent,
+
+    /// Last time `update_message_stats()` was called
+    StatsLastUpdate,
+
+    /// This key is sent to the statistics bot so that the bot can recognize the user
     /// without storing the email address
-    SelfReportingId,
+    StatsId,
+
+    /// The last contact id that already existed when statistics-sending was enabled.
+    StatsLastOldContactId,
 
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
@@ -821,6 +834,11 @@ impl Context {
                     .save_to_transports_table(self, &EnteredLoginParam::default())
                     .await?;
                 }
+            }
+            Config::StatsSending => {
+                stats::set_last_counted_msg_id(self).await?;
+                stats::set_last_old_contact_id(self).await?;
+                self.sql.set_raw_config(key.as_ref(), value).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
