@@ -240,12 +240,12 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 impl MimeMessage {
     /// Parse a mime message.
     ///
-    /// If `partial` is set, it contains the full message size in bytes
-    /// and `body` contains the header only.
+    /// If `partial` is set, it contains the full message size in bytes and an optional error text
+    /// for the partially downloaded message, and `body` contains the HEADER only.
     pub(crate) async fn from_bytes(
         context: &Context,
         body: &[u8],
-        partial: Option<u32>,
+        partial: Option<(u32, Option<String>)>,
     ) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
@@ -612,9 +612,9 @@ impl MimeMessage {
         };
 
         match partial {
-            Some(org_bytes) => {
+            Some((org_bytes, err)) => {
                 parser
-                    .create_stub_from_partial_download(context, org_bytes)
+                    .create_stub_from_partial_download(context, org_bytes, err)
                     .await?;
             }
             None => match mail {
@@ -634,7 +634,7 @@ impl MimeMessage {
                         error: Some(format!("Decrypting failed: {err:#}")),
                         ..Default::default()
                     };
-                    parser.parts.push(part);
+                    parser.do_add_single_part(part);
                 }
             },
         };
@@ -1543,7 +1543,7 @@ impl MimeMessage {
         Ok(true)
     }
 
-    fn do_add_single_part(&mut self, mut part: Part) {
+    pub(crate) fn do_add_single_part(&mut self, mut part: Part) {
         if self.was_encrypted() {
             part.param.set_int(Param::GuaranteeE2ee, 1);
         }

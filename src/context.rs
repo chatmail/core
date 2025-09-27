@@ -1079,6 +1079,13 @@ impl Context {
                 .await?
                 .unwrap_or_default(),
         );
+        res.insert(
+            "inject_fault_cfg",
+            self.sql
+                .get_raw_config("inject_fault_cfg")
+                .await?
+                .unwrap_or_default(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
@@ -1479,6 +1486,17 @@ impl Context {
         wal_fname.push(dbfile.file_name().unwrap_or_default());
         wal_fname.push("-wal");
         dbfile.with_file_name(wal_fname)
+    }
+
+    /// Returns error if the `Config::InjectFaultCfg` value matches `predicate`.
+    pub(crate) async fn inject_fault_if(&self, predicate: impl FnOnce(&str) -> bool) -> Result<()> {
+        ensure!(!predicate(
+            &self
+                .get_config(Config::InjectFaultCfg)
+                .await?
+                .unwrap_or_default()
+        ));
+        Ok(())
     }
 }
 

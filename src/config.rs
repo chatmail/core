@@ -450,6 +450,9 @@ pub enum Config {
     /// to avoid encrypting it differently and
     /// storing the same token multiple times on the server.
     EncryptedDeviceToken,
+
+    /// Return an error from the code and upon the condition specified. For tests.
+    InjectFaultCfg,
 }
 
 impl Config {
