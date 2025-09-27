@@ -17,6 +17,7 @@ def test_calls(acfactory) -> None:
     assert not incoming_call_event.has_video  # Cannot be parsed as SDP, so false by default
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
     assert incoming_call_message.get_call_info().state.kind == "Alerting"
+    assert not incoming_call_message.get_call_info().has_video
 
     incoming_call_message.accept_incoming_call(accept_call_info)
     assert incoming_call_message.get_call_info().sdp_offer == place_call_info
@@ -73,6 +74,9 @@ a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
     assert incoming_call_event.place_call_info == place_call_info
     assert incoming_call_event.has_video
+
+    incoming_call_message = Message(bob, incoming_call_event.msg_id)
+    assert incoming_call_message.get_call_info().has_video
 
 
 def test_ice_servers(acfactory) -> None:

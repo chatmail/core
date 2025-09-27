@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use deltachat::calls::{call_state, CallState};
+use deltachat::calls::{call_state, sdp_has_video, CallState};
 use deltachat::context::Context;
 use deltachat::message::MsgId;
 use serde::Serialize;
@@ -15,6 +15,9 @@ pub struct JsonrpcCallInfo {
     /// even if incoming call event was missed.
     pub sdp_offer: String,
 
+    /// True if SDP offer has a video.
+    pub has_video: bool,
+
     /// Call state.
     ///
     /// For example, if the call is accepted, active, cancelled, declined etc.
@@ -25,9 +28,14 @@ impl JsonrpcCallInfo {
     pub async fn from_msg_id(context: &Context, msg_id: MsgId) -> Result<JsonrpcCallInfo> {
         let call_info = context.load_call_by_id(msg_id).await?;
         let sdp_offer = call_info.place_call_info.clone();
+        let has_video = sdp_has_video(&sdp_offer).unwrap_or_default();
         let state = JsonrpcCallState::from_msg_id(context, msg_id).await?;
 
-        Ok(JsonrpcCallInfo { sdp_offer, state })
+        Ok(JsonrpcCallInfo {
+            sdp_offer,
+            has_video,
+            state,
+        })
     }
 }
 
