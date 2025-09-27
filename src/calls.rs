@@ -432,7 +432,7 @@ impl Context {
 }
 
 /// Returns true if SDP offer has a video.
-fn sdp_has_video(sdp: &str) -> Result<bool> {
+pub fn sdp_has_video(sdp: &str) -> Result<bool> {
     let mut cursor = Cursor::new(sdp);
     let session_description =
         SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
