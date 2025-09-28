@@ -783,7 +783,12 @@ async fn test_verified_chat_editor_reordering() -> Result<()> {
 
     tcm.section("Charlie receives member added message");
     charlie.recv_msg(&sent_member_added_msg).await;
-
+    charlie
+        .golden_test_chat(
+            charlie_received_xdc.chat_id,
+            "verified_chats_editor_reordering",
+        )
+        .await;
     Ok(())
 }
 

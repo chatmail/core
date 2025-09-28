@@ -3078,7 +3078,9 @@ async fn apply_group_changes(
     if let Some(removed_id) = removed_id {
         removed_ids.remove(&removed_id);
     }
-    let group_changes_msgs = if self_added {
+    let group_changes_msgs = if !chat_contacts.contains(&ContactId::SELF)
+        && new_chat_contacts.contains(&ContactId::SELF)
+    {
         Vec::new()
     } else {
         group_changes_msgs(context, &added_ids, &removed_ids, chat.id).await?
