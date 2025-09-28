@@ -2864,15 +2864,6 @@ async fn apply_group_changes(
     let (mut removed_id, mut added_id) = (None, None);
     let mut better_msg = None;
     let mut silent = false;
-
-    // True if a Delta Chat client has explicitly added our current primary address.
-    let self_added =
-        if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-            addr_cmp(&context.get_primary_self_addr().await?, added_addr)
-        } else {
-            false
-        };
-
     let chat_contacts =
         HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
     let is_from_in_chat =
@@ -3002,6 +2993,15 @@ async fn apply_group_changes(
             .await?;
         } else {
             let mut new_members: HashSet<ContactId>;
+            // True if a Delta Chat client has explicitly and really added our primary address to an
+            // already existing group.
+            let self_added =
+                if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+                    addr_cmp(&context.get_primary_self_addr().await?, added_addr)
+                        && !chat_contacts.contains(&ContactId::SELF)
+                } else {
+                    false
+                };
             if self_added {
                 new_members = HashSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
@@ -3068,10 +3068,9 @@ async fn apply_group_changes(
         .collect();
 
     if let Some(added_id) = added_id {
-        if !added_ids.remove(&added_id) && !self_added {
-            // No-op "Member added" message.
-            //
-            // Trash it.
+        if !added_ids.remove(&added_id) && added_id != ContactId::SELF {
+            // No-op "Member added" message. An exception is self-addition messages because they at
+            // least must be shown when a chat is created on our side.
             better_msg = Some(String::new());
         }
     }
