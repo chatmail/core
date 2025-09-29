@@ -1480,7 +1480,7 @@ impl Session {
                     context,
                     "Passing message UID {} to receive_imf().", request_uid
                 );
-                match receive_imf_inner(
+                let res = receive_imf_inner(
                     context,
                     folder,
                     uidvalidity,
@@ -1488,20 +1488,31 @@ impl Session {
                     rfc724_mid,
                     body,
                     is_seen,
-                    partial,
+                    partial.map(|msg_size| (msg_size, None)),
                 )
-                .await
-                {
-                    Ok(received_msg) => {
-                        received_msgs_channel
-                            .send((request_uid, received_msg))
-                            .await?;
+                .await;
+                let received_msg = if let Err(err) = res {
+                    warn!(context, "receive_imf error: {:#}.", err);
+                    if partial.is_some() {
+                        return Err(err);
                     }
-                    Err(err) => {
-                        warn!(context, "receive_imf error: {:#}.", err);
-                        received_msgs_channel.send((request_uid, None)).await?;
-                    }
+                    receive_imf_inner(
+                        context,
+                        folder,
+                        uidvalidity,
+                        request_uid,
+                        rfc724_mid,
+                        body,
+                        is_seen,
+                        Some((body.len().try_into()?, Some(format!("{err:#}")))),
+                    )
+                    .await?
+                } else {
+                    res?
                 };
+                received_msgs_channel
+                    .send((request_uid, received_msg))
+                    .await?;
             }
 
             // If we don't process the whole response, IMAP client is left in a broken state where
