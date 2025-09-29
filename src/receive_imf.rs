@@ -1007,7 +1007,10 @@ pub(crate) async fn receive_imf_inner(
     } else if received_msg.hidden {
         // No need to emit an event about the changed message
     } else if let Some(replace_chat_id) = replace_chat_id {
-        context.emit_msgs_changed_without_msg_id(replace_chat_id);
+        match replace_chat_id == chat_id {
+            false => context.emit_msgs_changed_without_msg_id(replace_chat_id),
+            true => context.emit_msgs_changed(chat_id, replace_msg_id.unwrap_or_default()),
+        }
     } else if !chat_id.is_trash() {
         let fresh = received_msg.state == MessageState::InFresh
             && mime_parser.is_system_message != SystemMessage::CallAccepted
