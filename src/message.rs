@@ -651,8 +651,10 @@ impl Message {
         if self.viewtype.has_file() {
             let file_param = self.param.get_file_path(context)?;
             if let Some(path_and_filename) = file_param {
-                if (self.viewtype == Viewtype::Image || self.viewtype == Viewtype::Gif)
-                    && !self.param.exists(Param::Width)
+                if matches!(
+                    self.viewtype,
+                    Viewtype::Image | Viewtype::Gif | Viewtype::Sticker
+                ) && !self.param.exists(Param::Width)
                 {
                     let buf = read_file(context, &path_and_filename).await?;
 
