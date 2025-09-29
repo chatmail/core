@@ -238,14 +238,20 @@ impl MimeMessage {
     /// the mime-structure itself is not available.
     ///
     /// The placeholder part currently contains a text with size and availability of the message;
+    /// `error` is set as the part error;
     /// in the future, we may do more advanced things as previews here.
     pub(crate) async fn create_stub_from_partial_download(
         &mut self,
         context: &Context,
         org_bytes: u32,
+        error: Option<String>,
     ) -> Result<()> {
+        let prefix = match error {
+            None => "",
+            Some(_) => "[❗] ",
+        };
         let mut text = format!(
-            "[{}]",
+            "{prefix}[{}]",
             stock_str::partial_download_msg_body(context, org_bytes).await
         );
         if let Some(delete_server_after) = context.get_config_delete_server_after().await? {
@@ -259,9 +265,10 @@ impl MimeMessage {
 
         info!(context, "Partial download: {}", text);
 
-        self.parts.push(Part {
+        self.do_add_single_part(Part {
             typ: Viewtype::Text,
             msg: text,
+            error,
             ..Default::default()
         });
 

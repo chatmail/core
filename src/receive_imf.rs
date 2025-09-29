@@ -196,7 +196,7 @@ pub(crate) async fn receive_imf_from_inbox(
         rfc724_mid,
         imf_raw,
         seen,
-        is_partial_download,
+        is_partial_download.map(|msg_size| (msg_size, None)),
     )
     .await
 }
@@ -494,9 +494,8 @@ async fn get_to_and_past_contact_ids(
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
 ///
-/// If `is_partial_download` is set, it contains the full message size in bytes.
-/// Do not confuse that with `replace_msg_id` that will be set when the full message is loaded
-/// later.
+/// If `partial` is set, it contains the full message size in bytes and an optional error text for
+/// the partially downloaded message.
 #[expect(clippy::too_many_arguments)]
 pub(crate) async fn receive_imf_inner(
     context: &Context,
@@ -506,7 +505,7 @@ pub(crate) async fn receive_imf_inner(
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
-    is_partial_download: Option<u32>,
+    partial: Option<(u32, Option<String>)>,
 ) -> Result<Option<ReceivedMsg>> {
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
@@ -515,9 +514,16 @@ pub(crate) async fn receive_imf_inner(
             String::from_utf8_lossy(imf_raw),
         );
     }
+    if partial.is_none() {
+        ensure!(
+            !context
+                .get_config_bool(Config::FailOnReceivingFullMsg)
+                .await?
+        );
+    }
 
-    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, is_partial_download).await
-    {
+    let is_partial_download = partial.as_ref().map(|(msg_size, _err)| *msg_size);
+    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, partial).await {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
             if rfc724_mid.starts_with(GENERATED_PREFIX) {
@@ -551,22 +557,11 @@ pub(crate) async fn receive_imf_inner(
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
     if let Some((old_msg_id, _)) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        if is_partial_download.is_some() {
-            // Should never happen, see imap::prefetch_should_download(), but still.
-            info!(
-                context,
-                "Got a partial download and message is already in DB."
-            );
-            return Ok(None);
-        }
         let msg = Message::load_from_db(context, old_msg_id).await?;
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if msg.download_state() != DownloadState::Done {
             // the message was partially downloaded before and is fully downloaded now.
-            info!(
-                context,
-                "Message already partly in DB, replacing by full message."
-            );
+            info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
         } else {
             None
