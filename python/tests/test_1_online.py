@@ -1776,7 +1776,7 @@ def test_group_quote(acfactory, lp):
             "xyz",
             False,
             "xyz",
-        ),  # Test that emails aren't found in a random folder
+        ),  # Test that emails are recognized in a random folder but not moved
         (
             "xyz",
             True,
@@ -1806,7 +1806,7 @@ def test_scan_folders(acfactory, lp, folder, move, expected_destination):
     ac1.stop_io()
     assert folder in ac1.direct_imap.list_folders()
 
-    lp.sec("Send a message to from ac2 to ac1 and manually move it to `folder`")
+    lp.sec("Send a message to from ac2 to ac1 and manually move it to the mvbox")
     ac1.direct_imap.select_config_folder("inbox")
     with ac1.direct_imap.idle() as idle1:
         acfactory.get_accepted_chat(ac2, ac1).send_text("hello")
@@ -1816,17 +1816,10 @@ def test_scan_folders(acfactory, lp, folder, move, expected_destination):
     lp.sec("start_io() and see if DeltaChat finds the message (" + variant + ")")
     ac1.set_config("scan_all_folders_debounce_secs", "0")
     ac1.start_io()
-    chat = ac1.create_chat(ac2)
-    n_msgs = 1  # "Messages are end-to-end encrypted."
-    if folder == "Spam":
-        msg = ac1._evtracker.wait_next_incoming_message()
-        assert msg.text == "hello"
-        n_msgs += 1
-    else:
-        ac1._evtracker.wait_idle_inbox_ready()
-    assert len(chat.get_messages()) == n_msgs
+    msg = ac1._evtracker.wait_next_incoming_message()
+    assert msg.text == "hello"
 
-    # The message has reached its destination.
+    # The message has been downloaded, which means it has reached its destination.
     ac1.direct_imap.select_folder(expected_destination)
     assert len(ac1.direct_imap.get_all_messages()) == 1
     if folder != expected_destination:
