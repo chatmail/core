@@ -589,9 +589,15 @@ pub(crate) async fn create_ice_servers_from_metadata(
 
 /// Creates JSON with ICE servers when no TURN servers are known.
 pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<String> {
-    // Public STUN server from https://stunprotocol.org/,
-    // an open source STUN server.
-    let hostname = "stunserver2025.stunprotocol.org";
+    // Do not use public STUN server from https://stunprotocol.org/.
+    // It changes the hostname every year
+    // (e.g. stunserver2025.stunprotocol.org
+    // which was previously stunserver2024.stunprotocol.org)
+    // because of bandwidth costs:
+    // <https://github.com/jselbie/stunserver/issues/50>
+
+    // We use nine.testrun.org for a default STUN server.
+    let hostname = "nine.testrun.org";
 
     // Do not use cache because there is no TLS.
     let load_cache = false;
