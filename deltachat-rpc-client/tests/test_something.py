@@ -252,6 +252,7 @@ def test_chat(acfactory) -> None:
     bob_chat_alice.get_encryption_info()
 
     group = alice.create_group("test group")
+    to_resend = group.send_text("will be resent")
     group.add_contact(alice_contact_bob)
     group.get_qr_code()
 
@@ -263,6 +264,7 @@ def test_chat(acfactory) -> None:
 
     msg = group.send_message(text="hi")
     assert (msg.get_snapshot()).text == "hi"
+    group.resend_messages([to_resend])
     group.forward_messages([msg])
 
     group.set_draft(text="test draft")
@@ -327,6 +329,52 @@ def test_message(acfactory) -> None:
     assert reactions
     snapshot = message.get_snapshot()
     assert reactions == snapshot.reactions
+
+
+def test_receive_imf_failure(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+    alice_contact_bob = alice.create_contact(bob, "Bob")
+    alice_chat_bob = alice_contact_bob.create_chat()
+
+    bob.set_config("fail_on_receiving_full_msg", "1")
+    alice_chat_bob.send_text("Hello!")
+    event = bob.wait_for_incoming_msg_event()
+    chat_id = event.chat_id
+    msg_id = event.msg_id
+    message = bob.get_message_by_id(msg_id)
+    snapshot = message.get_snapshot()
+    assert snapshot.chat_id == chat_id
+    assert snapshot.download_state == DownloadState.AVAILABLE
+    assert snapshot.error is not None
+    assert snapshot.show_padlock
+
+    # The failed message doesn't break the IMAP loop.
+    bob.set_config("fail_on_receiving_full_msg", "0")
+    alice_chat_bob.send_text("Hello again!")
+    event = bob.wait_for_incoming_msg_event()
+    assert event.chat_id == chat_id
+    msg_id = event.msg_id
+    message1 = bob.get_message_by_id(msg_id)
+    snapshot = message1.get_snapshot()
+    assert snapshot.chat_id == chat_id
+    assert snapshot.download_state == DownloadState.DONE
+    assert snapshot.error is None
+
+    # The failed message can be re-downloaded later.
+    bob._rpc.download_full_message(bob.id, message.id)
+    event = bob.wait_for_event(EventType.MSGS_CHANGED)
+    message = bob.get_message_by_id(event.msg_id)
+    snapshot = message.get_snapshot()
+    assert snapshot.download_state == DownloadState.IN_PROGRESS
+    event = bob.wait_for_event(EventType.MSGS_CHANGED)
+    assert event.chat_id == chat_id
+    msg_id = event.msg_id
+    message = bob.get_message_by_id(msg_id)
+    snapshot = message.get_snapshot()
+    assert snapshot.chat_id == chat_id
+    assert snapshot.download_state == DownloadState.DONE
+    assert snapshot.error is None
+    assert snapshot.text == "Hello!"
 
 
 def test_selfavatar_sync(acfactory, data, log) -> None:

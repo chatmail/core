@@ -240,12 +240,12 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 impl MimeMessage {
     /// Parse a mime message.
     ///
-    /// If `partial` is set, it contains the full message size in bytes
-    /// and `body` contains the header only.
+    /// If `partial` is set, it contains the full message size in bytes and an optional error text
+    /// for the partially downloaded message, and `body` contains the HEADER only.
     pub(crate) async fn from_bytes(
         context: &Context,
         body: &[u8],
-        partial: Option<u32>,
+        partial: Option<(u32, Option<String>)>,
     ) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
@@ -351,7 +351,7 @@ impl MimeMessage {
 
         let incoming = !context.is_self_addr(&from.addr).await?;
 
-        let mut aheader_value: Option<String> = mail.headers.get_header_value(HeaderDef::Autocrypt);
+        let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
@@ -378,11 +378,11 @@ impl MimeMessage {
                         timestamp_rcvd,
                     );
 
-                    if let Some(protected_aheader_value) = decrypted_mail
+                    let protected_aheader_values = decrypted_mail
                         .headers
-                        .get_header_value(HeaderDef::Autocrypt)
-                    {
-                        aheader_value = Some(protected_aheader_value);
+                        .get_all_values(HeaderDef::Autocrypt.into());
+                    if !protected_aheader_values.is_empty() {
+                        aheader_values = protected_aheader_values;
                     }
 
                     (Ok(decrypted_mail), true)
@@ -400,26 +400,27 @@ impl MimeMessage {
                 }
             };
 
-        let autocrypt_header = if !incoming {
-            None
-        } else if let Some(aheader_value) = aheader_value {
-            match Aheader::from_str(&aheader_value) {
-                Ok(header) if addr_cmp(&header.addr, &from.addr) => Some(header),
-                Ok(header) => {
-                    warn!(
-                        context,
-                        "Autocrypt header address {:?} is not {:?}.", header.addr, from.addr
-                    );
-                    None
-                }
-                Err(err) => {
-                    warn!(context, "Failed to parse Autocrypt header: {:#}.", err);
-                    None
-                }
+        let mut autocrypt_header = None;
+        if incoming {
+            // See `get_all_addresses_from_header()` for why we take the last valid header.
+            for val in aheader_values.iter().rev() {
+                autocrypt_header = match Aheader::from_str(val) {
+                    Ok(header) if addr_cmp(&header.addr, &from.addr) => Some(header),
+                    Ok(header) => {
+                        warn!(
+                            context,
+                            "Autocrypt header address {:?} is not {:?}.", header.addr, from.addr
+                        );
+                        continue;
+                    }
+                    Err(err) => {
+                        warn!(context, "Failed to parse Autocrypt header: {:#}.", err);
+                        continue;
+                    }
+                };
+                break;
             }
-        } else {
-            None
-        };
+        }
 
         let autocrypt_fingerprint = if let Some(autocrypt_header) = &autocrypt_header {
             let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
@@ -611,9 +612,9 @@ impl MimeMessage {
         };
 
         match partial {
-            Some(org_bytes) => {
+            Some((org_bytes, err)) => {
                 parser
-                    .create_stub_from_partial_download(context, org_bytes)
+                    .create_stub_from_partial_download(context, org_bytes, err)
                     .await?;
             }
             None => match mail {
@@ -633,7 +634,7 @@ impl MimeMessage {
                         error: Some(format!("Decrypting failed: {err:#}")),
                         ..Default::default()
                     };
-                    parser.parts.push(part);
+                    parser.do_add_single_part(part);
                 }
             },
         };
@@ -1542,7 +1543,7 @@ impl MimeMessage {
         Ok(true)
     }
 
-    fn do_add_single_part(&mut self, mut part: Part) {
+    pub(crate) fn do_add_single_part(&mut self, mut part: Part) {
         if self.was_encrypted() {
             part.param.set_int(Param::GuaranteeE2ee, 1);
         }

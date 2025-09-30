@@ -1079,6 +1079,13 @@ impl Context {
                 .await?
                 .unwrap_or_default(),
         );
+        res.insert(
+            "fail_on_receiving_full_msg",
+            self.sql
+                .get_raw_config("fail_on_receiving_full_msg")
+                .await?
+                .unwrap_or_default(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));

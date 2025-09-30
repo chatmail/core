@@ -57,6 +57,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
         assert_text(t, m.id, "Outgoing call").await?;
+        assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
 
     // Bob receives the message referring to the call on two devices;
@@ -74,6 +75,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
         assert_text(t, m.id, "Incoming call").await?;
+        assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
 
     Ok(CallSetup {
@@ -111,6 +113,7 @@ async fn accept_call() -> Result<CallSetup> {
     let info = bob.load_call_by_id(bob_call.id).await?;
     assert!(info.is_accepted());
     assert_eq!(info.place_call_info, PLACE_INFO);
+    assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Active);
 
     bob2.recv_msg_trash(&sent2).await;
     assert_text(&bob, bob_call.id, "Incoming call").await?;
@@ -119,6 +122,7 @@ async fn accept_call() -> Result<CallSetup> {
         .await;
     let info = bob2.load_call_by_id(bob2_call.id).await?;
     assert!(info.is_accepted());
+    assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Active);
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;
@@ -130,14 +134,15 @@ async fn accept_call() -> Result<CallSetup> {
     assert_eq!(
         ev,
         EventType::OutgoingCallAccepted {
-            msg_id: alice2_call.id,
-            chat_id: alice2_call.chat_id,
+            msg_id: alice_call.id,
+            chat_id: alice_call.chat_id,
             accept_call_info: ACCEPT_INFO.to_string()
         }
     );
     let info = alice.load_call_by_id(alice_call.id).await?;
     assert!(info.is_accepted());
     assert_eq!(info.place_call_info, PLACE_INFO);
+    assert_eq!(call_state(&alice, alice_call.id).await?, CallState::Active);
 
     alice2.recv_msg_trash(&sent2).await;
     assert_text(&alice2, alice2_call.id, "Outgoing call").await?;
@@ -145,6 +150,10 @@ async fn accept_call() -> Result<CallSetup> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
         .await;
+    assert_eq!(
+        call_state(&alice2, alice2_call.id).await?,
+        CallState::Active
+    );
 
     Ok(CallSetup {
         alice,
@@ -180,12 +189,20 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     let sent3 = bob.pop_sent_msg().await;
+    assert!(matches!(
+        call_state(&bob, bob_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Incoming call\n<1 minute").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&bob2, bob2_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     // Alice receives the ending message
     alice.recv_msg_trash(&sent3).await;
@@ -194,6 +211,10 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&alice, alice_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     alice2.recv_msg_trash(&sent3).await;
     assert_text(&alice2, alice2_call.id, "Outgoing call\n<1 minute").await?;
@@ -201,6 +222,10 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&alice2, alice2_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     Ok(())
 }
@@ -228,6 +253,10 @@ async fn test_accept_call_caller_ends() -> Result<()> {
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     let sent3 = alice.pop_sent_msg().await;
+    assert!(matches!(
+        call_state(&alice, alice_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     alice2.recv_msg_trash(&sent3).await;
     assert_text(&alice2, alice2_call.id, "Outgoing call\n<1 minute").await?;
@@ -235,6 +264,10 @@ async fn test_accept_call_caller_ends() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&alice2, alice2_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     // Bob receives the ending message
     bob.recv_msg_trash(&sent3).await;
@@ -242,12 +275,20 @@ async fn test_accept_call_caller_ends() -> Result<()> {
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&bob, bob_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Incoming call\n<1 minute").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert!(matches!(
+        call_state(&bob2, bob2_call.id).await?,
+        CallState::Completed { .. }
+    ));
 
     Ok(())
 }
@@ -275,12 +316,14 @@ async fn test_callee_rejects_call() -> Result<()> {
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     let sent3 = bob.pop_sent_msg().await;
+    assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Declined);
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Declined call").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Declined);
 
     // Alice receives decline message
     alice.recv_msg_trash(&sent3).await;
@@ -289,6 +332,10 @@ async fn test_callee_rejects_call() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(
+        call_state(&alice, alice_call.id).await?,
+        CallState::Declined
+    );
 
     alice2.recv_msg_trash(&sent3).await;
     assert_text(&alice2, alice2_call.id, "Declined call").await?;
@@ -296,6 +343,10 @@ async fn test_callee_rejects_call() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(
+        call_state(&alice2, alice2_call.id).await?,
+        CallState::Declined
+    );
 
     Ok(())
 }
@@ -323,6 +374,10 @@ async fn test_caller_cancels_call() -> Result<()> {
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     let sent3 = alice.pop_sent_msg().await;
+    assert_eq!(
+        call_state(&alice, alice_call.id).await?,
+        CallState::Cancelled
+    );
 
     alice2.recv_msg_trash(&sent3).await;
     assert_text(&alice2, alice2_call.id, "Cancelled call").await?;
@@ -330,6 +385,10 @@ async fn test_caller_cancels_call() -> Result<()> {
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(
+        call_state(&alice2, alice2_call.id).await?,
+        CallState::Cancelled
+    );
 
     // Bob receives the ending message
     bob.recv_msg_trash(&sent3).await;
@@ -337,12 +396,14 @@ async fn test_caller_cancels_call() -> Result<()> {
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Missed);
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Missed call").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
+    assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Missed);
 
     Ok(())
 }

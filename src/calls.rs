@@ -18,6 +18,7 @@ use anyhow::{Context as _, Result, ensure};
 use sdp::SessionDescription;
 use serde::Serialize;
 use std::io::Cursor;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -33,9 +34,21 @@ use tokio::time::sleep;
 /// as the callee won't start the call afterwards.
 const RINGING_SECONDS: i64 = 60;
 
-/// For persisting parameters in the call, we use Param::Arg*
+// For persisting parameters in the call, we use Param::Arg*
+
 const CALL_ACCEPTED_TIMESTAMP: Param = Param::Arg;
 const CALL_ENDED_TIMESTAMP: Param = Param::Arg4;
+
+const STUN_PORT: u16 = 3478;
+
+/// Set if incoming call was ended explicitly
+/// by the other side before we accepted it.
+///
+/// It is used to distinguish "ended" calls
+/// that are rejected by us from the calls
+/// cancelled by the other side
+/// immediately after ringing started.
+const CALL_CANCELLED_TIMESTAMP: Param = Param::Arg2;
 
 /// Information about the status of a call.
 #[derive(Debug, Default)]
@@ -59,7 +72,7 @@ impl CallInfo {
 
     /// Returns true if the call should not ring anymore.
     pub fn is_stale(&self) -> bool {
-        self.remaining_ring_seconds() <= 0
+        (self.is_incoming() || self.msg.timestamp_sent != 0) && self.remaining_ring_seconds() <= 0
     }
 
     fn remaining_ring_seconds(&self) -> i64 {
@@ -109,8 +122,34 @@ impl CallInfo {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
     }
 
+    /// Returns true if the call is missed
+    /// because the caller cancelled it
+    /// explicitly before ringing stopped.
+    ///
+    /// For outgoing calls this means
+    /// the receiver has rejected the call
+    /// explicitly.
+    pub fn is_cancelled(&self) -> bool {
+        self.msg.param.exists(CALL_CANCELLED_TIMESTAMP)
+    }
+
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, time());
+        self.msg.update_param(context).await?;
+        Ok(())
+    }
+
+    /// Explicitly mark the call as cancelled.
+    ///
+    /// For incoming calls this should be called
+    /// when "call ended" message is received
+    /// from the caller before we picked up the call.
+    /// In this case the call becomes "missed" early
+    /// before the ringing timeout.
+    async fn mark_as_cancelled(&mut self, context: &Context) -> Result<()> {
+        let now = time();
+        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
+        self.msg.param.set_i64(CALL_CANCELLED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
         Ok(())
     }
@@ -210,15 +249,17 @@ impl Context {
             info!(self, "Call already ended");
             return Ok(());
         }
-        call.mark_as_ended(self).await?;
 
         if !call.is_accepted() {
             if call.is_incoming() {
+                call.mark_as_ended(self).await?;
                 call.update_text(self, "Declined call").await?;
             } else {
+                call.mark_as_cancelled(self).await?;
                 call.update_text(self, "Cancelled call").await?;
             }
         } else {
+            call.mark_as_ended(self).await?;
             call.update_text_duration(self).await?;
         }
 
@@ -248,10 +289,11 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
-            call.mark_as_ended(&context).await?;
             if call.is_incoming() {
+                call.mark_as_cancelled(&context).await?;
                 call.update_text(&context, "Missed call").await?;
             } else {
+                call.mark_as_ended(&context).await?;
                 call.update_text(&context, "Cancelled call").await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
@@ -338,23 +380,27 @@ impl Context {
                         return Ok(());
                     }
 
-                    call.mark_as_ended(self).await?;
                     if !call.is_accepted() {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             } else {
+                                call.mark_as_cancelled(self).await?;
                                 call.update_text(self, "Missed call").await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
+                                call.mark_as_cancelled(self).await?;
                                 call.update_text(self, "Cancelled call").await?;
                             } else {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             }
                         }
                     } else {
+                        call.mark_as_ended(self).await?;
                         call.update_text_duration(self).await?;
                     }
 
@@ -396,7 +442,7 @@ impl Context {
 }
 
 /// Returns true if SDP offer has a video.
-fn sdp_has_video(sdp: &str) -> Result<bool> {
+pub fn sdp_has_video(sdp: &str) -> Result<bool> {
     let mut cursor = Cursor::new(sdp);
     let session_description =
         SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
@@ -406,6 +452,85 @@ fn sdp_has_video(sdp: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+/// State of the call for display in the message bubble.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallState {
+    /// Fresh incoming or outgoing call that is still ringing.
+    ///
+    /// There is no separate state for outgoing call
+    /// that has been dialled but not ringing on the other side yet
+    /// as we don't know whether the other side received our call.
+    Alerting,
+
+    /// Active call.
+    Active,
+
+    /// Completed call that was once active
+    /// and then was terminated for any reason.
+    Completed {
+        /// Call duration in seconds.
+        duration: i64,
+    },
+
+    /// Incoming call that was not picked up within a timeout
+    /// or was explicitly ended by the caller before we picked up.
+    Missed,
+
+    /// Incoming call that was explicitly ended on our side
+    /// before picking up or outgoing call
+    /// that was declined before the timeout.
+    Declined,
+
+    /// Outgoing call that has been cancelled on our side
+    /// before receiving a response.
+    ///
+    /// Incoming calls cannot be cancelled,
+    /// on the receiver side cancelled calls
+    /// usually result in missed calls.
+    Cancelled,
+}
+
+/// Returns call state given the message ID.
+pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
+    let call = context.load_call_by_id(msg_id).await?;
+    let state = if call.is_incoming() {
+        if call.is_accepted() {
+            if call.is_ended() {
+                CallState::Completed {
+                    duration: call.duration_seconds(),
+                }
+            } else {
+                CallState::Active
+            }
+        } else if call.is_cancelled() {
+            // Call was explicitly cancelled
+            // by the caller before we picked it up.
+            CallState::Missed
+        } else if call.is_ended() {
+            CallState::Declined
+        } else if call.is_stale() {
+            CallState::Missed
+        } else {
+            CallState::Alerting
+        }
+    } else if call.is_accepted() {
+        if call.is_ended() {
+            CallState::Completed {
+                duration: call.duration_seconds(),
+            }
+        } else {
+            CallState::Active
+        }
+    } else if call.is_cancelled() {
+        CallState::Cancelled
+    } else if call.is_ended() || call.is_stale() {
+        CallState::Declined
+    } else {
+        CallState::Alerting
+    };
+    Ok(state)
 }
 
 /// ICE server for JSON serialization.
@@ -421,21 +546,14 @@ struct IceServer {
     pub credential: Option<String>,
 }
 
-/// Returns JSON with ICE servers.
-///
-/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
-///
-/// All returned servers are resolved to their IP addresses.
-/// The primary point of DNS lookup is that Delta Chat Desktop
-/// relies on the servers being specified by IP,
-/// because it itself cannot utilize DNS. See
-/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
-pub async fn ice_servers(context: &Context) -> Result<String> {
-    let hostname = "ci-chatmail.testrun.org";
-    let port = 3478;
-    let username = "ohV8aec1".to_string();
-    let password = "zo3theiY".to_string();
-
+/// Creates JSON with ICE servers.
+async fn create_ice_servers(
+    context: &Context,
+    hostname: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+) -> Result<String> {
     // Do not use cache because there is no TLS.
     let load_cache = false;
     let urls: Vec<String> = lookup_host_with_cache(context, hostname, port, "", load_cache)
@@ -446,12 +564,75 @@ pub async fn ice_servers(context: &Context) -> Result<String> {
 
     let ice_server = IceServer {
         urls,
-        username: Some(username),
-        credential: Some(password),
+        username: Some(username.to_string()),
+        credential: Some(password.to_string()),
     };
 
     let json = serde_json::to_string(&[ice_server])?;
     Ok(json)
+}
+
+/// Creates JSON with ICE servers from a line received over IMAP METADATA.
+///
+/// IMAP METADATA returns a line such as
+/// `example.com:3478:1758650868:8Dqkyyu11MVESBqjbIylmB06rv8=`
+///
+/// 1758650868 is the username and expiration timestamp
+/// at the same time,
+/// while `8Dqkyyu11MVESBqjbIylmB06rv8=`
+/// is the password.
+pub(crate) async fn create_ice_servers_from_metadata(
+    context: &Context,
+    metadata: &str,
+) -> Result<(i64, String)> {
+    let (hostname, rest) = metadata.split_once(':').context("Missing hostname")?;
+    let (port, rest) = rest.split_once(':').context("Missing port")?;
+    let port = u16::from_str(port).context("Failed to parse the port")?;
+    let (ts, password) = rest.split_once(':').context("Missing timestamp")?;
+    let expiration_timestamp = i64::from_str(ts).context("Failed to parse the timestamp")?;
+    let ice_servers = create_ice_servers(context, hostname, port, ts, password).await?;
+    Ok((expiration_timestamp, ice_servers))
+}
+
+/// Creates JSON with ICE servers when no TURN servers are known.
+pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<String> {
+    // Public STUN server from https://stunprotocol.org/,
+    // an open source STUN server.
+    let hostname = "stunserver2025.stunprotocol.org";
+
+    // Do not use cache because there is no TLS.
+    let load_cache = false;
+    let urls: Vec<String> = lookup_host_with_cache(context, hostname, STUN_PORT, "", load_cache)
+        .await?
+        .into_iter()
+        .map(|addr| format!("stun:{addr}"))
+        .collect();
+
+    let ice_server = IceServer {
+        urls,
+        username: None,
+        credential: None,
+    };
+
+    let json = serde_json::to_string(&[ice_server])?;
+    Ok(json)
+}
+
+/// Returns JSON with ICE servers.
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
+///
+/// All returned servers are resolved to their IP addresses.
+/// The primary point of DNS lookup is that Delta Chat Desktop
+/// relies on the servers being specified by IP,
+/// because it itself cannot utilize DNS. See
+/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
+pub async fn ice_servers(context: &Context) -> Result<String> {
+    if let Some(ref metadata) = *context.metadata.read().await {
+        Ok(metadata.ice_servers.clone())
+    } else {
+        Ok("[]".to_string())
+    }
 }
 
 #[cfg(test)]

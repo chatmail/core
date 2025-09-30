@@ -16,7 +16,6 @@ use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, Fingerprint, load_self_public_key};
 use crate::log::{error, info, warn};
-use crate::logged_debug_assert;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
@@ -35,22 +34,20 @@ use crate::token::Namespace;
 fn inviter_progress(
     context: &Context,
     contact_id: ContactId,
+    chat_id: ChatId,
     is_group: bool,
-    progress: usize,
 ) -> Result<()> {
-    logged_debug_assert!(
-        context,
-        progress == 0 || progress == 1000,
-        "inviter_progress: contact {contact_id}, progress={progress}, but value is not 0 (error) or 1000 (success)."
-    );
     let chat_type = if is_group {
         Chattype::Group
     } else {
         Chattype::Single
     };
 
+    // No other values are used.
+    let progress = 1000;
     context.emit_event(EventType::SecurejoinInviterProgress {
         contact_id,
+        chat_id,
         chat_type,
         progress,
     });
@@ -427,16 +424,17 @@ pub(crate) async fn handle_securejoin_handshake(
                 chat::add_contact_to_chat_ex(context, Nosync, group_chat_id, contact_id, true)
                     .await?;
                 let is_group = true;
-                inviter_progress(context, contact_id, is_group, 1000)?;
+                inviter_progress(context, contact_id, group_chat_id, is_group)?;
                 // IMAP-delete the message to avoid handling it by another device and adding the
                 // member twice. Another device will know the member's key from Autocrypt-Gossip.
                 Ok(HandshakeMessage::Done)
             } else {
+                let chat_id = info_chat_id(context, contact_id).await?;
                 // Setup verified contact.
                 secure_connection_established(
                     context,
                     contact_id,
-                    info_chat_id(context, contact_id).await?,
+                    chat_id,
                     mime_message.timestamp_sent,
                 )
                 .await?;
@@ -445,7 +443,7 @@ pub(crate) async fn handle_securejoin_handshake(
                     .context("failed sending vc-contact-confirm message")?;
 
                 let is_group = false;
-                inviter_progress(context, contact_id, is_group, 1000)?;
+                inviter_progress(context, contact_id, chat_id, is_group)?;
                 Ok(HandshakeMessage::Ignore) // "Done" would delete the message and break multi-device (the key from Autocrypt-header is needed)
             }
         }
@@ -568,7 +566,16 @@ pub(crate) async fn observe_securejoin_on_other_device(
         let is_group = mime_message
             .get_header(HeaderDef::ChatGroupMemberAdded)
             .is_some();
-        inviter_progress(context, contact_id, is_group, 1000)?;
+
+        // We don't know the chat ID
+        // as we may not know about the group yet.
+        //
+        // Event is mostly used for bots
+        // which only have a single device
+        // and tests which don't care about the chat ID,
+        // so we pass invalid chat ID here.
+        let chat_id = ChatId::new(0);
+        inviter_progress(context, contact_id, chat_id, is_group)?;
     }
 
     if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
