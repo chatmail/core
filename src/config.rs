@@ -169,7 +169,7 @@ pub enum Config {
     ///
     /// This will not entirely disable other folders, e.g. the spam folder will also still
     /// be scanned for new messages.
-    #[strum(props(default = "0"))]
+    #[strum(props(default = "1"))]
     OnlyFetchMvbox,
 
     /// Whether to show classic emails or only chat messages.

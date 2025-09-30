@@ -122,8 +122,9 @@ async fn check_target_folder_combination(
     t.ctx
         .set_config(Config::ConfiguredSentboxFolder, Some("Sent"))
         .await?;
+    t.ctx.set_config_bool(Config::MvboxMove, mvbox_move).await?;
     t.ctx
-        .set_config(Config::MvboxMove, Some(if mvbox_move { "1" } else { "0" }))
+        .set_config_bool(Config::OnlyFetchMvbox, mvbox_move)
         .await?;
 
     if accepted_chat {
