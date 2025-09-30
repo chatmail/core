@@ -71,9 +71,13 @@ impl Imap {
                 _ => folder_meaning,
             };
 
-            // Don't scan folders that are watched anyway
             if !watched_folders.contains(&folder.name().to_string())
+                // Inbox shouldn't be scanned, getting messages from Inbox delayed doesn't make
+                // sense, the user should enable watching it instead.
+                && folder_meaning != FolderMeaning::Inbox
                 && folder_meaning != FolderMeaning::Trash
+                && (folder_meaning != FolderMeaning::Unknown
+                    || !context.get_config_bool(Config::OnlyFetchMvbox).await?)
             {
                 self.fetch_move_delete(context, session, folder.name(), folder_meaning)
                     .await

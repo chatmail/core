@@ -2041,9 +2041,9 @@ async fn spam_target_folder_cfg(
     }
 
     if needs_move_to_mvbox(context, headers).await?
-        // If OnlyFetchMvbox is set, we don't want to move the message to
-        // the inbox or sentbox where we wouldn't fetch it again:
-        || context.get_config_bool(Config::OnlyFetchMvbox).await?
+        // Don't move the message to Inbox if we won't fetch the message again there.
+        || (context.get_config_bool(Config::OnlyFetchMvbox).await?
+            && !context.get_config_bool(Config::MvboxMove).await?)
     {
         Ok(Some(Config::ConfiguredMvboxFolder))
     } else {
@@ -2569,6 +2569,9 @@ async fn should_ignore_folder(
     if context.is_sentbox(folder).await? {
         // Still respect the SentboxWatch setting.
         return Ok(!context.get_config_bool(Config::SentboxWatch).await?);
+    }
+    if context.is_inbox(folder).await? {
+        return Ok(!context.get_config_bool(Config::MvboxMove).await?);
     }
     Ok(!(context.is_mvbox(folder).await? || folder_meaning == FolderMeaning::Spam))
 }
