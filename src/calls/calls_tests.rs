@@ -368,7 +368,7 @@ async fn test_caller_cancels_call() -> Result<()> {
 
     // Alice changes their mind before Bob picks up
     alice.end_call(alice_call.id).await?;
-    assert_text(&alice, alice_call.id, "Cancelled call").await?;
+    assert_text(&alice, alice_call.id, "Canceled call").await?;
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -376,18 +376,18 @@ async fn test_caller_cancels_call() -> Result<()> {
     let sent3 = alice.pop_sent_msg().await;
     assert_eq!(
         call_state(&alice, alice_call.id).await?,
-        CallState::Cancelled
+        CallState::Canceled
     );
 
     alice2.recv_msg_trash(&sent3).await;
-    assert_text(&alice2, alice2_call.id, "Cancelled call").await?;
+    assert_text(&alice2, alice2_call.id, "Canceled call").await?;
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     assert_eq!(
         call_state(&alice2, alice2_call.id).await?,
-        CallState::Cancelled
+        CallState::Canceled
     );
 
     // Bob receives the ending message

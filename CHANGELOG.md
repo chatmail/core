@@ -1764,7 +1764,7 @@ This reverts commit 6f22ce2722b51773d7fbb0d89e4764f963cafd91..
 ### Fixes
 
 - Reset quota on configured address change ([#5908](https://github.com/chatmail/core/pull/5908)).
-- Do not emit progress 1000 when configuration is cancelled.
+- Do not emit progress 1000 when configuration is canceled.
 - Assume file extensions are 32 chars max and don't contain whitespace ([#5338](https://github.com/chatmail/core/pull/5338)).
 - Re-add tokens.foreign_id column ([#6038](https://github.com/chatmail/core/pull/6038)).
 
@@ -4212,7 +4212,7 @@ Bugfix release attempting to fix the [iOS build error](https://github.com/chatma
 - Recreate `smtp` table with AUTOINCREMENT `id` ([#4390](https://github.com/chatmail/core/pull/4390)).
 - Do not return an error from `send_msg_to_smtp` if retry limit is exceeded.
 - Make the bots automatically accept group chat contact requests ([#4377](https://github.com/chatmail/core/pull/4377)).
-- Delete `smtp` rows when message sending is cancelled ([#4391](https://github.com/chatmail/core/pull/4391)).
+- Delete `smtp` rows when message sending is canceled ([#4391](https://github.com/chatmail/core/pull/4391)).
 
 ### Refactor
 
@@ -4223,7 +4223,7 @@ Bugfix release attempting to fix the [iOS build error](https://github.com/chatma
 ### Fixes
 
 - Fetch at most 100 existing messages even if EXISTS was not received.
-- Delete `smtp` rows when message sending is cancelled.
+- Delete `smtp` rows when message sending is canceled.
 
 ### Changes
 
@@ -4310,14 +4310,14 @@ Bugfix release attempting to fix the [iOS build error](https://github.com/chatma
 ## [1.112.3] - 2023-03-30
 
 ### Fixes
-- `transfer::get_backup` now frees ongoing process when cancelled. #4249
+- `transfer::get_backup` now frees ongoing process when canceled. #4249
 
 ## [1.112.2] - 2023-03-30
 
 ### Changes
 - Update iroh, remove `default-net` from `[patch.crates-io]` section.
 - transfer backup: Connect to multiple provider addresses concurrently.  This should speed up connection time significantly on the getter side.  #4240
-- Make sure BackupProvider is cancelled on drop (or `dc_backup_provider_unref`).  The BackupProvider will now always finish with an IMEX event of 1000 or 0, previously it would sometimes finished with 1000 (success) when it really was 0 (failure). #4242
+- Make sure BackupProvider is canceled on drop (or `dc_backup_provider_unref`).  The BackupProvider will now always finish with an IMEX event of 1000 or 0, previously it would sometimes finished with 1000 (success) when it really was 0 (failure). #4242
 
 ### Fixes
 - Do not return media from trashed messages in the "All media" view. #4247
