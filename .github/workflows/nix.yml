@@ -24,10 +24,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - uses: DeterminateSystems/nix-installer-action@main
-      - run: nix fmt
-
-      # Check that formatting does not change anything.
-      - run: git diff --exit-code
+      - run: nix fmt flake.nix -- --check
 
   build:
     name: nix build
