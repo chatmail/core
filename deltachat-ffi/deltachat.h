@@ -7820,6 +7820,21 @@ void dc_event_unref(dc_event_t* event);
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193
 
+/// "Outgoing Call"
+#define DC_STR_OUTGOING_CALL 194
+
+/// "Incoming Call"
+#define DC_STR_INCOMING_CALL 195
+
+/// "Declined Call"
+#define DC_STR_DECLINED_CALL 196
+
+/// "Canceled Call"
+#define DC_STR_CANCELED_CALL 197
+
+/// "Missed Call"
+#define DC_STR_MISSED_CALL 198
+
 /// "Contact". Deprecated, currently unused.
 #define DC_STR_CONTACT 200
 

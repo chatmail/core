@@ -424,6 +424,21 @@ Help keeping us to keep Delta Chat independent and make it more awesome in the f
 
 https://delta.chat/donate"))]
     DonationRequest = 193,
+
+    #[strum(props(fallback = "Outgoing Call"))]
+    OutgoingCall = 194,
+
+    #[strum(props(fallback = "Incoming Call"))]
+    IncomingCall = 195,
+
+    #[strum(props(fallback = "Declined Call"))]
+    DeclinedCall = 196,
+
+    #[strum(props(fallback = "Canceled Call"))]
+    CanceledCall = 197,
+
+    #[strum(props(fallback = "Missed Call"))]
+    MissedCall = 198,
 }
 
 impl StockMessage {
@@ -799,6 +814,31 @@ pub(crate) async fn securejoin_wait(context: &Context) -> String {
 /// Stock string: `❤️ Seems you're enjoying Delta Chat!`…
 pub(crate) async fn donation_request(context: &Context) -> String {
     translated(context, StockMessage::DonationRequest).await
+}
+
+/// Stock string: `Outgoing Call`.
+pub(crate) async fn outgoing_call(context: &Context) -> String {
+    translated(context, StockMessage::OutgoingCall).await
+}
+
+/// Stock string: `Incoming Call`.
+pub(crate) async fn incoming_call(context: &Context) -> String {
+    translated(context, StockMessage::IncomingCall).await
+}
+
+/// Stock string: `Declined Call`.
+pub(crate) async fn declined_call(context: &Context) -> String {
+    translated(context, StockMessage::DeclinedCall).await
+}
+
+/// Stock string: `Canceled Call`.
+pub(crate) async fn canceled_call(context: &Context) -> String {
+    translated(context, StockMessage::CanceledCall).await
+}
+
+/// Stock string: `Missed Call`.
+pub(crate) async fn missed_call(context: &Context) -> String {
+    translated(context, StockMessage::MissedCall).await
 }
 
 /// Stock string: `Scan to chat with %1$s`.
