@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.16.0] - 2025-10-01
+
+### API-Changes
+
+- [**breaking**] Get rid of inviter progress other than 0 and 1000.
+- Add has_video attribute to incoming call events.
+- Add JSON-RPC API to get ICE servers.
+- Add call_info() JSON-RPC API.
+- Add chat ID to SecureJoinInviterProgress.
+- deltachat-rpc-client: Add Chat.resend_messages().
+- Add `chat_id` to all call events ([#7216](https://github.com/chatmail/core/pull/7216)).
+
+### Build system
+
+- Update rPGP from 0.16.0 to 0.17.0.
+
+### CI
+
+- Update Rust to 1.90.0.
+- Install rustfmt before checking provider database.
+
+### Documentation
+
+- Add more `get_next_event` docs.
+- SecurejoinInviterProgress never returns an error.
+
+### Features / Changes
+
+- Don't fetch messages from unknown folders ([#7190](https://github.com/chatmail/core/pull/7190)).
+- Get ICE servers from IMAP METADATA.
+- Don't ignore receive_imf_inner() errors, try adding partially downloaded message instead ([#7196](https://github.com/chatmail/core/pull/7196)).
+- Set dimensions for outgoing Sticker messages.
+
+### Fixes
+
+- Create 1:1 chat only if auth token is for setup contact.
+- Ignore vc-/vg- prefix for SecurejoinInviterProgress.
+- Don't init Iroh on channel leave ([#7210](https://github.com/chatmail/core/pull/7210)).
+- Take the last valid Autocrypt header ([#7167](https://github.com/chatmail/core/pull/7167)).
+- Don't add "member removed" messages from nonmembers ([#7207](https://github.com/chatmail/core/pull/7207)).
+- Do not consider the call stale if it is not sent out yet.
+- Receive_imf: Report replaced message id in `MsgsChanged` if chat is the same.
+- Allow Exif for stickers, don't recode them because of that ([#6447](https://github.com/chatmail/core/pull/6447)).
+
+### Refactor
+
+- Remove unused prop (TS, `BaseDeltaChat`).
+- Remove unused FolderMeaning::Drafts.
+
+### Tests
+
+- Rename test_udpate_call_text into test_update_call_text.
+- Update timestamp_sent in pop_sent_msg_opt().
+- Do not match call ID from second alice with first alice event.
+
 ## [2.15.0] - 2025-09-15
 
 ### API-Changes
@@ -6759,3 +6814,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.13.0]: https://github.com/chatmail/core/compare/v2.12.0..v2.13.0
 [2.14.0]: https://github.com/chatmail/core/compare/v2.13.0..v2.14.0
 [2.15.0]: https://github.com/chatmail/core/compare/v2.14.0..v2.15.0
+[2.16.0]: https://github.com/chatmail/core/compare/v2.15.0..v2.16.0
