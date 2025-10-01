@@ -135,6 +135,7 @@ async fn accept_call() -> Result<CallSetup> {
         ev,
         EventType::OutgoingCallAccepted {
             msg_id: alice_call.id,
+            chat_id: alice_call.chat_id,
             accept_call_info: ACCEPT_INFO.to_string()
         }
     );
