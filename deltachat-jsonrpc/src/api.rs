@@ -1809,13 +1809,13 @@ impl CommandApi {
 
     /// Offers a backup for remote devices to retrieve.
     ///
-    /// Can be cancelled by stopping the ongoing process.  Success or failure can be tracked
+    /// Can be canceled by stopping the ongoing process.  Success or failure can be tracked
     /// via the `ImexProgress` event which should either reach `1000` for success or `0` for
     /// failure.
     ///
     /// This **stops IO** while it is running.
     ///
-    /// Returns once a remote device has retrieved the backup, or is cancelled.
+    /// Returns once a remote device has retrieved the backup, or is canceled.
     async fn provide_backup(&self, account_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
 
@@ -1881,7 +1881,7 @@ impl CommandApi {
     /// This retrieves the backup from a remote device over the network and imports it into
     /// the current device.
     ///
-    /// Can be cancelled by stopping the ongoing process.
+    /// Can be canceled by stopping the ongoing process.
     ///
     /// Do not forget to call start_io on the account after a successful import,
     /// otherwise it will not connect to the email server.

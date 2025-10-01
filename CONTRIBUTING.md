@@ -44,7 +44,7 @@ If you want to contribute a code, follow this guide.
 
    The following prefix types are used:
    - `feat`: Features, e.g. "feat: Pause IO for BackupProvider". If you are unsure what's the category of your commit, you can often just use `feat`.
-   - `fix`: Bug fixes, e.g. "fix: delete `smtp` rows when message sending is cancelled"
+   - `fix`: Bug fixes, e.g. "fix: delete `smtp` rows when message sending is canceled"
    - `api`: API changes, e.g. "api(rust): add `get_msg_read_receipts(context, msg_id)`"
    - `refactor`: Refactorings, e.g. "refactor: iterate over `msg_ids` without `.iter()`"
    - `perf`: Performance improvements, e.g. "perf: improve SQLite performance with `PRAGMA synchronous=normal`"

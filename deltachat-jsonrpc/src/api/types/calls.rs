@@ -20,7 +20,7 @@ pub struct JsonrpcCallInfo {
 
     /// Call state.
     ///
-    /// For example, if the call is accepted, active, cancelled, declined etc.
+    /// For example, if the call is accepted, active, canceled, declined etc.
     pub state: JsonrpcCallState,
 }
 
@@ -68,13 +68,13 @@ pub enum JsonrpcCallState {
     /// that was declined before the timeout.
     Declined,
 
-    /// Outgoing call that has been cancelled on our side
+    /// Outgoing call that has been canceled on our side
     /// before receiving a response.
     ///
-    /// Incoming calls cannot be cancelled,
-    /// on the receiver side cancelled calls
+    /// Incoming calls cannot be canceled,
+    /// on the receiver side canceled calls
     /// usually result in missed calls.
-    Cancelled,
+    Canceled,
 }
 
 impl JsonrpcCallState {
@@ -87,7 +87,7 @@ impl JsonrpcCallState {
             CallState::Completed { duration } => JsonrpcCallState::Completed { duration },
             CallState::Missed => JsonrpcCallState::Missed,
             CallState::Declined => JsonrpcCallState::Declined,
-            CallState::Cancelled => JsonrpcCallState::Cancelled,
+            CallState::Canceled => JsonrpcCallState::Canceled,
         };
 
         Ok(jsonrpc_call_state)

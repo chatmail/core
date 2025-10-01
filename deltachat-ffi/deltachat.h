@@ -1230,7 +1230,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *
  * - callee declines using dc_end_call():
  *   caller receives #DC_EVENT_CALL_ENDED and has a "Declinced Call".
- *   callee's other devices receive #DC_EVENT_CALL_ENDED and have a "Cancelled Call",
+ *   callee's other devices receive #DC_EVENT_CALL_ENDED and have a "Canceled Call",
  *
  * - callee is already in a call:
  *   in this case, UI may decide to show a notification instead of ringing.
@@ -1241,7 +1241,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
  *   in case caller got offline without being able to send cancellation message.
- *   for caller, this is a "Cancelled Call";
+ *   for caller, this is a "Canceled Call";
  *   for callee, this is a "Missed Call"
  *
  * Actions during the call:
