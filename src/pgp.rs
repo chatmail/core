@@ -245,7 +245,7 @@ pub fn pk_decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
-    let decrypt_options = DecryptionOptions::new().enable_legacy();
+    let decrypt_options = DecryptionOptions::new();
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![&empty_pw],
