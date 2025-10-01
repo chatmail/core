@@ -1311,7 +1311,7 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED unless they are contact requests.
   * For contact requests, the call times out on all other affected devices.
   *
-  * If the message ID is wrong or does not exist for whatever reasons, nothing happends.
+  * If the message ID is wrong or does not exist for whatever reasons, nothing happens.
   * Therefore, and for resilience, UI should remove the call UI directly when calling
   * this function and not only on the event.
   *
