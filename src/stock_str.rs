@@ -442,6 +442,9 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "You left the channel."))]
     MsgYouLeftBroadcast = 200,
+
+    #[strum(props(fallback = "Scan to join channel %1$s"))]
+    SecureJoinBrodcastQRDescription = 201,
 }
 
 impl StockMessage {
@@ -865,9 +868,16 @@ pub(crate) async fn setup_contact_qr_description(
         .replace1(&name)
 }
 
-/// Stock string: `Scan to join %1$s`.
+/// Stock string: `Scan to join group %1$s`.
 pub(crate) async fn secure_join_group_qr_description(context: &Context, chat: &Chat) -> String {
     translated(context, StockMessage::SecureJoinGroupQRDescription)
+        .await
+        .replace1(chat.get_name())
+}
+
+/// Stock string: `Scan to join channel %1$s`.
+pub(crate) async fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
+    translated(context, StockMessage::SecureJoinBrodcastQRDescription)
         .await
         .replace1(chat.get_name())
 }

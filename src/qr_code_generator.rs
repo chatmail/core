@@ -1,6 +1,6 @@
 //! # QR code generation module.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use base64::Engine as _;
 use qrcodegen::{QrCode, QrCodeEcc};
 
@@ -108,8 +108,18 @@ async fn generate_join_group_qr_code(context: &Context, chat_id: ChatId) -> Resu
         None => None,
     };
 
+    let qrcode_description = match chat.typ {
+        crate::constants::Chattype::Group => {
+            stock_str::secure_join_group_qr_description(context, &chat).await
+        }
+        crate::constants::Chattype::OutBroadcast => {
+            stock_str::secure_join_broadcast_qr_description(context, &chat).await
+        }
+        _ => bail!("Unexpected chat type {}", chat.typ),
+    };
+
     inner_generate_secure_join_qr_code(
-        &stock_str::secure_join_group_qr_description(context, &chat).await,
+        &qrcode_description,
         &securejoin::get_securejoin_qr(context, Some(chat_id)).await?,
         &color_int_to_hex_string(chat.get_color(context).await?),
         avatar,
