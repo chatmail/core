@@ -355,9 +355,21 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let secrets: Vec<String> = context
+            .sql
+            .query_map(
+                "SELECT secret FROM broadcasts_shared_secrets",
+                (),
+                |row| row.get(0),
+                |rows| {
+                    rows.collect::<std::result::Result<Vec<_>, _>>()
+                        .map_err(Into::into)
+                },
+            )
+            .await?;
 
         let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
+            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
                 Ok(Some(mut msg)) => {
                     mail_raw = msg.as_data_vec().unwrap_or_default();
 
@@ -1588,6 +1600,15 @@ impl MimeMessage {
         self.parts
             .first()
             .is_some_and(|part| part.typ == Viewtype::Call)
+    }
+
+    pub fn replace_msg_by_error(&mut self, error_msg: &str) {
+        self.is_system_message = SystemMessage::Unknown;
+        if let Some(part) = self.parts.first_mut() {
+            part.typ = Viewtype::Text;
+            part.msg = format!("[{error_msg}]");
+            self.parts.truncate(1);
+        }
     }
 
     pub(crate) fn get_rfc724_mid(&self) -> Option<String> {
