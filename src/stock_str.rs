@@ -279,7 +279,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s removed by %2$s."))]
     MsgDelMemberBy = 131,
 
-    #[strum(props(fallback = "You left."))]
+    #[strum(props(fallback = "You left the group."))]
     MsgYouLeftGroup = 132,
 
     #[strum(props(fallback = "Group left by %1$s."))]
@@ -439,6 +439,9 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Missed Call"))]
     MissedCall = 198,
+
+    #[strum(props(fallback = "You left the channel."))]
+    MsgYouLeftBroadcast = 200,
 }
 
 impl StockMessage {
@@ -711,7 +714,7 @@ pub(crate) async fn msg_group_left_remote(context: &Context) -> String {
     translated(context, StockMessage::MsgILeftGroup).await
 }
 
-/// Stock string: `You left.` or `Group left by %1$s.`.
+/// Stock string: `You left the group.` or `Group left by %1$s.`.
 pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouLeftGroup).await
@@ -720,6 +723,11 @@ pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactI
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
+}
+
+/// Stock string: `You left the channel.`
+pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouLeftBroadcast).await
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.
