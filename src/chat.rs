@@ -2917,9 +2917,12 @@ async fn prepare_send_msg(
 
     let skip_fn = |reason: &CantSendReason| match reason {
         CantSendReason::ContactRequest => {
-            // Allow securejoin messages, they are supposed to repair the verification.
-            // If the chat is a contact request, let the user accept it later.
-            msg.param.get_cmd() == SystemMessage::SecurejoinMessage
+            // If the chat is a contact request, allow securejoin messages and let the user accept it later.
+            // And allow leaving a contact request chat.
+            matches!(
+                msg.param.get_cmd(),
+                SystemMessage::SecurejoinMessage | SystemMessage::MemberRemovedFromGroup
+            )
         }
         // Allow to send "Member removed" messages so we can leave the group/broadcast.
         // Necessary checks should be made anyway before removing contact
