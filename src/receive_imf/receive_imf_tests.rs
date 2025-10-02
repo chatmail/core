@@ -5169,6 +5169,44 @@ async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_chat_id = chat::create_group_chat(bob, ProtectionStatus::Protected, "Group").await?;
+    let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
+    tcm.exec_securejoin_qr(a0, bob, &qr).await;
+    tcm.exec_securejoin_qr(fiona, bob, &qr).await;
+    // Bob verifies Fiona for Alice#0.
+    a0.recv_msg(&bob.send_text(bob_chat_id, "Hi").await).await;
+
+    let chat_id = a0
+        .create_group_with_members(ProtectionStatus::Protected, "", &[fiona])
+        .await;
+    a1.recv_msg(&a0.send_text(chat_id, "Hi").await).await;
+    let a1_fiona = a1.add_or_lookup_contact(fiona).await;
+    assert_eq!(a1_fiona.get_verifier_id(a1).await?, Some(None));
+
+    let fiona_chat_id = fiona.get_last_msg().await.chat_id;
+    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
+        .await;
+    let a1_bob = a1.add_or_lookup_contact(bob).await;
+    // There was a bug that Bob is verified by Fiona on Alice's other device.
+    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(None));
+
+    tcm.execute_securejoin(a1, fiona).await;
+    a1.recv_msg(&fiona.send_text(fiona_chat_id, "Hi").await)
+        .await;
+    // But now Bob's verifier id must be updated because Fiona is verified by a known verifier
+    // (moreover, directly), so Alice has reverse verification chains on her devices.
+    assert_eq!(a1_bob.get_verifier_id(a1).await?, Some(Some(a1_fiona.id)));
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sanitize_filename_in_received() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     let raw = b"Message-ID: Mr.XA6y3og8-az.WGbH9_dNcQx@testr
