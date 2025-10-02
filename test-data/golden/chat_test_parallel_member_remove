@@ -2,7 +2,7 @@ Group#Chat#10: Group chat [3 member(s)]
 --------------------------------------------------------------------------------
 Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 Msg#11🔒:  (Contact#Contact#10): Hi! I created a group. [FRESH]
-Msg#12🔒: Me (Contact#Contact#Self): You left. [INFO] √
+Msg#12🔒: Me (Contact#Contact#Self): You left the group. [INFO] √
 Msg#13🔒:  (Contact#Contact#10): Member charlie@example.net added by alice@example.org. [FRESH][INFO]
 Msg#14🔒:  (Contact#Contact#10): What a silence! [FRESH]
 --------------------------------------------------------------------------------
