@@ -4568,17 +4568,6 @@ async fn test_cannot_send_edit_request() -> Result<()> {
             .is_err()
     );
 
-    // Videochat invitations cannot be edited
-    alice
-        .set_config(Config::WebrtcInstance, Some("https://foo.bar"))
-        .await?;
-    let msg_id = send_videochat_invitation(alice, chat_id).await?;
-    assert!(
-        send_edit_request(alice, msg_id, "bar".to_string())
-            .await
-            .is_err()
-    );
-
     // If not text was given initally, there is nothing to edit
     // (this also avoids complexity in UI element changes; focus is typos and rewordings)
     let mut msg = Message::new(Viewtype::File);

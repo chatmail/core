@@ -130,12 +130,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Failed to send message to %1$s."))]
     FailedSendingTo = 74,
 
-    #[strum(props(fallback = "Video chat invitation"))]
-    VideochatInvitation = 82,
-
-    #[strum(props(fallback = "You are invited to a video chat, click %1$s to join."))]
-    VideochatInviteMsgBody = 83,
-
     #[strum(props(fallback = "Error:\n\n“%1$s”"))]
     ConfigurationFailed = 84,
 
@@ -1057,18 +1051,6 @@ pub(crate) async fn msg_ephemeral_timer_year(context: &Context, by_contact: Cont
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
-}
-
-/// Stock string: `Video chat invitation`.
-pub(crate) async fn videochat_invitation(context: &Context) -> String {
-    translated(context, StockMessage::VideochatInvitation).await
-}
-
-/// Stock string: `You are invited to a video chat, click %1$s to join.`.
-pub(crate) async fn videochat_invite_msg_body(context: &Context, url: &str) -> String {
-    translated(context, StockMessage::VideochatInviteMsgBody)
-        .await
-        .replace1(url)
 }
 
 /// Stock string: `Error:\n\n“%1$s”`.

@@ -51,7 +51,6 @@ impl Lot {
                 Qr::Account { domain } => Some(Cow::Borrowed(domain)),
                 Qr::Backup2 { .. } => None,
                 Qr::BackupTooNew { .. } => None,
-                Qr::WebrtcInstance { domain, .. } => Some(Cow::Borrowed(domain)),
                 Qr::Proxy { host, port, .. } => Some(Cow::Owned(format!("{host}:{port}"))),
                 Qr::Addr { draft, .. } => draft.as_deref().map(Cow::Borrowed),
                 Qr::Url { url } => Some(Cow::Borrowed(url)),
@@ -105,7 +104,6 @@ impl Lot {
                 Qr::Account { .. } => LotState::QrAccount,
                 Qr::Backup2 { .. } => LotState::QrBackup2,
                 Qr::BackupTooNew { .. } => LotState::QrBackupTooNew,
-                Qr::WebrtcInstance { .. } => LotState::QrWebrtcInstance,
                 Qr::Proxy { .. } => LotState::QrProxy,
                 Qr::Addr { .. } => LotState::QrAddr,
                 Qr::Url { .. } => LotState::QrUrl,
@@ -132,7 +130,6 @@ impl Lot {
                 Qr::Account { .. } => Default::default(),
                 Qr::Backup2 { .. } => Default::default(),
                 Qr::BackupTooNew { .. } => Default::default(),
-                Qr::WebrtcInstance { .. } => Default::default(),
                 Qr::Proxy { .. } => Default::default(),
                 Qr::Addr { contact_id, .. } => contact_id.to_u32(),
                 Qr::Url { .. } => Default::default(),
@@ -184,9 +181,6 @@ pub enum LotState {
     QrBackup2 = 252,
 
     QrBackupTooNew = 255,
-
-    /// text1=domain, text2=instance pattern
-    QrWebrtcInstance = 260,
 
     /// text1=address, text2=protocol
     QrProxy = 271,

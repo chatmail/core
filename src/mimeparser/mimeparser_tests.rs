@@ -476,6 +476,10 @@ async fn test_mimeparser_with_avatars() {
     assert!(mimeparser.group_avatar.unwrap().is_change());
 }
 
+/// Tests that video chat invitations that are not supported anymore
+/// are displayed as text messages.
+///
+/// User can still click on the link manually.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mimeparser_with_videochat() {
     let t = TestContext::new_alice().await;
@@ -483,14 +487,8 @@ async fn test_mimeparser_with_videochat() {
     let raw = include_bytes!("../../test-data/message/videochat_invitation.eml");
     let mimeparser = MimeMessage::from_bytes(&t, &raw[..], None).await.unwrap();
     assert_eq!(mimeparser.parts.len(), 1);
-    assert_eq!(mimeparser.parts[0].typ, Viewtype::VideochatInvitation);
-    assert_eq!(
-        mimeparser.parts[0]
-            .param
-            .get(Param::WebrtcRoom)
-            .unwrap_or_default(),
-        "https://example.org/p2p/?roomname=6HiduoAn4xN"
-    );
+    assert_eq!(mimeparser.parts[0].typ, Viewtype::Text);
+    assert_eq!(mimeparser.parts[0].param.get(Param::WebrtcRoom), None);
     assert!(
         mimeparser.parts[0]
             .msg
