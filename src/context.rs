@@ -413,7 +413,7 @@ impl Context {
 
     /// Changes encrypted database passphrase.
     pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
-        self.sql.change_passphrase(passphrase).await?;
+        self.sql.change_passphrase(self, passphrase).await?;
         Ok(())
     }
 
