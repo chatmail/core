@@ -139,12 +139,12 @@ jobs:
       - name: Tests
         env:
           RUST_BACKTRACE: 1
-        run: cargo nextest run --workspace
+        run: cargo nextest run --workspace --locked
 
       - name: Doc-Tests
         env:
           RUST_BACKTRACE: 1
-        run: cargo test --workspace --doc
+        run: cargo test --workspace --locked --doc
 
       - name: Test cargo vendor
         run: cargo vendor
