@@ -485,17 +485,17 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
 
     // Update quota no more than once a minute.
     if ctx.quota_needs_update(60).await {
-        if let Err(err) = ctx.update_recent_quota(&mut session).await {
-            warn!(ctx, "Failed to update quota: {:#}.", err);
-        }
+        ctx.update_recent_quota(&mut session)
+            .await
+            .context("Failed to update quota")?;
     }
 
     let resync_requested = ctx.resync_request.swap(false, Ordering::Relaxed);
     if resync_requested {
-        if let Err(err) = session.resync_folders(ctx).await {
-            warn!(ctx, "Failed to resync folders: {:#}.", err);
-            ctx.resync_request.store(true, Ordering::Relaxed);
-        }
+        session
+            .resync_folders(ctx)
+            .await
+            .context("resync_folders")?;
     }
 
     maybe_add_time_based_warnings(ctx).await;
