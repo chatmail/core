@@ -2084,3 +2084,48 @@ async fn test_4k_image_stays_image() -> Result<()> {
     assert_eq!(msg.param.get_int(Param::Height).unwrap_or_default(), 2160);
     Ok(())
 }
+
+/// Tests that if multiple alternatives are available in multipart/alternative,
+/// the last one is preferred.
+///
+/// RFC 2046 says the last supported alternative should be preferred:
+/// <https://datatracker.ietf.org/doc/html/rfc2046#section-5.1.4>
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn prefer_last_alternative() {
+    let mut tcm = TestContextManager::new();
+    let context = &tcm.alice().await;
+    let raw = br#"From: Bob <bob@example.net>
+To: Alice <alice@example.org>
+Subject: Alternatives
+Date: Tue, 5 May 2020 01:23:45 +0000
+MIME-Version: 1.0
+Chat-Version: 1.0
+Content-Type: multipart/alternative; boundary="boundary"
+
+This is a multipart message in MIME format.
+
+--boundary
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+First alternative.
+--boundary
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+Second alternative.
+--boundary
+Content-Type: text/plain; charset="us-ascii"
+Content-Transfer-Encoding: 7bit
+
+Third alternative.
+--boundary--
+"#;
+
+    let message = MimeMessage::from_bytes(context, &raw[..], None)
+        .await
+        .unwrap();
+    assert_eq!(message.parts.len(), 1);
+    assert_eq!(message.parts[0].typ, Viewtype::Text);
+    assert_eq!(message.parts[0].msg, "Third alternative.");
+}

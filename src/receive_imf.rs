@@ -3607,8 +3607,7 @@ async fn apply_in_broadcast_changes(
         ensure!(removed_fpr == self_fingerprint(context).await?);
 
         if from_id == ContactId::SELF {
-            better_msg
-                .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
+            better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
         } else {
             better_msg.get_or_insert(
                 stock_str::msg_del_member_local(context, ContactId::SELF, from_id).await,

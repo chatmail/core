@@ -3119,7 +3119,7 @@ async fn test_leave_broadcast() -> Result<()> {
 }
 
 /// Tests that if Bob leaves a broadcast channel with one device,
-/// the other device shows a correct info message "You left.".
+/// the other device shows a correct info message "You left the channel.".
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_broadcast_multidevice() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -3178,10 +3178,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     assert_eq!(rcvd.chat_id, bob1_hello.chat_id);
     assert!(rcvd.is_info());
     assert_eq!(rcvd.get_info_type(), SystemMessage::MemberRemovedFromGroup);
-    assert_eq!(
-        rcvd.text,
-        stock_str::msg_group_left_local(bob1, ContactId::SELF).await
-    );
+    assert_eq!(rcvd.text, stock_str::msg_you_left_broadcast(bob1).await);
 
     Ok(())
 }

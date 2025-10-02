@@ -250,7 +250,7 @@ pub fn decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
-    let decrypt_options = DecryptionOptions::new().enable_legacy();
+    let decrypt_options = DecryptionOptions::new();
     let try_symmetric_decryption = should_try_symmetric_decryption(&msg);
     if try_symmetric_decryption.is_err() {
         shared_secrets = &[];

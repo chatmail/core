@@ -1084,47 +1084,61 @@ impl MimeMessage {
         )?
         .0;
         match (mimetype.type_(), mimetype.subtype().as_str()) {
-            /* Most times, multipart/alternative contains true alternatives
-            as text/plain and text/html.  If we find a multipart/mixed
-            inside multipart/alternative, we use this (happens eg in
-            apple mail: "plaintext" as an alternative to "html+PDF attachment") */
             (mime::MULTIPART, "alternative") => {
-                for cur_data in &mail.subparts {
-                    let mime_type = get_mime_type(
+                // multipart/alternative is described in
+                // <https://datatracker.ietf.org/doc/html/rfc2046#section-5.1.4>.
+                // Specification says that last part should be preferred,
+                // so we iterate over parts in reverse order.
+
+                // Search for plain text or multipart part.
+                //
+                // If we find a multipart inside multipart/alternative
+                // and it has usable subparts, we only parse multipart.
+                // This happens e.g. in Apple Mail:
+                // "plaintext" as an alternative to "html+PDF attachment".
+                for cur_data in mail.subparts.iter().rev() {
+                    let (mime_type, _viewtype) = get_mime_type(
                         cur_data,
                         &get_attachment_filename(context, cur_data)?,
                         self.has_chat_version(),
-                    )?
-                    .0;
-                    if mime_type == "multipart/mixed" || mime_type == "multipart/related" {
+                    )?;
+
+                    if mime_type == mime::TEXT_PLAIN || mime_type.type_() == mime::MULTIPART {
                         any_part_added = self
                             .parse_mime_recursive(context, cur_data, is_related)
                             .await?;
                         break;
                     }
                 }
-                if !any_part_added {
-                    /* search for text/plain and add this */
-                    for cur_data in &mail.subparts {
-                        if get_mime_type(
-                            cur_data,
-                            &get_attachment_filename(context, cur_data)?,
-                            self.has_chat_version(),
-                        )?
-                        .0
-                        .type_()
-                            == mime::TEXT
-                        {
-                            any_part_added = self
-                                .parse_mime_recursive(context, cur_data, is_related)
-                                .await?;
-                            break;
-                        }
+
+                // Explicitly look for a `text/calendar` part.
+                // Messages conforming to <https://datatracker.ietf.org/doc/html/rfc6047>
+                // contain `text/calendar` part as an alternative
+                // to the text or HTML representation.
+                //
+                // While we cannot display `text/calendar` and therefore do not prefer it,
+                // we still make it available by presenting as an attachment
+                // with a generic filename.
+                for cur_data in mail.subparts.iter().rev() {
+                    let mimetype = cur_data.ctype.mimetype.parse::<Mime>()?;
+                    if mimetype.type_() == mime::TEXT && mimetype.subtype() == "calendar" {
+                        let filename = get_attachment_filename(context, cur_data)?
+                            .unwrap_or_else(|| "calendar.ics".to_string());
+                        self.do_add_single_file_part(
+                            context,
+                            Viewtype::File,
+                            mimetype,
+                            &mail.ctype.mimetype.to_lowercase(),
+                            &mail.get_body_raw()?,
+                            &filename,
+                            is_related,
+                        )
+                        .await?;
                     }
                 }
+
                 if !any_part_added {
-                    /* `text/plain` not found - use the first part */
-                    for cur_part in &mail.subparts {
+                    for cur_part in mail.subparts.iter().rev() {
                         if self
                             .parse_mime_recursive(context, cur_part, is_related)
                             .await?

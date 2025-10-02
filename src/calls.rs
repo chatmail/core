@@ -46,9 +46,9 @@ const STUN_PORT: u16 = 3478;
 ///
 /// It is used to distinguish "ended" calls
 /// that are rejected by us from the calls
-/// cancelled by the other side
+/// canceled by the other side
 /// immediately after ringing started.
-const CALL_CANCELLED_TIMESTAMP: Param = Param::Arg2;
+const CALL_CANCELED_TIMESTAMP: Param = Param::Arg2;
 
 /// Information about the status of a call.
 #[derive(Debug, Default)]
@@ -123,14 +123,14 @@ impl CallInfo {
     }
 
     /// Returns true if the call is missed
-    /// because the caller cancelled it
+    /// because the caller canceled it
     /// explicitly before ringing stopped.
     ///
     /// For outgoing calls this means
     /// the receiver has rejected the call
     /// explicitly.
-    pub fn is_cancelled(&self) -> bool {
-        self.msg.param.exists(CALL_CANCELLED_TIMESTAMP)
+    pub fn is_canceled(&self) -> bool {
+        self.msg.param.exists(CALL_CANCELED_TIMESTAMP)
     }
 
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
@@ -139,17 +139,17 @@ impl CallInfo {
         Ok(())
     }
 
-    /// Explicitly mark the call as cancelled.
+    /// Explicitly mark the call as canceled.
     ///
     /// For incoming calls this should be called
     /// when "call ended" message is received
     /// from the caller before we picked up the call.
     /// In this case the call becomes "missed" early
     /// before the ringing timeout.
-    async fn mark_as_cancelled(&mut self, context: &Context) -> Result<()> {
+    async fn mark_as_canceled(&mut self, context: &Context) -> Result<()> {
         let now = time();
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
-        self.msg.param.set_i64(CALL_CANCELLED_TIMESTAMP, now);
+        self.msg.param.set_i64(CALL_CANCELED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
         Ok(())
     }
@@ -236,6 +236,7 @@ impl Context {
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -254,8 +255,8 @@ impl Context {
                 call.mark_as_ended(self).await?;
                 call.update_text(self, "Declined call").await?;
             } else {
-                call.mark_as_cancelled(self).await?;
-                call.update_text(self, "Cancelled call").await?;
+                call.mark_as_canceled(self).await?;
+                call.update_text(self, "Canceled call").await?;
             }
         } else {
             call.mark_as_ended(self).await?;
@@ -274,6 +275,7 @@ impl Context {
 
         self.emit_event(EventType::CallEnded {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -288,15 +290,16 @@ impl Context {
         let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
             if call.is_incoming() {
-                call.mark_as_cancelled(&context).await?;
+                call.mark_as_canceled(&context).await?;
                 call.update_text(&context, "Missed call").await?;
             } else {
                 call.mark_as_ended(&context).await?;
-                call.update_text(&context, "Cancelled call").await?;
+                call.update_text(&context, "Canceled call").await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
+                chat_id: call.msg.chat_id,
             });
         }
         Ok(())
@@ -327,6 +330,7 @@ impl Context {
                     };
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                         place_call_info: call.place_call_info.to_string(),
                         has_video,
                     });
@@ -355,6 +359,7 @@ impl Context {
                     if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                         });
                     } else {
                         let accept_call_info = mime_message
@@ -362,6 +367,7 @@ impl Context {
                             .unwrap_or_default();
                         self.emit_event(EventType::OutgoingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                             accept_call_info: accept_call_info.to_string(),
                         });
                     }
@@ -380,14 +386,14 @@ impl Context {
                                 call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             } else {
-                                call.mark_as_cancelled(self).await?;
+                                call.mark_as_canceled(self).await?;
                                 call.update_text(self, "Missed call").await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
-                                call.mark_as_cancelled(self).await?;
-                                call.update_text(self, "Cancelled call").await?;
+                                call.mark_as_canceled(self).await?;
+                                call.update_text(self, "Canceled call").await?;
                             } else {
                                 call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
@@ -401,6 +407,7 @@ impl Context {
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                     });
                 }
                 _ => {}
@@ -476,13 +483,13 @@ pub enum CallState {
     /// that was declined before the timeout.
     Declined,
 
-    /// Outgoing call that has been cancelled on our side
+    /// Outgoing call that has been canceled on our side
     /// before receiving a response.
     ///
-    /// Incoming calls cannot be cancelled,
-    /// on the receiver side cancelled calls
+    /// Incoming calls cannot be canceled,
+    /// on the receiver side canceled calls
     /// usually result in missed calls.
-    Cancelled,
+    Canceled,
 }
 
 /// Returns call state given the message ID.
@@ -497,8 +504,8 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
             } else {
                 CallState::Active
             }
-        } else if call.is_cancelled() {
-            // Call was explicitly cancelled
+        } else if call.is_canceled() {
+            // Call was explicitly canceled
             // by the caller before we picked it up.
             CallState::Missed
         } else if call.is_ended() {
@@ -516,8 +523,8 @@ pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
         } else {
             CallState::Active
         }
-    } else if call.is_cancelled() {
-        CallState::Cancelled
+    } else if call.is_canceled() {
+        CallState::Canceled
     } else if call.is_ended() || call.is_stale() {
         CallState::Declined
     } else {
@@ -589,9 +596,15 @@ pub(crate) async fn create_ice_servers_from_metadata(
 
 /// Creates JSON with ICE servers when no TURN servers are known.
 pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<String> {
-    // Public STUN server from https://stunprotocol.org/,
-    // an open source STUN server.
-    let hostname = "stunserver2025.stunprotocol.org";
+    // Do not use public STUN server from https://stunprotocol.org/.
+    // It changes the hostname every year
+    // (e.g. stunserver2025.stunprotocol.org
+    // which was previously stunserver2024.stunprotocol.org)
+    // because of bandwidth costs:
+    // <https://github.com/jselbie/stunserver/issues/50>
+
+    // We use nine.testrun.org for a default STUN server.
+    let hostname = "nine.testrun.org";
 
     // Do not use cache because there is no TLS.
     let load_cache = false;
