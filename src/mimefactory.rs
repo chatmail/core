@@ -1565,11 +1565,6 @@ impl MimeFactory {
                 "Chat-Content",
                 mail_builder::headers::raw::Raw::new("sticker").into(),
             ));
-        } else if msg.viewtype == Viewtype::VideochatInvitation {
-            headers.push((
-                "Chat-Content",
-                mail_builder::headers::raw::Raw::new("videochat-invitation").into(),
-            ));
         } else if msg.viewtype == Viewtype::Call {
             headers.push((
                 "Chat-Content",

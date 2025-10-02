@@ -35,7 +35,7 @@ use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, DcSecretKey, self_fingerprint};
 use crate::log::warn;
-use crate::message::{Message, MessageState, MsgId, Viewtype, update_msg_state};
+use crate::message::{Message, MessageState, MsgId, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::KeyPair;
 use crate::receive_imf::receive_imf;
@@ -1535,7 +1535,7 @@ async fn write_msg(context: &Context, prefix: &str, msg: &Message, buf: &mut Str
     let msgtext = msg.get_text();
     writeln!(
         buf,
-        "{}{}{}{}: {} (Contact#{}): {} {}{}{}{}{}",
+        "{}{}{}{}: {} (Contact#{}): {} {}{}{}{}",
         prefix,
         msg.get_id(),
         if msg.get_showpadlock() { "🔒" } else { "" },
@@ -1562,15 +1562,6 @@ async fn write_msg(context: &Context, prefix: &str, msg: &Message, buf: &mut Str
             }
         } else {
             ""
-        },
-        if msg.get_viewtype() == Viewtype::VideochatInvitation {
-            format!(
-                "[VIDEOCHAT-INVITATION: {}, type={}]",
-                msg.get_videochat_url().unwrap_or_default(),
-                msg.get_videochat_type().unwrap_or_default()
-            )
-        } else {
-            "".to_string()
         },
         if msg.is_forwarded() {
             "[FORWARDED]"

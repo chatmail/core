@@ -2691,10 +2691,7 @@ impl ChatIdBlocked {
 }
 
 async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
-    if msg.viewtype == Viewtype::Text
-        || msg.viewtype == Viewtype::VideochatInvitation
-        || msg.viewtype == Viewtype::Call
-    {
+    if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::Call {
         // the caller should check if the message text is empty
     } else if msg.viewtype.has_file() {
         let viewtype_orig = msg.viewtype;
@@ -3165,10 +3162,6 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
     );
     ensure!(!original_msg.is_info(), "Cannot edit info messages");
     ensure!(!original_msg.has_html(), "Cannot edit HTML messages");
-    ensure!(
-        original_msg.viewtype != Viewtype::VideochatInvitation,
-        "Cannot edit videochat invitations"
-    );
     ensure!(original_msg.viewtype != Viewtype::Call, "Cannot edit calls");
     ensure!(
         !original_msg.text.is_empty(), // avoid complexity in UI element changes. focus is typos and rewordings
@@ -3215,34 +3208,6 @@ pub(crate) async fn save_text_edit_to_db(
         .await?;
     context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
     Ok(())
-}
-
-/// Sends invitation to a videochat.
-pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Result<MsgId> {
-    ensure!(
-        !chat_id.is_special(),
-        "video chat invitation cannot be sent to special chat: {}",
-        chat_id
-    );
-
-    let instance = if let Some(instance) = context.get_config(Config::WebrtcInstance).await? {
-        if !instance.is_empty() {
-            instance
-        } else {
-            bail!("webrtc_instance is empty");
-        }
-    } else {
-        bail!("webrtc_instance not set");
-    };
-
-    let instance = Message::create_webrtc_instance(&instance, &create_id());
-
-    let mut msg = Message::new(Viewtype::VideochatInvitation);
-    msg.param.set(Param::WebrtcRoom, &instance);
-    msg.text =
-        stock_str::videochat_invite_msg_body(context, &Message::parse_webrtc_instance(&instance).1)
-            .await;
-    send_msg(context, chat_id, &mut msg).await
 }
 
 async fn donation_request_maybe(context: &Context) -> Result<()> {

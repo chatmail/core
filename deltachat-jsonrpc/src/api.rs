@@ -2282,13 +2282,6 @@ impl CommandApi {
         }
     }
 
-    async fn send_videochat_invitation(&self, account_id: u32, chat_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        chat::send_videochat_invitation(&ctx, ChatId::new(chat_id))
-            .await
-            .map(|msg_id| msg_id.to_u32())
-    }
-
     // ---------------------------------------------
     //           misc prototyping functions
     //       that might get removed later again
