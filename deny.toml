@@ -7,6 +7,9 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2023-0071>
     "RUSTSEC-2023-0071",
 
+    # Archived repository
+    "RUSTSEC-2023-0089",
+
     # Unmaintained instant
     "RUSTSEC-2024-0384",
 
@@ -69,8 +72,8 @@ skip = [
      { name = "http", version = "0.2.12" },
      { name = "hybrid-array", version = "0.2.3" },
      { name = "linux-raw-sys", version = "0.4.14" },
-     { name = "lru", version = "0.12.5" },
-     { name = "netlink-packet-route", version = "0.17.1" },
+     { name = "netdev", version = "0.36.0" },
+     { name = "netlink-packet-route", version = "0.22.0" },
      { name = "nom", version = "7.1.3" },
      { name = "rand_chacha", version = "0.3.1" },
      { name = "rand_core", version = "0.6.4" },
@@ -80,8 +83,6 @@ skip = [
      { name = "serdect", version = "0.2.0" },
      { name = "socket2", version = "0.5.9" },
      { name = "spin", version = "0.9.8" },
-     { name = "strum_macros", version = "0.26.2" },
-     { name = "strum", version = "0.26.2" },
      { name = "syn", version = "1.0.109" },
      { name = "thiserror-impl", version = "1.0.69" },
      { name = "thiserror", version = "1.0.69" },
@@ -96,6 +97,7 @@ skip = [
      { name = "windows_i686_msvc" },
      { name = "windows-implement" },
      { name = "windows-interface" },
+     { name = "windows-link" },
      { name = "windows-result" },
      { name = "windows-strings" },
      { name = "windows-sys" },
