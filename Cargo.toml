@@ -82,7 +82,7 @@ percent-encoding = "2.3"
 pgp = { version = "0.17.0", default-features = false }
 pin-project = "1"
 qrcodegen = "1.7.0"
-quick-xml = "0.37"
+quick-xml = { version = "0.38", features = ["escape-html"] }
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
