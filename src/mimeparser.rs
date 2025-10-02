@@ -1099,6 +1099,32 @@ impl MimeMessage {
                     }
                 }
 
+                // Explicitly look for a `text/calendar` part.
+                // Messages conforming to <https://datatracker.ietf.org/doc/html/rfc6047>
+                // contain `text/calendar` part as an alternative
+                // to the text or HTML representation.
+                //
+                // While we cannot display `text/calendar` and therefore do not prefer it,
+                // we still make it available by presenting as an attachment
+                // with a generic filename.
+                for cur_data in mail.subparts.iter().rev() {
+                    let mimetype = cur_data.ctype.mimetype.parse::<Mime>()?;
+                    if mimetype.type_() == mime::TEXT && mimetype.subtype() == "calendar" {
+                        let filename = get_attachment_filename(context, cur_data)?
+                            .unwrap_or_else(|| "calendar.ics".to_string());
+                        self.do_add_single_file_part(
+                            context,
+                            Viewtype::File,
+                            mimetype,
+                            &mail.ctype.mimetype.to_lowercase(),
+                            &mail.get_body_raw()?,
+                            &filename,
+                            is_related,
+                        )
+                        .await?;
+                    }
+                }
+
                 if !any_part_added {
                     for cur_part in mail.subparts.iter().rev() {
                         if self
