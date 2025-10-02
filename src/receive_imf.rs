@@ -3532,8 +3532,7 @@ async fn apply_in_broadcast_changes(
         // The only member added/removed message that is ever sent is "I left.",
         // so, this is the only case we need to handle here
         if from_id == ContactId::SELF {
-            better_msg
-                .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
+            better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
         }
     }
 

@@ -279,7 +279,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s removed by %2$s."))]
     MsgDelMemberBy = 131,
 
-    #[strum(props(fallback = "You left."))]
+    #[strum(props(fallback = "You left the group."))]
     MsgYouLeftGroup = 132,
 
     #[strum(props(fallback = "Group left by %1$s."))]
@@ -439,6 +439,12 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Missed Call"))]
     MissedCall = 198,
+
+    #[strum(props(fallback = "You left the channel."))]
+    MsgYouLeftBroadcast = 200,
+
+    #[strum(props(fallback = "Scan to join channel %1$s"))]
+    SecureJoinBrodcastQRDescription = 201,
 }
 
 impl StockMessage {
@@ -711,7 +717,7 @@ pub(crate) async fn msg_group_left_remote(context: &Context) -> String {
     translated(context, StockMessage::MsgILeftGroup).await
 }
 
-/// Stock string: `You left.` or `Group left by %1$s.`.
+/// Stock string: `You left the group.` or `Group left by %1$s.`.
 pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouLeftGroup).await
@@ -720,6 +726,11 @@ pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactI
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
+}
+
+/// Stock string: `You left the channel.`
+pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouLeftBroadcast).await
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.
@@ -857,9 +868,16 @@ pub(crate) async fn setup_contact_qr_description(
         .replace1(&name)
 }
 
-/// Stock string: `Scan to join %1$s`.
+/// Stock string: `Scan to join group %1$s`.
 pub(crate) async fn secure_join_group_qr_description(context: &Context, chat: &Chat) -> String {
     translated(context, StockMessage::SecureJoinGroupQRDescription)
+        .await
+        .replace1(chat.get_name())
+}
+
+/// Stock string: `Scan to join channel %1$s`.
+pub(crate) async fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
+    translated(context, StockMessage::SecureJoinBrodcastQRDescription)
         .await
         .replace1(chat.get_name())
 }

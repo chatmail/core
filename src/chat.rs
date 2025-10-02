@@ -4207,7 +4207,7 @@ pub async fn remove_contact_from_chat(
                 if chat.typ == Chattype::Group && chat.is_promoted() {
                     let addr = contact.get_addr();
 
-                    let res = send_member_removal_msg(context, chat_id, contact_id, addr).await;
+                    let res = send_member_removal_msg(context, &chat, contact_id, addr).await;
 
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4231,7 +4231,7 @@ pub async fn remove_contact_from_chat(
         // For incoming broadcast channels, it's not possible to remove members,
         // but it's possible to leave:
         let self_addr = context.get_primary_self_addr().await?;
-        send_member_removal_msg(context, chat_id, contact_id, &self_addr).await?;
+        send_member_removal_msg(context, &chat, contact_id, &self_addr).await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
@@ -4241,14 +4241,18 @@ pub async fn remove_contact_from_chat(
 
 async fn send_member_removal_msg(
     context: &Context,
-    chat_id: ChatId,
+    chat: &Chat,
     contact_id: ContactId,
     addr: &str,
 ) -> Result<MsgId> {
     let mut msg = Message::new(Viewtype::Text);
 
     if contact_id == ContactId::SELF {
-        msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
+        if chat.typ == Chattype::InBroadcast {
+            msg.text = stock_str::msg_you_left_broadcast(context).await;
+        } else {
+            msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
+        }
     } else {
         msg.text = stock_str::msg_del_member_local(context, contact_id, ContactId::SELF).await;
     }
@@ -4258,7 +4262,7 @@ async fn send_member_removal_msg(
     msg.param
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 
-    send_msg(context, chat_id, &mut msg).await
+    send_msg(context, chat.id, &mut msg).await
 }
 
 async fn set_group_explicitly_left(context: &Context, grpid: &str) -> Result<()> {
