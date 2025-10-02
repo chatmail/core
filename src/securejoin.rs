@@ -623,17 +623,19 @@ fn encrypted_and_signed(
     mimeparser: &MimeMessage,
     expected_fingerprint: &Fingerprint,
 ) -> bool {
-    if !mimeparser.was_encrypted() {
+    if let Some(signature) = mimeparser.signature.as_ref() {
+        if signature == expected_fingerprint {
+            true
+        } else {
+            warn!(
+                context,
+                "Message does not match expected fingerprint {expected_fingerprint}.",
+            );
+            false
+        }
+    } else {
         warn!(context, "Message not encrypted.",);
         false
-    } else if !mimeparser.signatures.contains(expected_fingerprint) {
-        warn!(
-            context,
-            "Message does not match expected fingerprint {}.", expected_fingerprint,
-        );
-        false
-    } else {
-        true
     }
 }
 
