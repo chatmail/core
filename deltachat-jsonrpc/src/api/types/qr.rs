@@ -225,13 +225,6 @@ impl From<Qr> for QrObject {
                 auth_token,
             },
             Qr::BackupTooNew {} => QrObject::BackupTooNew {},
-            Qr::WebrtcInstance {
-                domain,
-                instance_pattern,
-            } => QrObject::WebrtcInstance {
-                domain,
-                instance_pattern,
-            },
             Qr::Proxy { url, host, port } => QrObject::Proxy { url, host, port },
             Qr::Addr { contact_id, draft } => {
                 let contact_id = contact_id.to_u32();

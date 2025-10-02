@@ -179,7 +179,7 @@ const DB_COMMANDS: [&str; 11] = [
     "housekeeping",
 ];
 
-const CHAT_COMMANDS: [&str; 39] = [
+const CHAT_COMMANDS: [&str; 38] = [
     "listchats",
     "listarchived",
     "start-realtime",
@@ -206,7 +206,6 @@ const CHAT_COMMANDS: [&str; 39] = [
     "sendhtml",
     "sendsyncmsg",
     "sendupdate",
-    "videochat",
     "draft",
     "devicemsg",
     "listmedia",

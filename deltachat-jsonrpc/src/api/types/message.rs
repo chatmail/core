@@ -84,9 +84,6 @@ pub struct MessageObject {
     dimensions_height: i32,
     dimensions_width: i32,
 
-    videochat_type: Option<u32>,
-    videochat_url: Option<String>,
-
     override_sender_name: Option<String>,
     sender: ContactObject,
 
@@ -239,15 +236,6 @@ impl MessageObject {
             dimensions_height: message.get_height(),
             dimensions_width: message.get_width(),
 
-            videochat_type: match message.get_videochat_type() {
-                Some(vct) => Some(
-                    vct.to_u32()
-                        .context("videochat type conversion to number failed")?,
-                ),
-                None => None,
-            },
-            videochat_url: message.get_videochat_url(),
-
             override_sender_name,
             sender,
 
@@ -321,9 +309,6 @@ pub enum MessageViewtype {
     /// Message containing any file, eg. a PDF.
     File,
 
-    /// Message is an invitation to a videochat.
-    VideochatInvitation,
-
     /// Message is a call.
     Call,
 
@@ -348,7 +333,6 @@ impl From<Viewtype> for MessageViewtype {
             Viewtype::Voice => MessageViewtype::Voice,
             Viewtype::Video => MessageViewtype::Video,
             Viewtype::File => MessageViewtype::File,
-            Viewtype::VideochatInvitation => MessageViewtype::VideochatInvitation,
             Viewtype::Call => MessageViewtype::Call,
             Viewtype::Webxdc => MessageViewtype::Webxdc,
             Viewtype::Vcard => MessageViewtype::Vcard,
@@ -368,7 +352,6 @@ impl From<MessageViewtype> for Viewtype {
             MessageViewtype::Voice => Viewtype::Voice,
             MessageViewtype::Video => Viewtype::Video,
             MessageViewtype::File => Viewtype::File,
-            MessageViewtype::VideochatInvitation => Viewtype::VideochatInvitation,
             MessageViewtype::Call => Viewtype::Call,
             MessageViewtype::Webxdc => Viewtype::Webxdc,
             MessageViewtype::Vcard => Viewtype::Vcard,
