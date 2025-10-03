@@ -183,7 +183,11 @@ impl Context {
         place_call_info: String,
     ) -> Result<MsgId> {
         let chat = Chat::load_from_db(self, chat_id).await?;
-        ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
+        ensure!(
+            chat.typ == Chattype::Single,
+            "Can only place calls in 1:1 chats"
+        );
+        ensure!(!chat.is_self_talk(), "Cannot call self");
 
         let mut call = Message {
             viewtype: Viewtype::Call,
