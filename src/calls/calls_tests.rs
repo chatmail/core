@@ -401,7 +401,7 @@ async fn test_caller_cancels_call() -> Result<()> {
     // Test that message summary says it is a missed call.
     let bob_call_msg = Message::load_from_db(&bob, bob_call.id).await?;
     let summary = bob_call_msg.get_summary(&bob, None).await?;
-    assert_eq!(summary.text, "📞 Missed Call");
+    assert_eq!(summary.text, "📞 Missed call");
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Missed call").await?;
