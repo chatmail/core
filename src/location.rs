@@ -140,7 +140,7 @@ impl Kml {
         if self.tag == KmlTag::PlacemarkTimestampWhen
             || self.tag == KmlTag::PlacemarkPointCoordinates
         {
-            let val = event.unescape().unwrap_or_default();
+            let val = event.xml_content().unwrap_or_default();
 
             let val = val.replace(['\n', '\r', '\t', ' '], "");
 
