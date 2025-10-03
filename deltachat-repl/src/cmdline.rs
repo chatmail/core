@@ -210,13 +210,7 @@ async fn log_msg(context: &Context, prefix: impl AsRef<str>, msg: &Message) {
         } else {
             ""
         },
-        if msg.get_viewtype() == Viewtype::VideochatInvitation {
-            format!(
-                "[VIDEOCHAT-INVITATION: {}, type={}]",
-                msg.get_videochat_url().unwrap_or_default(),
-                msg.get_videochat_type().unwrap_or_default()
-            )
-        } else if msg.get_viewtype() == Viewtype::Webxdc {
+        if msg.get_viewtype() == Viewtype::Webxdc {
             match msg.get_webxdc_info(context).await {
                 Ok(info) => format!(
                     "[WEBXDC: {}, icon={}, document={}, summary={}, source_code_url={}]",
@@ -371,7 +365,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  sendhtml <file for html-part> [<text for plain-part>]\n\
                  sendsyncmsg\n\
                  sendupdate <msg-id> <json status update>\n\
-                 videochat\n\
                  draft [<text>]\n\
                  devicemsg <text>\n\
                  listmedia\n\
@@ -961,10 +954,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             );
             let msg_id = MsgId::new(arg1.parse()?);
             context.send_webxdc_status_update(msg_id, arg2).await?;
-        }
-        "videochat" => {
-            ensure!(sel_chat.is_some(), "No chat selected.");
-            chat::send_videochat_invitation(&context, sel_chat.as_ref().unwrap().get_id()).await?;
         }
         "listmsgs" => {
             ensure!(!arg1.is_empty(), "Argument <query> missing.");

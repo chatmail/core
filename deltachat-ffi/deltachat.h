@@ -458,12 +458,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    The library uses the `media_quality` setting to use different defaults
  *                    for recoding images sent with type #DC_MSG_IMAGE.
  *                    If needed, recoding other file types is up to the UI.
- * - `webrtc_instance` = webrtc instance to use for videochats in the form
- *                    `[basicwebrtc:|jitsi:]https://example.com/subdir#roomname=$ROOM`
- *                    if the URL is prefixed by `basicwebrtc`, the server is assumed to be of the type
- *                    https://github.com/cracker0dks/basicwebrtc which some UIs have native support for.
- *                    The type `jitsi:` may be handled by external apps.
- *                    If no type is prefixed, the videochat is handled completely in a browser.
  * - `bot`          = Set to "1" if this is a bot.
  *                    Prevents adding the "Device messages" and "Saved messages" chats,
  *                    adds Auto-Submitted header to outgoing messages,
@@ -575,11 +569,10 @@ int             dc_set_stock_translation(dc_context_t* context, uint32_t stock_i
 /**
  * Set configuration values from a QR code.
  * Before this function is called, dc_check_qr() should confirm the type of the
- * QR code is DC_QR_ACCOUNT, DC_QR_LOGIN or DC_QR_WEBRTC_INSTANCE.
+ * QR code is DC_QR_ACCOUNT or DC_QR_LOGIN.
  *
  * Internally, the function will call dc_set_config() with the appropriate keys,
- * e.g. `addr` and `mail_pw` for DC_QR_ACCOUNT and DC_QR_LOGIN
- * or `webrtc_instance` for DC_QR_WEBRTC_INSTANCE.
+ * e.g. `addr` and `mail_pw` for DC_QR_ACCOUNT and DC_QR_LOGIN.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -1050,42 +1043,6 @@ void            dc_send_edit_request         (dc_context_t* context, uint32_t ms
  * @param msg_cnt The number of messages IDs in the msg_ids array.
  */
  void            dc_send_delete_request       (dc_context_t* context, const uint32_t* msg_ids, int msg_cnt);
-
-
-/**
- * Send invitation to a videochat.
- *
- * This function reads the `webrtc_instance` config value,
- * may check that the server is working in some way
- * and creates a unique room for this chat, if needed doing a TOKEN roundtrip for that.
- *
- * After that, the function sends out a message that contains information to join the room:
- *
- * - To allow non-delta-clients to join the chat,
- *   the message contains a text-area with some descriptive text
- *   and a URL that can be opened in a supported browser to join the videochat.
- *
- * - delta-clients can get all information needed from
- *   the message object, using e.g.
- *   dc_msg_get_videochat_url() and check dc_msg_get_viewtype() for #DC_MSG_VIDEOCHAT_INVITATION.
- *
- * dc_send_videochat_invitation() is blocking and may take a while,
- * so the UIs will typically call the function from within a thread.
- * Moreover, UIs will typically enter the room directly without an additional click on the message,
- * for this purpose, the function returns the message id directly.
- *
- * As for other messages sent, this function
- * sends the event #DC_EVENT_MSGS_CHANGED on success, the message has a delivery state, and so on.
- * The recipient will get noticed by the call as usual by #DC_EVENT_INCOMING_MSG or #DC_EVENT_MSGS_CHANGED,
- * However, UIs might some things differently, e.g. play a different sound.
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @param chat_id The chat to start a videochat for.
- * @return The ID of the message sent out
- *     or 0 for errors.
- */
-uint32_t dc_send_videochat_invitation (dc_context_t* context, uint32_t chat_id);
 
 
 /**
@@ -2615,7 +2572,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_BACKUP                 251 // deprecated
 #define         DC_QR_BACKUP2                252
 #define         DC_QR_BACKUP_TOO_NEW         255
-#define         DC_QR_WEBRTC_INSTANCE        260 // text1=domain, text2=instance pattern
 #define         DC_QR_PROXY                  271 // text1=address (e.g. "127.0.0.1:9050")
 #define         DC_QR_ADDR                   320 // id=contact
 #define         DC_QR_TEXT                   330 // text1=text
@@ -2668,10 +2624,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  * - DC_QR_BACKUP_TOO_NEW:
  *   show a hint to the user that this backup comes from a newer Delta Chat version
  *   and this device needs an update
- *
- * - DC_QR_WEBRTC_INSTANCE with dc_lot_t::text1=domain:
- *   ask the user if they want to use the given service for video chats;
- *   if so, call dc_set_config_from_qr().
  *
  * - DC_QR_PROXY with dc_lot_t::text1=address:
  *   ask the user if they want to use the given proxy.
@@ -4745,22 +4697,6 @@ char*           dc_msg_get_setupcodebegin     (const dc_msg_t* msg);
 
 
 /**
- * Get URL of a videochat invitation.
- *
- * Videochat invitations are sent out using dc_send_videochat_invitation()
- * and dc_msg_get_viewtype() returns #DC_MSG_VIDEOCHAT_INVITATION for such invitations.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- * @return If the message contains a videochat invitation,
- *     the URL of the invitation is returned.
- *     If the message is no videochat invitation, NULL is returned.
- *     Must be released using dc_str_unref() when done.
- */
-char*           dc_msg_get_videochat_url (const dc_msg_t* msg);
-
-
-/**
  * Gets the error status of the message.
  * If there is no error associated with the message, NULL is returned.
  *
@@ -4780,41 +4716,6 @@ char*           dc_msg_get_videochat_url (const dc_msg_t* msg);
  * @return An error or NULL. The result must be released using dc_str_unref().
  */
 char*           dc_msg_get_error               (const dc_msg_t* msg);
-
-
-/**
- * Get type of videochat.
- *
- * Calling this functions only makes sense for messages of type #DC_MSG_VIDEOCHAT_INVITATION,
- * in this case, if `basicwebrtc:` as of https://github.com/cracker0dks/basicwebrtc or `jitsi`
- * were used to initiate the videochat,
- * dc_msg_get_videochat_type() returns the corresponding type.
- *
- * The videochat URL can be retrieved using dc_msg_get_videochat_url().
- * To check if a message is a videochat invitation at all, check the message type for #DC_MSG_VIDEOCHAT_INVITATION.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- * @return Type of the videochat as of DC_VIDEOCHATTYPE_BASICWEBRTC, DC_VIDEOCHATTYPE_JITSI or DC_VIDEOCHATTYPE_UNKNOWN.
- *
- * Example:
- * ~~~
- * if (dc_msg_get_viewtype(msg) == DC_MSG_VIDEOCHAT_INVITATION) {
- *   if (dc_msg_get_videochat_type(msg) == DC_VIDEOCHATTYPE_BASICWEBRTC) {
- *       // videochat invitation that we ship a client for
- *   } else {
- *       // use browser for videochat - or add an additional check for DC_VIDEOCHATTYPE_JITSI
- *   }
- * } else {
- *    // not a videochat invitation
- * }
- * ~~~
- */
-int dc_msg_get_videochat_type (const dc_msg_t* msg);
-
-#define DC_VIDEOCHATTYPE_UNKNOWN     0
-#define DC_VIDEOCHATTYPE_BASICWEBRTC 1
-#define DC_VIDEOCHATTYPE_JITSI       2
 
 
 /**
@@ -5713,17 +5614,6 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  * and retrieved via dc_msg_get_file().
  */
 #define DC_MSG_FILE      60
-
-
-/**
- * Message indicating an incoming or outgoing videochat.
- * The message was created via dc_send_videochat_invitation() on this or a remote device.
- *
- * Typically, such messages are rendered differently by the UIs,
- * e.g. contain a button to join the videochat.
- * The URL for joining can be retrieved using dc_msg_get_videochat_url().
- */
-#define DC_MSG_VIDEOCHAT_INVITATION 70
 
 
 /**
@@ -7275,17 +7165,6 @@ void dc_event_unref(dc_event_t* event);
 
 /// @deprecated Deprecated 2021-01-30, DC_STR_EPHEMERAL_WEEKS is used instead.
 #define DC_STR_EPHEMERAL_FOUR_WEEKS       81
-
-/// "Video chat invitation"
-///
-/// Used in summaries.
-#define DC_STR_VIDEOCHAT_INVITATION       82
-
-/// "You are invited to a video chat, click %1$s to join."
-///
-/// Used as message text of outgoing video chat invitations.
-/// - %1$s will be replaced by the URL of the video chat
-#define DC_STR_VIDEOCHAT_INVITE_MSG_BODY  83
 
 /// "Error: %1$s"
 ///
