@@ -193,6 +193,8 @@ impl Iroh {
     /// as it is the only way to reach the node
     /// without global discovery mechanisms.
     pub(crate) async fn get_node_addr(&self) -> Result<NodeAddr> {
+        // Wait until home relay connection is established.
+        let _relay_url = self.router.endpoint().home_relay().initialized().await;
         let mut addr = self.router.endpoint().node_addr().initialized().await;
         addr.direct_addresses = BTreeSet::new();
         debug_assert!(addr.relay_url().is_some());
