@@ -425,19 +425,19 @@ Help keeping us to keep Delta Chat independent and make it more awesome in the f
 https://delta.chat/donate"))]
     DonationRequest = 193,
 
-    #[strum(props(fallback = "Outgoing Call"))]
+    #[strum(props(fallback = "Outgoing call"))]
     OutgoingCall = 194,
 
-    #[strum(props(fallback = "Incoming Call"))]
+    #[strum(props(fallback = "Incoming call"))]
     IncomingCall = 195,
 
-    #[strum(props(fallback = "Declined Call"))]
+    #[strum(props(fallback = "Declined call"))]
     DeclinedCall = 196,
 
-    #[strum(props(fallback = "Canceled Call"))]
+    #[strum(props(fallback = "Canceled call"))]
     CanceledCall = 197,
 
-    #[strum(props(fallback = "Missed Call"))]
+    #[strum(props(fallback = "Missed call"))]
     MissedCall = 198,
 
     #[strum(props(fallback = "You left the channel."))]
@@ -827,27 +827,27 @@ pub(crate) async fn donation_request(context: &Context) -> String {
     translated(context, StockMessage::DonationRequest).await
 }
 
-/// Stock string: `Outgoing Call`.
+/// Stock string: `Outgoing call`.
 pub(crate) async fn outgoing_call(context: &Context) -> String {
     translated(context, StockMessage::OutgoingCall).await
 }
 
-/// Stock string: `Incoming Call`.
+/// Stock string: `Incoming call`.
 pub(crate) async fn incoming_call(context: &Context) -> String {
     translated(context, StockMessage::IncomingCall).await
 }
 
-/// Stock string: `Declined Call`.
+/// Stock string: `Declined call`.
 pub(crate) async fn declined_call(context: &Context) -> String {
     translated(context, StockMessage::DeclinedCall).await
 }
 
-/// Stock string: `Canceled Call`.
+/// Stock string: `Canceled call`.
 pub(crate) async fn canceled_call(context: &Context) -> String {
     translated(context, StockMessage::CanceledCall).await
 }
 
-/// Stock string: `Missed Call`.
+/// Stock string: `Missed call`.
 pub(crate) async fn missed_call(context: &Context) -> String {
     translated(context, StockMessage::MissedCall).await
 }

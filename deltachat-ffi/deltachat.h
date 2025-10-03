@@ -1222,7 +1222,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * Possible actions during ringing:
  *
  * - caller cancels the call using dc_end_call():
- *   callee receives #DC_EVENT_CALL_ENDED and has a "Missed Call"
+ *   callee receives #DC_EVENT_CALL_ENDED and has a "Missed call"
  *
  * - callee accepts using dc_accept_incoming_call():
  *   caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED.
@@ -1242,8 +1242,8 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
  *   in case caller got offline without being able to send cancellation message.
- *   for caller, this is a "Canceled Call";
- *   for callee, this is a "Missed Call"
+ *   for caller, this is a "Canceled call";
+ *   for callee, this is a "Missed call"
  *
  * Actions during the call:
  *
@@ -7850,19 +7850,19 @@ void dc_event_unref(dc_event_t* event);
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193
 
-/// "Outgoing Call"
+/// "Outgoing call"
 #define DC_STR_OUTGOING_CALL 194
 
-/// "Incoming Call"
+/// "Incoming call"
 #define DC_STR_INCOMING_CALL 195
 
-/// "Declined Call"
+/// "Declined call"
 #define DC_STR_DECLINED_CALL 196
 
-/// "Canceled Call"
+/// "Canceled call"
 #define DC_STR_CANCELED_CALL 197
 
-/// "Missed Call"
+/// "Missed call"
 #define DC_STR_MISSED_CALL 198
 
 /// "You left the channel."
