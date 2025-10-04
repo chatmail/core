@@ -34,7 +34,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux
@@ -58,7 +58,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}
@@ -109,7 +109,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android
@@ -136,7 +136,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
 
       - name: Download Linux aarch64 binary
         uses: actions/download-artifact@v5
