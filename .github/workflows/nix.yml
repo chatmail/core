@@ -5,10 +5,12 @@ on:
     paths:
       - flake.nix
       - flake.lock
+      - .github/workflows/nix.yml
   push:
     paths:
       - flake.nix
       - flake.lock
+      - .github/workflows/nix.yml
     branches:
       - main
 
