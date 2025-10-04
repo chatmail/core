@@ -158,6 +158,11 @@ required-features = ["internals"]
 harness = false
 
 [[bench]]
+name = "benchmark_decrypting"
+required-features = ["internals"]
+harness = false
+
+[[bench]]
 name = "get_chat_msgs"
 harness = false
 

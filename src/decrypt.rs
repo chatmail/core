@@ -10,17 +10,19 @@ use crate::pgp;
 
 /// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
 ///
-/// If successful and the message is encrypted, returns decrypted body.
+/// If successful and the message was encrypted,
+/// returns the decrypted and decompressed message.
 pub fn try_decrypt<'a>(
     mail: &'a ParsedMail<'a>,
     private_keyring: &'a [SignedSecretKey],
+    shared_secrets: &[String],
 ) -> Result<Option<::pgp::composed::Message<'static>>> {
     let Some(encrypted_data_part) = get_encrypted_mime(mail) else {
         return Ok(None);
     };
 
     let data = encrypted_data_part.get_body_raw()?;
-    let msg = pgp::pk_decrypt(data, private_keyring)?;
+    let msg = pgp::decrypt(data, private_keyring, shared_secrets)?;
 
     Ok(Some(msg))
 }
