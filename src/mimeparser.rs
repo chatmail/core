@@ -763,7 +763,10 @@ impl MimeMessage {
                     | Viewtype::Vcard
                     | Viewtype::File
                     | Viewtype::Webxdc => true,
-                    Viewtype::Unknown | Viewtype::Text | Viewtype::Call => false,
+                    Viewtype::Unknown
+                    | Viewtype::Text
+                    | Viewtype::DeprecatedVideochatInvitation
+                    | Viewtype::Call => false,
                 })
         {
             let mut parts = std::mem::take(&mut self.parts);

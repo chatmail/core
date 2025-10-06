@@ -168,6 +168,7 @@ impl Message {
     /// Returns a summary text without "Forwarded:" prefix.
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
         let (emoji, type_name, type_file, append_text);
+        debug_assert_ne!(self.viewtype, Viewtype::DeprecatedVideochatInvitation);
         match self.viewtype {
             Viewtype::Image => {
                 emoji = Some("📷");
@@ -248,7 +249,7 @@ impl Message {
                 type_file = None;
                 append_text = false
             }
-            Viewtype::Text | Viewtype::Unknown => {
+            Viewtype::Text | Viewtype::DeprecatedVideochatInvitation | Viewtype::Unknown => {
                 emoji = None;
                 if self.param.get_cmd() == SystemMessage::LocationOnly {
                     type_name = Some(stock_str::location(context).await);

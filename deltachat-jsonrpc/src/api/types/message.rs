@@ -325,7 +325,7 @@ impl From<Viewtype> for MessageViewtype {
     fn from(viewtype: Viewtype) -> Self {
         match viewtype {
             Viewtype::Unknown => MessageViewtype::Unknown,
-            Viewtype::Text => MessageViewtype::Text,
+            Viewtype::Text | Viewtype::DeprecatedVideochatInvitation => MessageViewtype::Text,
             Viewtype::Image => MessageViewtype::Image,
             Viewtype::Gif => MessageViewtype::Gif,
             Viewtype::Sticker => MessageViewtype::Sticker,

@@ -457,6 +457,7 @@ pub struct Message {
 impl Message {
     /// Creates a new message with given view type.
     pub fn new(viewtype: Viewtype) -> Self {
+        debug_assert_ne!(viewtype, Viewtype::DeprecatedVideochatInvitation);
         Message {
             viewtype,
             rfc724_mid: create_outgoing_rfc724_mid(),
@@ -552,6 +553,11 @@ impl Message {
                         }
                         _ => String::new(),
                     };
+                    let viewtype: Viewtype = match row.get("type")? {
+                        Viewtype::DeprecatedVideochatInvitation => Viewtype::Text,
+                        viewtype => viewtype,
+                    };
+
                     let msg = Message {
                         id: row.get("id")?,
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
@@ -566,7 +572,7 @@ impl Message {
                         timestamp_rcvd: row.get("timestamp_rcvd")?,
                         ephemeral_timer: row.get("ephemeral_timer")?,
                         ephemeral_timestamp: row.get("ephemeral_timestamp")?,
-                        viewtype: row.get("type")?,
+                        viewtype,
                         state: state.with_mdns(mdn_msg_id.is_some()),
                         download_state: row.get("download_state")?,
                         error: Some(row.get::<_, String>("error")?)
@@ -583,6 +589,7 @@ impl Message {
                             .get::<_, Option<Blocked>>("blocked")?
                             .unwrap_or_default(),
                     };
+                    debug_assert_ne!(msg.viewtype, Viewtype::DeprecatedVideochatInvitation);
                     Ok(msg)
                 },
             )
@@ -2196,6 +2203,14 @@ pub enum Viewtype {
     /// and retrieved via dc_msg_get_file().
     File = 60,
 
+    /// Message is an invitation to a videochat.
+    ///
+    /// This type is deprecated and should not be used
+    /// for new messages.
+    /// It should also never be returned from the API
+    /// and the messages should appear as Text instead.
+    DeprecatedVideochatInvitation = 70,
+
     /// Message is an incoming or outgoing call.
     Call = 71,
 
@@ -2221,6 +2236,7 @@ impl Viewtype {
             Viewtype::Voice => true,
             Viewtype::Video => true,
             Viewtype::File => true,
+            Viewtype::DeprecatedVideochatInvitation => false,
             Viewtype::Call => false,
             Viewtype::Webxdc => true,
             Viewtype::Vcard => true,
