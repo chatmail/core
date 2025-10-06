@@ -345,7 +345,7 @@ impl ChatId {
 
         info!(
             context,
-            "Created group/mailinglist '{}' grpid={} as {}, blocked={}, protected={create_protected}.",
+            "Created group/broadcast '{}' grpid={} as {}, blocked={}, protected={create_protected}.",
             &grpname,
             grpid,
             chat_id,

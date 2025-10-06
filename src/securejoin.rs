@@ -369,8 +369,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ========================================================*/
             bob::handle_auth_required(context, mime_message).await
         }
-        // TODO possibly rename vb-request* to vg-request* or vc-request*
-        "vg-request-with-auth" | "vc-request-with-auth" | "vb-request-with-auth" => {
+        "vg-request-with-auth" | "vc-request-with-auth" => {
             /*==========================================================
             ====              Alice - the inviter side              ====
             ====   Steps 5+6 in "Setup verified contact" protocol   ====
@@ -450,7 +449,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 let chat = Chat::load_from_db(context, joining_chat_id).await?;
 
                 inviter_progress(context, contact_id, joining_chat_id, chat.typ)?;
-                if chat.typ == Chattype::InBroadcast {
+                if chat.typ == Chattype::OutBroadcast {
                     // For broadcasts, we don't want to delete the message,
                     // because the other device should also internally add the member
                     // and see the key (because it won't see the member via autocrypt-gossip).
@@ -489,7 +488,7 @@ pub(crate) async fn handle_securejoin_handshake(
             });
             Ok(HandshakeMessage::Ignore)
         }
-        "vg-member-added" | "vb-member-added" => {
+        "vg-member-added" => {
             let Some(member_added) = mime_message.get_header(HeaderDef::ChatGroupMemberAdded)
             else {
                 warn!(
@@ -556,15 +555,8 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     if !matches!(
         step,
-        "vg-request-with-auth"
-            | "vb-request-with-auth"
-            | "vc-request-with-auth"
-            | "vg-member-added"
-            | "vc-contact-confirm"
+        "vg-request-with-auth" | "vc-request-with-auth" | "vg-member-added" | "vc-contact-confirm"
     ) {
-        // `vb-member-added` can be ignored
-        // because all devices receive the `vb-request-with-auth` message
-        // and mark Bob as verified because of this.
         return Ok(HandshakeMessage::Ignore);
     };
 
@@ -607,7 +599,7 @@ pub(crate) async fn observe_securejoin_on_other_device(
         {
             Chattype::Single
         } else if mime_message.get_header(HeaderDef::ListId).is_some() {
-            Chattype::InBroadcast
+            Chattype::OutBroadcast
         } else {
             Chattype::Group
         };

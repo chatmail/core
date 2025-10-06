@@ -326,9 +326,9 @@ pub(crate) async fn send_handshake_message(
 
 /// Identifies the SecureJoin handshake messages Bob can send.
 pub(crate) enum BobHandshakeMsg {
-    /// vc-request, vg-request, or vb-request
+    /// vc-request or vg-request
     Request,
-    /// vc-request-with-auth, vg-request-with-auth, or vb-request-with-auth
+    /// vc-request-with-auth or vg-request-with-auth
     RequestWithAuth,
 }
 
@@ -352,12 +352,12 @@ impl BobHandshakeMsg {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
-                QrInvite::Broadcast { .. } => "vb-request",
+                QrInvite::Broadcast { .. } => "vg-request",
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
-                QrInvite::Broadcast { .. } => "vb-request-with-auth",
+                QrInvite::Broadcast { .. } => "vg-request-with-auth",
             },
         }
     }

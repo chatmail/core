@@ -978,7 +978,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
 
         if not inviter_side:
             leave_msg = chat_msgs.pop(0).get_snapshot()
-            assert leave_msg.text == "You left."
+            assert leave_msg.text == "You left the channel."
 
         assert len(chat_msgs) == 0
 

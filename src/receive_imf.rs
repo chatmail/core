@@ -710,12 +710,13 @@ pub(crate) async fn receive_imf_inner(
             handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
                 .context("error in Secure-Join message handling")?
-        } else {
-            let to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
+        } else if let Some(to_id) = to_ids.first().copied().flatten() {
             // handshake may mark contacts as verified and must be processed before chats are created
             observe_securejoin_on_other_device(context, &mime_parser, to_id)
                 .await
                 .context("error in Secure-Join watching")?
+        } else {
+            securejoin::HandshakeMessage::Propagate
         };
 
         match res {
@@ -3513,7 +3514,12 @@ async fn apply_out_broadcast_changes(
         .await?;
     }
 
-    if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
+    if let Some(_added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        // This message can be safely ignored,
+        // because the only way to add a member is by having them scan a QR code.
+        // All devices will receive Bob's vg-request-with-auth message and add him to the channel.
+        better_msg.get_or_insert("".to_string());
+    } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
         send_event_chat_modified = true;
         let removed_id = lookup_key_contact_by_fingerprint(context, removed_fpr).await?;
         if removed_id == Some(from_id) {
@@ -3533,9 +3539,6 @@ async fn apply_out_broadcast_changes(
             }
         }
     }
-    // No need to check for ChatGroupMemberAdded:
-    // The only way to add a member is by having them scan a QR code.
-    // All devices will receive Bob's vb-request-with-auth message and add him to the channel.
 
     if send_event_chat_modified {
         context.emit_event(EventType::ChatModified(chat.id));

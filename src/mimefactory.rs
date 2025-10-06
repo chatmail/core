@@ -579,13 +579,11 @@ impl MimeFactory {
             //   messages are auto-sent unlike usual unencrypted messages.
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
-                || step == "vb-request-with-auth"
-                // Note that for "vg-member-added" and "vb-member-added",
+                // Note that for "vg-member-added"
                 // get_cmd() returns `MemberAddedToGroup` rather than `SecurejoinMessage`,
                 // so, it wouldn't actually be necessary to have them in the list here.
                 // Still, they are here for completeness.
                 || step == "vg-member-added"
-                || step == "vb-member-added"
                 || step == "vc-contact-confirm"
         }
     }
@@ -828,7 +826,7 @@ impl MimeFactory {
         } else if let Loaded::Message { msg, .. } = &self.loaded {
             if msg.param.get_cmd() == SystemMessage::SecurejoinMessage {
                 let step = msg.param.get(Param::Arg).unwrap_or_default();
-                if step != "vg-request" && step != "vc-request" && step != "vb-request" {
+                if step != "vg-request" && step != "vc-request" {
                     headers.push((
                         "Auto-Submitted",
                         mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
@@ -1476,12 +1474,8 @@ impl MimeFactory {
                         ));
                     }
                     if 0 != msg.param.get_int(Param::Arg2).unwrap_or_default() & DC_FROM_HANDSHAKE {
-                        let step = match chat.typ {
-                            Chattype::Group => "vg-member-added",
-                            Chattype::OutBroadcast => "vb-member-added",
-                            _ => bail!("Wrong chattype {}", chat.typ),
-                        };
-                        info!(context, "Sending secure-join message {:?}.", step,);
+                        let step = "vg-member-added";
+                        info!(context, "Sending secure-join message {:?}.", step);
                         headers.push((
                             "Secure-Join",
                             mail_builder::headers::raw::Raw::new(step.to_string()).into(),
@@ -1560,10 +1554,7 @@ impl MimeFactory {
                     let param2 = msg.param.get(Param::Arg2).unwrap_or_default();
                     if !param2.is_empty() {
                         headers.push((
-                            if step == "vg-request-with-auth"
-                                || step == "vc-request-with-auth"
-                                || step == "vb-request-with-auth"
-                            {
+                            if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
                                 "Secure-Join-Auth"
                             } else {
                                 "Secure-Join-Invitenumber"
@@ -1902,9 +1893,8 @@ fn hidden_recipients() -> Address<'static> {
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
     chat.typ == Chattype::OutBroadcast
-        // The only `SystemMessage::SecurejoinMessage` that is ever sent into a broadcast,
-        // which is `vb-request-with-auth`,
-        // should be encrypted with the AUTH token rather than the broadcast secret.
+        // Securejoin messages that are sent into a broadcast
+        // are encrypted asymmetrically:
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
         // The member-added message in a broadcast must be asymmetrically encrypted,
         // because the newly-added member doesn't know the broadcast shared secret yet:

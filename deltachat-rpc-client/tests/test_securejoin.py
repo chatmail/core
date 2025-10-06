@@ -137,7 +137,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     bob.wait_for_securejoin_joiner_success()
     alice_chat.send_text("Hello everyone!")
 
-    def wait_for_group_messages(ac):
+    def wait_for_broadcast_messages(ac):
         snapshot = ac.wait_for_incoming_msg().get_snapshot()
         assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
 
@@ -194,7 +194,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
             assert SpecialContactId.SELF in chat_contacts
             assert chat_snapshot.self_in_group
 
-    wait_for_group_messages(bob)
+    wait_for_broadcast_messages(bob)
 
     check_account(alice, alice.create_contact(bob), inviter_side=True)
     check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
@@ -219,7 +219,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     # Start second Bob device, if it wasn't started already.
     bob2.start_io()
     bob2.wait_for_securejoin_joiner_success()
-    wait_for_group_messages(bob2)
+    wait_for_broadcast_messages(bob2)
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
     # The QR code token is synced, so alice2 must be able to handle join requests.
