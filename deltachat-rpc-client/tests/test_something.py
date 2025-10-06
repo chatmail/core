@@ -951,7 +951,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
     assert member_added_msg.get_snapshot().text == f"Member Me added by {alice.get_config('addr')}."
 
     def get_broadcast(ac):
-        chat = ac.get_chatlist()[0]
+        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
         assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
         return chat
 

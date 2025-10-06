@@ -137,19 +137,28 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     bob.wait_for_securejoin_joiner_success()
     alice_chat.send_text("Hello everyone!")
 
+    def get_broadcast(ac):
+        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        return chat
+
     def wait_for_broadcast_messages(ac):
+        chat = get_broadcast(ac)
+
         snapshot = ac.wait_for_incoming_msg().get_snapshot()
         assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+        assert snapshot.chat_id == chat.id
 
         snapshot = ac.wait_for_incoming_msg().get_snapshot()
         assert snapshot.text == "Hello everyone!"
+        assert snapshot.chat_id == chat.id
 
     def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
         # Check that the chat partner is verified.
         contact_snapshot = contact.get_snapshot()
         assert contact_snapshot.is_verified
 
-        chat = ac.get_chatlist()[0]
+        chat = get_broadcast(ac)
         chat_msgs = chat.get_messages()
 
         if please_wait_info_msg:
@@ -232,7 +241,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
 
-    alice2.get_chatlist()[0].get_messages()[2].resend()
+    get_broadcast(alice2).get_messages()[2].resend()
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello everyone!"
 
