@@ -747,3 +747,21 @@ async fn test_send_empty_file() -> Result<()> {
     assert_eq!(bob_received_msg.get_viewtype(), Viewtype::File);
     Ok(())
 }
+
+/// Tests that viewtype 70
+/// which previously corresponded to videochat invitations,
+/// is loaded as unknown viewtype without errors.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_load_unknown_viewtype() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let msg_id = tcm.send_recv(alice, bob, "Hello!").await.id;
+    bob.sql
+        .execute("UPDATE msgs SET type=70 WHERE id=?", (msg_id,))
+        .await?;
+    let bob_msg = Message::load_from_db(bob, msg_id).await?;
+    assert_eq!(bob_msg.get_viewtype(), Viewtype::Unknown);
+    Ok(())
+}
