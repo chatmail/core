@@ -26,7 +26,7 @@ use crate::key::{DcKey, Fingerprint};
 #[cfg(test)]
 pub(crate) const HEADER_AUTOCRYPT: &str = "autocrypt-prefer-encrypt";
 
-pub const HEADER_SETUPCODE: &str = "passphrase-begin";
+pub(crate) const HEADER_SETUPCODE: &str = "passphrase-begin";
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
