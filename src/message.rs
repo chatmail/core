@@ -566,7 +566,7 @@ impl Message {
                         timestamp_rcvd: row.get("timestamp_rcvd")?,
                         ephemeral_timer: row.get("ephemeral_timer")?,
                         ephemeral_timestamp: row.get("ephemeral_timestamp")?,
-                        viewtype: row.get("type")?,
+                        viewtype: row.get("type").unwrap_or_default(),
                         state: state.with_mdns(mdn_msg_id.is_some()),
                         download_state: row.get("download_state")?,
                         error: Some(row.get::<_, String>("error")?)
