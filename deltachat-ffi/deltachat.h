@@ -458,12 +458,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    The library uses the `media_quality` setting to use different defaults
  *                    for recoding images sent with type #DC_MSG_IMAGE.
  *                    If needed, recoding other file types is up to the UI.
- * - `webrtc_instance` = webrtc instance to use for videochats in the form
- *                    `[basicwebrtc:|jitsi:]https://example.com/subdir#roomname=$ROOM`
- *                    if the URL is prefixed by `basicwebrtc`, the server is assumed to be of the type
- *                    https://github.com/cracker0dks/basicwebrtc which some UIs have native support for.
- *                    The type `jitsi:` may be handled by external apps.
- *                    If no type is prefixed, the videochat is handled completely in a browser.
  * - `bot`          = Set to "1" if this is a bot.
  *                    Prevents adding the "Device messages" and "Saved messages" chats,
  *                    adds Auto-Submitted header to outgoing messages,
@@ -575,11 +569,10 @@ int             dc_set_stock_translation(dc_context_t* context, uint32_t stock_i
 /**
  * Set configuration values from a QR code.
  * Before this function is called, dc_check_qr() should confirm the type of the
- * QR code is DC_QR_ACCOUNT, DC_QR_LOGIN or DC_QR_WEBRTC_INSTANCE.
+ * QR code is DC_QR_ACCOUNT or DC_QR_LOGIN.
  *
  * Internally, the function will call dc_set_config() with the appropriate keys,
- * e.g. `addr` and `mail_pw` for DC_QR_ACCOUNT and DC_QR_LOGIN
- * or `webrtc_instance` for DC_QR_WEBRTC_INSTANCE.
+ * e.g. `addr` and `mail_pw` for DC_QR_ACCOUNT and DC_QR_LOGIN.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -1053,42 +1046,6 @@ void            dc_send_edit_request         (dc_context_t* context, uint32_t ms
 
 
 /**
- * Send invitation to a videochat.
- *
- * This function reads the `webrtc_instance` config value,
- * may check that the server is working in some way
- * and creates a unique room for this chat, if needed doing a TOKEN roundtrip for that.
- *
- * After that, the function sends out a message that contains information to join the room:
- *
- * - To allow non-delta-clients to join the chat,
- *   the message contains a text-area with some descriptive text
- *   and a URL that can be opened in a supported browser to join the videochat.
- *
- * - delta-clients can get all information needed from
- *   the message object, using e.g.
- *   dc_msg_get_videochat_url() and check dc_msg_get_viewtype() for #DC_MSG_VIDEOCHAT_INVITATION.
- *
- * dc_send_videochat_invitation() is blocking and may take a while,
- * so the UIs will typically call the function from within a thread.
- * Moreover, UIs will typically enter the room directly without an additional click on the message,
- * for this purpose, the function returns the message id directly.
- *
- * As for other messages sent, this function
- * sends the event #DC_EVENT_MSGS_CHANGED on success, the message has a delivery state, and so on.
- * The recipient will get noticed by the call as usual by #DC_EVENT_INCOMING_MSG or #DC_EVENT_MSGS_CHANGED,
- * However, UIs might some things differently, e.g. play a different sound.
- *
- * @memberof dc_context_t
- * @param context The context object.
- * @param chat_id The chat to start a videochat for.
- * @return The ID of the message sent out
- *     or 0 for errors.
- */
-uint32_t dc_send_videochat_invitation (dc_context_t* context, uint32_t chat_id);
-
-
-/**
  * A webxdc instance sends a status update to its other members.
  *
  * In JS land, that would be mapped to something as:
@@ -1222,7 +1179,7 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  * Possible actions during ringing:
  *
  * - caller cancels the call using dc_end_call():
- *   callee receives #DC_EVENT_CALL_ENDED and has a "Missed Call"
+ *   callee receives #DC_EVENT_CALL_ENDED and has a "Missed call"
  *
  * - callee accepts using dc_accept_incoming_call():
  *   caller receives #DC_EVENT_OUTGOING_CALL_ACCEPTED.
@@ -1233,16 +1190,17 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *   callee's other devices receive #DC_EVENT_CALL_ENDED and have a "Canceled Call",
  *
  * - callee is already in a call:
- *   in this case, UI may decide to show a notification instead of ringing.
- *   otherwise, this is same as timeout
+ *   what to do depends on the capabilities of UI to handle calls.
+ *   if UI cannot handle multiple calls, an easy approach would be to decline the new call automatically
+ *   and make that visble to the user in the call, e.g. by a notification
  *
  * - timeout:
  *   after 1 minute without action,
  *   caller and callee receive #DC_EVENT_CALL_ENDED
  *   to prevent endless ringing of callee
  *   in case caller got offline without being able to send cancellation message.
- *   for caller, this is a "Canceled Call";
- *   for callee, this is a "Missed Call"
+ *   for caller, this is a "Canceled call";
+ *   for callee, this is a "Missed call"
  *
  * Actions during the call:
  *
@@ -1251,6 +1209,13 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *
  * - callee ends the call using dc_end_call():
  *   caller receives #DC_EVENT_CALL_ENDED
+ *
+ * Contact request handling:
+ *
+ * - placing or accepting calls implies accepting contact requests
+ *
+ * - ending a call does not accept a contact request;
+ *   instead, the call will timeout on all affected devices.
  *
  * Note, that the events are for updating the call screen,
  * possible status messages are added and updated as usual, including the known events.
@@ -1279,6 +1244,7 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
  * either #DC_EVENT_OUTGOING_CALL_ACCEPTED or #DC_EVENT_INCOMING_CALL_ACCEPTED.
  *
  * If the call is already accepted or ended, nothing happens.
+ * If the chat is a contact request, it is accepted implicitly.
  *
  * @memberof dc_context_t
  * @param context The context object.
@@ -1299,7 +1265,12 @@ uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t ch
   * Unaccepted calls ended by the callee are a "decline".
   * If the call was accepted, this is a "hangup".
   *
-  * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED.
+  * All participant devices get informed about the ended call via #DC_EVENT_CALL_ENDED unless they are contact requests.
+  * For contact requests, the call times out on all other affected devices.
+  *
+  * If the message ID is wrong or does not exist for whatever reasons, nothing happens.
+  * Therefore, and for resilience, UI should remove the call UI directly when calling
+  * this function and not only on the event.
   *
   * If the call is already ended, nothing happens.
   *
@@ -2601,7 +2572,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_BACKUP                 251 // deprecated
 #define         DC_QR_BACKUP2                252
 #define         DC_QR_BACKUP_TOO_NEW         255
-#define         DC_QR_WEBRTC_INSTANCE        260 // text1=domain, text2=instance pattern
 #define         DC_QR_PROXY                  271 // text1=address (e.g. "127.0.0.1:9050")
 #define         DC_QR_ADDR                   320 // id=contact
 #define         DC_QR_TEXT                   330 // text1=text
@@ -2654,10 +2624,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  * - DC_QR_BACKUP_TOO_NEW:
  *   show a hint to the user that this backup comes from a newer Delta Chat version
  *   and this device needs an update
- *
- * - DC_QR_WEBRTC_INSTANCE with dc_lot_t::text1=domain:
- *   ask the user if they want to use the given service for video chats;
- *   if so, call dc_set_config_from_qr().
  *
  * - DC_QR_PROXY with dc_lot_t::text1=address:
  *   ask the user if they want to use the given proxy.
@@ -4731,22 +4697,6 @@ char*           dc_msg_get_setupcodebegin     (const dc_msg_t* msg);
 
 
 /**
- * Get URL of a videochat invitation.
- *
- * Videochat invitations are sent out using dc_send_videochat_invitation()
- * and dc_msg_get_viewtype() returns #DC_MSG_VIDEOCHAT_INVITATION for such invitations.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- * @return If the message contains a videochat invitation,
- *     the URL of the invitation is returned.
- *     If the message is no videochat invitation, NULL is returned.
- *     Must be released using dc_str_unref() when done.
- */
-char*           dc_msg_get_videochat_url (const dc_msg_t* msg);
-
-
-/**
  * Gets the error status of the message.
  * If there is no error associated with the message, NULL is returned.
  *
@@ -4766,41 +4716,6 @@ char*           dc_msg_get_videochat_url (const dc_msg_t* msg);
  * @return An error or NULL. The result must be released using dc_str_unref().
  */
 char*           dc_msg_get_error               (const dc_msg_t* msg);
-
-
-/**
- * Get type of videochat.
- *
- * Calling this functions only makes sense for messages of type #DC_MSG_VIDEOCHAT_INVITATION,
- * in this case, if `basicwebrtc:` as of https://github.com/cracker0dks/basicwebrtc or `jitsi`
- * were used to initiate the videochat,
- * dc_msg_get_videochat_type() returns the corresponding type.
- *
- * The videochat URL can be retrieved using dc_msg_get_videochat_url().
- * To check if a message is a videochat invitation at all, check the message type for #DC_MSG_VIDEOCHAT_INVITATION.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- * @return Type of the videochat as of DC_VIDEOCHATTYPE_BASICWEBRTC, DC_VIDEOCHATTYPE_JITSI or DC_VIDEOCHATTYPE_UNKNOWN.
- *
- * Example:
- * ~~~
- * if (dc_msg_get_viewtype(msg) == DC_MSG_VIDEOCHAT_INVITATION) {
- *   if (dc_msg_get_videochat_type(msg) == DC_VIDEOCHATTYPE_BASICWEBRTC) {
- *       // videochat invitation that we ship a client for
- *   } else {
- *       // use browser for videochat - or add an additional check for DC_VIDEOCHATTYPE_JITSI
- *   }
- * } else {
- *    // not a videochat invitation
- * }
- * ~~~
- */
-int dc_msg_get_videochat_type (const dc_msg_t* msg);
-
-#define DC_VIDEOCHATTYPE_UNKNOWN     0
-#define DC_VIDEOCHATTYPE_BASICWEBRTC 1
-#define DC_VIDEOCHATTYPE_JITSI       2
 
 
 /**
@@ -5702,18 +5617,19 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
 
 
 /**
- * Message indicating an incoming or outgoing videochat.
- * The message was created via dc_send_videochat_invitation() on this or a remote device.
- *
- * Typically, such messages are rendered differently by the UIs,
- * e.g. contain a button to join the videochat.
- * The URL for joining can be retrieved using dc_msg_get_videochat_url().
- */
-#define DC_MSG_VIDEOCHAT_INVITATION 70
-
-
-/**
  * Message indicating an incoming or outgoing call.
+ *
+ * These messages are created by dc_place_outgoing_call()
+ * and should be rendered by UI similar to text messages,
+ * maybe with some "phone icon" at the side.
+ *
+ * The message text is updated as needed
+ * and UI will be informed via #DC_EVENT_MSGS_CHANGED as usual.
+ *
+ * Do not start ringing when seeing this message;
+ * the mesage may belong e.g. to an old missed call.
+ *
+ * Instead, ringing should start on the event #DC_EVENT_INCOMING_CALL
  */
 #define DC_MSG_CALL 71
 
@@ -6721,7 +6637,8 @@ void dc_event_unref(dc_event_t* event);
  *
  * Together with this event,
  * a message of type #DC_MSG_CALL is added to the corresponding chat;
- * this message is announced and updated by the usual even as #DC_EVENT_MSGS_CHANGED.
+ * this message is announced and updated by the usual event as #DC_EVENT_MSGS_CHANGED,
+ * there is usually no need to take care of this message from any of the CALL events.
  *
  * If user takes action, dc_accept_incoming_call() or dc_end_call() should be called.
  *
@@ -6738,8 +6655,7 @@ void dc_event_unref(dc_event_t* event);
  * The callee accepted an incoming call on this or another device using dc_accept_incoming_call().
  * The caller gets the event #DC_EVENT_OUTGOING_CALL_ACCEPTED at the same time.
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  */
@@ -6748,8 +6664,7 @@ void dc_event_unref(dc_event_t* event);
 /**
  * A call placed using dc_place_outgoing_call() was accepted by the callee using dc_accept_incoming_call().
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  * @param data2 (char*) accept_call_info, text passed to dc_accept_incoming_call()
@@ -6757,11 +6672,10 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
 
 /**
- * An incoming or outgoing call was ended using dc_end_call().
+ * An incoming or outgoing call was ended using dc_end_call() on this or another device, by caller or callee.
  * Moreover, the event is sent when the call was not accepted within 1 minute timeout.
  *
- * The event is sent unconditionally when the corresponding message is received.
- * UI should only take action in case call UI was opened before, otherwise the event should be ignored.
+ * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
  */
@@ -7252,17 +7166,6 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated Deprecated 2021-01-30, DC_STR_EPHEMERAL_WEEKS is used instead.
 #define DC_STR_EPHEMERAL_FOUR_WEEKS       81
 
-/// "Video chat invitation"
-///
-/// Used in summaries.
-#define DC_STR_VIDEOCHAT_INVITATION       82
-
-/// "You are invited to a video chat, click %1$s to join."
-///
-/// Used as message text of outgoing video chat invitations.
-/// - %1$s will be replaced by the URL of the video chat
-#define DC_STR_VIDEOCHAT_INVITE_MSG_BODY  83
-
 /// "Error: %1$s"
 ///
 /// Used in error strings.
@@ -7561,7 +7464,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used in status messages.
 #define DC_STR_REMOVE_MEMBER_BY_OTHER 131
 
-/// "You left."
+/// "You left the group."
 ///
 /// Used in status messages.
 #define DC_STR_GROUP_LEFT_BY_YOU 132
@@ -7784,6 +7687,12 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced by the provider's domain.
 #define DC_STR_INVALID_UNENCRYPTED_MAIL 174
 
+/// "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions."
+///
+/// Added to the device chat if could not decrypt a new outgoing message (i.e. not when fetching
+/// existing messages). But no more than once a day.
+#define DC_STR_CANT_DECRYPT_OUTGOING_MSGS 175
+
 /// "You reacted %1$s to '%2$s'"
 ///
 /// `%1$s` will be replaced by the reaction, usually an emoji
@@ -7820,23 +7729,32 @@ void dc_event_unref(dc_event_t* event);
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193
 
-/// "Outgoing Call"
+/// "Outgoing call"
 #define DC_STR_OUTGOING_CALL 194
 
-/// "Incoming Call"
+/// "Incoming call"
 #define DC_STR_INCOMING_CALL 195
 
-/// "Declined Call"
+/// "Declined call"
 #define DC_STR_DECLINED_CALL 196
 
-/// "Canceled Call"
+/// "Canceled call"
 #define DC_STR_CANCELED_CALL 197
 
-/// "Missed Call"
+/// "Missed call"
 #define DC_STR_MISSED_CALL 198
 
-/// "Contact". Deprecated, currently unused.
-#define DC_STR_CONTACT 200
+/// "You left the channel."
+///
+/// Used in status messages.
+#define DC_STR_CHANNEL_LEFT_BY_YOU 200
+
+/// "Scan to join channel %1$s"
+///
+/// Subtitle for channel join qrcode svg image generated by the core.
+///
+/// `%1$s` will be replaced with the channel name.
+#define DC_STR_SECURE_JOIN_CHANNEL_QR_DESC  201
 
 /**
  * @}

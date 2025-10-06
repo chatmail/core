@@ -26,82 +26,6 @@ fn test_guess_msgtype_from_suffix() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_parse_webrtc_instance() {
-    let (webrtc_type, url) = Message::parse_webrtc_instance("basicwebrtc:https://foo/bar");
-    assert_eq!(webrtc_type, VideochatType::BasicWebrtc);
-    assert_eq!(url, "https://foo/bar");
-
-    let (webrtc_type, url) = Message::parse_webrtc_instance("bAsIcwEbrTc:url");
-    assert_eq!(webrtc_type, VideochatType::BasicWebrtc);
-    assert_eq!(url, "url");
-
-    let (webrtc_type, url) = Message::parse_webrtc_instance("https://foo/bar?key=val#key=val");
-    assert_eq!(webrtc_type, VideochatType::Unknown);
-    assert_eq!(url, "https://foo/bar?key=val#key=val");
-
-    let (webrtc_type, url) = Message::parse_webrtc_instance("jitsi:https://j.si/foo");
-    assert_eq!(webrtc_type, VideochatType::Jitsi);
-    assert_eq!(url, "https://j.si/foo");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_webrtc_instance() {
-    // webrtc_instance may come from an input field of the ui, be pretty tolerant on input
-    let instance = Message::create_webrtc_instance("https://meet.jit.si/", "123");
-    assert_eq!(instance, "https://meet.jit.si/123");
-
-    let instance = Message::create_webrtc_instance("https://meet.jit.si", "456");
-    assert_eq!(instance, "https://meet.jit.si/456");
-
-    let instance = Message::create_webrtc_instance("meet.jit.si", "789");
-    assert_eq!(instance, "https://meet.jit.si/789");
-
-    let instance = Message::create_webrtc_instance("bla.foo?", "123");
-    assert_eq!(instance, "https://bla.foo?123");
-
-    let instance = Message::create_webrtc_instance("jitsi:bla.foo#", "456");
-    assert_eq!(instance, "jitsi:https://bla.foo#456");
-
-    let instance = Message::create_webrtc_instance("bla.foo#room=", "789");
-    assert_eq!(instance, "https://bla.foo#room=789");
-
-    let instance = Message::create_webrtc_instance("https://bla.foo#room", "123");
-    assert_eq!(instance, "https://bla.foo#room/123");
-
-    let instance = Message::create_webrtc_instance("bla.foo#room$ROOM", "123");
-    assert_eq!(instance, "https://bla.foo#room123");
-
-    let instance = Message::create_webrtc_instance("bla.foo#room=$ROOM&after=cont", "234");
-    assert_eq!(instance, "https://bla.foo#room=234&after=cont");
-
-    let instance = Message::create_webrtc_instance("  meet.jit .si ", "789");
-    assert_eq!(instance, "https://meet.jit.si/789");
-
-    let instance = Message::create_webrtc_instance(" basicwebrtc: basic . stuff\n ", "12345ab");
-    assert_eq!(instance, "basicwebrtc:https://basic.stuff/12345ab");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_webrtc_instance_noroom() {
-    // webrtc_instance may come from an input field of the ui, be pretty tolerant on input
-    let instance = Message::create_webrtc_instance("bla.foo$NOROOM", "123");
-    assert_eq!(instance, "https://bla.foo");
-
-    let instance = Message::create_webrtc_instance(" bla . foo $NOROOM ", "456");
-    assert_eq!(instance, "https://bla.foo");
-
-    let instance = Message::create_webrtc_instance(" $NOROOM bla . foo  ", "789");
-    assert_eq!(instance, "https://bla.foo");
-
-    let instance = Message::create_webrtc_instance(" bla.foo  / $NOROOM ? a = b ", "123");
-    assert_eq!(instance, "https://bla.foo/?a=b");
-
-    // $ROOM has a higher precedence
-    let instance = Message::create_webrtc_instance("bla.foo/?$NOROOM=$ROOM", "123");
-    assert_eq!(instance, "https://bla.foo/?$NOROOM=123");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_width_height() {
     let t = TestContext::new_alice().await;
 
@@ -648,10 +572,6 @@ fn test_viewtype_values() {
     assert_eq!(Viewtype::Voice, Viewtype::from_i32(41).unwrap());
     assert_eq!(Viewtype::Video, Viewtype::from_i32(50).unwrap());
     assert_eq!(Viewtype::File, Viewtype::from_i32(60).unwrap());
-    assert_eq!(
-        Viewtype::VideochatInvitation,
-        Viewtype::from_i32(70).unwrap()
-    );
     assert_eq!(Viewtype::Webxdc, Viewtype::from_i32(80).unwrap());
     assert_eq!(Viewtype::Vcard, Viewtype::from_i32(90).unwrap());
 }
@@ -825,5 +745,23 @@ async fn test_send_empty_file() -> Result<()> {
     let bob_received_msg = bob.recv_msg(&sent).await;
     assert_eq!(bob_received_msg.get_filename().unwrap(), "myfile");
     assert_eq!(bob_received_msg.get_viewtype(), Viewtype::File);
+    Ok(())
+}
+
+/// Tests that viewtype 70
+/// which previously corresponded to videochat invitations,
+/// is loaded as unknown viewtype without errors.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_load_unknown_viewtype() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let msg_id = tcm.send_recv(alice, bob, "Hello!").await.id;
+    bob.sql
+        .execute("UPDATE msgs SET type=70 WHERE id=?", (msg_id,))
+        .await?;
+    let bob_msg = Message::load_from_db(bob, msg_id).await?;
+    assert_eq!(bob_msg.get_viewtype(), Viewtype::Unknown);
     Ok(())
 }

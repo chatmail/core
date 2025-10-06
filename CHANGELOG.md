@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.17.0] - 2025-10-04
+
+### API-Changes
+
+- [**breaking**] Remove deprecated verified_one_on_one_chats config.
+
+### CI
+
+- Require that Cargo.lock is up to date.
+- Fix CI checking Nix formatting.
+
+### Documentation
+
+- Comment about outdated timespan.
+- Clarify CALL events ([#7188](https://github.com/chatmail/core/pull/7188)).
+- Add docs for JS `BaseDeltaChat`.
+
+### Features / Changes
+
+- Make `text/calendar` alternative available as an attachment.
+- Better summary for calls.
+- Add strings 'You left the channel.' and 'Scan to join Channel' ([#7266](https://github.com/chatmail/core/pull/7266)).
+- Stock strings for calls.
+- ffi: Add DC_STR_CANT_DECRYPT_OUTGOING_MSGS define.
+
+### Fixes
+
+- Prefer last part in `multipart/alternative`.
+- Prefetch messages in limited batches ([#6915](https://github.com/chatmail/core/pull/6915)).
+- Forward calls as text messages.
+- Consistent spelling of "canceled" with a single "l".
+- Lowercase "call" in "Missed call" and similar strings.
+
+### Refactor
+
+- Return the reason when failing to place calls.
+
+### Tests
+
+- Test reception of `multipart/alternative` with `text/calendar`.
+
 ## [2.16.0] - 2025-10-01
 
 ### API-Changes
@@ -6815,3 +6856,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.14.0]: https://github.com/chatmail/core/compare/v2.13.0..v2.14.0
 [2.15.0]: https://github.com/chatmail/core/compare/v2.14.0..v2.15.0
 [2.16.0]: https://github.com/chatmail/core/compare/v2.15.0..v2.16.0
+[2.17.0]: https://github.com/chatmail/core/compare/v2.16.0..v2.17.0

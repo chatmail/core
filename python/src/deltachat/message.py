@@ -435,10 +435,6 @@ class Message:
         """return True if it's a video message."""
         return self._view_type == const.DC_MSG_VIDEO
 
-    def is_videochat_invitation(self):
-        """return True if it's a videochat invitation message."""
-        return self._view_type == const.DC_MSG_VIDEOCHAT_INVITATION
-
     def is_webxdc(self):
         """return True if it's a Webxdc message."""
         return self._view_type == const.DC_MSG_WEBXDC
@@ -479,7 +475,6 @@ _view_type_mapping = {
     "video": const.DC_MSG_VIDEO,
     "file": const.DC_MSG_FILE,
     "sticker": const.DC_MSG_STICKER,
-    "videochat": const.DC_MSG_VIDEOCHAT_INVITATION,
     "webxdc": const.DC_MSG_WEBXDC,
 }
 

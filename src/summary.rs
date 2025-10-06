@@ -211,12 +211,6 @@ impl Message {
                 type_file = self.get_filename();
                 append_text = true
             }
-            Viewtype::VideochatInvitation => {
-                emoji = None;
-                type_name = Some(stock_str::videochat_invitation(context).await);
-                type_file = None;
-                append_text = false;
-            }
             Viewtype::Webxdc => {
                 emoji = None;
                 type_name = None;
@@ -427,13 +421,6 @@ mod tests {
         msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"), None)
             .unwrap();
         assert_summary_texts(&msg, ctx, "📎 foo.bar \u{2013} bla bla").await; // file name is added for files
-
-        let file = write_file_to_blobdir(&d).await;
-        let mut msg = Message::new(Viewtype::VideochatInvitation);
-        msg.set_text(some_text.clone());
-        msg.set_file_and_deduplicate(&d, &file, Some("foo.bar"), None)
-            .unwrap();
-        assert_summary_texts(&msg, ctx, "Video chat invitation").await; // text is not added for videochat invitations
 
         let mut msg = Message::new(Viewtype::Vcard);
         msg.set_file_from_bytes(ctx, "foo.vcf", b"", None).unwrap();

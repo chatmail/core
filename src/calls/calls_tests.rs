@@ -1,4 +1,5 @@
 use super::*;
+use crate::chat::forward_msgs;
 use crate::config::Config;
 use crate::test_utils::{TestContext, TestContextManager};
 
@@ -401,7 +402,7 @@ async fn test_caller_cancels_call() -> Result<()> {
     // Test that message summary says it is a missed call.
     let bob_call_msg = Message::load_from_db(&bob, bob_call.id).await?;
     let summary = bob_call_msg.get_summary(&bob, None).await?;
-    assert_eq!(summary.text, "📞 Missed Call");
+    assert_eq!(summary.text, "📞 Missed call");
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Missed call").await?;
@@ -497,4 +498,34 @@ async fn test_sdp_has_video() {
     assert!(sdp_has_video("foobar").is_err());
     assert_eq!(sdp_has_video(PLACE_INFO).unwrap(), false);
     assert_eq!(sdp_has_video(PLACE_INFO_VIDEO).unwrap(), true);
+}
+
+/// Tests that calls are forwarded as text messages.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_call() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_bob_chat = alice.create_chat(bob).await;
+    let alice_msg_id = alice
+        .place_outgoing_call(alice_bob_chat.id, PLACE_INFO.to_string())
+        .await
+        .context("Failed to place a call")?;
+    let alice_call = Message::load_from_db(alice, alice_msg_id).await?;
+
+    let _alice_sent_call = alice.pop_sent_msg().await;
+    assert_eq!(alice_call.viewtype, Viewtype::Call);
+
+    let alice_charlie_chat = alice.create_chat(charlie).await;
+    forward_msgs(alice, &[alice_call.id], alice_charlie_chat.id).await?;
+    let alice_forwarded_call = alice.pop_sent_msg().await;
+    let alice_forwarded_call_msg = alice_forwarded_call.load_from_db().await;
+    assert_eq!(alice_forwarded_call_msg.viewtype, Viewtype::Text);
+
+    let charlie_forwarded_call = charlie.recv_msg(&alice_forwarded_call).await;
+    assert_eq!(charlie_forwarded_call.viewtype, Viewtype::Text);
+
+    Ok(())
 }
