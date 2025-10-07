@@ -110,8 +110,8 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
     match invite {
         QrInvite::Group { .. } => {
-            // For a secure-join we need to create the group and add the contact.  The group will
-            // only become usable once the protocol is finished.
+            // We created the group already, now we need to add Alice to the group.
+            // The group will only become usable once the protocol is finished.
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
@@ -126,6 +126,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
+            // We created the broadcast channel already, now we need to add Alice to the group.
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
@@ -136,6 +137,9 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 .await?;
             }
 
+            // If we were not in the broadcast channel before, show a 'please wait' info message.
+            // Since we don't have any specific stock string for this,
+            // use the generic `Establishing guaranteed end-to-end encryption, please wait…`
             if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
                 let msg = stock_str::securejoin_wait(context).await;
                 chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
@@ -236,7 +240,7 @@ pub(super) async fn handle_auth_required(
             QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
-                // so only show it on secure-join and not on setup-contact.
+                // so only show it when joining a group and not for a 1:1 chat or broadcast channel.
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
                 let chat_id = joining_chat_id(context, &invite, chat_id).await?;

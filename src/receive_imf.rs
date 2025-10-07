@@ -1576,6 +1576,7 @@ async fn do_chat_assignment(
                         } else {
                             let name =
                                 compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
+                            // TODO what? We can't just choose a secret!
                             let secret = create_broadcast_shared_secret();
                             chat::create_out_broadcast_ex(context, Nosync, listid, name, secret)
                                 .await?
