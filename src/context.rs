@@ -973,6 +973,12 @@ impl Context {
         res.insert("public_key_count", pub_key_cnt.to_string());
         res.insert("fingerprint", fingerprint_str);
         res.insert(
+            "webrtc_instance",
+            self.get_config(Config::WebrtcInstance)
+                .await?
+                .unwrap_or_else(|| "<unset>".to_string()),
+        );
+        res.insert(
             "media_quality",
             self.get_config_int(Config::MediaQuality).await?.to_string(),
         );

@@ -160,6 +160,7 @@ class ViewType(str, Enum):
     VOICE = "Voice"
     VIDEO = "Video"
     FILE = "File"
+    VIDEOCHAT_INVITATION = "VideochatInvitation"
     WEBXDC = "Webxdc"
     VCARD = "Vcard"
 
@@ -278,3 +279,11 @@ class SocketSecurity(IntEnum):
     SSL = 1
     STARTTLS = 2
     PLAIN = 3
+
+
+class VideochatType(IntEnum):
+    """Video chat URL type."""
+
+    UNKNOWN = 0
+    BASICWEBRTC = 1
+    JITSI = 2

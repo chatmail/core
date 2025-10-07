@@ -732,10 +732,12 @@ impl MimeMessage {
             .map(|s| s.to_string());
         if let Some(part) = self.parts.first_mut() {
             if let Some(room) = room {
-                if content == "call" {
-                    part.typ = Viewtype::Call;
-                    part.param.set(Param::WebrtcRoom, room);
+                if content == "videochat-invitation" {
+                    part.typ = Viewtype::VideochatInvitation;
+                } else if content == "call" {
+                    part.typ = Viewtype::Call
                 }
+                part.param.set(Param::WebrtcRoom, room);
             } else if let Some(accepted) = accepted {
                 part.param.set(Param::WebrtcAccepted, accepted);
             }
@@ -763,7 +765,10 @@ impl MimeMessage {
                     | Viewtype::Vcard
                     | Viewtype::File
                     | Viewtype::Webxdc => true,
-                    Viewtype::Unknown | Viewtype::Text | Viewtype::Call => false,
+                    Viewtype::Unknown
+                    | Viewtype::Text
+                    | Viewtype::VideochatInvitation
+                    | Viewtype::Call => false,
                 })
         {
             let mut parts = std::mem::take(&mut self.parts);

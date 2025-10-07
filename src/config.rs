@@ -346,6 +346,9 @@ pub enum Config {
     /// Unset, when quota falls below minimal warning threshold again.
     QuotaExceeding,
 
+    /// address to webrtc instance to use for videochats
+    WebrtcInstance,
+
     /// Timestamp of the last time housekeeping was run
     LastHousekeeping,
 

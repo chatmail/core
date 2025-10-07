@@ -15,7 +15,9 @@ use crate::blob::BlobObject;
 use crate::chat::{Chat, ChatId, ChatIdBlocked, ChatVisibility, send_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{Blocked, Chattype, DC_CHAT_ID_TRASH, DC_MSG_ID_LAST_SPECIAL};
+use crate::constants::{
+    Blocked, Chattype, DC_CHAT_ID_TRASH, DC_MSG_ID_LAST_SPECIAL, VideochatType,
+};
 use crate::contact::{self, Contact, ContactId};
 use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
@@ -1012,6 +1014,85 @@ impl Message {
             }
         }
 
+        None
+    }
+
+    // add room to a webrtc_instance as defined by the corresponding config-value;
+    // the result may still be prefixed by the type
+    pub(crate) fn create_webrtc_instance(instance: &str, room: &str) -> String {
+        let (videochat_type, mut url) = Message::parse_webrtc_instance(instance);
+
+        // make sure, there is a scheme in the url
+        if !url.contains(':') {
+            url = format!("https://{url}");
+        }
+
+        // add/replace room
+        let url = if url.contains("$ROOM") {
+            url.replace("$ROOM", room)
+        } else if url.contains("$NOROOM") {
+            // there are some usecases where a separate room is not needed to use a service
+            // eg. if you let in people manually anyway, see discussion at
+            // <https://support.delta.chat/t/videochat-with-webex/1412/4>.
+            // hacks as hiding the room behind `#` are not reliable, therefore,
+            // these services are supported by adding the string `$NOROOM` to the url.
+            url.replace("$NOROOM", "")
+        } else {
+            // if there nothing that would separate the room, add a slash as a separator;
+            // this way, urls can be given as "https://meet.jit.si" as well as "https://meet.jit.si/"
+            let maybe_slash = if url.ends_with('/')
+                || url.ends_with('?')
+                || url.ends_with('#')
+                || url.ends_with('=')
+            {
+                ""
+            } else {
+                "/"
+            };
+            format!("{url}{maybe_slash}{room}")
+        };
+
+        // re-add and normalize type
+        match videochat_type {
+            VideochatType::BasicWebrtc => format!("basicwebrtc:{url}"),
+            VideochatType::Jitsi => format!("jitsi:{url}"),
+            VideochatType::Unknown => url,
+        }
+    }
+
+    /// split a webrtc_instance as defined by the corresponding config-value into a type and a url
+    pub fn parse_webrtc_instance(instance: &str) -> (VideochatType, String) {
+        let instance: String = instance.split_whitespace().collect();
+        let mut split = instance.splitn(2, ':');
+        let type_str = split.next().unwrap_or_default().to_lowercase();
+        let url = split.next();
+        match type_str.as_str() {
+            "basicwebrtc" => (
+                VideochatType::BasicWebrtc,
+                url.unwrap_or_default().to_string(),
+            ),
+            "jitsi" => (VideochatType::Jitsi, url.unwrap_or_default().to_string()),
+            _ => (VideochatType::Unknown, instance.to_string()),
+        }
+    }
+
+    /// Returns videochat URL if the message is a videochat invitation.
+    pub fn get_videochat_url(&self) -> Option<String> {
+        if self.viewtype == Viewtype::VideochatInvitation {
+            if let Some(instance) = self.param.get(Param::WebrtcRoom) {
+                return Some(Message::parse_webrtc_instance(instance).1);
+            }
+        }
+        None
+    }
+
+    /// Returns videochat type if the message is a videochat invitation.
+    pub fn get_videochat_type(&self) -> Option<VideochatType> {
+        if self.viewtype == Viewtype::VideochatInvitation {
+            if let Some(instance) = self.param.get(Param::WebrtcRoom) {
+                return Some(Message::parse_webrtc_instance(instance).0);
+            }
+        }
         None
     }
 
@@ -2196,6 +2277,9 @@ pub enum Viewtype {
     /// and retrieved via dc_msg_get_file().
     File = 60,
 
+    /// Message is an invitation to a videochat.
+    VideochatInvitation = 70,
+
     /// Message is an incoming or outgoing call.
     Call = 71,
 
@@ -2221,6 +2305,7 @@ impl Viewtype {
             Viewtype::Voice => true,
             Viewtype::Video => true,
             Viewtype::File => true,
+            Viewtype::VideochatInvitation => false,
             Viewtype::Call => false,
             Viewtype::Webxdc => true,
             Viewtype::Vcard => true,

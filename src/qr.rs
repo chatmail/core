@@ -16,6 +16,7 @@ use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::Fingerprint;
+use crate::message::Message;
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
@@ -26,6 +27,7 @@ const IDELTACHAT_SCHEME: &str = "https://i.delta.chat/#";
 const IDELTACHAT_NOSLASH_SCHEME: &str = "https://i.delta.chat#";
 const DCACCOUNT_SCHEME: &str = "DCACCOUNT:";
 pub(super) const DCLOGIN_SCHEME: &str = "DCLOGIN:";
+const DCWEBRTC_SCHEME: &str = "DCWEBRTC:";
 const TG_SOCKS_SCHEME: &str = "https://t.me/socks";
 const MAILTO_SCHEME: &str = "mailto:";
 const MATMSG_SCHEME: &str = "MATMSG:";
@@ -119,6 +121,15 @@ pub enum Qr {
 
     /// The QR code is a backup, but it is too new. The user has to update its Delta Chat.
     BackupTooNew {},
+
+    /// Ask the user if they want to use the given service for video chats.
+    WebrtcInstance {
+        /// Server domain name.
+        domain: String,
+
+        /// URL pattern for video chat rooms.
+        instance_pattern: String,
+    },
 
     /// Ask the user if they want to use the given proxy.
     ///
@@ -283,6 +294,8 @@ pub async fn check_qr(context: &Context, qr: &str) -> Result<Qr> {
         decode_account(qr)?
     } else if starts_with_ignore_case(qr, DCLOGIN_SCHEME) {
         dclogin_scheme::decode_login(qr)?
+    } else if starts_with_ignore_case(qr, DCWEBRTC_SCHEME) {
+        decode_webrtc_instance(context, qr)?
     } else if starts_with_ignore_case(qr, TG_SOCKS_SCHEME) {
         decode_tg_socks_proxy(context, qr)?
     } else if qr.starts_with(SHADOWSOCKS_SCHEME) {
@@ -560,6 +573,28 @@ fn decode_account(qr: &str) -> Result<Qr> {
     }
 }
 
+/// scheme: `DCWEBRTC:https://meet.jit.si/$ROOM`
+fn decode_webrtc_instance(_context: &Context, qr: &str) -> Result<Qr> {
+    let payload = qr
+        .get(DCWEBRTC_SCHEME.len()..)
+        .context("Invalid DCWEBRTC payload")?;
+
+    let (_type, url) = Message::parse_webrtc_instance(payload);
+    let url = url::Url::parse(&url).context("Invalid WebRTC instance")?;
+
+    if url.scheme() == "http" || url.scheme() == "https" {
+        Ok(Qr::WebrtcInstance {
+            domain: url
+                .host_str()
+                .context("can't extract WebRTC instance domain")?
+                .to_string(),
+            instance_pattern: payload.to_string(),
+        })
+    } else {
+        bail!("Bad URL scheme for WebRTC instance: {:?}", url.scheme());
+    }
+}
+
 /// scheme: `https://t.me/socks?server=foo&port=123` or `https://t.me/socks?server=1.2.3.4&port=123`
 fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
     let url = url::Url::parse(qr).context("Invalid t.me/socks url")?;
@@ -697,6 +732,14 @@ pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<(
 pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
     match check_qr(context, qr).await? {
         Qr::Account { .. } => set_account_from_qr(context, qr).await?,
+        Qr::WebrtcInstance {
+            domain: _,
+            instance_pattern,
+        } => {
+            context
+                .set_config_internal(Config::WebrtcInstance, Some(&instance_pattern))
+                .await?;
+        }
         Qr::Proxy { url, .. } => {
             let old_proxy_url_value = context
                 .get_config(Config::ProxyUrl)
