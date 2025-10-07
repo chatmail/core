@@ -2903,13 +2903,16 @@ async fn test_broadcast_joining_golden() -> Result<()> {
         .await;
 
     let alice_bob_contact = alice.add_or_lookup_contact_no_key(bob).await;
-    let direct_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
+    let private_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
         .await?
         .unwrap();
     // The 1:1 chat with Bob should not be visible to the user:
-    assert_eq!(direct_chat.blocked, Blocked::Yes);
+    assert_eq!(private_chat.blocked, Blocked::Yes);
     alice
-        .golden_test_chat(direct_chat.id, "test_broadcast_joining_golden_alice_direct")
+        .golden_test_chat(
+            private_chat.id,
+            "test_broadcast_joining_golden_private_chat",
+        )
         .await;
 
     assert_eq!(
@@ -3335,6 +3338,59 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
         r#"Error: This message was not sent by the channel owner:
 "Hi""#
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sync_broadcast_avatar_and_name() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+
+    alice1.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+    tcm.section("Alice1 creates broadcast channel.");
+    let a1_broadcast_id = create_broadcast(alice1, "foo".to_string()).await?;
+
+    tcm.section("The channel syncs to her second device");
+    sync(alice1, alice2).await;
+
+    let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
+    let a2_broadcast_id = get_chat_id_by_grpid(alice2, &a1_broadcast_chat.grpid)
+        .await?
+        .unwrap()
+        .0;
+    let a2_broadcast_chat = Chat::load_from_db(alice2, a2_broadcast_id).await?;
+    assert_eq!(a2_broadcast_chat.get_name(), "foo".to_string());
+
+    set_chat_name(&alice1, a1_broadcast_id, "New name").await?;
+    let sent = alice1.pop_sent_msg().await;
+    let rcvd = alice2.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, a2_broadcast_id);
+    assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupNameChanged);
+    assert_eq!(
+        rcvd.text,
+        r#"You changed group name from "foo" to "New name"."#
+    );
+
+    let a2_broadcast_chat = Chat::load_from_db(alice2, a2_broadcast_id).await?;
+    assert_eq!(a2_broadcast_chat.get_name(), "New name".to_string());
+
+    let file = alice2.get_blobdir().join("avatar.png");
+    tokio::fs::write(&file, AVATAR_64x64_BYTES).await?;
+    set_chat_profile_image(alice2, a2_broadcast_id, file.to_str().unwrap()).await?;
+
+    let sent = alice2.pop_sent_msg().await;
+    let rcvd = alice1.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, a1_broadcast_id);
+    assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupImageChanged);
+    assert_eq!(rcvd.text, "You changed the group image.");
+
+    let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
+    let avatar = a1_broadcast_chat.get_profile_image(alice1).await?.unwrap();
+    assert_eq!(avatar.file_name().unwrap(), AVATAR_64x64_DEDUPLICATED);
 
     Ok(())
 }
@@ -4099,7 +4155,7 @@ async fn test_sync_muted() -> Result<()> {
 
 /// Tests that synchronizing broadcast channels via sync-messages works
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sync_broadcast() -> Result<()> {
+async fn test_sync_broadcast_and_send_message() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice1 = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
