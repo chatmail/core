@@ -1569,19 +1569,33 @@ async fn do_chat_assignment(
                 // (it can't be a mailing list, since it's outgoing)
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
-                    chat_id = Some(
-                        if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await?
+                    if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+                        chat_id = Some(id);
+                    } else {
+                        // Looks like we missed the sync message that was creating this broadcast channel
+                        let name =
+                            compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
+                        if let Some(secret) = mime_parser
+                            .get_header(HeaderDef::ChatBroadcastSecret)
+                            .filter(|s| validate_broadcast_shared_secret(s))
                         {
-                            id
+                            chat_id = Some(
+                                chat::create_out_broadcast_ex(
+                                    context,
+                                    Nosync,
+                                    listid,
+                                    name,
+                                    secret.to_string(),
+                                )
+                                .await?,
+                            );
                         } else {
-                            let name =
-                                compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            // TODO what? We can't just choose a secret!
-                            let secret = create_broadcast_shared_secret();
-                            chat::create_out_broadcast_ex(context, Nosync, listid, name, secret)
-                                .await?
-                        },
-                    );
+                            warn!(
+                                context,
+                                "Not creating outgoing broadcast, because secret is unknown"
+                            );
+                        }
+                    }
                 }
             }
             ChatAssignment::AdHocGroup => {
