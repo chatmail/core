@@ -5111,9 +5111,6 @@ pub(crate) enum SyncAction {
         chat_name: String,
         shared_secret: String,
     },
-    /// Mark the contact with the given fingerprint as verified by self.
-    // TODO check if I can remove this
-    MarkVerified,
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5169,16 +5166,6 @@ impl Context {
                     SyncAction::Unblock => {
                         return contact::set_blocked(self, Nosync, contact_id, false).await;
                     }
-                    SyncAction::MarkVerified => {
-                        ContactId::scaleup_origin(self, &[contact_id], Origin::SecurejoinJoined)
-                            .await?;
-                        return contact::mark_contact_id_as_verified(
-                            self,
-                            contact_id,
-                            Some(ContactId::SELF),
-                        )
-                        .await;
-                    }
                     _ => (),
                 }
                 ChatIdBlocked::get_for_contact(self, contact_id, Blocked::Request)
@@ -5210,9 +5197,8 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateOutBroadcast { .. } | SyncAction::MarkVerified => {
+            SyncAction::CreateOutBroadcast { .. } => {
                 // Create action should have been handled by handle_sync_create_chat() already.
-                // MarkVerified action should have been handled by mark_contact_id_as_verified() already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
