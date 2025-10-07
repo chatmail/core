@@ -3174,9 +3174,8 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     // TODO: There is a known bug in `observe_securejoin_on_other_device()`:
     // When Bob joins a group or broadcast with his first device,
     // then a chat with Alice will pop up on his second device.
-    // When it's fixed, the following line can be uncommented,
-    // and the 2 following lines can be removed.
-    //check_direct_chat_is_hidden_and_contact_is_verified(bob1, alice).await;
+    // When it's fixed, the 2 following lines can be replaced with
+    // `check_direct_chat_is_hidden_and_contact_is_verified(bob1, alice).await;`
     let bob1_alice_contact = bob1.add_or_lookup_contact_no_key(alice).await;
     assert!(bob1_alice_contact.is_verified(bob1).await.unwrap());
 
