@@ -3322,7 +3322,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
     };
 
     if allow_creation {
-        // list does not exist but should be created
+        // Broadcast channel / mailinglist does not exist but should be created
         let param = mime_parser.list_post.as_ref().map(|list_post| {
             let mut p = Params::new();
             p.set(Param::ListPost, list_post);
