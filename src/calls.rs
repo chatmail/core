@@ -18,6 +18,7 @@ use anyhow::{Context as _, Result, ensure};
 use sdp::SessionDescription;
 use serde::Serialize;
 use std::io::Cursor;
+use std::str::FromStr;
 use std::time::Duration;
 use tokio::task;
 use tokio::time::sleep;
@@ -33,9 +34,21 @@ use tokio::time::sleep;
 /// as the callee won't start the call afterwards.
 const RINGING_SECONDS: i64 = 60;
 
-/// For persisting parameters in the call, we use Param::Arg*
+// For persisting parameters in the call, we use Param::Arg*
+
 const CALL_ACCEPTED_TIMESTAMP: Param = Param::Arg;
 const CALL_ENDED_TIMESTAMP: Param = Param::Arg4;
+
+const STUN_PORT: u16 = 3478;
+
+/// Set if incoming call was ended explicitly
+/// by the other side before we accepted it.
+///
+/// It is used to distinguish "ended" calls
+/// that are rejected by us from the calls
+/// canceled by the other side
+/// immediately after ringing started.
+const CALL_CANCELED_TIMESTAMP: Param = Param::Arg2;
 
 /// Information about the status of a call.
 #[derive(Debug, Default)]
@@ -52,12 +65,14 @@ pub struct CallInfo {
 }
 
 impl CallInfo {
-    fn is_incoming(&self) -> bool {
+    /// Returns true if the call is an incoming call.
+    pub fn is_incoming(&self) -> bool {
         self.msg.from_id != ContactId::SELF
     }
 
-    fn is_stale(&self) -> bool {
-        self.remaining_ring_seconds() <= 0
+    /// Returns true if the call should not ring anymore.
+    pub fn is_stale(&self) -> bool {
+        (self.is_incoming() || self.msg.timestamp_sent != 0) && self.remaining_ring_seconds() <= 0
     }
 
     fn remaining_ring_seconds(&self) -> i64 {
@@ -77,7 +92,7 @@ impl CallInfo {
     }
 
     async fn update_text_duration(&self, context: &Context) -> Result<()> {
-        let minutes = self.get_duration_seconds() / 60;
+        let minutes = self.duration_seconds() / 60;
         let duration = match minutes {
             0 => "<1 minute".to_string(),
             1 => "1 minute".to_string(),
@@ -102,8 +117,20 @@ impl CallInfo {
         Ok(())
     }
 
-    fn is_accepted(&self) -> bool {
+    /// Returns true if the call is accepted.
+    pub fn is_accepted(&self) -> bool {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
+    }
+
+    /// Returns true if the call is missed
+    /// because the caller canceled it
+    /// explicitly before ringing stopped.
+    ///
+    /// For outgoing calls this means
+    /// the receiver has rejected the call
+    /// explicitly.
+    pub fn is_canceled(&self) -> bool {
+        self.msg.param.exists(CALL_CANCELED_TIMESTAMP)
     }
 
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
@@ -112,11 +139,28 @@ impl CallInfo {
         Ok(())
     }
 
-    fn is_ended(&self) -> bool {
+    /// Explicitly mark the call as canceled.
+    ///
+    /// For incoming calls this should be called
+    /// when "call ended" message is received
+    /// from the caller before we picked up the call.
+    /// In this case the call becomes "missed" early
+    /// before the ringing timeout.
+    async fn mark_as_canceled(&mut self, context: &Context) -> Result<()> {
+        let now = time();
+        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
+        self.msg.param.set_i64(CALL_CANCELED_TIMESTAMP, now);
+        self.msg.update_param(context).await?;
+        Ok(())
+    }
+
+    /// Returns true if the call is ended.
+    pub fn is_ended(&self) -> bool {
         self.msg.param.exists(CALL_ENDED_TIMESTAMP)
     }
 
-    fn get_duration_seconds(&self) -> i64 {
+    /// Returns call duration in seconds.
+    pub fn duration_seconds(&self) -> i64 {
         if let (Some(start), Some(end)) = (
             self.msg.param.get_i64(CALL_ACCEPTED_TIMESTAMP),
             self.msg.param.get_i64(CALL_ENDED_TIMESTAMP),
@@ -139,7 +183,11 @@ impl Context {
         place_call_info: String,
     ) -> Result<MsgId> {
         let chat = Chat::load_from_db(self, chat_id).await?;
-        ensure!(chat.typ == Chattype::Single && !chat.is_self_talk());
+        ensure!(
+            chat.typ == Chattype::Single,
+            "Can only place calls in 1:1 chats"
+        );
+        ensure!(!chat.is_self_talk(), "Cannot call self");
 
         let mut call = Message {
             viewtype: Viewtype::Call,
@@ -192,6 +240,7 @@ impl Context {
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -204,15 +253,17 @@ impl Context {
             info!(self, "Call already ended");
             return Ok(());
         }
-        call.mark_as_ended(self).await?;
 
         if !call.is_accepted() {
             if call.is_incoming() {
+                call.mark_as_ended(self).await?;
                 call.update_text(self, "Declined call").await?;
             } else {
-                call.update_text(self, "Cancelled call").await?;
+                call.mark_as_canceled(self).await?;
+                call.update_text(self, "Canceled call").await?;
             }
         } else {
+            call.mark_as_ended(self).await?;
             call.update_text_duration(self).await?;
         }
 
@@ -228,6 +279,7 @@ impl Context {
 
         self.emit_event(EventType::CallEnded {
             msg_id: call.msg.id,
+            chat_id: call.msg.chat_id,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -241,15 +293,17 @@ impl Context {
         sleep(Duration::from_secs(wait)).await;
         let mut call = context.load_call_by_id(call_id).await?;
         if !call.is_accepted() && !call.is_ended() {
-            call.mark_as_ended(&context).await?;
             if call.is_incoming() {
+                call.mark_as_canceled(&context).await?;
                 call.update_text(&context, "Missed call").await?;
             } else {
-                call.update_text(&context, "Cancelled call").await?;
+                call.mark_as_ended(&context).await?;
+                call.update_text(&context, "Canceled call").await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
             context.emit_event(EventType::CallEnded {
                 msg_id: call.msg.id,
+                chat_id: call.msg.chat_id,
             });
         }
         Ok(())
@@ -280,6 +334,7 @@ impl Context {
                     };
                     self.emit_event(EventType::IncomingCall {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                         place_call_info: call.place_call_info.to_string(),
                         has_video,
                     });
@@ -308,6 +363,7 @@ impl Context {
                     if call.is_incoming() {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                         });
                     } else {
                         let accept_call_info = mime_message
@@ -315,6 +371,7 @@ impl Context {
                             .unwrap_or_default();
                         self.emit_event(EventType::OutgoingCallAccepted {
                             msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
                             accept_call_info: accept_call_info.to_string(),
                         });
                     }
@@ -327,29 +384,34 @@ impl Context {
                         return Ok(());
                     }
 
-                    call.mark_as_ended(self).await?;
                     if !call.is_accepted() {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             } else {
+                                call.mark_as_canceled(self).await?;
                                 call.update_text(self, "Missed call").await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
-                                call.update_text(self, "Cancelled call").await?;
+                                call.mark_as_canceled(self).await?;
+                                call.update_text(self, "Canceled call").await?;
                             } else {
+                                call.mark_as_ended(self).await?;
                                 call.update_text(self, "Declined call").await?;
                             }
                         }
                     } else {
+                        call.mark_as_ended(self).await?;
                         call.update_text_duration(self).await?;
                     }
 
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
                     self.emit_event(EventType::CallEnded {
                         msg_id: call.msg.id,
+                        chat_id: call.msg.chat_id,
                     });
                 }
                 _ => {}
@@ -358,7 +420,8 @@ impl Context {
         Ok(())
     }
 
-    async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
+    /// Loads information about the call given its ID.
+    pub async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
         let call = Message::load_from_db(self, call_id).await?;
         self.load_call_by_message(call)
     }
@@ -383,7 +446,7 @@ impl Context {
 }
 
 /// Returns true if SDP offer has a video.
-fn sdp_has_video(sdp: &str) -> Result<bool> {
+pub fn sdp_has_video(sdp: &str) -> Result<bool> {
     let mut cursor = Cursor::new(sdp);
     let session_description =
         SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
@@ -393,6 +456,85 @@ fn sdp_has_video(sdp: &str) -> Result<bool> {
         }
     }
     Ok(false)
+}
+
+/// State of the call for display in the message bubble.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CallState {
+    /// Fresh incoming or outgoing call that is still ringing.
+    ///
+    /// There is no separate state for outgoing call
+    /// that has been dialled but not ringing on the other side yet
+    /// as we don't know whether the other side received our call.
+    Alerting,
+
+    /// Active call.
+    Active,
+
+    /// Completed call that was once active
+    /// and then was terminated for any reason.
+    Completed {
+        /// Call duration in seconds.
+        duration: i64,
+    },
+
+    /// Incoming call that was not picked up within a timeout
+    /// or was explicitly ended by the caller before we picked up.
+    Missed,
+
+    /// Incoming call that was explicitly ended on our side
+    /// before picking up or outgoing call
+    /// that was declined before the timeout.
+    Declined,
+
+    /// Outgoing call that has been canceled on our side
+    /// before receiving a response.
+    ///
+    /// Incoming calls cannot be canceled,
+    /// on the receiver side canceled calls
+    /// usually result in missed calls.
+    Canceled,
+}
+
+/// Returns call state given the message ID.
+pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
+    let call = context.load_call_by_id(msg_id).await?;
+    let state = if call.is_incoming() {
+        if call.is_accepted() {
+            if call.is_ended() {
+                CallState::Completed {
+                    duration: call.duration_seconds(),
+                }
+            } else {
+                CallState::Active
+            }
+        } else if call.is_canceled() {
+            // Call was explicitly canceled
+            // by the caller before we picked it up.
+            CallState::Missed
+        } else if call.is_ended() {
+            CallState::Declined
+        } else if call.is_stale() {
+            CallState::Missed
+        } else {
+            CallState::Alerting
+        }
+    } else if call.is_accepted() {
+        if call.is_ended() {
+            CallState::Completed {
+                duration: call.duration_seconds(),
+            }
+        } else {
+            CallState::Active
+        }
+    } else if call.is_canceled() {
+        CallState::Canceled
+    } else if call.is_ended() || call.is_stale() {
+        CallState::Declined
+    } else {
+        CallState::Alerting
+    };
+    Ok(state)
 }
 
 /// ICE server for JSON serialization.
@@ -408,21 +550,14 @@ struct IceServer {
     pub credential: Option<String>,
 }
 
-/// Returns JSON with ICE servers.
-///
-/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
-///
-/// All returned servers are resolved to their IP addresses.
-/// The primary point of DNS lookup is that Delta Chat Desktop
-/// relies on the servers being specified by IP,
-/// because it itself cannot utilize DNS. See
-/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
-pub async fn ice_servers(context: &Context) -> Result<String> {
-    let hostname = "ci-chatmail.testrun.org";
-    let port = 3478;
-    let username = "ohV8aec1".to_string();
-    let password = "zo3theiY".to_string();
-
+/// Creates JSON with ICE servers.
+async fn create_ice_servers(
+    context: &Context,
+    hostname: &str,
+    port: u16,
+    username: &str,
+    password: &str,
+) -> Result<String> {
     // Do not use cache because there is no TLS.
     let load_cache = false;
     let urls: Vec<String> = lookup_host_with_cache(context, hostname, port, "", load_cache)
@@ -433,12 +568,81 @@ pub async fn ice_servers(context: &Context) -> Result<String> {
 
     let ice_server = IceServer {
         urls,
-        username: Some(username),
-        credential: Some(password),
+        username: Some(username.to_string()),
+        credential: Some(password.to_string()),
     };
 
     let json = serde_json::to_string(&[ice_server])?;
     Ok(json)
+}
+
+/// Creates JSON with ICE servers from a line received over IMAP METADATA.
+///
+/// IMAP METADATA returns a line such as
+/// `example.com:3478:1758650868:8Dqkyyu11MVESBqjbIylmB06rv8=`
+///
+/// 1758650868 is the username and expiration timestamp
+/// at the same time,
+/// while `8Dqkyyu11MVESBqjbIylmB06rv8=`
+/// is the password.
+pub(crate) async fn create_ice_servers_from_metadata(
+    context: &Context,
+    metadata: &str,
+) -> Result<(i64, String)> {
+    let (hostname, rest) = metadata.split_once(':').context("Missing hostname")?;
+    let (port, rest) = rest.split_once(':').context("Missing port")?;
+    let port = u16::from_str(port).context("Failed to parse the port")?;
+    let (ts, password) = rest.split_once(':').context("Missing timestamp")?;
+    let expiration_timestamp = i64::from_str(ts).context("Failed to parse the timestamp")?;
+    let ice_servers = create_ice_servers(context, hostname, port, ts, password).await?;
+    Ok((expiration_timestamp, ice_servers))
+}
+
+/// Creates JSON with ICE servers when no TURN servers are known.
+pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<String> {
+    // Do not use public STUN server from https://stunprotocol.org/.
+    // It changes the hostname every year
+    // (e.g. stunserver2025.stunprotocol.org
+    // which was previously stunserver2024.stunprotocol.org)
+    // because of bandwidth costs:
+    // <https://github.com/jselbie/stunserver/issues/50>
+
+    // We use nine.testrun.org for a default STUN server.
+    let hostname = "nine.testrun.org";
+
+    // Do not use cache because there is no TLS.
+    let load_cache = false;
+    let urls: Vec<String> = lookup_host_with_cache(context, hostname, STUN_PORT, "", load_cache)
+        .await?
+        .into_iter()
+        .map(|addr| format!("stun:{addr}"))
+        .collect();
+
+    let ice_server = IceServer {
+        urls,
+        username: None,
+        credential: None,
+    };
+
+    let json = serde_json::to_string(&[ice_server])?;
+    Ok(json)
+}
+
+/// Returns JSON with ICE servers.
+///
+/// <https://developer.mozilla.org/en-US/docs/Web/API/RTCPeerConnection/RTCPeerConnection#iceservers>
+///
+/// All returned servers are resolved to their IP addresses.
+/// The primary point of DNS lookup is that Delta Chat Desktop
+/// relies on the servers being specified by IP,
+/// because it itself cannot utilize DNS. See
+/// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
+pub async fn ice_servers(context: &Context) -> Result<String> {
+    if let Some(ref metadata) = *context.metadata.read().await {
+        Ok(metadata.ice_servers.clone())
+    } else {
+        Ok("[]".to_string())
+    }
 }
 
 #[cfg(test)]

@@ -5,10 +5,12 @@ on:
     paths:
       - flake.nix
       - flake.lock
+      - .github/workflows/nix.yml
   push:
     paths:
       - flake.nix
       - flake.lock
+      - .github/workflows/nix.yml
     branches:
       - main
 
@@ -23,11 +25,8 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
-      - run: nix fmt
-
-      # Check that formatting does not change anything.
-      - run: git diff --exit-code
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
+      - run: nix fmt flake.nix -- --check
 
   build:
     name: nix build
@@ -85,7 +84,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
       - run: nix build .#${{ matrix.installable }}
 
   build-macos:
@@ -105,5 +104,5 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: cachix/install-nix-action@9280e7aca88deada44c930f1e2c78e21c3ae3edd # v31
       - run: nix build .#${{ matrix.installable }}

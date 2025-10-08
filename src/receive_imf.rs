@@ -197,7 +197,7 @@ pub(crate) async fn receive_imf_from_inbox(
         rfc724_mid,
         imf_raw,
         seen,
-        is_partial_download,
+        is_partial_download.map(|msg_size| (msg_size, None)),
     )
     .await
 }
@@ -495,9 +495,8 @@ async fn get_to_and_past_contact_ids(
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
 ///
-/// If `is_partial_download` is set, it contains the full message size in bytes.
-/// Do not confuse that with `replace_msg_id` that will be set when the full message is loaded
-/// later.
+/// If `partial` is set, it contains the full message size in bytes and an optional error text for
+/// the partially downloaded message.
 #[expect(clippy::too_many_arguments)]
 pub(crate) async fn receive_imf_inner(
     context: &Context,
@@ -507,7 +506,7 @@ pub(crate) async fn receive_imf_inner(
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
-    is_partial_download: Option<u32>,
+    partial: Option<(u32, Option<String>)>,
 ) -> Result<Option<ReceivedMsg>> {
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
@@ -516,9 +515,16 @@ pub(crate) async fn receive_imf_inner(
             String::from_utf8_lossy(imf_raw),
         );
     }
+    if partial.is_none() {
+        ensure!(
+            !context
+                .get_config_bool(Config::FailOnReceivingFullMsg)
+                .await?
+        );
+    }
 
-    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, is_partial_download).await
-    {
+    let is_partial_download = partial.as_ref().map(|(msg_size, _err)| *msg_size);
+    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, partial).await {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
             if rfc724_mid.starts_with(GENERATED_PREFIX) {
@@ -552,22 +558,11 @@ pub(crate) async fn receive_imf_inner(
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
     if let Some((old_msg_id, _)) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        if is_partial_download.is_some() {
-            // Should never happen, see imap::prefetch_should_download(), but still.
-            info!(
-                context,
-                "Got a partial download and message is already in DB."
-            );
-            return Ok(None);
-        }
         let msg = Message::load_from_db(context, old_msg_id).await?;
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if msg.download_state() != DownloadState::Done {
             // the message was partially downloaded before and is fully downloaded now.
-            info!(
-                context,
-                "Message already partly in DB, replacing by full message."
-            );
+            info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
         } else {
             None
@@ -1008,7 +1003,10 @@ pub(crate) async fn receive_imf_inner(
     } else if received_msg.hidden {
         // No need to emit an event about the changed message
     } else if let Some(replace_chat_id) = replace_chat_id {
-        context.emit_msgs_changed_without_msg_id(replace_chat_id);
+        match replace_chat_id == chat_id {
+            false => context.emit_msgs_changed_without_msg_id(replace_chat_id),
+            true => context.emit_msgs_changed(chat_id, replace_msg_id.unwrap_or_default()),
+        }
     } else if !chat_id.is_trash() {
         let fresh = received_msg.state == MessageState::InFresh
             && mime_parser.is_system_message != SystemMessage::CallAccepted
@@ -2869,15 +2867,6 @@ async fn apply_group_changes(
     let (mut removed_id, mut added_id) = (None, None);
     let mut better_msg = None;
     let mut silent = false;
-
-    // True if a Delta Chat client has explicitly added our current primary address.
-    let self_added =
-        if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-            addr_cmp(&context.get_primary_self_addr().await?, added_addr)
-        } else {
-            false
-        };
-
     let chat_contacts =
         HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
     let is_from_in_chat =
@@ -2910,8 +2899,12 @@ async fn apply_group_changes(
         // rather than old display name.
         // This could be fixed by looking up the contact with the highest
         // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
-        removed_id = lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?;
-        if let Some(id) = removed_id {
+        if !is_from_in_chat {
+            better_msg = Some(String::new());
+        } else if let Some(id) =
+            lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?
+        {
+            removed_id = Some(id);
             better_msg = if id == from_id {
                 silent = true;
                 Some(stock_str::msg_group_left_local(context, from_id).await)
@@ -2922,7 +2915,9 @@ async fn apply_group_changes(
             warn!(context, "Removed {removed_addr:?} has no contact id.")
         }
     } else if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
+        if !is_from_in_chat {
+            better_msg = Some(String::new());
+        } else if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
             // TODO: if gossiped keys contain the same address multiple times,
             // we may lookup the wrong contact.
             // This could be fixed by looking up the contact with
@@ -3001,6 +2996,15 @@ async fn apply_group_changes(
             .await?;
         } else {
             let mut new_members: HashSet<ContactId>;
+            // True if a Delta Chat client has explicitly and really added our primary address to an
+            // already existing group.
+            let self_added =
+                if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+                    addr_cmp(&context.get_primary_self_addr().await?, added_addr)
+                        && !chat_contacts.contains(&ContactId::SELF)
+                } else {
+                    false
+                };
             if self_added {
                 new_members = HashSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
@@ -3067,17 +3071,18 @@ async fn apply_group_changes(
         .collect();
 
     if let Some(added_id) = added_id {
-        if !added_ids.remove(&added_id) && !self_added {
-            // No-op "Member added" message.
-            //
-            // Trash it.
+        if !added_ids.remove(&added_id) && added_id != ContactId::SELF {
+            // No-op "Member added" message. An exception is self-addition messages because they at
+            // least must be shown when a chat is created on our side.
             better_msg = Some(String::new());
         }
     }
     if let Some(removed_id) = removed_id {
         removed_ids.remove(&removed_id);
     }
-    let group_changes_msgs = if self_added {
+    let group_changes_msgs = if !chat_contacts.contains(&ContactId::SELF)
+        && new_chat_contacts.contains(&ContactId::SELF)
+    {
         Vec::new()
     } else {
         group_changes_msgs(context, &added_ids, &removed_ids, chat.id).await?
@@ -3531,8 +3536,7 @@ async fn apply_in_broadcast_changes(
         // The only member added/removed message that is ever sent is "I left.",
         // so, this is the only case we need to handle here
         if from_id == ContactId::SELF {
-            better_msg
-                .get_or_insert(stock_str::msg_group_left_local(context, ContactId::SELF).await);
+            better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
         }
     }
 

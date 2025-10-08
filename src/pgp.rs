@@ -8,9 +8,9 @@ use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    ArmorOptions, Deserializable, KeyType as PgpKeyType, Message, MessageBuilder,
-    SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
-    StandaloneSignature, SubkeyParamsBuilder, TheRing,
+    ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, KeyType as PgpKeyType,
+    Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey,
+    SignedSecretKey, SubkeyParamsBuilder, TheRing,
 };
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
@@ -226,7 +226,7 @@ pub fn pk_calc_signature(
         plain.as_slice(),
     )?;
 
-    let sig = StandaloneSignature::new(signature);
+    let sig = DetachedSignature::new(signature);
 
     Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
@@ -245,12 +245,13 @@ pub fn pk_decrypt(
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
+    let decrypt_options = DecryptionOptions::new();
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![&empty_pw],
         message_password: vec![],
         session_keys: vec![],
-        allow_legacy: false,
+        decrypt_options,
     };
     let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
     anyhow::ensure!(
@@ -293,10 +294,10 @@ pub fn pk_validate(
 ) -> Result<HashSet<Fingerprint>> {
     let mut ret: HashSet<Fingerprint> = Default::default();
 
-    let standalone_signature = StandaloneSignature::from_armor_single(Cursor::new(signature))?.0;
+    let detached_signature = DetachedSignature::from_armor_single(Cursor::new(signature))?.0;
 
     for pkey in public_keys_for_validation {
-        if standalone_signature.verify(pkey, content).is_ok() {
+        if detached_signature.verify(pkey, content).is_ok() {
             let fp = pkey.dc_fingerprint();
             ret.insert(fp);
         }

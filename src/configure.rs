@@ -137,7 +137,7 @@ impl Context {
 
         let res = self
             .inner_configure(param)
-            .race(cancel_channel.recv().map(|_| Err(format_err!("Cancelled"))))
+            .race(cancel_channel.recv().map(|_| Err(format_err!("Canceled"))))
             .await;
 
         self.free_ongoing().await;

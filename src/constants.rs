@@ -60,23 +60,6 @@ pub enum MediaQuality {
     Worse = 1,
 }
 
-/// Video chat URL type.
-#[derive(
-    Debug, Default, Display, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, FromSql, ToSql,
-)]
-#[repr(i8)]
-pub enum VideochatType {
-    /// Unknown type.
-    #[default]
-    Unknown = 0,
-
-    /// [basicWebRTC](https://github.com/cracker0dks/basicwebrtc) instance.
-    BasicWebrtc = 1,
-
-    /// [Jitsi Meet](https://jitsi.org/jitsi-meet/) instance.
-    Jitsi = 2,
-}
-
 pub const DC_HANDSHAKE_CONTINUE_NORMAL_PROCESSING: i32 = 0x01;
 pub const DC_HANDSHAKE_STOP_NORMAL_PROCESSING: i32 = 0x02;
 pub const DC_HANDSHAKE_ADD_DELETE_JOB: i32 = 0x04;
@@ -98,6 +81,7 @@ pub(crate) const DC_RESEND_USER_AVATAR_DAYS: i64 = 14;
 // reference is the release date.
 // as not all system get speedy updates,
 // do not use too small value that will annoy users checking for nonexistent updates.
+// "90 days" has proven to be too short at some point (user were informed but there was no update)
 pub(crate) const DC_OUTDATED_WARNING_DAYS: i64 = 183;
 
 /// messages that should be deleted get this chat_id; the messages are deleted from the working thread later then. This is also needed as rfc724_mid should be preset as long as the message is not deleted on the server (otherwise it is downloaded again)
@@ -308,17 +292,5 @@ mod tests {
         assert_eq!(MediaQuality::Balanced, MediaQuality::default());
         assert_eq!(MediaQuality::Balanced, MediaQuality::from_i32(0).unwrap());
         assert_eq!(MediaQuality::Worse, MediaQuality::from_i32(1).unwrap());
-    }
-
-    #[test]
-    fn test_videochattype_values() {
-        // values may be written to disk and must not change
-        assert_eq!(VideochatType::Unknown, VideochatType::default());
-        assert_eq!(VideochatType::Unknown, VideochatType::from_i32(0).unwrap());
-        assert_eq!(
-            VideochatType::BasicWebrtc,
-            VideochatType::from_i32(1).unwrap()
-        );
-        assert_eq!(VideochatType::Jitsi, VideochatType::from_i32(2).unwrap());
     }
 }

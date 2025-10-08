@@ -2691,10 +2691,7 @@ impl ChatIdBlocked {
 }
 
 async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
-    if msg.viewtype == Viewtype::Text
-        || msg.viewtype == Viewtype::VideochatInvitation
-        || msg.viewtype == Viewtype::Call
-    {
+    if msg.viewtype == Viewtype::Text || msg.viewtype == Viewtype::Call {
         // the caller should check if the message text is empty
     } else if msg.viewtype.has_file() {
         let viewtype_orig = msg.viewtype;
@@ -3165,10 +3162,6 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
     );
     ensure!(!original_msg.is_info(), "Cannot edit info messages");
     ensure!(!original_msg.has_html(), "Cannot edit HTML messages");
-    ensure!(
-        original_msg.viewtype != Viewtype::VideochatInvitation,
-        "Cannot edit videochat invitations"
-    );
     ensure!(original_msg.viewtype != Viewtype::Call, "Cannot edit calls");
     ensure!(
         !original_msg.text.is_empty(), // avoid complexity in UI element changes. focus is typos and rewordings
@@ -3215,34 +3208,6 @@ pub(crate) async fn save_text_edit_to_db(
         .await?;
     context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
     Ok(())
-}
-
-/// Sends invitation to a videochat.
-pub async fn send_videochat_invitation(context: &Context, chat_id: ChatId) -> Result<MsgId> {
-    ensure!(
-        !chat_id.is_special(),
-        "video chat invitation cannot be sent to special chat: {}",
-        chat_id
-    );
-
-    let instance = if let Some(instance) = context.get_config(Config::WebrtcInstance).await? {
-        if !instance.is_empty() {
-            instance
-        } else {
-            bail!("webrtc_instance is empty");
-        }
-    } else {
-        bail!("webrtc_instance not set");
-    };
-
-    let instance = Message::create_webrtc_instance(&instance, &create_id());
-
-    let mut msg = Message::new(Viewtype::VideochatInvitation);
-    msg.param.set(Param::WebrtcRoom, &instance);
-    msg.text =
-        stock_str::videochat_invite_msg_body(context, &Message::parse_webrtc_instance(&instance).1)
-            .await;
-    send_msg(context, chat_id, &mut msg).await
 }
 
 async fn donation_request_maybe(context: &Context) -> Result<()> {
@@ -4207,7 +4172,7 @@ pub async fn remove_contact_from_chat(
                 if chat.typ == Chattype::Group && chat.is_promoted() {
                     let addr = contact.get_addr();
 
-                    let res = send_member_removal_msg(context, chat_id, contact_id, addr).await;
+                    let res = send_member_removal_msg(context, &chat, contact_id, addr).await;
 
                     if contact_id == ContactId::SELF {
                         res?;
@@ -4231,7 +4196,7 @@ pub async fn remove_contact_from_chat(
         // For incoming broadcast channels, it's not possible to remove members,
         // but it's possible to leave:
         let self_addr = context.get_primary_self_addr().await?;
-        send_member_removal_msg(context, chat_id, contact_id, &self_addr).await?;
+        send_member_removal_msg(context, &chat, contact_id, &self_addr).await?;
     } else {
         bail!("Cannot remove members from non-group chats.");
     }
@@ -4241,14 +4206,18 @@ pub async fn remove_contact_from_chat(
 
 async fn send_member_removal_msg(
     context: &Context,
-    chat_id: ChatId,
+    chat: &Chat,
     contact_id: ContactId,
     addr: &str,
 ) -> Result<MsgId> {
     let mut msg = Message::new(Viewtype::Text);
 
     if contact_id == ContactId::SELF {
-        msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
+        if chat.typ == Chattype::InBroadcast {
+            msg.text = stock_str::msg_you_left_broadcast(context).await;
+        } else {
+            msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
+        }
     } else {
         msg.text = stock_str::msg_del_member_local(context, contact_id, ContactId::SELF).await;
     }
@@ -4258,7 +4227,7 @@ async fn send_member_removal_msg(
     msg.param
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 
-    send_msg(context, chat_id, &mut msg).await
+    send_msg(context, chat.id, &mut msg).await
 }
 
 async fn set_group_explicitly_left(context: &Context, grpid: &str) -> Result<()> {
@@ -4446,6 +4415,10 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
                 .set_int(Param::Forwarded, src_msg_id.to_u32() as i32);
         }
 
+        if msg.get_viewtype() == Viewtype::Call {
+            msg.viewtype = Viewtype::Text;
+        }
+
         msg.param.remove(Param::GuaranteeE2ee);
         msg.param.remove(Param::ForcePlaintext);
         msg.param.remove(Param::Cmd);
@@ -4455,6 +4428,8 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.param.remove(Param::WebxdcSummary);
         msg.param.remove(Param::WebxdcSummaryTimestamp);
         msg.param.remove(Param::IsEdited);
+        msg.param.remove(Param::WebrtcRoom);
+        msg.param.remove(Param::WebrtcAccepted);
         msg.in_reply_to = None;
 
         // do not leak data as group names; a default subject is generated by mimefactory

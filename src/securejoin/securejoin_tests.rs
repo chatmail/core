@@ -72,11 +72,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         }
         _ => alice_auto_submitted_hdr = "Auto-Submitted: auto-replied",
     };
-    for t in [&alice, &bob] {
-        t.set_config_bool(Config::VerifiedOneOnOneChats, true)
-            .await
-            .unwrap();
-    }
 
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
@@ -380,6 +375,7 @@ async fn test_setup_contact_bob_knows_alice() -> Result<()> {
             contact_id,
             chat_type,
             progress,
+            ..
         } => {
             assert_eq!(contact_id, contact_bob.id);
             assert_eq!(chat_type, Chattype::Single);
@@ -552,10 +548,12 @@ async fn test_secure_join() -> Result<()> {
         EventType::SecurejoinInviterProgress {
             contact_id,
             chat_type,
+            chat_id,
             progress,
         } => {
             assert_eq!(contact_id, contact_bob.id);
             assert_eq!(chat_type, Chattype::Group);
+            assert_eq!(chat_id, alice_chatid);
             assert_eq!(progress, 1000);
         }
         _ => unreachable!(),
@@ -699,11 +697,6 @@ async fn test_lost_contact_confirm() {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
-    for t in [&alice, &bob] {
-        t.set_config_bool(Config::VerifiedOneOnOneChats, true)
-            .await
-            .unwrap();
-    }
 
     let qr = get_securejoin_qr(&alice, None).await.unwrap();
     join_securejoin(&bob.ctx, &qr).await.unwrap();

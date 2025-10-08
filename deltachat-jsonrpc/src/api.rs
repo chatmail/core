@@ -48,6 +48,7 @@ pub mod types;
 
 use num_traits::FromPrimitive;
 use types::account::Account;
+use types::calls::JsonrpcCallInfo;
 use types::chat::FullChat;
 use types::contact::{ContactObject, VcardContact};
 use types::events::Event;
@@ -1851,13 +1852,13 @@ impl CommandApi {
 
     /// Offers a backup for remote devices to retrieve.
     ///
-    /// Can be cancelled by stopping the ongoing process.  Success or failure can be tracked
+    /// Can be canceled by stopping the ongoing process.  Success or failure can be tracked
     /// via the `ImexProgress` event which should either reach `1000` for success or `0` for
     /// failure.
     ///
     /// This **stops IO** while it is running.
     ///
-    /// Returns once a remote device has retrieved the backup, or is cancelled.
+    /// Returns once a remote device has retrieved the backup, or is canceled.
     async fn provide_backup(&self, account_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
 
@@ -1923,7 +1924,7 @@ impl CommandApi {
     /// This retrieves the backup from a remote device over the network and imports it into
     /// the current device.
     ///
-    /// Can be cancelled by stopping the ongoing process.
+    /// Can be canceled by stopping the ongoing process.
     ///
     /// Do not forget to call start_io on the account after a successful import,
     /// otherwise it will not connect to the email server.
@@ -2044,6 +2045,11 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Leaves the gossip of the webxdc with the given message id.
+    ///
+    /// NB: When this is called before closing a webxdc app in UIs, it must be guaranteed that
+    /// `send_webxdc_realtime_*()` functions aren't called for the given `instance_message_id`
+    /// anymore until the app is open again.
     async fn leave_webxdc_realtime(&self, account_id: u32, instance_message_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         leave_webxdc_realtime(&ctx, MsgId::new(instance_message_id)).await
@@ -2153,6 +2159,13 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
         ctx.end_call(MsgId::new(msg_id)).await?;
         Ok(())
+    }
+
+    /// Returns information about the call.
+    async fn call_info(&self, account_id: u32, msg_id: u32) -> Result<JsonrpcCallInfo> {
+        let ctx = self.get_context(account_id).await?;
+        let call_info = JsonrpcCallInfo::from_msg_id(&ctx, MsgId::new(msg_id)).await?;
+        Ok(call_info)
     }
 
     /// Returns JSON with ICE servers, to be used for WebRTC video calls.
@@ -2310,13 +2323,6 @@ impl CommandApi {
         } else {
             Ok(None)
         }
-    }
-
-    async fn send_videochat_invitation(&self, account_id: u32, chat_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        chat::send_videochat_invitation(&ctx, ChatId::new(chat_id))
-            .await
-            .map(|msg_id| msg_id.to_u32())
     }
 
     // ---------------------------------------------

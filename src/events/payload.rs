@@ -273,14 +273,13 @@ pub enum EventType {
         /// ID of the contact that wants to join.
         contact_id: ContactId,
 
+        /// ID of the chat in case of success.
+        chat_id: ChatId,
+
         /// The type of the joined chat.
         chat_type: Chattype,
 
-        /// Progress as:
-        /// 300=vg-/vc-request received, typically shown as "bob@addr joins".
-        /// 600=vg-/vc-request-with-auth received and verified, typically shown as "bob@addr verified".
-        /// 800=contact added to chat, shown as "bob@addr securely joined GROUP". Only for the verified-group-protocol.
-        /// 1000=Protocol finished for this contact.
+        /// Progress, always 1000.
         progress: usize,
     },
 
@@ -384,6 +383,8 @@ pub enum EventType {
     IncomingCall {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// ID of the chat which the message belongs to.
+        chat_id: ChatId,
         /// User-defined info as passed to place_outgoing_call()
         place_call_info: String,
         /// True if incoming call is a video call.
@@ -394,12 +395,16 @@ pub enum EventType {
     IncomingCallAccepted {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// ID of the chat which the message belongs to.
+        chat_id: ChatId,
     },
 
     /// Outgoing call accepted.
     OutgoingCallAccepted {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// ID of the chat which the message belongs to.
+        chat_id: ChatId,
         /// User-defined info as passed to accept_incoming_call()
         accept_call_info: String,
     },
@@ -408,6 +413,8 @@ pub enum EventType {
     CallEnded {
         /// ID of the message referring to the call.
         msg_id: MsgId,
+        /// ID of the chat which the message belongs to.
+        chat_id: ChatId,
     },
 
     /// Event for using in tests, e.g. as a fence between normally generated events.

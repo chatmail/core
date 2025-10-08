@@ -367,10 +367,11 @@ impl<'a> BlobObject<'a> {
                         || img.get_pixel(x_max, y_max).0[3] == 0)
                 {
                     *vt = Viewtype::Image;
+                } else {
+                    // Core doesn't auto-assign `Viewtype::Sticker` to messages and stickers coming
+                    // from UIs shouldn't contain sensitive Exif info.
+                    return Ok(name);
                 }
-            }
-            if *vt == Viewtype::Sticker && exif.is_none() {
-                return Ok(name);
             }
 
             img = match orientation {

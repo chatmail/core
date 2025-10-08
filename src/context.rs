@@ -968,12 +968,6 @@ impl Context {
         res.insert("public_key_count", pub_key_cnt.to_string());
         res.insert("fingerprint", fingerprint_str);
         res.insert(
-            "webrtc_instance",
-            self.get_config(Config::WebrtcInstance)
-                .await?
-                .unwrap_or_else(|| "<unset>".to_string()),
-        );
-        res.insert(
             "media_quality",
             self.get_config_int(Config::MediaQuality).await?.to_string(),
         );
@@ -1050,12 +1044,6 @@ impl Context {
             self.get_config_int(Config::GossipPeriod).await?.to_string(),
         );
         res.insert(
-            "verified_one_on_one_chats", // deprecated 2025-07
-            self.get_config_bool(Config::VerifiedOneOnOneChats)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "webxdc_realtime_enabled",
             self.get_config_bool(Config::WebxdcRealtimeEnabled)
                 .await?
@@ -1089,6 +1077,13 @@ impl Context {
             self.get_config_i64(Config::StatsLastSent)
                 .await?
                 .to_string(),
+        );
+        res.insert(
+            "fail_on_receiving_full_msg",
+            self.sql
+                .get_raw_config("fail_on_receiving_full_msg")
+                .await?
+                .unwrap_or_default(),
         );
 
         let elapsed = time_elapsed(&self.creation_time);

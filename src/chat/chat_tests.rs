@@ -3026,7 +3026,7 @@ async fn test_leave_broadcast() -> Result<()> {
 }
 
 /// Tests that if Bob leaves a broadcast channel with one device,
-/// the other device shows a correct info message "You left.".
+/// the other device shows a correct info message "You left the channel.".
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_leave_broadcast_multidevice() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -3061,10 +3061,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     assert_eq!(rcvd.chat_id, bob1_hello.chat_id);
     assert!(rcvd.is_info());
     assert_eq!(rcvd.get_info_type(), SystemMessage::MemberRemovedFromGroup);
-    assert_eq!(
-        rcvd.text,
-        stock_str::msg_group_left_local(bob1, ContactId::SELF).await
-    );
+    assert_eq!(rcvd.text, stock_str::msg_you_left_broadcast(bob1).await);
 
     Ok(())
 }
@@ -4160,7 +4157,7 @@ async fn test_past_members() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn non_member_cannot_modify_member_list() -> Result<()> {
+async fn test_non_member_cannot_modify_member_list() -> Result<()> {
     let mut tcm = TestContextManager::new();
 
     let alice = &tcm.alice().await;
@@ -4192,6 +4189,12 @@ async fn non_member_cannot_modify_member_list() -> Result<()> {
     alice.recv_msg_trash(&bob_sent_add_msg).await;
     assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
+    // The same for removal.
+    let bob_alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
+    remove_contact_from_chat(bob, bob_chat_id, bob_alice_contact_id).await?;
+    let bob_sent_add_msg = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&bob_sent_add_msg).await;
+    assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
     Ok(())
 }
 
@@ -4561,17 +4564,6 @@ async fn test_cannot_send_edit_request() -> Result<()> {
     assert_eq!(msg.from_id, ContactId::SELF);
     assert!(
         send_edit_request(alice, msg.id, "bar".to_string())
-            .await
-            .is_err()
-    );
-
-    // Videochat invitations cannot be edited
-    alice
-        .set_config(Config::WebrtcInstance, Some("https://foo.bar"))
-        .await?;
-    let msg_id = send_videochat_invitation(alice, chat_id).await?;
-    assert!(
-        send_edit_request(alice, msg_id, "bar".to_string())
             .await
             .is_err()
     );

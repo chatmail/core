@@ -130,12 +130,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Failed to send message to %1$s."))]
     FailedSendingTo = 74,
 
-    #[strum(props(fallback = "Video chat invitation"))]
-    VideochatInvitation = 82,
-
-    #[strum(props(fallback = "You are invited to a video chat, click %1$s to join."))]
-    VideochatInviteMsgBody = 83,
-
     #[strum(props(fallback = "Error:\n\n“%1$s”"))]
     ConfigurationFailed = 84,
 
@@ -279,7 +273,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s removed by %2$s."))]
     MsgDelMemberBy = 131,
 
-    #[strum(props(fallback = "You left."))]
+    #[strum(props(fallback = "You left the group."))]
     MsgYouLeftGroup = 132,
 
     #[strum(props(fallback = "Group left by %1$s."))]
@@ -424,6 +418,27 @@ Help keeping us to keep Delta Chat independent and make it more awesome in the f
 
 https://delta.chat/donate"))]
     DonationRequest = 193,
+
+    #[strum(props(fallback = "Outgoing call"))]
+    OutgoingCall = 194,
+
+    #[strum(props(fallback = "Incoming call"))]
+    IncomingCall = 195,
+
+    #[strum(props(fallback = "Declined call"))]
+    DeclinedCall = 196,
+
+    #[strum(props(fallback = "Canceled call"))]
+    CanceledCall = 197,
+
+    #[strum(props(fallback = "Missed call"))]
+    MissedCall = 198,
+
+    #[strum(props(fallback = "You left the channel."))]
+    MsgYouLeftBroadcast = 200,
+
+    #[strum(props(fallback = "Scan to join channel %1$s"))]
+    SecureJoinBrodcastQRDescription = 201,
 }
 
 impl StockMessage {
@@ -696,7 +711,7 @@ pub(crate) async fn msg_group_left_remote(context: &Context) -> String {
     translated(context, StockMessage::MsgILeftGroup).await
 }
 
-/// Stock string: `You left.` or `Group left by %1$s.`.
+/// Stock string: `You left the group.` or `Group left by %1$s.`.
 pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouLeftGroup).await
@@ -705,6 +720,11 @@ pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactI
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
+}
+
+/// Stock string: `You left the channel.`
+pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouLeftBroadcast).await
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.
@@ -801,6 +821,31 @@ pub(crate) async fn donation_request(context: &Context) -> String {
     translated(context, StockMessage::DonationRequest).await
 }
 
+/// Stock string: `Outgoing call`.
+pub(crate) async fn outgoing_call(context: &Context) -> String {
+    translated(context, StockMessage::OutgoingCall).await
+}
+
+/// Stock string: `Incoming call`.
+pub(crate) async fn incoming_call(context: &Context) -> String {
+    translated(context, StockMessage::IncomingCall).await
+}
+
+/// Stock string: `Declined call`.
+pub(crate) async fn declined_call(context: &Context) -> String {
+    translated(context, StockMessage::DeclinedCall).await
+}
+
+/// Stock string: `Canceled call`.
+pub(crate) async fn canceled_call(context: &Context) -> String {
+    translated(context, StockMessage::CanceledCall).await
+}
+
+/// Stock string: `Missed call`.
+pub(crate) async fn missed_call(context: &Context) -> String {
+    translated(context, StockMessage::MissedCall).await
+}
+
 /// Stock string: `Scan to chat with %1$s`.
 pub(crate) async fn setup_contact_qr_description(
     context: &Context,
@@ -817,9 +862,16 @@ pub(crate) async fn setup_contact_qr_description(
         .replace1(&name)
 }
 
-/// Stock string: `Scan to join %1$s`.
+/// Stock string: `Scan to join group %1$s`.
 pub(crate) async fn secure_join_group_qr_description(context: &Context, chat: &Chat) -> String {
     translated(context, StockMessage::SecureJoinGroupQRDescription)
+        .await
+        .replace1(chat.get_name())
+}
+
+/// Stock string: `Scan to join channel %1$s`.
+pub(crate) async fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
+    translated(context, StockMessage::SecureJoinBrodcastQRDescription)
         .await
         .replace1(chat.get_name())
 }
@@ -999,18 +1051,6 @@ pub(crate) async fn msg_ephemeral_timer_year(context: &Context, by_contact: Cont
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
-}
-
-/// Stock string: `Video chat invitation`.
-pub(crate) async fn videochat_invitation(context: &Context) -> String {
-    translated(context, StockMessage::VideochatInvitation).await
-}
-
-/// Stock string: `You are invited to a video chat, click %1$s to join.`.
-pub(crate) async fn videochat_invite_msg_body(context: &Context, url: &str) -> String {
-    translated(context, StockMessage::VideochatInviteMsgBody)
-        .await
-        .replace1(url)
 }
 
 /// Stock string: `Error:\n\n“%1$s”`.

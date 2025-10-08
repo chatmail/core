@@ -5557,3 +5557,32 @@ async fn test_lookup_key_contact_by_address_self() -> Result<()> {
     );
     Ok(())
 }
+
+/// Tests reception of multipart/alternative
+/// with three parts, one of which is a calendar.
+///
+/// MS Exchange produces multipart/alternative
+/// messages with three parts:
+/// `text/plain`, `text/html` and `text/calendar`.
+///
+/// We display `text/plain` part in this case,
+/// but .ics file is available as an attachment.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_calendar_alternative() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let raw = include_bytes!("../../test-data/message/calendar-alternative.eml");
+    let msg = receive_imf(t, raw, false).await?.unwrap();
+    assert_eq!(msg.msg_ids.len(), 1);
+
+    let calendar_msg = Message::load_from_db(t, msg.msg_ids[0]).await?;
+    assert_eq!(calendar_msg.text, "Subject was here – Hello!");
+    assert_eq!(calendar_msg.viewtype, Viewtype::File);
+    assert_eq!(calendar_msg.get_filename().unwrap(), "calendar.ics");
+
+    assert!(calendar_msg.has_html());
+    let html = calendar_msg.get_id().get_html(t).await.unwrap().unwrap();
+    assert_eq!(html, "<b>Hello!</b>");
+
+    Ok(())
+}

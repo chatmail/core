@@ -242,7 +242,7 @@ impl BackupProvider {
                         if let Err(err) = Self::handle_connection(context.clone(), conn, auth_token, dbfile).race(
                             async {
                                 cancel_token.recv().await.ok();
-                                Err(format_err!("Backup transfer cancelled"))
+                                Err(format_err!("Backup transfer canceled"))
                             }
                         ).race(
                             async {
@@ -262,12 +262,12 @@ impl BackupProvider {
                     }
                 },
                 _ = cancel_token.recv() => {
-                    info!(context, "Backup transfer cancelled by the user, stopping accept loop.");
+                    info!(context, "Backup transfer canceled by the user, stopping accept loop.");
                     context.emit_event(EventType::ImexProgress(0));
                     break;
                 }
                 _ = drop_token.cancelled() => {
-                    info!(context, "Backup transfer cancelled by dropping the provider, stopping accept loop.");
+                    info!(context, "Backup transfer canceled by dropping the provider, stopping accept loop.");
                     context.emit_event(EventType::ImexProgress(0));
                     break;
                 }
@@ -364,7 +364,7 @@ pub async fn get_backup(context: &Context, qr: Qr) -> Result<()> {
             let res = get_backup2(context, node_addr, auth_token)
                 .race(async {
                     cancel_token.recv().await.ok();
-                    Err(format_err!("Backup reception cancelled"))
+                    Err(format_err!("Backup reception canceled"))
                 })
                 .await;
             if let Err(ref res) = res {
