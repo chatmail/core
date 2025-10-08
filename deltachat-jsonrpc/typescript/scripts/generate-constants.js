@@ -50,25 +50,25 @@ const constants = data
     );
   })
   .map((row) => {
-    return `  ${row.key} = ${row.value}`;
+    return `  export const ${row.key} = ${row.value};`;
   })
-  .join(",\n");
+  .join("\n");
 
 writeFileSync(
   resolve(__dirname, "../generated/constants.ts"),
   `// Generated!
 
-export enum C {
-${constants},
+export namespace C {
+${constants}
   /** @deprecated 10-8-2025 compare string directly with \`== "Group"\` */
-  DC_CHAT_TYPE_GROUP = "Group",
+  export const DC_CHAT_TYPE_GROUP = "Group";
   /** @deprecated 10-8-2025 compare string directly with \`== "InBroadcast"\`*/
-  DC_CHAT_TYPE_IN_BROADCAST = "InBroadcast",
+  export const DC_CHAT_TYPE_IN_BROADCAST = "InBroadcast";
   /** @deprecated 10-8-2025 compare string directly with \`== "Mailinglist"\` */
-  DC_CHAT_TYPE_MAILINGLIST = "Mailinglist",
+  export const DC_CHAT_TYPE_MAILINGLIST = "Mailinglist";
   /** @deprecated 10-8-2025 compare string directly with \`== "OutBroadcast"\` */
-  DC_CHAT_TYPE_OUT_BROADCAST = "OutBroadcast",
+  export const DC_CHAT_TYPE_OUT_BROADCAST = "OutBroadcast";
   /** @deprecated 10-8-2025 compare string directly with \`== "Single"\` */
-  DC_CHAT_TYPE_SINGLE = "Single",
+  export const DC_CHAT_TYPE_SINGLE = "Single";
 }\n`,
 );
