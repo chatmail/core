@@ -408,7 +408,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
         match percent_decode_str(&encoded_name).decode_utf8() {
             Ok(name) => name.to_string(),
-            Err(err) => bail!("Invalid name: {}", err),
+            Err(err) => bail!("Invalid name: {err}"),
         }
     } else {
         "".to_string()
@@ -432,7 +432,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
             match percent_decode_str(&encoded_name).decode_utf8() {
                 Ok(name) => Some(name.to_string()),
-                Err(err) => bail!("Invalid group name: {}", err),
+                Err(err) => bail!("Invalid group name: {err}"),
             }
         } else {
             None
@@ -581,7 +581,7 @@ fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
     }
 
     let Some(host) = host else {
-        bail!("Bad t.me/socks url: {:?}", url);
+        bail!("Bad t.me/socks url: {url:?}");
     };
 
     let mut url = "socks5://".to_string();
@@ -685,8 +685,7 @@ pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<(
                     "Cannot create account, server response could not be parsed:\n{parse_error:#}\nraw response:\n{response_text}"
                 )));
                 bail!(
-                    "Cannot create account, unexpected server response:\n{:?}",
-                    response_text
+                    "Cannot create account, unexpected server response:\n{response_text:?}"
                 )
             }
         }

@@ -32,7 +32,7 @@ pub(crate) async fn handle_authres(
     let from_domain = match EmailAddress::new(from) {
         Ok(email) => email.domain,
         Err(e) => {
-            return Err(anyhow::format_err!("invalid email {}: {:#}", from, e));
+            return Err(anyhow::format_err!("invalid email {from}: {e:#}"));
         }
     };
 

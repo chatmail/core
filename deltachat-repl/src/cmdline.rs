@@ -418,7 +418,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             Ok(setup_code) => {
                 println!("Setup code for the transferred setup message: {setup_code}",)
             }
-            Err(err) => bail!("Failed to generate setup code: {}", err),
+            Err(err) => bail!("Failed to generate setup code: {err}"),
         },
         "get-setupcodebegin" => {
             ensure!(!arg1.is_empty(), "Argument <msg-id> missing.");
@@ -432,7 +432,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                     setupcodebegin.unwrap_or_default(),
                 );
             } else {
-                bail!("{} is no setup message.", msg_id,);
+                bail!("{msg_id} is no setup message.",);
             }
         }
         "continue-key-transfer" => {
@@ -527,7 +527,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                     println!("Report written to: {file:#?}");
                 }
                 Err(err) => {
-                    bail!("Failed to get connectivity html: {}", err);
+                    bail!("Failed to get connectivity html: {err}");
                 }
             }
         }
@@ -1287,7 +1287,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             );
         }
         "" => (),
-        _ => bail!("Unknown command: \"{}\" type ? for help.", arg0),
+        _ => bail!("Unknown command: \"{arg0}\" type ? for help."),
     }
 
     Ok(())

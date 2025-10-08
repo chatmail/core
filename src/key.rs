@@ -500,7 +500,7 @@ impl std::str::FromStr for Fingerprint {
             .filter(|&c| c.is_ascii_hexdigit())
             .collect();
         let v: Vec<u8> = hex::decode(&hex_repr)?;
-        ensure!(v.len() == 20, "wrong fingerprint length: {}", hex_repr);
+        ensure!(v.len() == 20, "wrong fingerprint length: {hex_repr}");
         let fp = Fingerprint::new(v);
         Ok(fp)
     }

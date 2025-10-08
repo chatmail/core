@@ -41,22 +41,22 @@ async fn main_impl() -> Result<()> {
     if let Some(first_arg) = args.next() {
         if first_arg.to_str() == Some("--version") {
             if let Some(arg) = args.next() {
-                return Err(anyhow!("Unrecognized argument {:?}", arg));
+                return Err(anyhow!("Unrecognized argument {arg:?}"));
             }
             eprintln!("{}", &*DC_VERSION_STR);
             return Ok(());
         } else if first_arg.to_str() == Some("--openrpc") {
             if let Some(arg) = args.next() {
-                return Err(anyhow!("Unrecognized argument {:?}", arg));
+                return Err(anyhow!("Unrecognized argument {arg:?}"));
             }
             println!("{}", CommandApi::openrpc_specification()?);
             return Ok(());
         } else {
-            return Err(anyhow!("Unrecognized option {:?}", first_arg));
+            return Err(anyhow!("Unrecognized option {first_arg:?}"));
         }
     }
     if let Some(arg) = args.next() {
-        return Err(anyhow!("Unrecognized argument {:?}", arg));
+        return Err(anyhow!("Unrecognized argument {arg:?}"));
     }
 
     // Install signal handlers early so that the shutdown is graceful starting from here.

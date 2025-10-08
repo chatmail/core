@@ -420,8 +420,7 @@ impl MimeFactory {
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
                     bail!(
-                        "No recipient keys are available, cannot encrypt to {:?}.",
-                        recipients
+                        "No recipient keys are available, cannot encrypt to {recipients:?}."
                     );
                 }
 

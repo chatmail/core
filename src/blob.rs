@@ -170,7 +170,7 @@ impl<'a> BlobObject<'a> {
             false => name,
         };
         if !BlobObject::is_acceptible_blob_name(name) {
-            return Err(format_err!("not an acceptable blob name: {}", name));
+            return Err(format_err!("not an acceptable blob name: {name}"));
         }
         Ok(BlobObject {
             blobdir: context.get_blobdir(),
@@ -458,8 +458,7 @@ impl<'a> BlobObject<'a> {
                     {
                         if img_wh < 20 {
                             return Err(format_err!(
-                                "Failed to scale image to below {}B.",
-                                max_bytes,
+                                "Failed to scale image to below {max_bytes}B.",
                             ));
                         }
 

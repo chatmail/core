@@ -490,8 +490,7 @@ impl Message {
     pub async fn load_from_db_optional(context: &Context, id: MsgId) -> Result<Option<Message>> {
         ensure!(
             !id.is_special(),
-            "Can not load special message ID {} from DB",
-            id
+            "Can not load special message ID {id} from DB"
         );
         let msg = context
             .sql

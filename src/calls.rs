@@ -96,7 +96,7 @@ impl CallInfo {
         let duration = match minutes {
             0 => "<1 minute".to_string(),
             1 => "1 minute".to_string(),
-            n => format!("{} minutes", n),
+            n => format!("{n} minutes"),
         };
 
         if self.is_incoming() {
