@@ -464,7 +464,10 @@ impl MimeFactory {
                 .unwrap_or_default(),
             false => "".to_string(),
         };
-        let attach_selfavatar = should_attach_profile;
+        // We don't display avatars for address-contacts, so sending avatars w/o encryption is not
+        // useful and causes e.g. Outlook to reject a message with a big header, see
+        // https://support.delta.chat/t/invalid-mime-content-single-text-value-size-32822-exceeded-allowed-maximum-32768-for-the-chat-user-avatar-header/4067.
+        let attach_selfavatar = should_attach_profile && encryption_keys.is_some();
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
@@ -1429,7 +1432,7 @@ impl MimeFactory {
                         "Chat-Content",
                         mail_builder::headers::text::Text::new("group-avatar-changed").into(),
                     ));
-                    if grpimage.is_none() {
+                    if grpimage.is_none() && is_encrypted {
                         headers.push((
                             "Chat-Group-Avatar",
                             mail_builder::headers::raw::Raw::new("0").into(),
@@ -1556,7 +1559,7 @@ impl MimeFactory {
             _ => {}
         }
 
-        if let Some(grpimage) = grpimage {
+        if let (Some(grpimage), true) = (grpimage, is_encrypted) {
             info!(context, "setting group image '{}'", grpimage);
             let avatar = build_avatar_file(context, grpimage)
                 .await
