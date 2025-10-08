@@ -44,10 +44,7 @@ use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on
 use crate::simplify;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{
-    self, buf_compress, create_broadcast_shared_secret, remove_subject_prefix,
-    validate_broadcast_shared_secret,
-};
+use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_shared_secret};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 use crate::{contact, imap};
 
@@ -3536,7 +3533,8 @@ async fn apply_out_broadcast_changes(
     if let Some(_added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         // This message can be safely ignored,
         // because the only way to add a member is by having them scan a QR code.
-        // All devices will receive the vg-request-with-auth message and add him to the channel.
+        // All devices will receive the vg-request-with-auth message and add the member to the channel.
+        info!(context, "Second device adding a member (TRASH)");
         better_msg.get_or_insert("".to_string());
     } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
         send_event_chat_modified = true;
