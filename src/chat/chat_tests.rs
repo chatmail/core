@@ -3365,7 +3365,7 @@ async fn test_sync_broadcast_avatar_and_name() -> Result<()> {
     let a2_broadcast_chat = Chat::load_from_db(alice2, a2_broadcast_id).await?;
     assert_eq!(a2_broadcast_chat.get_name(), "foo".to_string());
 
-    set_chat_name(&alice1, a1_broadcast_id, "New name").await?;
+    set_chat_name(alice1, a1_broadcast_id, "New name").await?;
     let sent = alice1.pop_sent_msg().await;
     let rcvd = alice2.recv_msg(&sent).await;
     assert_eq!(rcvd.chat_id, a2_broadcast_id);
