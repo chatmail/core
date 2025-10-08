@@ -95,7 +95,7 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
     let private_key = load_self_secret_key(context).await?;
     let ac_headers = Some(("Autocrypt-Prefer-Encrypt", "mutual"));
     let private_key_asc = private_key.to_asc(ac_headers);
-    let encr = pgp::symm_encrypt_setup_file(passphrase, private_key_asc.into_bytes())
+    let encr = pgp::symm_encrypt_autocrypt_setup(passphrase, private_key_asc.into_bytes())
         .await?
         .replace('\n', "\r\n");
 

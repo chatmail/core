@@ -2565,6 +2565,7 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 
 #define         DC_QR_ASK_VERIFYCONTACT      200 // id=contact
 #define         DC_QR_ASK_VERIFYGROUP        202 // text1=groupname
+#define         DC_QR_ASK_VERIFYBROADCAST    204
 #define         DC_QR_FPR_OK                 210 // id=contact
 #define         DC_QR_FPR_MISMATCH           220 // id=contact
 #define         DC_QR_FPR_WITHOUT_ADDR       230 // test1=formatted fingerprint
@@ -2597,7 +2598,8 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  *   ask whether to verify the contact;
  *   if so, start the protocol with dc_join_securejoin().
  *
- * - DC_QR_ASK_VERIFYGROUP with dc_lot_t::text1=Group name:
+ * - DC_QR_ASK_VERIFYGROUP or DC_QR_ASK_VERIFYBROADCAST
+ *   with dc_lot_t::text1=Group name:
  *   ask whether to join the group;
  *   if so, start the protocol with dc_join_securejoin().
  *
@@ -2681,7 +2683,8 @@ dc_lot_t*       dc_check_qr                  (dc_context_t* context, const char*
  * Get QR code text that will offer an Setup-Contact or Verified-Group invitation.
  *
  * The scanning device will pass the scanned content to dc_check_qr() then;
- * if dc_check_qr() returns DC_QR_ASK_VERIFYCONTACT or DC_QR_ASK_VERIFYGROUP
+ * if dc_check_qr() returns
+ * DC_QR_ASK_VERIFYCONTACT, DC_QR_ASK_VERIFYGROUP or DC_QR_ASK_VERIFYBROADCAST
  * an out-of-band-verification can be joined using dc_join_securejoin()
  *
  * The returned text will also work as a normal https:-link,
@@ -2722,7 +2725,7 @@ char*           dc_get_securejoin_qr_svg         (dc_context_t* context, uint32_
  * Continue a Setup-Contact or Verified-Group-Invite protocol
  * started on another device with dc_get_securejoin_qr().
  * This function is typically called when dc_check_qr() returns
- * lot.state=DC_QR_ASK_VERIFYCONTACT or lot.state=DC_QR_ASK_VERIFYGROUP.
+ * lot.state=DC_QR_ASK_VERIFYCONTACT, lot.state=DC_QR_ASK_VERIFYGROUP or lot.state=DC_QR_ASK_VERIFYBROADCAST
  *
  * The function returns immediately and the handshake runs in background,
  * sending and receiving several messages.

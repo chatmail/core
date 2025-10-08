@@ -104,7 +104,7 @@ pub enum Param {
     ///
     /// For "MemberAddedToGroup", this is the email address added to the group.
     ///
-    /// For securejoin messages, this is the step,
+    /// For securejoin messages other than `vg-member-added`, this is the step,
     /// which is put into the `Secure-Join` header.
     Arg = b'E',
 

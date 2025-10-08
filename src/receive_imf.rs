@@ -3532,7 +3532,7 @@ async fn apply_out_broadcast_changes(
     if let Some(_added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         // This message can be safely ignored,
         // because the only way to add a member is by having them scan a QR code.
-        // All devices will receive Bob's vg-request-with-auth message and add him to the channel.
+        // All devices will receive the vg-request-with-auth message and add him to the channel.
         better_msg.get_or_insert("".to_string());
     } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
         send_event_chat_modified = true;

@@ -36,7 +36,7 @@ pub enum QrObject {
     },
     /// Ask the user whether to join the broadcast channel.
     AskJoinBroadcast {
-        /// Chat name.
+        /// The user-visible name of this broadcast channel
         broadcast_name: String,
         /// A string of random characters,
         /// uniquely identifying this broadcast channel in the database.

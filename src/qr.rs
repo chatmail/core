@@ -495,7 +495,6 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 })
             }
         } else if let (Some(grpid), Some(broadcast_name)) = (grpid, broadcast_name) {
-            // This is a broadcast channel invite link.
             Ok(Qr::AskJoinBroadcast {
                 broadcast_name,
                 grpid,

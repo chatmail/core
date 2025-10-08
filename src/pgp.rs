@@ -258,7 +258,7 @@ pub fn decrypt(
 
     // We always try out all passwords here, which is not great for performance.
     // But benchmarking (see `benchmark_decrypting.rs`)
-    // showed that the performance penalty is acceptable.
+    // showed that the performance impact is negligible.
     // We could include a short (~2 character) identifier of the secret in cleartext
     // (or just include the first 2 characters of the secret in cleartext)
     // in order to narrow down the number of shared secrets that have to be tried out.
@@ -363,8 +363,8 @@ pub fn pk_validate(
     Ok(ret)
 }
 
-/// Symmetric encryption for the autocrypt setup file.
-pub async fn symm_encrypt_setup_file(passphrase: &str, plain: Vec<u8>) -> Result<String> {
+/// Symmetric encryption for the autocrypt setup message (ASM).
+pub async fn symm_encrypt_autocrypt_setup(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
