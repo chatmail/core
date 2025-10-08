@@ -91,19 +91,17 @@ class ChatId(IntEnum):
     LAST_SPECIAL = 9
 
 
-class ChatType(IntEnum):
+class ChatType(str, Enum):
     """Chat type."""
 
-    UNDEFINED = 0
-
-    SINGLE = 100
+    SINGLE = "Single"
     """1:1 chat, i.e. a direct chat with a single contact"""
 
-    GROUP = 120
+    GROUP = "Group"
 
-    MAILINGLIST = 140
+    MAILINGLIST = "Mailinglist"
 
-    OUT_BROADCAST = 160
+    OUT_BROADCAST = "OutBroadcast"
     """Outgoing broadcast channel, called "Channel" in the UI.
 
     The user can send into this channel,
@@ -115,7 +113,7 @@ class ChatType(IntEnum):
     which would make it hard to grep for it.
     """
 
-    IN_BROADCAST = 165
+    IN_BROADCAST = "InBroadcast"
     """Incoming broadcast channel, called "Channel" in the UI.
 
     This channel is read-only,
