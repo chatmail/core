@@ -40,15 +40,30 @@ const constants = data
       key.startsWith("DC_DOWNLOAD") ||
       key.startsWith("DC_INFO_") ||
       (key.startsWith("DC_MSG") && !key.startsWith("DC_MSG_ID")) ||
-      key.startsWith("DC_QR_")
+      key.startsWith("DC_QR_") ||
+      key.startsWith("DC_CHAT_TYPE")
     );
   })
   .map((row) => {
-    return `  ${row.key}: ${row.value}`;
+    return `  ${row.key} = ${row.value}`;
   })
   .join(",\n");
 
 writeFileSync(
   resolve(__dirname, "../generated/constants.ts"),
-  `// Generated!\n\nexport enum C {\n${constants.replace(/:/g, " =")},\n}\n`,
+  `// Generated!
+
+export enum C {
+${constants},
+  /** @deprecated 10-8-2025 compare string directly with \`== "Group"\` */
+  DC_CHAT_TYPE_GROUP = "Group",
+  /** @deprecated 10-8-2025 compare string directly with \`== "InBroadcast"\`*/
+  DC_CHAT_TYPE_IN_BROADCAST = "InBroadcast",
+  /** @deprecated 10-8-2025 compare string directly with \`== "Mailinglist"\` */
+  DC_CHAT_TYPE_MAILINGLIST = "Mailinglist",
+  /** @deprecated 10-8-2025 compare string directly with \`== "OutBroadcast"\` */
+  DC_CHAT_TYPE_OUT_BROADCAST = "OutBroadcast",
+  /** @deprecated 10-8-2025 compare string directly with \`== "Single"\` */
+  DC_CHAT_TYPE_SINGLE = "Single",
+}\n`,
 );
