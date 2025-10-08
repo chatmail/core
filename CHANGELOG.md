@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.18.0] - 2025-10-08
+
+### API-Changes
+
+- [**breaking**] Remove APIs for video chat invitations.
+
+### CI
+
+- nix: Run the workflow when workflow file changes.
+- nix: Switch from DeterminateSystems/nix-installer-action to cachix/install-nix-action.
+
+### Features / Changes
+
+- No implicit member changes from old Delta Chat clients ([#7220](https://github.com/chatmail/core/pull/7220)).
+
+### Fixes
+
+- Do not fail to load messages with unknown viewtype.
+- Only omit group changes messages if SELF is really added ([#7220](https://github.com/chatmail/core/pull/7220)).
+
+### Refactor
+
+- Assert that Iroh node addresses have home relay URL.
+
 ## [2.17.0] - 2025-10-04
 
 ### API-Changes
@@ -6857,3 +6881,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.15.0]: https://github.com/chatmail/core/compare/v2.14.0..v2.15.0
 [2.16.0]: https://github.com/chatmail/core/compare/v2.15.0..v2.16.0
 [2.17.0]: https://github.com/chatmail/core/compare/v2.16.0..v2.17.0
+[2.18.0]: https://github.com/chatmail/core/compare/v2.17.0..v2.18.0
