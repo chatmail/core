@@ -15,7 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, load_broadcast_shared_secret};
+use crate::chat::{self, Chat, PARAM_BROADCAST_SHARED_SECRET, load_broadcast_shared_secret};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -847,7 +847,7 @@ impl MimeFactory {
                 ));
 
                 if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
-                    if let Some(secret) = msg.param.get(Param::Arg3) {
+                    if let Some(secret) = msg.param.get(PARAM_BROADCAST_SHARED_SECRET) {
                         headers.push((
                             "Chat-Broadcast-Secret",
                             mail_builder::headers::text::Text::new(secret.to_string()).into(),
@@ -1888,8 +1888,7 @@ fn hidden_recipients() -> Address<'static> {
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
     chat.typ == Chattype::OutBroadcast
-        // Securejoin messages that are sent into a broadcast
-        // are encrypted asymmetrically:
+        // We encrypt securejoin messages asymmetrically
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
         // The member-added message in a broadcast must be asymmetrically encrypted,
         // because the newly-added member doesn't know the broadcast shared secret yet:

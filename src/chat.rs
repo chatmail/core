@@ -50,6 +50,8 @@ use crate::tools::{
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
 
+pub(crate) const PARAM_BROADCAST_SHARED_SECRET: Param = Param::Arg3;
+
 /// An chat item, such as a message or a marker.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ChatItem {
@@ -4071,7 +4073,7 @@ pub(crate) async fn add_contact_to_chat_ex(
             let secret = load_broadcast_shared_secret(context, chat_id)
                 .await?
                 .context("Failed to find broadcast shared secret")?;
-            msg.param.set(Param::Arg3, secret);
+            msg.param.set(PARAM_BROADCAST_SHARED_SECRET, secret);
         }
         send_msg(context, chat_id, &mut msg).await?;
 

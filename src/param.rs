@@ -118,6 +118,8 @@ pub enum Param {
     ///
     /// For [`SystemMessage::MemberAddedToGroup`],
     /// this is '1' if it was added because of a securejoin-handshake, and '0' otherwise.
+    ///
+    /// For call messages, this is the accept timestamp.
     Arg2 = b'F',
 
     /// For Messages
@@ -132,6 +134,8 @@ pub enum Param {
     /// For Messages
     ///
     /// Deprecated `Secure-Join-Group` header for `BobHandshakeMsg::RequestWithAuth` messages.
+    ///
+    /// For call messages, this is the end timsetamp.
     Arg4 = b'H',
 
     /// For Messages
