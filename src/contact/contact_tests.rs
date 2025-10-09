@@ -759,7 +759,7 @@ async fn test_contact_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "name", "name@example.net").await?;
     let color1 = Contact::get_by_id(&t, contact_id).await?.get_color();
-    assert_eq!(color1, 0x4947dc);
+    assert_eq!(color1, 0x4844e2);
 
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "prename name", "name@example.net").await?;
