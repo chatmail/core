@@ -69,7 +69,7 @@ pub(crate) async fn connect_and_auth(
             .await
             .context("SMTP failed to get OAUTH2 access token")?;
         if access_token.is_none() {
-            bail!("SMTP OAuth 2 error {}", addr);
+            bail!("SMTP OAuth 2 error {addr}");
         }
         (
             async_smtp::authentication::Credentials::new(

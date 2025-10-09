@@ -1742,8 +1742,7 @@ pub(crate) async fn set_blocked(
 ) -> Result<()> {
     ensure!(
         !contact_id.is_special(),
-        "Can't block special contact {}",
-        contact_id
+        "Can't block special contact {contact_id}"
     );
     let contact = Contact::get_by_id(context, contact_id).await?;
 

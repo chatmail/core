@@ -2080,7 +2080,7 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
     if let Some(id) = parse_message_ids(ids).first() {
         Ok(id.to_string())
     } else {
-        bail!("could not parse message_id: {}", ids);
+        bail!("could not parse message_id: {ids}");
     }
 }
 

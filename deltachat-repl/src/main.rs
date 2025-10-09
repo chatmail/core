@@ -466,7 +466,7 @@ async fn handle_cmd(
                     println!("QR code svg written to: {file:#?}");
                 }
                 Err(err) => {
-                    bail!("Failed to get QR code svg: {}", err);
+                    bail!("Failed to get QR code svg: {err}");
                 }
             }
         }

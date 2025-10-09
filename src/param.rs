@@ -284,7 +284,7 @@ impl str::FromStr for Params {
                     inner.insert(key, value);
                 }
             } else {
-                bail!("Not a key-value pair: {:?}", line);
+                bail!("Not a key-value pair: {line:?}");
             }
         }
 
