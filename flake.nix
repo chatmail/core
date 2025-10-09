@@ -587,6 +587,7 @@
               (python3.withPackages (pypkgs: with pypkgs; [
                 tox
               ]))
+              nodejs
             ];
           };
       }
