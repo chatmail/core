@@ -2531,9 +2531,7 @@ impl CommandApi {
                 .to_u32();
             Ok(msg_id)
         } else {
-            Err(anyhow!(
-                "chat with id {chat_id} doesn't have draft message"
-            ))
+            Err(anyhow!("chat with id {chat_id} doesn't have draft message"))
         }
     }
 }

@@ -419,9 +419,7 @@ impl MimeFactory {
                 None
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
-                    bail!(
-                        "No recipient keys are available, cannot encrypt to {recipients:?}."
-                    );
+                    bail!("No recipient keys are available, cannot encrypt to {recipients:?}.");
                 }
 
                 // Remove recipients for which the key is missing.
