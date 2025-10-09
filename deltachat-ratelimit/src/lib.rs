@@ -91,9 +91,9 @@ impl Ratelimit {
         self.until_can_send_at(SystemTime::now())
     }
 
-    /// Returns minimum possible update interval in milliseconds.
-    pub fn update_interval(&self) -> usize {
-        (self.window.as_millis() as f64 / self.quota) as usize
+    /// Returns the minimum possible sending interval.
+    pub fn min_send_interval(&self) -> Duration {
+        self.window.div_f64(self.quota)
     }
 }
 
@@ -107,7 +107,7 @@ mod tests {
 
         let mut ratelimit = Ratelimit::new_at(Duration::new(60, 0), 3.0, now);
         assert!(ratelimit.can_send_at(now));
-        assert_eq!(ratelimit.update_interval(), 20_000);
+        assert_eq!(ratelimit.min_send_interval(), Duration::new(20, 0));
 
         // Send burst of 3 messages.
         ratelimit.send_at(now);

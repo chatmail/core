@@ -60,7 +60,7 @@ impl WebxdcMessageInfo {
             request_integration: _,
             internet_access,
             self_addr,
-            send_update_interval,
+            send_update_interval_ms,
             send_update_max_size,
         } = message.get_webxdc_info(context).await?;
 
@@ -72,7 +72,7 @@ impl WebxdcMessageInfo {
             source_code_url: maybe_empty_string_to_option(source_code_url),
             internet_access,
             self_addr,
-            send_update_interval,
+            send_update_interval: send_update_interval_ms,
             send_update_max_size,
         })
     }
