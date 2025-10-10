@@ -99,7 +99,7 @@ pub mod html;
 pub mod net;
 pub mod plaintext;
 mod push;
-pub(crate) mod stats;
+mod stats;
 pub mod summary;
 
 mod debug_logging;

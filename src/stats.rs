@@ -11,7 +11,7 @@ use pgp::types::PublicKeyTrait;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
 
-use crate::chat::{self, ChatId, ChatVisibility, MuteDuration, ProtectionStatus};
+use crate::chat::{self, ChatId, MuteDuration, ProtectionStatus};
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
@@ -24,7 +24,8 @@ use crate::tools::{create_id, time};
 
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
-const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+// const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+const SENDING_INTERVAL_SECONDS: i64 = 60; // TODO
 const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less than the lowest ephemeral messages timeout)
 
 #[derive(Serialize)]
@@ -231,13 +232,7 @@ async fn send_stats(context: &Context) -> Result<ChatId> {
     let chat_id = get_stats_chat_id(context).await?;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_text(
-        "The attachment contains anonymous usage statistics, \
-because you enabled this in the settings. \
-This helps us improve Delta Chat. \
-See TODO[blog post] for more information."
-            .to_string(),
-    );
+    msg.set_text(crate::stock_str::stats_device_message(context).await);
 
     let stats = get_stats(context).await?;
 
@@ -346,9 +341,6 @@ async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
         res
     } else {
         let chat_id = ChatId::get_for_contact(context, contact_id).await?;
-        chat_id
-            .set_visibility(context, ChatVisibility::Archived)
-            .await?;
         chat::set_muted(context, chat_id, MuteDuration::Forever).await?;
         chat_id
     };

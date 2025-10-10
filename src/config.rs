@@ -739,6 +739,12 @@ impl Context {
         if key == Config::SentboxWatch {
             self.last_full_folder_scan.lock().await.take();
         }
+        if key == Config::StatsSending {
+            stats::set_last_counted_msg_id(self).await?;
+            stats::set_last_old_contact_id(self).await?;
+            self.sql.set_raw_config(key.as_ref(), value).await?;
+            stats::maybe_send_stats(self).await?;
+        }
         Ok(())
     }
 
@@ -824,11 +830,6 @@ impl Context {
                     .save_to_transports_table(self, &EnteredLoginParam::default())
                     .await?;
                 }
-            }
-            Config::StatsSending => {
-                stats::set_last_counted_msg_id(self).await?;
-                stats::set_last_old_contact_id(self).await?;
-                self.sql.set_raw_config(key.as_ref(), value).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

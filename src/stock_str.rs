@@ -439,6 +439,9 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Scan to join channel %1$s"))]
     SecureJoinBrodcastQRDescription = 201,
+
+    #[strum(props(fallback = "todo"))]
+    StatsMessageBody = 210,
 }
 
 impl StockMessage {
@@ -1285,6 +1288,10 @@ pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> Stri
     translated(context, StockMessage::InvalidUnencryptedMail)
         .await
         .replace1(provider)
+}
+
+pub(crate) async fn stats_device_message(context: &Context) -> String {
+    translated(context, StockMessage::StatsMessageBody).await
 }
 
 pub(crate) async fn aeap_explanation_and_link(
