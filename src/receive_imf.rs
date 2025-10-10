@@ -999,7 +999,7 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if mime_parser.is_call() {
+    if is_partial_download.is_none() && mime_parser.is_call() {
         context
             .handle_call_msg(insert_msg_id, &mime_parser, from_id)
             .await?;
@@ -1157,8 +1157,9 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
-    } else if mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
+    } else if is_partial_download.is_none()
+        && (mime_parser.is_system_message == SystemMessage::CallAccepted
+            || mime_parser.is_system_message == SystemMessage::CallEnded)
     {
         info!(context, "Call state changed (TRASH).");
         true
@@ -1986,8 +1987,9 @@ async fn add_parts(
 
     handle_edit_delete(context, mime_parser, from_id).await?;
 
-    if mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
+    if is_partial_download.is_none()
+        && (mime_parser.is_system_message == SystemMessage::CallAccepted
+            || mime_parser.is_system_message == SystemMessage::CallEnded)
     {
         if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(call) =
