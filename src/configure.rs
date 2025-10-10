@@ -27,6 +27,7 @@ use crate::config::{self, Config};
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
+use crate::key;
 use crate::log::{LogExt, info, warn};
 pub use crate::login_param::EnteredLoginParam;
 use crate::login_param::{
@@ -62,7 +63,16 @@ macro_rules! progress {
 impl Context {
     /// Checks if the context is already configured.
     pub async fn is_configured(&self) -> Result<bool> {
-        self.sql.exists("SELECT COUNT(*) FROM transports", ()).await
+        if !self
+            .sql
+            .exists("SELECT COUNT(*) FROM transports", ())
+            .await?
+        {
+            return Ok(false);
+        }
+        // We don't want configured accounts w/o a public key. The self-color depends on it.
+        key::load_self_public_key(self).await?;
+        Ok(true)
     }
 
     /// Configures this account with the currently provided parameters.
