@@ -742,6 +742,9 @@ impl Context {
         if key == Config::StatsSending {
             stats::set_last_counted_msg_id(self).await?;
             stats::set_last_old_contact_id(self).await?;
+            // Make sure that StatsId is available for the UI,
+            // in order to open the survey with the StatsId as a parameter:
+            stats::stats_id(self).await?;
             self.sql.set_raw_config(key.as_ref(), value).await?;
             stats::maybe_send_stats(self).await?;
         }

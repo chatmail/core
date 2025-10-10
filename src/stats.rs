@@ -303,21 +303,10 @@ async fn get_stats(context: &Context) -> Result<String> {
         .map(|k| k.created_at().timestamp())
         .collect();
 
-    let stats_id = match context.get_config(Config::StatsId).await? {
-        Some(id) => id,
-        None => {
-            let id = create_id();
-            context
-                .set_config_internal(Config::StatsId, Some(&id))
-                .await?;
-            id
-        }
-    };
-
     let stats = Statistics {
         core_version: get_version_str().to_string(),
         key_create_timestamps,
-        stats_id,
+        stats_id: stats_id(context).await?,
         is_chatmail: context.is_chatmail().await?,
         contact_stats: get_contact_stats(context, last_old_contact).await?,
         message_stats: get_message_stats(context).await?,
@@ -327,6 +316,19 @@ async fn get_stats(context: &Context) -> Result<String> {
     };
 
     Ok(serde_json::to_string_pretty(&stats)?)
+}
+
+pub(crate) async fn stats_id(context: &Context) -> Result<String> {
+    Ok(match context.get_config(Config::StatsId).await? {
+        Some(id) => id,
+        None => {
+            let id = create_id();
+            context
+                .set_config_internal(Config::StatsId, Some(&id))
+                .await?;
+            id
+        }
+    })
 }
 
 async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
