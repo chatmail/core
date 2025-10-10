@@ -1582,6 +1582,8 @@ impl Contact {
     pub fn get_color(&self) -> u32 {
         if let Some(fingerprint) = self.fingerprint() {
             str_to_color(&fingerprint.hex())
+        } else if self.id == ContactId::SELF {
+            0x808080
         } else {
             str_to_color(&self.addr.to_lowercase())
         }

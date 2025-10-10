@@ -15,6 +15,7 @@ use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
+use crate::events::EventType;
 use crate::log::{LogExt, info};
 use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
@@ -414,15 +415,11 @@ pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> 
                 "INSERT INTO config (keyname, value) VALUES ('key_id', ?)",
                 (new_key_id,),
             )?;
-            Ok(Some(new_key_id))
+            Ok(new_key_id)
         })
         .await?;
-
-    if let Some(new_key_id) = new_key_id {
-        // Update config cache if transaction succeeded and changed current default key.
-        config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
-    }
-
+    context.emit_event(EventType::AccountsItemChanged);
+    config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
     Ok(())
 }
 
