@@ -445,21 +445,33 @@ impl TestContext {
     ///
     /// This is a shortcut which configures alice@example.org with a fixed key.
     pub async fn new_alice() -> Self {
-        Self::builder().configure_alice().build(None).await
+        Self::builder()
+            .configure_alice()
+            .with_id_offset(11000)
+            .build(None)
+            .await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures bob@example.net with a fixed key.
     pub async fn new_bob() -> Self {
-        Self::builder().configure_bob().build(None).await
+        Self::builder()
+            .configure_bob()
+            .with_id_offset(12000)
+            .build(None)
+            .await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures fiona@example.net with a fixed key.
     pub async fn new_fiona() -> Self {
-        Self::builder().configure_fiona().build(None).await
+        Self::builder()
+            .configure_fiona()
+            .with_id_offset(13000)
+            .build(None)
+            .await
     }
 
     /// Print current chat state.
