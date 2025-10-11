@@ -270,7 +270,7 @@ pub struct TestContextBuilder {
     /// prevent it from being dropped immediately.
     log_sink: Option<LogSink>,
 
-    /// Offset for chat-,message-,contact- and webxdc status update ids.
+    /// Offset for chat-,message-,contact ids.
     ///
     /// This makes tests fail where ids from different accounts were mixed up.
     id_offset: Option<u32>,
@@ -339,7 +339,7 @@ impl TestContextBuilder {
         self
     }
 
-    /// Adds an offset for chat-, message-, contact- and webxdc status update IDs.
+    /// Adds an offset for chat-, message-, contact IDs.
     ///
     /// This makes it harder to accidentally mix up IDs from different accounts.
     pub fn with_id_offset(mut self, offset: u32) -> Self {
@@ -388,8 +388,7 @@ impl TestContextBuilder {
                         "UPDATE sqlite_sequence SET seq = ? \
                         WHERE name = 'contacts' \
                         OR name = 'chats' \
-                        OR name = 'msgs' \
-                        OR name = 'msgs_status_updates';",
+                        OR name = 'msgs';",
                         (offset,),
                     )
                     .await
