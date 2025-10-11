@@ -360,6 +360,23 @@ impl TestContextBuilder {
             key::store_self_keypair(&test_context, &key_pair)
                 .await
                 .expect("Failed to save key");
+
+            // account id is randomly gernerated in [TestContext::new_internal], we need to half it to prevent overflow
+            let id_offset = test_context.ctx.get_id().wrapping_div(2);
+            test_context
+                .ctx
+                .sql
+                .execute(
+                    "UPDATE sqlite_sequence SET seq = ? \
+                        WHERE name = 'contacts' \
+                        OR name = 'chats' \
+                        OR name = 'msgs' \
+                        OR name = 'msgs_status_updates';",
+                    (id_offset,),
+                )
+                .await
+                .expect("Failed set id offset");
+
             test_context
         } else {
             TestContext::new_internal(None, self.log_sink).await
@@ -1623,5 +1640,22 @@ mod tests {
     fn test_new_test_context() {
         let runtime = tokio::runtime::Runtime::new().expect("unable to create tokio runtime");
         runtime.block_on(TestContext::new());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_id_offset() {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+
+        let alice_bob_chat = alice.create_chat(&bob).await;
+        let bob_alice_chat = bob.create_chat(&alice).await;
+        assert_ne!(alice_bob_chat.id, bob_alice_chat.id);
+
+        // TODO test for contact ids
+
+        // TODO test for message ids
+
+        // TODO test for webxdc status update ids
     }
 }
