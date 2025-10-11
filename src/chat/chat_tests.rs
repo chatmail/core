@@ -2412,14 +2412,14 @@ async fn test_forward_from_saved_to_saved() -> Result<()> {
     let bob = TestContext::new_bob().await;
     let sent = alice.send_text(alice.create_chat(&bob).await.id, "k").await;
 
-    bob.recv_msg(&sent).await;
+    let received_message = bob.recv_msg(&sent).await;
     let orig = bob.get_last_msg().await;
     let self_chat = bob.get_self_chat().await;
     save_msgs(&bob, &[orig.id]).await?;
     let saved1 = bob.get_last_msg().await;
     assert_eq!(
         saved1.get_original_msg_id(&bob).await?.unwrap(),
-        sent.sender_msg_id
+        received_message.id
     );
     assert_ne!(saved1.from_id, ContactId::SELF);
 
@@ -2644,7 +2644,7 @@ async fn test_broadcast() -> Result<()> {
     add_contact_to_chat(
         &alice,
         broadcast_id,
-        get_chat_contacts(&alice, chat_bob.id).await?.pop().unwrap(),
+        get_chat_contacts(&alice, msg.chat_id).await?.pop().unwrap(),
     )
     .await?;
     let fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
