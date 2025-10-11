@@ -557,13 +557,17 @@ pub(crate) async fn receive_imf_inner(
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
     if let Some((old_msg_id, _)) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        let msg = Message::load_from_db(context, old_msg_id).await?;
         replace_msg_id = Some(old_msg_id);
-        replace_chat_id = if msg.download_state() != DownloadState::Done {
+        replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
+            .await?
+            .filter(|msg| msg.download_state() != DownloadState::Done)
+        {
             // the message was partially downloaded before and is fully downloaded now.
             info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
         } else {
+            // The message was already fully downloaded
+            // or cannot be loaded because it is deleted.
             None
         };
     } else {
