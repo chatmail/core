@@ -84,6 +84,7 @@ impl TestContextManager {
     pub async fn alice(&mut self) -> TestContext {
         TestContext::builder()
             .configure_alice()
+            .with_id_offset(1000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -92,6 +93,7 @@ impl TestContextManager {
     pub async fn bob(&mut self) -> TestContext {
         TestContext::builder()
             .configure_bob()
+            .with_id_offset(2000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -100,6 +102,7 @@ impl TestContextManager {
     pub async fn charlie(&mut self) -> TestContext {
         TestContext::builder()
             .configure_charlie()
+            .with_id_offset(3000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -108,6 +111,7 @@ impl TestContextManager {
     pub async fn dom(&mut self) -> TestContext {
         TestContext::builder()
             .configure_dom()
+            .with_id_offset(4000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -116,6 +120,7 @@ impl TestContextManager {
     pub async fn elena(&mut self) -> TestContext {
         TestContext::builder()
             .configure_elena()
+            .with_id_offset(5000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -124,6 +129,7 @@ impl TestContextManager {
     pub async fn fiona(&mut self) -> TestContext {
         TestContext::builder()
             .configure_fiona()
+            .with_id_offset(6000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -263,6 +269,11 @@ pub struct TestContextBuilder {
     /// so the caller should store the LogSink elsewhere to
     /// prevent it from being dropped immediately.
     log_sink: Option<LogSink>,
+
+    /// Offset for chat-,message-,contact- and webxdc status update ids.
+    ///
+    /// This makes tests fail where ids from different accounts were mixed up.
+    id_offset: Option<u32>,
 }
 
 impl TestContextBuilder {
@@ -328,6 +339,14 @@ impl TestContextBuilder {
         self
     }
 
+    /// Adds an offset for chat-, message-, contact- and webxdc status update IDs.
+    ///
+    /// This makes it harder to accidentally mix up IDs from different accounts.
+    pub fn with_id_offset(mut self, offset: u32) -> Self {
+        self.id_offset = Some(offset);
+        self
+    }
+
     /// Builds the [`TestContext`].
     pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
@@ -361,21 +380,21 @@ impl TestContextBuilder {
                 .await
                 .expect("Failed to save key");
 
-            // account id is randomly gernerated in [TestContext::new_internal], we need to half it to prevent overflow
-            let id_offset = test_context.ctx.get_id().wrapping_div(2);
-            test_context
-                .ctx
-                .sql
-                .execute(
-                    "UPDATE sqlite_sequence SET seq = ? \
+            if let Some(offset) = self.id_offset {
+                test_context
+                    .ctx
+                    .sql
+                    .execute(
+                        "UPDATE sqlite_sequence SET seq = ? \
                         WHERE name = 'contacts' \
                         OR name = 'chats' \
                         OR name = 'msgs' \
                         OR name = 'msgs_status_updates';",
-                    (id_offset,),
-                )
-                .await
-                .expect("Failed set id offset");
+                        (offset,),
+                    )
+                    .await
+                    .expect("Failed set id offset");
+            }
 
             test_context
         } else {
