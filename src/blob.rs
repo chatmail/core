@@ -537,7 +537,11 @@ fn file_hash(src: &Path) -> Result<blake3::Hash> {
 fn image_metadata(file: &std::fs::File) -> Result<(u64, Option<exif::Exif>)> {
     let len = file.metadata()?.len();
     let mut bufreader = std::io::BufReader::new(file);
-    let exif = exif::Reader::new().read_from_container(&mut bufreader).ok();
+    let exif = exif::Reader::new()
+        .continue_on_error(true)
+        .read_from_container(&mut bufreader)
+        .or_else(|e| e.distill_partial_result(|_errors| {}))
+        .ok();
     Ok((len, exif))
 }
 
