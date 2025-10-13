@@ -995,7 +995,9 @@ impl CommandApi {
     /// Create a new unencrypted group chat.
     ///
     /// Same as [`Self::create_group_chat`], but the chat is unencrypted and can only have
-    /// address-contacts.
+    /// address-contacts. NB: Chats with similar names and the same members are merged on other
+    /// devices, but usually users don't create such chats and look up the existing one instead, so
+    /// chat split on the first device is acceptable.
     async fn create_group_chat_unencrypted(&self, account_id: u32, name: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         chat::create_group_ex(&ctx, None, &name)

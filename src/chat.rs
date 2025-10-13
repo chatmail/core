@@ -3664,6 +3664,10 @@ pub async fn create_group_chat(
 ///
 /// * `encryption` - If `Some`, the chat is encrypted (with key-contacts) and can be protected.
 /// * `name` - Chat name.
+///
+/// NB: Unencrypted chats with similar names and the same members are merged on other devices, but
+/// usually users don't create such chats and look up the existing one instead, so chat split on the
+/// first device is acceptable.
 pub async fn create_group_ex(
     context: &Context,
     encryption: Option<ProtectionStatus>,
