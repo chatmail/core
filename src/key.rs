@@ -25,7 +25,7 @@ use crate::tools::{self, time_elapsed};
 /// This trait is implemented for rPGP's [SignedPublicKey] and
 /// [SignedSecretKey] types and makes working with them a little
 /// easier in the deltachat world.
-pub(crate) trait DcKey: Serialize + Deserializable + Clone {
+pub trait DcKey: Serialize + Deserializable + Clone {
     /// Create a key from some bytes.
     fn from_slice(bytes: &[u8]) -> Result<Self> {
         let res = <Self as Deserializable>::from_bytes(Cursor::new(bytes));
@@ -112,7 +112,10 @@ pub(crate) trait DcKey: Serialize + Deserializable + Clone {
     /// The fingerprint for the key.
     fn dc_fingerprint(&self) -> Fingerprint;
 
+    /// Whether the key is private (or public).
     fn is_private() -> bool;
+
+    /// Returns the OpenPGP Key ID.
     fn key_id(&self) -> KeyId;
 }
 
