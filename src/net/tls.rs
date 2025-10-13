@@ -35,10 +35,10 @@ pub async fn wrap_rustls<'a>(
     alpn: &[&str],
     stream: impl SessionStream + 'a,
 ) -> Result<impl SessionStream + 'a> {
-    let mut root_cert_store = rustls::RootCertStore::empty();
+    let mut root_cert_store = tokio_rustls::rustls::RootCertStore::empty();
     root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-    let mut config = rustls::ClientConfig::builder()
+    let mut config = tokio_rustls::rustls::ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_no_client_auth();
     config.alpn_protocols = alpn.iter().map(|s| s.as_bytes().to_vec()).collect();
