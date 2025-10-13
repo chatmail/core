@@ -106,6 +106,13 @@ fn http_url_cache_timestamps(url: &str, mimetype: Option<&str>) -> (i64, i64) {
     let stale = if url.ends_with(".xdc") {
         // WebXDCs are never stale, they just expire.
         expires
+    } else if url.starts_with("https://tile.openstreetmap.org/")
+        || url.starts_with("https://vector.openstreetmap.org/")
+    {
+        // Policy at <https://operations.osmfoundation.org/policies/tiles/>
+        // requires that we cache tiles for at least 7 days.
+        // Do not revalidate earlier than that.
+        now + 3600 * 24 * 7
     } else if mimetype.is_some_and(|s| s.starts_with("image/")) {
         // Cache images for 1 day.
         //
