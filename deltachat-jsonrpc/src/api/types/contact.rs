@@ -1,6 +1,6 @@
 use anyhow::Result;
-use deltachat::color;
 use deltachat::context::Context;
+use deltachat::key::{DcKey, SignedPublicKey};
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
@@ -130,7 +130,13 @@ pub struct VcardContact {
 impl From<deltachat_contact_tools::VcardContact> for VcardContact {
     fn from(vc: deltachat_contact_tools::VcardContact) -> Self {
         let display_name = vc.display_name().to_string();
-        let color = color::str_to_color(&vc.addr.to_lowercase());
+        let is_self = false;
+        let fpr = vc.key.as_deref().and_then(|k| {
+            SignedPublicKey::from_base64(k)
+                .ok()
+                .map(|k| k.dc_fingerprint())
+        });
+        let color = deltachat::contact::get_color(is_self, &vc.addr, &fpr);
         Self {
             addr: vc.addr,
             display_name,
