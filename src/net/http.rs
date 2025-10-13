@@ -16,6 +16,10 @@ use crate::net::session::SessionStream;
 use crate::net::tls::wrap_rustls;
 use crate::tools::time;
 
+/// User-Agent for HTTP requests if a resource usage policy requires it.
+/// By default we do not set User-Agent.
+const USER_AGENT: &str = "chatmail/2 (+https://github.com/chatmail/core/)";
+
 /// HTTP(S) GET response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
@@ -243,8 +247,22 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             .context("URL has no authority")?
             .clone();
 
-        let req = hyper::Request::builder()
-            .uri(parsed_url)
+        let req = hyper::Request::builder().uri(parsed_url);
+
+        // OSM usage policy requires
+        // that User-Agent is set for HTTP GET requests
+        // to tile servers:
+        // <https://operations.osmfoundation.org/policies/tiles/>
+        // Same for vectory tiles
+        // at <https://operations.osmfoundation.org/policies/vector/>.
+        let req =
+            if authority == "tile.openstreetmap.org" || authority == "vector.openstreetmap.org" {
+                req.header("User-Agent", USER_AGENT)
+            } else {
+                req
+            };
+
+        let req = req
             .header(hyper::header::HOST, authority.as_str())
             .body(http_body_util::Empty::<Bytes>::new())?;
         let response = sender.send_request(req).await?;
