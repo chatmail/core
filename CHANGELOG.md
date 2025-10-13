@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.20.0] - 2025-10-13
+
+This release fixes a bug that resulted in ephemeral loop getting stuck in infinite loop
+when trying to delete a message with unknown viewtype.
+
+### Fixes
+
+- Accept unknown viewtype in ephemeral loop.
+- Accept unknown viewtype in delete-old-messages loop.
+
 ## [2.19.0] - 2025-10-12
 
 ### Features / Changes
@@ -6910,3 +6920,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.17.0]: https://github.com/chatmail/core/compare/v2.16.0..v2.17.0
 [2.18.0]: https://github.com/chatmail/core/compare/v2.17.0..v2.18.0
 [2.19.0]: https://github.com/chatmail/core/compare/v2.18.0..v2.19.0
+[2.20.0]: https://github.com/chatmail/core/compare/v2.19.0..v2.20.0
