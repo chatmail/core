@@ -445,7 +445,11 @@ WHERE
                 |row| {
                     let id: MsgId = row.get("id")?;
                     let chat_id: ChatId = row.get("chat_id")?;
-                    let viewtype: Viewtype = row.get("type")?;
+                    let viewtype: Viewtype = row
+                        .get("type")
+                        .context("Using default viewtype for delete-old handling.")
+                        .log_err(context)
+                        .unwrap_or_default();
                     let location_id: u32 = row.get("location_id")?;
                     Ok((id, chat_id, viewtype, location_id))
                 },
