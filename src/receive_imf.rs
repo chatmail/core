@@ -85,7 +85,7 @@ pub struct ReceivedMsg {
 /// don't assign the message to an encrypted
 /// group after looking up key-contacts
 /// or vice versa.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ChatAssignment {
     /// Trash the message.
     Trash,
@@ -1638,8 +1638,24 @@ async fn do_chat_assignment(
             }
         }
 
-        // automatically unblock chat when the user sends a message
-        if chat_id_blocked != Blocked::Not {
+        // Automatically unblock the chat when the user sends a message. For encrypted 1:1 messages
+        // we don't check the recipient fingerprint currently, so check that we don't have multiple
+        // key-contacts with the given address.
+        if chat_id_blocked != Blocked::Not
+            && (!mime_parser.was_encrypted() || chat_assignment != ChatAssignment::OneOneChat || {
+                context
+                    .sql
+                    .count(
+                        "SELECT COUNT(*) FROM contacts
+                         WHERE contacts.addr=(SELECT addr FROM contacts WHERE id=?)
+                         AND fingerprint<>''
+                        ",
+                        (to_id,),
+                    )
+                    .await?
+                    == 1
+            })
+        {
             if let Some(chat_id) = chat_id {
                 chat_id.unblock_ex(context, Nosync).await?;
                 chat_id_blocked = Blocked::Not;
@@ -3934,7 +3950,7 @@ async fn lookup_key_contact_by_fingerprint(
         .sql
         .query_row_optional(
             "SELECT id FROM contacts
-             WHERE fingerprint=? AND fingerprint!=''",
+             WHERE fingerprint=?",
             (fingerprint,),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
