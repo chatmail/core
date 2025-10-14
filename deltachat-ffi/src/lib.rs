@@ -1523,6 +1523,23 @@ pub unsafe extern "C" fn dc_marknoticed_chat(context: *mut dc_context_t, chat_id
     })
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn dc_markfresh_chat(context: *mut dc_context_t, chat_id: u32) {
+    if context.is_null() {
+        eprintln!("ignoring careless call to dc_markfresh_chat()");
+        return;
+    }
+    let ctx = &*context;
+
+    block_on(async move {
+        chat::markfresh_chat(ctx, ChatId::new(chat_id))
+            .await
+            .context("Failed markfresh chat")
+            .log_err(ctx)
+            .unwrap_or(())
+    })
+}
+
 fn from_prim<S, T>(s: S) -> Option<T>
 where
     T: FromPrimitive,
