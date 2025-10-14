@@ -3406,6 +3406,38 @@ pub(crate) async fn mark_old_messages_as_noticed(
     Ok(())
 }
 
+/// Marks last incoming message in a chat as fresh.
+pub async fn markfresh_chat(context: &Context, chat_id: ChatId) -> Result<()> {
+    let affected_rows = context
+        .sql
+        .execute(
+            "UPDATE msgs
+                SET state=?1
+              WHERE id=(SELECT id
+                          FROM msgs
+                         WHERE state IN (?1, ?2, ?3) AND hidden=0 AND chat_id=?4
+                      ORDER BY timestamp DESC, id DESC
+                         LIMIT 1)
+                AND state!=?1",
+            (
+                MessageState::InFresh,
+                MessageState::InNoticed,
+                MessageState::InSeen,
+                chat_id,
+            ),
+        )
+        .await?;
+
+    if affected_rows == 0 {
+        return Ok(());
+    }
+
+    context.emit_msgs_changed_without_msg_id(chat_id);
+    chatlist_events::emit_chatlist_item_changed(context, chat_id);
+
+    Ok(())
+}
+
 /// Returns all database message IDs of the given types.
 ///
 /// If `chat_id` is None, return messages from any chat.

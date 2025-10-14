@@ -1939,6 +1939,17 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 && curr_param.get_cmd() == SystemMessage::Unknown
                 && context.should_send_mdns().await?
             {
+                // Clear WantsMdn to not handle a MDN twice
+                // if the state later is InFresh again as markfresh_chat() was called.
+                // BccSelf MDN messages in the next branch may be sent twice for syncing.
+                context
+                    .sql
+                    .execute(
+                        "UPDATE msgs SET param=? WHERE id=?",
+                        (curr_param.clone().remove(Param::WantsMdn).to_string(), id),
+                    )
+                    .await
+                    .context("failed to clear WantsMdn")?;
                 Some(curr_from_id)
             } else if context.get_config_bool(Config::BccSelf).await? {
                 Some(ContactId::SELF)
@@ -1956,6 +1967,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                     .context("failed to insert into smtp_mdns")?;
                 context.scheduler.interrupt_smtp().await;
             }
+
             if !curr_hidden {
                 updated_chat_ids.insert(curr_chat_id);
             }

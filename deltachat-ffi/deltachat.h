@@ -1569,13 +1569,36 @@ dc_array_t*     dc_wait_next_msgs            (dc_context_t* context);
  * (read receipts aren't sent for noticed messages).
  *
  * Calling this function usually results in the event #DC_EVENT_MSGS_NOTICED.
- * See also dc_markseen_msgs().
+ * See also dc_markseen_msgs() and dc_markfresh_chat().
  *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
  * @param chat_id The chat ID of which all messages should be marked as being noticed.
  */
 void            dc_marknoticed_chat          (dc_context_t* context, uint32_t chat_id);
+
+
+/**
+ * Mark the last incoming message in chat as _fresh_.
+ *
+ * UI can use this to offer a "mark unread" option,
+ * so that already noticed chats (see dc_marknoticed_chat()) get a badge counter again.
+ *
+ * dc_get_fresh_msg_cnt() and dc_get_fresh_msgs() usually is increased by one afterwards.
+ *
+ * #DC_EVENT_MSGS_CHANGED is fired as usual,
+ * however, #DC_EVENT_INCOMING_MSG is _not_ fired again.
+ * This is to not add complexity to incoming messages code,
+ * e.g. UI usually does not add notifications for manually unread chats.
+ * If the UI wants to update system badge counters,
+ * they should do so directly after calling dc_markfresh_chat().
+ *
+ * @memberof dc_context_t
+ * @param context The context object as returned from dc_context_new().
+ * @param chat_id The chat ID of which messages should be marked as fresh.
+ *     If the chat does not have incoming messages, nothing happens.
+ */
+void            dc_markfresh_chat            (dc_context_t* context, uint32_t chat_id);
 
 
 /**
