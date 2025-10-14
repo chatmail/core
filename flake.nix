@@ -98,9 +98,6 @@
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
             ];
-            buildInputs = pkgs.lib.optionals isDarwin [
-              pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-            ];
             auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
           };
@@ -482,12 +479,6 @@
                   pkgs.cmake
                   pkgs.rustPlatform.cargoSetupHook
                   pkgs.cargo
-                ];
-                buildInputs = pkgs.lib.optionals isDarwin [
-                  pkgs.darwin.apple_sdk.frameworks.CoreFoundation
-                  pkgs.darwin.apple_sdk.frameworks.Security
-                  pkgs.darwin.apple_sdk.frameworks.SystemConfiguration
-                  pkgs.libiconv
                 ];
 
                 postInstall = ''
