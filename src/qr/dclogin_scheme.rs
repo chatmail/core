@@ -122,7 +122,7 @@ pub(super) fn decode_login(qr: &str) -> Result<Qr> {
             options,
         })
     } else {
-        bail!("Bad scheme for account URL: {:?}.", payload);
+        bail!("Bad scheme for account URL: {payload:?}.");
     }
 }
 
@@ -139,7 +139,7 @@ fn parse_socket_security(security: Option<&String>) -> Result<Option<Socket>> {
         Some("starttls") => Some(Socket::Starttls),
         Some("default") => Some(Socket::Automatic),
         Some("plain") => Some(Socket::Plain),
-        Some(other) => bail!("Unknown security level: {}", other),
+        Some(other) => bail!("Unknown security level: {other}"),
         None => None,
     })
 }
@@ -152,7 +152,7 @@ fn parse_certificate_checks(
         Some("1") => Some(EnteredCertificateChecks::Strict),
         Some("2") => Some(EnteredCertificateChecks::AcceptInvalidCertificates),
         Some("3") => Some(EnteredCertificateChecks::AcceptInvalidCertificates2),
-        Some(other) => bail!("Unknown certificatecheck level: {}", other),
+        Some(other) => bail!("Unknown certificatecheck level: {other}"),
         None => None,
     })
 }

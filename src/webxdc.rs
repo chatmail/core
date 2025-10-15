@@ -279,7 +279,7 @@ impl Context {
         };
 
         if !valid {
-            bail!("{} is not a valid webxdc file", filename);
+            bail!("{filename} is not a valid webxdc file");
         }
 
         Ok(())
@@ -837,8 +837,8 @@ fn parse_webxdc_manifest(bytes: &[u8]) -> Result<WebxdcManifest> {
 }
 
 async fn get_blob(archive: &mut SeekZipFileReader<BufReader<File>>, name: &str) -> Result<Vec<u8>> {
-    let (i, _) = find_zip_entry(archive.file(), name)
-        .ok_or_else(|| anyhow!("no entry found for {}", name))?;
+    let (i, _) =
+        find_zip_entry(archive.file(), name).ok_or_else(|| anyhow!("no entry found for {name}"))?;
     let mut reader = archive.reader_with_entry(i).await?;
     let mut buf = Vec::new();
     reader.read_to_end_checked(&mut buf).await?;

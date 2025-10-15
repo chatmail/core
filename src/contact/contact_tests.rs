@@ -4,6 +4,7 @@ use super::*;
 use crate::chat::{Chat, ProtectionStatus, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote};
 
 #[test]
@@ -759,7 +760,7 @@ async fn test_contact_get_color() -> Result<()> {
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "name", "name@example.net").await?;
     let color1 = Contact::get_by_id(&t, contact_id).await?.get_color();
-    assert_eq!(color1, 0x4947dc);
+    assert_eq!(color1, 0x4844e2);
 
     let t = TestContext::new().await;
     let contact_id = Contact::create(&t, "prename name", "name@example.net").await?;
@@ -770,6 +771,20 @@ async fn test_contact_get_color() -> Result<()> {
     let contact_id = Contact::create(&t, "Name", "nAme@exAmple.NET").await?;
     let color3 = Contact::get_by_id(&t, contact_id).await?.get_color();
     assert_eq!(color3, color1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_color_vs_key() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    t.configure_addr("alice@example.org").await;
+    assert!(t.is_configured().await?);
+    let color = Contact::get_by_id(t, ContactId::SELF).await?.get_color();
+    assert_eq!(color, 0x808080);
+    get_securejoin_qr(t, None).await?;
+    let color1 = Contact::get_by_id(t, ContactId::SELF).await?.get_color();
+    assert_ne!(color1, color);
     Ok(())
 }
 

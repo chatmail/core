@@ -68,7 +68,7 @@ impl ContactAddress {
     pub fn new(s: &str) -> Result<Self> {
         let addr = addr_normalize(s);
         if !may_be_valid_addr(&addr) {
-            bail!("invalid address {:?}", s);
+            bail!("invalid address {s:?}");
         }
         Ok(Self(addr.to_string()))
     }
@@ -257,16 +257,16 @@ impl EmailAddress {
             .chars()
             .any(|c| c.is_whitespace() || c == '<' || c == '>')
         {
-            bail!("Email {:?} must not contain whitespaces, '>' or '<'", input);
+            bail!("Email {input:?} must not contain whitespaces, '>' or '<'");
         }
 
         match &parts[..] {
             [domain, local] => {
                 if local.is_empty() {
-                    bail!("empty string is not valid for local part in {:?}", input);
+                    bail!("empty string is not valid for local part in {input:?}");
                 }
                 if domain.is_empty() {
-                    bail!("missing domain after '@' in {:?}", input);
+                    bail!("missing domain after '@' in {input:?}");
                 }
                 if domain.ends_with('.') {
                     bail!("Domain {domain:?} should not contain the dot in the end");
@@ -276,7 +276,7 @@ impl EmailAddress {
                     domain: (*domain).to_string(),
                 })
             }
-            _ => bail!("Email {:?} must contain '@' character", input),
+            _ => bail!("Email {input:?} must contain '@' character"),
         }
     }
 }

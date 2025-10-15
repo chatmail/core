@@ -608,7 +608,7 @@ fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
     }
 
     let Some(host) = host else {
-        bail!("Bad t.me/socks url: {:?}", url);
+        bail!("Bad t.me/socks url: {url:?}");
     };
 
     let mut url = "socks5://".to_string();
@@ -711,10 +711,7 @@ pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<(
                 context.emit_event(EventType::Error(format!(
                     "Cannot create account, server response could not be parsed:\n{parse_error:#}\nraw response:\n{response_text}"
                 )));
-                bail!(
-                    "Cannot create account, unexpected server response:\n{:?}",
-                    response_text
-                )
+                bail!("Cannot create account, unexpected server response:\n{response_text:?}")
             }
         }
     }

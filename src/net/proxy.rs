@@ -429,7 +429,14 @@ impl ProxyConfig {
                     load_cache,
                 )
                 .await?;
-                let tls_stream = wrap_rustls(&https_config.host, &[], tcp_stream).await?;
+                let tls_stream = wrap_rustls(
+                    &https_config.host,
+                    https_config.port,
+                    "",
+                    tcp_stream,
+                    &context.tls_session_store,
+                )
+                .await?;
                 let auth = if let Some((username, password)) = &https_config.user_password {
                     Some((username.as_str(), password.as_str()))
                 } else {

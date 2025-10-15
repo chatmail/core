@@ -335,6 +335,28 @@ async fn test_recode_image_2() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_image_bad_exif() {
+    // `exiftool` reports for this file "Bad offset for IFD0 XResolution", still Exif must be
+    // detected and removed.
+    let bytes = include_bytes!("../../test-data/image/1000x1000-bad-exif.jpg");
+    SendImageCheckMediaquality {
+        viewtype: Viewtype::Image,
+        media_quality_config: "0",
+        bytes,
+        extension: "jpg",
+        has_exif: true,
+        original_width: 1000,
+        original_height: 1000,
+        compressed_width: 1000,
+        compressed_height: 1000,
+        ..Default::default()
+    }
+    .test()
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recode_image_balanced_png() {
     let bytes = include_bytes!("../../test-data/image/screenshot.png");
 
@@ -418,7 +440,7 @@ async fn test_recode_image_balanced_png() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sticker_with_exif() {
-    let bytes = include_bytes!("../../test-data/image/logo.png");
+    let bytes = include_bytes!("../../test-data/image/logo-exif.png");
     SendImageCheckMediaquality {
         viewtype: Viewtype::Sticker,
         bytes,

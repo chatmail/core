@@ -35,7 +35,7 @@ impl FromStr for EncryptPreference {
         match s {
             "mutual" => Ok(EncryptPreference::Mutual),
             "nopreference" => Ok(EncryptPreference::NoPreference),
-            _ => bail!("Cannot parse encryption preference {}", s),
+            _ => bail!("Cannot parse encryption preference {s}"),
         }
     }
 }

@@ -557,13 +557,17 @@ pub(crate) async fn receive_imf_inner(
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
     if let Some((old_msg_id, _)) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        let msg = Message::load_from_db(context, old_msg_id).await?;
         replace_msg_id = Some(old_msg_id);
-        replace_chat_id = if msg.download_state() != DownloadState::Done {
+        replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
+            .await?
+            .filter(|msg| msg.download_state() != DownloadState::Done)
+        {
             // the message was partially downloaded before and is fully downloaded now.
             info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
         } else {
+            // The message was already fully downloaded
+            // or cannot be loaded because it is deleted.
             None
         };
     } else {
@@ -638,7 +642,7 @@ pub(crate) async fn receive_imf_inner(
     // For example, GitHub sends messages from `notifications@github.com`,
     // but uses display name of the user whose action generated the notification
     // as the display name.
-    let fingerprint = mime_parser.signatures.iter().next();
+    let fingerprint = mime_parser.signature.as_ref();
     let (from_id, _from_id_blocked, incoming_origin) = match from_field_to_contact_id(
         context,
         &mime_parser.from,
@@ -996,7 +1000,7 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if mime_parser.is_call() {
+    if is_partial_download.is_none() && mime_parser.is_call() {
         context
             .handle_call_msg(insert_msg_id, &mime_parser, from_id)
             .await?;
@@ -1154,8 +1158,9 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
-    } else if mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
+    } else if is_partial_download.is_none()
+        && (mime_parser.is_system_message == SystemMessage::CallAccepted
+            || mime_parser.is_system_message == SystemMessage::CallEnded)
     {
         info!(context, "Call state changed (TRASH).");
         true
@@ -2010,8 +2015,9 @@ async fn add_parts(
 
     handle_edit_delete(context, mime_parser, from_id).await?;
 
-    if mime_parser.is_system_message == SystemMessage::CallAccepted
-        || mime_parser.is_system_message == SystemMessage::CallEnded
+    if is_partial_download.is_none()
+        && (mime_parser.is_system_message == SystemMessage::CallAccepted
+            || mime_parser.is_system_message == SystemMessage::CallEnded)
     {
         if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(call) =
@@ -3776,7 +3782,10 @@ async fn has_verified_encryption(
         ));
     }
 
-    let signed_with_verified_key = mimeparser.signatures.contains(&fingerprint);
+    let signed_with_verified_key = mimeparser
+        .signature
+        .as_ref()
+        .is_some_and(|signature| *signature == fingerprint);
     if signed_with_verified_key {
         Ok(Verified)
     } else {

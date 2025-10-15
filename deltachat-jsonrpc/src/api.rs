@@ -126,7 +126,7 @@ impl CommandApi {
             .read()
             .await
             .get_account(id)
-            .ok_or_else(|| anyhow!("account with id {} not found", id))?;
+            .ok_or_else(|| anyhow!("account with id {id} not found"))?;
         Ok(sc)
     }
 
@@ -308,8 +308,7 @@ impl CommandApi {
             Ok(Account::from_context(&ctx, account_id).await?)
         } else {
             Err(anyhow!(
-                "account with id {} doesn't exist anymore",
-                account_id
+                "account with id {account_id} doesn't exist anymore"
             ))
         }
     }
@@ -2312,8 +2311,7 @@ impl CommandApi {
         let message = Message::load_from_db(&ctx, MsgId::new(msg_id)).await?;
         ensure!(
             message.get_viewtype() == Viewtype::Sticker,
-            "message {} is not a sticker",
-            msg_id
+            "message {msg_id} is not a sticker"
         );
         let account_folder = ctx
             .get_dbfile()
@@ -2533,10 +2531,7 @@ impl CommandApi {
                 .to_u32();
             Ok(msg_id)
         } else {
-            Err(anyhow!(
-                "chat with id {} doesn't have draft message",
-                chat_id
-            ))
+            Err(anyhow!("chat with id {chat_id} doesn't have draft message"))
         }
     }
 }

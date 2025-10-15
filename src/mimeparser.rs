@@ -87,12 +87,12 @@ pub(crate) struct MimeMessage {
     pub chat_disposition_notification_to: Option<SingleInfo>,
     pub decrypting_failed: bool,
 
-    /// Set of valid signature fingerprints if a message is an
+    /// Valid signature fingerprint if a message is an
     /// Autocrypt encrypted and signed message.
     ///
     /// If a message is not encrypted or the signature is not valid,
-    /// this set is empty.
-    pub signatures: HashSet<Fingerprint>,
+    /// this is `None`.
+    pub signature: Option<Fingerprint>,
 
     /// The addresses for which there was a gossip header
     /// and their respective gossiped keys.
@@ -601,7 +601,7 @@ impl MimeMessage {
             decrypting_failed: mail.is_err(),
 
             // only non-empty if it was a valid autocrypt message
-            signatures,
+            signature: signatures.into_iter().last(),
             autocrypt_fingerprint,
             gossiped_keys,
             is_forwarded: false,
@@ -978,7 +978,7 @@ impl MimeMessage {
     /// This means the message was both encrypted and signed with a
     /// valid signature.
     pub fn was_encrypted(&self) -> bool {
-        !self.signatures.is_empty()
+        self.signature.is_some()
     }
 
     /// Returns whether the email contains a `chat-version` header.
@@ -2101,7 +2101,7 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
     if let Some(id) = parse_message_ids(ids).first() {
         Ok(id.to_string())
     } else {
-        bail!("could not parse message_id: {}", ids);
+        bail!("could not parse message_id: {ids}");
     }
 }
 

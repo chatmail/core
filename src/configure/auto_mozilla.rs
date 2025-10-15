@@ -106,7 +106,7 @@ fn parse_server<B: BufRead>(
                 }
             }
             Event::Text(ref event) => {
-                let val = event.unescape().unwrap_or_default().trim().to_owned();
+                let val = event.xml_content().unwrap_or_default().trim().to_owned();
 
                 match tag_config {
                     MozConfigTag::Hostname => hostname = Some(val),

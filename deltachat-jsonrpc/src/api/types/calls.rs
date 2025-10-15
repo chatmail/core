@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 
 use deltachat::calls::{call_state, sdp_has_video, CallState};
 use deltachat::context::Context;
@@ -26,7 +26,9 @@ pub struct JsonrpcCallInfo {
 
 impl JsonrpcCallInfo {
     pub async fn from_msg_id(context: &Context, msg_id: MsgId) -> Result<JsonrpcCallInfo> {
-        let call_info = context.load_call_by_id(msg_id).await?;
+        let call_info = context.load_call_by_id(msg_id).await?.with_context(|| {
+            format!("Attempting to get call state of non-call message {msg_id}")
+        })?;
         let sdp_offer = call_info.place_call_info.clone();
         let has_video = sdp_has_video(&sdp_offer).unwrap_or_default();
         let state = JsonrpcCallState::from_msg_id(context, msg_id).await?;

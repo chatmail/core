@@ -12,20 +12,20 @@ use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
-use crate::net::tls::wrap_tls;
+use crate::net::tls::{TlsSessionStore, wrap_tls};
 use crate::net::{
     connect_tcp_inner, connect_tls_inner, run_connection_attempts, update_connection_history,
 };
 use crate::oauth2::get_oauth2_access_token;
 use crate::tools::time;
 
-/// Converts port number to ALPN list.
-fn alpn(port: u16) -> &'static [&'static str] {
+/// Converts port number to ALPN.
+fn alpn(port: u16) -> &'static str {
     if port == 465 {
         // Do not request ALPN on standard port.
-        &[]
+        ""
     } else {
-        &["smtp"]
+        "smtp"
     }
 }
 
@@ -69,7 +69,7 @@ pub(crate) async fn connect_and_auth(
             .await
             .context("SMTP failed to get OAUTH2 access token")?;
         if access_token.is_none() {
-            bail!("SMTP OAuth 2 error {}", addr);
+            bail!("SMTP OAuth 2 error {addr}");
         }
         (
             async_smtp::authentication::Credentials::new(
@@ -109,8 +109,12 @@ async fn connection_attempt(
         "Attempting SMTP connection to {host} ({resolved_addr})."
     );
     let res = match security {
-        ConnectionSecurity::Tls => connect_secure(resolved_addr, host, strict_tls).await,
-        ConnectionSecurity::Starttls => connect_starttls(resolved_addr, host, strict_tls).await,
+        ConnectionSecurity::Tls => {
+            connect_secure(resolved_addr, host, strict_tls, &context.tls_session_store).await
+        }
+        ConnectionSecurity::Starttls => {
+            connect_starttls(resolved_addr, host, strict_tls, &context.tls_session_store).await
+        }
         ConnectionSecurity::Plain => connect_insecure(resolved_addr).await,
     };
     match res {
@@ -226,7 +230,15 @@ async fn connect_secure_proxy(
     let proxy_stream = proxy_config
         .connect(context, hostname, port, strict_tls)
         .await?;
-    let tls_stream = wrap_tls(strict_tls, hostname, alpn(port), proxy_stream).await?;
+    let tls_stream = wrap_tls(
+        strict_tls,
+        hostname,
+        port,
+        alpn(port),
+        proxy_stream,
+        &context.tls_session_store,
+    )
+    .await?;
     let mut buffered_stream = BufStream::new(tls_stream);
     skip_smtp_greeting(&mut buffered_stream).await?;
     let session_stream: Box<dyn SessionBufStream> = Box::new(buffered_stream);
@@ -249,9 +261,16 @@ async fn connect_starttls_proxy(
     skip_smtp_greeting(&mut buffered_stream).await?;
     let transport = new_smtp_transport(buffered_stream).await?;
     let tcp_stream = transport.starttls().await?.into_inner();
-    let tls_stream = wrap_tls(strict_tls, hostname, &[], tcp_stream)
-        .await
-        .context("STARTTLS upgrade failed")?;
+    let tls_stream = wrap_tls(
+        strict_tls,
+        hostname,
+        port,
+        "",
+        tcp_stream,
+        &context.tls_session_store,
+    )
+    .await
+    .context("STARTTLS upgrade failed")?;
     let buffered_stream = BufStream::new(tls_stream);
     let session_stream: Box<dyn SessionBufStream> = Box::new(buffered_stream);
     Ok(session_stream)
@@ -274,8 +293,16 @@ async fn connect_secure(
     addr: SocketAddr,
     hostname: &str,
     strict_tls: bool,
+    tls_session_store: &TlsSessionStore,
 ) -> Result<Box<dyn SessionBufStream>> {
-    let tls_stream = connect_tls_inner(addr, hostname, strict_tls, alpn(addr.port())).await?;
+    let tls_stream = connect_tls_inner(
+        addr,
+        hostname,
+        strict_tls,
+        alpn(addr.port()),
+        tls_session_store,
+    )
+    .await?;
     let mut buffered_stream = BufStream::new(tls_stream);
     skip_smtp_greeting(&mut buffered_stream).await?;
     let session_stream: Box<dyn SessionBufStream> = Box::new(buffered_stream);
@@ -286,6 +313,7 @@ async fn connect_starttls(
     addr: SocketAddr,
     host: &str,
     strict_tls: bool,
+    tls_session_store: &TlsSessionStore,
 ) -> Result<Box<dyn SessionBufStream>> {
     let tcp_stream = connect_tcp_inner(addr).await?;
 
@@ -294,9 +322,16 @@ async fn connect_starttls(
     skip_smtp_greeting(&mut buffered_stream).await?;
     let transport = new_smtp_transport(buffered_stream).await?;
     let tcp_stream = transport.starttls().await?.into_inner();
-    let tls_stream = wrap_tls(strict_tls, host, &[], tcp_stream)
-        .await
-        .context("STARTTLS upgrade failed")?;
+    let tls_stream = wrap_tls(
+        strict_tls,
+        host,
+        addr.port(),
+        "",
+        tcp_stream,
+        tls_session_store,
+    )
+    .await
+    .context("STARTTLS upgrade failed")?;
 
     let buffered_stream = BufStream::new(tls_stream);
     let session_stream: Box<dyn SessionBufStream> = Box::new(buffered_stream);

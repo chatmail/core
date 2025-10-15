@@ -179,7 +179,7 @@ const DB_COMMANDS: [&str; 11] = [
     "housekeeping",
 ];
 
-const CHAT_COMMANDS: [&str; 38] = [
+const CHAT_COMMANDS: [&str; 39] = [
     "listchats",
     "listarchived",
     "start-realtime",
@@ -199,6 +199,7 @@ const CHAT_COMMANDS: [&str; 38] = [
     "dellocations",
     "getlocations",
     "send",
+    "send-sync",
     "sendempty",
     "sendimage",
     "sendsticker",
@@ -466,7 +467,7 @@ async fn handle_cmd(
                     println!("QR code svg written to: {file:#?}");
                 }
                 Err(err) => {
-                    bail!("Failed to get QR code svg: {}", err);
+                    bail!("Failed to get QR code svg: {err}");
                 }
             }
         }

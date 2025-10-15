@@ -1,6 +1,8 @@
 use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
+use crate::constants::DC_CHAT_ID_TRASH;
+use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
 use crate::test_utils::{TestContext, TestContextManager};
 
 struct CallSetup {
@@ -53,7 +55,10 @@ async fn setup_call() -> Result<CallSetup> {
     for (t, m) in [(&alice, &alice_call), (&alice2, &alice2_call)] {
         assert!(!m.is_info());
         assert_eq!(m.viewtype, Viewtype::Call);
-        let info = t.load_call_by_id(m.id).await?;
+        let info = t
+            .load_call_by_id(m.id)
+            .await?
+            .expect("m should be a call message");
         assert!(!info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
@@ -71,7 +76,10 @@ async fn setup_call() -> Result<CallSetup> {
         t.evtracker
             .get_matching(|evt| matches!(evt, EventType::IncomingCall { .. }))
             .await;
-        let info = t.load_call_by_id(m.id).await?;
+        let info = t
+            .load_call_by_id(m.id)
+            .await?
+            .expect("IncomingCall event should refer to a call message");
         assert!(info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
@@ -111,7 +119,10 @@ async fn accept_call() -> Result<CallSetup> {
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
     let sent2 = bob.pop_sent_msg().await;
-    let info = bob.load_call_by_id(bob_call.id).await?;
+    let info = bob
+        .load_call_by_id(bob_call.id)
+        .await?
+        .expect("bob_call should be a call message");
     assert!(info.is_accepted());
     assert_eq!(info.place_call_info, PLACE_INFO);
     assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Active);
@@ -121,7 +132,10 @@ async fn accept_call() -> Result<CallSetup> {
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
-    let info = bob2.load_call_by_id(bob2_call.id).await?;
+    let info = bob2
+        .load_call_by_id(bob2_call.id)
+        .await?
+        .expect("bob2_call should be a call message");
     assert!(info.is_accepted());
     assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Active);
 
@@ -140,7 +154,10 @@ async fn accept_call() -> Result<CallSetup> {
             accept_call_info: ACCEPT_INFO.to_string()
         }
     );
-    let info = alice.load_call_by_id(alice_call.id).await?;
+    let info = alice
+        .load_call_by_id(alice_call.id)
+        .await?
+        .expect("alice_call should be a call message");
     assert!(info.is_accepted());
     assert_eq!(info.place_call_info, PLACE_INFO);
     assert_eq!(call_state(&alice, alice_call.id).await?, CallState::Active);
@@ -460,14 +477,20 @@ async fn test_mark_calls() -> Result<()> {
         alice, alice_call, ..
     } = setup_call().await?;
 
-    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    let mut call_info: CallInfo = alice
+        .load_call_by_id(alice_call.id)
+        .await?
+        .expect("alice_call should be a call message");
     assert!(!call_info.is_accepted());
     assert!(!call_info.is_ended());
     call_info.mark_as_accepted(&alice).await?;
     assert!(call_info.is_accepted());
     assert!(!call_info.is_ended());
 
-    let mut call_info: CallInfo = alice.load_call_by_id(alice_call.id).await?;
+    let mut call_info: CallInfo = alice
+        .load_call_by_id(alice_call.id)
+        .await?
+        .expect("alice_call should be a call message");
     assert!(call_info.is_accepted());
     assert!(!call_info.is_ended());
 
@@ -484,7 +507,10 @@ async fn test_update_call_text() -> Result<()> {
         alice, alice_call, ..
     } = setup_call().await?;
 
-    let call_info = alice.load_call_by_id(alice_call.id).await?;
+    let call_info = alice
+        .load_call_by_id(alice_call.id)
+        .await?
+        .expect("alice_call should be a call message");
     call_info.update_text(&alice, "foo bar").await?;
 
     let alice_call = Message::load_from_db(&alice, alice_call.id).await?;
@@ -526,6 +552,117 @@ async fn test_forward_call() -> Result<()> {
 
     let charlie_forwarded_call = charlie.recv_msg(&alice_forwarded_call).await;
     assert_eq!(charlie_forwarded_call.viewtype, Viewtype::Text);
+
+    Ok(())
+}
+
+/// Tests that "end call" message referring
+/// to a text message does not make receive_imf fail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_end_text_call() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let received1 = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <first@example.net>\n\
+        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
+        Chat-Version: 1.0\n\
+        \n\
+        Hello\n",
+        false,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(received1.msg_ids.len(), 1);
+    let msg = Message::load_from_db(alice, received1.msg_ids[0])
+        .await
+        .unwrap();
+    assert_eq!(msg.viewtype, Viewtype::Text);
+
+    // Receiving "Call ended" message that refers
+    // to the text message does not result in an error.
+    let received2 = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <second@example.net>\n\
+        Date: Sun, 22 Mar 2020 23:37:57 +0000\n\
+        In-Reply-To: <first@example.net>\n\
+        Chat-Version: 1.0\n\
+        Chat-Content: call-ended\n\
+        \n\
+        Call ended\n",
+        false,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(received2.msg_ids.len(), 1);
+    assert_eq!(received2.chat_id, DC_CHAT_ID_TRASH);
+
+    Ok(())
+}
+
+/// Tests that partially downloaded "call ended"
+/// messages are not processed.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_no_partial_calls() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let seen = false;
+
+    // The messages in the test
+    // have no `Date` on purpose,
+    // so they are treated as new.
+    let received_call = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <first@example.net>\n\
+        Chat-Version: 1.0\n\
+        Chat-Content: call\n\
+        Chat-Webrtc-Room: YWFhYWFhYWFhCg==\n\
+        \n\
+        Hello, this is a call\n",
+        seen,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(received_call.msg_ids.len(), 1);
+    let call_msg = Message::load_from_db(alice, received_call.msg_ids[0])
+        .await
+        .unwrap();
+    assert_eq!(call_msg.viewtype, Viewtype::Call);
+    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Alerting);
+
+    let imf_raw = b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <second@example.net>\n\
+        In-Reply-To: <first@example.net>\n\
+        Chat-Version: 1.0\n\
+        Chat-Content: call-ended\n\
+        \n\
+        Call ended\n";
+    receive_imf_from_inbox(
+        alice,
+        "second@example.net",
+        imf_raw,
+        seen,
+        Some(imf_raw.len().try_into().unwrap()),
+    )
+    .await?;
+
+    // The call is still not ended.
+    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Alerting);
+
+    // Fully downloading the message ends the call.
+    receive_imf_from_inbox(alice, "second@example.net", imf_raw, seen, None)
+        .await
+        .context("Failed to fully download end call message")?;
+    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Missed);
 
     Ok(())
 }

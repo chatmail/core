@@ -96,7 +96,7 @@ impl CallInfo {
         let duration = match minutes {
             0 => "<1 minute".to_string(),
             1 => "1 minute".to_string(),
-            n => format!("{} minutes", n),
+            n => format!("{n} minutes"),
         };
 
         if self.is_incoming() {
@@ -213,7 +213,9 @@ impl Context {
         call_id: MsgId,
         accept_call_info: String,
     ) -> Result<()> {
-        let mut call: CallInfo = self.load_call_by_id(call_id).await?;
+        let mut call: CallInfo = self.load_call_by_id(call_id).await?.with_context(|| {
+            format!("accept_incoming_call is called with {call_id} which does not refer to a call")
+        })?;
         ensure!(call.is_incoming());
         if call.is_accepted() || call.is_ended() {
             info!(self, "Call already accepted/ended");
@@ -248,7 +250,9 @@ impl Context {
 
     /// Cancel, decline or hangup an incoming or outgoing call.
     pub async fn end_call(&self, call_id: MsgId) -> Result<()> {
-        let mut call: CallInfo = self.load_call_by_id(call_id).await?;
+        let mut call: CallInfo = self.load_call_by_id(call_id).await?.with_context(|| {
+            format!("end_call is called with {call_id} which does not refer to a call")
+        })?;
         if call.is_ended() {
             info!(self, "Call already ended");
             return Ok(());
@@ -291,7 +295,13 @@ impl Context {
         call_id: MsgId,
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
-        let mut call = context.load_call_by_id(call_id).await?;
+        let Some(mut call) = context.load_call_by_id(call_id).await? else {
+            warn!(
+                context,
+                "emit_end_call_if_unaccepted is called with {call_id} which does not refer to a call."
+            );
+            return Ok(());
+        };
         if !call.is_accepted() && !call.is_ended() {
             if call.is_incoming() {
                 call.mark_as_canceled(&context).await?;
@@ -316,7 +326,10 @@ impl Context {
         from_id: ContactId,
     ) -> Result<()> {
         if mime_message.is_call() {
-            let call = self.load_call_by_id(call_id).await?;
+            let Some(call) = self.load_call_by_id(call_id).await? else {
+                warn!(self, "{call_id} does not refer to a call message");
+                return Ok(());
+            };
 
             if call.is_incoming() {
                 if call.is_stale() {
@@ -352,7 +365,11 @@ impl Context {
         } else {
             match mime_message.is_system_message {
                 SystemMessage::CallAccepted => {
-                    let mut call = self.load_call_by_id(call_id).await?;
+                    let Some(mut call) = self.load_call_by_id(call_id).await? else {
+                        warn!(self, "{call_id} does not refer to a call message");
+                        return Ok(());
+                    };
+
                     if call.is_ended() || call.is_accepted() {
                         info!(self, "CallAccepted received for accepted/ended call");
                         return Ok(());
@@ -377,7 +394,11 @@ impl Context {
                     }
                 }
                 SystemMessage::CallEnded => {
-                    let mut call = self.load_call_by_id(call_id).await?;
+                    let Some(mut call) = self.load_call_by_id(call_id).await? else {
+                        warn!(self, "{call_id} does not refer to a call message");
+                        return Ok(());
+                    };
+
                     if call.is_ended() {
                         // may happen eg. if a a message is missed
                         info!(self, "CallEnded received for ended call");
@@ -421,15 +442,26 @@ impl Context {
     }
 
     /// Loads information about the call given its ID.
-    pub async fn load_call_by_id(&self, call_id: MsgId) -> Result<CallInfo> {
+    ///
+    /// If the message referred to by ID is
+    /// not a call message, returns `None`.
+    pub async fn load_call_by_id(&self, call_id: MsgId) -> Result<Option<CallInfo>> {
         let call = Message::load_from_db(self, call_id).await?;
-        self.load_call_by_message(call)
+        Ok(self.load_call_by_message(call))
     }
 
-    fn load_call_by_message(&self, call: Message) -> Result<CallInfo> {
-        ensure!(call.viewtype == Viewtype::Call);
+    // Loads information about the call given the `Message`.
+    //
+    // If the `Message` is not a call message, returns `None`
+    fn load_call_by_message(&self, call: Message) -> Option<CallInfo> {
+        if call.viewtype != Viewtype::Call {
+            // This can happen e.g. if a "call accepted"
+            // or "call ended" message is received
+            // with `In-Reply-To` referring to non-call message.
+            return None;
+        }
 
-        Ok(CallInfo {
+        Some(CallInfo {
             place_call_info: call
                 .param
                 .get(Param::WebrtcRoom)
@@ -497,8 +529,13 @@ pub enum CallState {
 }
 
 /// Returns call state given the message ID.
+///
+/// Returns an error if the message is not a call message.
 pub async fn call_state(context: &Context, msg_id: MsgId) -> Result<CallState> {
-    let call = context.load_call_by_id(msg_id).await?;
+    let call = context
+        .load_call_by_id(msg_id)
+        .await?
+        .with_context(|| format!("{msg_id} is not a call message"))?;
     let state = if call.is_incoming() {
         if call.is_accepted() {
             if call.is_ended() {
