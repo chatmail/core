@@ -270,7 +270,6 @@ impl Context {
                     Ok(())
                 }
             }
-            .with_context(|| format!("Sync data {:?}", item.data))
             .log_err(self)
             .ok();
         }
