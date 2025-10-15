@@ -428,7 +428,7 @@ pub enum Config {
     /// without storing the email address
     StatsId,
 
-    /// The last contact id that already existed when statistics-sending was enabled.
+    /// The last contact id that already existed when statistics-sending was enabled for the first time.
     StatsLastOldContactId,
 
     /// MsgId of webxdc map integration.
