@@ -1,6 +1,6 @@
 //! # Synchronize items between devices.
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 
