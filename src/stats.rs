@@ -158,7 +158,7 @@ struct JoinedInvite {
 /// to Delta Chat's developers.
 pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
     if should_send_stats(context).await?
-        && has_time_passed(context, Config::StatsLastSent, SENDING_INTERVAL_SECONDS).await?
+        && time_has_passed(context, Config::StatsLastSent, SENDING_INTERVAL_SECONDS).await?
     {
         let chat_id = send_stats(context).await?;
 
@@ -169,7 +169,7 @@ pub async fn maybe_send_stats(context: &Context) -> Result<Option<ChatId>> {
 
 pub(crate) async fn maybe_update_message_stats(context: &Context) -> Result<()> {
     if should_send_stats(context).await?
-        && has_time_passed(
+        && time_has_passed(
             context,
             Config::StatsLastUpdate,
             MESSAGE_STATS_UPDATE_INTERVAL_SECONDS,
@@ -182,7 +182,7 @@ pub(crate) async fn maybe_update_message_stats(context: &Context) -> Result<()> 
     Ok(())
 }
 
-async fn has_time_passed(context: &Context, config: Config, seconds: i64) -> Result<bool> {
+async fn time_has_passed(context: &Context, config: Config, seconds: i64) -> Result<bool> {
     let last_time = context.get_config_i64(config).await?;
     let next_time = last_time.saturating_add(seconds);
 
