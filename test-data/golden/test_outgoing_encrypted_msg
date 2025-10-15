@@ -1,5 +1,5 @@
 Single#Chat#10: bob@example.net [KEY bob@example.net]
 --------------------------------------------------------------------------------
-Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 Msg#11🔒: Me (Contact#Contact#Self): Test – This is encrypted, signed, and has an Autocrypt Header without prefer-encrypt=mutual.  √
+Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 --------------------------------------------------------------------------------
