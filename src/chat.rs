@@ -1218,12 +1218,11 @@ impl ChatId {
                 )
                 .await?
         } else if received {
-            // Received messages shouldn't mingle with just sent ones and appear somewhere in the
-            // middle of the chat, so we go after the newest non fresh message.
-            //
-            // But if a received outgoing message is older than some seen message, better sort the
-            // received message purely by timestamp. We could place it just before that seen
-            // message, but anyway the user may not notice it.
+            // Received incoming messages shouldn't mingle with just sent ones and appear somewhere
+            // in the middle of the chat, so we go after the newest non fresh message. Received
+            // outgoing messages are allowed to mingle with seen messages though to avoid seen
+            // replies appearing before messages sent from another device (cases like the user
+            // sharing the account with others or bots are rare, so let them break sometimes).
             //
             // NB: Received outgoing messages may break sorting of fresh incoming ones, but this
             // shouldn't happen frequently. Seen incoming messages don't really break sorting of
@@ -1231,24 +1230,23 @@ impl ChatId {
             context
                 .sql
                 .query_row_optional(
-                    "SELECT MAX(timestamp), MAX(IIF(state=?,timestamp_sent,0))
+                    "SELECT MAX(timestamp)
                      FROM msgs
                      WHERE chat_id=? AND hidden=0 AND state>?
                      HAVING COUNT(*) > 0",
-                    (MessageState::InSeen, self, MessageState::InFresh),
+                    (
+                        self,
+                        match incoming {
+                            true => MessageState::InFresh,
+                            false => MessageState::InSeen,
+                        },
+                    ),
                     |row| {
                         let ts: i64 = row.get(0)?;
-                        let ts_sent_seen: i64 = row.get(1)?;
-                        Ok((ts, ts_sent_seen))
+                        Ok(ts)
                     },
                 )
                 .await?
-                .and_then(|(ts, ts_sent_seen)| {
-                    match incoming || ts_sent_seen <= message_timestamp {
-                        true => Some(ts),
-                        false => None,
-                    }
-                })
         } else {
             None
         };
