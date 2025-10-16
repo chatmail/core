@@ -300,8 +300,6 @@ async fn get_configured_param(
         param.smtp.password.clone()
     };
 
-    let proxy_enabled = ctx.get_config_bool(Config::ProxyEnabled).await?;
-
     let mut addr = param.addr.clone();
     if param.oauth2 {
         // the used oauth2 addr may differ, check this.
@@ -343,7 +341,7 @@ async fn get_configured_param(
             "checking internal provider-info for offline autoconfig"
         );
 
-        provider = provider::get_provider_info(ctx, &param_domain, proxy_enabled).await;
+        provider = provider::get_provider_info(&param_domain);
         if let Some(provider) = provider {
             if provider.server.is_empty() {
                 info!(ctx, "Offline autoconfig found, but no servers defined.");

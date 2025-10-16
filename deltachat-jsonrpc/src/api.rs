@@ -336,21 +336,10 @@ impl CommandApi {
     /// instead of the domain.
     async fn get_provider_info(
         &self,
-        account_id: u32,
+        _account_id: u32,
         email: String,
     ) -> Result<Option<ProviderInfo>> {
-        let ctx = self.get_context(account_id).await?;
-
-        let proxy_enabled = ctx
-            .get_config_bool(deltachat::config::Config::ProxyEnabled)
-            .await?;
-
-        let provider_info = get_provider_info(
-            &ctx,
-            email.split('@').next_back().unwrap_or(""),
-            proxy_enabled,
-        )
-        .await;
+        let provider_info = get_provider_info(email.split('@').next_back().unwrap_or(""));
         Ok(ProviderInfo::from_dc_type(provider_info))
     }
 
