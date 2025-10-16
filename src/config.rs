@@ -165,11 +165,11 @@ pub enum Config {
     #[strum(props(default = "1"))]
     MvboxMove,
 
-    /// Watch for new messages in the "Mvbox" (aka DeltaChat folder) only.
+    /// Only watch the mvbox (aka DeltaChat folder) and, if `MvboxMove` is set, Inbox.
     ///
     /// This will not entirely disable other folders, e.g. the spam folder will also still
-    /// be watched for new messages.
-    #[strum(props(default = "0"))]
+    /// be scanned for new messages.
+    #[strum(props(default = "1"))]
     OnlyFetchMvbox,
 
     /// Whether to show classic emails or only chat messages.
