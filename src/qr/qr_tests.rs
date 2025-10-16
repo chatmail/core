@@ -224,13 +224,13 @@ async fn test_decode_ideltachat_link() -> Result<()> {
     for ctx in &[ctx_configured, ctx_unconfigured] {
         let qr = check_qr(
             ctx,
-            "https://i.delta.chat/#79252762C34C5096AF57958F4FC3D21A81B0F0A7&a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
+            "https://i.privittytech.com/#79252762C34C5096AF57958F4FC3D21A81B0F0A7&a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
         ).await?;
         assert!(matches!(qr, Qr::AskVerifyGroup { .. }));
 
         let qr = check_qr(
             ctx,
-            "https://i.delta.chat#79252762C34C5096AF57958F4FC3D21A81B0F0A7&a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
+            "https://i.privittytech.com#79252762C34C5096AF57958F4FC3D21A81B0F0A7&a=cli%40deltachat.de&g=test%20%3F+test%20%21&x=h-0oKQf2CDK&i=9JEXlxAqGM0&s=0V7LzL9cxRL"
         ).await?;
         assert!(matches!(qr, Qr::AskVerifyGroup { .. }));
     }

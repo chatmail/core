@@ -104,7 +104,7 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
             context.scheduler.interrupt_inbox().await;
         }
         format!(
-            "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
+            "https://i.privittytech.com/#{}&a={}&g={}&x={}&i={}&s={}",
             fingerprint.hex(),
             self_addr_urlencoded,
             &group_name_urlencoded,
@@ -119,7 +119,7 @@ pub async fn get_securejoin_qr(context: &Context, group: Option<ChatId>) -> Resu
             context.scheduler.interrupt_inbox().await;
         }
         format!(
-            "https://i.delta.chat/#{}&a={}&n={}&i={}&s={}",
+            "https://i.privittytech.com/#{}&a={}&n={}&i={}&s={}",
             fingerprint.hex(),
             self_addr_urlencoded,
             self_name_urlencoded,
