@@ -232,7 +232,7 @@ async fn send_stats(context: &Context) -> Result<ChatId> {
     let chat_id = get_stats_chat_id(context).await?;
 
     let mut msg = Message::new(Viewtype::File);
-    msg.set_text(crate::stock_str::stats_device_message(context).await);
+    msg.set_text(crate::stock_str::stats_message_body(context).await);
 
     let stats = get_stats(context).await?;
 

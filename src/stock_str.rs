@@ -440,7 +440,9 @@ https://delta.chat/donate"))]
     #[strum(props(fallback = "Scan to join channel %1$s"))]
     SecureJoinBrodcastQRDescription = 201,
 
-    #[strum(props(fallback = "todo"))]
+    #[strum(props(
+        fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
+    ))]
     StatsMessageBody = 210,
 }
 
@@ -1290,7 +1292,8 @@ pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> Stri
         .replace1(provider)
 }
 
-pub(crate) async fn stats_device_message(context: &Context) -> String {
+/// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`
+pub(crate) async fn stats_message_body(context: &Context) -> String {
     translated(context, StockMessage::StatsMessageBody).await
 }
 
