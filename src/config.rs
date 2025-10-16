@@ -745,7 +745,6 @@ impl Context {
             // Make sure that StatsId is available for the UI,
             // in order to open the survey with the StatsId as a parameter:
             stats::stats_id(self).await?;
-            self.sql.set_raw_config(key.as_ref(), value).await?;
             stats::maybe_send_stats(self).await?;
         }
         Ok(())
