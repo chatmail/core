@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 
-use anyhow::{Context as _, Result, bail, ensure};
+use anyhow::{Context as _, Result, bail};
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -15,7 +15,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat};
+use crate::chat::{self, Chat, PARAM_BROADCAST_SHARED_SECRET, load_broadcast_shared_secret};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -182,7 +182,7 @@ impl MimeFactory {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
         let attach_profile_data = Self::should_attach_profile_data(&msg);
-        let undisclosed_recipients = chat.typ == Chattype::OutBroadcast;
+        let undisclosed_recipients = should_hide_recipients(&msg, &chat);
 
         let from_addr = context.get_primary_self_addr().await?;
         let config_displayname = context
@@ -329,7 +329,7 @@ impl MimeFactory {
 
                                 if let Some(public_key) = public_key_opt {
                                     keys.push((addr.clone(), public_key))
-                                } else if id != ContactId::SELF {
+                                } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
                                     missing_key_addresses.insert(addr.clone());
                                     if is_encrypted {
                                         warn!(context, "Missing key for {addr}");
@@ -350,7 +350,7 @@ impl MimeFactory {
 
                                             if let Some(public_key) = public_key_opt {
                                                 keys.push((addr.clone(), public_key))
-                                            } else if id != ContactId::SELF {
+                                            } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat)  {
                                                 missing_key_addresses.insert(addr.clone());
                                                 if is_encrypted {
                                                     warn!(context, "Missing key for {addr}");
@@ -415,8 +415,24 @@ impl MimeFactory {
                 req_mdn = true;
             }
 
+            // If undisclosed_recipients, and this is a member-added/removed message,
+            // only send to the added/removed member
+            if undisclosed_recipients
+                && matches!(
+                    msg.param.get_cmd(),
+                    SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
+                )
+            {
+                if let Some(member) = msg.param.get(Param::Arg) {
+                    recipients.retain(|addr| addr == member);
+                }
+            }
+
             encryption_keys = if !is_encrypted {
                 None
+            } else if should_encrypt_symmetrically(&msg, &chat) {
+                // Encrypt, but only symmetrically, not with the public keys.
+                Some(Vec::new())
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
                     bail!("No recipient keys are available, cannot encrypt to {recipients:?}.");
@@ -560,6 +576,10 @@ impl MimeFactory {
             //   messages are auto-sent unlike usual unencrypted messages.
             step == "vg-request-with-auth"
                 || step == "vc-request-with-auth"
+                // Note that for "vg-member-added"
+                // get_cmd() returns `MemberAddedToGroup` rather than `SecurejoinMessage`,
+                // so, it wouldn't actually be necessary to have them in the list here.
+                // Still, they are here for completeness.
                 || step == "vg-member-added"
                 || step == "vc-contact-confirm"
         }
@@ -812,7 +832,7 @@ impl MimeFactory {
             }
         }
 
-        if let Loaded::Message { chat, .. } = &self.loaded {
+        if let Loaded::Message { msg, chat } = &self.loaded {
             if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
                 headers.push((
                     "List-ID",
@@ -822,6 +842,15 @@ impl MimeFactory {
                     ))
                     .into(),
                 ));
+
+                if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
+                    if let Some(secret) = msg.param.get(PARAM_BROADCAST_SHARED_SECRET) {
+                        headers.push((
+                            "Chat-Broadcast-Secret",
+                            mail_builder::headers::text::Text::new(secret.to_string()).into(),
+                        ));
+                    }
+                }
             }
         }
 
@@ -1002,6 +1031,15 @@ impl MimeFactory {
                 } else {
                     unprotected_headers.push(header.clone());
                 }
+            } else if header_name == "chat-broadcast-secret" {
+                if is_encrypted {
+                    protected_headers.push(header.clone());
+                } else {
+                    warn!(
+                        context,
+                        "Message is unnecrypted, not including broadcast secret"
+                    );
+                }
             } else if is_encrypted {
                 protected_headers.push(header.clone());
 
@@ -1057,7 +1095,7 @@ impl MimeFactory {
 
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
-                    if chat.typ != Chattype::OutBroadcast {
+                    if !should_hide_recipients(msg, chat) {
                         for (addr, key) in &encryption_keys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
@@ -1141,18 +1179,45 @@ impl MimeFactory {
                 Loaded::Mdn { .. } => true,
             };
 
-            // Encrypt to self unconditionally,
-            // even for a single-device setup.
-            let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
-            encryption_keyring.extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
+            let shared_secret: Option<String> = match &self.loaded {
+                Loaded::Message { chat, msg }
+                    if should_encrypt_with_broadcast_secret(msg, chat) =>
+                {
+                    // If there is no shared secret yet
+                    // (because this is an old broadcast channel,
+                    // created before we had symmetric encryption),
+                    // we just encrypt asymmetrically.
+                    // Symmetric encryption exists since 2025-10;
+                    // some time after that, we can think about requiring everyone
+                    // to switch to symmetrically-encrypted broadcast lists.
+                    load_broadcast_shared_secret(context, chat.id).await?
+                }
+                _ => None,
+            };
+
+            let encrypted = if let Some(shared_secret) = shared_secret {
+                info!(context, "Encrypting symmetrically.");
+                encrypt_helper
+                    .encrypt_symmetrically(context, &shared_secret, message, compress)
+                    .await?
+            } else {
+                // Asymmetric encryption
+
+                // Encrypt to self unconditionally,
+                // even for a single-device setup.
+                let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
+                encryption_keyring
+                    .extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
+
+                encrypt_helper
+                    .encrypt(context, encryption_keyring, message, compress)
+                    .await?
+            };
 
             // XXX: additional newline is needed
             // to pass filtermail at
-            // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>
-            let encrypted = encrypt_helper
-                .encrypt(context, encryption_keyring, message, compress)
-                .await?
-                + "\n";
+            // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
+            let encrypted = encrypted + "\n";
 
             // Set the appropriate Content-Type for the outer message
             MimePart::new(
@@ -1361,8 +1426,8 @@ impl MimeFactory {
 
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
+                    let fingerprint_to_remove = msg.param.get(Param::Arg2).unwrap_or_default();
 
                     if email_to_remove
                         == context
@@ -1383,9 +1448,16 @@ impl MimeFactory {
                                 .into(),
                         ));
                     }
+
+                    if !fingerprint_to_remove.is_empty() {
+                        headers.push((
+                            "Chat-Group-Member-Removed-Fpr",
+                            mail_builder::headers::raw::Raw::new(fingerprint_to_remove.to_string())
+                                .into(),
+                        ));
+                    }
                 }
                 SystemMessage::MemberAddedToGroup => {
-                    ensure!(chat.typ != Chattype::OutBroadcast);
                     // TODO: lookup the contact by ID rather than email address.
                     // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
@@ -1399,14 +1471,11 @@ impl MimeFactory {
                         ));
                     }
                     if 0 != msg.param.get_int(Param::Arg2).unwrap_or_default() & DC_FROM_HANDSHAKE {
-                        info!(
-                            context,
-                            "Sending secure-join message {:?}.", "vg-member-added",
-                        );
+                        let step = "vg-member-added";
+                        info!(context, "Sending secure-join message {:?}.", step);
                         headers.push((
                             "Secure-Join",
-                            mail_builder::headers::raw::Raw::new("vg-member-added".to_string())
-                                .into(),
+                            mail_builder::headers::raw::Raw::new(step.to_string()).into(),
                         ));
                     }
                 }
@@ -1815,6 +1884,23 @@ impl MimeFactory {
 
 fn hidden_recipients() -> Address<'static> {
     Address::new_group(Some("hidden-recipients".to_string()), Vec::new())
+}
+
+fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
+    chat.typ == Chattype::OutBroadcast
+        // We encrypt securejoin messages asymmetrically
+        && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
+        // The member-added message in a broadcast must be asymmetrically encrypted,
+        // because the newly-added member doesn't know the broadcast shared secret yet:
+        && msg.param.get_cmd() != SystemMessage::MemberAddedToGroup
+}
+
+fn should_hide_recipients(msg: &Message, chat: &Chat) -> bool {
+    should_encrypt_with_broadcast_secret(msg, chat)
+}
+
+fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
+    should_encrypt_with_broadcast_secret(msg, chat)
 }
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {

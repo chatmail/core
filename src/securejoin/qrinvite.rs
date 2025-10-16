@@ -29,6 +29,14 @@ pub enum QrInvite {
         invitenumber: String,
         authcode: String,
     },
+    Broadcast {
+        contact_id: ContactId,
+        fingerprint: Fingerprint,
+        broadcast_name: String,
+        grpid: String,
+        invitenumber: String,
+        authcode: String,
+    },
 }
 
 impl QrInvite {
@@ -38,28 +46,36 @@ impl QrInvite {
     /// translated to a contact ID.
     pub fn contact_id(&self) -> ContactId {
         match self {
-            Self::Contact { contact_id, .. } | Self::Group { contact_id, .. } => *contact_id,
+            Self::Contact { contact_id, .. }
+            | Self::Group { contact_id, .. }
+            | Self::Broadcast { contact_id, .. } => *contact_id,
         }
     }
 
     /// The fingerprint of the inviter.
     pub fn fingerprint(&self) -> &Fingerprint {
         match self {
-            Self::Contact { fingerprint, .. } | Self::Group { fingerprint, .. } => fingerprint,
+            Self::Contact { fingerprint, .. }
+            | Self::Group { fingerprint, .. }
+            | Self::Broadcast { fingerprint, .. } => fingerprint,
         }
     }
 
     /// The `INVITENUMBER` of the setup-contact/secure-join protocol.
     pub fn invitenumber(&self) -> &str {
         match self {
-            Self::Contact { invitenumber, .. } | Self::Group { invitenumber, .. } => invitenumber,
+            Self::Contact { invitenumber, .. }
+            | Self::Group { invitenumber, .. }
+            | Self::Broadcast { invitenumber, .. } => invitenumber,
         }
     }
 
     /// The `AUTH` code of the setup-contact/secure-join protocol.
     pub fn authcode(&self) -> &str {
         match self {
-            Self::Contact { authcode, .. } | Self::Group { authcode, .. } => authcode,
+            Self::Contact { authcode, .. }
+            | Self::Group { authcode, .. }
+            | Self::Broadcast { authcode, .. } => authcode,
         }
     }
 }
@@ -95,7 +111,22 @@ impl TryFrom<Qr> for QrInvite {
                 invitenumber,
                 authcode,
             }),
-            _ => bail!("Unsupported QR type"),
+            Qr::AskJoinBroadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                authcode,
+                invitenumber,
+            } => Ok(QrInvite::Broadcast {
+                broadcast_name,
+                grpid,
+                contact_id,
+                fingerprint,
+                authcode,
+                invitenumber,
+            }),
+            _ => bail!("Unsupported QR type: {qr:?}"),
         }
     }
 }

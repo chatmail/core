@@ -17,7 +17,7 @@ use crate::param::Param;
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{create_smeared_timestamp, time};
+use crate::tools::{smeared_time, time};
 
 /// Starts the securejoin protocol with the QR `invite`.
 ///
@@ -47,10 +47,17 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     let hidden = match invite {
         QrInvite::Contact { .. } => Blocked::Not,
         QrInvite::Group { .. } => Blocked::Yes,
+        QrInvite::Broadcast { .. } => Blocked::Yes,
     };
-    let chat_id = ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
-        .await
-        .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
+
+    // The 1:1 chat with the inviter
+    let private_chat_id =
+        ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
+            .await
+            .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
+
+    // The chat id of the 1:1 chat, group or broadcast that is being joined
+    let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
 
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
@@ -71,11 +78,16 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         {
             // The scanned fingerprint matches Alice's key, we can proceed to step 4b.
             info!(context, "Taking securejoin protocol shortcut");
-            send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth)
-                .await?;
+            send_handshake_message(
+                context,
+                &invite,
+                private_chat_id,
+                BobHandshakeMsg::RequestWithAuth,
+            )
+            .await?;
 
             // Mark 1:1 chat as verified already.
-            chat_id
+            private_chat_id
                 .set_protection(
                     context,
                     ProtectionStatus::Protected,
@@ -89,29 +101,50 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 progress: JoinerProgress::RequestWithAuthSent.to_usize(),
             });
         } else {
-            send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::Request).await?;
+            send_handshake_message(context, &invite, private_chat_id, BobHandshakeMsg::Request)
+                .await?;
 
-            insert_new_db_entry(context, invite.clone(), chat_id).await?;
+            insert_new_db_entry(context, invite.clone(), private_chat_id).await?;
         }
     }
 
     match invite {
         QrInvite::Group { .. } => {
-            // For a secure-join we need to create the group and add the contact.  The group will
-            // only become usable once the protocol is finished.
-            let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
-            if !is_contact_in_chat(context, group_chat_id, invite.contact_id()).await? {
+            // We created the group already, now we need to add Alice to the group.
+            // The group will only become usable once the protocol is finished.
+            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
                     time(),
-                    group_chat_id,
+                    joining_chat_id,
                     &[invite.contact_id()],
                 )
                 .await?;
             }
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
-            chat::add_info_msg(context, group_chat_id, &msg, time()).await?;
-            Ok(group_chat_id)
+            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            Ok(joining_chat_id)
+        }
+        QrInvite::Broadcast { .. } => {
+            // We created the broadcast channel already, now we need to add Alice to the group.
+            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
+                chat::add_to_chat_contacts_table(
+                    context,
+                    time(),
+                    joining_chat_id,
+                    &[invite.contact_id()],
+                )
+                .await?;
+            }
+
+            // If we were not in the broadcast channel before, show a 'please wait' info message.
+            // Since we don't have any specific stock string for this,
+            // use the generic `Establishing guaranteed end-to-end encryption, please wait…`
+            if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
+                let msg = stock_str::securejoin_wait(context).await;
+                chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            }
+            Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
@@ -120,14 +153,14 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // race with its change, we don't add our message below the protection message.
             let sort_to_bottom = true;
             let (received, incoming) = (false, false);
-            let ts_sort = chat_id
+            let ts_sort = private_chat_id
                 .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
                 .await?;
-            if chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
+            if private_chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
                 let ts_start = time();
                 chat::add_info_msg_with_cmd(
                     context,
-                    chat_id,
+                    private_chat_id,
                     &stock_str::securejoin_wait(context).await,
                     SystemMessage::SecurejoinWait,
                     ts_sort,
@@ -138,7 +171,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 )
                 .await?;
             }
-            Ok(chat_id)
+            Ok(private_chat_id)
         }
     }
 }
@@ -204,10 +237,10 @@ pub(super) async fn handle_auth_required(
             .await?;
 
         match invite {
-            QrInvite::Contact { .. } => {}
+            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
-                // so only show it on secure-join and not on setup-contact.
+                // so only show it when joining a group and not for a 1:1 chat or broadcast channel.
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
                 let chat_id = joining_chat_id(context, &invite, chat_id).await?;
@@ -323,10 +356,12 @@ impl BobHandshakeMsg {
             Self::Request => match invite {
                 QrInvite::Contact { .. } => "vc-request",
                 QrInvite::Group { .. } => "vg-request",
+                QrInvite::Broadcast { .. } => "vg-request",
             },
             Self::RequestWithAuth => match invite {
                 QrInvite::Contact { .. } => "vc-request-with-auth",
                 QrInvite::Group { .. } => "vg-request-with-auth",
+                QrInvite::Broadcast { .. } => "vg-request-with-auth",
             },
         }
     }
@@ -346,8 +381,19 @@ async fn joining_chat_id(
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
-        QrInvite::Group { grpid, name, .. } => {
-            let group_chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
+        QrInvite::Group { grpid, name, .. }
+        | QrInvite::Broadcast {
+            broadcast_name: name,
+            grpid,
+            ..
+        } => {
+            let chattype = if matches!(invite, QrInvite::Group { .. }) {
+                Chattype::Group
+            } else {
+                Chattype::InBroadcast
+            };
+
+            let chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
                 Some((chat_id, _protected, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;
                     chat_id
@@ -355,18 +401,18 @@ async fn joining_chat_id(
                 None => {
                     ChatId::create_multiuser_record(
                         context,
-                        Chattype::Group,
+                        chattype,
                         grpid,
                         name,
                         Blocked::Not,
                         ProtectionStatus::Unprotected, // protection is added later as needed
                         None,
-                        create_smeared_timestamp(context),
+                        smeared_time(context),
                     )
                     .await?
                 }
             };
-            Ok(group_chat_id)
+            Ok(chat_id)
         }
     }
 }
