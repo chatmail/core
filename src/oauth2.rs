@@ -53,7 +53,7 @@ pub async fn get_oauth2_url(
     addr: &str,
     redirect_uri: &str,
 ) -> Result<Option<String>> {
-    if let Some(oauth2) = Oauth2::from_address(context, addr).await {
+    if let Some(oauth2) = Oauth2::from_address(addr) {
         context
             .sql
             .set_raw_config("oauth2_pending_redirect_uri", Some(redirect_uri))
@@ -73,7 +73,7 @@ pub(crate) async fn get_oauth2_access_token(
     code: &str,
     regenerate: bool,
 ) -> Result<Option<String>> {
-    if let Some(oauth2) = Oauth2::from_address(context, addr).await {
+    if let Some(oauth2) = Oauth2::from_address(addr) {
         let lock = context.oauth2_mutex.lock().await;
 
         // read generated token
@@ -221,7 +221,7 @@ pub(crate) async fn get_oauth2_addr(
     addr: &str,
     code: &str,
 ) -> Result<Option<String>> {
-    let oauth2 = match Oauth2::from_address(context, addr).await {
+    let oauth2 = match Oauth2::from_address(addr) {
         Some(o) => o,
         None => return Ok(None),
     };
@@ -256,15 +256,13 @@ pub(crate) async fn get_oauth2_addr(
 }
 
 impl Oauth2 {
-    async fn from_address(context: &Context, addr: &str) -> Option<Self> {
+    fn from_address(addr: &str) -> Option<Self> {
         let addr_normalized = normalize_addr(addr);
-        let skip_mx = true;
         if let Some(domain) = addr_normalized
             .find('@')
             .map(|index| addr_normalized.split_at(index + 1).1)
         {
-            if let Some(oauth2_authorizer) = provider::get_provider_info(context, domain, skip_mx)
-                .await
+            if let Some(oauth2_authorizer) = provider::get_provider_info(domain)
                 .and_then(|provider| provider.oauth2_authorizer.as_ref())
             {
                 return Some(match oauth2_authorizer {
@@ -354,21 +352,16 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_oauth_from_address() {
-        let t = TestContext::new().await;
-
         // Delta Chat does not have working Gmail client ID anymore.
-        assert_eq!(Oauth2::from_address(&t, "hello@gmail.com").await, None);
-        assert_eq!(Oauth2::from_address(&t, "hello@googlemail.com").await, None);
+        assert_eq!(Oauth2::from_address("hello@gmail.com"), None);
+        assert_eq!(Oauth2::from_address("hello@googlemail.com"), None);
 
         assert_eq!(
-            Oauth2::from_address(&t, "hello@yandex.com").await,
+            Oauth2::from_address("hello@yandex.com"),
             Some(OAUTH2_YANDEX)
         );
-        assert_eq!(
-            Oauth2::from_address(&t, "hello@yandex.ru").await,
-            Some(OAUTH2_YANDEX)
-        );
-        assert_eq!(Oauth2::from_address(&t, "hello@web.de").await, None);
+        assert_eq!(Oauth2::from_address("hello@yandex.ru"), Some(OAUTH2_YANDEX));
+        assert_eq!(Oauth2::from_address("hello@web.de"), None);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

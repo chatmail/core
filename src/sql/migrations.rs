@@ -19,7 +19,7 @@ use crate::key::DcKey;
 use crate::log::{info, warn};
 use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
-use crate::provider::get_provider_by_domain;
+use crate::provider::get_provider_info;
 use crate::sql::Sql;
 use crate::tools::{Time, inc_and_check, time_elapsed};
 
@@ -382,7 +382,7 @@ UPDATE chats SET protected=1, type=120 WHERE type=130;"#,
                 context
                     .set_config_internal(
                         Config::ConfiguredProvider,
-                        get_provider_by_domain(&domain).map(|provider| provider.id),
+                        get_provider_info(&domain).map(|provider| provider.id),
                     )
                     .await?;
             } else {

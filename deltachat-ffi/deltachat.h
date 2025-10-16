@@ -5350,11 +5350,9 @@ dc_provider_t*  dc_provider_new_from_email            (const dc_context_t* conte
 
 
 /**
- * Create a provider struct for the given e-mail address by local and DNS lookup.
+ * Create a provider struct for the given e-mail address by local lookup.
  *
- * First lookup is done from the local database as of dc_provider_new_from_email().
- * If the first lookup fails, an additional DNS lookup is done,
- * trying to figure out the provider belonging to custom domains.
+ * DNS lookup is not used anymore and this function is deprecated.
  *
  * @memberof dc_provider_t
  * @param context The context object.
@@ -5362,6 +5360,7 @@ dc_provider_t*  dc_provider_new_from_email            (const dc_context_t* conte
  * @return A dc_provider_t struct which can be used with the dc_provider_get_*
  *     accessor functions. If no provider info is found, NULL will be
  *     returned.
+ * @deprecated 2025-10-17 use dc_provider_new_from_email() instead.
  */
 dc_provider_t*  dc_provider_new_from_email_with_dns    (const dc_context_t* context, const char* email);
 

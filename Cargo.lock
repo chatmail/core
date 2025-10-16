@@ -1316,7 +1316,6 @@ dependencies = [
  "futures",
  "futures-lite",
  "hex",
- "hickory-resolver",
  "http-body-util",
  "humansize",
  "hyper",

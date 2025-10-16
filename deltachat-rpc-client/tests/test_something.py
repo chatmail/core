@@ -570,8 +570,11 @@ def test_provider_info(rpc) -> None:
     assert provider_info is None
 
     # Test MX record resolution.
+    # This previously resulted in Gmail provider
+    # because MX record pointed to google.com domain,
+    # but MX record resolution has been removed.
     provider_info = rpc.get_provider_info(account_id, "github.com")
-    assert provider_info["id"] == "gmail"
+    assert provider_info is None
 
     # Disable MX record resolution.
     rpc.set_config(account_id, "proxy_enabled", "1")
