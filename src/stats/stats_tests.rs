@@ -14,7 +14,11 @@ use serde_json::{Number, Value};
 async fn test_maybe_send_stats() -> Result<()> {
     let alice = &TestContext::new_alice().await;
 
-    alice.set_config_bool(Config::StatsSending, true).await?;
+    // Can't use `set_config()` here, because this would directly send the statistics,
+    // and we wouldn't know the chat id
+    alice
+        .set_config_internal(Config::StatsSending, Some("1"))
+        .await?;
 
     let chat_id = maybe_send_stats(alice).await?.unwrap();
     let msg = get_chat_msg(alice, chat_id, 0, 2).await;
@@ -47,6 +51,15 @@ async fn test_maybe_send_stats() -> Result<()> {
 async fn test_rewound_time() -> Result<()> {
     let alice = &TestContext::new_alice().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
+
+    // Enabling StatsSending directly sends the first statistics,
+    // so that the user immediately sees the result of enabling it:
+    assert!(maybe_send_stats(alice).await?.is_none());
+    let sent = alice.pop_sent_msg().await;
+    assert_eq!(
+        sent.load_from_db().await.get_filename().unwrap(),
+        "statistics.txt"
+    );
 
     const EIGHT_DAYS: Duration = Duration::from_secs(3600 * 24 * 14);
     SystemTime::shift(EIGHT_DAYS);
@@ -128,7 +141,10 @@ async fn test_message_stats() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    alice.set_config_bool(Config::StatsSending, true).await?;
+    // Can't use `set_config()` here, because this would directly send the statistics
+    alice
+        .set_config_internal(Config::StatsSending, Some("1"))
+        .await?;
     let email_chat = alice.create_email_chat(bob).await;
     let encrypted_chat = alice.create_chat(bob).await;
 
