@@ -28,7 +28,7 @@ fn rgb_to_u32(rgb: Rgb<u8>) -> u32 {
 /// Lightness is set to half (0.5) to make colors suitable both for light and dark theme.
 pub fn str_to_color(s: &str) -> u32 {
     let lightness = 0.5;
-    let chroma = 0.22;
+    let chroma = 0.23;
     let angle = str_to_angle(s);
     let oklch = Oklch::new(lightness, chroma, angle);
     let rgb = oklch.to_rgb(TransferFunction::Srgb);

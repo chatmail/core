@@ -826,3 +826,68 @@ async fn test_ephemeral_timer_non_member() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that expiration of a disappearing message
+/// with unknown viewtype does not make `delete_expired_messages` fail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_disappearing_unknown_viewtype() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let chat = alice.create_chat(bob).await;
+
+    let duration = 60;
+    chat.id
+        .set_ephemeral_timer(alice, Timer::Enabled { duration })
+        .await?;
+
+    let mut msg = Message::new_text("Expiring message".to_string());
+    let _alice_sent_message = alice.send_msg(chat.id, &mut msg).await;
+
+    // Set message viewtype to unassigned
+    // type 70 that was previously used for videochat invitations.
+    alice
+        .sql
+        .execute("UPDATE msgs SET type=70 WHERE id=?", (msg.id,))
+        .await?;
+
+    SystemTime::shift(Duration::from_secs(100));
+
+    // This should not fail.
+    delete_expired_messages(alice, time()).await?;
+
+    Ok(())
+}
+
+/// Tests that deletion of a message with unknown viewtype
+/// triggered by `delete_device_after`
+/// does not make `delete_expired_messages` fail.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_delete_device_after_unknown_viewtype() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let chat = alice.create_chat(bob).await;
+    alice
+        .set_config(Config::DeleteDeviceAfter, Some("600"))
+        .await?;
+
+    let mut msg = Message::new_text("Some message".to_string());
+    let _alice_sent_message = alice.send_msg(chat.id, &mut msg).await;
+
+    // Set message viewtype to unassigned
+    // type 70 that was previously used for videochat invitations.
+    alice
+        .sql
+        .execute("UPDATE msgs SET type=70 WHERE id=?", (msg.id,))
+        .await?;
+
+    SystemTime::shift(Duration::from_secs(1000));
+
+    // This should not fail.
+    delete_expired_messages(alice, time()).await?;
+
+    Ok(())
+}

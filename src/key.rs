@@ -15,6 +15,7 @@ use rand::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
+use crate::events::EventType;
 use crate::log::{LogExt, info};
 use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
@@ -24,7 +25,7 @@ use crate::tools::{self, time_elapsed};
 /// This trait is implemented for rPGP's [SignedPublicKey] and
 /// [SignedSecretKey] types and makes working with them a little
 /// easier in the deltachat world.
-pub(crate) trait DcKey: Serialize + Deserializable + Clone {
+pub trait DcKey: Serialize + Deserializable + Clone {
     /// Create a key from some bytes.
     fn from_slice(bytes: &[u8]) -> Result<Self> {
         let res = <Self as Deserializable>::from_bytes(Cursor::new(bytes));
@@ -111,7 +112,10 @@ pub(crate) trait DcKey: Serialize + Deserializable + Clone {
     /// The fingerprint for the key.
     fn dc_fingerprint(&self) -> Fingerprint;
 
+    /// Whether the key is private (or public).
     fn is_private() -> bool;
+
+    /// Returns the OpenPGP Key ID.
     fn key_id(&self) -> KeyId;
 }
 
@@ -414,15 +418,11 @@ pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> 
                 "INSERT INTO config (keyname, value) VALUES ('key_id', ?)",
                 (new_key_id,),
             )?;
-            Ok(Some(new_key_id))
+            Ok(new_key_id)
         })
         .await?;
-
-    if let Some(new_key_id) = new_key_id {
-        // Update config cache if transaction succeeded and changed current default key.
-        config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
-    }
-
+    context.emit_event(EventType::AccountsItemChanged);
+    config_cache_lock.insert("key_id".to_string(), Some(new_key_id.to_string()));
     Ok(())
 }
 
@@ -500,7 +500,7 @@ impl std::str::FromStr for Fingerprint {
             .filter(|&c| c.is_ascii_hexdigit())
             .collect();
         let v: Vec<u8> = hex::decode(&hex_repr)?;
-        ensure!(v.len() == 20, "wrong fingerprint length: {}", hex_repr);
+        ensure!(v.len() == 20, "wrong fingerprint length: {hex_repr}");
         let fp = Fingerprint::new(v);
         Ok(fp)
     }

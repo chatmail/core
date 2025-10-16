@@ -16,6 +16,10 @@ use crate::net::session::SessionStream;
 use crate::net::tls::wrap_rustls;
 use crate::tools::time;
 
+/// User-Agent for HTTP requests if a resource usage policy requires it.
+/// By default we do not set User-Agent.
+const USER_AGENT: &str = "chatmail/2 (+https://github.com/chatmail/core/)";
+
 /// HTTP(S) GET response.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Response {
@@ -76,11 +80,13 @@ where
                 let proxy_stream = proxy_config
                     .connect(context, host, port, load_cache)
                     .await?;
-                let tls_stream = wrap_rustls(host, &[], proxy_stream).await?;
+                let tls_stream =
+                    wrap_rustls(host, port, "", proxy_stream, &context.tls_session_store).await?;
                 Box::new(tls_stream)
             } else {
                 let tcp_stream = crate::net::connect_tcp(context, host, port, load_cache).await?;
-                let tls_stream = wrap_rustls(host, &[], tcp_stream).await?;
+                let tls_stream =
+                    wrap_rustls(host, port, "", tcp_stream, &context.tls_session_store).await?;
                 Box::new(tls_stream)
             }
         }
@@ -102,6 +108,13 @@ fn http_url_cache_timestamps(url: &str, mimetype: Option<&str>) -> (i64, i64) {
     let stale = if url.ends_with(".xdc") {
         // WebXDCs are never stale, they just expire.
         expires
+    } else if url.starts_with("https://tile.openstreetmap.org/")
+        || url.starts_with("https://vector.openstreetmap.org/")
+    {
+        // Policy at <https://operations.osmfoundation.org/policies/tiles/>
+        // requires that we cache tiles for at least 7 days.
+        // Do not revalidate earlier than that.
+        now + 3600 * 24 * 7
     } else if mimetype.is_some_and(|s| s.starts_with("image/")) {
         // Cache images for 1 day.
         //
@@ -243,8 +256,22 @@ async fn fetch_url(context: &Context, original_url: &str) -> Result<Response> {
             .context("URL has no authority")?
             .clone();
 
-        let req = hyper::Request::builder()
-            .uri(parsed_url)
+        let req = hyper::Request::builder().uri(parsed_url);
+
+        // OSM usage policy requires
+        // that User-Agent is set for HTTP GET requests
+        // to tile servers:
+        // <https://operations.osmfoundation.org/policies/tiles/>
+        // Same for vectory tiles
+        // at <https://operations.osmfoundation.org/policies/vector/>.
+        let req =
+            if authority == "tile.openstreetmap.org" || authority == "vector.openstreetmap.org" {
+                req.header("User-Agent", USER_AGENT)
+            } else {
+                req
+            };
+
+        let req = req
             .header(hyper::header::HOST, authority.as_str())
             .body(http_body_util::Empty::<Bytes>::new())?;
         let response = sender.send_request(req).await?;

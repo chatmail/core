@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.20.0] - 2025-10-13
+
+This release fixes a bug that resulted in ephemeral loop getting stuck in infinite loop
+when trying to delete a message with unknown viewtype.
+
+### Fixes
+
+- Accept unknown viewtype in ephemeral loop.
+- Accept unknown viewtype in delete-old-messages loop.
+
+## [2.19.0] - 2025-10-12
+
+### Features / Changes
+
+- Slightly increase saturation of colors.
+
+### Fixes
+
+- Do not fail to receive call accepted/ended messages referring to non-call Message-ID.
+- Do not fail to fully download previously trashed messages.
+- Emit AccountsItemChanged when own key is generated/imported, use gray self-color until that ([#7296](https://github.com/chatmail/core/pull/7296)).
+- Do not try to process calls from partial messages.
+
+### CI
+
+- Update to Python 3.14.
+
+### Refactor
+
+- Use variables directly in formatted strings ([#7284](https://github.com/chatmail/core/pull/7284)).
+- Set_chat_profile_image(): Remove !chat.is_mailing_list() check.
+
+### Miscellaneous Tasks
+
+- cargo: Bump quick-xml from 0.37.5 to 0.38.3.
+- Add nodejs to nix dev env ([#7283](https://github.com/chatmail/core/pull/7283))
+
 ## [2.18.0] - 2025-10-08
 
 ### API-Changes
@@ -6882,3 +6919,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.16.0]: https://github.com/chatmail/core/compare/v2.15.0..v2.16.0
 [2.17.0]: https://github.com/chatmail/core/compare/v2.16.0..v2.17.0
 [2.18.0]: https://github.com/chatmail/core/compare/v2.17.0..v2.18.0
+[2.19.0]: https://github.com/chatmail/core/compare/v2.18.0..v2.19.0
+[2.20.0]: https://github.com/chatmail/core/compare/v2.19.0..v2.20.0

@@ -939,7 +939,7 @@ impl Scheduler {
 
         // wait for all loops to be started
         if let Err(err) = try_join_all(start_recvs).await {
-            bail!("failed to start scheduler: {}", err);
+            bail!("failed to start scheduler: {err}");
         }
 
         info!(ctx, "scheduler is running");

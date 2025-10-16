@@ -7,6 +7,7 @@ use std::sync::LazyLock;
 
 use quick_xml::{
     Reader,
+    errors::Error as QuickXmlError,
     events::{BytesEnd, BytesStart, BytesText},
 };
 
@@ -132,6 +133,7 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
     reader.config_mut().check_end_names = false;
 
     let mut buf = Vec::new();
+    let mut char_buf = String::with_capacity(4);
 
     loop {
         match reader.read_event_into(&mut buf) {
@@ -140,16 +142,9 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
             }
             Ok(quick_xml::events::Event::End(ref e)) => dehtml_endtag_cb(e, &mut dehtml),
             Ok(quick_xml::events::Event::Text(ref e)) => dehtml_text_cb(e, &mut dehtml),
-            Ok(quick_xml::events::Event::CData(e)) => match e.escape() {
-                Ok(e) => dehtml_text_cb(&e, &mut dehtml),
-                Err(e) => {
-                    eprintln!(
-                        "CDATA escape error at position {}: {:?}",
-                        reader.buffer_position(),
-                        e,
-                    );
-                }
-            },
+            Ok(quick_xml::events::Event::CData(e)) => {
+                str_cb(&String::from_utf8_lossy(&e as &[_]), &mut dehtml)
+            }
             Ok(quick_xml::events::Event::Empty(ref e)) => {
                 // Handle empty tags as a start tag immediately followed by end tag.
                 // For example, `<p/>` is treated as `<p></p>`.
@@ -158,6 +153,33 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
                     &BytesEnd::new(String::from_utf8_lossy(e.name().as_ref())),
                     &mut dehtml,
                 );
+            }
+            Ok(quick_xml::events::Event::GeneralRef(ref e)) => {
+                match e.resolve_char_ref() {
+                    Err(err) => eprintln!(
+                        "resolve_char_ref() error at position {}: {:?}",
+                        reader.buffer_position(),
+                        err,
+                    ),
+                    Ok(Some(ch)) => {
+                        char_buf.clear();
+                        char_buf.push(ch);
+                        str_cb(&char_buf, &mut dehtml);
+                    }
+                    Ok(None) => {
+                        let event_str = String::from_utf8_lossy(e);
+                        if let Some(s) = quick_xml::escape::resolve_html5_entity(&event_str) {
+                            str_cb(s, &mut dehtml);
+                        } else {
+                            // Nonstandard entity. Add escaped.
+                            str_cb(&format!("&{event_str};"), &mut dehtml);
+                        }
+                    }
+                }
+            }
+            Err(QuickXmlError::IllFormed(_)) => {
+                // This is probably not HTML at all and should be left as is.
+                str_cb(&String::from_utf8_lossy(&buf), &mut dehtml);
             }
             Err(e) => {
                 eprintln!(
@@ -176,36 +198,36 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
 }
 
 fn dehtml_text_cb(event: &BytesText, dehtml: &mut Dehtml) {
-    static LINE_RE: LazyLock<regex::Regex> =
-        LazyLock::new(|| regex::Regex::new(r"(\r?\n)+").unwrap());
-
     if dehtml.get_add_text() == AddText::YesPreserveLineEnds
         || dehtml.get_add_text() == AddText::YesRemoveLineEnds
     {
         let event = event as &[_];
         let event_str = std::str::from_utf8(event).unwrap_or_default();
-        let mut last_added = escaper::decode_html_buf_sloppy(event).unwrap_or_default();
-        if event_str.starts_with(&last_added) {
-            last_added = event_str.to_string();
+        str_cb(event_str, dehtml);
+    }
+}
+
+fn str_cb(event_str: &str, dehtml: &mut Dehtml) {
+    static LINE_RE: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r"(\r?\n)+").unwrap());
+
+    let add_text = dehtml.get_add_text();
+    if add_text == AddText::YesRemoveLineEnds {
+        // Replace all line ends with spaces.
+        // E.g. `\r\n\r\n` is replaced with one space.
+        let event_str = LINE_RE.replace_all(event_str, " ");
+
+        // Add a space if `event_str` starts with a space
+        // and there is no whitespace at the end of the buffer yet.
+        // Trim the rest of leading whitespace from `event_str`.
+        let buf = dehtml.get_buf();
+        if !buf.ends_with(' ') && !buf.ends_with('\n') && event_str.starts_with(' ') {
+            *buf += " ";
         }
 
-        if dehtml.get_add_text() == AddText::YesRemoveLineEnds {
-            // Replace all line ends with spaces.
-            // E.g. `\r\n\r\n` is replaced with one space.
-            let last_added = LINE_RE.replace_all(&last_added, " ");
-
-            // Add a space if `last_added` starts with a space
-            // and there is no whitespace at the end of the buffer yet.
-            // Trim the rest of leading whitespace from `last_added`.
-            let buf = dehtml.get_buf();
-            if !buf.ends_with(' ') && !buf.ends_with('\n') && last_added.starts_with(' ') {
-                *buf += " ";
-            }
-
-            *buf += last_added.trim_start();
-        } else {
-            *dehtml.get_buf() += LINE_RE.replace_all(&last_added, "\n").as_ref();
-        }
+        *buf += event_str.trim_start();
+    } else if add_text == AddText::YesPreserveLineEnds {
+        *dehtml.get_buf() += LINE_RE.replace_all(event_str, "\n").as_ref();
     }
 }
 

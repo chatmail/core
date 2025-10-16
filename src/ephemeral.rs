@@ -376,6 +376,10 @@ pub(crate) async fn start_chat_ephemeral_timers(context: &Context, chat_id: Chat
 /// `delete_device_after` setting or `ephemeral_timestamp` column.
 ///
 /// For each message a row ID, chat id, viewtype and location ID is returned.
+///
+/// Unknown viewtypes are returned as `Viewtype::Unknown`
+/// and not as errors bubbled up, easily resulting in infinite loop or leaving messages undeleted.
+/// (Happens when viewtypes are removed or added on another device which was backup/add-second-device source)
 async fn select_expired_messages(
     context: &Context,
     now: i64,
@@ -395,7 +399,11 @@ WHERE
             |row| {
                 let id: MsgId = row.get("id")?;
                 let chat_id: ChatId = row.get("chat_id")?;
-                let viewtype: Viewtype = row.get("type")?;
+                let viewtype: Viewtype = row
+                    .get("type")
+                    .context("Using default viewtype for ephemeral handling.")
+                    .log_err(context)
+                    .unwrap_or_default();
                 let location_id: u32 = row.get("location_id")?;
                 Ok((id, chat_id, viewtype, location_id))
             },
@@ -437,7 +445,11 @@ WHERE
                 |row| {
                     let id: MsgId = row.get("id")?;
                     let chat_id: ChatId = row.get("chat_id")?;
-                    let viewtype: Viewtype = row.get("type")?;
+                    let viewtype: Viewtype = row
+                        .get("type")
+                        .context("Using default viewtype for delete-old handling.")
+                        .log_err(context)
+                        .unwrap_or_default();
                     let location_id: u32 = row.get("location_id")?;
                     Ok((id, chat_id, viewtype, location_id))
                 },

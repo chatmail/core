@@ -1,6 +1,6 @@
 [package]
 name = "deltachat"
-version = "2.18.0"
+version = "2.20.0"
 edition = "2024"
 license = "MPL-2.0"
 rust-version = "1.85"
@@ -47,7 +47,7 @@ async-channel = { workspace = true }
 async-imap = { version = "0.11.1", default-features = false, features = ["runtime-tokio", "compress"] }
 async-native-tls = { version = "0.5", default-features = false, features = ["runtime-tokio"] }
 async-smtp = { version = "0.10.2", default-features = false, features = ["runtime-tokio"] }
-async_zip = { version = "0.0.17", default-features = false, features = ["deflate", "tokio-fs"] }
+async_zip = { version = "0.0.18", default-features = false, features = ["deflate", "tokio-fs"] }
 base64 = { workspace = true }
 blake3 = "1.8.2"
 brotli = { version = "8", default-features=false, features = ["std"] }
@@ -82,12 +82,11 @@ percent-encoding = "2.3"
 pgp = { version = "0.17.0", default-features = false }
 pin-project = "1"
 qrcodegen = "1.7.0"
-quick-xml = "0.37"
+quick-xml = { version = "0.38", features = ["escape-html"] }
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
 rustls-pki-types = "1.12.0"
-rustls = { version = "0.23.22", default-features = false }
 sanitize-filename = { workspace = true }
 sdp = "0.8.0"
 serde_json = { workspace = true }

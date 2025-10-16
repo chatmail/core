@@ -36,7 +36,7 @@ use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
 use crate::sync::{self, Sync::*};
-use crate::tools::{SystemTime, duration_to_str, get_abs_path, time};
+use crate::tools::{SystemTime, duration_to_str, get_abs_path, time, to_lowercase};
 use crate::{chat, chatlist_events, ensure_and_debug_assert_ne, stock_str};
 
 /// Time during which a contact is considered as seen recently.
@@ -1574,17 +1574,10 @@ impl Contact {
         Ok(None)
     }
 
-    /// Get a color for the contact.
-    /// The color is calculated from the contact's fingerprint (for key-contacts)
-    /// or email address (for address-contacts) and can be used
-    /// for an fallback avatar with white initials
-    /// as well as for headlines in bubbles of group chats.
+    /// Returns a color for the contact.
+    /// See [`self::get_color`].
     pub fn get_color(&self) -> u32 {
-        if let Some(fingerprint) = self.fingerprint() {
-            str_to_color(&fingerprint.hex())
-        } else {
-            str_to_color(&self.addr.to_lowercase())
-        }
+        get_color(self.id == ContactId::SELF, &self.addr, &self.fingerprint())
     }
 
     /// Gets the contact's status.
@@ -1680,6 +1673,21 @@ impl Contact {
     }
 }
 
+/// Returns a color for a contact having given attributes.
+///
+/// The color is calculated from contact's fingerprint (for key-contacts) or email address (for
+/// address-contacts; should be lowercased to avoid allocation) and can be used for an fallback
+/// avatar with white initials as well as for headlines in bubbles of group chats.
+pub fn get_color(is_self: bool, addr: &str, fingerprint: &Option<Fingerprint>) -> u32 {
+    if let Some(fingerprint) = fingerprint {
+        str_to_color(&fingerprint.hex())
+    } else if is_self {
+        0x808080
+    } else {
+        str_to_color(&to_lowercase(addr))
+    }
+}
+
 // Updates the names of the chats which use the contact name.
 //
 // This is one of the few duplicated data, however, getting the chat list is easier this way.
@@ -1742,8 +1750,7 @@ pub(crate) async fn set_blocked(
 ) -> Result<()> {
     ensure!(
         !contact_id.is_special(),
-        "Can't block special contact {}",
-        contact_id
+        "Can't block special contact {contact_id}"
     );
     let contact = Contact::get_by_id(context, contact_id).await?;
 

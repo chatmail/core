@@ -753,6 +753,14 @@ pub(crate) fn buf_decompress(buf: &[u8]) -> Result<Vec<u8>> {
     Ok(mem::take(decompressor.get_mut()))
 }
 
+/// Returns the given `&str` if already lowercased to avoid allocation, otherwise lowercases it.
+pub(crate) fn to_lowercase(s: &str) -> Cow<'_, str> {
+    match s.chars().all(char::is_lowercase) {
+        true => Cow::Borrowed(s),
+        false => Cow::Owned(s.to_lowercase()),
+    }
+}
+
 /// Increments `*t` and checks that it equals to `expected` after that.
 pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
     t: &mut T,
