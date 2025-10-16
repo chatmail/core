@@ -256,7 +256,7 @@ pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
     context
         .sql
         .execute(
-            "UPDATE stats_messages
+            "UPDATE stats_msgs
             SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
             WHERE last_counted_msg_id=0",
             (),
@@ -468,7 +468,7 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
         .sql
         .query_map(
             "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
-            FROM stats_messages",
+            FROM stats_msgs",
             (),
             |row| {
                 let chattype: Chattype = row.get(0)?;
@@ -514,14 +514,14 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         // Only newer messages will be counted in the current statistics.
         let last_counted_msg_id: u32 = t
             .query_row(
-                "SELECT last_counted_msg_id FROM stats_messages WHERE chattype=?",
+                "SELECT last_counted_msg_id FROM stats_msgs WHERE chattype=?",
                 (chattype,),
                 |row| row.get(0),
             )
             .optional()?
             .unwrap_or(0);
         t.execute(
-            "UPDATE stats_messages
+            "UPDATE stats_msgs
             SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
             WHERE chattype=?",
             (chattype,),
@@ -651,12 +651,12 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
         t.execute("DROP TABLE temp.chat_with_correct_type", ())?;
 
         t.execute(
-            "INSERT INTO stats_messages(chattype) VALUES (?)
+            "INSERT INTO stats_msgs(chattype) VALUES (?)
             ON CONFLICT(chattype) DO NOTHING",
             (chattype,),
         )?;
         t.execute(
-            "UPDATE stats_messages SET
+            "UPDATE stats_msgs SET
             verified=verified+?,
             unverified_encrypted=unverified_encrypted+?,
             unencrypted=unencrypted+?,

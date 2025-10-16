@@ -1277,7 +1277,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
                 already_verified INTEGER NOT NULL,
                 type TEXT NOT NULL
             ) STRICT;
-            CREATE TABLE stats_messages(
+            CREATE TABLE stats_msgs(
                 chattype INTEGER PRIMARY KEY,
                 verified INTEGER NOT NULL DEFAULT 0,
                 unverified_encrypted INTEGER NOT NULL DEFAULT 0,
