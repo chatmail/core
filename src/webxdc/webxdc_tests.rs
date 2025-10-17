@@ -1853,6 +1853,14 @@ async fn test_status_update_vs_delete_device_after() -> Result<()> {
         .await?;
     let alice_chat = alice.create_chat(bob).await;
     let alice_instance = send_webxdc_instance(alice, alice_chat.id).await?;
+    // Needed to test receiving of re-sent locally deleted webxdc.
+    bob.sql
+        .execute(
+            "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
+            VALUES            (?1,         ?2,     ?3,  ?4,          ?5)",
+            (&alice_instance.rfc724_mid, "INBOX", 1, 1, "INBOX"),
+        )
+        .await?;
     let bob_instance = bob.recv_msg(&alice.pop_sent_msg().await).await;
     assert_eq!(bob.add_or_lookup_contact(alice).await.is_bot(), false);
 
@@ -1882,8 +1890,15 @@ async fn test_status_update_vs_delete_device_after() -> Result<()> {
     SystemTime::shift(Duration::from_secs(2700));
     ephemeral::delete_expired_messages(bob, tools::time()).await?;
     let bob_instance = Message::load_from_db(bob, bob_instance.id).await?;
-    assert_eq!(bob_instance.chat_id.is_trash(), false);
 
+    SystemTime::shift(Duration::from_secs(1800));
+    ephemeral::delete_expired_messages(bob, tools::time()).await?;
+    let bob_instance = Message::load_from_db_optional(bob, bob_instance.id).await?;
+    assert!(bob_instance.is_none());
+
+    // Additionally test that a re-sent instance can be received after deletion.
+    resend_msgs(alice, &[alice_instance.id]).await?;
+    bob.recv_msg(&alice.pop_sent_msg().await).await;
     Ok(())
 }
 
