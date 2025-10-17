@@ -1366,7 +1366,7 @@ pub enum MessageState {
     OutDelivered = 26,
 
     /// Outgoing message read by the recipient (two checkmarks; this
-    /// requires goodwill on the receiver's side). Not used in the db for new messages.
+    /// requires goodwill on the receiver's side). API-only, not used in the db.
     OutMdnRcvd = 28,
 }
 
