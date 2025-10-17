@@ -14,17 +14,6 @@ use crate::provider;
 use crate::provider::Oauth2Authorizer;
 use crate::tools::time;
 
-const OAUTH2_GMAIL: Oauth2 = Oauth2 {
-    // see <https://developers.google.com/identity/protocols/OAuth2InstalledApp>
-    client_id: "959970109878-4mvtgf6feshskf7695nfln6002mom908.apps.googleusercontent.com",
-    get_code: "https://accounts.google.com/o/oauth2/auth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URI&response_type=code&scope=https%3A%2F%2Fmail.google.com%2F%20email&access_type=offline",
-    init_token: "https://accounts.google.com/o/oauth2/token?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URI&code=$CODE&grant_type=authorization_code",
-    refresh_token: "https://accounts.google.com/o/oauth2/token?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URI&refresh_token=$REFRESH_TOKEN&grant_type=refresh_token",
-    get_userinfo: Some(
-        "https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=$ACCESS_TOKEN",
-    ),
-};
-
 const OAUTH2_YANDEX: Oauth2 = Oauth2 {
     // see <https://tech.yandex.com/oauth/doc/dg/reference/auto-code-client-docpage/>
     client_id: "c4d0b6735fc8420a816d7e1303469341",
@@ -279,7 +268,6 @@ impl Oauth2 {
                 .and_then(|provider| provider.oauth2_authorizer.as_ref())
             {
                 return Some(match oauth2_authorizer {
-                    Oauth2Authorizer::Gmail => OAUTH2_GMAIL,
                     Oauth2Authorizer::Yandex => OAUTH2_YANDEX,
                 });
             }

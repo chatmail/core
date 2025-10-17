@@ -82,13 +82,9 @@ pub enum UsernamePattern {
 
 /// Type of OAuth 2 authorization.
 #[derive(Debug, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Oauth2Authorizer {
     /// Yandex.
-    Yandex = 1,
-
-    /// Gmail.
-    Gmail = 2,
+    Yandex,
 }
 
 /// Email server endpoint.
