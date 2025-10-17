@@ -45,6 +45,12 @@ async fn setup_call() -> Result<CallSetup> {
     // Alice creates a chat with Bob and places an outgoing call there.
     // Alice's other device sees the same message as an outgoing call.
     let alice_chat = alice.create_chat(&bob).await;
+
+    // Create chat on Bob's side
+    // so incoming call causes a notification.
+    bob.create_chat(&alice).await;
+    bob2.create_chat(&alice).await;
+
     let test_msg_id = alice
         .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string())
         .await?;
