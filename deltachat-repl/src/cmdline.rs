@@ -731,7 +731,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         }
         "creategroup" => {
             ensure!(!arg1.is_empty(), "Argument <name> missing.");
-            let chat_id = chat::create_group_chat(&context, arg1).await?;
+            let chat_id = chat::create_group(&context, arg1).await?;
 
             println!("Group#{chat_id} created successfully.");
         }

@@ -728,7 +728,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         alice.set_config_bool(Config::SyncMsgs, true).await?;
-        let alice_chatid = chat::create_group_chat(alice, "the chat").await?;
+        let alice_chatid = chat::create_group(alice, "the chat").await?;
         let qr = get_securejoin_qr(alice, Some(alice_chatid)).await?;
 
         // alice2 syncs the QR code token.
