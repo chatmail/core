@@ -33,7 +33,8 @@ use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
 use crate::message::{
-    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
+    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, get_webxdc_info_messages,
+    rfc724_mid_exists,
 };
 use crate::mimeparser::{AvatarAction, GossipedKey, MimeMessage, SystemMessage, parse_message_ids};
 use crate::param::{Param, Params};
@@ -2306,12 +2307,18 @@ async fn handle_edit_delete(
                 let mut modified_chat_ids = HashSet::new();
                 let mut msg_ids = Vec::new();
 
+                let mut deleted_info_msgs = vec![];
                 let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
                 for rfc724_mid in rfc724_mid_vec {
                     if let Some((msg_id, _)) =
                         message::rfc724_mid_exists(context, rfc724_mid).await?
                     {
                         if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
+                            if msg.viewtype == Viewtype::Webxdc {
+                                let info_msgs = get_webxdc_info_messages(context, &msg).await?;
+                                deleted_info_msgs.extend(&info_msgs);
+                            }
+
                             if msg.from_id == from_id {
                                 message::delete_msg_locally(context, &msg).await?;
                                 msg_ids.push(msg.id);
@@ -2324,6 +2331,15 @@ async fn handle_edit_delete(
                         }
                     } else {
                         warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                    }
+                }
+                if !deleted_info_msgs.is_empty() {
+                    message::delete_msgs(context, &deleted_info_msgs).await?;
+                    for msg_id in deleted_info_msgs {
+                        if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
+                            message::delete_msg_locally(context, &msg).await?;
+                            msg_ids.push(msg.id);
+                        }
                     }
                 }
                 message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;

@@ -11,7 +11,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::log::LogExt;
 use crate::log::{info, warn};
-use crate::message::{Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype, get_webxdc_info_messages};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::sync::SyncData::{AddQrToken, AlterChat, DeleteQrToken};
@@ -313,10 +313,15 @@ impl Context {
 
     async fn sync_message_deletion(&self, msgs: &Vec<String>) -> Result<()> {
         let mut modified_chat_ids = HashSet::new();
+        let mut deleted_info_msgs = vec![];
         let mut msg_ids = Vec::new();
         for rfc724_mid in msgs {
             if let Some((msg_id, _)) = message::rfc724_mid_exists(self, rfc724_mid).await? {
                 if let Some(msg) = Message::load_from_db_optional(self, msg_id).await? {
+                    if msg.viewtype == Viewtype::Webxdc {
+                        let info_msgs = get_webxdc_info_messages(&self, &msg).await?;
+                        deleted_info_msgs.extend(&info_msgs);
+                    }
                     message::delete_msg_locally(self, &msg).await?;
                     msg_ids.push(msg.id);
                     modified_chat_ids.insert(msg.chat_id);
@@ -325,6 +330,15 @@ impl Context {
                 }
             } else {
                 warn!(self, "Sync message delete: {rfc724_mid:?} not found.");
+            }
+        }
+        if !deleted_info_msgs.is_empty() {
+            message::delete_msgs(&self, &deleted_info_msgs).await?;
+            for msg_id in deleted_info_msgs {
+                if let Some(msg) = Message::load_from_db_optional(&self, msg_id).await? {
+                    message::delete_msg_locally(&self, &msg).await?;
+                    msg_ids.push(msg.id);
+                }
             }
         }
         message::delete_msgs_locally_done(self, &msg_ids, modified_chat_ids).await?;
