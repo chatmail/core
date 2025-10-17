@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.22.0] - 2025-10-17
+
+### Fixes
+
+- Do not notify about incoming calls for contact requests and blocked contacts.
+
+### Tests
+
+- Accept the chat with the caller before accepting calls.
+
 ## [2.21.0] - 2025-10-16
 
 ### Build system
@@ -6957,3 +6967,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.19.0]: https://github.com/chatmail/core/compare/v2.18.0..v2.19.0
 [2.20.0]: https://github.com/chatmail/core/compare/v2.19.0..v2.20.0
 [2.21.0]: https://github.com/chatmail/core/compare/v2.20.0..v2.21.0
+[2.22.0]: https://github.com/chatmail/core/compare/v2.21.0..v2.22.0
