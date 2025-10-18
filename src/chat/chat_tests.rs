@@ -483,7 +483,7 @@ async fn test_msg_with_implicit_member_removed() -> Result<()> {
     // If Bob sends a message to Alice now, Fiona is removed.
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 3);
     let sent_msg = bob
-        .send_text(alice_chat_id, "I have removed Fiona some time ago.")
+        .send_text(bob_chat_id, "I have removed Fiona some time ago.")
         .await;
     alice.recv_msg(&sent_msg).await;
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 2);
