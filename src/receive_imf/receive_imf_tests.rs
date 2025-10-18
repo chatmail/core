@@ -2069,7 +2069,7 @@ Chat-Version: 1.0
 
 Message content
 
--- 
+--
 First signature";
 
     let second_message = b"Received: from [127.0.0.1]
@@ -2081,7 +2081,7 @@ Chat-Version: 1.0
 
 Message content
 
--- 
+--
 Second signature";
 
     receive_imf(&alice, first_message, false).await?;
@@ -2901,9 +2901,9 @@ async fn test_accept_outgoing() -> Result<()> {
     let bob1_chat = bob1.create_chat(&alice1).await;
     let sent = bob1.send_text(bob1_chat.id, "Hello!").await;
 
-    alice1.recv_msg(&sent).await;
+    let alice1_msg = alice1.recv_msg(&sent).await;
     alice2.recv_msg(&sent).await;
-    let alice1_msg = bob2.recv_msg(&sent).await;
+    bob2.recv_msg(&sent).await;
     assert_eq!(alice1_msg.text, "Hello!");
     let alice1_chat = chat::Chat::load_from_db(&alice1, alice1_msg.chat_id).await?;
     assert!(alice1_chat.is_contact_request());
@@ -5167,7 +5167,7 @@ Content-Type: multipart/mixed; boundary=\"mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z\"
 --mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z
 Content-Type: text/plain; charset=utf-8
 
--- 
+--
 Sent with my Delta Chat Messenger: https://delta.chat
 
 --mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z
