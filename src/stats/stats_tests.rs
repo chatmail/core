@@ -338,7 +338,7 @@ async fn test_stats_securejoin_sources() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stats_securejoin_uipaths() -> Result<()> {
-    async fn check_stats(context: &TestContext, expected: &SecurejoinUIPaths) {
+    async fn check_stats(context: &TestContext, expected: &SecurejoinUiPaths) {
         let stats = get_stats(context).await.unwrap();
         let actual: serde_json::Value = serde_json::from_str(&stats).unwrap();
         let actual = &actual["securejoin_uipaths"];
@@ -354,7 +354,7 @@ async fn test_stats_securejoin_uipaths() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
 
-    let mut expected = SecurejoinUIPaths {
+    let mut expected = SecurejoinUiPaths {
         other: 0,
         qr_icon: 0,
         new_contact: 0,
@@ -372,15 +372,15 @@ async fn test_stats_securejoin_uipaths() -> Result<()> {
     expected.other += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::NewContact)).await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::NewContact)).await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::QrIcon)).await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUiPath::QrIcon)).await?;
     expected.qr_icon += 1;
     check_stats(alice, &expected).await;
 

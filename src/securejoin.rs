@@ -22,7 +22,7 @@ use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
-use crate::{SecurejoinSource, SecurejoinUIPath, token};
+use crate::{SecurejoinSource, SecurejoinUiPath, token};
 use crate::{chatlist_events, stats};
 
 mod bob;
@@ -175,7 +175,7 @@ pub async fn join_securejoin_with_ux_info(
     context: &Context,
     qr: &str,
     source: Option<SecurejoinSource>,
-    uipath: Option<SecurejoinUIPath>,
+    uipath: Option<SecurejoinUiPath>,
 ) -> Result<ChatId> {
     let res = securejoin(context, qr).await.map_err(|err| {
         warn!(context, "Fatal joiner error: {:#}", err);

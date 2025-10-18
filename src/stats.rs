@@ -38,7 +38,7 @@ struct Statistics {
     contact_stats: Vec<ContactStat>,
     message_stats: BTreeMap<Chattype, MessageStats>,
     securejoin_sources: SecurejoinSources,
-    securejoin_uipaths: SecurejoinUIPaths,
+    securejoin_uipaths: SecurejoinUiPaths,
     securejoin_invites: Vec<JoinedInvite>,
 }
 
@@ -90,7 +90,7 @@ struct MessageStats {
 }
 
 /// Where a securejoin invite link or QR code came from.
-/// This is only used if the user enabled sending of statistics.
+/// This is only used if the user enabled StatsSending.
 #[repr(u32)]
 #[derive(
     Debug, Clone, Copy, ToPrimitive, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord,
@@ -121,11 +121,11 @@ struct SecurejoinSources {
 }
 
 /// How the user opened the QR activity in order scan a QR code on Android.
-/// This is only used if the user enabled sending of statistics.
+/// This is only used if the user enabled StatsSending.
 #[derive(
     Debug, Clone, Copy, ToPrimitive, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord,
 )]
-pub enum SecurejoinUIPath {
+pub enum SecurejoinUiPath {
     /// The UI path is unknown, or the user didn't open the QR code screen at all.
     Unknown = 0,
     /// The user directly clicked on the QR icon in the main screen
@@ -136,7 +136,7 @@ pub enum SecurejoinUIPath {
 }
 
 #[derive(Serialize)]
-struct SecurejoinUIPaths {
+struct SecurejoinUiPaths {
     other: u32,
     qr_icon: u32,
     new_contact: u32,
@@ -691,7 +691,7 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
 pub(crate) async fn count_securejoin_ux_info(
     context: &Context,
     source: Option<SecurejoinSource>,
-    uipath: Option<SecurejoinUIPath>,
+    uipath: Option<SecurejoinUiPath>,
 ) -> Result<()> {
     if !should_send_stats(context).await? {
         return Ok(());
@@ -705,7 +705,7 @@ pub(crate) async fn count_securejoin_ux_info(
     // We only get a UI path if the source is a QR code scan,
     // a loaded image, or a link pasted from the QR code,
     // so, no need to log an error if `uipath` is None:
-    let uipath = uipath.unwrap_or(SecurejoinUIPath::Unknown);
+    let uipath = uipath.unwrap_or(SecurejoinUiPath::Unknown);
 
     context
         .sql
@@ -755,14 +755,14 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
     Ok(stats)
 }
 
-async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPaths> {
+async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUiPaths> {
     let map = context
         .sql
         .query_map(
             "SELECT uipath, count FROM stats_securejoin_uipaths",
             (),
             |row| {
-                let uipath: SecurejoinUIPath = row.get(0)?;
+                let uipath: SecurejoinUiPath = row.get(0)?;
                 let count: u32 = row.get(1)?;
                 Ok((uipath, count))
             },
@@ -770,10 +770,10 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUIPa
         )
         .await?;
 
-    let stats = SecurejoinUIPaths {
-        other: *map.get(&SecurejoinUIPath::Unknown).unwrap_or(&0),
-        qr_icon: *map.get(&SecurejoinUIPath::QrIcon).unwrap_or(&0),
-        new_contact: *map.get(&SecurejoinUIPath::NewContact).unwrap_or(&0),
+    let stats = SecurejoinUiPaths {
+        other: *map.get(&SecurejoinUiPath::Unknown).unwrap_or(&0),
+        qr_icon: *map.get(&SecurejoinUiPath::QrIcon).unwrap_or(&0),
+        new_contact: *map.get(&SecurejoinUiPath::NewContact).unwrap_or(&0),
     };
 
     Ok(stats)

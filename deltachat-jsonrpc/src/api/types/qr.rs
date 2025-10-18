@@ -323,7 +323,7 @@ pub enum SecurejoinSource {
 }
 
 #[derive(Deserialize, TypeDef, schemars::JsonSchema)]
-pub enum SecurejoinUIPath {
+pub enum SecurejoinUiPath {
     /// The UI path is unknown, or the user didn't open the QR code screen at all.
     Unknown = 0,
     /// The user directly clicked on the QR icon in the main screen
@@ -346,12 +346,12 @@ impl From<SecurejoinSource> for deltachat::SecurejoinSource {
     }
 }
 
-impl From<SecurejoinUIPath> for deltachat::SecurejoinUIPath {
-    fn from(value: SecurejoinUIPath) -> Self {
+impl From<SecurejoinUiPath> for deltachat::SecurejoinUiPath {
+    fn from(value: SecurejoinUiPath) -> Self {
         match value {
-            SecurejoinUIPath::Unknown => deltachat::SecurejoinUIPath::Unknown,
-            SecurejoinUIPath::QrIcon => deltachat::SecurejoinUIPath::QrIcon,
-            SecurejoinUIPath::NewContact => deltachat::SecurejoinUIPath::NewContact,
+            SecurejoinUiPath::Unknown => deltachat::SecurejoinUiPath::Unknown,
+            SecurejoinUiPath::QrIcon => deltachat::SecurejoinUiPath::QrIcon,
+            SecurejoinUiPath::NewContact => deltachat::SecurejoinUiPath::NewContact,
         }
     }
 }
