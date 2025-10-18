@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context as _, Result};
 use deltachat_derive::FromSql;
+use num_traits::ToPrimitive;
 use pgp::types::PublicKeyTrait;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
@@ -88,9 +89,13 @@ struct MessageStats {
     only_to_self: u32,
 }
 
+/// Where a securejoin invite link or QR code came from.
+/// This is only used if the user enabled sending of statistics.
 #[repr(u32)]
-#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
-enum SecurejoinSource {
+#[derive(
+    Debug, Clone, Copy, ToPrimitive, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord,
+)]
+pub enum SecurejoinSource {
     /// Because of some problem, it is unknown where the QR code came from.
     Unknown = 0,
     /// The user opened a link somewhere outside Delta Chat
@@ -115,8 +120,12 @@ struct SecurejoinSources {
     scan: u32,
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord)]
-enum SecurejoinUIPath {
+/// How the user opened the QR activity in order scan a QR code on Android.
+/// This is only used if the user enabled sending of statistics.
+#[derive(
+    Debug, Clone, Copy, ToPrimitive, FromPrimitive, FromSql, PartialEq, Eq, PartialOrd, Ord,
+)]
+pub enum SecurejoinUIPath {
     /// The UI path is unknown, or the user didn't open the QR code screen at all.
     Unknown = 0,
     /// The user directly clicked on the QR icon in the main screen
@@ -681,8 +690,8 @@ async fn update_message_stats_inner(context: &Context, chattype: Chattype) -> Re
 
 pub(crate) async fn count_securejoin_ux_info(
     context: &Context,
-    source: Option<u32>,
-    uipath: Option<u32>,
+    source: Option<SecurejoinSource>,
+    uipath: Option<SecurejoinUIPath>,
 ) -> Result<()> {
     if !should_send_stats(context).await? {
         return Ok(());
@@ -691,12 +700,12 @@ pub(crate) async fn count_securejoin_ux_info(
     let source = source
         .context("Missing securejoin source")
         .log_err(context)
-        .unwrap_or(0);
+        .unwrap_or(SecurejoinSource::Unknown);
 
     // We only get a UI path if the source is a QR code scan,
     // a loaded image, or a link pasted from the QR code,
     // so, no need to log an error if `uipath` is None:
-    let uipath = uipath.unwrap_or(0);
+    let uipath = uipath.unwrap_or(SecurejoinUIPath::Unknown);
 
     context
         .sql
@@ -704,13 +713,13 @@ pub(crate) async fn count_securejoin_ux_info(
             conn.execute(
                 "INSERT INTO stats_securejoin_sources VALUES (?, 1)
                 ON CONFLICT (source) DO UPDATE SET count=count+1;",
-                (source,),
+                (source.to_u32(),),
             )?;
 
             conn.execute(
                 "INSERT INTO stats_securejoin_uipaths VALUES (?, 1)
                 ON CONFLICT (uipath) DO UPDATE SET count=count+1;",
-                (uipath,),
+                (uipath.to_u32(),),
             )?;
             Ok(())
         })

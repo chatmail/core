@@ -67,7 +67,7 @@ use self::types::{
     },
 };
 use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
-use crate::api::types::qr::QrObject;
+use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUIPath};
 
 #[derive(Debug)]
 struct AccountState {
@@ -931,11 +931,17 @@ impl CommandApi {
         &self,
         account_id: u32,
         qr: String,
-        source: Option<u32>,
-        uipath: Option<u32>,
+        source: Option<SecurejoinSource>,
+        uipath: Option<SecurejoinUIPath>,
     ) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
-        let chat_id = securejoin::join_securejoin_with_ux_info(&ctx, &qr, source, uipath).await?;
+        let chat_id = securejoin::join_securejoin_with_ux_info(
+            &ctx,
+            &qr,
+            source.map(Into::into),
+            uipath.map(Into::into),
+        )
+        .await?;
         Ok(chat_id.to_u32())
     }
 

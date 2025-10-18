@@ -1,4 +1,5 @@
 use deltachat::qr::Qr;
+use serde::Deserialize;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
@@ -301,6 +302,56 @@ impl From<Qr> for QrObject {
                 }
             }
             Qr::Login { address, .. } => QrObject::Login { address },
+        }
+    }
+}
+
+#[derive(Deserialize, TypeDef, schemars::JsonSchema)]
+pub enum SecurejoinSource {
+    /// Because of some problem, it is unknown where the QR code came from.
+    Unknown = 0,
+    /// The user opened a link somewhere outside Delta Chat
+    ExternalLink = 1,
+    /// The user clicked on a link in a message inside Delta Chat
+    InternalLink = 2,
+    /// The user clicked "Paste from Clipboard" in the QR scan activity
+    Clipboard = 3,
+    /// The user clicked "Load QR code as image" in the QR scan activity
+    ImageLoaded = 4,
+    /// The user scanned a QR code
+    Scan = 5,
+}
+
+#[derive(Deserialize, TypeDef, schemars::JsonSchema)]
+pub enum SecurejoinUIPath {
+    /// The UI path is unknown, or the user didn't open the QR code screen at all.
+    Unknown = 0,
+    /// The user directly clicked on the QR icon in the main screen
+    QrIcon = 1,
+    /// The user first clicked on the `+` button in the main screen,
+    /// and then on "New Contact"
+    NewContact = 2,
+}
+
+impl From<SecurejoinSource> for deltachat::SecurejoinSource {
+    fn from(value: SecurejoinSource) -> Self {
+        match value {
+            SecurejoinSource::Unknown => deltachat::SecurejoinSource::Unknown,
+            SecurejoinSource::ExternalLink => deltachat::SecurejoinSource::ExternalLink,
+            SecurejoinSource::InternalLink => deltachat::SecurejoinSource::InternalLink,
+            SecurejoinSource::Clipboard => deltachat::SecurejoinSource::Clipboard,
+            SecurejoinSource::ImageLoaded => deltachat::SecurejoinSource::ImageLoaded,
+            SecurejoinSource::Scan => deltachat::SecurejoinSource::Scan,
+        }
+    }
+}
+
+impl From<SecurejoinUIPath> for deltachat::SecurejoinUIPath {
+    fn from(value: SecurejoinUIPath) -> Self {
+        match value {
+            SecurejoinUIPath::Unknown => deltachat::SecurejoinUIPath::Unknown,
+            SecurejoinUIPath::QrIcon => deltachat::SecurejoinUIPath::QrIcon,
+            SecurejoinUIPath::NewContact => deltachat::SecurejoinUIPath::NewContact,
         }
     }
 }

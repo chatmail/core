@@ -100,6 +100,8 @@ pub mod net;
 pub mod plaintext;
 mod push;
 mod stats;
+pub use stats::SecurejoinSource;
+pub use stats::SecurejoinUIPath;
 pub mod summary;
 
 mod debug_logging;

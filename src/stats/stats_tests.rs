@@ -305,47 +305,31 @@ async fn test_stats_securejoin_sources() -> Result<()> {
     expected.unknown += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
-        .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard), None).await?;
     expected.clipboard += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(
-        alice,
-        &qr,
-        Some(SecurejoinSource::ExternalLink as u32),
-        None,
-    )
-    .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ExternalLink), None).await?;
     expected.external_link += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(
-        alice,
-        &qr,
-        Some(SecurejoinSource::InternalLink as u32),
-        None,
-    )
-    .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::InternalLink), None).await?;
     expected.internal_link += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ImageLoaded as u32), None)
-        .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::ImageLoaded), None).await?;
     expected.image_loaded += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Scan as u32), None).await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Scan), None).await?;
     expected.scan += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
-        .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard), None).await?;
     expected.clipboard += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard as u32), None)
-        .await?;
+    join_securejoin_with_ux_info(alice, &qr, Some(SecurejoinSource::Clipboard), None).await?;
     expected.clipboard += 1;
     check_stats(alice, &expected).await;
 
@@ -388,28 +372,15 @@ async fn test_stats_securejoin_uipaths() -> Result<()> {
     expected.other += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(
-        alice,
-        &qr,
-        Some(0),
-        Some(SecurejoinUIPath::NewContact as u32),
-    )
-    .await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(
-        alice,
-        &qr,
-        Some(0),
-        Some(SecurejoinUIPath::NewContact as u32),
-    )
-    .await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::NewContact)).await?;
     expected.new_contact += 1;
     check_stats(alice, &expected).await;
 
-    join_securejoin_with_ux_info(alice, &qr, Some(0), Some(SecurejoinUIPath::QrIcon as u32))
-        .await?;
+    join_securejoin_with_ux_info(alice, &qr, None, Some(SecurejoinUIPath::QrIcon)).await?;
     expected.qr_icon += 1;
     check_stats(alice, &expected).await;
 
