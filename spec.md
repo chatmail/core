@@ -1,6 +1,6 @@
 # Chatmail Specification
 
-Version: 0.36.0
+Version: 0.37.0
 Status:  In-progress 
 Format:  [Semantic Line Breaks](https://sembr.org/)
 
@@ -580,6 +580,24 @@ END:VCARD
 It is fine if messengers do include a full vCard parser
 and e.g. simply search for the line starting with `EMAIL`
 in order to get the email address.
+
+
+# Verifications
+
+Keys obtained using [SecureJoin](https://securejoin.readthedocs.io) protocol
+and corresponding contacts
+are considered "verified".
+
+As an extension to `Autocrypt-Gossip` header,
+chatmail clients can add `_verified=1` attribute
+(underscore marks the attribute as non-critical)
+to indicate that they have the gossiped key
+and the corresponding contact marked as verified.
+
+When receiving such `Autocrypt-Gossip` header
+in a message signed by a verified key,
+chatmail clients mark the gossiped key
+as indirectly verified.
 
 
 # Transitioning to a new e-mail address (AEAP)

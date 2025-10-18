@@ -21,8 +21,8 @@ use tokio::runtime::Handle;
 use tokio::{fs, task};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, ProtectionStatus,
-    add_to_chat_contacts_table, create_group_chat,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table,
+    create_group_chat,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -1013,7 +1013,7 @@ impl TestContext {
         };
         writeln!(
             res,
-            "{}#{}: {} [{}]{}{}{} {}",
+            "{}#{}: {} [{}]{}{}{}",
             sel_chat.typ,
             sel_chat.get_id(),
             sel_chat.get_name(),
@@ -1030,11 +1030,6 @@ impl TestContext {
                     _ => " Icon: Err".to_string(),
                 },
                 _ => "".to_string(),
-            },
-            if sel_chat.is_protected() {
-                "🛡️"
-            } else {
-                ""
             },
         )
         .unwrap();
@@ -1066,11 +1061,10 @@ impl TestContext {
 
     pub async fn create_group_with_members(
         &self,
-        protect: ProtectionStatus,
         chat_name: &str,
         members: &[&TestContext],
     ) -> ChatId {
-        let chat_id = create_group_chat(self, protect, chat_name).await.unwrap();
+        let chat_id = create_group_chat(self, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
             let contact_id = self.add_or_lookup_contact_id(member).await;

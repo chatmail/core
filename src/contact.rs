@@ -1790,9 +1790,7 @@ WHERE type=? AND id IN (
         // also unblock mailinglist
         // if the contact is a mailinglist address explicitly created to allow unblocking
         if !new_blocking && contact.origin == Origin::MailinglistAddress {
-            if let Some((chat_id, _, _)) =
-                chat::get_chat_id_by_grpid(context, &contact.addr).await?
-            {
+            if let Some((chat_id, ..)) = chat::get_chat_id_by_grpid(context, &contact.addr).await? {
                 chat_id.unblock_ex(context, Nosync).await?;
             }
         }

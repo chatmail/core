@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 use crate::accounts::Accounts;
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, ChatId, ProtectionStatus};
+use crate::chat::{self, Chat, ChatId};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -1083,13 +1083,6 @@ pub(crate) async fn messages_e2e_encrypted(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
 }
 
-/// Stock string: `%1$s sent a message from another device.`
-pub(crate) async fn chat_protection_disabled(context: &Context, contact_id: ContactId) -> String {
-    translated(context, StockMessage::ChatProtectionDisabled)
-        .await
-        .replace1(&contact_id.get_stock_name(context).await)
-}
-
 /// Stock string: `Reply`.
 pub(crate) async fn reply_noun(context: &Context) -> String {
     translated(context, StockMessage::ReplyNoun).await
@@ -1332,26 +1325,6 @@ impl Context {
             .set_stock_translation(id, stockstring)
             .await?;
         Ok(())
-    }
-
-    /// Returns a stock message saying that protection status has changed.
-    pub(crate) async fn stock_protection_msg(
-        &self,
-        protect: ProtectionStatus,
-        contact_id: Option<ContactId>,
-    ) -> String {
-        match protect {
-            ProtectionStatus::Unprotected => {
-                if let Some(contact_id) = contact_id {
-                    chat_protection_disabled(self, contact_id).await
-                } else {
-                    // In a group chat, it's not possible to downgrade verification.
-                    // In a 1:1 chat, the `contact_id` always has to be provided.
-                    "[Error] No contact_id given".to_string()
-                }
-            }
-            ProtectionStatus::Protected => messages_e2e_encrypted(self).await,
-        }
     }
 
     pub(crate) async fn update_device_chats(&self) -> Result<()> {
