@@ -4013,26 +4013,27 @@ async fn test_info_contact_id() -> Result<()> {
     )
     .await?;
 
-    let fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await; // contexts are in sync, fiona_id is same everywhere
-    add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
+    let alice_fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await;
+    let bob_fiona_id = bob.add_or_lookup_contact_id(&tcm.fiona().await).await;
+    add_contact_to_chat(alice, alice_chat_id, alice_fiona_id).await?;
     pop_recv_and_check(
         alice,
         alice2,
         bob,
         SystemMessage::MemberAddedToGroup,
-        fiona_id,
-        fiona_id,
+        alice_fiona_id,
+        bob_fiona_id,
     )
     .await?;
 
-    remove_contact_from_chat(alice, alice_chat_id, fiona_id).await?;
+    remove_contact_from_chat(alice, alice_chat_id, alice_fiona_id).await?;
     pop_recv_and_check(
         alice,
         alice2,
         bob,
         SystemMessage::MemberRemovedFromGroup,
-        fiona_id,
-        fiona_id,
+        alice_fiona_id,
+        bob_fiona_id,
     )
     .await?;
 
@@ -4040,11 +4041,12 @@ async fn test_info_contact_id() -> Result<()> {
     // We raw delete in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
     alice
         .sql
-        .execute("DELETE FROM contacts WHERE id=?", (fiona_id,))
+        .execute("DELETE FROM contacts WHERE id=?", (alice_fiona_id,))
         .await?;
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_info_type(), SystemMessage::MemberRemovedFromGroup);
     assert!(msg.get_info_contact_id(alice).await?.is_none());
+    assert!(msg.get_info_contact_id(bob).await?.is_none());
 
     Ok(())
 }
