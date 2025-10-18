@@ -1677,15 +1677,26 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
+        let fiona = tcm.fiona().await;
 
+        // chat ids
         let alice_bob_chat = alice.create_chat(&bob).await;
         let bob_alice_chat = bob.create_chat(&alice).await;
         assert_ne!(alice_bob_chat.id, bob_alice_chat.id);
 
-        // TODO test for contact ids
+        // contact ids
+        let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
+        let fiona_fiona_contact_id = bob.add_or_lookup_contact_id(&fiona).await;
+        assert_ne!(alice_fiona_contact_id, fiona_fiona_contact_id);
 
-        // TODO test for message ids
-
-        // TODO test for webxdc status update ids
+        // message ids
+        let alice_group_id = alice
+            .create_group_with_members(ProtectionStatus::Protected, "test group", &[&bob, &fiona])
+            .await;
+        let alice_sent_msg = alice.send_text(alice_group_id, "testing").await;
+        let bob_received_id = bob.recv_msg(&alice_sent_msg).await;
+        assert_ne!(alice_sent_msg.sender_msg_id, bob_received_id.id);
+        let fiona_received_id = fiona.recv_msg(&alice_sent_msg).await;
+        assert_ne!(bob_received_id.id, fiona_received_id.id);
     }
 }
