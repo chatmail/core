@@ -122,7 +122,7 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
             .await?
             .is_empty()
     );
-    let pgp_bob = Contact::get_by_id(&t, ContactId::new(11)).await?;
+    let pgp_bob = Contact::get_by_id(&t, ContactId::new(11001)).await?;
     assert_eq!(pgp_bob.is_key_contact(), true);
     assert_eq!(pgp_bob.origin, Origin::Hidden);
 
