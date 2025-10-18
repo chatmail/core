@@ -252,7 +252,7 @@ async fn send_stats(context: &Context) -> Result<ChatId> {
     Ok(chat_id)
 }
 
-pub(crate) async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
+pub(crate) async fn ensure_last_counted_msg_id(context: &Context) -> Result<()> {
     context
         .sql
         .execute(

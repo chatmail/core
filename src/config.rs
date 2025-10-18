@@ -740,7 +740,7 @@ impl Context {
             self.last_full_folder_scan.lock().await.take();
         }
         if key == Config::StatsSending {
-            stats::set_last_counted_msg_id(self).await?;
+            stats::ensure_last_counted_msg_id(self).await?;
             stats::set_last_old_contact_id(self).await?;
             // Make sure that StatsId is available for the UI,
             // in order to open the survey with the StatsId as a parameter:
