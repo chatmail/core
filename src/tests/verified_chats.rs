@@ -245,9 +245,9 @@ async fn test_old_message_4() -> Result<()> {
     Ok(())
 }
 
-/// Alice is offline for some time.
-/// When they come online, first their sentbox is synced and then their inbox.
-/// This test tests that the messages are still in the right order.
+/// Alice's device#0 is offline for some time.
+/// When it comes online, it sees a message from another device and an incoming message. Messages
+/// may come from different folders.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_old_message_5() -> Result<()> {
     let alice = TestContext::new_alice().await;
@@ -277,7 +277,11 @@ async fn test_old_message_5() -> Result<()> {
     .await?
     .unwrap();
 
-    assert_eq!(msg_sent.sort_timestamp, msg_incoming.sort_timestamp);
+    // If the messages come from the same folder and `msg_sent` is sent by Alice, it's better to
+    // sort `msg_incoming` after it so that it's more visible. Messages coming from different
+    // folders are a rare case now, but if Alice shares her account with someone else or has some
+    // auto-reply bot, messages should be sorted just by "Date".
+    assert!(msg_incoming.sort_timestamp < msg_sent.sort_timestamp);
     alice
         .golden_test_chat(msg_sent.chat_id, "test_old_message_5")
         .await;

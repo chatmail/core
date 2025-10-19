@@ -1694,7 +1694,7 @@ async fn add_parts(
     };
 
     let state = if !mime_parser.incoming {
-        MessageState::OutDelivered
+        MessageState::InFresh
     } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
@@ -1702,7 +1702,6 @@ async fn add_parts(
     } else {
         MessageState::InFresh
     };
-    let in_fresh = state == MessageState::InFresh;
 
     let sort_to_bottom = false;
     let received = true;
@@ -1999,7 +1998,7 @@ async fn add_parts(
         save_mime_modified |= mime_parser.is_mime_modified && !part_is_empty && !hidden;
         let save_mime_modified = save_mime_modified && parts.peek().is_none();
 
-        let ephemeral_timestamp = if in_fresh {
+        let ephemeral_timestamp = if state == MessageState::InFresh {
             0
         } else {
             match ephemeral_timer {
@@ -2111,6 +2110,8 @@ RETURNING id
         ensure_and_debug_assert!(!row_id.is_special(), "Rowid {row_id} is special");
         created_db_entries.push(row_id);
     }
+    let has_mdns = false;
+    let state = state.with(from_id, has_mdns);
 
     // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
