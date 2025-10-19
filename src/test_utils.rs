@@ -1691,7 +1691,7 @@ mod tests {
 
         // message ids
         let alice_group_id = alice
-            .create_group_with_members(ProtectionStatus::Protected, "test group", &[&bob, &fiona])
+            .create_group_with_members("test group", &[&bob, &fiona])
             .await;
         let alice_sent_msg = alice.send_text(alice_group_id, "testing").await;
         let bob_received_id = bob.recv_msg(&alice_sent_msg).await;
