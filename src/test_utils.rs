@@ -385,10 +385,10 @@ impl TestContextBuilder {
                     .ctx
                     .sql
                     .execute(
-                        "UPDATE sqlite_sequence SET seq = ? \
-                        WHERE name = 'contacts' \
-                        OR name = 'chats' \
-                        OR name = 'msgs';",
+                        "UPDATE sqlite_sequence SET seq = ?
+                        WHERE name = 'contacts'
+                        OR name = 'chats'
+                        OR name = 'msgs'",
                         (offset,),
                     )
                     .await
