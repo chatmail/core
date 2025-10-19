@@ -2129,7 +2129,7 @@ Subject: first message
 
 body 1
 
--- 
+--
 Original signature",
         false,
     )
@@ -5167,7 +5167,7 @@ Content-Type: multipart/mixed; boundary=\"mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z\"
 --mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z
 Content-Type: text/plain; charset=utf-8
 
---
+-- 
 Sent with my Delta Chat Messenger: https://delta.chat
 
 --mwkNRwaJw1M5n2xcr2ODfAqvTjcj9Z
