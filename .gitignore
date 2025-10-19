@@ -36,6 +36,7 @@ deltachat-ffi/xml
 coverage/
 .DS_Store
 .vscode
+.zed
 python/accounts.txt
 python/all-testaccounts.txt
 tmp/
