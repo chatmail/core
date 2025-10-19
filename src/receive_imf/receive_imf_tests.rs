@@ -2069,7 +2069,7 @@ Chat-Version: 1.0
 
 Message content
 
---
+-- 
 First signature";
 
     let second_message = b"Received: from [127.0.0.1]
@@ -2081,7 +2081,7 @@ Chat-Version: 1.0
 
 Message content
 
---
+-- 
 Second signature";
 
     receive_imf(&alice, first_message, false).await?;
@@ -2129,7 +2129,7 @@ Subject: first message
 
 body 1
 
---
+-- 
 Original signature",
         false,
     )
