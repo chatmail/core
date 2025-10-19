@@ -616,7 +616,7 @@ mod tests {
         loop {
             let event = bob.evtracker.recv().await.unwrap();
             if let EventType::WebxdcRealtimeAdvertisementReceived { msg_id } = event.typ {
-                assert!(msg_id == alice_webxdc.id);
+                assert!(msg_id == bob_webxdc.id);
                 break;
             }
         }

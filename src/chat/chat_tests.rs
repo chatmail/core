@@ -483,7 +483,7 @@ async fn test_msg_with_implicit_member_removed() -> Result<()> {
     // If Bob sends a message to Alice now, Fiona is removed.
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 3);
     let sent_msg = bob
-        .send_text(alice_chat_id, "I have removed Fiona some time ago.")
+        .send_text(bob_chat_id, "I have removed Fiona some time ago.")
         .await;
     alice.recv_msg(&sent_msg).await;
     assert_eq!(get_chat_contacts(&alice, alice_chat_id).await?.len(), 2);
@@ -2412,14 +2412,14 @@ async fn test_forward_from_saved_to_saved() -> Result<()> {
     let bob = TestContext::new_bob().await;
     let sent = alice.send_text(alice.create_chat(&bob).await.id, "k").await;
 
-    bob.recv_msg(&sent).await;
+    let received_message = bob.recv_msg(&sent).await;
     let orig = bob.get_last_msg().await;
     let self_chat = bob.get_self_chat().await;
     save_msgs(&bob, &[orig.id]).await?;
     let saved1 = bob.get_last_msg().await;
     assert_eq!(
         saved1.get_original_msg_id(&bob).await?.unwrap(),
-        sent.sender_msg_id
+        received_message.id
     );
     assert_ne!(saved1.from_id, ContactId::SELF);
 
@@ -2644,7 +2644,7 @@ async fn test_broadcast() -> Result<()> {
     add_contact_to_chat(
         &alice,
         broadcast_id,
-        get_chat_contacts(&alice, chat_bob.id).await?.pop().unwrap(),
+        get_chat_contacts(&alice, msg.chat_id).await?.pop().unwrap(),
     )
     .await?;
     let fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
@@ -4013,26 +4013,27 @@ async fn test_info_contact_id() -> Result<()> {
     )
     .await?;
 
-    let fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await; // contexts are in sync, fiona_id is same everywhere
-    add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
+    let alice_fiona_id = alice.add_or_lookup_contact_id(&tcm.fiona().await).await;
+    let bob_fiona_id = bob.add_or_lookup_contact_id(&tcm.fiona().await).await;
+    add_contact_to_chat(alice, alice_chat_id, alice_fiona_id).await?;
     pop_recv_and_check(
         alice,
         alice2,
         bob,
         SystemMessage::MemberAddedToGroup,
-        fiona_id,
-        fiona_id,
+        alice_fiona_id,
+        bob_fiona_id,
     )
     .await?;
 
-    remove_contact_from_chat(alice, alice_chat_id, fiona_id).await?;
+    remove_contact_from_chat(alice, alice_chat_id, alice_fiona_id).await?;
     pop_recv_and_check(
         alice,
         alice2,
         bob,
         SystemMessage::MemberRemovedFromGroup,
-        fiona_id,
-        fiona_id,
+        alice_fiona_id,
+        bob_fiona_id,
     )
     .await?;
 
@@ -4040,11 +4041,12 @@ async fn test_info_contact_id() -> Result<()> {
     // We raw delete in db as Contact::delete() leaves a tombstone (which is great as the tap works longer then)
     alice
         .sql
-        .execute("DELETE FROM contacts WHERE id=?", (fiona_id,))
+        .execute("DELETE FROM contacts WHERE id=?", (alice_fiona_id,))
         .await?;
     let msg = alice.get_last_msg().await;
     assert_eq!(msg.get_info_type(), SystemMessage::MemberRemovedFromGroup);
     assert!(msg.get_info_contact_id(alice).await?.is_none());
+    assert!(msg.get_info_contact_id(bob).await?.is_none());
 
     Ok(())
 }
