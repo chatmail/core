@@ -168,7 +168,6 @@ pub(crate) async fn pre_config_change(
 ) -> Result<()> {
     // These functions are no-ops if they were called in the past already;
     // just call them opportunistically:
-    ensure_last_counted_msg_id(context).await?;
     ensure_last_old_contact_id(context).await?;
     // Make sure that StatsId is available for the UI,
     // in order to open the survey with the StatsId as a parameter:
@@ -178,6 +177,14 @@ pub(crate) async fn pre_config_change(
     let new_value = bool_from_config(new_value);
 
     if old_value != new_value {
+        if new_value {
+            // Only count messages sent from now on:
+            set_last_counted_msg_id(context).await?;
+        } else {
+            // Update message stats one last time in case it's enabled again in the future:
+            update_message_stats(context).await?;
+        }
+
         let sql_table = if new_value {
             "stats_sending_enabled_events"
         } else {
@@ -295,13 +302,12 @@ async fn send_stats(context: &Context) -> Result<ChatId> {
     Ok(chat_id)
 }
 
-async fn ensure_last_counted_msg_id(context: &Context) -> Result<()> {
+async fn set_last_counted_msg_id(context: &Context) -> Result<()> {
     context
         .sql
         .execute(
             "UPDATE stats_msgs
-            SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)
-            WHERE last_counted_msg_id=0",
+            SET last_counted_msg_id=(SELECT MAX(id) FROM msgs)",
             (),
         )
         .await?;
