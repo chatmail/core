@@ -18,7 +18,7 @@ use typescript_type_def::TypeDef;
 
 use super::color_int_to_hex_string;
 use super::contact::ContactObject;
-use super::reactions::JSONRPCReactions;
+use super::reactions::JsonrpcReactions;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "kind")]
@@ -102,7 +102,7 @@ pub struct MessageObject {
 
     saved_message_id: Option<u32>,
 
-    reactions: Option<JSONRPCReactions>,
+    reactions: Option<JsonrpcReactions>,
 
     vcard_contact: Option<VcardContact>,
 }

@@ -54,7 +54,7 @@ use types::events::Event;
 use types::http::HttpResponse;
 use types::message::{MessageData, MessageObject, MessageReadReceipt};
 use types::provider_info::ProviderInfo;
-use types::reactions::JSONRPCReactions;
+use types::reactions::JsonrpcReactions;
 use types::webxdc::WebxdcMessageInfo;
 
 use self::types::message::{MessageInfo, MessageLoadResult};
@@ -2191,7 +2191,7 @@ impl CommandApi {
         &self,
         account_id: u32,
         message_id: u32,
-    ) -> Result<Option<JSONRPCReactions>> {
+    ) -> Result<Option<JsonrpcReactions>> {
         let ctx = self.get_context(account_id).await?;
         let reactions = get_msg_reactions(&ctx, MsgId::new(message_id)).await?;
         if reactions.is_empty() {
