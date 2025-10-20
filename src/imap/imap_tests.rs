@@ -3,17 +3,6 @@ use crate::test_utils::TestContext;
 
 #[test]
 fn test_get_folder_meaning_by_name() {
-    assert_eq!(get_folder_meaning_by_name("Gesendet"), FolderMeaning::Sent);
-    assert_eq!(get_folder_meaning_by_name("GESENDET"), FolderMeaning::Sent);
-    assert_eq!(get_folder_meaning_by_name("gesendet"), FolderMeaning::Sent);
-    assert_eq!(
-        get_folder_meaning_by_name("Messages envoyés"),
-        FolderMeaning::Sent
-    );
-    assert_eq!(
-        get_folder_meaning_by_name("mEsSaGes envoyÉs"),
-        FolderMeaning::Sent
-    );
     assert_eq!(get_folder_meaning_by_name("xxx"), FolderMeaning::Unknown);
     assert_eq!(get_folder_meaning_by_name("SPAM"), FolderMeaning::Spam);
     assert_eq!(get_folder_meaning_by_name("Trash"), FolderMeaning::Trash);
@@ -120,9 +109,6 @@ async fn check_target_folder_combination(
         .set_config(Config::ConfiguredMvboxFolder, Some("DeltaChat"))
         .await?;
     t.ctx
-        .set_config(Config::ConfiguredSentboxFolder, Some("Sent"))
-        .await?;
-    t.ctx
         .set_config(Config::MvboxMove, Some(if mvbox_move { "1" } else { "0" }))
         .await?;
 
@@ -183,10 +169,6 @@ const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
     ("INBOX", true, true, "DeltaChat"),
-    ("Sent", false, false, "Sent"),
-    ("Sent", false, true, "Sent"),
-    ("Sent", true, false, "Sent"),
-    ("Sent", true, true, "DeltaChat"),
     ("Spam", false, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
@@ -199,10 +181,6 @@ const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
     ("INBOX", true, true, "DeltaChat"),
-    ("Sent", false, false, "Sent"),
-    ("Sent", false, true, "Sent"),
-    ("Sent", true, false, "Sent"),
-    ("Sent", true, true, "DeltaChat"),
     ("Spam", false, false, "Spam"),
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "Spam"),

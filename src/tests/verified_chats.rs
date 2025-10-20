@@ -207,8 +207,8 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     Ok(())
 }
 
-/// Alice is offline for some time.
-/// When she comes online, first her inbox is synced and then her sentbox.
+/// Alice is offline for some time. mvbox_move is 0.
+/// When she comes online, first her inbox is synced and then her mvbox.
 /// This test tests that the messages are still in the right order.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_old_message_4() -> Result<()> {
@@ -246,7 +246,7 @@ async fn test_old_message_4() -> Result<()> {
 }
 
 /// Alice is offline for some time.
-/// When they come online, first their sentbox is synced and then their inbox.
+/// When they come online, first their mvbox is synced and then their inbox.
 /// This test tests that the messages are still in the right order.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_old_message_5() -> Result<()> {

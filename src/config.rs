@@ -156,10 +156,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     MdnsEnabled,
 
-    /// True if "Sent" folder should be watched for changes.
-    #[strum(props(default = "0"))]
-    SentboxWatch,
-
     /// True if chat messages should be moved to a separate folder. Auto-sent messages like sync
     /// ones are moved there anyway.
     #[strum(props(default = "1"))]
@@ -284,9 +280,6 @@ pub enum Config {
 
     /// Configured folder for chat messages.
     ConfiguredMvboxFolder,
-
-    /// Configured "Sent" folder.
-    ConfiguredSentboxFolder,
 
     /// Configured "Trash" folder.
     ConfiguredTrashFolder,
@@ -460,10 +453,7 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(
-            self,
-            Config::MvboxMove | Config::OnlyFetchMvbox | Config::SentboxWatch
-        )
+        matches!(self, Config::MvboxMove | Config::OnlyFetchMvbox)
     }
 }
 
@@ -589,15 +579,6 @@ impl Context {
             || !self.get_config_bool(Config::IsChatmail).await?)
     }
 
-    /// Returns true if sentbox ("Sent" folder) should be watched.
-    pub(crate) async fn should_watch_sentbox(&self) -> Result<bool> {
-        Ok(self.get_config_bool(Config::SentboxWatch).await?
-            && self
-                .get_config(Config::ConfiguredSentboxFolder)
-                .await?
-                .is_some())
-    }
-
     /// Returns true if sync messages should be sent.
     pub(crate) async fn should_send_sync_msgs(&self) -> Result<bool> {
         Ok(self.get_config_bool(Config::SyncMsgs).await?
@@ -686,7 +667,6 @@ impl Context {
             | Config::ProxyEnabled
             | Config::BccSelf
             | Config::MdnsEnabled
-            | Config::SentboxWatch
             | Config::MvboxMove
             | Config::OnlyFetchMvbox
             | Config::DeleteToTrash
@@ -716,11 +696,7 @@ impl Context {
             true => self.scheduler.pause(self).await?,
             _ => Default::default(),
         };
-        self.set_config_internal(key, value).await?;
-        if key == Config::SentboxWatch {
-            self.last_full_folder_scan.lock().await.take();
-        }
-        Ok(())
+        self.set_config_internal(key, value).await
     }
 
     pub(crate) async fn set_config_internal(&self, key: Config, value: Option<&str>) -> Result<()> {

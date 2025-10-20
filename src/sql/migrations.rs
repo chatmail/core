@@ -401,19 +401,18 @@ UPDATE chats SET protected=1, type=120 WHERE type=130;"#,
         .await?;
     }
     if dbversion < 73 {
-        use Config::*;
         sql.execute(
             r#"
 CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, uid_next INTEGER DEFAULT 0);"#,
 ()
         )
             .await?;
-        for c in &[
-            ConfiguredInboxFolder,
-            ConfiguredSentboxFolder,
-            ConfiguredMvboxFolder,
+        for c in [
+            "configured_inbox_folder",
+            "configured_sentbox_folder",
+            "configured_mvbox_folder",
         ] {
-            if let Some(folder) = context.get_config(*c).await? {
+            if let Some(folder) = context.sql.get_raw_config(c).await? {
                 let (uid_validity, last_seen_uid) =
                     imap::get_config_last_seen_uid(context, &folder).await?;
                 if last_seen_uid > 0 {
