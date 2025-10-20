@@ -595,8 +595,9 @@ impl Context {
     /// Returns boolean configuration value for the given key.
     pub async fn get_config_bool(&self, key: Config) -> Result<bool> {
         Ok(self
-            .get_config_parsed::<i32>(key)
+            .get_config(key)
             .await?
+            .and_then(|s| s.parse::<i32>().ok())
             .map(|x| x != 0)
             .unwrap_or_default())
     }
@@ -735,16 +736,15 @@ impl Context {
             true => self.scheduler.pause(self).await?,
             _ => Default::default(),
         };
+        if key == Config::StatsSending {
+            let old_value = self.get_config(key).await?;
+            stats::pre_config_change(self, old_value, value).await?;
+        }
         self.set_config_internal(key, value).await?;
         if key == Config::SentboxWatch {
             self.last_full_folder_scan.lock().await.take();
         }
         if key == Config::StatsSending {
-            stats::ensure_last_counted_msg_id(self).await?;
-            stats::set_last_old_contact_id(self).await?;
-            // Make sure that StatsId is available for the UI,
-            // in order to open the survey with the StatsId as a parameter:
-            stats::stats_id(self).await?;
             stats::maybe_send_stats(self).await?;
         }
         Ok(())
@@ -896,6 +896,10 @@ impl Context {
 /// Returns a value for use in `Context::set_config_*()` for the given `bool`.
 pub(crate) fn from_bool(val: bool) -> Option<&'static str> {
     Some(if val { "1" } else { "0" })
+}
+
+pub(crate) fn bool_from_config(config: Option<&str>) -> bool {
+    config.is_some_and(|v| v.parse::<i32>().unwrap_or_default() != 0)
 }
 
 // Separate impl block for self address handling

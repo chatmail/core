@@ -499,3 +499,96 @@ async fn test_stats_key_creation_timestamp() -> Result<()> {
 
     Ok(())
 }
+
+/// We record the timestamp when StatsSending is enabled.
+/// If it's disabled and then enabled again, we also record these timestamps.
+/// This test enables, disables, and reenables StatsSending,
+/// and checks that the timestamps are recorded correctly.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stats_enable_disable_timestamps() -> Result<()> {
+    async fn get_timestamps(context: &TestContext) -> (Vec<i64>, Vec<i64>) {
+        let stats = get_stats(context).await.unwrap();
+        let stats: serde_json::Value = serde_json::from_str(&stats).unwrap();
+        let enabled_ts = &stats["timestamps_when_sending_was_enabled"];
+        let disabled_ts = &stats["timestamps_when_sending_was_disabled"];
+
+        let enabled_ts = enabled_ts
+            .as_array()
+            .unwrap()
+            .into_iter()
+            .map(|v| v.as_i64().unwrap())
+            .collect();
+        let disabled_ts = disabled_ts
+            .as_array()
+            .unwrap()
+            .into_iter()
+            .map(|v| v.as_i64().unwrap())
+            .collect();
+
+        (enabled_ts, disabled_ts)
+    }
+
+    let alice = &TestContext::new_alice().await;
+
+    // ============================== Enable the setting, and check corresponding timestamp ==============================
+    let enabled_min = time();
+    alice.set_config_bool(Config::StatsSending, true).await?;
+    let enabled_max = time();
+
+    let (enabled_ts, disabled_ts) = get_timestamps(alice).await;
+
+    // The enabling timestamp was inbetween `enabled_min` and `enabled_max`:
+    assert_eq!(enabled_ts.len(), 1);
+    assert!(enabled_ts[0] >= enabled_min);
+    assert!(enabled_ts[0] <= enabled_max);
+
+    assert!(disabled_ts.is_empty());
+
+    // Enabling again should not make a difference
+    alice.set_config_bool(Config::StatsSending, true).await?;
+    SystemTime::shift(Duration::from_secs(10));
+    alice.set_config_bool(Config::StatsSending, true).await?;
+    assert_eq!(
+        get_timestamps(alice).await,
+        (enabled_ts.clone(), disabled_ts.clone())
+    );
+
+    // ============================== Disable the setting, and check corresponding timestamp ==============================
+    let disabled_min = time();
+    alice.set_config_bool(Config::StatsSending, false).await?;
+    let disabled_max = time();
+
+    let (new_enabled_ts, new_disabled_ts) = get_timestamps(alice).await;
+
+    assert_eq!(new_enabled_ts, enabled_ts); // The timestamp of enabling didn't change
+
+    // The disabling timestamp was inbetween `disabled_min` and `disabled_max`:
+    assert_eq!(new_disabled_ts.len(), 1);
+    assert!(new_disabled_ts[0] >= disabled_min);
+    assert!(new_disabled_ts[0] <= disabled_max);
+
+    // The time should have advanced in the meantime (because of SystemTime::shift()):
+    assert_ne!(new_disabled_ts[0], enabled_ts[0]);
+
+    // ============================== Enable the setting again ==============================
+    SystemTime::shift(Duration::from_secs(10));
+    let enabled_min = time();
+    alice.set_config_bool(Config::StatsSending, true).await?;
+    let enabled_max = time();
+
+    let (newer_enabled_ts, newer_disabled_ts) = get_timestamps(alice).await;
+
+    // The timestamp of disabling didn't change:
+    assert_eq!(newer_disabled_ts, new_disabled_ts);
+
+    // The enabling timestamp was inbetween `enabled_min` and `enabled_max`:
+    assert_eq!(newer_enabled_ts.len(), 2);
+    assert!(newer_enabled_ts[1] >= enabled_min);
+    assert!(newer_enabled_ts[1] <= enabled_max);
+    assert_eq!(newer_enabled_ts[0], new_enabled_ts[0]);
+
+    // The time should have advanced in the meantime (because of SystemTime::shift()):
+    assert_ne!(newer_disabled_ts[0], newer_enabled_ts[1]);
+
+    Ok(())
+}
