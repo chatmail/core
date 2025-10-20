@@ -2,8 +2,9 @@
 //!
 //! Internally, calls are bound a user-visible message initializing the call.
 //! This means, the "Call ID" is a "Message ID" - similar to Webxdc IDs.
+use crate::chat::ChatIdBlocked;
 use crate::chat::{Chat, ChatId, send_msg};
-use crate::constants::Chattype;
+use crate::constants::{Blocked, Chattype};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
@@ -345,12 +346,27 @@ impl Context {
                             false
                         }
                     };
-                    self.emit_event(EventType::IncomingCall {
-                        msg_id: call.msg.id,
-                        chat_id: call.msg.chat_id,
-                        place_call_info: call.place_call_info.to_string(),
-                        has_video,
-                    });
+                    if let Some(chat_id_blocked) =
+                        ChatIdBlocked::lookup_by_contact(self, from_id).await?
+                    {
+                        match chat_id_blocked.blocked {
+                            Blocked::Not => {
+                                self.emit_event(EventType::IncomingCall {
+                                    msg_id: call.msg.id,
+                                    chat_id: call.msg.chat_id,
+                                    place_call_info: call.place_call_info.to_string(),
+                                    has_video,
+                                });
+                            }
+                            Blocked::Yes | Blocked::Request => {
+                                // Do not notify about incoming calls
+                                // from contact requests and blocked contacts.
+                                //
+                                // User can still access the call and accept it
+                                // via the chat in case of contact requests.
+                            }
+                        }
+                    }
                     let wait = call.remaining_ring_seconds();
                     task::spawn(Context::emit_end_call_if_unaccepted(
                         self.clone(),

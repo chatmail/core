@@ -481,8 +481,8 @@ mod tests {
     use super::*;
     use crate::chat::save_msgs;
     use crate::chat::{
-        ProtectionStatus, add_contact_to_chat, create_group_chat, get_chat_contacts,
-        remove_contact_from_chat, send_text_msg,
+        add_contact_to_chat, create_group, get_chat_contacts, remove_contact_from_chat,
+        send_text_msg,
     };
     use crate::receive_imf::receive_imf;
     use crate::stock_str::StockMessage;
@@ -495,15 +495,9 @@ mod tests {
     async fn test_try_load() {
         let mut tcm = TestContextManager::new();
         let bob = &tcm.bob().await;
-        let chat_id1 = create_group_chat(bob, ProtectionStatus::Unprotected, "a chat")
-            .await
-            .unwrap();
-        let chat_id2 = create_group_chat(bob, ProtectionStatus::Unprotected, "b chat")
-            .await
-            .unwrap();
-        let chat_id3 = create_group_chat(bob, ProtectionStatus::Unprotected, "c chat")
-            .await
-            .unwrap();
+        let chat_id1 = create_group(bob, "a chat").await.unwrap();
+        let chat_id2 = create_group(bob, "b chat").await.unwrap();
+        let chat_id3 = create_group(bob, "c chat").await.unwrap();
 
         // check that the chatlist starts with the most recent message
         let chats = Chatlist::try_load(bob, 0, None, None).await.unwrap();
@@ -536,9 +530,7 @@ mod tests {
 
         // receive a message from alice
         let alice = &tcm.alice().await;
-        let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "alice chat")
-            .await
-            .unwrap();
+        let alice_chat_id = create_group(alice, "alice chat").await.unwrap();
         add_contact_to_chat(
             alice,
             alice_chat_id,
@@ -576,9 +568,7 @@ mod tests {
     async fn test_sort_self_talk_up_on_forward() {
         let t = TestContext::new_alice().await;
         t.update_device_chats().await.unwrap();
-        create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
-            .await
-            .unwrap();
+        create_group(&t, "a chat").await.unwrap();
 
         let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
         assert_eq!(chats.len(), 3);
@@ -765,9 +755,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_summary_unwrap() {
         let t = TestContext::new().await;
-        let chat_id1 = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
-            .await
-            .unwrap();
+        let chat_id1 = create_group(&t, "a chat").await.unwrap();
 
         let mut msg = Message::new_text("foo:\nbar \r\n test".to_string());
         chat_id1.set_draft(&t, Some(&mut msg)).await.unwrap();
@@ -783,9 +771,7 @@ mod tests {
     async fn test_get_summary_deleted_draft() {
         let t = TestContext::new().await;
 
-        let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
-            .await
-            .unwrap();
+        let chat_id = create_group(&t, "a chat").await.unwrap();
         let mut msg = Message::new_text("Foobar".to_string());
         chat_id.set_draft(&t, Some(&mut msg)).await.unwrap();
 
@@ -824,15 +810,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_load_broken() {
         let t = TestContext::new_bob().await;
-        let chat_id1 = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat")
-            .await
-            .unwrap();
-        create_group_chat(&t, ProtectionStatus::Unprotected, "b chat")
-            .await
-            .unwrap();
-        create_group_chat(&t, ProtectionStatus::Unprotected, "c chat")
-            .await
-            .unwrap();
+        let chat_id1 = create_group(&t, "a chat").await.unwrap();
+        create_group(&t, "b chat").await.unwrap();
+        create_group(&t, "c chat").await.unwrap();
 
         // check that the chatlist starts with the most recent message
         let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();

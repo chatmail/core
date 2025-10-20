@@ -1,6 +1,6 @@
-Single#Chat#10: bob@example.net [KEY bob@example.net] 🛡️
+Single#Chat#1001: bob@example.net [KEY bob@example.net]
 --------------------------------------------------------------------------------
-Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO 🛡️]
-Msg#11🔒:  (Contact#Contact#10): Heyho from DC [FRESH]
-Msg#13🔒: Me (Contact#Contact#Self): Sending with DC again  √
+Msg#1001: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
+Msg#1002🔒:  (Contact#Contact#1001): Heyho from DC [FRESH]
+Msg#1004🔒: Me (Contact#Contact#Self): Sending with DC again  √
 --------------------------------------------------------------------------------

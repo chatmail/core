@@ -253,13 +253,19 @@ impl Context {
     /// If an error is returned, the caller shall not try over because some sync items could be
     /// already executed. Sync items are considered independent and executed in the given order but
     /// regardless of whether executing of the previous items succeeded.
-    pub(crate) async fn execute_sync_items(&self, items: &SyncItems) {
+    pub(crate) async fn execute_sync_items(&self, items: &SyncItems, timestamp_sent: i64) {
         info!(self, "executing {} sync item(s)", items.items.len());
         for item in &items.items {
+            // Limit the timestamp to ensure it is not in the future.
+            //
+            // `sent_timestamp` should be already corrected
+            // if the `Date` header is in the future.
+            let timestamp = std::cmp::min(item.timestamp, timestamp_sent);
+
             match &item.data {
                 SyncDataOrUnknown::SyncData(data) => match data {
-                    AddQrToken(token) => self.add_qr_token(token).await,
-                    DeleteQrToken(token) => self.delete_qr_token(token).await,
+                    AddQrToken(token) => self.add_qr_token(token, timestamp).await,
+                    DeleteQrToken(token) => self.delete_qr_token(token, timestamp).await,
                     AlterChat { id, action } => self.sync_alter_chat(id, action).await,
                     SyncData::Config { key, val } => self.sync_config(key, val).await,
                     SyncData::SaveMessage { src, dest } => self.save_message(src, dest).await,
@@ -284,21 +290,28 @@ impl Context {
         }
     }
 
-    async fn add_qr_token(&self, token: &QrTokenData) -> Result<()> {
+    async fn add_qr_token(&self, token: &QrTokenData, timestamp: i64) -> Result<()> {
         let grpid = token.grpid.as_deref();
-        token::save(self, Namespace::InviteNumber, grpid, &token.invitenumber).await?;
-        token::save(self, Namespace::Auth, grpid, &token.auth).await?;
+        token::save(
+            self,
+            Namespace::InviteNumber,
+            grpid,
+            &token.invitenumber,
+            timestamp,
+        )
+        .await?;
+        token::save(self, Namespace::Auth, grpid, &token.auth, timestamp).await?;
         Ok(())
     }
 
-    async fn delete_qr_token(&self, token: &QrTokenData) -> Result<()> {
+    async fn delete_qr_token(&self, token: &QrTokenData, timestamp: i64) -> Result<()> {
         self.sql
             .execute(
                 "DELETE FROM tokens
                  WHERE foreign_key IN
                  (SELECT foreign_key FROM tokens
-                  WHERE token=? OR token=?)",
-                (&token.invitenumber, &token.auth),
+                  WHERE token=? OR token=? AND timestamp <= ?)",
+                (&token.invitenumber, &token.auth, timestamp),
             )
             .await?;
         Ok(())
@@ -339,7 +352,7 @@ mod tests {
     use anyhow::bail;
 
     use super::*;
-    use crate::chat::{Chat, ProtectionStatus, remove_contact_from_chat};
+    use crate::chat::{Chat, remove_contact_from_chat};
     use crate::chatlist::Chatlist;
     use crate::contact::{Contact, Origin};
     use crate::securejoin::get_securejoin_qr;
@@ -550,6 +563,7 @@ mod tests {
 
         assert!(!token::exists(&t, Namespace::Auth, "yip-auth").await?);
 
+        let timestamp_sent = time();
         let sync_items = t
             .parse_sync_items(
                 r#"{"items":[
@@ -564,7 +578,7 @@ mod tests {
                 .to_string(),
             )
             ?;
-        t.execute_sync_items(&sync_items).await;
+        t.execute_sync_items(&sync_items, timestamp_sent).await;
 
         assert!(
             Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Unknown)
@@ -714,8 +728,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         alice.set_config_bool(Config::SyncMsgs, true).await?;
-        let alice_chatid =
-            chat::create_group_chat(alice, ProtectionStatus::Protected, "the chat").await?;
+        let alice_chatid = chat::create_group(alice, "the chat").await?;
         let qr = get_securejoin_qr(alice, Some(alice_chatid)).await?;
 
         // alice2 syncs the QR code token.

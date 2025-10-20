@@ -22,7 +22,7 @@ use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration, ProtectionStatus};
+use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration};
 use deltachat::constants::DC_MSG_ID_LAST_SPECIAL;
 use deltachat::contact::{Contact, ContactId, Origin};
 use deltachat::context::{Context, ContextBuilder};
@@ -1721,7 +1721,7 @@ pub unsafe extern "C" fn dc_get_chat(context: *mut dc_context_t, chat_id: u32) -
 #[no_mangle]
 pub unsafe extern "C" fn dc_create_group_chat(
     context: *mut dc_context_t,
-    protect: libc::c_int,
+    _protect: libc::c_int,
     name: *const libc::c_char,
 ) -> u32 {
     if context.is_null() || name.is_null() {
@@ -1729,22 +1729,12 @@ pub unsafe extern "C" fn dc_create_group_chat(
         return 0;
     }
     let ctx = &*context;
-    let Some(protect) = ProtectionStatus::from_i32(protect)
-        .context("Bad protect-value for dc_create_group_chat()")
-        .log_err(ctx)
-        .ok()
-    else {
-        return 0;
-    };
 
-    block_on(async move {
-        chat::create_group_chat(ctx, protect, &to_string_lossy(name))
-            .await
-            .context("Failed to create group chat")
-            .log_err(ctx)
-            .map(|id| id.to_u32())
-            .unwrap_or(0)
-    })
+    block_on(chat::create_group(ctx, &to_string_lossy(name)))
+        .context("Failed to create group chat")
+        .log_err(ctx)
+        .map(|id| id.to_u32())
+        .unwrap_or(0)
 }
 
 #[no_mangle]
@@ -3206,13 +3196,8 @@ pub unsafe extern "C" fn dc_chat_can_send(chat: *mut dc_chat_t) -> libc::c_int {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_chat_is_protected(chat: *mut dc_chat_t) -> libc::c_int {
-    if chat.is_null() {
-        eprintln!("ignoring careless call to dc_chat_is_protected()");
-        return 0;
-    }
-    let ffi_chat = &*chat;
-    ffi_chat.chat.is_protected() as libc::c_int
+pub extern "C" fn dc_chat_is_protected(_chat: *mut dc_chat_t) -> libc::c_int {
+    0
 }
 
 #[no_mangle]
@@ -4661,13 +4646,9 @@ pub unsafe extern "C" fn dc_provider_new_from_email(
 
     let ctx = &*context;
 
-    match block_on(provider::get_provider_info_by_addr(
-        ctx,
-        addr.as_str(),
-        true,
-    ))
-    .log_err(ctx)
-    .unwrap_or_default()
+    match provider::get_provider_info_by_addr(addr.as_str())
+        .log_err(ctx)
+        .unwrap_or_default()
     {
         Some(provider) => provider,
         None => ptr::null_mut(),
@@ -4686,25 +4667,13 @@ pub unsafe extern "C" fn dc_provider_new_from_email_with_dns(
     let addr = to_string_lossy(addr);
 
     let ctx = &*context;
-    let proxy_enabled = block_on(ctx.get_config_bool(config::Config::ProxyEnabled))
-        .context("Can't get config")
-        .log_err(ctx);
 
-    match proxy_enabled {
-        Ok(proxy_enabled) => {
-            match block_on(provider::get_provider_info_by_addr(
-                ctx,
-                addr.as_str(),
-                proxy_enabled,
-            ))
-            .log_err(ctx)
-            .unwrap_or_default()
-            {
-                Some(provider) => provider,
-                None => ptr::null_mut(),
-            }
-        }
-        Err(_) => ptr::null_mut(),
+    match provider::get_provider_info_by_addr(addr.as_str())
+        .log_err(ctx)
+        .unwrap_or_default()
+    {
+        Some(provider) => provider,
+        None => ptr::null_mut(),
     }
 }
 

@@ -1,5 +1,5 @@
 use super::*;
-use crate::chat::{ProtectionStatus, create_group_chat};
+use crate::chat::create_group;
 use crate::config::Config;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{TestContext, TestContextManager, sync};
@@ -479,7 +479,7 @@ async fn test_withdraw_verifycontact() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_withdraw_verifygroup() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&alice, "foo").await?;
     let qr = get_securejoin_qr(&alice, Some(chat_id)).await?;
 
     // scanning own verify-group code offers withdrawing
@@ -520,8 +520,8 @@ async fn test_withdraw_multidevice() -> Result<()> {
 
     // Alice creates two QR codes on the first device:
     // group QR code and contact QR code.
-    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
-    let chat2_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group 2").await?;
+    let chat_id = create_group(alice, "Group").await?;
+    let chat2_id = create_group(alice, "Group 2").await?;
     let contact_qr = get_securejoin_qr(alice, None).await?;
     let group_qr = get_securejoin_qr(alice, Some(chat_id)).await?;
     let group2_qr = get_securejoin_qr(alice, Some(chat2_id)).await?;

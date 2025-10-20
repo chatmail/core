@@ -1,8 +1,8 @@
-Group#Chat#10: Group chat [3 member(s)] 
+Group#Chat#2001: Group chat [3 member(s)]
 --------------------------------------------------------------------------------
-Msg#10: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
-Msg#11🔒:  (Contact#Contact#10): Hi! I created a group. [FRESH]
-Msg#12🔒: Me (Contact#Contact#Self): You left the group. [INFO] √
-Msg#13🔒:  (Contact#Contact#10): Member charlie@example.net added by alice@example.org. [FRESH][INFO]
-Msg#14🔒:  (Contact#Contact#10): What a silence! [FRESH]
+Msg#2001: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
+Msg#2002🔒:  (Contact#Contact#2001): Hi! I created a group. [FRESH]
+Msg#2003🔒: Me (Contact#Contact#Self): You left the group. [INFO] √
+Msg#2004🔒:  (Contact#Contact#2001): Member charlie@example.net added by alice@example.org. [FRESH][INFO]
+Msg#2005🔒:  (Contact#Contact#2001): What a silence! [FRESH]
 --------------------------------------------------------------------------------

@@ -179,7 +179,7 @@ pub async fn pk_encrypt(
             let msg = MessageBuilder::from_bytes("", plain);
             let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
             for pkey in pkeys {
-                msg.encrypt_to_key(&mut rng, &pkey)?;
+                msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
             }
 
             if let Some(ref skey) = private_key_for_signing {
@@ -448,6 +448,8 @@ mod tests {
         key::{load_self_public_key, load_self_secret_key},
         test_utils::{TestContextManager, alice_keypair, bob_keypair},
     };
+    use pgp::composed::Esk;
+    use pgp::packet::PublicKeyEncryptedSessionKey;
 
     fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
@@ -741,6 +743,36 @@ mod tests {
             "missing key (Note: symmetric decryption was not tried: not symmetrically encrypted)"
         );
 
+        Ok(())
+    }
+
+    /// Tests that recipient key IDs and fingerprints
+    /// are omitted or replaced with wildcards.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_anonymous_recipients() -> Result<()> {
+        let ctext = ctext_signed().await.as_bytes();
+        let cursor = Cursor::new(ctext);
+        let (msg, _headers) = Message::from_armor(cursor)?;
+
+        let Message::Encrypted { esk, .. } = msg else {
+            unreachable!();
+        };
+
+        for encrypted_session_key in esk {
+            let Esk::PublicKeyEncryptedSessionKey(pkesk) = encrypted_session_key else {
+                unreachable!()
+            };
+
+            match pkesk {
+                PublicKeyEncryptedSessionKey::V3 { id, .. } => {
+                    assert!(id.is_wildcard());
+                }
+                PublicKeyEncryptedSessionKey::V6 { fingerprint, .. } => {
+                    assert!(fingerprint.is_none());
+                }
+                PublicKeyEncryptedSessionKey::Other { .. } => unreachable!(),
+            }
+        }
         Ok(())
     }
 }

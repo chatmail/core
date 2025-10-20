@@ -1,5 +1,50 @@
 # Changelog
 
+## [2.22.0] - 2025-10-17
+
+### Fixes
+
+- Do not notify about incoming calls for contact requests and blocked contacts.
+
+### Tests
+
+- Accept the chat with the caller before accepting calls.
+
+## [2.21.0] - 2025-10-16
+
+### Build system
+
+- nix: Remove unused dependencies.
+
+### Features / Changes
+
+- TLS 1.3 session resumption.
+- REPL: Add send-sync command.
+- Set `User-Agent` for tile.openstreetmap.org requests.
+- Cache tile.openstreetmap.org tiles for 7 days.
+
+### Fixes
+
+- Remove Exif with non-fatal errors from images.
+- jsonrpc: Use Core's logic for computing VcardContact.color ([#7294](https://github.com/chatmail/core/pull/7294)).
+
+### Miscellaneous Tasks
+
+- deps: Bump cachix/install-nix-action from 31.7.0 to 31.8.0.
+- cargo: Bump async_zip from 0.0.17 to 0.0.18 ([#7257](https://github.com/chatmail/core/pull/7257)).
+- deps: Bump github/codeql-action from 3 to 4 ([#7304](https://github.com/chatmail/core/pull/7304)).
+
+### Refactor
+
+- Use rustls reexported from tokio_rustls.
+- Pass ALPN around as &str.
+- mimeparser: Store only one signature fingerprint.
+
+### Tests
+
+- Test expiration of ephemeral messages with unknown viewtype.
+- Test expiration of non-ephemeral message with unknown viewtype.
+
 ## [2.20.0] - 2025-10-13
 
 This release fixes a bug that resulted in ephemeral loop getting stuck in infinite loop
@@ -6921,3 +6966,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.18.0]: https://github.com/chatmail/core/compare/v2.17.0..v2.18.0
 [2.19.0]: https://github.com/chatmail/core/compare/v2.18.0..v2.19.0
 [2.20.0]: https://github.com/chatmail/core/compare/v2.19.0..v2.20.0
+[2.21.0]: https://github.com/chatmail/core/compare/v2.20.0..v2.21.0
+[2.22.0]: https://github.com/chatmail/core/compare/v2.21.0..v2.22.0

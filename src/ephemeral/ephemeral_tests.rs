@@ -12,7 +12,7 @@ use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager};
 use crate::timesmearing::MAX_SECONDS_TO_LEND_FROM_FUTURE;
 use crate::{
-    chat::{self, Chat, ChatItem, ProtectionStatus, create_group_chat, send_text_msg},
+    chat::{self, Chat, ChatItem, create_group, send_text_msg},
     tools::IsNoneOrEmpty,
 };
 
@@ -164,7 +164,7 @@ async fn test_ephemeral_enable_disable() -> Result<()> {
 async fn test_ephemeral_unpromoted() -> Result<()> {
     let alice = TestContext::new_alice().await;
 
-    let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group name").await?;
+    let chat_id = create_group(&alice, "Group name").await?;
 
     // Group is unpromoted, the timer can be changed without sending a message.
     assert!(chat_id.is_unpromoted(&alice).await?);
@@ -799,8 +799,7 @@ async fn test_ephemeral_timer_non_member() -> Result<()> {
     let bob = &tcm.bob().await;
 
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
-    let alice_chat_id =
-        create_group_chat(alice, ProtectionStatus::Unprotected, "Group name").await?;
+    let alice_chat_id = create_group(alice, "Group name").await?;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
     send_text_msg(alice, alice_chat_id, "Hi!".to_string()).await?;
 

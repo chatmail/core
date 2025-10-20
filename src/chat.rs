@@ -12,7 +12,6 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
-use deltachat_derive::{FromSql, ToSql};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -31,6 +30,7 @@ use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
+use crate::key::self_fingerprint;
 use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::logged_debug_assert;
@@ -67,41 +67,6 @@ pub enum ChatItem {
         /// Marker timestamp, for day markers
         timestamp: i64,
     },
-}
-
-/// Chat protection status.
-#[derive(
-    Debug,
-    Default,
-    Display,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    FromPrimitive,
-    ToPrimitive,
-    FromSql,
-    ToSql,
-    IntoStaticStr,
-    Serialize,
-    Deserialize,
-)]
-#[repr(u32)]
-pub enum ProtectionStatus {
-    /// Chat is not protected.
-    #[default]
-    Unprotected = 0,
-
-    /// Chat is protected.
-    ///
-    /// All members of the chat must be verified.
-    Protected = 1,
-    // `2` was never used as a value.
-
-    // Chats don't break in Core v2 anymore. Chats with broken protection existing before the
-    // key-contacts migration are treated as `Unprotected`.
-    //
-    // ProtectionBroken = 3,
 }
 
 /// The reason why messages cannot be sent to the chat.
@@ -308,14 +273,12 @@ impl ChatId {
 
     /// Create a group or mailinglist raw database record with the given parameters.
     /// The function does not add SELF nor checks if the record already exists.
-    #[expect(clippy::too_many_arguments)]
     pub(crate) async fn create_multiuser_record(
         context: &Context,
         chattype: Chattype,
         grpid: &str,
         grpname: &str,
         create_blocked: Blocked,
-        create_protected: ProtectionStatus,
         param: Option<String>,
         timestamp: i64,
     ) -> Result<Self> {
@@ -323,31 +286,27 @@ impl ChatId {
         let timestamp = cmp::min(timestamp, smeared_time(context));
         let row_id =
             context.sql.insert(
-                "INSERT INTO chats (type, name, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, ?, ?);",
+                "INSERT INTO chats (type, name, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, 0, ?);",
                 (
                     chattype,
                     &grpname,
                     grpid,
                     create_blocked,
                     timestamp,
-                    create_protected,
                     param.unwrap_or_default(),
                 ),
             ).await?;
 
         let chat_id = ChatId::new(u32::try_from(row_id)?);
+        let chat = Chat::load_from_db(context, chat_id).await?;
 
-        if create_protected == ProtectionStatus::Protected {
-            chat_id
-                .add_protection_msg(context, ProtectionStatus::Protected, None, timestamp)
-                .await?;
-        } else {
-            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
+        if chat.is_encrypted(context).await? {
+            chat_id.add_encrypted_msg(context, timestamp).await?;
         }
 
         info!(
             context,
-            "Created group/broadcast '{}' grpid={} as {}, blocked={}, protected={create_protected}.",
+            "Created group/broadcast '{}' grpid={} as {}, blocked={}.",
             &grpname,
             grpid,
             chat_id,
@@ -502,118 +461,7 @@ impl ChatId {
         Ok(())
     }
 
-    /// Sets protection without sending a message.
-    ///
-    /// Returns whether the protection status was actually modified.
-    pub(crate) async fn inner_set_protection(
-        self,
-        context: &Context,
-        protect: ProtectionStatus,
-    ) -> Result<bool> {
-        ensure!(!self.is_special(), "Invalid chat-id {self}.");
-
-        let chat = Chat::load_from_db(context, self).await?;
-
-        if protect == chat.protected {
-            info!(context, "Protection status unchanged for {}.", self);
-            return Ok(false);
-        }
-
-        match protect {
-            ProtectionStatus::Protected => match chat.typ {
-                Chattype::Single
-                | Chattype::Group
-                | Chattype::OutBroadcast
-                | Chattype::InBroadcast => {}
-                Chattype::Mailinglist => bail!("Cannot protect mailing lists"),
-            },
-            ProtectionStatus::Unprotected => {}
-        };
-
-        context
-            .sql
-            .execute("UPDATE chats SET protected=? WHERE id=?;", (protect, self))
-            .await?;
-
-        context.emit_event(EventType::ChatModified(self));
-        chatlist_events::emit_chatlist_item_changed(context, self);
-
-        // make sure, the receivers will get all keys
-        self.reset_gossiped_timestamp(context).await?;
-
-        Ok(true)
-    }
-
-    /// Adds an info message to the chat, telling the user that the protection status changed.
-    ///
-    /// Params:
-    ///
-    /// * `contact_id`: In a 1:1 chat, pass the chat partner's contact id.
-    /// * `timestamp_sort` is used as the timestamp of the added message
-    ///   and should be the timestamp of the change happening.
-    pub(crate) async fn add_protection_msg(
-        self,
-        context: &Context,
-        protect: ProtectionStatus,
-        contact_id: Option<ContactId>,
-        timestamp_sort: i64,
-    ) -> Result<()> {
-        if contact_id == Some(ContactId::SELF) {
-            // Do not add protection messages to Saved Messages chat.
-            // This chat never gets protected and unprotected,
-            // we do not want the first message
-            // to be a protection message with an arbitrary timestamp.
-            return Ok(());
-        }
-
-        let text = context.stock_protection_msg(protect, contact_id).await;
-        let cmd = match protect {
-            ProtectionStatus::Protected => SystemMessage::ChatProtectionEnabled,
-            ProtectionStatus::Unprotected => SystemMessage::ChatProtectionDisabled,
-        };
-        add_info_msg_with_cmd(
-            context,
-            self,
-            &text,
-            cmd,
-            timestamp_sort,
-            None,
-            None,
-            None,
-            None,
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    /// Adds message "Messages are end-to-end encrypted" if appropriate.
-    ///
-    /// This function is rather slow because it does a lot of database queries,
-    /// but this is fine because it is only called on chat creation.
-    async fn maybe_add_encrypted_msg(self, context: &Context, timestamp_sort: i64) -> Result<()> {
-        let chat = Chat::load_from_db(context, self).await?;
-
-        // as secure-join adds its own message on success (after some other messasges),
-        // we do not want to add "Messages are end-to-end encrypted" on chat creation.
-        // we detect secure join by `can_send` (for Bob, scanner side) and by `blocked` (for Alice, inviter side) below.
-        if !chat.is_encrypted(context).await?
-            || self <= DC_CHAT_ID_LAST_SPECIAL
-            || chat.is_device_talk()
-            || chat.is_self_talk()
-            || (!chat.can_send(context).await? && !chat.is_contact_request())
-            // For chattype InBrodacast, the info message is added when the member-added message is received
-            // by directly calling add_encrypted_msg()
-            || chat.typ == Chattype::InBroadcast
-            || chat.blocked == Blocked::Yes
-        {
-            return Ok(());
-        }
-
-        self.add_encrypted_msg(context, timestamp_sort).await?;
-        Ok(())
-    }
-
+    /// Adds message "Messages are end-to-end encrypted".
     pub(crate) async fn add_encrypted_msg(
         self,
         context: &Context,
@@ -632,74 +480,6 @@ impl ChatId {
             None,
         )
         .await?;
-        Ok(())
-    }
-
-    /// Sets protection and adds a message.
-    ///
-    /// `timestamp_sort` is used as the timestamp of the added message
-    /// and should be the timestamp of the change happening.
-    async fn set_protection_for_timestamp_sort(
-        self,
-        context: &Context,
-        protect: ProtectionStatus,
-        timestamp_sort: i64,
-        contact_id: Option<ContactId>,
-    ) -> Result<()> {
-        let protection_status_modified = self
-            .inner_set_protection(context, protect)
-            .await
-            .with_context(|| format!("Cannot set protection for {self}"))?;
-        if protection_status_modified {
-            self.add_protection_msg(context, protect, contact_id, timestamp_sort)
-                .await?;
-            chatlist_events::emit_chatlist_item_changed(context, self);
-        }
-        Ok(())
-    }
-
-    /// Sets protection and sends or adds a message.
-    ///
-    /// `timestamp_sent` is the "sent" timestamp of a message caused the protection state change.
-    pub(crate) async fn set_protection(
-        self,
-        context: &Context,
-        protect: ProtectionStatus,
-        timestamp_sent: i64,
-        contact_id: Option<ContactId>,
-    ) -> Result<()> {
-        let sort_to_bottom = true;
-        let (received, incoming) = (false, false);
-        let ts = self
-            .calc_sort_timestamp(context, timestamp_sent, sort_to_bottom, received, incoming)
-            .await?
-            // Always sort protection messages below `SystemMessage::SecurejoinWait{,Timeout}` ones
-            // in case of race conditions.
-            .saturating_add(1);
-        self.set_protection_for_timestamp_sort(context, protect, ts, contact_id)
-            .await
-    }
-
-    /// Sets the 1:1 chat with the given address to ProtectionStatus::Protected,
-    /// and posts a `SystemMessage::ChatProtectionEnabled` into it.
-    ///
-    /// If necessary, creates a hidden chat for this.
-    pub(crate) async fn set_protection_for_contact(
-        context: &Context,
-        contact_id: ContactId,
-        timestamp: i64,
-    ) -> Result<()> {
-        let chat_id = ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Yes)
-            .await
-            .with_context(|| format!("can't create chat for {contact_id}"))?;
-        chat_id
-            .set_protection(
-                context,
-                ProtectionStatus::Protected,
-                timestamp,
-                Some(contact_id),
-            )
-            .await?;
         Ok(())
     }
 
@@ -1410,16 +1190,6 @@ impl ChatId {
         Ok(())
     }
 
-    /// Returns true if the chat is protected.
-    pub async fn is_protected(self, context: &Context) -> Result<ProtectionStatus> {
-        let protection_status = context
-            .sql
-            .query_get_value("SELECT protected FROM chats WHERE id=?", (self,))
-            .await?
-            .unwrap_or_default();
-        Ok(protection_status)
-    }
-
     /// Returns the sort timestamp for a new message in the chat.
     ///
     /// `message_timestamp` should be either the message "sent" timestamp or a timestamp of the
@@ -1574,9 +1344,6 @@ pub struct Chat {
 
     /// Duration of the chat being muted.
     pub mute_duration: MuteDuration,
-
-    /// If the chat is protected (verified).
-    pub(crate) protected: ProtectionStatus,
 }
 
 impl Chat {
@@ -1586,7 +1353,7 @@ impl Chat {
             .sql
             .query_row(
                 "SELECT c.type, c.name, c.grpid, c.param, c.archived,
-                    c.blocked, c.locations_send_until, c.muted_until, c.protected
+                    c.blocked, c.locations_send_until, c.muted_until
              FROM chats c
              WHERE c.id=?;",
                 (chat_id,),
@@ -1601,7 +1368,6 @@ impl Chat {
                         blocked: row.get::<_, Option<_>>(5)?.unwrap_or_default(),
                         is_sending_locations: row.get(6)?,
                         mute_duration: row.get(7)?,
-                        protected: row.get(8)?,
                     };
                     Ok(c)
                 },
@@ -1883,53 +1649,38 @@ impl Chat {
         !self.is_unpromoted()
     }
 
-    /// Returns true if chat protection is enabled.
-    ///
-    /// UI should display a green checkmark
-    /// in the chat title,
-    /// in the chat profile title and
-    /// in the chatlist item
-    /// if chat protection is enabled.
-    /// UI should also display a green checkmark
-    /// in the contact profile
-    /// if 1:1 chat with this contact exists and is protected.
-    pub fn is_protected(&self) -> bool {
-        self.protected == ProtectionStatus::Protected
-    }
-
     /// Returns true if the chat is encrypted.
     pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
-        let is_encrypted = self.is_protected()
-            || match self.typ {
-                Chattype::Single => {
-                    match context
-                        .sql
-                        .query_row_optional(
-                            "SELECT cc.contact_id, c.fingerprint<>''
+        let is_encrypted = match self.typ {
+            Chattype::Single => {
+                match context
+                    .sql
+                    .query_row_optional(
+                        "SELECT cc.contact_id, c.fingerprint<>''
                              FROM chats_contacts cc LEFT JOIN contacts c
                                  ON c.id=cc.contact_id
                              WHERE cc.chat_id=?
                             ",
-                            (self.id,),
-                            |row| {
-                                let id: ContactId = row.get(0)?;
-                                let is_key: bool = row.get(1)?;
-                                Ok((id, is_key))
-                            },
-                        )
-                        .await?
-                    {
-                        Some((id, is_key)) => is_key || id == ContactId::DEVICE,
-                        None => true,
-                    }
+                        (self.id,),
+                        |row| {
+                            let id: ContactId = row.get(0)?;
+                            let is_key: bool = row.get(1)?;
+                            Ok((id, is_key))
+                        },
+                    )
+                    .await?
+                {
+                    Some((id, is_key)) => is_key || id == ContactId::DEVICE,
+                    None => true,
                 }
-                Chattype::Group => {
-                    // Do not encrypt ad-hoc groups.
-                    !self.grpid.is_empty()
-                }
-                Chattype::Mailinglist => false,
-                Chattype::OutBroadcast | Chattype::InBroadcast => true,
-            };
+            }
+            Chattype::Group => {
+                // Do not encrypt ad-hoc groups.
+                !self.grpid.is_empty()
+            }
+            Chattype::Mailinglist => false,
+            Chattype::OutBroadcast | Chattype::InBroadcast => true,
+        };
         Ok(is_encrypted)
     }
 
@@ -2263,17 +2014,21 @@ impl Chat {
     /// Sends a `SyncAction` synchronising chat contacts to other devices.
     pub(crate) async fn sync_contacts(&self, context: &Context) -> Result<()> {
         if self.is_encrypted(context).await? {
+            let self_fp = self_fingerprint(context).await?;
             let fingerprint_addrs = context
                 .sql
                 .query_map(
-                    "SELECT c.fingerprint, c.addr
+                    "SELECT c.id, c.fingerprint, c.addr
                      FROM contacts c INNER JOIN chats_contacts cc
                      ON c.id=cc.contact_id
                      WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
                     (self.id,),
                     |row| {
-                        let fingerprint = row.get(0)?;
-                        let addr = row.get(1)?;
+                        if row.get::<_, ContactId>(0)? == ContactId::SELF {
+                            return Ok((self_fp.to_string(), String::new()));
+                        }
+                        let fingerprint = row.get(1)?;
+                        let addr = row.get(2)?;
                         Ok((fingerprint, addr))
                     },
                     |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
@@ -2640,7 +2395,6 @@ impl ChatIdBlocked {
             _ => (),
         }
 
-        let protected = contact_id == ContactId::SELF || contact.is_verified(context).await?;
         let smeared_time = create_smeared_timestamp(context);
 
         let chat_id = context
@@ -2648,19 +2402,14 @@ impl ChatIdBlocked {
             .transaction(move |transaction| {
                 transaction.execute(
                     "INSERT INTO chats
-                     (type, name, param, blocked, created_timestamp, protected)
-                     VALUES(?, ?, ?, ?, ?, ?)",
+                     (type, name, param, blocked, created_timestamp)
+                     VALUES(?, ?, ?, ?, ?)",
                     (
                         Chattype::Single,
                         chat_name,
                         params.to_string(),
                         create_blocked as u8,
                         smeared_time,
-                        if protected {
-                            ProtectionStatus::Protected
-                        } else {
-                            ProtectionStatus::Unprotected
-                        },
                     ),
                 )?;
                 let chat_id = ChatId::new(
@@ -2681,19 +2430,12 @@ impl ChatIdBlocked {
             })
             .await?;
 
-        if protected {
-            chat_id
-                .add_protection_msg(
-                    context,
-                    ProtectionStatus::Protected,
-                    Some(contact_id),
-                    smeared_time,
-                )
-                .await?;
-        } else {
-            chat_id
-                .maybe_add_encrypted_msg(context, smeared_time)
-                .await?;
+        let chat = Chat::load_from_db(context, chat_id).await?;
+        if chat.is_encrypted(context).await?
+            && !chat.param.exists(Param::Devicetalk)
+            && !chat.param.exists(Param::Selftalk)
+        {
+            chat_id.add_encrypted_msg(context, smeared_time).await?;
         }
 
         Ok(Self {
@@ -3670,23 +3412,26 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
     Ok(list)
 }
 
-/// Creates a group chat with a given `name`.
-/// Deprecated on 2025-06-21, use `create_group_ex()`.
-pub async fn create_group_chat(
-    context: &Context,
-    protect: ProtectionStatus,
-    name: &str,
-) -> Result<ChatId> {
-    create_group_ex(context, Some(protect), name).await
+/// Creates an encrypted group chat.
+pub async fn create_group(context: &Context, name: &str) -> Result<ChatId> {
+    create_group_ex(context, Sync, create_id(), name).await
+}
+
+/// Creates an unencrypted group chat.
+pub async fn create_group_unencrypted(context: &Context, name: &str) -> Result<ChatId> {
+    create_group_ex(context, Sync, String::new(), name).await
 }
 
 /// Creates a group chat.
 ///
-/// * `encryption` - If `Some`, the chat is encrypted (with key-contacts) and can be protected.
+/// * `sync` - Whether a multi-device synchronization message should be sent. Ignored for
+///   unencrypted chats currently.
+/// * `grpid` - Group ID. Iff nonempty, the chat is encrypted (with key-contacts).
 /// * `name` - Chat name.
-pub async fn create_group_ex(
+pub(crate) async fn create_group_ex(
     context: &Context,
-    encryption: Option<ProtectionStatus>,
+    sync: sync::Sync,
+    grpid: String,
     name: &str,
 ) -> Result<ChatId> {
     let mut chat_name = sanitize_single_line(name);
@@ -3697,11 +3442,6 @@ pub async fn create_group_ex(
         chat_name = "…".to_string();
     }
 
-    let grpid = match encryption {
-        Some(_) => create_id(),
-        None => String::new(),
-    };
-
     let timestamp = create_smeared_timestamp(context);
     let row_id = context
         .sql
@@ -3709,7 +3449,7 @@ pub async fn create_group_ex(
             "INSERT INTO chats
         (type, name, grpid, param, created_timestamp)
         VALUES(?, ?, ?, \'U=1\', ?);",
-            (Chattype::Group, chat_name, grpid, timestamp),
+            (Chattype::Group, &chat_name, &grpid, timestamp),
         )
         .await?;
 
@@ -3720,19 +3460,9 @@ pub async fn create_group_ex(
     chatlist_events::emit_chatlist_changed(context);
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-    match encryption {
-        Some(ProtectionStatus::Protected) => {
-            let protect = ProtectionStatus::Protected;
-            chat_id
-                .set_protection_for_timestamp_sort(context, protect, timestamp, None)
-                .await?;
-        }
-        Some(ProtectionStatus::Unprotected) => {
-            // Add "Messages are end-to-end encrypted." message
-            // even to unprotected chats.
-            chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
-        }
-        None => {}
+    if !grpid.is_empty() {
+        // Add "Messages are end-to-end encrypted." message.
+        chat_id.add_encrypted_msg(context, timestamp).await?;
     }
 
     if !context.get_config_bool(Config::Bot).await?
@@ -3741,7 +3471,11 @@ pub async fn create_group_ex(
         let text = stock_str::new_group_send_first_message(context).await;
         add_info_msg(context, chat_id, &text, create_smeared_timestamp(context)).await?;
     }
-
+    if let (true, true) = (sync.into(), !grpid.is_empty()) {
+        let id = SyncId::Grpid(grpid);
+        let action = SyncAction::CreateGroupEncrypted(chat_name);
+        self::sync(context, id, action).await.log_err(context).ok();
+    }
     Ok(chat_id)
 }
 
@@ -3757,7 +3491,7 @@ pub async fn create_group_ex(
 /// which would make it hard to grep for it.
 ///
 /// After creation, the chat contains no recipients and is in _unpromoted_ state;
-/// see [`create_group_chat`] for more information on the unpromoted state.
+/// see [`create_group`] for more information on the unpromoted state.
 ///
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
@@ -3803,7 +3537,7 @@ pub(crate) async fn create_out_broadcast_ex(
         Ok(chat_id)
     };
     let chat_id = context.sql.transaction(trans_fn).await?;
-    chat_id.maybe_add_encrypted_msg(context, timestamp).await?;
+    chat_id.add_encrypted_msg(context, timestamp).await?;
 
     context.emit_msgs_changed_without_ids();
     chatlist_events::emit_chatlist_changed(context);
@@ -4036,13 +3770,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         }
     } else {
         // else continue and send status mail
-        if chat.is_protected() && !contact.is_verified(context).await? {
-            error!(
-                context,
-                "Cannot add non-bidirectionally verified contact {contact_id} to protected chat {chat_id}."
-            );
-            return Ok(false);
-        }
         add_to_chat_contacts_table(context, time(), chat_id, &[contact_id]).await?;
     }
     if chat.is_promoted() {
@@ -4722,24 +4449,21 @@ pub(crate) async fn get_chat_cnt(context: &Context) -> Result<usize> {
     }
 }
 
-/// Returns a tuple of `(chatid, is_protected, blocked)`.
+/// Returns a tuple of `(chatid, blocked)`.
 pub(crate) async fn get_chat_id_by_grpid(
     context: &Context,
     grpid: &str,
-) -> Result<Option<(ChatId, bool, Blocked)>> {
+) -> Result<Option<(ChatId, Blocked)>> {
     context
         .sql
         .query_row_optional(
-            "SELECT id, blocked, protected FROM chats WHERE grpid=?;",
+            "SELECT id, blocked FROM chats WHERE grpid=?;",
             (grpid,),
             |row| {
                 let chat_id = row.get::<_, ChatId>(0)?;
 
                 let b = row.get::<_, Option<Blocked>>(1)?.unwrap_or_default();
-                let p = row
-                    .get::<_, Option<ProtectionStatus>>(2)?
-                    .unwrap_or_default();
-                Ok((chat_id, p == ProtectionStatus::Protected, b))
+                Ok((chat_id, b))
             },
         )
         .await
@@ -5042,16 +4766,14 @@ async fn set_contacts_by_fingerprints(
         "Cannot add key-contacts to unencrypted chat {id}"
     );
     ensure!(
-        chat.typ == Chattype::OutBroadcast,
-        "{id} is not a broadcast list",
+        matches!(chat.typ, Chattype::Group | Chattype::OutBroadcast),
+        "{id} is not a group or broadcast",
     );
     let mut contacts = HashSet::new();
     for (fingerprint, addr) in fingerprint_addrs {
-        let contact_addr = ContactAddress::new(addr)?;
-        let contact =
-            Contact::add_or_lookup_ex(context, "", &contact_addr, fingerprint, Origin::Hidden)
-                .await?
-                .0;
+        let contact = Contact::add_or_lookup_ex(context, "", addr, fingerprint, Origin::Hidden)
+            .await?
+            .0;
         contacts.insert(contact);
     }
     let contacts_old = HashSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
@@ -5090,7 +4812,7 @@ pub(crate) enum SyncId {
     /// "Message-ID"-s, from oldest to latest. Used for ad-hoc groups.
     Msgids(Vec<String>),
 
-    // Special id for device chat.
+    /// Special id for device chat.
     Device,
 }
 
@@ -5107,6 +4829,8 @@ pub(crate) enum SyncAction {
         chat_name: String,
         shared_secret: String,
     },
+    /// Create encrypted group chat with the given name.
+    CreateGroupEncrypted(String),
     Rename(String),
     /// Set chat contacts by their addresses.
     SetContacts(Vec<String>),
@@ -5172,6 +4896,9 @@ impl Context {
                 let handled = self.handle_sync_create_chat(action, grpid).await?;
                 if handled {
                     return Ok(());
+                } else if let SyncAction::CreateGroupEncrypted(name) = action {
+                    create_group_ex(self, Nosync, grpid.clone(), name).await?;
+                    return Ok(());
                 }
                 get_chat_id_by_grpid(self, grpid)
                     .await?
@@ -5193,7 +4920,7 @@ impl Context {
             SyncAction::Accept => chat_id.accept_ex(self, Nosync).await,
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
-            SyncAction::CreateOutBroadcast { .. } => {
+            SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateGroupEncrypted(..) => {
                 // Create action should have been handled by handle_sync_create_chat() already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }

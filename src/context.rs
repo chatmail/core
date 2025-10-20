@@ -14,7 +14,7 @@ use pgp::types::PublicKeyTrait;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
-use crate::chat::{ChatId, ProtectionStatus, get_chat_cnt};
+use crate::chat::{ChatId, get_chat_cnt};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{
@@ -1036,12 +1036,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "protect_autocrypt",
-            self.get_config_int(Config::ProtectAutocrypt)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "debug_logging",
             self.get_config_int(Config::DebugLogging).await?.to_string(),
         );
@@ -1089,7 +1083,6 @@ impl Context {
     async fn get_self_report(&self) -> Result<String> {
         #[derive(Default)]
         struct ChatNumbers {
-            protected: u32,
             opportunistic_dc: u32,
             opportunistic_mua: u32,
             unencrypted_dc: u32,
@@ -1124,7 +1117,6 @@ impl Context {
         res += &format!("key_created {key_created}\n");
 
         // how many of the chats active in the last months are:
-        // - protected
         // - opportunistic-encrypted and the contact uses Delta Chat
         // - opportunistic-encrypted and the contact uses a classical MUA
         // - unencrypted and the contact uses Delta Chat
@@ -1133,7 +1125,7 @@ impl Context {
         let chats = self
             .sql
             .query_map(
-                "SELECT c.protected, m.param, m.msgrmsg
+                "SELECT m.param, m.msgrmsg
                     FROM chats c
                     JOIN msgs m
                         ON c.id=m.chat_id
@@ -1151,23 +1143,20 @@ impl Context {
                     GROUP BY c.id",
                 (DownloadState::Done, ContactId::INFO, three_months_ago),
                 |row| {
-                    let protected: ProtectionStatus = row.get(0)?;
                     let message_param: Params =
                         row.get::<_, String>(1)?.parse().unwrap_or_default();
                     let is_dc_message: bool = row.get(2)?;
-                    Ok((protected, message_param, is_dc_message))
+                    Ok((message_param, is_dc_message))
                 },
                 |rows| {
                     let mut chats = ChatNumbers::default();
                     for row in rows {
-                        let (protected, message_param, is_dc_message) = row?;
+                        let (message_param, is_dc_message) = row?;
                         let encrypted = message_param
                             .get_bool(Param::GuaranteeE2ee)
                             .unwrap_or(false);
 
-                        if protected == ProtectionStatus::Protected {
-                            chats.protected += 1;
-                        } else if encrypted {
+                        if encrypted {
                             if is_dc_message {
                                 chats.opportunistic_dc += 1;
                             } else {
@@ -1183,7 +1172,6 @@ impl Context {
                 },
             )
             .await?;
-        res += &format!("chats_protected {}\n", chats.protected);
         res += &format!("chats_opportunistic_dc {}\n", chats.opportunistic_dc);
         res += &format!("chats_opportunistic_mua {}\n", chats.opportunistic_mua);
         res += &format!("chats_unencrypted_dc {}\n", chats.unencrypted_dc);
@@ -1216,9 +1204,6 @@ impl Context {
         mark_contact_id_as_verified(self, contact_id, Some(ContactId::SELF)).await?;
 
         let chat_id = ChatId::create_for_contact(self, contact_id).await?;
-        chat_id
-            .set_protection(self, ProtectionStatus::Protected, time(), Some(contact_id))
-            .await?;
 
         let mut msg = Message::new_text(self.get_self_report().await?);
 

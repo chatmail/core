@@ -4,7 +4,7 @@ use anyhow::{Context as _, Result};
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
-use crate::chat::{self, ChatId, ProtectionStatus, is_contact_in_chat};
+use crate::chat::{self, ChatId, is_contact_in_chat};
 use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
@@ -86,16 +86,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             )
             .await?;
 
-            // Mark 1:1 chat as verified already.
-            private_chat_id
-                .set_protection(
-                    context,
-                    ProtectionStatus::Protected,
-                    time(),
-                    Some(invite.contact_id()),
-                )
-                .await?;
-
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id: invite.contact_id(),
                 progress: JoinerProgress::RequestWithAuthSent.to_usize(),
@@ -156,21 +146,19 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             let ts_sort = private_chat_id
                 .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
                 .await?;
-            if private_chat_id.is_protected(context).await? == ProtectionStatus::Unprotected {
-                let ts_start = time();
-                chat::add_info_msg_with_cmd(
-                    context,
-                    private_chat_id,
-                    &stock_str::securejoin_wait(context).await,
-                    SystemMessage::SecurejoinWait,
-                    ts_sort,
-                    Some(ts_start),
-                    None,
-                    None,
-                    None,
-                )
-                .await?;
-            }
+            let ts_start = time();
+            chat::add_info_msg_with_cmd(
+                context,
+                private_chat_id,
+                &stock_str::securejoin_wait(context).await,
+                SystemMessage::SecurejoinWait,
+                ts_sort,
+                Some(ts_start),
+                None,
+                None,
+                None,
+            )
+            .await?;
             Ok(private_chat_id)
         }
     }
@@ -247,15 +235,6 @@ pub(super) async fn handle_auth_required(
                 chat::add_info_msg(context, chat_id, &msg, time()).await?;
             }
         }
-
-        chat_id
-            .set_protection(
-                context,
-                ProtectionStatus::Protected,
-                message.timestamp_sent,
-                Some(invite.contact_id()),
-            )
-            .await?;
 
         context.emit_event(EventType::SecurejoinJoinerProgress {
             contact_id: invite.contact_id(),
@@ -394,7 +373,7 @@ async fn joining_chat_id(
             };
 
             let chat_id = match chat::get_chat_id_by_grpid(context, grpid).await? {
-                Some((chat_id, _protected, _blocked)) => {
+                Some((chat_id, _blocked)) => {
                     chat_id.unblock_ex(context, Nosync).await?;
                     chat_id
                 }
@@ -405,7 +384,6 @@ async fn joining_chat_id(
                         grpid,
                         name,
                         Blocked::Not,
-                        ProtectionStatus::Unprotected, // protection is added later as needed
                         None,
                         smeared_time(context),
                     )

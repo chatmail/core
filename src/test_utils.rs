@@ -21,8 +21,7 @@ use tokio::runtime::Handle;
 use tokio::{fs, task};
 
 use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, ProtectionStatus,
-    add_to_chat_contacts_table, create_group_chat,
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -84,6 +83,7 @@ impl TestContextManager {
     pub async fn alice(&mut self) -> TestContext {
         TestContext::builder()
             .configure_alice()
+            .with_id_offset(1000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -92,6 +92,7 @@ impl TestContextManager {
     pub async fn bob(&mut self) -> TestContext {
         TestContext::builder()
             .configure_bob()
+            .with_id_offset(2000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -100,6 +101,7 @@ impl TestContextManager {
     pub async fn charlie(&mut self) -> TestContext {
         TestContext::builder()
             .configure_charlie()
+            .with_id_offset(3000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -108,6 +110,7 @@ impl TestContextManager {
     pub async fn dom(&mut self) -> TestContext {
         TestContext::builder()
             .configure_dom()
+            .with_id_offset(4000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -116,6 +119,7 @@ impl TestContextManager {
     pub async fn elena(&mut self) -> TestContext {
         TestContext::builder()
             .configure_elena()
+            .with_id_offset(5000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -124,6 +128,7 @@ impl TestContextManager {
     pub async fn fiona(&mut self) -> TestContext {
         TestContext::builder()
             .configure_fiona()
+            .with_id_offset(6000)
             .with_log_sink(self.log_sink.clone())
             .build(Some(&mut self.used_names))
             .await
@@ -294,6 +299,11 @@ pub struct TestContextBuilder {
     /// so the caller should store the LogSink elsewhere to
     /// prevent it from being dropped immediately.
     log_sink: Option<LogSink>,
+
+    /// Offset for chat-,message-,contact ids.
+    ///
+    /// This makes tests fail where ids from different accounts were mixed up.
+    id_offset: Option<u32>,
 }
 
 impl TestContextBuilder {
@@ -359,6 +369,14 @@ impl TestContextBuilder {
         self
     }
 
+    /// Adds an offset for chat-, message-, contact IDs.
+    ///
+    /// This makes it harder to accidentally mix up IDs from different accounts.
+    pub fn with_id_offset(mut self, offset: u32) -> Self {
+        self.id_offset = Some(offset);
+        self
+    }
+
     /// Builds the [`TestContext`].
     pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
@@ -391,6 +409,22 @@ impl TestContextBuilder {
             key::store_self_keypair(&test_context, &key_pair)
                 .await
                 .expect("Failed to save key");
+
+            if let Some(offset) = self.id_offset {
+                test_context
+                    .ctx
+                    .sql
+                    .execute(
+                        "UPDATE sqlite_sequence SET seq = ?
+                        WHERE name = 'contacts'
+                        OR name = 'chats'
+                        OR name = 'msgs'",
+                        (offset,),
+                    )
+                    .await
+                    .expect("Failed set id offset");
+            }
+
             test_context
         } else {
             TestContext::new_internal(None, self.log_sink).await
@@ -440,21 +474,33 @@ impl TestContext {
     ///
     /// This is a shortcut which configures alice@example.org with a fixed key.
     pub async fn new_alice() -> Self {
-        Self::builder().configure_alice().build(None).await
+        Self::builder()
+            .configure_alice()
+            .with_id_offset(11000)
+            .build(None)
+            .await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures bob@example.net with a fixed key.
     pub async fn new_bob() -> Self {
-        Self::builder().configure_bob().build(None).await
+        Self::builder()
+            .configure_bob()
+            .with_id_offset(12000)
+            .build(None)
+            .await
     }
 
     /// Creates a new configured [`TestContext`].
     ///
     /// This is a shortcut which configures fiona@example.net with a fixed key.
     pub async fn new_fiona() -> Self {
-        Self::builder().configure_fiona().build(None).await
+        Self::builder()
+            .configure_fiona()
+            .with_id_offset(13000)
+            .build(None)
+            .await
     }
 
     /// Print current chat state.
@@ -1050,7 +1096,7 @@ impl TestContext {
         };
         writeln!(
             res,
-            "{}#{}: {} [{}]{}{}{} {}",
+            "{}#{}: {} [{}]{}{}{}",
             sel_chat.typ,
             sel_chat.get_id(),
             sel_chat.get_name(),
@@ -1067,11 +1113,6 @@ impl TestContext {
                     _ => " Icon: Err".to_string(),
                 },
                 _ => "".to_string(),
-            },
-            if sel_chat.is_protected() {
-                "🛡️"
-            } else {
-                ""
             },
         )
         .unwrap();
@@ -1103,11 +1144,10 @@ impl TestContext {
 
     pub async fn create_group_with_members(
         &self,
-        protect: ProtectionStatus,
         chat_name: &str,
         members: &[&TestContext],
     ) -> ChatId {
-        let chat_id = create_group_chat(self, protect, chat_name).await.unwrap();
+        let chat_id = create_group(self, chat_name).await.unwrap();
         let mut to_add = vec![];
         for member in members {
             let contact_id = self.add_or_lookup_contact_id(member).await;
@@ -1666,5 +1706,33 @@ mod tests {
     fn test_new_test_context() {
         let runtime = tokio::runtime::Runtime::new().expect("unable to create tokio runtime");
         runtime.block_on(TestContext::new());
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_id_offset() {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let fiona = tcm.fiona().await;
+
+        // chat ids
+        let alice_bob_chat = alice.create_chat(&bob).await;
+        let bob_alice_chat = bob.create_chat(&alice).await;
+        assert_ne!(alice_bob_chat.id, bob_alice_chat.id);
+
+        // contact ids
+        let alice_fiona_contact_id = alice.add_or_lookup_contact_id(&fiona).await;
+        let fiona_fiona_contact_id = bob.add_or_lookup_contact_id(&fiona).await;
+        assert_ne!(alice_fiona_contact_id, fiona_fiona_contact_id);
+
+        // message ids
+        let alice_group_id = alice
+            .create_group_with_members("test group", &[&bob, &fiona])
+            .await;
+        let alice_sent_msg = alice.send_text(alice_group_id, "testing").await;
+        let bob_received_id = bob.recv_msg(&alice_sent_msg).await;
+        assert_ne!(alice_sent_msg.sender_msg_id, bob_received_id.id);
+        let fiona_received_id = fiona.recv_msg(&alice_sent_msg).await;
+        assert_ne!(bob_received_id.id, fiona_received_id.id);
     }
 }

@@ -4,13 +4,9 @@ pub(crate) mod data;
 
 use anyhow::Result;
 use deltachat_contact_tools::EmailAddress;
-use hickory_resolver::name_server::TokioConnectionProvider;
-use hickory_resolver::{Resolver, TokioResolver, config};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
-use crate::context::Context;
-use crate::log::warn;
 use crate::provider::data::{PROVIDER_DATA, PROVIDER_IDS};
 
 /// Provider status according to manual testing.
@@ -82,13 +78,9 @@ pub enum UsernamePattern {
 
 /// Type of OAuth 2 authorization.
 #[derive(Debug, PartialEq, Eq)]
-#[repr(u8)]
 pub enum Oauth2Authorizer {
     /// Yandex.
-    Yandex = 1,
-
-    /// Gmail.
-    Gmail = 2,
+    Yandex,
 }
 
 /// Email server endpoint.
@@ -175,61 +167,17 @@ impl ProviderOptions {
     }
 }
 
-/// Get resolver to query MX records.
-///
-/// We first try to read the system's resolver from `/etc/resolv.conf`.
-/// This does not work at least on some Androids, therefore we fallback
-/// to the default `ResolverConfig` which uses eg. to google's `8.8.8.8` or `8.8.4.4`.
-fn get_resolver() -> Result<TokioResolver> {
-    if let Ok(resolver) = TokioResolver::builder_tokio() {
-        return Ok(resolver.build());
-    }
-    let resolver = Resolver::builder_with_config(
-        config::ResolverConfig::default(),
-        TokioConnectionProvider::default(),
-    );
-    Ok(resolver.build())
-}
-
 /// Returns provider for the given an e-mail address.
 ///
 /// Returns an error if provided address is not valid.
-pub async fn get_provider_info_by_addr(
-    context: &Context,
-    addr: &str,
-    skip_mx: bool,
-) -> Result<Option<&'static Provider>> {
+pub fn get_provider_info_by_addr(addr: &str) -> Result<Option<&'static Provider>> {
     let addr = EmailAddress::new(addr)?;
 
-    let provider = get_provider_info(context, &addr.domain, skip_mx).await;
-    Ok(provider)
-}
-
-/// Returns provider for the given domain.
-///
-/// This function looks up domain in offline database first. If not
-/// found, it queries MX record for the domain and looks up offline
-/// database for MX domains.
-pub async fn get_provider_info(
-    context: &Context,
-    domain: &str,
-    skip_mx: bool,
-) -> Option<&'static Provider> {
-    if let Some(provider) = get_provider_by_domain(domain) {
-        return Some(provider);
-    }
-
-    if !skip_mx {
-        if let Some(provider) = get_provider_by_mx(context, domain).await {
-            return Some(provider);
-        }
-    }
-
-    None
+    Ok(get_provider_info(&addr.domain))
 }
 
 /// Finds a provider in offline database based on domain.
-pub fn get_provider_by_domain(domain: &str) -> Option<&'static Provider> {
+pub fn get_provider_info(domain: &str) -> Option<&'static Provider> {
     let domain = domain.to_lowercase();
     for (pattern, provider) in PROVIDER_DATA {
         if let Some(suffix) = pattern.strip_prefix('*') {
@@ -241,51 +189,6 @@ pub fn get_provider_by_domain(domain: &str) -> Option<&'static Provider> {
             }
         } else if pattern == domain {
             return Some(provider);
-        }
-    }
-
-    None
-}
-
-/// Finds a provider based on MX record for the given domain.
-///
-/// For security reasons, only Gmail can be configured this way.
-pub async fn get_provider_by_mx(context: &Context, domain: &str) -> Option<&'static Provider> {
-    let Ok(resolver) = get_resolver() else {
-        warn!(context, "Cannot get a resolver to check MX records.");
-        return None;
-    };
-
-    let mut fqdn: String = domain.to_string();
-    if !fqdn.ends_with('.') {
-        fqdn.push('.');
-    }
-
-    let Ok(mx_domains) = resolver.mx_lookup(fqdn).await else {
-        warn!(context, "Cannot resolve MX records for {domain:?}.");
-        return None;
-    };
-
-    for (provider_domain_pattern, provider) in PROVIDER_DATA {
-        if provider.id != "gmail" {
-            // MX lookup is limited to Gmail for security reasons
-            continue;
-        }
-
-        if provider_domain_pattern.starts_with('*') {
-            // Skip wildcard patterns.
-            continue;
-        }
-
-        let provider_fqdn = provider_domain_pattern.to_string() + ".";
-        let provider_fqdn_dot = ".".to_string() + &provider_fqdn;
-
-        for mx_domain in mx_domains.iter() {
-            let mx_domain = mx_domain.exchange().to_lowercase().to_utf8();
-
-            if mx_domain == provider_fqdn || mx_domain.ends_with(&provider_fqdn_dot) {
-                return Some(provider);
-            }
         }
     }
 
@@ -304,24 +207,23 @@ pub fn get_provider_by_id(id: &str) -> Option<&'static Provider> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_utils::TestContext;
 
     #[test]
     fn test_get_provider_by_domain_unexistant() {
-        let provider = get_provider_by_domain("unexistant.org");
+        let provider = get_provider_info("unexistant.org");
         assert!(provider.is_none());
     }
 
     #[test]
     fn test_get_provider_by_domain_mixed_case() {
-        let provider = get_provider_by_domain("nAUta.Cu").unwrap();
+        let provider = get_provider_info("nAUta.Cu").unwrap();
         assert!(provider.status == Status::Ok);
     }
 
     #[test]
-    fn test_get_provider_by_domain() {
+    fn test_get_provider_info() {
         let addr = "nauta.cu";
-        let provider = get_provider_by_domain(addr).unwrap();
+        let provider = get_provider_info(addr).unwrap();
         assert!(provider.status == Status::Ok);
         let server = &provider.server[0];
         assert_eq!(server.protocol, Protocol::Imap);
@@ -336,13 +238,17 @@ mod tests {
         assert_eq!(server.port, 25);
         assert_eq!(server.username_pattern, UsernamePattern::Email);
 
-        let provider = get_provider_by_domain("gmail.com").unwrap();
+        let provider = get_provider_info("gmail.com").unwrap();
         assert!(provider.status == Status::Preparation);
         assert!(!provider.before_login_hint.is_empty());
         assert!(!provider.overview_page.is_empty());
 
-        let provider = get_provider_by_domain("googlemail.com").unwrap();
+        let provider = get_provider_info("googlemail.com").unwrap();
         assert!(provider.status == Status::Preparation);
+
+        assert!(get_provider_info("").is_none());
+        assert!(get_provider_info("google.com").unwrap().id == "gmail");
+        assert!(get_provider_info("example@google.com").is_none());
     }
 
     #[test]
@@ -352,38 +258,9 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_get_provider_info() {
-        let t = TestContext::new().await;
-        assert!(get_provider_info(&t, "", false).await.is_none());
-        assert!(get_provider_info(&t, "google.com", false).await.unwrap().id == "gmail");
-        assert!(
-            get_provider_info(&t, "example@google.com", false)
-                .await
-                .is_none()
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_provider_info_by_addr() -> Result<()> {
-        let t = TestContext::new().await;
-        assert!(
-            get_provider_info_by_addr(&t, "google.com", false)
-                .await
-                .is_err()
-        );
-        assert!(
-            get_provider_info_by_addr(&t, "example@google.com", false)
-                .await?
-                .unwrap()
-                .id
-                == "gmail"
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_get_resolver() -> Result<()> {
-        assert!(get_resolver().is_ok());
+        assert!(get_provider_info_by_addr("google.com").is_err());
+        assert!(get_provider_info_by_addr("example@google.com")?.unwrap().id == "gmail");
         Ok(())
     }
 }

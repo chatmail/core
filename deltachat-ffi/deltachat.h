@@ -1763,9 +1763,7 @@ dc_chat_t*      dc_get_chat                  (dc_context_t* context, uint32_t ch
  *
  * @memberof dc_context_t
  * @param context The context object.
- * @param protect If set to 1 the function creates group with protection initially enabled.
- *     Only verified members are allowed in these groups
- *     and end-to-end-encryption is always enabled.
+ * @param protect Deprecated 2025-08-31, ignored.
  * @param name The name of the group chat to create.
  *     The name may be changed later using dc_set_chat_name().
  *     To find out the name of a group later, see dc_chat_get_name()
@@ -3893,18 +3891,12 @@ int             dc_chat_can_send              (const dc_chat_t* chat);
 
 
 /**
- * Check if a chat is protected.
- *
- * Only verified contacts
- * as determined by dc_contact_is_verified()
- * can be added to protected chats.
- *
- * Protected chats are created using dc_create_group_chat()
- * by setting the 'protect' parameter to 1.
+ * Deprecated, always returns 0.
  *
  * @memberof dc_chat_t
  * @param chat The chat object.
- * @return 1=chat protected, 0=chat is not protected.
+ * @return Always 0.
+ * @deprecated 2025-09-09
  */
 int             dc_chat_is_protected         (const dc_chat_t* chat);
 
@@ -5353,11 +5345,9 @@ dc_provider_t*  dc_provider_new_from_email            (const dc_context_t* conte
 
 
 /**
- * Create a provider struct for the given e-mail address by local and DNS lookup.
+ * Create a provider struct for the given e-mail address by local lookup.
  *
- * First lookup is done from the local database as of dc_provider_new_from_email().
- * If the first lookup fails, an additional DNS lookup is done,
- * trying to figure out the provider belonging to custom domains.
+ * DNS lookup is not used anymore and this function is deprecated.
  *
  * @memberof dc_provider_t
  * @param context The context object.
@@ -5365,6 +5355,7 @@ dc_provider_t*  dc_provider_new_from_email            (const dc_context_t* conte
  * @return A dc_provider_t struct which can be used with the dc_provider_get_*
  *     accessor functions. If no provider info is found, NULL will be
  *     returned.
+ * @deprecated 2025-10-17 use dc_provider_new_from_email() instead.
  */
 dc_provider_t*  dc_provider_new_from_email_with_dns    (const dc_context_t* context, const char* email);
 
