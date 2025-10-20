@@ -16,7 +16,7 @@ use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use typescript_type_def::TypeDef;
 
-use super::chat::JSONRPCChatType;
+use super::chat::JsonrpcChatType;
 use super::color_int_to_hex_string;
 use super::contact::ContactObject;
 use super::reactions::JsonrpcReactions;
@@ -532,8 +532,7 @@ pub struct MessageSearchResult {
     chat_profile_image: Option<String>,
     chat_color: String,
     chat_name: String,
-    chat_type: u32,
-    chat_type: JSONRPCChatType,
+    chat_type: JsonrpcChatType,
     is_chat_contact_request: bool,
     is_chat_archived: bool,
     message: String,

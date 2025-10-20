@@ -45,7 +45,7 @@ pub struct FullChat {
     archived: bool,
     pinned: bool,
     // subtitle  - will be moved to frontend because it uses translation functions
-    chat_type: JSONRPCChatType,
+    chat_type: JsonrpcChatType,
     is_unpromoted: bool,
     is_self_talk: bool,
     contacts: Vec<ContactObject>,
@@ -191,7 +191,7 @@ pub struct BasicChat {
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
-    chat_type: JSONRPCChatType,
+    chat_type: JsonrpcChatType,
     is_unpromoted: bool,
     is_self_talk: bool,
     color: String,
@@ -276,7 +276,7 @@ impl JsonrpcChatVisibility {
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "ChatType")]
-pub enum JSONRPCChatType {
+pub enum JsonrpcChatType {
     Single,
     Group,
     Mailinglist,
@@ -284,26 +284,26 @@ pub enum JSONRPCChatType {
     InBroadcast,
 }
 
-impl From<Chattype> for JSONRPCChatType {
+impl From<Chattype> for JsonrpcChatType {
     fn from(chattype: Chattype) -> Self {
         match chattype {
-            Chattype::Single => JSONRPCChatType::Single,
-            Chattype::Group => JSONRPCChatType::Group,
-            Chattype::Mailinglist => JSONRPCChatType::Mailinglist,
-            Chattype::OutBroadcast => JSONRPCChatType::OutBroadcast,
-            Chattype::InBroadcast => JSONRPCChatType::InBroadcast,
+            Chattype::Single => JsonrpcChatType::Single,
+            Chattype::Group => JsonrpcChatType::Group,
+            Chattype::Mailinglist => JsonrpcChatType::Mailinglist,
+            Chattype::OutBroadcast => JsonrpcChatType::OutBroadcast,
+            Chattype::InBroadcast => JsonrpcChatType::InBroadcast,
         }
     }
 }
 
-impl From<JSONRPCChatType> for Chattype {
-    fn from(chattype: JSONRPCChatType) -> Self {
+impl From<JsonrpcChatType> for Chattype {
+    fn from(chattype: JsonrpcChatType) -> Self {
         match chattype {
-            JSONRPCChatType::Single => Chattype::Single,
-            JSONRPCChatType::Group => Chattype::Group,
-            JSONRPCChatType::Mailinglist => Chattype::Mailinglist,
-            JSONRPCChatType::OutBroadcast => Chattype::OutBroadcast,
-            JSONRPCChatType::InBroadcast => Chattype::InBroadcast,
+            JsonrpcChatType::Single => Chattype::Single,
+            JsonrpcChatType::Group => Chattype::Group,
+            JsonrpcChatType::Mailinglist => Chattype::Mailinglist,
+            JsonrpcChatType::OutBroadcast => Chattype::OutBroadcast,
+            JsonrpcChatType::InBroadcast => Chattype::InBroadcast,
         }
     }
 }

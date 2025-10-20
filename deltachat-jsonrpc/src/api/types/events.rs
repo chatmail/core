@@ -2,7 +2,7 @@ use deltachat::{Event as CoreEvent, EventType as CoreEventType};
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
-use super::chat::JSONRPCChatType;
+use super::chat::JsonrpcChatType;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -308,7 +308,7 @@ pub enum EventType {
         /// The type of the joined chat.
         /// This can take the same values
         /// as `BasicChat.chatType` ([`crate::api::types::chat::BasicChat::chat_type`]).
-        chat_type: JSONRPCChatType,
+        chat_type: JsonrpcChatType,
         /// ID of the chat in case of success.
         chat_id: u32,
 
