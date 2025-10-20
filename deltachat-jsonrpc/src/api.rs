@@ -59,7 +59,7 @@ use types::webxdc::WebxdcMessageInfo;
 
 use self::types::message::{MessageInfo, MessageLoadResult};
 use self::types::{
-    chat::{BasicChat, JSONRPCChatVisibility, MuteDuration},
+    chat::{BasicChat, JsonrpcChatVisibility, MuteDuration},
     location::JsonrpcLocation,
     message::{
         JSONRPCMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
@@ -1051,7 +1051,7 @@ impl CommandApi {
         &self,
         account_id: u32,
         chat_id: u32,
-        visibility: JSONRPCChatVisibility,
+        visibility: JsonrpcChatVisibility,
     ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
 
