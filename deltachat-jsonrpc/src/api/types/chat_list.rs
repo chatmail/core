@@ -11,7 +11,7 @@ use num_traits::cast::ToPrimitive;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
-use super::chat::JSONRPCChatType;
+use super::chat::JsonrpcChatType;
 use super::color_int_to_hex_string;
 use super::message::MessageViewtype;
 
@@ -24,7 +24,7 @@ pub enum ChatListItemFetchResult {
         name: String,
         avatar_path: Option<String>,
         color: String,
-        chat_type: JSONRPCChatType,
+        chat_type: JsonrpcChatType,
         last_updated: Option<i64>,
         summary_text1: String,
         summary_text2: String,
