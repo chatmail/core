@@ -581,7 +581,7 @@ impl MessageSearchResult {
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", rename = "MessageListItem", tag = "kind")]
-pub enum JSONRPCMessageListItem {
+pub enum JsonrpcMessageListItem {
     Message {
         msg_id: u32,
     },
@@ -594,13 +594,13 @@ pub enum JSONRPCMessageListItem {
     },
 }
 
-impl From<ChatItem> for JSONRPCMessageListItem {
+impl From<ChatItem> for JsonrpcMessageListItem {
     fn from(item: ChatItem) -> Self {
         match item {
-            ChatItem::Message { msg_id } => JSONRPCMessageListItem::Message {
+            ChatItem::Message { msg_id } => JsonrpcMessageListItem::Message {
                 msg_id: msg_id.to_u32(),
             },
-            ChatItem::DayMarker { timestamp } => JSONRPCMessageListItem::DayMarker { timestamp },
+            ChatItem::DayMarker { timestamp } => JsonrpcMessageListItem::DayMarker { timestamp },
         }
     }
 }

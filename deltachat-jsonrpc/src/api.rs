@@ -62,7 +62,7 @@ use self::types::{
     chat::{BasicChat, JsonrpcChatVisibility, MuteDuration},
     location::JsonrpcLocation,
     message::{
-        JSONRPCMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
+        JsonrpcMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
 use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
@@ -1256,7 +1256,7 @@ impl CommandApi {
         chat_id: u32,
         info_only: bool,
         add_daymarker: bool,
-    ) -> Result<Vec<JSONRPCMessageListItem>> {
+    ) -> Result<Vec<JsonrpcMessageListItem>> {
         let ctx = self.get_context(account_id).await?;
         let msg = get_chat_msgs_ex(
             &ctx,
@@ -1270,7 +1270,7 @@ impl CommandApi {
         Ok(msg
             .iter()
             .map(|chat_item| (*chat_item).into())
-            .collect::<Vec<JSONRPCMessageListItem>>())
+            .collect::<Vec<JsonrpcMessageListItem>>())
     }
 
     async fn get_message(&self, account_id: u32, msg_id: u32) -> Result<MessageObject> {
