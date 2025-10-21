@@ -6956,11 +6956,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used to build the string returned by dc_get_contact_encrinfo().
 #define DC_STR_ENCR_NONE                  28
 
-/// "This message was encrypted for another setup."
-///
-/// Used as message text if decryption fails.
-#define DC_STR_CANTDECRYPT_MSG_BODY       29
-
 /// "Fingerprints"
 ///
 /// Used to build the string returned by dc_get_contact_encrinfo().
@@ -7677,12 +7672,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// `%1$s` will be replaced by the provider's domain.
 #define DC_STR_INVALID_UNENCRYPTED_MAIL 174
-
-/// "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions."
-///
-/// Added to the device chat if could not decrypt a new outgoing message (i.e. not when fetching
-/// existing messages). But no more than once a day.
-#define DC_STR_CANT_DECRYPT_OUTGOING_MSGS 175
 
 /// "You reacted %1$s to '%2$s'"
 ///
