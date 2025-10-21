@@ -3530,9 +3530,6 @@ async fn apply_in_broadcast_changes(
                 info!(context, "No-op broadcast 'Member added' message (TRASH)");
                 msg = "".to_string();
             } else {
-                chat.id
-                    .add_encrypted_msg(context, mime_parser.timestamp_sent)
-                    .await?;
                 msg = stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await;
             }
 

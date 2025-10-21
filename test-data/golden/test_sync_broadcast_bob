@@ -2,7 +2,7 @@ InBroadcast#Chat#2002: Channel [1 member(s)]
 --------------------------------------------------------------------------------
 Msg#2004: info (Contact#Contact#Info): Establishing guaranteed end-to-end encryption, please wait… [NOTICED][INFO]
 Msg#2002: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
-Msg#2009🔒:  (Contact#Contact#2001): Member Me added by alice@example.org. [FRESH][INFO]
-Msg#2011🔒:  (Contact#Contact#2001): hi [FRESH]
-Msg#2012🔒:  (Contact#Contact#2001): Member Me removed by alice@example.org. [FRESH][INFO]
+Msg#2008🔒:  (Contact#Contact#2001): Member Me added by alice@example.org. [FRESH][INFO]
+Msg#2010🔒:  (Contact#Contact#2001): hi [FRESH]
+Msg#2011🔒:  (Contact#Contact#2001): Member Me removed by alice@example.org. [FRESH][INFO]
 --------------------------------------------------------------------------------
