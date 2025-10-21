@@ -1271,6 +1271,45 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 135)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE stats_securejoin_sources(
+                source INTEGER PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            CREATE TABLE stats_securejoin_uipaths(
+                uipath INTEGER PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            CREATE TABLE stats_securejoin_invites(
+                already_existed INTEGER NOT NULL,
+                already_verified INTEGER NOT NULL,
+                type TEXT NOT NULL
+            ) STRICT;
+            CREATE TABLE stats_msgs(
+                chattype INTEGER PRIMARY KEY,
+                verified INTEGER NOT NULL DEFAULT 0,
+                unverified_encrypted INTEGER NOT NULL DEFAULT 0,
+                unencrypted INTEGER NOT NULL DEFAULT 0,
+                only_to_self INTEGER NOT NULL DEFAULT 0,
+                last_counted_msg_id INTEGER NOT NULL DEFAULT 0
+            ) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
+    inc_and_check(&mut migration_version, 136)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE stats_sending_enabled_events(timestamp INTEGER NOT NULL) STRICT;
+            CREATE TABLE stats_sending_disabled_events(timestamp INTEGER NOT NULL) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

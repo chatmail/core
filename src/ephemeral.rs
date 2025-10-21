@@ -80,12 +80,12 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
-use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;
 use crate::tools::{SystemTime, duration_to_str, time};
+use crate::{location, stats};
 
 /// Ephemeral timer value.
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
@@ -610,7 +610,7 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
                 + Duration::from_secs(1)
         } else {
             // no messages to be deleted for now, wait long for one to occur
-            now + Duration::from_secs(86400)
+            now + Duration::from_secs(86400) // 1 day
         };
 
         if let Ok(duration) = until.duration_since(now) {
@@ -636,6 +636,12 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
                 }
             }
         }
+
+        // Make sure that the statistics stay correct by updating them _before_ deleting messages:
+        stats::maybe_update_message_stats(context)
+            .await
+            .log_err(context)
+            .ok();
 
         delete_expired_messages(context, time())
             .await

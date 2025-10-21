@@ -40,6 +40,7 @@ use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
 use crate::simplify;
+use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{self, buf_compress, remove_subject_prefix};
@@ -1700,6 +1701,8 @@ async fn add_parts(
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL {
+        MessageState::InNoticed
     } else {
         MessageState::InFresh
     };

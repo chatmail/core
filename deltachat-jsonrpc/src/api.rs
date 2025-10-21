@@ -66,7 +66,7 @@ use self::types::{
     },
 };
 use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
-use crate::api::types::qr::QrObject;
+use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
 
 #[derive(Debug)]
 struct AccountState {
@@ -379,11 +379,6 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
         let file = Path::new(&path);
         Ok(BlobObject::create_and_deduplicate(&ctx, file, file)?.to_abs_path())
-    }
-
-    async fn draft_self_report(&self, account_id: u32) -> Result<u32> {
-        let ctx = self.get_context(account_id).await?;
-        Ok(ctx.draft_self_report().await?.to_u32())
     }
 
     /// Sets the given configuration key.
@@ -881,6 +876,38 @@ impl CommandApi {
     async fn secure_join(&self, account_id: u32, qr: String) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         let chat_id = securejoin::join_securejoin(&ctx, &qr).await?;
+        Ok(chat_id.to_u32())
+    }
+
+    /// Like `secure_join()`, but allows to pass a source and a UI-path.
+    /// You only need this if your UI has an option to send statistics
+    /// to Delta Chat's developers.
+    ///
+    /// **source**: The source where the QR code came from.
+    /// E.g. a link that was clicked inside or outside Delta Chat,
+    /// the "Paste from Clipboard" action,
+    /// the "Load QR code as image" action,
+    /// or a QR code scan.
+    ///
+    /// **uipath**: Which UI path did the user use to arrive at the QR code screen.
+    /// If the SecurejoinSource was ExternalLink or InternalLink,
+    /// pass `None` here, because the QR code screen wasn't even opened.
+    /// ```
+    async fn secure_join_with_ux_info(
+        &self,
+        account_id: u32,
+        qr: String,
+        source: Option<SecurejoinSource>,
+        uipath: Option<SecurejoinUiPath>,
+    ) -> Result<u32> {
+        let ctx = self.get_context(account_id).await?;
+        let chat_id = securejoin::join_securejoin_with_ux_info(
+            &ctx,
+            &qr,
+            source.map(Into::into),
+            uipath.map(Into::into),
+        )
+        .await?;
         Ok(chat_id.to_u32())
     }
 
