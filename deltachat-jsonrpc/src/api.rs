@@ -54,15 +54,15 @@ use types::events::Event;
 use types::http::HttpResponse;
 use types::message::{MessageData, MessageObject, MessageReadReceipt};
 use types::provider_info::ProviderInfo;
-use types::reactions::JSONRPCReactions;
+use types::reactions::JsonrpcReactions;
 use types::webxdc::WebxdcMessageInfo;
 
 use self::types::message::{MessageInfo, MessageLoadResult};
 use self::types::{
-    chat::{BasicChat, JSONRPCChatVisibility, MuteDuration},
+    chat::{BasicChat, JsonrpcChatVisibility, MuteDuration},
     location::JsonrpcLocation,
     message::{
-        JSONRPCMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
+        JsonrpcMessageListItem, MessageNotificationInfo, MessageSearchResult, MessageViewtype,
     },
 };
 use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
@@ -1049,7 +1049,7 @@ impl CommandApi {
         &self,
         account_id: u32,
         chat_id: u32,
-        visibility: JSONRPCChatVisibility,
+        visibility: JsonrpcChatVisibility,
     ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
 
@@ -1254,7 +1254,7 @@ impl CommandApi {
         chat_id: u32,
         info_only: bool,
         add_daymarker: bool,
-    ) -> Result<Vec<JSONRPCMessageListItem>> {
+    ) -> Result<Vec<JsonrpcMessageListItem>> {
         let ctx = self.get_context(account_id).await?;
         let msg = get_chat_msgs_ex(
             &ctx,
@@ -1268,7 +1268,7 @@ impl CommandApi {
         Ok(msg
             .iter()
             .map(|chat_item| (*chat_item).into())
-            .collect::<Vec<JSONRPCMessageListItem>>())
+            .collect::<Vec<JsonrpcMessageListItem>>())
     }
 
     async fn get_message(&self, account_id: u32, msg_id: u32) -> Result<MessageObject> {
@@ -2189,7 +2189,7 @@ impl CommandApi {
         &self,
         account_id: u32,
         message_id: u32,
-    ) -> Result<Option<JSONRPCReactions>> {
+    ) -> Result<Option<JsonrpcReactions>> {
         let ctx = self.get_context(account_id).await?;
         let reactions = get_msg_reactions(&ctx, MsgId::new(message_id)).await?;
         if reactions.is_empty() {
