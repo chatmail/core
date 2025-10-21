@@ -25,8 +25,8 @@ use crate::tools::{create_id, time};
 
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
-const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
-// const SENDING_INTERVAL_SECONDS: i64 = 60; // 1 minute (for testing)
+// const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
+const SENDING_INTERVAL_SECONDS: i64 = 60; // 1 minute (for testing)
 const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less than the lowest ephemeral messages timeout)
 
 #[derive(Serialize)]
