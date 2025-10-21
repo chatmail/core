@@ -903,7 +903,7 @@ impl CommandApi {
     ///
     /// **uipath**: Which UI path did the user use to arrive at the QR code screen.
     /// If the SecurejoinSource was ExternalLink or InternalLink,
-    /// pass null here, because the QR code screen wasn't even opened.
+    /// pass `None` here, because the QR code screen wasn't even opened.
     /// ```
     async fn secure_join_with_ux_info(
         &self,
