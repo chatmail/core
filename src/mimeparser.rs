@@ -34,7 +34,7 @@ use crate::sync::SyncItems;
 use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
-use crate::{chatlist_events, location, stock_str, tools};
+use crate::{chatlist_events, location, tools};
 
 /// Public key extracted from `Autocrypt-Gossip`
 /// header with associated information.
@@ -622,13 +622,12 @@ impl MimeMessage {
                     parser.parse_mime_recursive(context, mail, false).await?;
                 }
                 Err(err) => {
-                    let msg_body = stock_str::cant_decrypt_msg_body(context).await;
-                    let txt = format!("[{msg_body}]");
+                    let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
 
                     let part = Part {
                         typ: Viewtype::Text,
-                        msg_raw: Some(txt.clone()),
-                        msg: txt,
+                        msg_raw: Some(txt.to_string()),
+                        msg: txt.to_string(),
                         // Don't change the error prefix for now,
                         // receive_imf.rs:lookup_chat_by_reply() checks it.
                         error: Some(format!("Decrypting failed: {err:#}")),
