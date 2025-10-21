@@ -61,6 +61,13 @@ pub struct FullChat {
     is_contact_request: bool,
 
     is_device_chat: bool,
+    /// Note that this is different from
+    /// [`ChatListItem::is_self_in_group`](`crate::api::types::chat_list::ChatListItemFetchResult::ChatListItem::is_self_in_group`).
+    /// This property should only be accessed
+    /// when [`FullChat::chat_type`] is [`Chattype::Group`].
+    //
+    // We could utilize [`Chat::is_self_in_chat`],
+    // but that would be an extra DB query.
     self_in_group: bool,
     is_muted: bool,
     ephemeral_timer: u32, //TODO look if there are more important properties in newer core versions
