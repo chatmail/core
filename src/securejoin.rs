@@ -23,8 +23,8 @@ use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
 use crate::tools::{create_id, time};
-use crate::{SecurejoinSource, SecurejoinUiPath, token};
-use crate::{chatlist_events, stats};
+use crate::{SecurejoinSource, stats};
+use crate::{SecurejoinUiPath, token};
 
 mod bob;
 mod qrinvite;

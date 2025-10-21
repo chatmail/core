@@ -1,7 +1,9 @@
 use std::time::Duration;
 
 use super::*;
-use crate::chat::{Chat, create_broadcast, create_group_chat, create_group_ex};
+use crate::chat::{
+    Chat, create_broadcast, create_group, create_group_unencrypted, get_chat_contacts,
+};
 use crate::mimeparser::SystemMessage;
 use crate::qr::check_qr;
 use crate::securejoin::{get_securejoin_qr, join_securejoin, join_securejoin_with_ux_info};
@@ -22,10 +24,14 @@ async fn test_maybe_send_stats() -> Result<()> {
 
     let chat_id = maybe_send_stats(alice).await?.unwrap();
     let msg = get_chat_msg(alice, chat_id, 0, 2).await;
-    assert_eq!(msg.get_info_type(), SystemMessage::ChatProtectionEnabled);
+    assert_eq!(msg.get_info_type(), SystemMessage::ChatE2ee);
 
     let chat = Chat::load_from_db(alice, chat_id).await?;
-    assert!(chat.is_protected());
+    assert!(chat.is_encrypted(alice).await?);
+    let contacts = get_chat_contacts(alice, chat_id).await?;
+    assert_eq!(contacts.len(), 1);
+    let contact = Contact::get_by_id(alice, contacts[0]).await?;
+    assert!(contact.is_verified(alice).await?);
 
     let msg = get_chat_msg(alice, chat_id, 1, 2).await;
     assert_eq!(msg.get_filename().unwrap(), "statistics.txt");
@@ -174,9 +180,7 @@ async fn test_message_stats() -> Result<()> {
         .unverified_encrypted += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
-    let group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "Pizza", &[bob])
-        .await;
+    let group = alice.create_group_with_members("Pizza", &[bob]).await;
     alice.send_text(group, "foo").await;
     expected
         .get_mut(&Chattype::Group)
@@ -191,19 +195,17 @@ async fn test_message_stats() -> Result<()> {
     expected.get_mut(&Chattype::Single).unwrap().only_to_self += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
-    let empty_group = create_group_chat(alice, ProtectionStatus::Unprotected, "Notes").await?;
+    let empty_group = create_group(alice, "Notes").await?;
     alice.send_text(empty_group, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
-    let empty_unencrypted = create_group_ex(alice, None, "Email thread").await?;
+    let empty_unencrypted = create_group_unencrypted(alice, "Email thread").await?;
     alice.send_text(empty_unencrypted, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().only_to_self += 1;
     check_stats(&update_get_stats(alice).await, &expected);
 
-    let group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "Pizza 2", &[bob])
-        .await;
+    let group = alice.create_group_with_members("Pizza 2", &[bob]).await;
     alice.send_text(group, "foo").await;
     expected.get_mut(&Chattype::Group).unwrap().verified += 1;
     check_stats(&update_get_stats(alice).await, &expected);
@@ -431,7 +433,7 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     });
     check_stats(alice, &expected).await;
 
-    let group_id = create_group_chat(bob, ProtectionStatus::Unprotected, "Group chat").await?;
+    let group_id = create_group(bob, "Group chat").await?;
     let qr = get_securejoin_qr(bob, Some(group_id)).await?;
 
     check_qr(alice, &qr).await?;
@@ -445,8 +447,7 @@ async fn test_stats_securejoin_invites() -> Result<()> {
 
     // A contact with Charlie exists already:
     alice.add_or_lookup_contact(charlie).await;
-    let group_id =
-        create_group_chat(charlie, ProtectionStatus::Unprotected, "Group chat 2").await?;
+    let group_id = create_group(charlie, "Group chat 2").await?;
     let qr = get_securejoin_qr(charlie, Some(group_id)).await?;
 
     check_qr(alice, &qr).await?;

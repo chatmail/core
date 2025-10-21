@@ -12,7 +12,7 @@ use pgp::types::PublicKeyTrait;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
 
-use crate::chat::{self, ChatId, MuteDuration, ProtectionStatus};
+use crate::chat::{self, ChatId, MuteDuration};
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
@@ -416,15 +416,6 @@ async fn get_stats_chat_id(context: &Context) -> Result<ChatId, anyhow::Error> {
         chat::set_muted(context, chat_id, MuteDuration::Forever).await?;
         chat_id
     };
-
-    chat_id
-        .set_protection(
-            context,
-            ProtectionStatus::Protected,
-            time(),
-            Some(contact_id),
-        )
-        .await?;
 
     Ok(chat_id)
 }
