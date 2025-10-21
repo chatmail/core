@@ -516,13 +516,13 @@ async fn test_stats_enable_disable_timestamps() -> Result<()> {
         let enabled_ts = enabled_ts
             .as_array()
             .unwrap()
-            .into_iter()
+            .iter()
             .map(|v| v.as_i64().unwrap())
             .collect();
         let disabled_ts = disabled_ts
             .as_array()
             .unwrap()
-            .into_iter()
+            .iter()
             .map(|v| v.as_i64().unwrap())
             .collect();
 
