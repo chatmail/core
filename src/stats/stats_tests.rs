@@ -509,8 +509,8 @@ async fn test_stats_enable_disable_timestamps() -> Result<()> {
     async fn get_timestamps(context: &TestContext) -> (Vec<i64>, Vec<i64>) {
         let stats = get_stats(context).await.unwrap();
         let stats: serde_json::Value = serde_json::from_str(&stats).unwrap();
-        let enabled_ts = &stats["timestamps_when_sending_was_enabled"];
-        let disabled_ts = &stats["timestamps_when_sending_was_disabled"];
+        let enabled_ts = &stats["sending_enabled_timestamps"];
+        let disabled_ts = &stats["sending_disabled_timestamps"];
 
         let enabled_ts = enabled_ts
             .as_array()

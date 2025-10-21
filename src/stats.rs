@@ -13,7 +13,7 @@ use rusqlite::OptionalExtension;
 use serde::Serialize;
 
 use crate::chat::{self, ChatId, MuteDuration, ProtectionStatus};
-use crate::config::{Config, bool_from_config};
+use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
 use crate::context::{Context, get_version_str};
@@ -40,8 +40,8 @@ struct Statistics {
     securejoin_sources: SecurejoinSources,
     securejoin_uipaths: SecurejoinUiPaths,
     securejoin_invites: Vec<JoinedInvite>,
-    timestamps_when_sending_was_enabled: Vec<i64>,
-    timestamps_when_sending_was_disabled: Vec<i64>,
+    sending_enabled_timestamps: Vec<i64>,
+    sending_disabled_timestamps: Vec<i64>,
 }
 
 #[derive(Serialize, PartialEq)]
@@ -161,10 +161,10 @@ struct JoinedInvite {
     typ: String,
 }
 
-pub(crate) async fn pre_config_change(
+pub(crate) async fn pre_sending_config_change(
     context: &Context,
-    old_value: Option<String>,
-    new_value: Option<&str>,
+    old_value: bool,
+    new_value: bool,
 ) -> Result<()> {
     // These functions are no-ops if they were called in the past already;
     // just call them opportunistically:
@@ -172,9 +172,6 @@ pub(crate) async fn pre_config_change(
     // Make sure that StatsId is available for the UI,
     // in order to open the survey with the StatsId as a parameter:
     stats_id(context).await?;
-
-    let old_value = bool_from_config(old_value.as_deref());
-    let new_value = bool_from_config(new_value);
 
     if old_value != new_value {
         if new_value {
@@ -352,9 +349,9 @@ async fn get_stats(context: &Context) -> Result<String> {
         .map(|k| k.created_at().timestamp())
         .collect();
 
-    let timestamps_when_sending_was_enabled =
+    let sending_enabled_timestamps =
         get_timestamps(context, "stats_sending_enabled_events").await?;
-    let timestamps_when_sending_was_disabled =
+    let sending_disabled_timestamps =
         get_timestamps(context, "stats_sending_disabled_events").await?;
 
     let stats = Statistics {
@@ -367,8 +364,8 @@ async fn get_stats(context: &Context) -> Result<String> {
         securejoin_sources: get_securejoin_source_stats(context).await?,
         securejoin_uipaths: get_securejoin_uipath_stats(context).await?,
         securejoin_invites: get_securejoin_invite_stats(context).await?,
-        timestamps_when_sending_was_enabled,
-        timestamps_when_sending_was_disabled,
+        sending_enabled_timestamps,
+        sending_disabled_timestamps,
     };
 
     Ok(serde_json::to_string_pretty(&stats)?)
@@ -378,7 +375,7 @@ async fn get_timestamps(context: &Context, sql_table: &str) -> Result<Vec<i64>> 
     let res = context
         .sql
         .query_map(
-            &format!("SELECT timestamp FROM {sql_table}"),
+            &format!("SELECT timestamp FROM {sql_table} LIMIT 1000"),
             (),
             |row| row.get(0),
             |rows| {

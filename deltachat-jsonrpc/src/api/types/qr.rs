@@ -309,28 +309,28 @@ impl From<Qr> for QrObject {
 #[derive(Deserialize, TypeDef, schemars::JsonSchema)]
 pub enum SecurejoinSource {
     /// Because of some problem, it is unknown where the QR code came from.
-    Unknown = 0,
+    Unknown,
     /// The user opened a link somewhere outside Delta Chat
-    ExternalLink = 1,
+    ExternalLink,
     /// The user clicked on a link in a message inside Delta Chat
-    InternalLink = 2,
+    InternalLink,
     /// The user clicked "Paste from Clipboard" in the QR scan activity
-    Clipboard = 3,
+    Clipboard,
     /// The user clicked "Load QR code as image" in the QR scan activity
-    ImageLoaded = 4,
+    ImageLoaded,
     /// The user scanned a QR code
-    Scan = 5,
+    Scan,
 }
 
 #[derive(Deserialize, TypeDef, schemars::JsonSchema)]
 pub enum SecurejoinUiPath {
     /// The UI path is unknown, or the user didn't open the QR code screen at all.
-    Unknown = 0,
+    Unknown,
     /// The user directly clicked on the QR icon in the main screen
-    QrIcon = 1,
+    QrIcon,
     /// The user first clicked on the `+` button in the main screen,
     /// and then on "New Contact"
-    NewContact = 2,
+    NewContact,
 }
 
 impl From<SecurejoinSource> for deltachat::SecurejoinSource {

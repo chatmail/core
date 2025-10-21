@@ -738,7 +738,9 @@ impl Context {
         };
         if key == Config::StatsSending {
             let old_value = self.get_config(key).await?;
-            stats::pre_config_change(self, old_value, value).await?;
+            let old_value = bool_from_config(old_value.as_deref());
+            let new_value = bool_from_config(value);
+            stats::pre_sending_config_change(self, old_value, new_value).await?;
         }
         self.set_config_internal(key, value).await?;
         if key == Config::SentboxWatch {
