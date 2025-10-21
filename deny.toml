@@ -36,8 +36,6 @@ skip = [
      { name = "rand_chacha", version = "0.3.1" },
      { name = "rand_core", version = "0.6.4" },
      { name = "rand", version = "0.8.5" },
-     { name = "redox_syscall", version = "0.3.5" },
-     { name = "redox_syscall", version = "0.4.1" },
      { name = "rustix", version = "0.38.44" },
      { name = "serdect", version = "0.2.0" },
      { name = "spin", version = "0.9.8" },
