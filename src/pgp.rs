@@ -256,12 +256,10 @@ pub fn decrypt(
         shared_secrets = &[];
     }
 
-    // We always try out all passwords here, which is not great for performance.
-    // But benchmarking (see `benchmark_decrypting.rs`)
+    // We always try out all passwords here,
+    // but benchmarking (see `benchmark_decrypting.rs`)
     // showed that the performance impact is negligible.
-    // We could include a short (~2 character) identifier of the secret in cleartext
-    // (or just include the first 2 characters of the secret in cleartext)
-    // in order to narrow down the number of shared secrets that have to be tried out.
+    // We can improve this in the future if necessary.
     let message_password: Vec<Password> = shared_secrets
         .iter()
         .map(|p| Password::from(p.as_str()))

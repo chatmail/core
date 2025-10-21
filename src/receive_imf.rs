@@ -1544,7 +1544,7 @@ async fn do_chat_assignment(
                         } else {
                             warn!(
                                 context,
-                                "Not creating outgoing broadcast, because secret is unknown"
+                                "Not creating outgoing broadcast with id {listid}, because secret is unknown"
                             );
                         }
                     }
