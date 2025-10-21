@@ -1494,7 +1494,7 @@ impl Chat {
     /// Checks if the user is part of a chat
     /// and has basically the permissions to edit the chat therefore.
     /// The function does not check if the chat type allows editing of concrete elements.
-    pub(crate) async fn is_self_in_chat(&self, context: &Context) -> Result<bool> {
+    pub async fn is_self_in_chat(&self, context: &Context) -> Result<bool> {
         match self.typ {
             Chattype::Single | Chattype::OutBroadcast | Chattype::Mailinglist => Ok(true),
             Chattype::Group => is_contact_in_chat(context, self.id, ContactId::SELF).await,
