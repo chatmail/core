@@ -14,7 +14,6 @@ use tokio::fs;
 
 use crate::blob::BlobObject;
 use crate::configure::EnteredLoginParam;
-use crate::constants;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{LogExt, info};
@@ -23,6 +22,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
+use crate::{constants, stats};
 
 /// The available configuration keys.
 #[derive(
@@ -408,9 +408,22 @@ pub enum Config {
     /// used for signatures, encryption to self and included in `Autocrypt` header.
     KeyId,
 
-    /// This key is sent to the self_reporting bot so that the bot can recognize the user
+    /// Send statistics to Delta Chat's developers.
+    /// Can be exposed to the user as a setting.
+    StatsSending,
+
+    /// Last time statistics were sent to Delta Chat's developers
+    StatsLastSent,
+
+    /// Last time `update_message_stats()` was called
+    StatsLastUpdate,
+
+    /// This key is sent to the statistics bot so that the bot can recognize the user
     /// without storing the email address
-    SelfReportingId,
+    StatsId,
+
+    /// The last contact id that already existed when statistics-sending was enabled for the first time.
+    StatsLastOldContactId,
 
     /// MsgId of webxdc map integration.
     WebxdcIntegration,
@@ -576,8 +589,9 @@ impl Context {
     /// Returns boolean configuration value for the given key.
     pub async fn get_config_bool(&self, key: Config) -> Result<bool> {
         Ok(self
-            .get_config_parsed::<i32>(key)
+            .get_config(key)
             .await?
+            .and_then(|s| s.parse::<i32>().ok())
             .map(|x| x != 0)
             .unwrap_or_default())
     }
@@ -716,9 +730,18 @@ impl Context {
             true => self.scheduler.pause(self).await?,
             _ => Default::default(),
         };
+        if key == Config::StatsSending {
+            let old_value = self.get_config(key).await?;
+            let old_value = bool_from_config(old_value.as_deref());
+            let new_value = bool_from_config(value);
+            stats::pre_sending_config_change(self, old_value, new_value).await?;
+        }
         self.set_config_internal(key, value).await?;
         if key == Config::SentboxWatch {
             self.last_full_folder_scan.lock().await.take();
+        }
+        if key == Config::StatsSending {
+            stats::maybe_send_stats(self).await?;
         }
         Ok(())
     }
@@ -869,6 +892,10 @@ impl Context {
 /// Returns a value for use in `Context::set_config_*()` for the given `bool`.
 pub(crate) fn from_bool(val: bool) -> Option<&'static str> {
     Some(if val { "1" } else { "0" })
+}
+
+pub(crate) fn bool_from_config(config: Option<&str>) -> bool {
+    config.is_some_and(|v| v.parse::<i32>().unwrap_or_default() != 0)
 }
 
 // Separate impl block for self address handling

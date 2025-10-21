@@ -71,9 +71,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "No encryption"))]
     EncrNone = 28,
 
-    #[strum(props(fallback = "This message was encrypted for another setup."))]
-    CantDecryptMsgBody = 29,
-
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
 
@@ -392,11 +389,6 @@ pub enum StockMessage {
     ))]
     InvalidUnencryptedMail = 174,
 
-    #[strum(props(
-        fallback = "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions."
-    ))]
-    CantDecryptOutgoingMsgs = 175,
-
     #[strum(props(fallback = "You reacted %1$s to \"%2$s\""))]
     MsgYouReacted = 176,
 
@@ -439,6 +431,11 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Scan to join channel %1$s"))]
     SecureJoinBrodcastQRDescription = 201,
+
+    #[strum(props(
+        fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
+    ))]
+    StatsMsgBody = 210,
 }
 
 impl StockMessage {
@@ -761,16 +758,6 @@ pub(crate) async fn e2e_available(context: &Context) -> String {
 /// Stock string: `No encryption.`.
 pub(crate) async fn encr_none(context: &Context) -> String {
     translated(context, StockMessage::EncrNone).await
-}
-
-/// Stock string: `This message was encrypted for another setup.`.
-pub(crate) async fn cant_decrypt_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::CantDecryptMsgBody).await
-}
-
-/// Stock string:`Got outgoing message(s) encrypted for another setup...`.
-pub(crate) async fn cant_decrypt_outgoing_msgs(context: &Context) -> String {
-    translated(context, StockMessage::CantDecryptOutgoingMsgs).await
 }
 
 /// Stock string: `Fingerprints`.
@@ -1278,6 +1265,11 @@ pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> Stri
     translated(context, StockMessage::InvalidUnencryptedMail)
         .await
         .replace1(provider)
+}
+
+/// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`
+pub(crate) async fn stats_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::StatsMsgBody).await
 }
 
 pub(crate) async fn aeap_explanation_and_link(

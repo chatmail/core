@@ -101,6 +101,8 @@ pub const DC_CHAT_ID_LAST_SPECIAL: ChatId = ChatId::new(9);
     Copy,
     PartialEq,
     Eq,
+    PartialOrd,
+    Ord,
     FromPrimitive,
     ToPrimitive,
     FromSql,

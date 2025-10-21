@@ -252,18 +252,18 @@ impl MuteDuration {
 
 #[derive(Clone, Serialize, Deserialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "ChatVisibility")]
-pub enum JSONRPCChatVisibility {
+pub enum JsonrpcChatVisibility {
     Normal,
     Archived,
     Pinned,
 }
 
-impl JSONRPCChatVisibility {
+impl JsonrpcChatVisibility {
     pub fn into_core_type(self) -> ChatVisibility {
         match self {
-            JSONRPCChatVisibility::Normal => ChatVisibility::Normal,
-            JSONRPCChatVisibility::Archived => ChatVisibility::Archived,
-            JSONRPCChatVisibility::Pinned => ChatVisibility::Pinned,
+            JsonrpcChatVisibility::Normal => ChatVisibility::Normal,
+            JsonrpcChatVisibility::Archived => ChatVisibility::Archived,
+            JsonrpcChatVisibility::Pinned => ChatVisibility::Pinned,
         }
     }
 }

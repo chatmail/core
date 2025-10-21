@@ -14,6 +14,7 @@ use crate::e2ee::ensure_secret_key_exists;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, Fingerprint, load_self_public_key};
+use crate::log::LogExt as _;
 use crate::log::{error, info, warn};
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
@@ -21,13 +22,14 @@ use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
-use crate::token;
 use crate::tools::{create_id, time};
+use crate::{SecurejoinSource, stats};
+use crate::{SecurejoinUiPath, token};
 
 mod bob;
 mod qrinvite;
 
-use qrinvite::QrInvite;
+pub(crate) use qrinvite::QrInvite;
 
 use crate::token::Namespace;
 
@@ -175,12 +177,38 @@ async fn get_self_fingerprint(context: &Context) -> Result<Fingerprint> {
 ///
 /// The function returns immediately and the handshake will run in background.
 pub async fn join_securejoin(context: &Context, qr: &str) -> Result<ChatId> {
-    securejoin(context, qr).await.map_err(|err| {
+    join_securejoin_with_ux_info(context, qr, None, None).await
+}
+
+/// Take a scanned QR-code and do the setup-contact/join-group/invite handshake.
+///
+/// This is the start of the process for the joiner.  See the module and ffi documentation
+/// for more details.
+///
+/// The function returns immediately and the handshake will run in background.
+///
+/// **source** and **uipath** are for statistics-sending,
+/// if the user enabled it in the settings;
+/// if you don't have statistics-sending implemented, just pass `None` here.
+pub async fn join_securejoin_with_ux_info(
+    context: &Context,
+    qr: &str,
+    source: Option<SecurejoinSource>,
+    uipath: Option<SecurejoinUiPath>,
+) -> Result<ChatId> {
+    let res = securejoin(context, qr).await.map_err(|err| {
         warn!(context, "Fatal joiner error: {:#}", err);
         // The user just scanned this QR code so has context on what failed.
         error!(context, "QR process failed");
         err
-    })
+    })?;
+
+    stats::count_securejoin_ux_info(context, source, uipath)
+        .await
+        .log_err(context)
+        .ok();
+
+    Ok(res)
 }
 
 async fn securejoin(context: &Context, qr: &str) -> Result<ChatId> {
@@ -193,6 +221,11 @@ async fn securejoin(context: &Context, qr: &str) -> Result<ChatId> {
     let qr_scan = check_qr(context, qr).await?;
 
     let invite = QrInvite::try_from(qr_scan)?;
+
+    stats::count_securejoin_invite(context, &invite)
+        .await
+        .log_err(context)
+        .ok();
 
     bob::start_protocol(context, invite).await
 }

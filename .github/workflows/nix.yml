@@ -95,10 +95,11 @@ jobs:
       matrix:
         installable:
           - deltachat-rpc-server
+          - deltachat-rpc-server-x86_64-darwin
 
-          # Fails to bulid
+          # Fails to build
+          # because of <https://github.com/NixOS/nixpkgs/issues/413910>.
           # - deltachat-rpc-server-aarch64-darwin
-          # - deltachat-rpc-server-x86_64-darwin
     steps:
       - uses: actions/checkout@v5
         with:

@@ -40,6 +40,7 @@ use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
 use crate::simplify;
+use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_shared_secret};
@@ -1167,7 +1168,8 @@ async fn decide_chat_assignment(
             .await?;
         let now = tools::time();
         let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
-            let mut msg = Message::new_text(stock_str::cant_decrypt_outgoing_msgs(context).await);
+            let txt = "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions.";
+            let mut msg = Message::new_text(txt.to_string());
             chat::add_device_msg(context, None, Some(&mut msg))
                 .await
                 .log_err(context)
@@ -1727,6 +1729,8 @@ async fn add_parts(
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL {
+        MessageState::InNoticed
     } else {
         MessageState::InFresh
     };
