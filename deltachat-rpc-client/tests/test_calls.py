@@ -9,6 +9,7 @@ def test_calls(acfactory) -> None:
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
+    bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
     outgoing_call_message = alice_chat_bob.place_outgoing_call(place_call_info)
     assert outgoing_call_message.get_call_info().state.kind == "Alerting"
 
@@ -67,6 +68,7 @@ a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r
 
     alice, bob = acfactory.get_online_accounts(2)
 
+    bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     alice_chat_bob.place_outgoing_call(place_call_info)
@@ -84,3 +86,24 @@ def test_ice_servers(acfactory) -> None:
 
     ice_servers = alice.ice_servers()
     assert len(ice_servers) == 1
+
+
+def test_no_contact_request_call(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.send_text("Hello!")
+
+    # Notification for "Hello!" message should arrive
+    # without the call ringing.
+    while True:
+        event = bob.wait_for_event()
+
+        # There should be no incoming call notification.
+        assert event.kind != EventType.INCOMING_CALL
+
+        if event.kind == EventType.INCOMING_MSG:
+            msg = bob.get_message_by_id(event.msg_id)
+            assert msg.get_snapshot().text == "Hello!"
+            break

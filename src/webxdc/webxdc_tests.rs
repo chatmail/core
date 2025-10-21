@@ -5,8 +5,8 @@ use serde_json::json;
 
 use super::*;
 use crate::chat::{
-    ChatId, ProtectionStatus, add_contact_to_chat, create_broadcast, create_group_chat,
-    forward_msgs, remove_contact_from_chat, resend_msgs, send_msg, send_text_msg,
+    ChatId, add_contact_to_chat, create_broadcast, create_group, forward_msgs,
+    remove_contact_from_chat, resend_msgs, send_msg, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -78,7 +78,7 @@ async fn send_webxdc_instance(t: &TestContext, chat_id: ChatId) -> Result<Messag
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_webxdc_instance() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     // send as .xdc file
     let instance = send_webxdc_instance(&t, chat_id).await?;
@@ -97,7 +97,7 @@ async fn test_send_webxdc_instance() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_invalid_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     // sending invalid .xdc as file is possible, but must not result in Viewtype::Webxdc
     let mut instance = create_webxdc_instance(
@@ -126,7 +126,7 @@ async fn test_send_invalid_webxdc() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_draft_invalid_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     let mut instance = create_webxdc_instance(
         &t,
@@ -143,7 +143,7 @@ async fn test_set_draft_invalid_webxdc() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_special_webxdc_format() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     // chess.xdc is failing for some zip-versions, see #3476, if we know more details about why, we can have a nicer name for the test :)
     let mut instance = create_webxdc_instance(
@@ -164,7 +164,7 @@ async fn test_send_special_webxdc_format() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_webxdc_instance() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
     t.send_webxdc_status_update(
         instance.id,
@@ -213,7 +213,7 @@ async fn test_resend_webxdc_instance_and_info() -> Result<()> {
 
     // Alice uses webxdc in a group
     alice.set_config_bool(Config::BccSelf, false).await?;
-    let alice_grp = create_group_chat(&alice, ProtectionStatus::Unprotected, "grp").await?;
+    let alice_grp = create_group(&alice, "grp").await?;
     let alice_instance = send_webxdc_instance(&alice, alice_grp).await?;
     assert_eq!(alice_grp.get_msg_cnt(&alice).await?, 2);
     alice
@@ -395,7 +395,7 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_webxdc_instance() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let now = tools::time();
     t.receive_status_update(
@@ -428,7 +428,7 @@ async fn test_delete_webxdc_instance() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_chat_with_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let now = tools::time();
     t.receive_status_update(
@@ -461,7 +461,7 @@ async fn test_delete_chat_with_webxdc() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_webxdc_draft() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     let mut instance = create_webxdc_instance(
         &t,
@@ -498,7 +498,7 @@ async fn test_delete_webxdc_draft() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_status_update_record() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
 
     assert_eq!(
@@ -633,7 +633,7 @@ async fn test_create_status_update_record() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_receive_status_update() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let now = tools::time();
 
@@ -904,7 +904,7 @@ async fn test_send_big_webxdc_status_update() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_render_webxdc_status_update_object() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat").await?;
+    let chat_id = create_group(&t, "a chat").await?;
     let mut instance = create_webxdc_instance(
         &t,
         "minimal.xdc",
@@ -932,7 +932,7 @@ async fn test_render_webxdc_status_update_object() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_render_webxdc_status_update_object_range() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat").await?;
+    let chat_id = create_group(&t, "a chat").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
     t.send_webxdc_status_update(instance.id, r#"{"payload": 1}"#)
         .await?;
@@ -979,7 +979,7 @@ async fn test_render_webxdc_status_update_object_range() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pop_status_update() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "a chat").await?;
+    let chat_id = create_group(&t, "a chat").await?;
     let instance1 = send_webxdc_instance(&t, chat_id).await?;
     let instance2 = send_webxdc_instance(&t, chat_id).await?;
     let instance3 = send_webxdc_instance(&t, chat_id).await?;
@@ -1109,7 +1109,7 @@ async fn test_draft_and_send_webxdc_status_update() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_send_webxdc_status_update_to_non_webxdc() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let msg_id = send_text_msg(&t, chat_id, "ho!".to_string()).await?;
     assert!(
         t.send_webxdc_status_update(msg_id, r#"{"foo":"bar"}"#)
@@ -1122,7 +1122,7 @@ async fn test_send_webxdc_status_update_to_non_webxdc() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_blob() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
 
     let buf = instance.get_webxdc_blob(&t, "index.html").await?;
@@ -1141,7 +1141,7 @@ async fn test_get_webxdc_blob() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_blob_default_icon() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
 
     let buf = instance.get_webxdc_blob(&t, WEBXDC_DEFAULT_ICON).await?;
@@ -1153,7 +1153,7 @@ async fn test_get_webxdc_blob_default_icon() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_blob_with_absolute_paths() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
 
     let buf = instance.get_webxdc_blob(&t, "/index.html").await?;
@@ -1166,7 +1166,7 @@ async fn test_get_webxdc_blob_with_absolute_paths() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_blob_with_subdirs() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
     let mut instance = create_webxdc_instance(
         &t,
         "some-files.xdc",
@@ -1265,7 +1265,7 @@ async fn test_parse_webxdc_manifest_source_code_url() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_min_api_too_large() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "chat").await?;
+    let chat_id = create_group(&t, "chat").await?;
     let mut instance = create_webxdc_instance(
         &t,
         "with-min-api-1001.xdc",
@@ -1283,7 +1283,7 @@ async fn test_webxdc_min_api_too_large() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_info() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let info = instance.get_webxdc_info(&t).await?;
@@ -1363,7 +1363,7 @@ async fn test_get_webxdc_info() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_webxdc_self_addr() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&t, "foo").await?;
 
     let instance = send_webxdc_instance(&t, chat_id).await?;
     let info1 = instance.get_webxdc_info(&t).await?;
@@ -1601,7 +1601,7 @@ async fn test_webxdc_info_msg_cleanup_series() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_info_msg_no_cleanup_on_interrupted_series() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "c").await?;
+    let chat_id = create_group(&t, "c").await?;
     let instance = send_webxdc_instance(&t, chat_id).await?;
 
     t.send_webxdc_status_update(instance.id, r#"{"info":"i1", "payload":1}"#)
@@ -1623,7 +1623,7 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
     let t = TestContext::new_alice().await;
     let self_id = t.get_self_chat().await.id;
     let single_id = t.create_chat_with_contact("bob", "bob@e.com").await.id;
-    let group_id = create_group_chat(&t, ProtectionStatus::Unprotected, "chat").await?;
+    let group_id = create_group(&t, "chat").await?;
     let broadcast_id = create_broadcast(&t, "Channel".to_string()).await?;
 
     for chat_id in [self_id, single_id, group_id, broadcast_id] {
@@ -1655,7 +1655,7 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_chatlist_summary() -> Result<()> {
     let t = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&t, ProtectionStatus::Unprotected, "chat").await?;
+    let chat_id = create_group(&t, "chat").await?;
     let mut instance = create_webxdc_instance(
         &t,
         "with-minimal-manifest.xdc",
@@ -1727,7 +1727,7 @@ async fn test_webxdc_reject_updates_from_non_groupmembers() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let contact_bob = alice.add_or_lookup_contact_id(bob).await;
-    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let chat_id = create_group(alice, "Group").await?;
     add_contact_to_chat(alice, chat_id, contact_bob).await?;
     let instance = send_webxdc_instance(alice, chat_id).await?;
     bob.recv_msg(&alice.pop_sent_msg().await).await;
@@ -1758,7 +1758,7 @@ async fn test_webxdc_reject_updates_from_non_groupmembers() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webxdc_delete_event() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foo").await?;
+    let chat_id = create_group(&alice, "foo").await?;
     let instance = send_webxdc_instance(&alice, chat_id).await?;
     message::delete_msgs(&alice, &[instance.id]).await?;
     alice
@@ -1912,7 +1912,7 @@ async fn test_webxdc_notify_one() -> Result<()> {
     let fiona = tcm.fiona().await;
 
     let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob, &fiona])
+        .create_group_with_members("grp", &[&bob, &fiona])
         .await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
@@ -1958,7 +1958,7 @@ async fn test_webxdc_notify_multiple() -> Result<()> {
     let fiona = tcm.fiona().await;
 
     let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob, &fiona])
+        .create_group_with_members("grp", &[&bob, &fiona])
         .await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
@@ -2001,9 +2001,7 @@ async fn test_webxdc_no_notify_self() -> Result<()> {
     let alice = tcm.alice().await;
     let alice2 = tcm.alice().await;
 
-    let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[])
-        .await;
+    let grp_id = alice.create_group_with_members("grp", &[]).await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
     let alice2_instance = alice2.recv_msg(&sent1).await;
@@ -2043,7 +2041,7 @@ async fn test_webxdc_notify_all() -> Result<()> {
     let fiona = tcm.fiona().await;
 
     let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob, &fiona])
+        .create_group_with_members("grp", &[&bob, &fiona])
         .await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
@@ -2083,7 +2081,7 @@ async fn test_webxdc_notify_bob_and_all() -> Result<()> {
     let fiona = tcm.fiona().await;
 
     let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob, &fiona])
+        .create_group_with_members("grp", &[&bob, &fiona])
         .await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
@@ -2117,7 +2115,7 @@ async fn test_webxdc_notify_all_and_bob() -> Result<()> {
     let fiona = tcm.fiona().await;
 
     let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob, &fiona])
+        .create_group_with_members("grp", &[&bob, &fiona])
         .await;
     let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
@@ -2149,9 +2147,7 @@ async fn test_webxdc_href() -> Result<()> {
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
 
-    let grp_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "grp", &[&bob])
-        .await;
+    let grp_id = alice.create_group_with_members("grp", &[&bob]).await;
     let instance = send_webxdc_instance(&alice, grp_id).await?;
     let sent1 = alice.pop_sent_msg().await;
 
@@ -2181,9 +2177,7 @@ async fn test_webxdc_href() -> Result<()> {
 async fn test_self_addr_consistency() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
-    let alice_chat = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "No friends :(", &[])
-        .await;
+    let alice_chat = alice.create_group_with_members("No friends :(", &[]).await;
     let mut instance = create_webxdc_instance(
         alice,
         "minimal.xdc",

@@ -1,7 +1,7 @@
 use deltachat_contact_tools::{addr_cmp, may_be_valid_addr};
 
 use super::*;
-use crate::chat::{Chat, ProtectionStatus, get_chat_contacts, send_text_msg};
+use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::get_securejoin_qr;
@@ -1319,9 +1319,6 @@ async fn test_self_is_verified() -> Result<()> {
     assert_eq!(contact.is_verified(&alice).await?, true);
     assert!(contact.get_verifier_id(&alice).await?.is_none());
     assert!(contact.is_key_contact());
-
-    let chat_id = ChatId::get_for_contact(&alice, ContactId::SELF).await?;
-    assert!(chat_id.is_protected(&alice).await.unwrap() == ProtectionStatus::Protected);
 
     Ok(())
 }

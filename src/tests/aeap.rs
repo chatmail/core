@@ -9,7 +9,7 @@
 
 use anyhow::Result;
 
-use crate::chat::{self, Chat, ChatId, ProtectionStatus};
+use crate::chat::{self, Chat, ChatId};
 use crate::contact::{Contact, ContactId};
 use crate::message::Message;
 use crate::receive_imf::receive_imf;
@@ -90,24 +90,12 @@ async fn check_aeap_transition(chat_for_transition: ChatForTransition, verified:
     }
 
     let mut groups = vec![
-        chat::create_group_chat(bob, chat::ProtectionStatus::Unprotected, "Group 0")
-            .await
-            .unwrap(),
-        chat::create_group_chat(bob, chat::ProtectionStatus::Unprotected, "Group 1")
-            .await
-            .unwrap(),
+        chat::create_group(bob, "Group 0").await.unwrap(),
+        chat::create_group(bob, "Group 1").await.unwrap(),
     ];
     if verified {
-        groups.push(
-            chat::create_group_chat(bob, chat::ProtectionStatus::Protected, "Group 2")
-                .await
-                .unwrap(),
-        );
-        groups.push(
-            chat::create_group_chat(bob, chat::ProtectionStatus::Protected, "Group 3")
-                .await
-                .unwrap(),
-        );
+        groups.push(chat::create_group(bob, "Group 2").await.unwrap());
+        groups.push(chat::create_group(bob, "Group 3").await.unwrap());
     }
 
     let alice_contact = bob.add_or_lookup_contact_id(alice).await;
@@ -201,8 +189,7 @@ async fn test_aeap_replay_attack() -> Result<()> {
     tcm.send_recv_accept(&alice, &bob, "Hi").await;
     tcm.send_recv(&bob, &alice, "Hi back").await;
 
-    let group =
-        chat::create_group_chat(&bob, chat::ProtectionStatus::Unprotected, "Group 0").await?;
+    let group = chat::create_group(&bob, "Group 0").await?;
 
     let bob_alice_contact = bob.add_or_lookup_contact_id(&alice).await;
     let bob_fiona_contact = bob.add_or_lookup_contact_id(&fiona).await;
@@ -217,10 +204,12 @@ async fn test_aeap_replay_attack() -> Result<()> {
     // Fiona gets the message, replaces the From addr...
     let sent = sent
         .payload()
-        .replace("From: <alice@example.org>", "From: <fiona@example.net>")
-        .replace("addr=alice@example.org;", "addr=fiona@example.net;");
+        .replace("From: <alice@example.org>", "From: <fiona@example.net>");
     sent.find("From: <fiona@example.net>").unwrap(); // Assert that it worked
-    sent.find("addr=fiona@example.net;").unwrap(); // Assert that it worked
+
+    // Autocrypt header is protected, nothing to replace outside.
+    // In the signed part we cannot replace it without breaking the signature.
+    assert!(!sent.contains("addr=alice@example.org;"));
 
     tcm.section("Fiona replaced the From addr and forwards the message to Bob");
     receive_imf(&bob, sent.as_bytes(), false).await?.unwrap();
@@ -243,16 +232,13 @@ async fn test_write_to_alice_after_aeap() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_grp_id = chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let alice_grp_id = chat::create_group(alice, "Group").await?;
     let qr = get_securejoin_qr(alice, Some(alice_grp_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
     let bob_alice_contact = bob.add_or_lookup_contact(alice).await;
     assert!(bob_alice_contact.is_verified(bob).await?);
     let bob_alice_chat = bob.create_chat(alice).await;
-    assert!(bob_alice_chat.is_protected());
-    let bob_unprotected_grp_id = bob
-        .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[alice])
-        .await;
+    let bob_unprotected_grp_id = bob.create_group_with_members("Group", &[alice]).await;
 
     tcm.change_addr(alice, "alice@someotherdomain.xyz").await;
     let sent = alice.send_text(alice_grp_id, "Hello!").await;
@@ -260,7 +246,6 @@ async fn test_write_to_alice_after_aeap() -> Result<()> {
 
     assert!(bob_alice_contact.is_verified(bob).await?);
     let bob_alice_chat = Chat::load_from_db(bob, bob_alice_chat.id).await?;
-    assert!(bob_alice_chat.is_protected());
     let mut msg = Message::new_text("hi".to_string());
     chat::send_msg(bob, bob_alice_chat.id, &mut msg).await?;
 

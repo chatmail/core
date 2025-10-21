@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 
 use crate::accounts::Accounts;
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, ChatId, ProtectionStatus};
+use crate::chat::{self, Chat, ChatId};
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -70,9 +70,6 @@ pub enum StockMessage {
 
     #[strum(props(fallback = "No encryption"))]
     EncrNone = 28,
-
-    #[strum(props(fallback = "This message was encrypted for another setup."))]
-    CantDecryptMsgBody = 29,
 
     #[strum(props(fallback = "Fingerprints"))]
     FingerPrints = 30,
@@ -391,11 +388,6 @@ pub enum StockMessage {
         fallback = "⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet."
     ))]
     InvalidUnencryptedMail = 174,
-
-    #[strum(props(
-        fallback = "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions."
-    ))]
-    CantDecryptOutgoingMsgs = 175,
 
     #[strum(props(fallback = "You reacted %1$s to \"%2$s\""))]
     MsgYouReacted = 176,
@@ -768,16 +760,6 @@ pub(crate) async fn encr_none(context: &Context) -> String {
     translated(context, StockMessage::EncrNone).await
 }
 
-/// Stock string: `This message was encrypted for another setup.`.
-pub(crate) async fn cant_decrypt_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::CantDecryptMsgBody).await
-}
-
-/// Stock string:`Got outgoing message(s) encrypted for another setup...`.
-pub(crate) async fn cant_decrypt_outgoing_msgs(context: &Context) -> String {
-    translated(context, StockMessage::CantDecryptOutgoingMsgs).await
-}
-
 /// Stock string: `Fingerprints`.
 pub(crate) async fn finger_prints(context: &Context) -> String {
     translated(context, StockMessage::FingerPrints).await
@@ -1088,13 +1070,6 @@ pub(crate) async fn messages_e2e_encrypted(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
 }
 
-/// Stock string: `%1$s sent a message from another device.`
-pub(crate) async fn chat_protection_disabled(context: &Context, contact_id: ContactId) -> String {
-    translated(context, StockMessage::ChatProtectionDisabled)
-        .await
-        .replace1(&contact_id.get_stock_name(context).await)
-}
-
 /// Stock string: `Reply`.
 pub(crate) async fn reply_noun(context: &Context) -> String {
     translated(context, StockMessage::ReplyNoun).await
@@ -1342,26 +1317,6 @@ impl Context {
             .set_stock_translation(id, stockstring)
             .await?;
         Ok(())
-    }
-
-    /// Returns a stock message saying that protection status has changed.
-    pub(crate) async fn stock_protection_msg(
-        &self,
-        protect: ProtectionStatus,
-        contact_id: Option<ContactId>,
-    ) -> String {
-        match protect {
-            ProtectionStatus::Unprotected => {
-                if let Some(contact_id) = contact_id {
-                    chat_protection_disabled(self, contact_id).await
-                } else {
-                    // In a group chat, it's not possible to downgrade verification.
-                    // In a 1:1 chat, the `contact_id` always has to be provided.
-                    "[Error] No contact_id given".to_string()
-                }
-            }
-            ProtectionStatus::Protected => messages_e2e_encrypted(self).await,
-        }
     }
 
     pub(crate) async fn update_device_chats(&self) -> Result<()> {

@@ -142,13 +142,6 @@ class Chat:
         """
         return bool(lib.dc_chat_can_send(self._dc_chat))
 
-    def is_protected(self) -> bool:
-        """return True if this chat is a protected chat.
-
-        :returns: True if chat is protected, False otherwise.
-        """
-        return bool(lib.dc_chat_is_protected(self._dc_chat))
-
     def get_name(self) -> Optional[str]:
         """return name of this chat.
 

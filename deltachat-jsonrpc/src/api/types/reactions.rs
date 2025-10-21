@@ -8,7 +8,7 @@ use typescript_type_def::TypeDef;
 /// A single reaction emoji.
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "Reaction", rename_all = "camelCase")]
-pub struct JSONRPCReaction {
+pub struct JsonrpcReaction {
     /// Emoji.
     emoji: String,
 
@@ -22,14 +22,14 @@ pub struct JSONRPCReaction {
 /// Structure representing all reactions to a particular message.
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "Reactions", rename_all = "camelCase")]
-pub struct JSONRPCReactions {
+pub struct JsonrpcReactions {
     /// Map from a contact to it's reaction to message.
     reactions_by_contact: BTreeMap<u32, Vec<String>>,
     /// Unique reactions and their count, sorted in descending order.
-    reactions: Vec<JSONRPCReaction>,
+    reactions: Vec<JsonrpcReaction>,
 }
 
-impl From<Reactions> for JSONRPCReactions {
+impl From<Reactions> for JsonrpcReactions {
     fn from(reactions: Reactions) -> Self {
         let mut reactions_by_contact: BTreeMap<u32, Vec<String>> = BTreeMap::new();
 
@@ -56,7 +56,7 @@ impl From<Reactions> for JSONRPCReactions {
                 false
             };
 
-            let reaction = JSONRPCReaction {
+            let reaction = JsonrpcReaction {
                 emoji,
                 count,
                 is_from_self,
@@ -64,7 +64,7 @@ impl From<Reactions> for JSONRPCReactions {
             reactions_v.push(reaction)
         }
 
-        JSONRPCReactions {
+        JsonrpcReactions {
             reactions_by_contact,
             reactions: reactions_v,
         }

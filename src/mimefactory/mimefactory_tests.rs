@@ -6,8 +6,7 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    self, ChatId, ProtectionStatus, add_contact_to_chat, create_group_chat,
-    remove_contact_from_chat, send_text_msg,
+    self, ChatId, add_contact_to_chat, create_group, remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
@@ -352,9 +351,7 @@ async fn test_subject_in_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = tcm.alice().await;
     let bob = tcm.bob().await;
-    let group_id = chat::create_group_chat(&t, chat::ProtectionStatus::Unprotected, "groupname")
-        .await
-        .unwrap();
+    let group_id = chat::create_group(&t, "groupname").await.unwrap();
     let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
     chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
@@ -666,7 +663,7 @@ async fn test_selfavatar_unencrypted_signed() {
     assert_eq!(part.match_indices("From:").count(), 1);
     assert_eq!(part.match_indices("Message-ID:").count(), 0);
     assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 0);
+    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
     assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
 
     let part = payload.next().unwrap();
@@ -717,7 +714,7 @@ async fn test_selfavatar_unencrypted_signed() {
     assert_eq!(part.match_indices("From:").count(), 1);
     assert_eq!(part.match_indices("Message-ID:").count(), 0);
     assert_eq!(part.match_indices("Subject:").count(), 1);
-    assert_eq!(part.match_indices("Autocrypt:").count(), 0);
+    assert_eq!(part.match_indices("Autocrypt:").count(), 1);
     assert_eq!(part.match_indices("Chat-User-Avatar:").count(), 0);
 
     let part = payload.next().unwrap();
@@ -756,7 +753,7 @@ async fn test_remove_member_bcc() -> Result<()> {
     let charlie_contact = Contact::get_by_id(alice, charlie_id).await?;
     let charlie_addr = charlie_contact.get_addr();
 
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foo").await?;
+    let alice_chat_id = create_group(alice, "foo").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
     send_text_msg(alice, alice_chat_id, "Creating a group".to_string()).await?;
@@ -846,16 +843,12 @@ async fn test_dont_remove_self() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let first_group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "First group", &[bob])
-        .await;
+    let first_group = alice.create_group_with_members("First group", &[bob]).await;
     alice.send_text(first_group, "Hi! I created a group.").await;
     remove_contact_from_chat(alice, first_group, ContactId::SELF).await?;
     alice.pop_sent_msg().await;
 
-    let second_group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "First group", &[bob])
-        .await;
+    let second_group = alice.create_group_with_members("First group", &[bob]).await;
     let sent = alice
         .send_text(second_group, "Hi! I created another group.")
         .await;
@@ -883,9 +876,7 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
 
-    let group = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[bob])
-        .await;
+    let group = alice.create_group_with_members("Group", &[bob]).await;
     alice.send_text(group, "Hi! I created a group.").await;
 
     SystemTime::shift(Duration::from_secs(60));

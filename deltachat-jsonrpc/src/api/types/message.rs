@@ -18,7 +18,7 @@ use typescript_type_def::TypeDef;
 
 use super::color_int_to_hex_string;
 use super::contact::ContactObject;
-use super::reactions::JSONRPCReactions;
+use super::reactions::JsonrpcReactions;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "kind")]
@@ -102,7 +102,7 @@ pub struct MessageObject {
 
     saved_message_id: Option<u32>,
 
-    reactions: Option<JSONRPCReactions>,
+    reactions: Option<JsonrpcReactions>,
 
     vcard_contact: Option<VcardContact>,
 }
@@ -532,7 +532,6 @@ pub struct MessageSearchResult {
     chat_color: String,
     chat_name: String,
     chat_type: u32,
-    is_chat_protected: bool,
     is_chat_contact_request: bool,
     is_chat_archived: bool,
     message: String,
@@ -572,7 +571,6 @@ impl MessageSearchResult {
             chat_color,
             chat_type: chat.get_type().to_u32().context("unknown chat type id")?,
             chat_profile_image,
-            is_chat_protected: chat.is_protected(),
             is_chat_contact_request: chat.is_contact_request(),
             is_chat_archived: chat.get_visibility() == ChatVisibility::Archived,
             message: message.get_text(),
@@ -583,7 +581,7 @@ impl MessageSearchResult {
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", rename = "MessageListItem", tag = "kind")]
-pub enum JSONRPCMessageListItem {
+pub enum JsonrpcMessageListItem {
     Message {
         msg_id: u32,
     },
@@ -596,13 +594,13 @@ pub enum JSONRPCMessageListItem {
     },
 }
 
-impl From<ChatItem> for JSONRPCMessageListItem {
+impl From<ChatItem> for JsonrpcMessageListItem {
     fn from(item: ChatItem) -> Self {
         match item {
-            ChatItem::Message { msg_id } => JSONRPCMessageListItem::Message {
+            ChatItem::Message { msg_id } => JsonrpcMessageListItem::Message {
                 msg_id: msg_id.to_u32(),
             },
-            ChatItem::DayMarker { timestamp } => JSONRPCMessageListItem::DayMarker { timestamp },
+            ChatItem::DayMarker { timestamp } => JsonrpcMessageListItem::DayMarker { timestamp },
         }
     }
 }

@@ -169,7 +169,7 @@ pub(crate) async fn intercept_get_updates(
 
 #[cfg(test)]
 mod tests {
-    use crate::chat::{ChatId, ProtectionStatus, create_group_chat};
+    use crate::chat::{ChatId, create_group};
     use crate::chatlist::Chatlist;
     use crate::contact::Contact;
     use crate::message::Message;
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(msg.chat_id, bob_chat_id);
 
         // Integrate Webxdc into another group
-        let group_id = create_group_chat(&t, ProtectionStatus::Unprotected, "foo").await?;
+        let group_id = create_group(&t, "foo").await?;
         let integration_id = t.init_webxdc_integration(Some(group_id)).await?.unwrap();
 
         let locations = location::get_range(&t, Some(group_id), None, 0, 0).await?;

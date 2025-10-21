@@ -5,7 +5,7 @@ use tokio::fs;
 
 use super::*;
 use crate::chat::{
-    ChatItem, ChatVisibility, add_contact_to_chat, add_to_chat_contacts_table, create_group_chat,
+    ChatItem, ChatVisibility, add_contact_to_chat, add_to_chat_contacts_table, create_group,
     get_chat_contacts, get_chat_msgs, is_contact_in_chat, remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
@@ -1000,7 +1000,7 @@ async fn test_other_device_writes_to_mailinglist() -> Result<()> {
         chat::get_chat_id_by_grpid(&t, "delta.codespeak.net")
             .await?
             .unwrap(),
-        (first_chat.id, false, Blocked::Request)
+        (first_chat.id, Blocked::Request)
     );
 
     receive_imf(
@@ -2901,9 +2901,9 @@ async fn test_accept_outgoing() -> Result<()> {
     let bob1_chat = bob1.create_chat(&alice1).await;
     let sent = bob1.send_text(bob1_chat.id, "Hello!").await;
 
-    alice1.recv_msg(&sent).await;
+    let alice1_msg = alice1.recv_msg(&sent).await;
     alice2.recv_msg(&sent).await;
-    let alice1_msg = bob2.recv_msg(&sent).await;
+    bob2.recv_msg(&sent).await;
     assert_eq!(alice1_msg.text, "Hello!");
     let alice1_chat = chat::Chat::load_from_db(&alice1, alice1_msg.chat_id).await?;
     assert!(alice1_chat.is_contact_request());
@@ -2944,7 +2944,7 @@ async fn test_outgoing_private_reply_multidevice() -> Result<()> {
     let charlie = tcm.charlie().await;
 
     // =============== Bob creates a group ===============
-    let group_id = chat::create_group_chat(&bob, ProtectionStatus::Unprotected, "Group").await?;
+    let group_id = chat::create_group(&bob, "Group").await?;
     chat::add_to_chat_contacts_table(
         &bob,
         time(),
@@ -3042,9 +3042,7 @@ async fn test_auto_accept_protected_group_for_bots() -> Result<()> {
     bob.set_config(Config::Bot, Some("1")).await.unwrap();
     mark_as_verified(alice, bob).await;
     mark_as_verified(bob, alice).await;
-    let group_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
-        .await;
+    let group_id = alice.create_group_with_members("Group", &[bob]).await;
     let sent = alice.send_text(group_id, "Hello!").await;
     let msg = bob.recv_msg(&sent).await;
     let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
@@ -3092,13 +3090,11 @@ async fn test_bot_accepts_another_group_after_qr_scan() -> Result<()> {
     let bob = &tcm.bob().await;
     bob.set_config(Config::Bot, Some("1")).await?;
 
-    let group_id = chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let group_id = chat::create_group(alice, "Group").await?;
     let qr = get_securejoin_qr(alice, Some(group_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
-    let group_id = alice
-        .create_group_with_members(ProtectionStatus::Protected, "Group", &[bob])
-        .await;
+    let group_id = alice.create_group_with_members("Group", &[bob]).await;
     let sent = alice.send_text(group_id, "Hello!").await;
     let msg = bob.recv_msg(&sent).await;
     let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
@@ -3152,7 +3148,7 @@ async fn test_no_private_reply_to_blocked_account() -> Result<()> {
     let bob = tcm.bob().await;
 
     tcm.section("Bob creates a group");
-    let group_id = chat::create_group_chat(&bob, ProtectionStatus::Unprotected, "Group").await?;
+    let group_id = chat::create_group(&bob, "Group").await?;
     chat::add_to_chat_contacts_table(
         &bob,
         time(),
@@ -3228,11 +3224,7 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
     chat.id.block(&alice).await?;
 
     let group_id = bob
-        .create_group_with_members(
-            ProtectionStatus::Unprotected,
-            "group name",
-            &[&alice, &fiona],
-        )
+        .create_group_with_members("group name", &[&alice, &fiona])
         .await;
 
     let sent = bob.send_text(group_id, "Heyho, I'm a spammer!").await;
@@ -3253,7 +3245,7 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
     assert_eq!(rcvd.chat_blocked, Blocked::Request);
     // In order not to lose context, Bob's message should also be shown in the group
     let msgs = chat::get_chat_msgs(&alice, rcvd.chat_id).await?;
-    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs.len(), 3);
 
     Ok(())
 }
@@ -3279,7 +3271,7 @@ async fn test_outgoing_undecryptable() -> Result<()> {
     assert!(
         dev_msg
             .text
-            .contains(&stock_str::cant_decrypt_outgoing_msgs(alice).await)
+            .contains("⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions.")
     );
 
     let raw = include_bytes!("../../test-data/message/thunderbird_encrypted_signed.eml");
@@ -3728,7 +3720,7 @@ async fn test_unsigned_chat_group_hdr() -> Result<()> {
     let bob = &tcm.bob().await;
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foos").await?;
+    let alice_chat_id = create_group(alice, "foos").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     send_text_msg(alice, alice_chat_id, "populate".to_string()).await?;
     let sent_msg = alice.pop_sent_msg().await;
@@ -3774,7 +3766,7 @@ async fn test_sync_member_list_on_rejoin() -> Result<()> {
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
 
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foos").await?;
+    let alice_chat_id = create_group(alice, "foos").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
 
@@ -3812,7 +3804,7 @@ async fn test_ignore_outdated_membership_changes() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let alice_bob_id = alice.add_or_lookup_contact_id(bob).await;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "grp").await?;
+    let alice_chat_id = create_group(alice, "grp").await?;
 
     // Alice creates a group chat. Bob accepts it.
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
@@ -3860,7 +3852,7 @@ async fn test_dont_recreate_contacts_on_add_remove() -> Result<()> {
     let fiona = &tcm.fiona().await;
     let charlie = &tcm.charlie().await;
 
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
 
     add_contact_to_chat(
         alice,
@@ -3911,7 +3903,7 @@ async fn test_delayed_removal_is_ignored() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
-    let chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let chat_id = create_group(alice, "Group").await?;
     let alice_bob = alice.add_or_lookup_contact_id(bob).await;
     let alice_fiona = alice.add_or_lookup_contact_id(fiona).await;
     // create chat with three members
@@ -3964,7 +3956,7 @@ async fn test_dont_readd_with_normal_msg() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
 
     add_contact_to_chat(
         alice,
@@ -4202,7 +4194,7 @@ async fn test_member_left_does_not_create_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
     add_contact_to_chat(
         alice,
         alice_chat_id,
@@ -4230,7 +4222,7 @@ async fn test_recreate_member_list_on_missing_add_of_self() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
     add_contact_to_chat(
         alice,
         alice_chat_id,
@@ -4274,7 +4266,7 @@ async fn test_recreate_member_list_on_missing_add_of_self() -> Result<()> {
 async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
-    let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(&alice, "Group").await?;
     add_contact_to_chat(
         &alice,
         alice_chat_id,
@@ -4414,7 +4406,7 @@ async fn test_create_group_with_big_msg() -> Result<()> {
 
     let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
 
-    let bob_grp_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "Group").await?;
+    let bob_grp_id = create_group(&bob, "Group").await?;
     add_contact_to_chat(&bob, bob_grp_id, ba_contact).await?;
     let mut msg = Message::new(Viewtype::Image);
     msg.set_file_from_bytes(&bob, "a.jpg", file_bytes, None)?;
@@ -4445,7 +4437,7 @@ async fn test_create_group_with_big_msg() -> Result<()> {
 
     // Now Bob can send encrypted messages to Alice.
 
-    let bob_grp_id = create_group_chat(&bob, ProtectionStatus::Unprotected, "Group1").await?;
+    let bob_grp_id = create_group(&bob, "Group1").await?;
     add_contact_to_chat(&bob, bob_grp_id, ba_contact).await?;
     let mut msg = Message::new(Viewtype::Image);
     msg.set_file_from_bytes(&bob, "a.jpg", file_bytes, None)?;
@@ -4486,7 +4478,7 @@ async fn test_partial_group_consistency() -> Result<()> {
     let bob = tcm.bob().await;
     let fiona = tcm.fiona().await;
     let bob_id = alice.add_or_lookup_contact_id(&bob).await;
-    let alice_chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "foos").await?;
+    let alice_chat_id = create_group(&alice, "foos").await?;
     add_contact_to_chat(&alice, alice_chat_id, bob_id).await?;
 
     send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
@@ -4566,7 +4558,7 @@ async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     mark_as_verified(alice, bob).await;
-    let group_id = create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let group_id = create_group(alice, "Group").await?;
     let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
     add_contact_to_chat(alice, group_id, alice_bob_id).await?;
     alice.send_text(group_id, "Hello!").await;
@@ -4663,7 +4655,7 @@ async fn test_unarchive_on_member_removal() -> Result<()> {
     let fiona = &tcm.fiona().await;
     let bob_id = alice.add_or_lookup_contact_id(bob).await;
     let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "foos").await?;
+    let alice_chat_id = create_group(alice, "foos").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
 
@@ -4696,9 +4688,7 @@ async fn test_no_op_member_added_is_trash() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "foos", &[bob])
-        .await;
+    let alice_chat_id = alice.create_group_with_members("foos", &[bob]).await;
     send_text_msg(alice, alice_chat_id, "populate".to_string()).await?;
     let msg = alice.pop_sent_msg().await;
     bob.recv_msg(&msg).await;
@@ -4765,7 +4755,7 @@ async fn test_references() -> Result<()> {
     let bob = &tcm.bob().await;
     alice.set_config_bool(Config::BccSelf, true).await?;
 
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
     alice
         .send_text(alice_chat_id, "Hi! I created a group.")
         .await;
@@ -4809,7 +4799,7 @@ async fn test_prefer_references_to_downloaded_msgs() -> Result<()> {
     let fiona = &tcm.fiona().await;
     let alice_bob_id = tcm.send_recv(bob, alice, "hi").await.from_id;
     let alice_fiona_id = tcm.send_recv(fiona, alice, "hi").await.from_id;
-    let alice_chat_id = create_group_chat(alice, ProtectionStatus::Unprotected, "Group").await?;
+    let alice_chat_id = create_group(alice, "Group").await?;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
     // W/o fiona the test doesn't work -- the last message is assigned to the 1:1 chat due to
     // `is_probably_private_reply()`.
@@ -5009,12 +4999,7 @@ async fn test_group_name_with_newline() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let chat_id = create_group_chat(
-        alice,
-        ProtectionStatus::Unprotected,
-        "Group\r\nwith\nnewlines",
-    )
-    .await?;
+    let chat_id = create_group(alice, "Group\r\nwith\nnewlines").await?;
     add_contact_to_chat(alice, chat_id, alice.add_or_lookup_contact_id(bob).await).await?;
     send_text_msg(alice, chat_id, "populate".to_string()).await?;
     let bob_chat_id = bob.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
@@ -5032,7 +5017,7 @@ async fn test_rename_chat_on_missing_message() -> Result<()> {
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
     let charlie = tcm.charlie().await;
-    let chat_id = create_group_chat(&alice, ProtectionStatus::Unprotected, "Group").await?;
+    let chat_id = create_group(&alice, "Group").await?;
     add_to_chat_contacts_table(
         &alice,
         time(),
@@ -5068,7 +5053,7 @@ async fn test_rename_chat_after_creating_invite() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     for populate_before_securejoin in [false, true] {
-        let alice_chat_id = create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+        let alice_chat_id = create_group(alice, "Group").await?;
         let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
 
         SystemTime::shift(Duration::from_secs(60));
@@ -5098,7 +5083,7 @@ async fn test_two_group_securejoins() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let group_id = chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let group_id = chat::create_group(alice, "Group").await?;
 
     let qr = get_securejoin_qr(alice, Some(group_id)).await?;
 
@@ -5123,8 +5108,7 @@ async fn test_unverified_member_msg() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let alice_chat_id =
-        chat::create_group_chat(alice, ProtectionStatus::Protected, "Group").await?;
+    let alice_chat_id = chat::create_group(alice, "Group").await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
 
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
@@ -5150,11 +5134,14 @@ async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
 
-    let bob_chat_id = chat::create_group_chat(bob, ProtectionStatus::Protected, "Group").await?;
+    let bob_chat_id = chat::create_group(bob, "Group").await?;
     let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
     tcm.exec_securejoin_qr(fiona, bob, &qr).await;
     tcm.exec_securejoin_qr(a0, bob, &qr).await;
     tcm.exec_securejoin_qr(a1, bob, &qr).await;
+
+    // Shift time by one week to trigger gossip.
+    SystemTime::shift(Duration::from_secs(7 * 24 * 3600));
 
     let a0_chat_id = a0.get_last_msg().await.chat_id;
     let a0_sent_msg = a0.send_text(a0_chat_id, "Hi").await;
@@ -5211,9 +5198,7 @@ async fn test_no_address_contact_added_into_group() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = alice
-        .create_group_with_members(ProtectionStatus::Unprotected, "Group", &[bob])
-        .await;
+    let alice_chat_id = alice.create_group_with_members("Group", &[bob]).await;
     let bob_received_msg = bob
         .recv_msg(&alice.send_text(alice_chat_id, "Message").await)
         .await;
@@ -5493,7 +5478,7 @@ async fn test_small_unencrypted_group() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = chat::create_group_ex(alice, None, "Unencrypted group").await?;
+    let alice_chat_id = chat::create_group_unencrypted(alice, "Unencrypted group").await?;
     let alice_bob_id = alice.add_or_lookup_address_contact_id(bob).await;
     add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
     send_text_msg(alice, alice_chat_id, "Hello!".to_string()).await?;

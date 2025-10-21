@@ -120,7 +120,7 @@ pub enum Chattype {
 
     /// Group chat.
     ///
-    /// Created by [`crate::chat::create_group_chat`].
+    /// Created by [`crate::chat::create_group`].
     Group = 120,
 
     /// An (unencrypted) mailing list,

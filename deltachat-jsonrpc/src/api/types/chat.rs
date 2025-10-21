@@ -19,18 +19,6 @@ pub struct FullChat {
     id: u32,
     name: String,
 
-    /// True if the chat is protected.
-    ///
-    /// Only verified contacts
-    /// as determined by [`ContactObject::is_verified`] / `Contact.isVerified`
-    /// can be added to protected chats.
-    ///
-    /// Protected chats are created using [`create_group_chat`] / `createGroupChat()`
-    /// by setting the 'protect' parameter to true.
-    ///
-    /// [`create_group_chat`]: crate::api::CommandApi::create_group_chat
-    is_protected: bool,
-
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
     /// and all contacts in the chat are "key-contacts",
@@ -131,7 +119,6 @@ impl FullChat {
         Ok(FullChat {
             id: chat_id,
             name: chat.name.clone(),
-            is_protected: chat.is_protected(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
@@ -171,18 +158,6 @@ impl FullChat {
 pub struct BasicChat {
     id: u32,
     name: String,
-
-    /// True if the chat is protected.
-    ///
-    /// UI should display a green checkmark
-    /// in the chat title,
-    /// in the chat profile title and
-    /// in the chatlist item
-    /// if chat protection is enabled.
-    /// UI should also display a green checkmark
-    /// in the contact profile
-    /// if 1:1 chat with this contact exists and is protected.
-    is_protected: bool,
 
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
@@ -234,7 +209,6 @@ impl BasicChat {
         Ok(BasicChat {
             id: chat_id,
             name: chat.name.clone(),
-            is_protected: chat.is_protected(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
@@ -278,18 +252,18 @@ impl MuteDuration {
 
 #[derive(Clone, Serialize, Deserialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename = "ChatVisibility")]
-pub enum JSONRPCChatVisibility {
+pub enum JsonrpcChatVisibility {
     Normal,
     Archived,
     Pinned,
 }
 
-impl JSONRPCChatVisibility {
+impl JsonrpcChatVisibility {
     pub fn into_core_type(self) -> ChatVisibility {
         match self {
-            JSONRPCChatVisibility::Normal => ChatVisibility::Normal,
-            JSONRPCChatVisibility::Archived => ChatVisibility::Archived,
-            JSONRPCChatVisibility::Pinned => ChatVisibility::Pinned,
+            JsonrpcChatVisibility::Normal => ChatVisibility::Normal,
+            JsonrpcChatVisibility::Archived => ChatVisibility::Archived,
+            JsonrpcChatVisibility::Pinned => ChatVisibility::Pinned,
         }
     }
 }
