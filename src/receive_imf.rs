@@ -3521,17 +3521,15 @@ async fn apply_in_broadcast_changes(
 
     if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
         if context.is_self_addr(added_addr).await? {
-            let msg;
-
-            if chat.is_self_in_chat(context).await? {
+            let msg = if chat.is_self_in_chat(context).await? {
                 // Self is already in the chat.
                 // Probably Alice has two devices and her second device added us again;
                 // just hide the message.
                 info!(context, "No-op broadcast 'Member added' message (TRASH)");
-                msg = "".to_string();
+                "".to_string()
             } else {
-                msg = stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await;
-            }
+                stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await
+            };
 
             better_msg.get_or_insert(msg);
             send_event_chat_modified = true;
