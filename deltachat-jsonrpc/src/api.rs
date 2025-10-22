@@ -993,7 +993,15 @@ impl CommandApi {
     ///
     /// To check, if a chat is still unpromoted, you can look at the `is_unpromoted` property of `BasicChat` or `FullChat`.
     /// This may be useful if you want to show some help for just created groups.
-    async fn create_group_chat(&self, account_id: u32, name: String) -> Result<u32> {
+    ///
+    /// `protect` argument is deprecated as of 2025-10-22 and is left for compatibility.
+    /// Pass `false` here.
+    async fn create_group_chat(
+        &self,
+        account_id: u32,
+        name: String,
+        _protect: bool,
+    ) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         chat::create_group(&ctx, &name).await.map(|id| id.to_u32())
     }
