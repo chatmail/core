@@ -65,7 +65,21 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             )
             .await?;
 
-        if has_key
+        // Chat ID of the group we are joining, unused otherwise.
+        let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
+        if matches!(invite, QrInvite::Group { .. })
+            && is_contact_in_chat(context, group_chat_id, ContactId::SELF).await?
+        {
+            // If QR code is a group invite
+            // and we are already in the chat,
+            // nothing needs to be done.
+            // Even if Alice is not verified, we don't send anything.
+            context.emit_event(EventType::SecurejoinJoinerProgress {
+                contact_id: invite.contact_id(),
+                progress: JoinerProgress::Succeeded.to_usize(),
+            });
+            return Ok(group_chat_id);
+        } else if has_key
             && verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
                 .await?
         {
