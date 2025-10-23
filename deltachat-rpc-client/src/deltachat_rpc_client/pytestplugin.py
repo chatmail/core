@@ -73,11 +73,12 @@ class ACFactory:
     def resetup_account(self, ac: Account) -> Account:
         """Resetup account from scratch, losing the encryption key."""
         ac.stop_io()
-        ac_clone = self.get_unconfigured_account()
-        for i in ["addr", "mail_pw"]:
-            ac_clone.set_config(i, ac.get_config(i))
+        addr = ac.get_config("addr")
+        password = ac.get_config("mail_pw")
         ac.remove()
-        ac_clone.configure()
+        ac_clone = self.get_unconfigured_account()
+        params = {"addr": addr, "password": password}
+        ac_clone.add_or_update_transport(params)
         return ac_clone
 
     def get_accepted_chat(self, ac1: Account, ac2: Account) -> Chat:
