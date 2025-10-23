@@ -73,9 +73,8 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             .await?;
 
         // Chat ID of the group we are joining, unused otherwise.
-        let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
         if matches!(invite, QrInvite::Group { .. })
-            && is_contact_in_chat(context, group_chat_id, ContactId::SELF).await?
+            && is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await?
         {
             // If QR code is a group invite
             // and we are already in the chat,
@@ -85,7 +84,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 contact_id: invite.contact_id(),
                 progress: JoinerProgress::Succeeded.to_usize(),
             });
-            return Ok(group_chat_id);
+            return Ok(joining_chat_id);
         } else if has_key
             && verify_sender_by_fingerprint(context, invite.fingerprint(), invite.contact_id())
                 .await?
