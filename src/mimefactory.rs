@@ -546,7 +546,7 @@ impl MimeFactory {
             Loaded::Message { msg, .. } => {
                 msg.param.get_bool(Param::SkipAutocrypt).unwrap_or_default()
             }
-            Loaded::Mdn { .. } => false,
+            Loaded::Mdn { .. } => true,
         }
     }
 
