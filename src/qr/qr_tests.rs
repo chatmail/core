@@ -1,6 +1,8 @@
 use super::*;
 use crate::chat::create_group;
 use crate::config::Config;
+use crate::login_param::EnteredCertificateChecks;
+use crate::provider::Socket;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{TestContext, TestContextManager, sync};
 
@@ -581,101 +583,58 @@ async fn test_withdraw_multidevice() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_decode_and_apply_dclogin() -> Result<()> {
-    let ctx = TestContext::new().await;
+async fn test_decode_dclogin() -> Result<()> {
+    let ctx = &TestContext::new().await;
 
-    let result = check_qr(&ctx.ctx, "dclogin:usename+extension@host?p=1234&v=1").await?;
-    if let Qr::Login { address, options } = result {
-        assert_eq!(address, "usename+extension@host".to_owned());
+    let Qr::Login { address, options } =
+        check_qr(ctx, "dclogin:username+extension@host?p=1234&v=1").await?
+    else {
+        unreachable!();
+    };
 
-        if let LoginOptions::V1 { mail_pw, .. } = options {
-            assert_eq!(mail_pw, "1234".to_owned());
-        } else {
-            bail!("wrong type")
-        }
+    assert_eq!(address, "username+extension@host".to_owned());
+
+    if let LoginOptions::V1 { ref mail_pw, .. } = options {
+        assert_eq!(mail_pw, "1234");
     } else {
         bail!("wrong type")
     }
 
-    assert!(ctx.ctx.get_config(Config::Addr).await?.is_none());
-    assert!(ctx.ctx.get_config(Config::MailPw).await?.is_none());
-
-    set_config_from_qr(&ctx.ctx, "dclogin:username+extension@host?p=1234&v=1").await?;
-    assert_eq!(
-        ctx.ctx.get_config(Config::Addr).await?,
-        Some("username+extension@host".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailPw).await?,
-        Some("1234".to_owned())
-    );
+    let param = login_param_from_login_qr(&address, options)?;
+    assert_eq!(param.addr, "username+extension@host");
+    assert_eq!(param.imap.password, "1234");
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_decode_and_apply_dclogin_advanced_options() -> Result<()> {
-    let ctx = TestContext::new().await;
-    set_config_from_qr(&ctx.ctx, "dclogin:username+extension@host?p=1234&spw=4321&sh=send.host&sp=7273&su=SendUser&ih=host.tld&ip=4343&iu=user&ipw=password&is=ssl&ic=1&sc=3&ss=plain&v=1").await?;
-    assert_eq!(
-        ctx.ctx.get_config(Config::Addr).await?,
-        Some("username+extension@host".to_owned())
-    );
+async fn test_decode_dclogin_advanced_options() -> Result<()> {
+    let ctx = &TestContext::new().await;
+
+    let Qr::Login { address, options } = check_qr(ctx, "dclogin:username+extension@host?p=1234&spw=4321&sh=send.host&sp=7273&su=SendUser&ih=host.tld&ip=4343&iu=user&ipw=password&is=ssl&ic=1&sc=3&ss=plain&v=1").await? else {
+        unreachable!();
+    };
+
+    assert_eq!(address, "username+extension@host");
+
+    let param = login_param_from_login_qr(&address, options)?;
+    assert_eq!(param.imap.server, "host.tld");
+    assert_eq!(param.imap.port, 4343);
+    assert_eq!(param.imap.user, "user");
 
     // `p=1234` is ignored, because `ipw=password` is set
+    assert_eq!(param.imap.password, "password");
+    assert_eq!(param.imap.security, Socket::Ssl);
 
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailServer).await?,
-        Some("host.tld".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailPort).await?,
-        Some("4343".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailUser).await?,
-        Some("user".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailPw).await?,
-        Some("password".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::MailSecurity).await?,
-        Some("1".to_owned()) // ssl
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::ImapCertificateChecks).await?,
-        Some("1".to_owned())
-    );
-
-    assert_eq!(
-        ctx.ctx.get_config(Config::SendPw).await?,
-        Some("4321".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::SendServer).await?,
-        Some("send.host".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::SendPort).await?,
-        Some("7273".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::SendUser).await?,
-        Some("SendUser".to_owned())
-    );
+    assert_eq!(param.smtp.password, "4321");
+    assert_eq!(param.smtp.server, "send.host");
+    assert_eq!(param.smtp.port, 7273);
+    assert_eq!(param.smtp.user, "SendUser");
+    assert_eq!(param.smtp.security, Socket::Plain);
 
     // `sc` option is actually ignored and `ic` is used instead
     // because `smtp_certificate_checks` is deprecated.
-    assert_eq!(
-        ctx.ctx.get_config(Config::SmtpCertificateChecks).await?,
-        Some("1".to_owned())
-    );
-    assert_eq!(
-        ctx.ctx.get_config(Config::SendSecurity).await?,
-        Some("3".to_owned()) // plain
-    );
+    assert_eq!(param.certificate_checks, EnteredCertificateChecks::Strict);
 
     Ok(())
 }
