@@ -39,7 +39,7 @@ use crate::token::Namespace;
 /// so, Alice doesn't mark Bob as verified.
 // TODO For backwards compatibility reasons, this is still using a rather large value.
 // Set this to a lower value (e.g. 10 minutes)
-// when Delta Chat v2.21.0 is sufficiently rolled out
+// when Delta Chat v2.22.0 is sufficiently rolled out
 const VERIFICATION_TIMEOUT_SECONDS: i64 = 7 * 24 * 3600;
 
 fn inviter_progress(
