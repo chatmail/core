@@ -11,6 +11,7 @@ use iroh_gossip::proto::TopicId;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::mime::MimePart;
+use rand::Rng as _;
 use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
@@ -1036,6 +1037,32 @@ impl MimeFactory {
                         "Message is unnecrypted, not including broadcast secret"
                     );
                 }
+            } else if is_encrypted && header_name == "date" {
+                protected_headers.push(header.clone());
+
+                // Randomized date goes to unprotected header.
+                //
+                // We cannot just send "Thu, 01 Jan 1970 00:00:00 +0000"
+                // or omit the header because GMX then fails with
+                //
+                // host mx00.emig.gmx.net[212.227.15.9] said:
+                // 554-Transaction failed
+                // 554-Reject due to policy restrictions.
+                // 554 For explanation visit https://postmaster.gmx.net/en/case?...
+                // (in reply to end of DATA command)
+                //
+                // and the explanation page says
+                // "The time information deviates too much from the actual time".
+                let timestamp_offset = rand::thread_rng().gen_range(0..1000000);
+                let protected_timestamp = self.timestamp.saturating_sub(timestamp_offset);
+                let unprotected_date =
+                    chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)
+                        .unwrap()
+                        .to_rfc2822();
+                unprotected_headers.push((
+                    "Date",
+                    mail_builder::headers::raw::Raw::new(unprotected_date).into(),
+                ));
             } else if is_encrypted {
                 protected_headers.push(header.clone());
 
@@ -1046,8 +1073,7 @@ impl MimeFactory {
                             mail_builder::headers::raw::Raw::new("[...]").into(),
                         ));
                     }
-                    "date"
-                    | "in-reply-to"
+                    "in-reply-to"
                     | "references"
                     | "auto-submitted"
                     | "chat-version"

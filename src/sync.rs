@@ -318,7 +318,7 @@ impl Context {
     }
 
     async fn save_message(&self, src_rfc724_mid: &str, dest_rfc724_mid: &String) -> Result<()> {
-        if let Some((src_msg_id, _)) = message::rfc724_mid_exists(self, src_rfc724_mid).await? {
+        if let Some(src_msg_id) = message::rfc724_mid_exists(self, src_rfc724_mid).await? {
             chat::save_copy_in_self_talk(self, src_msg_id, dest_rfc724_mid).await?;
         }
         Ok(())
@@ -328,7 +328,7 @@ impl Context {
         let mut modified_chat_ids = HashSet::new();
         let mut msg_ids = Vec::new();
         for rfc724_mid in msgs {
-            if let Some((msg_id, _)) = message::rfc724_mid_exists(self, rfc724_mid).await? {
+            if let Some(msg_id) = message::rfc724_mid_exists(self, rfc724_mid).await? {
                 if let Some(msg) = Message::load_from_db_optional(self, msg_id).await? {
                     message::delete_msg_locally(self, &msg).await?;
                     msg_ids.push(msg.id);

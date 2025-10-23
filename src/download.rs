@@ -157,30 +157,23 @@ pub(crate) async fn download_msg(
     let row = context
         .sql
         .query_row_optional(
-            "SELECT uid, folder, uidvalidity FROM imap WHERE rfc724_mid=? AND target!=''",
+            "SELECT uid, folder FROM imap WHERE rfc724_mid=? AND target!=''",
             (&msg.rfc724_mid,),
             |row| {
                 let server_uid: u32 = row.get(0)?;
                 let server_folder: String = row.get(1)?;
-                let uidvalidity: u32 = row.get(2)?;
-                Ok((server_uid, server_folder, uidvalidity))
+                Ok((server_uid, server_folder))
             },
         )
         .await?;
 
-    let Some((server_uid, server_folder, uidvalidity)) = row else {
+    let Some((server_uid, server_folder)) = row else {
         // No IMAP record found, we don't know the UID and folder.
         return Err(anyhow!("Call download_full() again to try over."));
     };
 
     session
-        .fetch_single_msg(
-            context,
-            &server_folder,
-            uidvalidity,
-            server_uid,
-            msg.rfc724_mid.clone(),
-        )
+        .fetch_single_msg(context, &server_folder, server_uid, msg.rfc724_mid.clone())
         .await?;
     Ok(())
 }
@@ -194,7 +187,6 @@ impl Session {
         &mut self,
         context: &Context,
         folder: &str,
-        uidvalidity: u32,
         uid: u32,
         rfc724_mid: String,
     ) -> Result<()> {
@@ -214,16 +206,8 @@ impl Session {
         let mut uid_message_ids: BTreeMap<u32, String> = BTreeMap::new();
         uid_message_ids.insert(uid, rfc724_mid);
         let (sender, receiver) = async_channel::unbounded();
-        self.fetch_many_msgs(
-            context,
-            folder,
-            uidvalidity,
-            vec![uid],
-            &uid_message_ids,
-            false,
-            sender,
-        )
-        .await?;
+        self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, false, sender)
+            .await?;
         if receiver.recv().await.is_err() {
             bail!("Failed to fetch UID {uid}");
         }
