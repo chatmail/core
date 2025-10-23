@@ -360,12 +360,7 @@ async fn joining_chat_id(
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
-        QrInvite::Group { grpid, name, .. }
-        | QrInvite::Broadcast {
-            broadcast_name: name,
-            grpid,
-            ..
-        } => {
+        QrInvite::Group { grpid, name, .. } | QrInvite::Broadcast { name, grpid, .. } => {
             let chattype = if matches!(invite, QrInvite::Group { .. }) {
                 Chattype::Group
             } else {

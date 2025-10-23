@@ -2563,7 +2563,7 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 
 #define         DC_QR_ASK_VERIFYCONTACT      200 // id=contact
 #define         DC_QR_ASK_VERIFYGROUP        202 // text1=groupname
-#define         DC_QR_ASK_VERIFYBROADCAST    204
+#define         DC_QR_ASK_VERIFYBROADCAST    204 // text1=broadcast name
 #define         DC_QR_FPR_OK                 210 // id=contact
 #define         DC_QR_FPR_MISMATCH           220 // id=contact
 #define         DC_QR_FPR_WITHOUT_ADDR       230 // test1=formatted fingerprint
@@ -2598,7 +2598,7 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
  *
  * - DC_QR_ASK_VERIFYGROUP or DC_QR_ASK_VERIFYBROADCAST
  *   with dc_lot_t::text1=Group name:
- *   ask whether to join the group;
+ *   ask whether to join the chat;
  *   if so, start the protocol with dc_join_securejoin().
  *
  * - DC_QR_FPR_OK with dc_lot_t::id=Contact ID:

@@ -358,7 +358,7 @@ impl MimeMessage {
         let secrets: Vec<String> = context
             .sql
             .query_map(
-                "SELECT secret FROM broadcasts_shared_secrets ORDER BY chat_id DESC",
+                "SELECT secret FROM broadcast_secrets ORDER BY chat_id DESC",
                 (),
                 |row| row.get(0),
                 |rows| {

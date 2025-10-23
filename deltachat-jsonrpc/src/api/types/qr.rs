@@ -38,7 +38,7 @@ pub enum QrObject {
     /// Ask the user whether to join the broadcast channel.
     AskJoinBroadcast {
         /// The user-visible name of this broadcast channel
-        broadcast_name: String,
+        name: String,
         /// A string of random characters,
         /// uniquely identifying this broadcast channel in the database.
         /// Called `grpid` for historic reasons:
@@ -229,7 +229,7 @@ impl From<Qr> for QrObject {
                 }
             }
             Qr::AskJoinBroadcast {
-                broadcast_name,
+                name,
                 grpid,
                 contact_id,
                 fingerprint,
@@ -239,7 +239,7 @@ impl From<Qr> for QrObject {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.to_string();
                 QrObject::AskJoinBroadcast {
-                    broadcast_name,
+                    name,
                     grpid,
                     contact_id,
                     fingerprint,

@@ -3501,7 +3501,7 @@ pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<Ch
 }
 
 const SQL_INSERT_BROADCAST_SECRET: &str =
-    "INSERT INTO broadcasts_shared_secrets (chat_id, secret) VALUES (?, ?)
+    "INSERT INTO broadcast_secrets (chat_id, secret) VALUES (?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET secret=excluded.secret";
 
 pub(crate) async fn create_out_broadcast_ex(
@@ -3526,8 +3526,8 @@ pub(crate) async fn create_out_broadcast_ex(
         ensure!(cnt == 0, "{cnt} chats exist with grpid {grpid}");
 
         t.execute(
-            "INSERT INTO chats \
-            (type, name, grpid, created_timestamp) \
+            "INSERT INTO chats
+            (type, name, grpid, created_timestamp)
             VALUES(?, ?, ?, ?);",
             (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
         )?;
@@ -3545,10 +3545,7 @@ pub(crate) async fn create_out_broadcast_ex(
 
     if sync.into() {
         let id = SyncId::Grpid(grpid);
-        let action = SyncAction::CreateOutBroadcast {
-            chat_name,
-            shared_secret: secret,
-        };
+        let action = SyncAction::CreateOutBroadcast { chat_name, secret };
         self::sync(context, id, action).await.log_err(context).ok();
     }
 
@@ -3562,7 +3559,7 @@ pub(crate) async fn load_broadcast_shared_secret(
     context
         .sql
         .query_get_value(
-            "SELECT secret FROM broadcasts_shared_secrets WHERE chat_id=?",
+            "SELECT secret FROM broadcast_secrets WHERE chat_id=?",
             (chat_id,),
         )
         .await
@@ -4827,7 +4824,7 @@ pub(crate) enum SyncAction {
     /// Create broadcast channel with the given name.
     CreateOutBroadcast {
         chat_name: String,
-        shared_secret: String,
+        secret: String,
     },
     /// Create encrypted group chat with the given name.
     CreateGroupEncrypted(String),
@@ -4935,16 +4932,13 @@ impl Context {
 
     async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &str) -> Result<bool> {
         match action {
-            SyncAction::CreateOutBroadcast {
-                chat_name,
-                shared_secret,
-            } => {
+            SyncAction::CreateOutBroadcast { chat_name, secret } => {
                 create_out_broadcast_ex(
                     self,
                     Nosync,
                     grpid.to_string(),
                     chat_name.clone(),
-                    shared_secret.to_string(),
+                    secret.to_string(),
                 )
                 .await?;
                 Ok(true)

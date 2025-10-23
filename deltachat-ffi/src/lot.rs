@@ -45,7 +45,7 @@ impl Lot {
             Self::Qr(qr) => match qr {
                 Qr::AskVerifyContact { .. } => None,
                 Qr::AskVerifyGroup { grpname, .. } => Some(Cow::Borrowed(grpname)),
-                Qr::AskJoinBroadcast { broadcast_name, .. } => Some(Cow::Borrowed(broadcast_name)),
+                Qr::AskJoinBroadcast { name, .. } => Some(Cow::Borrowed(name)),
                 Qr::FprOk { .. } => None,
                 Qr::FprMismatch { .. } => None,
                 Qr::FprWithoutAddr { fingerprint, .. } => Some(Cow::Borrowed(fingerprint)),

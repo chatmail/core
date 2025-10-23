@@ -85,7 +85,7 @@ pub enum Qr {
     /// Ask whether to join the broadcast channel.
     AskJoinBroadcast {
         /// The user-visible name of this broadcast channel
-        broadcast_name: String,
+        name: String,
 
         /// A string of random characters,
         /// uniquely identifying this broadcast channel in the database.
@@ -494,9 +494,9 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     authcode,
                 })
             }
-        } else if let (Some(grpid), Some(broadcast_name)) = (grpid, broadcast_name) {
+        } else if let (Some(grpid), Some(name)) = (grpid, broadcast_name) {
             Ok(Qr::AskJoinBroadcast {
-                broadcast_name,
+                name,
                 grpid,
                 contact_id,
                 fingerprint,
