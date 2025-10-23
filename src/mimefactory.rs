@@ -1216,14 +1216,27 @@ impl MimeFactory {
                 Loaded::Message { chat, msg }
                     if should_encrypt_with_broadcast_secret(msg, chat) =>
                 {
-                    // If there is no shared secret yet
-                    // (because this is an old broadcast channel,
-                    // created before we had symmetric encryption),
-                    // we just encrypt asymmetrically.
-                    // Symmetric encryption exists since 2025-10;
-                    // some time after that, we can think about requiring everyone
-                    // to switch to symmetrically-encrypted broadcast lists.
-                    load_broadcast_shared_secret(context, chat.id).await?
+                    let secret = load_broadcast_shared_secret(context, chat.id).await?;
+                    if secret.is_none() {
+                        // If there is no shared secret yet
+                        // because this is an old broadcast channel,
+                        // created before we had symmetric encryption,
+                        // we show an error message.
+                        let text = r#"The up to now "experimental channels feature" is about to become an officially supported one. By that, privacy will be improved, it will become faster, and less traffic will be consumed.
+
+As we do not guarantee feature-stability for such experiments, this means, that you will need to create the channel again. 
+
+Here is what to do:
+ • Create a new channel
+ • Tap on the channel name
+ • Tap on "QR Invite Code"
+ • Have all recipients scan the QR code, or send them the link
+
+If you have any questions, please send an email to delta@merlinux.eu or ask at https://support.delta.chat/."#;
+                        chat::add_info_msg(context, chat.id, text, time()).await?;
+                        bail!(text);
+                    }
+                    secret
                 }
                 _ => None,
             };
