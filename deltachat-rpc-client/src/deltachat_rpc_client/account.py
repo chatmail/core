@@ -318,7 +318,7 @@ class Account:
         (see `get_full_snapshot()` / `get_basic_snapshot()`).
         This may be useful if you want to show some help for just created groups.
         """
-        return Chat(self, self._rpc.create_group_chat(self.id, name))
+        return Chat(self, self._rpc.create_group_chat(self.id, name, False))
 
     def create_broadcast(self, name: str) -> Chat:
         """Create a new, outgoing **broadcast channel**

@@ -1027,3 +1027,46 @@ async fn test_expired_synced_auth_token() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that attempting to join already joined group does nothing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_rejoin_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_group(alice, "the chat").await?;
+
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    // Bob gets two progress events.
+    for expected_progress in [400, 1000] {
+        let EventType::SecurejoinJoinerProgress { progress, .. } = bob
+            .evtracker
+            .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
+            .await
+        else {
+            unreachable!();
+        };
+        assert_eq!(progress, expected_progress);
+    }
+
+    // Bob scans the QR code again.
+    join_securejoin(bob, &qr).await?;
+
+    // Bob immediately receives progress 1000 event.
+    let EventType::SecurejoinJoinerProgress { progress, .. } = bob
+        .evtracker
+        .get_matching(|evt| matches!(evt, EventType::SecurejoinJoinerProgress { .. }))
+        .await
+    else {
+        unreachable!();
+    };
+    assert_eq!(progress, 1000);
+
+    // Bob does not send any more messages by scanning the QR code.
+    assert!(bob.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+
+    Ok(())
+}

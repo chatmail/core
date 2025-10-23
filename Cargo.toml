@@ -103,7 +103,7 @@ thiserror = { workspace = true }
 tokio-io-timeout = "1.2.1"
 tokio-rustls = { version = "0.26.2", default-features = false }
 tokio-stream = { version = "0.1.17", features = ["fs"] }
-tokio-tar = { version = "0.3" } # TODO: integrate tokio into async-tar
+astral-tokio-tar = { version = "0.5.6", default-features = false }
 tokio-util = { workspace = true }
 tokio = { workspace = true, features = ["fs", "rt-multi-thread", "macros"] }
 toml = "0.9"
