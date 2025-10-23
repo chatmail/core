@@ -6,16 +6,17 @@ use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 pub use dclogin_scheme::LoginOptions;
+pub(crate) use dclogin_scheme::login_param_from_login_qr;
 use deltachat_contact_tools::{ContactAddress, addr_normalize, may_be_valid_addr};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
 use serde::Deserialize;
 
-pub(crate) use self::dclogin_scheme::configure_from_login_qr;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::Fingerprint;
+use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
@@ -651,10 +652,13 @@ struct CreateAccountErrorResponse {
     reason: String,
 }
 
-/// take a qr of the type DC_QR_ACCOUNT, parse it's parameters,
-/// download additional information from the contained url and set the parameters.
-/// on success, a configure::configure() should be able to log in to the account
-pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<()> {
+/// Takes a QR with `DCACCOUNT:` scheme, parses its parameters,
+/// downloads additional information from the contained URL
+/// and returns the login parameters.
+pub(crate) async fn login_param_from_account_qr(
+    context: &Context,
+    qr: &str,
+) -> Result<EnteredLoginParam> {
     let url_str = qr
         .get(DCACCOUNT_SCHEME.len()..)
         .context("Invalid DCACCOUNT scheme")?;
@@ -669,14 +673,19 @@ pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<(
             .with_context(|| {
                 format!("Cannot create account, response is malformed:\n{response_text:?}")
             })?;
-        context
-            .set_config_internal(Config::Addr, Some(&email))
-            .await?;
-        context
-            .set_config_internal(Config::MailPw, Some(&password))
-            .await?;
 
-        Ok(())
+        let param = EnteredLoginParam {
+            addr: email,
+            imap: EnteredServerLoginParam {
+                password,
+                ..Default::default()
+            },
+            smtp: Default::default(),
+            certificate_checks: EnteredCertificateChecks::Strict,
+            oauth2: false,
+        };
+
+        Ok(param)
     } else {
         match serde_json::from_str::<CreateAccountErrorResponse>(&response_text) {
             Ok(error) => Err(anyhow!(error.reason)),
@@ -693,7 +702,10 @@ pub(crate) async fn set_account_from_qr(context: &Context, qr: &str) -> Result<(
 /// Sets configuration values from a QR code.
 pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
     match check_qr(context, qr).await? {
-        Qr::Account { .. } => set_account_from_qr(context, qr).await?,
+        Qr::Account { .. } => {
+            let mut param = login_param_from_account_qr(context, qr).await?;
+            context.add_transport_inner(&mut param).await?
+        }
         Qr::Proxy { url, .. } => {
             let old_proxy_url_value = context
                 .get_config(Config::ProxyUrl)
@@ -781,7 +793,8 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             context.scheduler.interrupt_inbox().await;
         }
         Qr::Login { address, options } => {
-            configure_from_login_qr(context, &address, options).await?
+            let mut param = login_param_from_login_qr(&address, options)?;
+            context.add_transport_inner(&mut param).await?
         }
         _ => bail!("QR code does not contain config"),
     }

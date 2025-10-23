@@ -3,12 +3,9 @@ use std::collections::HashMap;
 use anyhow::{Context as _, Result, bail};
 
 use deltachat_contact_tools::may_be_valid_addr;
-use num_traits::cast::ToPrimitive;
 
 use super::{DCLOGIN_SCHEME, Qr};
-use crate::config::Config;
-use crate::context::Context;
-use crate::login_param::EnteredCertificateChecks;
+use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
 use crate::provider::Socket;
 
 /// Options for `dclogin:` scheme.
@@ -157,15 +154,10 @@ fn parse_certificate_checks(
     })
 }
 
-pub(crate) async fn configure_from_login_qr(
-    context: &Context,
-    address: &str,
+pub(crate) fn login_param_from_login_qr(
+    addr: &str,
     options: LoginOptions,
-) -> Result<()> {
-    context
-        .set_config_internal(Config::Addr, Some(address))
-        .await?;
-
+) -> Result<EnteredLoginParam> {
     match options {
         LoginOptions::V1 {
             mail_pw,
@@ -181,77 +173,26 @@ pub(crate) async fn configure_from_login_qr(
             smtp_security,
             certificate_checks,
         } => {
-            context
-                .set_config_internal(Config::MailPw, Some(&mail_pw))
-                .await?;
-            if let Some(value) = imap_host {
-                context
-                    .set_config_internal(Config::MailServer, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = imap_port {
-                context
-                    .set_config_internal(Config::MailPort, Some(&value.to_string()))
-                    .await?;
-            }
-            if let Some(value) = imap_username {
-                context
-                    .set_config_internal(Config::MailUser, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = imap_password {
-                context
-                    .set_config_internal(Config::MailPw, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = imap_security {
-                let code = value
-                    .to_u8()
-                    .context("could not convert imap security value to number")?;
-                context
-                    .set_config_internal(Config::MailSecurity, Some(&code.to_string()))
-                    .await?;
-            }
-            if let Some(value) = smtp_host {
-                context
-                    .set_config_internal(Config::SendServer, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = smtp_port {
-                context
-                    .set_config_internal(Config::SendPort, Some(&value.to_string()))
-                    .await?;
-            }
-            if let Some(value) = smtp_username {
-                context
-                    .set_config_internal(Config::SendUser, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = smtp_password {
-                context
-                    .set_config_internal(Config::SendPw, Some(&value))
-                    .await?;
-            }
-            if let Some(value) = smtp_security {
-                let code = value
-                    .to_u8()
-                    .context("could not convert smtp security value to number")?;
-                context
-                    .set_config_internal(Config::SendSecurity, Some(&code.to_string()))
-                    .await?;
-            }
-            if let Some(value) = certificate_checks {
-                let code = value
-                    .to_u32()
-                    .context("could not convert certificate checks value to number")?;
-                context
-                    .set_config_internal(Config::ImapCertificateChecks, Some(&code.to_string()))
-                    .await?;
-                context
-                    .set_config_internal(Config::SmtpCertificateChecks, Some(&code.to_string()))
-                    .await?;
-            }
-            Ok(())
+            let param = EnteredLoginParam {
+                addr: addr.to_string(),
+                imap: EnteredServerLoginParam {
+                    server: imap_host.unwrap_or_default(),
+                    port: imap_port.unwrap_or_default(),
+                    security: imap_security.unwrap_or_default(),
+                    user: imap_username.unwrap_or_default(),
+                    password: imap_password.unwrap_or(mail_pw),
+                },
+                smtp: EnteredServerLoginParam {
+                    server: smtp_host.unwrap_or_default(),
+                    port: smtp_port.unwrap_or_default(),
+                    security: smtp_security.unwrap_or_default(),
+                    user: smtp_username.unwrap_or_default(),
+                    password: smtp_password.unwrap_or_default(),
+                },
+                certificate_checks: certificate_checks.unwrap_or_default(),
+                oauth2: false,
+            };
+            Ok(param)
         }
         _ => bail!(
             "DeltaChat does not understand this QR Code yet, please update the app and try again."
