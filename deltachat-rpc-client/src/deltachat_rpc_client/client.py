@@ -83,11 +83,10 @@ class Client:
 
     def configure(self, email: str, password: str, **kwargs) -> None:
         """Configure the client."""
-        self.account.set_config("addr", email)
-        self.account.set_config("mail_pw", password)
         for key, value in kwargs.items():
             self.account.set_config(key, value)
-        self.account.configure()
+        params = {"addr": email, "password": password}
+        self.account.add_or_update_transport(params)
         self.logger.debug("Account configured")
 
     def run_forever(self) -> None:
