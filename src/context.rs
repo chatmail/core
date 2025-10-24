@@ -818,7 +818,6 @@ impl Context {
         let unblocked_msgs = message::get_unblocked_msg_cnt(self).await;
         let request_msgs = message::get_request_msg_cnt(self).await;
         let contacts = Contact::get_real_cnt(self).await?;
-        let is_configured = self.get_config_int(Config::Configured).await?;
         let proxy_enabled = self.get_config_int(Config::ProxyEnabled).await?;
         let dbversion = self
             .sql
@@ -897,7 +896,6 @@ impl Context {
                 .await?
                 .unwrap_or_else(|| "<unset>".to_string()),
         );
-        res.insert("is_configured", is_configured.to_string());
         res.insert("proxy_enabled", proxy_enabled.to_string());
         res.insert("entered_account_settings", l.to_string());
         res.insert("used_account_settings", l2);
