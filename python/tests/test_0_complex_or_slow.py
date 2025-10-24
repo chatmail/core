@@ -116,7 +116,6 @@ class TestGroupStressTests:
 
 def test_qr_verified_group_and_chatting(acfactory, lp):
     ac1, ac2, ac3 = acfactory.get_online_accounts(3)
-    ac1_addr = ac1.get_self_contact().addr
     lp.sec("ac1: create verified-group QR, ac2 scans and joins")
     chat1 = ac1.create_group_chat("hello")
     qr = chat1.get_join_qr()
