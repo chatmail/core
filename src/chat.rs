@@ -951,7 +951,7 @@ impl ChatId {
 
         let chat_size: HashMap<ChatId, f64> = context
             .sql
-            .query_map(
+            .query_map_collect(
                 "SELECT chat_id, count(*) AS n
                  FROM chats_contacts
                  WHERE contact_id > ? AND chat_id > ?
@@ -962,10 +962,6 @@ impl ChatId {
                     let chat_id: ChatId = row.get(0)?;
                     let size: f64 = row.get(1)?;
                     Ok((chat_id, size))
-                },
-                |rows| {
-                    rows.collect::<std::result::Result<HashMap<ChatId, f64>, _>>()
-                        .map_err(Into::into)
                 },
             )
             .await

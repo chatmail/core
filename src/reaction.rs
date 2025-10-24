@@ -320,9 +320,9 @@ async fn get_self_reaction(context: &Context, msg_id: MsgId) -> Result<Reaction>
 
 /// Returns a structure containing all reactions to the message.
 pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<Reactions> {
-    let reactions = context
+    let reactions: BTreeMap<ContactId, Reaction> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT contact_id, reaction FROM reactions WHERE msg_id=?",
             (msg_id,),
             |row| {
@@ -330,7 +330,6 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
                 let reaction: String = row.get(1)?;
                 Ok((contact_id, Reaction::from(reaction.as_str())))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
     Ok(Reactions { reactions })
