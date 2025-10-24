@@ -279,8 +279,10 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     ac1_contact_ac2 = ac1.create_contact(ac2)
     ac1_contact_ac3 = ac1.create_contact(ac3)
     ac1_contact_ac2_snapshot = ac1_contact_ac2.get_snapshot()
-    assert ac1_contact_ac2_snapshot.is_verified
-    assert ac1_contact_ac2_snapshot.verifier_id == ac1_contact_ac3.id
+    # Until we reset verifications and then send the _verified header,
+    # verification is not gossiped here:
+    assert not ac1_contact_ac2_snapshot.is_verified
+    assert ac1_contact_ac2_snapshot.verifier_id != ac1_contact_ac3.id
 
 
 def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
@@ -442,7 +444,9 @@ def test_gossip_verification(acfactory) -> None:
 
     # Group propagates verification using Autocrypt-Gossip header.
     carol_contact_alice_snapshot = carol_contact_alice.get_snapshot()
-    assert carol_contact_alice_snapshot.is_verified
+    # Until we reset verifications and then send the _verified header,
+    # verification is not gossiped here:
+    assert not carol_contact_alice_snapshot.is_verified
 
     logging.info("Bob creates a Securejoin group")
     bob_group_chat = bob.create_group("Securejoin Group")
