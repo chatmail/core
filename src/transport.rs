@@ -10,8 +10,8 @@
 
 use std::fmt;
 
-use anyhow::{Context as _, Result, bail, ensure, format_err};
-use deltachat_contact_tools::{EmailAddress, addr_cmp, addr_normalize};
+use anyhow::{Context as _, Result, bail, format_err};
+use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -540,12 +540,6 @@ impl ConfiguredLoginParam {
         let addr = addr_normalize(&self.addr);
         let provider_id = self.provider.map(|provider| provider.id);
         let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-        if let Some(configured_addr) = &configured_addr {
-            ensure!(
-                addr_cmp(configured_addr, &addr),
-                "Adding a second transport is not supported right now."
-            );
-        }
         context
             .sql
             .execute(
