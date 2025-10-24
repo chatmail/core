@@ -517,7 +517,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
 async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, MessageStats>> {
     let mut map: BTreeMap<Chattype, MessageStats> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
             FROM stats_msgs",
             (),
@@ -535,7 +535,6 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
                 };
                 Ok((chattype, message_stats))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
@@ -771,9 +770,9 @@ pub(crate) async fn count_securejoin_ux_info(
 }
 
 async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSources> {
-    let map = context
+    let map: BTreeMap<SecurejoinSource, u32> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT source, count FROM stats_securejoin_sources",
             (),
             |row| {
@@ -781,7 +780,6 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
                 let count: u32 = row.get(1)?;
                 Ok((source, count))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
@@ -798,9 +796,9 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
 }
 
 async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUiPaths> {
-    let map = context
+    let map: BTreeMap<SecurejoinUiPath, u32> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT uipath, count FROM stats_securejoin_uipaths",
             (),
             |row| {
@@ -808,7 +806,6 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUiPa
                 let count: u32 = row.get(1)?;
                 Ok((uipath, count))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
