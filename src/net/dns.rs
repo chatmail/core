@@ -630,7 +630,7 @@ async fn lookup_cache(
     let mut res = Vec::new();
     for cached_address in context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT dns_cache.address
              FROM dns_cache
              LEFT JOIN connection_history
@@ -646,10 +646,6 @@ async fn lookup_cache(
             |row| {
                 let address: String = row.get(0)?;
                 Ok(address)
-            },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<String>, _>>()
-                    .map_err(Into::into)
             },
         )
         .await?

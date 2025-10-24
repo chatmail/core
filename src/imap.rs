@@ -1036,7 +1036,7 @@ impl Session {
     async fn move_delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
         let rows = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT id, uid, target FROM imap
         WHERE folder = ?
         AND target != folder
@@ -1048,7 +1048,6 @@ impl Session {
                     let target: String = row.get(2)?;
                     Ok((rowid, uid, target))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
 
@@ -1139,7 +1138,7 @@ impl Session {
     pub(crate) async fn store_seen_flags_on_imap(&mut self, context: &Context) -> Result<()> {
         let rows = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT imap.id, uid, folder FROM imap, imap_markseen
                  WHERE imap.id = imap_markseen.id AND target = folder
                  ORDER BY folder, uid",
@@ -1150,7 +1149,6 @@ impl Session {
                     let folder: String = row.get(2)?;
                     Ok((rowid, uid, folder))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
 

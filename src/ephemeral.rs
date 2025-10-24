@@ -386,7 +386,7 @@ async fn select_expired_messages(
 ) -> Result<Vec<(MsgId, ChatId, Viewtype, u32)>> {
     let mut rows = context
         .sql
-        .query_map(
+        .query_map_vec(
             r#"
 SELECT id, chat_id, type, location_id
 FROM msgs
@@ -407,7 +407,6 @@ WHERE
                 let location_id: u32 = row.get("location_id")?;
                 Ok((id, chat_id, viewtype, location_id))
             },
-            |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
         )
         .await?;
 
@@ -425,7 +424,7 @@ WHERE
 
         let rows_expired = context
             .sql
-            .query_map(
+            .query_map_vec(
                 r#"
 SELECT id, chat_id, type, location_id
 FROM msgs
@@ -453,7 +452,6 @@ WHERE
                     let location_id: u32 = row.get("location_id")?;
                     Ok((id, chat_id, viewtype, location_id))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
 

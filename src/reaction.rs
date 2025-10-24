@@ -328,20 +328,11 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
             |row| {
                 let contact_id: ContactId = row.get(0)?;
                 let reaction: String = row.get(1)?;
-                Ok((contact_id, reaction))
+                Ok((contact_id, Reaction::from(reaction.as_str())))
             },
-            |rows| {
-                let mut reactions = Vec::new();
-                for row in rows {
-                    let (contact_id, reaction) = row?;
-                    reactions.push((contact_id, Reaction::from(reaction.as_str())));
-                }
-                Ok(reactions)
-            },
+            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
-        .await?
-        .into_iter()
-        .collect();
+        .await?;
     Ok(Reactions { reactions })
 }
 
