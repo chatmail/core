@@ -407,6 +407,7 @@ async fn test_stats_securejoin_invites() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
+    let _first_sent_stats = alice.pop_sent_msg().await;
 
     let mut expected = vec![];
 

@@ -14,7 +14,7 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, remove_from_chat_contacts_table};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, save_broadcast_shared_secret};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -25,8 +25,8 @@ use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
-use crate::key::self_fingerprint_opt;
 use crate::key::{DcKey, Fingerprint};
+use crate::key::{self_fingerprint, self_fingerprint_opt};
 use crate::log::LogExt;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
@@ -43,7 +43,7 @@ use crate::simplify;
 use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, remove_subject_prefix};
+use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_shared_secret};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
@@ -681,12 +681,13 @@ pub(crate) async fn receive_imf_inner(
             handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
                 .context("error in Secure-Join message handling")?
-        } else {
-            let to_id = to_ids.first().copied().flatten().unwrap_or(ContactId::SELF);
+        } else if let Some(to_id) = to_ids.first().copied().flatten() {
             // handshake may mark contacts as verified and must be processed before chats are created
             observe_securejoin_on_other_device(context, &mime_parser, to_id)
                 .await
                 .context("error in Secure-Join watching")?
+        } else {
+            securejoin::HandshakeMessage::Propagate
         };
 
         match res {
@@ -1359,6 +1360,7 @@ async fn do_chat_assignment(
                         create_or_lookup_mailinglist_or_broadcast(
                             context,
                             allow_creation,
+                            create_blocked,
                             mailinglist_header,
                             from_id,
                             mime_parser,
@@ -1494,16 +1496,33 @@ async fn do_chat_assignment(
                 // (it can't be a mailing list, since it's outgoing)
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
                     let listid = mailinglist_header_listid(mailinglist_header)?;
-                    chat_id = Some(
-                        if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await?
+                    if let Some((id, ..)) = chat::get_chat_id_by_grpid(context, &listid).await? {
+                        chat_id = Some(id);
+                    } else {
+                        // Looks like we missed the sync message that was creating this broadcast channel
+                        let name =
+                            compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
+                        if let Some(secret) = mime_parser
+                            .get_header(HeaderDef::ChatBroadcastSecret)
+                            .filter(|s| validate_broadcast_shared_secret(s))
                         {
-                            id
+                            chat_id = Some(
+                                chat::create_out_broadcast_ex(
+                                    context,
+                                    Nosync,
+                                    listid,
+                                    name,
+                                    secret.to_string(),
+                                )
+                                .await?,
+                            );
                         } else {
-                            let name =
-                                compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
-                            chat::create_broadcast_ex(context, Nosync, listid, name).await?
-                        },
-                    );
+                            warn!(
+                                context,
+                                "Not creating outgoing broadcast with id {listid}, because secret is unknown"
+                            );
+                        }
+                    }
                 }
             }
             ChatAssignment::AdHocGroup => {
@@ -1627,6 +1646,15 @@ async fn add_parts(
             let name: &str = from.display_name.as_ref().unwrap_or(&from.addr);
             for part in &mut mime_parser.parts {
                 part.param.set(Param::OverrideSenderDisplayname, name);
+            }
+
+            if chat.typ == Chattype::InBroadcast {
+                let s = stock_str::error(context, "This message was not sent by the channel owner")
+                    .await;
+                if let Some(part) = mime_parser.parts.first_mut() {
+                    part.error = Some(format!("{s}:\n\"{}\"", part.msg));
+                }
+                mime_parser.replace_msg_by_error(&s);
             }
         }
     }
@@ -2783,20 +2811,18 @@ async fn apply_group_changes(
         !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
     if let Some(removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // TODO: if address "alice@example.org" is a member of the group twice,
-        // with old and new key,
-        // and someone (maybe Alice's new contact) just removed Alice's old contact,
-        // we may lookup the wrong contact because we only look up by the address.
-        // The result is that info message may contain the new Alice's display name
-        // rather than old display name.
-        // This could be fixed by looking up the contact with the highest
-        // `remove_timestamp` after applying Chat-Group-Member-Timestamps.
         if !is_from_in_chat {
             better_msg = Some(String::new());
-        } else if let Some(id) =
-            lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?
+        } else if let Some(removed_fpr) =
+            mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr)
         {
-            removed_id = Some(id);
+            removed_id = lookup_key_contact_by_fingerprint(context, removed_fpr).await?;
+        } else {
+            // Removal message sent by a legacy Delta Chat client.
+            removed_id =
+                lookup_key_contact_by_address(context, removed_addr, Some(chat.id)).await?;
+        }
+        if let Some(id) = removed_id {
             better_msg = if id == from_id {
                 silent = true;
                 Some(stock_str::msg_group_left_local(context, from_id).await)
@@ -2814,6 +2840,8 @@ async fn apply_group_changes(
             // we may lookup the wrong contact.
             // This could be fixed by looking up the contact with
             // highest `add_timestamp` to disambiguate.
+            // Alternatively, this can be fixed by a header ChatGroupMemberAddedFpr,
+            // just like we have ChatGroupMemberRemovedFpr.
             // The result of the error is that info message
             // may contain display name of the wrong contact.
             let fingerprint = key.public_key.dc_fingerprint().hex();
@@ -2966,6 +2994,7 @@ async fn apply_group_changes(
         if !added_ids.remove(&added_id) && added_id != ContactId::SELF {
             // No-op "Member added" message. An exception is self-addition messages because they at
             // least must be shown when a chat is created on our side.
+            info!(context, "No-op 'Member added' message (TRASH)");
             better_msg = Some(String::new());
         }
     }
@@ -3163,6 +3192,7 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
 async fn create_or_lookup_mailinglist_or_broadcast(
     context: &Context,
     allow_creation: bool,
+    create_blocked: Blocked,
     list_id_header: &str,
     from_id: ContactId,
     mime_parser: &MimeMessage,
@@ -3188,25 +3218,19 @@ async fn create_or_lookup_mailinglist_or_broadcast(
     };
 
     if allow_creation {
-        // list does not exist but should be created
+        // Broadcast channel / mailinglist does not exist but should be created
         let param = mime_parser.list_post.as_ref().map(|list_post| {
             let mut p = Params::new();
             p.set(Param::ListPost, list_post);
             p.to_string()
         });
 
-        let is_bot = context.get_config_bool(Config::Bot).await?;
-        let blocked = if is_bot {
-            Blocked::Not
-        } else {
-            Blocked::Request
-        };
         let chat_id = ChatId::create_multiuser_record(
             context,
             chattype,
             &listid,
             name,
-            blocked,
+            create_blocked,
             param,
             mime_parser.timestamp_sent,
         )
@@ -3218,13 +3242,6 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             )
         })?;
 
-        chat::add_to_chat_contacts_table(
-            context,
-            mime_parser.timestamp_sent,
-            chat_id,
-            &[ContactId::SELF],
-        )
-        .await?;
         if chattype == Chattype::InBroadcast {
             chat::add_to_chat_contacts_table(
                 context,
@@ -3234,7 +3251,12 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             )
             .await?;
         }
-        Ok(Some((chat_id, blocked)))
+
+        context.emit_event(EventType::ChatModified(chat_id));
+        chatlist_events::emit_chatlist_changed(context);
+        chatlist_events::emit_chatlist_item_changed(context, chat_id);
+
+        Ok(Some((chat_id, create_blocked)))
     } else {
         info!(context, "Creating list forbidden by caller.");
         Ok(None)
@@ -3387,19 +3409,58 @@ async fn apply_out_broadcast_changes(
 ) -> Result<GroupChangesInfo> {
     ensure!(chat.typ == Chattype::OutBroadcast);
 
-    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // The sender of the message left the broadcast channel
-        remove_from_chat_contacts_table(context, chat.id, from_id).await?;
+    let mut send_event_chat_modified = false;
+    let mut better_msg = None;
 
-        return Ok(GroupChangesInfo {
-            better_msg: Some("".to_string()),
-            added_removed_id: None,
-            silent: true,
-            extra_msgs: vec![],
-        });
+    if from_id == ContactId::SELF {
+        apply_chat_name_and_avatar_changes(
+            context,
+            mime_parser,
+            from_id,
+            chat,
+            &mut send_event_chat_modified,
+            &mut better_msg,
+        )
+        .await?;
     }
 
-    Ok(GroupChangesInfo::default())
+    if let Some(_added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        // This message can be safely ignored,
+        // because the only way to add a member is by having them scan a QR code.
+        // All devices will receive the vg-request-with-auth message and add the member to the channel.
+        info!(context, "Second device adding a member (TRASH)");
+        better_msg.get_or_insert("".to_string());
+    } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
+        send_event_chat_modified = true;
+        let removed_id = lookup_key_contact_by_fingerprint(context, removed_fpr).await?;
+        if removed_id == Some(from_id) {
+            // The sender of the message left the broadcast channel
+            // Silently remove them without notifying the user
+            chat::remove_from_chat_contacts_table_without_trace(context, chat.id, from_id).await?;
+            info!(context, "Broadcast leave message (TRASH)");
+            better_msg = Some("".to_string());
+        } else if from_id == ContactId::SELF {
+            if let Some(removed_id) = removed_id {
+                chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
+                    .await?;
+
+                better_msg.get_or_insert(
+                    stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
+                );
+            }
+        }
+    }
+
+    if send_event_chat_modified {
+        context.emit_event(EventType::ChatModified(chat.id));
+        chatlist_events::emit_chatlist_item_changed(context, chat.id);
+    }
+    Ok(GroupChangesInfo {
+        better_msg,
+        added_removed_id: None,
+        silent: false,
+        extra_msgs: vec![],
+    })
 }
 
 async fn apply_in_broadcast_changes(
@@ -3409,6 +3470,16 @@ async fn apply_in_broadcast_changes(
     from_id: ContactId,
 ) -> Result<GroupChangesInfo> {
     ensure!(chat.typ == Chattype::InBroadcast);
+
+    if let Some(part) = mime_parser.parts.first() {
+        if let Some(error) = &part.error {
+            warn!(
+                context,
+                "Not applying broadcast changes from message with error: {error}"
+            );
+            return Ok(GroupChangesInfo::default());
+        }
+    }
 
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
@@ -3423,11 +3494,55 @@ async fn apply_in_broadcast_changes(
     )
     .await?;
 
-    if let Some(_removed_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {
-        // The only member added/removed message that is ever sent is "I left.",
-        // so, this is the only case we need to handle here
+    if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
+        if context.is_self_addr(added_addr).await? {
+            let msg = if chat.is_self_in_chat(context).await? {
+                // Self is already in the chat.
+                // Probably Alice has two devices and her second device added us again;
+                // just hide the message.
+                info!(context, "No-op broadcast 'Member added' message (TRASH)");
+                "".to_string()
+            } else {
+                stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await
+            };
+
+            better_msg.get_or_insert(msg);
+            send_event_chat_modified = true;
+        }
+    }
+
+    if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
+        // We are not supposed to receive a notification when someone else than self is removed:
+        ensure!(removed_fpr == self_fingerprint(context).await?);
+
         if from_id == ContactId::SELF {
             better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
+        } else {
+            better_msg.get_or_insert(
+                stock_str::msg_del_member_local(context, ContactId::SELF, from_id).await,
+            );
+        }
+
+        chat::remove_from_chat_contacts_table_without_trace(context, chat.id, ContactId::SELF)
+            .await?;
+        send_event_chat_modified = true;
+    } else if !chat.is_self_in_chat(context).await? {
+        // Apparently, self is in the chat now, because we're receiving messages
+        chat::add_to_chat_contacts_table(
+            context,
+            mime_parser.timestamp_sent,
+            chat.id,
+            &[ContactId::SELF],
+        )
+        .await?;
+        send_event_chat_modified = true;
+    }
+
+    if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
+        if validate_broadcast_shared_secret(secret) {
+            save_broadcast_shared_secret(context, chat.id, secret).await?;
+        } else {
+            warn!(context, "Not saving invalid broadcast secret");
         }
     }
 
