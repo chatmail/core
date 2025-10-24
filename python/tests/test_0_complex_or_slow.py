@@ -174,7 +174,9 @@ def test_qr_verified_group_and_chatting(acfactory, lp):
     for ac2_contact in chat2.get_contacts():
         if ac2_contact == ac2_ac1_contact or ac2_contact.id == dc.const.DC_CONTACT_ID_SELF:
             continue
-        assert ac2.get_self_contact().get_verifier(ac2_contact).addr == ac1_addr
+        # Until we reset verifications and then send the _verified header,
+        # verification is not gossiped here:
+        assert ac2.get_self_contact().get_verifier(ac2_contact) is None
 
     lp.sec("ac2: send message and let ac3 read it")
     chat2.send_text("hi")
@@ -409,7 +411,9 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     assert msg_in.text == "hi2"
     assert msg_in.chat == chat2_offl
     assert msg_in.get_sender_contact().addr == ac2.get_config("addr")
-    assert ac2_offl_ac1_contact.is_verified()
+    # Until we reset verifications and then send the _verified header,
+    # verification is not gossiped here:
+    assert not ac2_offl_ac1_contact.is_verified()
 
 
 def test_deleted_msgs_dont_reappear(acfactory):

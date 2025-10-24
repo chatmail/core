@@ -1238,8 +1238,10 @@ def test_qr_email_capitalization(acfactory, lp):
 
     # ac1 should see both ac3 and ac2 as verified.
     assert len(ac1_chat.get_contacts()) == 3
+    # Until we reset verifications and then send the _verified header,
+    # verification is not gossiped here:
     for contact in ac1_chat.get_contacts():
-        assert contact.is_verified()
+        assert contact.id == dc.const.DC_CONTACT_ID_SELF or not contact.is_verified()
 
 
 def test_set_get_contact_avatar(acfactory, data, lp):
