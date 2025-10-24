@@ -40,6 +40,10 @@ class ACFactory:
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))
         return f"{username}@{domain}", f"{username}${username}"
 
+    def get_account_qr(self):
+        domain = os.getenv("CHATMAIL_DOMAIN")
+        return f"dcaccount:https://{domain}/new"
+
     @futuremethod
     def new_configured_account(self):
         """Create a new configured account."""
