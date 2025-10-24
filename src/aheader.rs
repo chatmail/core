@@ -61,9 +61,11 @@ impl fmt::Display for Aheader {
         if self.prefer_encrypt == EncryptPreference::Mutual {
             write!(fmt, " prefer-encrypt=mutual;")?;
         }
-        if self.verified {
-            write!(fmt, " _verified=1;")?;
-        }
+        // TODO After we reset all existing verifications,
+        // we want to start sending the _verified attribute
+        // if self.verified {
+        //     write!(fmt, " _verified=1;")?;
+        // }
 
         // adds a whitespace every 78 characters, this allows
         // email crate to wrap the lines according to RFC 5322
@@ -282,8 +284,9 @@ mod tests {
             .contains("test@example.com")
         );
 
+        // We don't send the _verified header yet:
         assert!(
-            format!(
+            !format!(
                 "{}",
                 Aheader {
                     addr: "test@example.com".to_string(),

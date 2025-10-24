@@ -1352,6 +1352,43 @@ impl MimeFactory {
         let command = msg.param.get_cmd();
         let mut placeholdertext = None;
 
+        let send_verified_headers = match chat.typ {
+            Chattype::Single => true,
+            Chattype::Group => true,
+            // Mailinglists and broadcast channels can actually never be verified:
+            Chattype::Mailinglist => false,
+            Chattype::OutBroadcast | Chattype::InBroadcast => false,
+        };
+
+        if send_verified_headers {
+            let was_protected: bool = context
+                .sql
+                .query_get_value("SELECT protected FROM chats WHERE id=?", (chat.id,))
+                .await?
+                .unwrap_or_default();
+
+            if was_protected {
+                let unverified_member_exists = context
+                    .sql
+                    .exists(
+                        "SELECT COUNT(*)
+                        FROM contacts, chats_contacts
+                        WHERE chats_contacts.contact_id=contacts.id AND chats_contacts.chat_id=?
+                        AND contacts.id>9
+                        AND contacts.verifier=0",
+                        (chat.id,),
+                    )
+                    .await?;
+
+                if !unverified_member_exists {
+                    headers.push((
+                        "Chat-Verified",
+                        mail_builder::headers::raw::Raw::new("1").into(),
+                    ));
+                }
+            }
+        }
+
         if chat.typ == Chattype::Group {
             // Send group ID unless it is an ad hoc group that has no ID.
             if !chat.grpid.is_empty() {

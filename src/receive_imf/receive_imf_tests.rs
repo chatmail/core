@@ -5133,6 +5133,7 @@ async fn test_dont_reverify_by_self_on_outgoing_msg() -> Result<()> {
     let fiona = &tcm.fiona().await;
 
     let bob_chat_id = chat::create_group(bob, "Group").await?;
+    bob.set_legacy_protected(bob_chat_id).await;
     let qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
     tcm.exec_securejoin_qr(fiona, bob, &qr).await;
     tcm.exec_securejoin_qr(a0, bob, &qr).await;
