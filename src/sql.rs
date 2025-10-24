@@ -370,11 +370,11 @@ impl Sql {
         sql: &str,
         params: impl rusqlite::Params + Send,
         f: F,
-        mut g: G,
+        g: G,
     ) -> Result<H>
     where
         F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
-        G: Send + FnMut(rusqlite::MappedRows<F>) -> Result<H>,
+        G: Send + FnOnce(rusqlite::MappedRows<F>) -> Result<H>,
         H: Send + 'static,
     {
         let query_only = true;
