@@ -1261,15 +1261,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
-    inc_and_check(&mut migration_version, 134)?;
-    if dbversion < migration_version {
-        // Reset all indirect verifications.
-        sql.execute_migration(
-            "UPDATE contacts SET verifier=0 WHERE verifier!=1",
-            migration_version,
-        )
-        .await?;
-    }
+    inc_and_check(&mut migration_version, 134)?; // Migration 134 was removed
 
     inc_and_check(&mut migration_version, 135)?;
     if dbversion < migration_version {
