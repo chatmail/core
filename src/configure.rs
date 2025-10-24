@@ -130,12 +130,6 @@ impl Context {
             "cannot configure, database not opened."
         );
         param.addr = addr_normalize(&param.addr);
-        let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
-            let error_msg = "Changing your email address is not supported right now. Check back in a few months!";
-            progress!(self, 0, Some(error_msg.to_string()));
-            bail!(error_msg);
-        }
         let cancel_channel = self.alloc_ongoing().await?;
 
         let res = self
