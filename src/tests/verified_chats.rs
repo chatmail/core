@@ -97,7 +97,7 @@ async fn test_create_verified_oneonone_chat() -> Result<()> {
     let group_id = bob
         .create_group_with_members("Group with everyone", &[&alice, &fiona])
         .await;
-    bob.set_legacy_protected(group_id).await;
+    bob.set_chat_protected(group_id).await;
     assert_eq!(
         get_chat_msg(&bob, group_id, 0, 1).await.get_info_type(),
         SystemMessage::ChatE2ee
@@ -736,7 +736,7 @@ async fn test_no_reverification() -> Result<()> {
     let alice_chat_id = alice
         .create_group_with_members("Group", &[bob, charlie, fiona])
         .await;
-    alice.set_legacy_protected(alice_chat_id).await;
+    alice.set_chat_protected(alice_chat_id).await;
     let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
     let bob_rcvd_msg = bob.recv_msg(&alice_sent).await;
     let bob_alice_id = bob_rcvd_msg.from_id;
@@ -804,7 +804,7 @@ async fn test_no_direct_verification_via_bcc() -> Result<()> {
     mark_as_verified(alice, bob).await;
 
     let alice_chat_id = alice.create_chat_id(bob).await;
-    alice.set_legacy_protected(alice_chat_id).await;
+    alice.set_chat_protected(alice_chat_id).await;
     let alice_sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
     alice2.recv_msg(&alice_sent_msg).await;
 
