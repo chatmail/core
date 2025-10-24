@@ -460,7 +460,9 @@ def test_gossip_verification(acfactory) -> None:
 
     # Securejoin propagates verification.
     carol_contact_alice_snapshot = carol_contact_alice.get_snapshot()
-    assert carol_contact_alice_snapshot.is_verified
+    # Until we reset verifications and then send the _verified header,
+    # verification is not gossiped here:
+    assert not carol_contact_alice_snapshot.is_verified
 
 
 def test_securejoin_after_contact_resetup(acfactory) -> None:
