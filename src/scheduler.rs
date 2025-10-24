@@ -349,19 +349,10 @@ pub(crate) struct Scheduler {
 async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
     let msg_ids = context
         .sql
-        .query_map(
-            "SELECT msg_id FROM download",
-            (),
-            |row| {
-                let msg_id: MsgId = row.get(0)?;
-                Ok(msg_id)
-            },
-            |rowids| {
-                rowids
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
-        )
+        .query_map_vec("SELECT msg_id FROM download", (), |row| {
+            let msg_id: MsgId = row.get(0)?;
+            Ok(msg_id)
+        })
         .await?;
 
     for msg_id in msg_ids {

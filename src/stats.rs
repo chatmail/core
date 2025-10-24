@@ -372,20 +372,14 @@ async fn get_stats(context: &Context) -> Result<String> {
 }
 
 async fn get_timestamps(context: &Context, sql_table: &str) -> Result<Vec<i64>> {
-    let res = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             &format!("SELECT timestamp FROM {sql_table} LIMIT 1000"),
             (),
             |row| row.get(0),
-            |rows| {
-                rows.collect::<rusqlite::Result<Vec<i64>>>()
-                    .map_err(Into::into)
-            },
         )
-        .await?;
-
-    Ok(res)
+        .await
 }
 
 pub(crate) async fn stats_id(context: &Context) -> Result<String> {
@@ -424,9 +418,9 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
     let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
     let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
 
-    let mut contacts: Vec<ContactStat> = context
+    let mut contacts = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
             WHERE id>9 AND origin>? AND addr<>?",
             (Origin::Hidden, STATISTICS_BOT_EMAIL),
@@ -461,10 +455,6 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
                     transitive_chain: None, // will be filled later
                     new: id.to_u32() > last_old_contact,
                 })
-            },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
             },
         )
         .await?;
@@ -866,9 +856,9 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
 }
 
 async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvite>> {
-    let qr_scans: Vec<JoinedInvite> = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT already_existed, already_verified, type FROM stats_securejoin_invites",
             (),
             |row| {
@@ -882,14 +872,8 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
                     typ,
                 })
             },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
         )
-        .await?;
-
-    Ok(qr_scans)
+        .await
 }
 
 #[cfg(test)]

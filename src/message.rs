@@ -170,17 +170,13 @@ impl MsgId {
     ) -> Result<Vec<String>> {
         context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT folder, uid FROM imap WHERE rfc724_mid=?",
                 (rfc724_mid,),
                 |row| {
                     let folder: String = row.get("folder")?;
                     let uid: u32 = row.get("uid")?;
                     Ok(format!("</{folder}/;UID={uid}>"))
-                },
-                |rows| {
-                    rows.collect::<std::result::Result<Vec<_>, _>>()
-                        .map_err(Into::into)
                 },
             )
             .await
@@ -240,7 +236,7 @@ impl MsgId {
 
         if let Ok(rows) = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT contact_id, timestamp_sent FROM msgs_mdns WHERE msg_id=?",
                 (self,),
                 |row| {
@@ -248,7 +244,6 @@ impl MsgId {
                     let ts: i64 = row.get(1)?;
                     Ok((contact_id, ts))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await
         {
@@ -1426,7 +1421,7 @@ pub async fn get_msg_read_receipts(
 ) -> Result<Vec<(ContactId, i64)>> {
     context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT contact_id, timestamp_sent FROM msgs_mdns WHERE msg_id=?",
             (msg_id,),
             |row| {
@@ -1434,7 +1429,6 @@ pub async fn get_msg_read_receipts(
                 let ts: i64 = row.get(1)?;
                 Ok((contact_id, ts))
             },
-            |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
         )
         .await
 }

@@ -2432,9 +2432,9 @@ async fn handle_ndn(
 
     // The NDN might be for a message-id that had attachments and was sent from a non-Delta Chat client.
     // In this case we need to mark multiple "msgids" as failed that all refer to the same message-id.
-    let msgs: Vec<_> = context
+    let msg_ids = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id FROM msgs
                 WHERE rfc724_mid=? AND from_id=1",
             (&failed.rfc724_mid,),
@@ -2442,7 +2442,6 @@ async fn handle_ndn(
                 let msg_id: MsgId = row.get(0)?;
                 Ok(msg_id)
             },
-            |rows| Ok(rows.collect::<Vec<_>>()),
         )
         .await?;
 
@@ -2453,8 +2452,7 @@ async fn handle_ndn(
     };
     let err_msg = &error;
 
-    for msg in msgs {
-        let msg_id = msg?;
+    for msg_id in msg_ids {
         let mut message = Message::load_from_db(context, msg_id).await?;
         let aggregated_error = message
             .error

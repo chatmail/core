@@ -386,6 +386,26 @@ impl Sql {
         .await
     }
 
+    /// Prepares and executes the statement and maps a function over the resulting rows.
+    ///
+    /// Collects the resulting rows into a `Vec`.
+    pub async fn query_map_vec<T, F>(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params + Send,
+        f: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Send + 'static,
+        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+    {
+        self.query_map(sql, params, f, |rows| {
+            rows.collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(Into::into)
+        })
+        .await
+    }
+
     /// Used for executing `SELECT COUNT` statements only. Returns the resulting count.
     pub async fn count(&self, query: &str, params: impl rusqlite::Params + Send) -> Result<usize> {
         let count: isize = self.query_row(query, params, |row| row.get(0)).await?;

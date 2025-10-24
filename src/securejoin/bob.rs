@@ -167,19 +167,14 @@ pub(super) async fn handle_auth_required(
     message: &MimeMessage,
 ) -> Result<HandshakeMessage> {
     // Load all Bob states that expect `vc-auth-required` or `vg-auth-required`.
-    let bob_states: Vec<(i64, QrInvite, ChatId)> = context
+    let bob_states = context
         .sql
-        .query_map(
-            "SELECT id, invite, chat_id FROM bobstate",
-            (),
-            |row| {
-                let row_id: i64 = row.get(0)?;
-                let invite: QrInvite = row.get(1)?;
-                let chat_id: ChatId = row.get(2)?;
-                Ok((row_id, invite, chat_id))
-            },
-            |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
-        )
+        .query_map_vec("SELECT id, invite, chat_id FROM bobstate", (), |row| {
+            let row_id: i64 = row.get(0)?;
+            let invite: QrInvite = row.get(1)?;
+            let chat_id: ChatId = row.get(2)?;
+            Ok((row_id, invite, chat_id))
+        })
         .await?;
 
     info!(

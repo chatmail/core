@@ -345,15 +345,10 @@ pub async fn set(context: &Context, latitude: f64, longitude: f64, accuracy: f64
 
     let chats = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id FROM chats WHERE locations_send_until>?;",
             (now,),
             |row| row.get::<_, i32>(0),
-            |chats| {
-                chats
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
         )
         .await?;
 
@@ -408,7 +403,7 @@ pub async fn get_range(
     };
     let list = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT l.id, l.latitude, l.longitude, l.accuracy, l.timestamp, l.independent, \
              COALESCE(m.id, 0) AS msg_id, l.from_id, l.chat_id, COALESCE(m.txt, '') AS txt \
              FROM locations l  LEFT JOIN msgs m ON l.id=m.location_id  WHERE (? OR l.chat_id=?) \
@@ -444,14 +439,6 @@ pub async fn get_range(
                     marker,
                 };
                 Ok(loc)
-            },
-            |locations| {
-                let mut ret = Vec::new();
-
-                for location in locations {
-                    ret.push(location?);
-                }
-                Ok(ret)
             },
         )
         .await?;
@@ -768,7 +755,7 @@ async fn maybe_send_locations(context: &Context) -> Result<Option<u64>> {
     let now = time();
     let rows = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id, locations_send_begin, locations_send_until, locations_last_sent
              FROM chats
              WHERE locations_send_until>0",
@@ -784,10 +771,6 @@ async fn maybe_send_locations(context: &Context) -> Result<Option<u64>> {
                     locations_send_until,
                     locations_last_sent,
                 ))
-            },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
             },
         )
         .await

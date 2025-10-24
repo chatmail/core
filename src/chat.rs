@@ -925,9 +925,9 @@ impl ChatId {
     /// Chat is considered active if something was posted there within the last 42 days.
     pub async fn get_similar_chat_ids(self, context: &Context) -> Result<Vec<(ChatId, f64)>> {
         // Count number of common members in this and other chats.
-        let intersection: Vec<(ChatId, f64)> = context
+        let intersection = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT y.chat_id, SUM(x.contact_id = y.contact_id)
                  FROM chats_contacts as x
                  JOIN chats_contacts as y
@@ -944,10 +944,6 @@ impl ChatId {
                     let chat_id: ChatId = row.get(0)?;
                     let intersection: f64 = row.get(1)?;
                     Ok((chat_id, intersection))
-                },
-                |rows| {
-                    rows.collect::<std::result::Result<Vec<_>, _>>()
-                        .map_err(Into::into)
                 },
             )
             .await
@@ -2010,7 +2006,7 @@ impl Chat {
             let self_fp = self_fingerprint(context).await?;
             let fingerprint_addrs = context
                 .sql
-                .query_map(
+                .query_map_vec(
                     "SELECT c.id, c.fingerprint, c.addr
                      FROM contacts c INNER JOIN chats_contacts cc
                      ON c.id=cc.contact_id
@@ -2024,7 +2020,6 @@ impl Chat {
                         let addr = row.get(2)?;
                         Ok((fingerprint, addr))
                     },
-                    |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
                 )
                 .await?;
             self.sync(context, SyncAction::SetPgpContacts(fingerprint_addrs))
@@ -2032,14 +2027,13 @@ impl Chat {
         } else {
             let addrs = context
                 .sql
-                .query_map(
+                .query_map_vec(
                     "SELECT c.addr \
                     FROM contacts c INNER JOIN chats_contacts cc \
                     ON c.id=cc.contact_id \
                     WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
                     (self.id,),
                     |row| row.get::<_, String>(0),
-                    |addrs| addrs.collect::<Result<Vec<_>, _>>().map_err(Into::into),
                 )
                 .await?;
             self.sync(context, SyncAction::SetContacts(addrs)).await?;
@@ -3125,13 +3119,12 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
     if chat_id.is_archived_link() {
         let chat_ids_in_archive = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT DISTINCT(m.chat_id) FROM msgs m
                     LEFT JOIN chats c ON m.chat_id=c.id
                     WHERE m.state=10 AND m.hidden=0 AND m.chat_id>9 AND c.archived=1",
                 (),
                 |row| row.get::<_, ChatId>(0),
-                |ids| ids.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
         if chat_ids_in_archive.is_empty() {
@@ -3175,7 +3168,7 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
         // locally (i.e. when the chat was opened locally).
         let hidden_messages = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT id, rfc724_mid FROM msgs
                     WHERE state=?
                       AND hidden=1
@@ -3186,10 +3179,6 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
                     let msg_id: MsgId = row.get(0)?;
                     let rfc724_mid: String = row.get(1)?;
                     Ok((msg_id, rfc724_mid))
-                },
-                |rows| {
-                    rows.collect::<std::result::Result<Vec<_>, _>>()
-                        .map_err(Into::into)
                 },
             )
             .await?;
@@ -3299,7 +3288,7 @@ pub async fn get_chat_media(
     {
         context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT id
                FROM msgs
               WHERE (1=? OR chat_id=?)
@@ -3314,13 +3303,12 @@ pub async fn get_chat_media(
                     Viewtype::Webxdc,
                 ),
                 |row| row.get::<_, MsgId>(0),
-                |ids| Ok(ids.flatten().collect()),
             )
             .await?
     } else {
         context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT id
                FROM msgs
               WHERE (1=? OR chat_id=?)
@@ -3345,7 +3333,6 @@ pub async fn get_chat_media(
                     },
                 ),
                 |row| row.get::<_, MsgId>(0),
-                |ids| Ok(ids.flatten().collect()),
             )
             .await?
     };
@@ -3356,10 +3343,9 @@ pub async fn get_chat_media(
 pub async fn get_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec<ContactId>> {
     // Normal chats do not include SELF.  Group chats do (as it may happen that one is deleted from a
     // groupchat but the chats stays visible, moreover, this makes displaying lists easier)
-
-    let list = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT cc.contact_id
                FROM chats_contacts cc
                LEFT JOIN contacts c
@@ -3368,11 +3354,8 @@ pub async fn get_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec
               ORDER BY c.id=1, c.last_seen DESC, c.id DESC;",
             (chat_id,),
             |row| row.get::<_, ContactId>(0),
-            |ids| ids.collect::<Result<Vec<_>, _>>().map_err(Into::into),
         )
-        .await?;
-
-    Ok(list)
+        .await
 }
 
 /// Returns a vector of contact IDs for given chat ID that are no longer part of the group.
@@ -3380,9 +3363,9 @@ pub async fn get_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec
 /// Members that have been removed recently are in the beginning of the list.
 pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec<ContactId>> {
     let now = time();
-    let list = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT cc.contact_id
              FROM chats_contacts cc
              LEFT JOIN contacts c
@@ -3393,11 +3376,8 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
              ORDER BY c.id=1, cc.remove_timestamp DESC, c.id DESC",
             (chat_id, now.saturating_sub(60 * 24 * 3600)),
             |row| row.get::<_, ContactId>(0),
-            |ids| ids.collect::<Result<Vec<_>, _>>().map_err(Into::into),
         )
-        .await?;
-
-    Ok(list)
+        .await
 }
 
 /// Creates an encrypted group chat.

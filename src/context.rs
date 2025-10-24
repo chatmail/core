@@ -1100,7 +1100,7 @@ impl Context {
     pub async fn get_fresh_msgs(&self) -> Result<Vec<MsgId>> {
         let list = self
             .sql
-            .query_map(
+            .query_map_vec(
                 concat!(
                     "SELECT m.id",
                     " FROM msgs m",
@@ -1118,13 +1118,6 @@ impl Context {
                 ),
                 (MessageState::InFresh, time()),
                 |row| row.get::<_, MsgId>(0),
-                |rows| {
-                    let mut list = Vec::new();
-                    for row in rows {
-                        list.push(row?);
-                    }
-                    Ok(list)
-                },
             )
             .await?;
         Ok(list)
@@ -1157,7 +1150,7 @@ impl Context {
 
         let list = self
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT m.id
                      FROM msgs m
                      LEFT JOIN contacts ct
@@ -1176,13 +1169,6 @@ impl Context {
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
                     Ok(msg_id)
-                },
-                |rows| {
-                    let mut list = Vec::new();
-                    for row in rows {
-                        list.push(row?);
-                    }
-                    Ok(list)
                 },
             )
             .await?;
@@ -1224,7 +1210,7 @@ impl Context {
 
         let list = if let Some(chat_id) = chat_id {
             self.sql
-                .query_map(
+                .query_map_vec(
                     "SELECT m.id AS id
                  FROM msgs m
                  LEFT JOIN contacts ct
@@ -1236,13 +1222,6 @@ impl Context {
                  ORDER BY m.timestamp,m.id;",
                     (chat_id, str_like_in_text),
                     |row| row.get::<_, MsgId>("id"),
-                    |rows| {
-                        let mut ret = Vec::new();
-                        for id in rows {
-                            ret.push(id?);
-                        }
-                        Ok(ret)
-                    },
                 )
                 .await?
         } else {
@@ -1257,7 +1236,7 @@ impl Context {
             // According to some tests, this limit speeds up eg. 2 character searches by factor 10.
             // The limit is documented and UI may add a hint when getting 1000 results.
             self.sql
-                .query_map(
+                .query_map_vec(
                     "SELECT m.id AS id
                  FROM msgs m
                  LEFT JOIN contacts ct
@@ -1272,13 +1251,6 @@ impl Context {
                  ORDER BY m.id DESC LIMIT 1000",
                     (str_like_in_text,),
                     |row| row.get::<_, MsgId>("id"),
-                    |rows| {
-                        let mut ret = Vec::new();
-                        for id in rows {
-                            ret.push(id?);
-                        }
-                        Ok(ret)
-                    },
                 )
                 .await?
         };
