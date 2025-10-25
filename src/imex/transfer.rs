@@ -33,7 +33,7 @@ use std::task::Poll;
 
 use anyhow::{Context as _, Result, bail, format_err};
 use futures_lite::FutureExt;
-use iroh::{Endpoint, RelayMode, Watcher as _};
+use iroh::{Endpoint, RelayMode};
 use tokio::fs;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -69,7 +69,7 @@ pub struct BackupProvider {
     _endpoint: Endpoint,
 
     /// iroh address.
-    node_addr: iroh::NodeAddr,
+    node_addr: iroh::EndpointAddr,
 
     /// Authentication token that should be submitted
     /// to retrieve the backup.
@@ -100,7 +100,7 @@ impl BackupProvider {
             .relay_mode(relay_mode)
             .bind()
             .await?;
-        let node_addr = endpoint.node_addr().initialized().await;
+        let node_addr = endpoint.addr();
 
         // Acquire global "ongoing" mutex.
         let cancel_token = context.alloc_ongoing().await?;
@@ -297,7 +297,7 @@ impl Future for BackupProvider {
 
 pub async fn get_backup2(
     context: &Context,
-    node_addr: iroh::NodeAddr,
+    node_addr: iroh::EndpointAddr,
     auth_token: String,
 ) -> Result<()> {
     let relay_mode = RelayMode::Disabled;

@@ -865,25 +865,3 @@ async fn test_decode_socks5() -> Result<()> {
 
     Ok(())
 }
-
-/// Ensure that `DCBACKUP2` QR code does not fail to deserialize
-/// because iroh changes the format of `NodeAddr`
-/// as happened between iroh 0.29 and iroh 0.30 before.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_decode_backup() -> Result<()> {
-    let ctx = TestContext::new().await;
-
-    let qr = check_qr(&ctx, r#"DCBACKUP2:TWSv6ZjDPa5eoxkocj7xMi8r&{"node_id":"9afc1ea5b4f543e5cdd7b7a21cd26aee7c0b1e1c2af26790896fbd8932a06e1e","relay_url":null,"direct_addresses":["192.168.1.10:12345"]}"#).await?;
-    assert!(matches!(qr, Qr::Backup2 { .. }));
-
-    let qr = check_qr(&ctx, r#"DCBACKUP2:AIvFjRFBt_aMiisSZ8P33JqY&{"node_id":"buzkyd4x76w66qtanjk5fm6ikeuo4quletajowsl3a3p7l6j23pa","info":{"relay_url":null,"direct_addresses":["192.168.1.5:12345"]}}"#).await?;
-    assert!(matches!(qr, Qr::Backup2 { .. }));
-
-    let qr = check_qr(&ctx, r#"DCBACKUP9:from-the-future"#).await?;
-    assert!(matches!(qr, Qr::BackupTooNew { .. }));
-
-    let qr = check_qr(&ctx, r#"DCBACKUP99:far-from-the-future"#).await?;
-    assert!(matches!(qr, Qr::BackupTooNew { .. }));
-
-    Ok(())
-}

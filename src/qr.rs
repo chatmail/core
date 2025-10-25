@@ -112,7 +112,7 @@ pub enum Qr {
     /// Provides a backup that can be retrieved using iroh-net based backup transfer protocol.
     Backup2 {
         /// Iroh node address.
-        node_addr: iroh::NodeAddr,
+        node_addr: iroh::EndpointAddr,
 
         /// Authentication token.
         auth_token: String,
@@ -629,7 +629,7 @@ fn decode_backup2(qr: &str) -> Result<Qr> {
         .split_once('&')
         .context("Backup QR code has no separator")?;
     let auth_token = auth_token.to_string();
-    let node_addr = serde_json::from_str::<iroh::NodeAddr>(node_addr)
+    let node_addr = serde_json::from_str::<iroh::EndpointAddr>(node_addr)
         .context("Invalid node addr in backup QR code")?;
 
     Ok(Qr::Backup2 {
