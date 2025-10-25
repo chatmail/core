@@ -65,11 +65,26 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             )
             .await?;
 
-        // Chat ID of the group we are joining, unused otherwise.
-        let group_chat_id = joining_chat_id(context, &invite, chat_id).await?;
-        if matches!(invite, QrInvite::Group { .. })
-            && is_contact_in_chat(context, group_chat_id, ContactId::SELF).await?
-        {
+        // `group_chat_id` is `Some` if group chat
+        // already exists and we are in the chat.
+        let group_chat_id = match invite {
+            QrInvite::Group { ref grpid, .. } => {
+                if let Some((group_chat_id, _blocked)) =
+                    chat::get_chat_id_by_grpid(context, grpid).await?
+                {
+                    if is_contact_in_chat(context, group_chat_id, ContactId::SELF).await? {
+                        Some(group_chat_id)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            QrInvite::Contact { .. } => None,
+        };
+
+        if let Some(group_chat_id) = group_chat_id {
             // If QR code is a group invite
             // and we are already in the chat,
             // nothing needs to be done.
