@@ -4890,12 +4890,23 @@ impl Context {
                     .id
             }
             SyncId::Grpid(grpid) => {
-                let handled = self.handle_sync_create_chat(action, grpid).await?;
-                if handled {
-                    return Ok(());
-                } else if let SyncAction::CreateGroupEncrypted(name) = action {
-                    create_group_ex(self, Nosync, grpid.clone(), name).await?;
-                    return Ok(());
+                match action {
+                    SyncAction::CreateOutBroadcast { chat_name, secret } => {
+                        create_out_broadcast_ex(
+                            self,
+                            Nosync,
+                            grpid.to_string(),
+                            chat_name.clone(),
+                            secret.to_string(),
+                        )
+                        .await?;
+                        return Ok(());
+                    }
+                    SyncAction::CreateGroupEncrypted(name) => {
+                        create_group_ex(self, Nosync, grpid.clone(), name).await?;
+                        return Ok(());
+                    }
+                    _ => {}
                 }
                 get_chat_id_by_grpid(self, grpid)
                     .await?
@@ -4918,7 +4929,7 @@ impl Context {
             SyncAction::SetVisibility(v) => chat_id.set_visibility_ex(self, Nosync, *v).await,
             SyncAction::SetMuted(duration) => set_muted_ex(self, Nosync, chat_id, *duration).await,
             SyncAction::CreateOutBroadcast { .. } | SyncAction::CreateGroupEncrypted(..) => {
-                // Create action should have been handled by handle_sync_create_chat() already.
+                // Create action should have been handled above already.
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
@@ -4927,23 +4938,6 @@ impl Context {
                 set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await
             }
             SyncAction::Delete => chat_id.delete_ex(self, Nosync).await,
-        }
-    }
-
-    async fn handle_sync_create_chat(&self, action: &SyncAction, grpid: &str) -> Result<bool> {
-        match action {
-            SyncAction::CreateOutBroadcast { chat_name, secret } => {
-                create_out_broadcast_ex(
-                    self,
-                    Nosync,
-                    grpid.to_string(),
-                    chat_name.clone(),
-                    secret.to_string(),
-                )
-                .await?;
-                Ok(true)
-            }
-            _ => Ok(false),
         }
     }
 
