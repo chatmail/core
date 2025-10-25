@@ -424,9 +424,10 @@ impl MimeFactory {
                     SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
                 )
             {
-                if let Some(member) = msg.param.get(Param::Arg) {
-                    recipients.retain(|addr| addr == member);
-                }
+                let Some(member) = msg.param.get(Param::Arg) else {
+                    bail!("Missing removed/added member");
+                };
+                recipients.retain(|addr| addr == member);
             }
 
             encryption_keys = if !is_encrypted {
