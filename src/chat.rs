@@ -43,14 +43,14 @@ use crate::smtp::send_msg_to_smtp;
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
-    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_shared_secret, create_id,
+    IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_secret, create_id,
     create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
     gm2local_offset, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
 
-pub(crate) const PARAM_BROADCAST_SHARED_SECRET: Param = Param::Arg3;
+pub(crate) const PARAM_BROADCAST_SECRET: Param = Param::Arg3;
 
 /// An chat item, such as a message or a marker.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -3496,7 +3496,7 @@ pub(crate) async fn create_group_ex(
 /// Returns the created chat's id.
 pub async fn create_broadcast(context: &Context, chat_name: String) -> Result<ChatId> {
     let grpid = create_id();
-    let secret = create_broadcast_shared_secret();
+    let secret = create_broadcast_secret();
     create_out_broadcast_ex(context, Sync, grpid, chat_name, secret).await
 }
 
@@ -3552,7 +3552,7 @@ pub(crate) async fn create_out_broadcast_ex(
     Ok(chat_id)
 }
 
-pub(crate) async fn load_broadcast_shared_secret(
+pub(crate) async fn load_broadcast_secret(
     context: &Context,
     chat_id: ChatId,
 ) -> Result<Option<String>> {
@@ -3565,7 +3565,7 @@ pub(crate) async fn load_broadcast_shared_secret(
         .await
 }
 
-pub(crate) async fn save_broadcast_shared_secret(
+pub(crate) async fn save_broadcast_secret(
     context: &Context,
     chat_id: ChatId,
     secret: &str,
@@ -3789,10 +3789,10 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param
             .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
         if chat.typ == Chattype::OutBroadcast {
-            let secret = load_broadcast_shared_secret(context, chat_id)
+            let secret = load_broadcast_secret(context, chat_id)
                 .await?
                 .context("Failed to find broadcast shared secret")?;
-            msg.param.set(PARAM_BROADCAST_SHARED_SECRET, secret);
+            msg.param.set(PARAM_BROADCAST_SECRET, secret);
         }
         send_msg(context, chat_id, &mut msg).await?;
 

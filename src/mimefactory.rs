@@ -16,7 +16,7 @@ use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
-use crate::chat::{self, Chat, PARAM_BROADCAST_SHARED_SECRET, load_broadcast_shared_secret};
+use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
 use crate::constants::ASM_SUBJECT;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
@@ -845,7 +845,7 @@ impl MimeFactory {
                 ));
 
                 if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
-                    if let Some(secret) = msg.param.get(PARAM_BROADCAST_SHARED_SECRET) {
+                    if let Some(secret) = msg.param.get(PARAM_BROADCAST_SECRET) {
                         headers.push((
                             "Chat-Broadcast-Secret",
                             mail_builder::headers::text::Text::new(secret.to_string()).into(),
@@ -1216,7 +1216,7 @@ impl MimeFactory {
                 Loaded::Message { chat, msg }
                     if should_encrypt_with_broadcast_secret(msg, chat) =>
                 {
-                    let secret = load_broadcast_shared_secret(context, chat.id).await?;
+                    let secret = load_broadcast_secret(context, chat.id).await?;
                     if secret.is_none() {
                         // If there is no shared secret yet
                         // because this is an old broadcast channel,

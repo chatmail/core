@@ -14,7 +14,7 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, save_broadcast_shared_secret};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, save_broadcast_secret};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -43,7 +43,7 @@ use crate::simplify;
 use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_shared_secret};
+use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_secret};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
@@ -1504,7 +1504,7 @@ async fn do_chat_assignment(
                             compute_mailinglist_name(mailinglist_header, &listid, mime_parser);
                         if let Some(secret) = mime_parser
                             .get_header(HeaderDef::ChatBroadcastSecret)
-                            .filter(|s| validate_broadcast_shared_secret(s))
+                            .filter(|s| validate_broadcast_secret(s))
                         {
                             chat_id = Some(
                                 chat::create_out_broadcast_ex(
@@ -3539,8 +3539,8 @@ async fn apply_in_broadcast_changes(
     }
 
     if let Some(secret) = mime_parser.get_header(HeaderDef::ChatBroadcastSecret) {
-        if validate_broadcast_shared_secret(secret) {
-            save_broadcast_shared_secret(context, chat.id, secret).await?;
+        if validate_broadcast_secret(secret) {
+            save_broadcast_secret(context, chat.id, secret).await?;
         } else {
             warn!(context, "Not saving invalid broadcast secret");
         }

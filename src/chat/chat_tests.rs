@@ -3258,7 +3258,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
     );
 
     assert!(
-        load_broadcast_shared_secret(bob, bob_broadcast_id)
+        load_broadcast_secret(bob, bob_broadcast_id)
             .await?
             .is_none()
     );
@@ -3288,7 +3288,7 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
     let bob_broadcast_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
     assert!(
-        load_broadcast_shared_secret(bob, bob_broadcast_id)
+        load_broadcast_secret(bob, bob_broadcast_id)
             .await?
             .is_some()
     );
@@ -3413,7 +3413,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
         time(),
     )
     .await?;
-    save_broadcast_shared_secret(bob, bob_chat_id, secret).await?;
+    save_broadcast_secret(bob, bob_chat_id, secret).await?;
 
     let sent = alice
         .send_text(alice_chat_id, "Symmetrically encrypted message")

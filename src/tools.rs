@@ -306,7 +306,7 @@ pub(crate) fn create_id() -> String {
 /// and is returned as 43 Base64 characters, each containing 6 bits of entropy.
 /// 258 is chosen because we may switch to AES-256 keys in the future,
 /// and so that the shared secret definitely won't be the weak spot.
-pub(crate) fn create_broadcast_shared_secret() -> String {
+pub(crate) fn create_broadcast_secret() -> String {
     // ThreadRng implements CryptoRng trait and is supposed to be cryptographically secure.
     let mut rng = thread_rng();
 
@@ -327,7 +327,7 @@ pub(crate) fn validate_id(s: &str) -> bool {
     s.chars().all(|c| alphabet.contains(c)) && s.len() > 10 && s.len() <= 32
 }
 
-pub(crate) fn validate_broadcast_shared_secret(s: &str) -> bool {
+pub(crate) fn validate_broadcast_secret(s: &str) -> bool {
     let alphabet = base64::alphabet::URL_SAFE.as_str();
     s.chars().all(|c| alphabet.contains(c)) && s.len() >= 43 && s.len() <= 100
 }

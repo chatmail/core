@@ -27,9 +27,9 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use deltachat::internals_for_benchmarks::create_broadcast_shared_secret;
+use deltachat::internals_for_benchmarks::create_broadcast_secret;
 use deltachat::internals_for_benchmarks::create_dummy_keypair;
-use deltachat::internals_for_benchmarks::save_broadcast_shared_secret;
+use deltachat::internals_for_benchmarks::save_broadcast_secret;
 use deltachat::{
     Events,
     chat::ChatId,
@@ -142,7 +142,7 @@ fn criterion_benchmark(c: &mut Criterion) {
     let context = rt.block_on(async {
         let context = create_context().await;
         for (i, secret) in secrets.iter().enumerate() {
-            save_broadcast_shared_secret(&context, ChatId::new(10 + i as u32), secret)
+            save_broadcast_secret(&context, ChatId::new(10 + i as u32), secret)
                 .await
                 .unwrap();
         }
@@ -184,7 +184,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
 fn generate_secrets() -> Vec<String> {
     let secrets: Vec<String> = (0..NUM_SECRETS)
-        .map(|_| create_broadcast_shared_secret())
+        .map(|_| create_broadcast_secret())
         .collect();
     secrets
 }

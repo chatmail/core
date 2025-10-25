@@ -25,18 +25,14 @@ pub async fn parse_and_get_text(context: &Context, imf_raw: &[u8]) -> Result<Str
     Ok(mime_parser.parts.into_iter().next().unwrap().msg)
 }
 
-pub async fn save_broadcast_shared_secret(
-    context: &Context,
-    chat_id: ChatId,
-    secret: &str,
-) -> Result<()> {
-    crate::chat::save_broadcast_shared_secret(context, chat_id, secret).await
+pub async fn save_broadcast_secret(context: &Context, chat_id: ChatId, secret: &str) -> Result<()> {
+    crate::chat::save_broadcast_secret(context, chat_id, secret).await
 }
 
 pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
     pgp::create_keypair(EmailAddress::new(addr)?)
 }
 
-pub fn create_broadcast_shared_secret() -> String {
-    crate::tools::create_broadcast_shared_secret()
+pub fn create_broadcast_secret() -> String {
+    crate::tools::create_broadcast_secret()
 }
