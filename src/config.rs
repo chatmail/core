@@ -758,6 +758,16 @@ impl Context {
         let better_value;
 
         match key {
+            Config::Selfstatus => {
+                // Currently we send the self-status in every appropriate message, but in the future
+                // (when most users upgrade to "feat: Don't reset key-contact status if
+                // Chat-User-Avatar header is absent") we want to send it periodically together with
+                // the self-avatar. This ensures the correct behavior after a possible Core upgrade.
+                self.sql
+                    .execute("UPDATE contacts SET selfavatar_sent=0", ())
+                    .await?;
+                self.sql.set_raw_config(key.as_ref(), value).await?;
+            }
             Config::Selfavatar => {
                 self.sql
                     .execute("UPDATE contacts SET selfavatar_sent=0;", ())

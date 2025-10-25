@@ -182,7 +182,7 @@ impl MimeFactory {
     pub async fn from_msg(context: &Context, msg: Message) -> Result<MimeFactory> {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
-        let attach_profile_data = Self::should_attach_profile_data(&msg);
+        let can_transfer_profile = Self::can_transfer_profile(&msg);
         let undisclosed_recipients = chat.typ == Chattype::OutBroadcast;
 
         let from_addr = context.get_primary_self_addr().await?;
@@ -194,7 +194,7 @@ impl MimeFactory {
             if let Some(override_name) = msg.param.get(Param::OverrideSenderDisplayname) {
                 (override_name.to_string(), Some(config_displayname))
             } else {
-                let name = match attach_profile_data {
+                let name = match can_transfer_profile {
                     true => config_displayname,
                     false => "".to_string(),
                 };
@@ -302,7 +302,7 @@ impl MimeFactory {
                             } else {
                                 addr
                             };
-                            let name = match attach_profile_data {
+                            let name = match can_transfer_profile {
                                 true => authname,
                                 false => "".to_string(),
                             };
@@ -451,14 +451,18 @@ impl MimeFactory {
             .split_ascii_whitespace()
             .map(|s| s.trim_start_matches('<').trim_end_matches('>').to_string())
             .collect();
-        let selfstatus = match attach_profile_data {
+        let should_attach_profile = Self::should_attach_profile(context, &msg).await;
+        // TODO: (2025-08) Attach self-status in every message for compatibility with older
+        // versions. Should be replaced with
+        // `should_attach_profile || !is_encrypted && can_transfer_profile`.
+        let selfstatus = match can_transfer_profile {
             true => context
                 .get_config(Config::Selfstatus)
                 .await?
                 .unwrap_or_default(),
             false => "".to_string(),
         };
-        let attach_selfavatar = Self::should_attach_selfavatar(context, &msg).await;
+        let attach_selfavatar = should_attach_profile;
 
         ensure_and_debug_assert!(
             member_timestamps.is_empty()
@@ -551,7 +555,7 @@ impl MimeFactory {
         }
     }
 
-    fn should_attach_profile_data(msg: &Message) -> bool {
+    fn can_transfer_profile(msg: &Message) -> bool {
         msg.param.get_cmd() != SystemMessage::SecurejoinMessage || {
             let step = msg.param.get(Param::Arg).unwrap_or_default();
             // Don't attach profile data at the earlier SecureJoin steps:
@@ -566,14 +570,14 @@ impl MimeFactory {
         }
     }
 
-    async fn should_attach_selfavatar(context: &Context, msg: &Message) -> bool {
-        Self::should_attach_profile_data(msg)
-            && match chat::shall_attach_selfavatar(context, msg.chat_id).await {
+    async fn should_attach_profile(context: &Context, msg: &Message) -> bool {
+        Self::can_transfer_profile(msg)
+            && match chat::should_attach_profile(context, msg.chat_id).await {
                 Ok(should) => should,
                 Err(err) => {
                     warn!(
                         context,
-                        "should_attach_selfavatar: cannot get selfavatar state: {err:#}."
+                        "should_attach_profile: chat::should_attach_profile: {err:#}."
                     );
                     false
                 }
@@ -638,7 +642,7 @@ impl MimeFactory {
                     return Ok(format!("Re: {}", remove_subject_prefix(last_subject)));
                 }
 
-                let self_name = match Self::should_attach_profile_data(msg) {
+                let self_name = match Self::can_transfer_profile(msg) {
                     true => context.get_config(Config::Displayname).await?,
                     false => None,
                 };
