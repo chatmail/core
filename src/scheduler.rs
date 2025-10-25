@@ -25,7 +25,7 @@ use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::message::MsgId;
 use crate::smtp::{Smtp, send_smtp_messages};
-use crate::sql;
+use crate::sql::{self, Sql};
 use crate::stats::maybe_send_stats;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
 use crate::{constants, stats};
@@ -498,6 +498,11 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
                 last_housekeeping_time.saturating_add(constants::HOUSEKEEPING_PERIOD);
             if next_housekeeping_time <= time() {
                 sql::housekeeping(ctx).await.log_err(ctx).ok();
+            } else {
+                let force_truncate = false;
+                if let Err(err) = Sql::wal_checkpoint(ctx, force_truncate).await {
+                    warn!(ctx, "wal_checkpoint() failed: {err:#}.");
+                }
             }
         }
         Err(err) => {
