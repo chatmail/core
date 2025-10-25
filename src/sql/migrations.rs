@@ -1328,6 +1328,34 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 138)?;
+    if dbversion < migration_version {
+        // `MvboxMove` now means "watch Inbox also and move chat messages from it". Preserve the old
+        // behavior for `OnlyFetchMvbox` users.
+        sql.execute_migration(
+            "INSERT OR REPLACE INTO config (keyname, value)
+             SELECT 'mvbox_move', '0'
+             FROM config WHERE keyname='only_fetch_mvbox' AND value!='0'
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
+    inc_and_check(&mut migration_version, 139)?;
+    if dbversion < migration_version {
+        // `OnlyFetchMvbox` is now 1 by default to avoid scanning unknown folders. But if the user
+        // disabled `MvboxMove`, we have to keep `OnlyFetchMvbox` unset so that Inbox is watched.
+        sql.execute_migration(
+            "INSERT OR IGNORE INTO config (keyname, value)
+             SELECT 'only_fetch_mvbox', '0'
+             FROM config WHERE keyname='mvbox_move' AND value='0'
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
