@@ -128,12 +128,6 @@ impl Context {
             "cannot configure, database not opened."
         );
         param.addr = addr_normalize(&param.addr);
-        let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
-            let error_msg = "Changing your email address is not supported right now. Check back in a few months!";
-            progress!(self, 0, Some(error_msg.to_string()));
-            bail!(error_msg);
-        }
         let cancel_channel = self.alloc_ongoing().await?;
 
         let res = self
@@ -209,11 +203,27 @@ impl Context {
 
     /// Removes the transport with the specified email address
     /// (i.e. [EnteredLoginParam::addr]).
-    #[expect(clippy::unused_async)]
-    pub async fn delete_transport(&self, _addr: &str) -> Result<()> {
-        bail!(
-            "Adding and removing additional transports is not supported yet. Check back in a few months!"
-        )
+    pub async fn delete_transport(&self, addr: &str) -> Result<()> {
+        self
+            .sql
+            .transaction(|transaction| {
+                let current_addr = transaction.query_row(
+                    "SELECT value FROM config WHERE keyname='configured_addr'",
+                    (),
+                    |row| {
+                        let addr: String = row.get(0)?;
+                        Ok(addr)
+                    },
+                )?;
+
+                if current_addr == addr {
+                    bail!("Cannot delete current transport");
+                }
+                transaction.execute("DELETE FROM transports WHERE addr=?", (addr,))?;
+                Ok(())
+            })
+            .await?;
+        Ok(())
     }
 
     async fn inner_configure(&self, param: &EnteredLoginParam) -> Result<()> {

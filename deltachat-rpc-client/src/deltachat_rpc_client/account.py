@@ -126,6 +126,15 @@ class Account:
         yield self._rpc.add_or_update_transport.future(self.id, params)
 
     @futuremethod
+    def add_transport_from_qr(self, qr: str):
+        """Add a new transport using a QR code."""
+        yield self._rpc.add_transport_from_qr.future(self.id, qr)
+
+    def delete_transport(self, addr: str):
+        """Delete a transport."""
+        self._rpc.delete_transport(self.id, addr)
+
+    @futuremethod
     def list_transports(self):
         """Return the list of all email accounts that are used as a transport in the current profile."""
         transports = yield self._rpc.list_transports.future(self.id)
