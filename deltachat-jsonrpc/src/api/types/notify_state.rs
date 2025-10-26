@@ -6,21 +6,21 @@ use typescript_type_def::TypeDef;
 #[serde(rename = "NotifyState")]
 pub enum JsonrpcNotifyState {
     /// Not subscribed to push notifications.
-    NotConnected = 0,
+    NotConnected,
 
     /// Subscribed to heartbeat push notifications.
-    Heartbeat = 1,
+    Heartbeat,
 
     /// Subscribed to push notifications for new messages.
-    Connected = 2,
+    Connected,
 }
 
 impl From<NotifyState> for JsonrpcNotifyState {
     fn from(state: NotifyState) -> Self {
         match state {
-            NotifyState::NotConnected => JsonrpcNotifyState::NotConnected,
-            NotifyState::Heartbeat => JsonrpcNotifyState::Heartbeat,
-            NotifyState::Connected => JsonrpcNotifyState::Connected,
+            NotifyState::NotConnected => Self::NotConnected,
+            NotifyState::Heartbeat => Self::Heartbeat,
+            NotifyState::Connected => Self::Connected,
         }
     }
 }
