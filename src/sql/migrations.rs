@@ -401,19 +401,18 @@ UPDATE chats SET protected=1, type=120 WHERE type=130;"#,
         .await?;
     }
     if dbversion < 73 {
-        use Config::*;
         sql.execute(
             r#"
 CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, uid_next INTEGER DEFAULT 0);"#,
 ()
         )
             .await?;
-        for c in &[
-            ConfiguredInboxFolder,
-            ConfiguredSentboxFolder,
-            ConfiguredMvboxFolder,
+        for c in [
+            "configured_inbox_folder",
+            "configured_sentbox_folder",
+            "configured_mvbox_folder",
         ] {
-            if let Some(folder) = context.get_config(*c).await? {
+            if let Some(folder) = context.sql.get_raw_config(c).await? {
                 let (uid_validity, last_seen_uid) =
                     imap::get_config_last_seen_uid(context, &folder).await?;
                 if last_seen_uid > 0 {
@@ -1261,15 +1260,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
-    inc_and_check(&mut migration_version, 134)?;
-    if dbversion < migration_version {
-        // Reset all indirect verifications.
-        sql.execute_migration(
-            "UPDATE contacts SET verifier=0 WHERE verifier!=1",
-            migration_version,
-        )
-        .await?;
-    }
+    inc_and_check(&mut migration_version, 134)?; // Migration 134 was removed
 
     inc_and_check(&mut migration_version, 135)?;
     if dbversion < migration_version {

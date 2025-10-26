@@ -373,20 +373,14 @@ async fn get_stats(context: &Context) -> Result<String> {
 }
 
 async fn get_timestamps(context: &Context, sql_table: &str) -> Result<Vec<i64>> {
-    let res = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             &format!("SELECT timestamp FROM {sql_table} LIMIT 1000"),
             (),
             |row| row.get(0),
-            |rows| {
-                rows.collect::<rusqlite::Result<Vec<i64>>>()
-                    .map_err(Into::into)
-            },
         )
-        .await?;
-
-    Ok(res)
+        .await
 }
 
 pub(crate) async fn stats_id(context: &Context) -> Result<String> {
@@ -425,9 +419,9 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
     let mut verified_by_map: BTreeMap<ContactId, ContactId> = BTreeMap::new();
     let mut bot_ids: BTreeSet<ContactId> = BTreeSet::new();
 
-    let mut contacts: Vec<ContactStat> = context
+    let mut contacts = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id, fingerprint<>'', verifier, last_seen, is_bot FROM contacts c
             WHERE id>9 AND origin>? AND addr<>?",
             (Origin::Hidden, STATISTICS_BOT_EMAIL),
@@ -462,10 +456,6 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
                     transitive_chain: None, // will be filled later
                     new: id.to_u32() > last_old_contact,
                 })
-            },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
             },
         )
         .await?;
@@ -528,7 +518,7 @@ async fn get_contact_stats(context: &Context, last_old_contact: u32) -> Result<V
 async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, MessageStats>> {
     let mut map: BTreeMap<Chattype, MessageStats> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT chattype, verified, unverified_encrypted, unencrypted, only_to_self
             FROM stats_msgs",
             (),
@@ -546,7 +536,6 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
                 };
                 Ok((chattype, message_stats))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
@@ -782,9 +771,9 @@ pub(crate) async fn count_securejoin_ux_info(
 }
 
 async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSources> {
-    let map = context
+    let map: BTreeMap<SecurejoinSource, u32> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT source, count FROM stats_securejoin_sources",
             (),
             |row| {
@@ -792,7 +781,6 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
                 let count: u32 = row.get(1)?;
                 Ok((source, count))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
@@ -809,9 +797,9 @@ async fn get_securejoin_source_stats(context: &Context) -> Result<SecurejoinSour
 }
 
 async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUiPaths> {
-    let map = context
+    let map: BTreeMap<SecurejoinUiPath, u32> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT uipath, count FROM stats_securejoin_uipaths",
             (),
             |row| {
@@ -819,7 +807,6 @@ async fn get_securejoin_uipath_stats(context: &Context) -> Result<SecurejoinUiPa
                 let count: u32 = row.get(1)?;
                 Ok((uipath, count))
             },
-            |rows| Ok(rows.collect::<rusqlite::Result<BTreeMap<_, _>>>()?),
         )
         .await?;
 
@@ -868,9 +855,9 @@ pub(crate) async fn count_securejoin_invite(context: &Context, invite: &QrInvite
 }
 
 async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvite>> {
-    let qr_scans: Vec<JoinedInvite> = context
+    context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT already_existed, already_verified, type FROM stats_securejoin_invites",
             (),
             |row| {
@@ -884,14 +871,8 @@ async fn get_securejoin_invite_stats(context: &Context) -> Result<Vec<JoinedInvi
                     typ,
                 })
             },
-            |rows| {
-                rows.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
         )
-        .await?;
-
-    Ok(qr_scans)
+        .await
 }
 
 #[cfg(test)]

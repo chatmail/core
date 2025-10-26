@@ -320,28 +320,18 @@ async fn get_self_reaction(context: &Context, msg_id: MsgId) -> Result<Reaction>
 
 /// Returns a structure containing all reactions to the message.
 pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<Reactions> {
-    let reactions = context
+    let reactions: BTreeMap<ContactId, Reaction> = context
         .sql
-        .query_map(
+        .query_map_collect(
             "SELECT contact_id, reaction FROM reactions WHERE msg_id=?",
             (msg_id,),
             |row| {
                 let contact_id: ContactId = row.get(0)?;
                 let reaction: String = row.get(1)?;
-                Ok((contact_id, reaction))
-            },
-            |rows| {
-                let mut reactions = Vec::new();
-                for row in rows {
-                    let (contact_id, reaction) = row?;
-                    reactions.push((contact_id, Reaction::from(reaction.as_str())));
-                }
-                Ok(reactions)
+                Ok((contact_id, Reaction::from(reaction.as_str())))
             },
         )
-        .await?
-        .into_iter()
-        .collect();
+        .await?;
     Ok(Reactions { reactions })
 }
 

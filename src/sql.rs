@@ -370,11 +370,11 @@ impl Sql {
         sql: &str,
         params: impl rusqlite::Params + Send,
         f: F,
-        mut g: G,
+        g: G,
     ) -> Result<H>
     where
         F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
-        G: Send + FnMut(rusqlite::MappedRows<F>) -> Result<H>,
+        G: Send + FnOnce(rusqlite::MappedRows<F>) -> Result<H>,
         H: Send + 'static,
     {
         let query_only = true;
@@ -384,6 +384,43 @@ impl Sql {
             g(res)
         })
         .await
+    }
+
+    /// Prepares and executes the statement and maps a function over the resulting rows.
+    ///
+    /// Collects the resulting rows into a generic structure.
+    pub async fn query_map_collect<T, C, F>(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params + Send,
+        f: F,
+    ) -> Result<C>
+    where
+        T: Send + 'static,
+        C: Send + 'static + std::iter::FromIterator<T>,
+        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+    {
+        self.query_map(sql, params, f, |rows| {
+            rows.collect::<std::result::Result<C, _>>()
+                .map_err(Into::into)
+        })
+        .await
+    }
+
+    /// Prepares and executes the statement and maps a function over the resulting rows.
+    ///
+    /// Collects the resulting rows into a `Vec`.
+    pub async fn query_map_vec<T, F>(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params + Send,
+        f: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Send + 'static,
+        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+    {
+        self.query_map_collect(sql, params, f).await
     }
 
     /// Used for executing `SELECT COUNT` statements only. Returns the resulting count.

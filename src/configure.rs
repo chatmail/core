@@ -549,7 +549,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
         true => ctx.get_config_bool(Config::IsChatmail).await?,
     };
     if is_chatmail {
-        ctx.set_config(Config::SentboxWatch, None).await?;
         ctx.set_config(Config::MvboxMove, Some("0")).await?;
         ctx.set_config(Config::OnlyFetchMvbox, None).await?;
         ctx.set_config(Config::ShowEmails, None).await?;

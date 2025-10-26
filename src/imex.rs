@@ -648,7 +648,7 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
 
     let keys = context
         .sql
-        .query_map(
+        .query_map_vec(
             "SELECT id, public_key, private_key, id=(SELECT value FROM config WHERE keyname='key_id') FROM keypairs;",
             (),
             |row| {
@@ -660,10 +660,6 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
                 let is_default: i32 = row.get(3)?;
 
                 Ok((id, public_key, private_key, is_default))
-            },
-            |keys| {
-                keys.collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
             },
         )
         .await?;

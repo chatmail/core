@@ -7,7 +7,6 @@ use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
 use futures::future::try_join_all;
 use futures_lite::FutureExt;
-use rand::Rng;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task;
 use tokio_util::sync::CancellationToken;
@@ -255,7 +254,7 @@ impl SchedulerState {
         }
     }
 
-    /// Interrupt optional boxes (mvbox, sentbox) loops.
+    /// Interrupt optional boxes (mvbox currently) loops.
     pub(crate) async fn interrupt_oboxes(&self) {
         let inner = self.inner.read().await;
         if let InnerSchedulerState::Started(ref scheduler) = *inner {
@@ -334,7 +333,7 @@ struct SchedBox {
 #[derive(Debug)]
 pub(crate) struct Scheduler {
     inbox: SchedBox,
-    /// Optional boxes -- mvbox, sentbox.
+    /// Optional boxes -- mvbox.
     oboxes: Vec<SchedBox>,
     smtp: SmtpConnectionState,
     smtp_handle: task::JoinHandle<()>,
@@ -349,19 +348,10 @@ pub(crate) struct Scheduler {
 async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
     let msg_ids = context
         .sql
-        .query_map(
-            "SELECT msg_id FROM download",
-            (),
-            |row| {
-                let msg_id: MsgId = row.get(0)?;
-                Ok(msg_id)
-            },
-            |rowids| {
-                rowids
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
-            },
-        )
+        .query_map_vec("SELECT msg_id FROM download", (), |row| {
+            let msg_id: MsgId = row.get(0)?;
+            Ok(msg_id)
+        })
         .await?;
 
     for msg_id in msg_ids {
@@ -840,7 +830,7 @@ async fn smtp_loop(
                 let slept = time_elapsed(&now).as_secs();
                 timeout = Some(cmp::max(
                     t,
-                    slept.saturating_add(rand::thread_rng().gen_range((slept / 2)..=slept)),
+                    slept.saturating_add(rand::random_range((slept / 2)..=slept)),
                 ));
             } else {
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");
@@ -885,22 +875,18 @@ impl Scheduler {
         };
         start_recvs.push(inbox_start_recv);
 
-        for (meaning, should_watch) in [
-            (FolderMeaning::Mvbox, ctx.should_watch_mvbox().await),
-            (FolderMeaning::Sent, ctx.should_watch_sentbox().await),
-        ] {
-            if should_watch? {
-                let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
-                let (start_send, start_recv) = oneshot::channel();
-                let ctx = ctx.clone();
-                let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
-                oboxes.push(SchedBox {
-                    meaning,
-                    conn_state,
-                    handle,
-                });
-                start_recvs.push(start_recv);
-            }
+        if ctx.should_watch_mvbox().await? {
+            let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
+            let (start_send, start_recv) = oneshot::channel();
+            let ctx = ctx.clone();
+            let meaning = FolderMeaning::Mvbox;
+            let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
+            oboxes.push(SchedBox {
+                meaning,
+                conn_state,
+                handle,
+            });
+            start_recvs.push(start_recv);
         }
 
         let smtp_handle = {

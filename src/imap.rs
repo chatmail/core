@@ -20,7 +20,6 @@ use deltachat_contact_tools::ContactAddress;
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use num_traits::FromPrimitive;
-use rand::Rng;
 use ratelimit::Ratelimit;
 use url::Url;
 
@@ -157,7 +156,6 @@ pub enum FolderMeaning {
     Spam,
     Inbox,
     Mvbox,
-    Sent,
     Trash,
 
     /// Virtual folders.
@@ -176,7 +174,6 @@ impl FolderMeaning {
             FolderMeaning::Spam => None,
             FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
             FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
-            FolderMeaning::Sent => Some(Config::ConfiguredSentboxFolder),
             FolderMeaning::Trash => Some(Config::ConfiguredTrashFolder),
             FolderMeaning::Virtual => None,
         }
@@ -342,9 +339,9 @@ impl Imap {
         const BACKOFF_MIN_MS: u64 = 2000;
         const BACKOFF_MAX_MS: u64 = 80_000;
         self.conn_backoff_ms = min(self.conn_backoff_ms, BACKOFF_MAX_MS / 2);
-        self.conn_backoff_ms = self.conn_backoff_ms.saturating_add(
-            rand::thread_rng().gen_range((self.conn_backoff_ms / 2)..=self.conn_backoff_ms),
-        );
+        self.conn_backoff_ms = self.conn_backoff_ms.saturating_add(rand::random_range(
+            (self.conn_backoff_ms / 2)..=self.conn_backoff_ms,
+        ));
         self.conn_backoff_ms = max(BACKOFF_MIN_MS, self.conn_backoff_ms);
 
         let login_params = prioritize_server_login_params(&context.sql, &self.lp, "imap").await?;
@@ -799,9 +796,6 @@ impl Imap {
         context: &Context,
         session: &mut Session,
     ) -> Result<()> {
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredSentboxFolder)
-            .await
-            .context("failed to get recipients from the sentbox")?;
         add_all_recipients_as_contacts(context, session, Config::ConfiguredMvboxFolder)
             .await
             .context("failed to get recipients from the movebox")?;
@@ -1036,7 +1030,7 @@ impl Session {
     async fn move_delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
         let rows = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT id, uid, target FROM imap
         WHERE folder = ?
         AND target != folder
@@ -1048,7 +1042,6 @@ impl Session {
                     let target: String = row.get(2)?;
                     Ok((rowid, uid, target))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
 
@@ -1139,7 +1132,7 @@ impl Session {
     pub(crate) async fn store_seen_flags_on_imap(&mut self, context: &Context) -> Result<()> {
         let rows = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT imap.id, uid, folder FROM imap, imap_markseen
                  WHERE imap.id = imap_markseen.id AND target = folder
                  ORDER BY folder, uid",
@@ -1150,7 +1143,6 @@ impl Session {
                     let folder: String = row.get(2)?;
                     Ok((rowid, uid, folder))
                 },
-                |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
             )
             .await?;
 
@@ -2047,7 +2039,7 @@ async fn spam_target_folder_cfg(
 
     if needs_move_to_mvbox(context, headers).await?
         // If OnlyFetchMvbox is set, we don't want to move the message to
-        // the inbox or sentbox where we wouldn't fetch it again:
+        // the inbox where we wouldn't fetch it again:
         || context.get_config_bool(Config::OnlyFetchMvbox).await?
     {
         Ok(Some(Config::ConfiguredMvboxFolder))
@@ -2056,7 +2048,7 @@ async fn spam_target_folder_cfg(
     }
 }
 
-/// Returns `ConfiguredInboxFolder`, `ConfiguredMvboxFolder` or `ConfiguredSentboxFolder` if
+/// Returns `ConfiguredInboxFolder` or `ConfiguredMvboxFolder` if
 /// the message needs to be moved from `folder`. Otherwise returns `None`.
 pub async fn target_folder_cfg(
     context: &Context,
@@ -2145,38 +2137,6 @@ async fn needs_move_to_mvbox(
 // but sth. different in others - a hard job.
 fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
     // source: <https://stackoverflow.com/questions/2185391/localized-gmail-imap-folders>
-    const SENT_NAMES: &[&str] = &[
-        "sent",
-        "sentmail",
-        "sent objects",
-        "gesendet",
-        "Sent Mail",
-        "Sendte e-mails",
-        "Enviados",
-        "Messages envoyés",
-        "Messages envoyes",
-        "Posta inviata",
-        "Verzonden berichten",
-        "Wyslane",
-        "E-mails enviados",
-        "Correio enviado",
-        "Enviada",
-        "Enviado",
-        "Gönderildi",
-        "Inviati",
-        "Odeslaná pošta",
-        "Sendt",
-        "Skickat",
-        "Verzonden",
-        "Wysłane",
-        "Éléments envoyés",
-        "Απεσταλμένα",
-        "Отправленные",
-        "寄件備份",
-        "已发送邮件",
-        "送信済み",
-        "보낸편지함",
-    ];
     const SPAM_NAMES: &[&str] = &[
         "spam",
         "junk",
@@ -2222,8 +2182,6 @@ fn get_folder_meaning_by_name(folder_name: &str) -> FolderMeaning {
 
     if lower == "inbox" {
         FolderMeaning::Inbox
-    } else if SENT_NAMES.iter().any(|s| s.to_lowercase() == lower) {
-        FolderMeaning::Sent
     } else if SPAM_NAMES.iter().any(|s| s.to_lowercase() == lower) {
         FolderMeaning::Spam
     } else if TRASH_NAMES.iter().any(|s| s.to_lowercase() == lower) {
@@ -2237,7 +2195,6 @@ fn get_folder_meaning_by_attrs(folder_attrs: &[NameAttribute]) -> FolderMeaning 
     for attr in folder_attrs {
         match attr {
             NameAttribute::Trash => return FolderMeaning::Trash,
-            NameAttribute::Sent => return FolderMeaning::Sent,
             NameAttribute::Junk => return FolderMeaning::Spam,
             NameAttribute::All | NameAttribute::Flagged => return FolderMeaning::Virtual,
             NameAttribute::Extension(label) => {
@@ -2570,10 +2527,6 @@ async fn should_ignore_folder(
 ) -> Result<bool> {
     if !context.get_config_bool(Config::OnlyFetchMvbox).await? {
         return Ok(false);
-    }
-    if context.is_sentbox(folder).await? {
-        // Still respect the SentboxWatch setting.
-        return Ok(!context.get_config_bool(Config::SentboxWatch).await?);
     }
     Ok(!(context.is_mvbox(folder).await? || folder_meaning == FolderMeaning::Spam))
 }

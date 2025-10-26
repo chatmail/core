@@ -845,7 +845,6 @@ impl Context {
             Err(err) => format!("<key failure: {err}>"),
         };
 
-        let sentbox_watch = self.get_config_int(Config::SentboxWatch).await?;
         let mvbox_move = self.get_config_int(Config::MvboxMove).await?;
         let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
         let folders_configured = self
@@ -856,10 +855,6 @@ impl Context {
 
         let configured_inbox_folder = self
             .get_config(Config::ConfiguredInboxFolder)
-            .await?
-            .unwrap_or_else(|| "<unset>".to_string());
-        let configured_sentbox_folder = self
-            .get_config(Config::ConfiguredSentboxFolder)
             .await?
             .unwrap_or_else(|| "<unset>".to_string());
         let configured_mvbox_folder = self
@@ -949,7 +944,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert("sentbox_watch", sentbox_watch.to_string());
         res.insert("mvbox_move", mvbox_move.to_string());
         res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
         res.insert(
@@ -957,7 +951,6 @@ impl Context {
             folders_configured.to_string(),
         );
         res.insert("configured_inbox_folder", configured_inbox_folder);
-        res.insert("configured_sentbox_folder", configured_sentbox_folder);
         res.insert("configured_mvbox_folder", configured_mvbox_folder);
         res.insert("configured_trash_folder", configured_trash_folder);
         res.insert("mdns_enabled", mdns_enabled.to_string());
@@ -1095,7 +1088,7 @@ impl Context {
     pub async fn get_fresh_msgs(&self) -> Result<Vec<MsgId>> {
         let list = self
             .sql
-            .query_map(
+            .query_map_vec(
                 concat!(
                     "SELECT m.id",
                     " FROM msgs m",
@@ -1113,13 +1106,6 @@ impl Context {
                 ),
                 (MessageState::InFresh, time()),
                 |row| row.get::<_, MsgId>(0),
-                |rows| {
-                    let mut list = Vec::new();
-                    for row in rows {
-                        list.push(row?);
-                    }
-                    Ok(list)
-                },
             )
             .await?;
         Ok(list)
@@ -1152,7 +1138,7 @@ impl Context {
 
         let list = self
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT m.id
                      FROM msgs m
                      LEFT JOIN contacts ct
@@ -1171,13 +1157,6 @@ impl Context {
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
                     Ok(msg_id)
-                },
-                |rows| {
-                    let mut list = Vec::new();
-                    for row in rows {
-                        list.push(row?);
-                    }
-                    Ok(list)
                 },
             )
             .await?;
@@ -1219,7 +1198,7 @@ impl Context {
 
         let list = if let Some(chat_id) = chat_id {
             self.sql
-                .query_map(
+                .query_map_vec(
                     "SELECT m.id AS id
                  FROM msgs m
                  LEFT JOIN contacts ct
@@ -1231,13 +1210,6 @@ impl Context {
                  ORDER BY m.timestamp,m.id;",
                     (chat_id, str_like_in_text),
                     |row| row.get::<_, MsgId>("id"),
-                    |rows| {
-                        let mut ret = Vec::new();
-                        for id in rows {
-                            ret.push(id?);
-                        }
-                        Ok(ret)
-                    },
                 )
                 .await?
         } else {
@@ -1252,7 +1224,7 @@ impl Context {
             // According to some tests, this limit speeds up eg. 2 character searches by factor 10.
             // The limit is documented and UI may add a hint when getting 1000 results.
             self.sql
-                .query_map(
+                .query_map_vec(
                     "SELECT m.id AS id
                  FROM msgs m
                  LEFT JOIN contacts ct
@@ -1267,13 +1239,6 @@ impl Context {
                  ORDER BY m.id DESC LIMIT 1000",
                     (str_like_in_text,),
                     |row| row.get::<_, MsgId>("id"),
-                    |rows| {
-                        let mut ret = Vec::new();
-                        for id in rows {
-                            ret.push(id?);
-                        }
-                        Ok(ret)
-                    },
                 )
                 .await?
         };
@@ -1285,12 +1250,6 @@ impl Context {
     pub async fn is_inbox(&self, folder_name: &str) -> Result<bool> {
         let inbox = self.get_config(Config::ConfiguredInboxFolder).await?;
         Ok(inbox.as_deref() == Some(folder_name))
-    }
-
-    /// Returns true if given folder name is the name of the "sent" folder.
-    pub async fn is_sentbox(&self, folder_name: &str) -> Result<bool> {
-        let sentbox = self.get_config(Config::ConfiguredSentboxFolder).await?;
-        Ok(sentbox.as_deref() == Some(folder_name))
     }
 
     /// Returns true if given folder name is the name of the "DeltaChat" folder.

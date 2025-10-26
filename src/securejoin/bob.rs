@@ -72,10 +72,26 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             )
             .await?;
 
-        // Chat ID of the group we are joining, unused otherwise.
-        if matches!(invite, QrInvite::Group { .. })
-            && is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await?
-        {
+        // `joining_chat_id` is `Some` if group chat
+        // already exists and we are in the chat.
+        let joining_chat_id = match invite {
+            QrInvite::Group { ref grpid, .. } | QrInvite::Broadcast { ref grpid, .. } => {
+                if let Some((joining_chat_id, _blocked)) =
+                    chat::get_chat_id_by_grpid(context, grpid).await?
+                {
+                    if is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
+                        Some(joining_chat_id)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }
+            QrInvite::Contact { .. } => None,
+        };
+
+        if let Some(joining_chat_id) = joining_chat_id {
             // If QR code is a group invite
             // and we are already in the chat,
             // nothing needs to be done.
@@ -199,19 +215,14 @@ pub(super) async fn handle_auth_required(
     message: &MimeMessage,
 ) -> Result<HandshakeMessage> {
     // Load all Bob states that expect `vc-auth-required` or `vg-auth-required`.
-    let bob_states: Vec<(i64, QrInvite, ChatId)> = context
+    let bob_states = context
         .sql
-        .query_map(
-            "SELECT id, invite, chat_id FROM bobstate",
-            (),
-            |row| {
-                let row_id: i64 = row.get(0)?;
-                let invite: QrInvite = row.get(1)?;
-                let chat_id: ChatId = row.get(2)?;
-                Ok((row_id, invite, chat_id))
-            },
-            |rows| rows.collect::<Result<Vec<_>, _>>().map_err(Into::into),
-        )
+        .query_map_vec("SELECT id, invite, chat_id FROM bobstate", (), |row| {
+            let row_id: i64 = row.get(0)?;
+            let invite: QrInvite = row.get(1)?;
+            let chat_id: ChatId = row.get(2)?;
+            Ok((row_id, invite, chat_id))
+        })
         .await?;
 
     info!(

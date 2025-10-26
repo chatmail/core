@@ -90,7 +90,7 @@ impl DetailedConnectivity {
             DetailedConnectivity::Preparing => Some(Connectivity::Working),
 
             // Just don't return a connectivity, probably the folder is configured not to be
-            // watched or there is e.g. no "Sent" folder, so we are not interested in it
+            // watched, so we are not interested in it.
             DetailedConnectivity::NotConfigured => None,
 
             DetailedConnectivity::Idle => Some(Connectivity::Connected),
@@ -378,7 +378,6 @@ impl Context {
         // Add e.g.
         //                              Incoming messages
         //                               - "Inbox": Connected
-        //                               - "Sent": Connected
         // =============================================================================================
 
         let watched_folders = get_watched_folder_configs(self).await?;

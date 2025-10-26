@@ -39,7 +39,6 @@ use deltachat_jsonrpc::api::CommandApi;
 use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
 use message::Viewtype;
 use num_traits::{FromPrimitive, ToPrimitive};
-use rand::Rng;
 use tokio::runtime::Runtime;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
@@ -101,7 +100,7 @@ pub unsafe extern "C" fn dc_context_new(
 
     let ctx = if blobdir.is_null() || *blobdir == 0 {
         // generate random ID as this functionality is not yet available on the C-api.
-        let id = rand::thread_rng().gen();
+        let id = rand::random();
         block_on(
             ContextBuilder::new(as_path(dbfile).to_path_buf())
                 .with_id(id)
@@ -129,7 +128,7 @@ pub unsafe extern "C" fn dc_context_new_closed(dbfile: *const libc::c_char) -> *
         return ptr::null_mut();
     }
 
-    let id = rand::thread_rng().gen();
+    let id = rand::random();
     match block_on(
         ContextBuilder::new(as_path(dbfile).to_path_buf())
             .with_id(id)

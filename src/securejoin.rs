@@ -33,6 +33,15 @@ pub(crate) use qrinvite::QrInvite;
 
 use crate::token::Namespace;
 
+/// Only new QR codes cause a verification on Alice's side.
+/// When a QR code is too old, it is assumed that there was no direct QR scan,
+/// and that the QR code was potentially published on a website,
+/// so, Alice doesn't mark Bob as verified.
+// TODO For backwards compatibility reasons, this is still using a rather large value.
+// Set this to a lower value (e.g. 10 minutes)
+// when Delta Chat v2.22.0 is sufficiently rolled out
+const VERIFICATION_TIMEOUT_SECONDS: i64 = 7 * 24 * 3600;
+
 fn inviter_progress(
     context: &Context,
     contact_id: ContactId,
@@ -481,8 +490,8 @@ pub(crate) async fn handle_securejoin_handshake(
             }
             info!(context, "Fingerprint verified via Auth code.",);
 
-            // Mark the contact as verified if auth code is 600 seconds old.
-            if time() < timestamp + 600 {
+            // Mark the contact as verified if auth code is less than VERIFICATION_TIMEOUT_SECONDS seconds old.
+            if time() < timestamp + VERIFICATION_TIMEOUT_SECONDS {
                 mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
             }
             contact_id.regossip_keys(context).await?;
