@@ -27,17 +27,17 @@
 use std::hint::black_box;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use deltachat::internals_for_benchmarks::create_broadcast_secret;
-use deltachat::internals_for_benchmarks::create_dummy_keypair;
-use deltachat::internals_for_benchmarks::save_broadcast_secret;
+use deltachat::internals_for_benches::create_broadcast_secret;
+use deltachat::internals_for_benches::create_dummy_keypair;
+use deltachat::internals_for_benches::save_broadcast_secret;
 use deltachat::{
     Events,
     chat::ChatId,
     config::Config,
     context::Context,
-    internals_for_benchmarks::key_from_asc,
-    internals_for_benchmarks::parse_and_get_text,
-    internals_for_benchmarks::store_self_keypair,
+    internals_for_benches::key_from_asc,
+    internals_for_benches::parse_and_get_text,
+    internals_for_benches::store_self_keypair,
     pgp::{KeyPair, decrypt, pk_encrypt, symm_encrypt_message},
     stock_str::StockStrings,
 };

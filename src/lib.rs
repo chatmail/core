@@ -116,7 +116,7 @@ pub mod peer_channels;
 pub mod reaction;
 
 #[cfg(feature = "internals")]
-pub mod internals_for_benchmarks;
+pub mod internals_for_benches;
 
 /// If set IMAP/incoming and SMTP/outgoing MIME messages will be printed.
 pub const DCC_MIME_DEBUG: &str = "DCC_MIME_DEBUG";

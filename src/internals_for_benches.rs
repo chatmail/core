@@ -1,4 +1,4 @@
-//! Re-exports of internal functions needed for benchmarks.
+//! Re-exports of `pub(crate)` functions that are needed for benchmarks.
 #![allow(missing_docs)] // Not necessary to put a doc comment on the pub functions here
 
 use anyhow::Result;
