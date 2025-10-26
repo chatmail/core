@@ -5,20 +5,20 @@
 //! Call with
 //!
 //! ```text
-//! cargo bench --bench benchmark_decrypting --features="internals"
+//! cargo bench --bench decrypting --features="internals"
 //! ```
 //!
 //! or, if you want to only run e.g. the 'Decrypt a symmetrically encrypted message' benchmark:
 //!
 //! ```text
-//! cargo bench --bench benchmark_decrypting --features="internals" -- 'Decrypt a symmetrically encrypted message'
+//! cargo bench --bench decrypting --features="internals" -- 'Decrypt a symmetrically encrypted message'
 //! ```
 //!
 //! You can also pass a substring.
 //! So, you can run all 'Decrypt and parse' benchmarks with:
 //!
 //! ```text
-//! cargo bench --bench benchmark_decrypting --features="internals" -- 'Decrypt and parse'
+//! cargo bench --bench decrypting --features="internals" -- 'Decrypt and parse'
 //! ```
 //!
 //! Symmetric decryption has to try out all known secrets,

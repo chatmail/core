@@ -257,7 +257,7 @@ pub fn decrypt(
     }
 
     // We always try out all passwords here,
-    // but benchmarking (see `benchmark_decrypting.rs`)
+    // but benchmarking (see `benches/decrypting.rs`)
     // showed that the performance impact is negligible.
     // We can improve this in the future if necessary.
     let message_password: Vec<Password> = shared_secrets

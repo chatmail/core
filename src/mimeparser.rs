@@ -357,14 +357,10 @@ impl MimeMessage {
         let decrypted_msg; // Decrypted signed OpenPGP message.
         let secrets: Vec<String> = context
             .sql
-            .query_map(
+            .query_map_vec(
                 "SELECT secret FROM broadcast_secrets ORDER BY chat_id DESC",
                 (),
                 |row| row.get(0),
-                |rows| {
-                    rows.collect::<std::result::Result<Vec<_>, _>>()
-                        .map_err(Into::into)
-                },
             )
             .await?;
 
