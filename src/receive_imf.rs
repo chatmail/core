@@ -3513,7 +3513,10 @@ async fn apply_in_broadcast_changes(
 
     if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
         // We are not supposed to receive a notification when someone else than self is removed:
-        ensure!(removed_fpr == self_fingerprint(context).await?);
+        if removed_fpr != self_fingerprint(context).await? {
+            logged_debug_assert!(context, false, "Ignoring unexpected removal message");
+            return Ok(GroupChangesInfo::default());
+        }
 
         if from_id == ContactId::SELF {
             better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
@@ -3535,6 +3538,8 @@ async fn apply_in_broadcast_changes(
             &[ContactId::SELF],
         )
         .await?;
+        let msg = stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await;
+        better_msg.get_or_insert(msg);
         send_event_chat_modified = true;
     }
 
