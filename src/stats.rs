@@ -157,8 +157,8 @@ struct JoinedInvite {
     /// The type of the invite:
     /// "contact" for 1:1 invites that setup a verified contact,
     /// "group" for invites that invite to a group,
-    /// "broadcast" for invites that invite to a broadcast channel,
-    /// and also perform the contact verification 'along the way'.
+    /// "broadcast" for invites that invite to a broadcast channel.
+    /// The invite also performs the contact verification 'along the way'.
     typ: String,
 }
 

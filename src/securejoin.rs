@@ -509,7 +509,7 @@ pub(crate) async fn handle_securejoin_handshake(
                 if chat.typ == Chattype::OutBroadcast {
                     // For broadcasts, we don't want to delete the message,
                     // because the other device should also internally add the member
-                    // and see the key (because it won't see the member via autocrypt-gossip).
+                    // and see the key. This makes the whole logic of member-addition simpler.
                     Ok(HandshakeMessage::Ignore)
                 } else {
                     // IMAP-delete the message to avoid handling it by another device and adding the
