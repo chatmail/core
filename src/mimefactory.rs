@@ -95,7 +95,7 @@ pub struct MimeFactory {
     /// to use for encryption.
     ///
     /// `None` if the message is not encrypted.
-    encryption_keys: Option<Vec<(String, SignedPublicKey)>>,
+    encryption_pubkeys: Option<Vec<(String, SignedPublicKey)>>,
 
     /// Vector of pairs of recipient name and address that goes into the `To` field.
     ///
@@ -209,14 +209,14 @@ impl MimeFactory {
         let mut recipient_ids = HashSet::new();
         let mut req_mdn = false;
 
-        let encryption_keys;
+        let encryption_pubkeys;
 
         let self_fingerprint = self_fingerprint(context).await?;
 
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            encryption_keys = if msg.param.get_bool(Param::ForcePlaintext).unwrap_or(false) {
+            encryption_pubkeys = if msg.param.get_bool(Param::ForcePlaintext).unwrap_or(false) {
                 None
             } else {
                 // Encrypt, but only to self.
@@ -231,7 +231,7 @@ impl MimeFactory {
             recipients.push(list_post.to_string());
 
             // Do not encrypt messages to mailing lists.
-            encryption_keys = None;
+            encryption_pubkeys = None;
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -430,10 +430,9 @@ impl MimeFactory {
                 recipients.retain(|addr| addr == member);
             }
 
-            encryption_keys = if !is_encrypted {
+            encryption_pubkeys = if !is_encrypted {
                 None
             } else if should_encrypt_symmetrically(&msg, &chat) {
-                // Encrypt, but only symmetrically, not with the public keys.
                 Some(Vec::new())
             } else {
                 if keys.is_empty() && !recipients.is_empty() {
@@ -492,7 +491,7 @@ impl MimeFactory {
             sender_displayname,
             selfstatus,
             recipients,
-            encryption_keys,
+            encryption_pubkeys,
             to,
             past_members,
             member_fingerprints,
@@ -521,7 +520,7 @@ impl MimeFactory {
         let timestamp = create_smeared_timestamp(context);
 
         let addr = contact.get_addr().to_string();
-        let encryption_keys = if contact.is_key_contact() {
+        let encryption_pubkeys = if contact.is_key_contact() {
             if let Some(key) = contact.public_key(context).await? {
                 Some(vec![(addr.clone(), key)])
             } else {
@@ -537,7 +536,7 @@ impl MimeFactory {
             sender_displayname: None,
             selfstatus: "".to_string(),
             recipients: vec![addr],
-            encryption_keys,
+            encryption_pubkeys,
             to: vec![("".to_string(), contact.get_addr().to_string())],
             past_members: vec![],
             member_fingerprints: vec![],
@@ -903,7 +902,7 @@ impl MimeFactory {
             ));
         }
 
-        let is_encrypted = self.encryption_keys.is_some();
+        let is_encrypted = self.encryption_pubkeys.is_some();
 
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
@@ -1094,7 +1093,7 @@ impl MimeFactory {
             }
         }
 
-        let outer_message = if let Some(encryption_keys) = self.encryption_keys {
+        let outer_message = if let Some(encryption_pubkeys) = self.encryption_pubkeys {
             // Store protected headers in the inner message.
             let message = protected_headers
                 .into_iter()
@@ -1111,7 +1110,7 @@ impl MimeFactory {
 
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
-                encryption_keys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
+                encryption_pubkeys.len() > 1 || context.get_config_bool(Config::BccSelf).await?;
 
             let gossip_period = context.get_config_i64(Config::GossipPeriod).await?;
             let now = time();
@@ -1119,7 +1118,7 @@ impl MimeFactory {
             match &self.loaded {
                 Loaded::Message { chat, msg } => {
                     if !should_hide_recipients(msg, chat) {
-                        for (addr, key) in &encryption_keys {
+                        for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
                             let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
@@ -1254,7 +1253,7 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
                 // even for a single-device setup.
                 let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
                 encryption_keyring
-                    .extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
+                    .extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
 
                 encrypt_helper
                     .encrypt(context, encryption_keyring, message, compress)
