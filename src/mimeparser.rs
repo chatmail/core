@@ -1612,9 +1612,11 @@ impl MimeMessage {
 
     pub fn replace_msg_by_error(&mut self, error_msg: &str) {
         self.is_system_message = SystemMessage::Unknown;
-        let mut new_part = Part::default();
-        new_part.typ = Viewtype::Text;
-        new_part.msg = format!("[{error_msg}]");
+        let new_part = Part {
+            typ: Viewtype::Text,
+            msg: format!("[{error_msg}]"),
+            ..Default::default()
+        };
         self.parts = vec![new_part];
     }
 
