@@ -17,7 +17,7 @@ use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
-use rand::thread_rng;
+use rand_old::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};

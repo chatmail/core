@@ -1,8 +1,6 @@
 //! # Key transfer via Autocrypt Setup Message.
 use std::io::BufReader;
 
-use rand::{Rng, thread_rng};
-
 use anyhow::{Result, bail, ensure};
 
 use crate::blob::BlobObject;
@@ -133,12 +131,11 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
 /// Creates a new setup code for Autocrypt Setup Message.
 fn create_setup_code(_context: &Context) -> String {
     let mut random_val: u16;
-    let mut rng = thread_rng();
     let mut ret = String::new();
 
     for i in 0..9 {
         loop {
-            random_val = rng.r#gen();
+            random_val = rand::random();
             if random_val as usize <= 60000 {
                 break;
             }

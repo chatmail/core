@@ -32,7 +32,7 @@ use mailparse::MailHeaderMap;
 use mailparse::dateparse;
 use mailparse::headers::Headers;
 use num_traits::PrimInt;
-use rand::{Rng, thread_rng};
+use rand::Rng;
 use tokio::{fs, io};
 use url::Url;
 use uuid::Uuid;
@@ -291,7 +291,7 @@ async fn maybe_warn_on_outdated(context: &Context, now: i64, approx_compile_time
 /// and divides both by 8 (byte size) and 6 (number of bits in a single Base64 character).
 pub(crate) fn create_id() -> String {
     // ThreadRng implements CryptoRng trait and is supposed to be cryptographically secure.
-    let mut rng = thread_rng();
+    let mut rng = rand::rng();
 
     // Generate 144 random bits.
     let mut arr = [0u8; 18];

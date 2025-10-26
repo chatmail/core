@@ -468,7 +468,7 @@ Authentication-Results: box.hispanilandia.net; spf=pass smtp.mailfrom=adbenitez@
             // The ordering in which the emails are received can matter;
             // the test _should_ pass for every ordering.
             dir.sort_by_key(|d| d.file_name());
-            //rand::seq::SliceRandom::shuffle(&mut dir[..], &mut rand::thread_rng());
+            //rand::seq::SliceRandom::shuffle(&mut dir[..], &mut rand::rng());
 
             for entry in &dir {
                 let mut file = fs::File::open(entry.path()).await?;
