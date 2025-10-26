@@ -15,7 +15,6 @@ use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
 use pretty_assertions::assert_eq;
-use rand::Rng;
 use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
 use tokio::{fs, task};
@@ -494,7 +493,7 @@ impl TestContext {
     async fn new_internal(name: Option<String>, log_sink: Option<LogSink>) -> Self {
         let dir = tempdir().unwrap();
         let dbfile = dir.path().join("db.sqlite");
-        let id = rand::thread_rng().r#gen();
+        let id = rand::random();
         if let Some(name) = name {
             let mut context_names = CONTEXT_NAMES.write().unwrap();
             context_names.insert(id, name);

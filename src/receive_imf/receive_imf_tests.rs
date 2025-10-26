@@ -4339,8 +4339,8 @@ async fn test_download_later() -> Result<()> {
     let bob_chat = bob.create_chat(&alice).await;
 
     // Generate a random string so OpenPGP does not compress it.
-    let text: String = rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
+    let text: String = rand::rng()
+        .sample_iter(&rand::distr::Alphanumeric)
         .take(MIN_DOWNLOAD_LIMIT as usize)
         .map(char::from)
         .collect();

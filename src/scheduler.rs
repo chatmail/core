@@ -7,7 +7,6 @@ use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
 use futures::future::try_join_all;
 use futures_lite::FutureExt;
-use rand::Rng;
 use tokio::sync::{RwLock, oneshot};
 use tokio::task;
 use tokio_util::sync::CancellationToken;
@@ -831,7 +830,7 @@ async fn smtp_loop(
                 let slept = time_elapsed(&now).as_secs();
                 timeout = Some(cmp::max(
                     t,
-                    slept.saturating_add(rand::thread_rng().gen_range((slept / 2)..=slept)),
+                    slept.saturating_add(rand::random_range((slept / 2)..=slept)),
                 ));
             } else {
                 info!(ctx, "SMTP has no messages to retry, waiting for interrupt.");

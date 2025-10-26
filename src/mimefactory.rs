@@ -11,7 +11,6 @@ use iroh_gossip::proto::TopicId;
 use mail_builder::headers::HeaderType;
 use mail_builder::headers::address::{Address, EmailAddress};
 use mail_builder::mime::MimePart;
-use rand::Rng as _;
 use tokio::fs;
 
 use crate::aheader::{Aheader, EncryptPreference};
@@ -1015,7 +1014,7 @@ impl MimeFactory {
                 //
                 // and the explanation page says
                 // "The time information deviates too much from the actual time".
-                let timestamp_offset = rand::thread_rng().gen_range(0..1000000);
+                let timestamp_offset = rand::random_range(0..1000000);
                 let protected_timestamp = self.timestamp.saturating_sub(timestamp_offset);
                 let unprotected_date =
                     chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)

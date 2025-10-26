@@ -20,7 +20,6 @@ use deltachat_contact_tools::ContactAddress;
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use num_traits::FromPrimitive;
-use rand::Rng;
 use ratelimit::Ratelimit;
 use url::Url;
 
@@ -342,9 +341,9 @@ impl Imap {
         const BACKOFF_MIN_MS: u64 = 2000;
         const BACKOFF_MAX_MS: u64 = 80_000;
         self.conn_backoff_ms = min(self.conn_backoff_ms, BACKOFF_MAX_MS / 2);
-        self.conn_backoff_ms = self.conn_backoff_ms.saturating_add(
-            rand::thread_rng().gen_range((self.conn_backoff_ms / 2)..=self.conn_backoff_ms),
-        );
+        self.conn_backoff_ms = self.conn_backoff_ms.saturating_add(rand::random_range(
+            (self.conn_backoff_ms / 2)..=self.conn_backoff_ms,
+        ));
         self.conn_backoff_ms = max(BACKOFF_MIN_MS, self.conn_backoff_ms);
 
         let login_params = prioritize_server_login_params(&context.sql, &self.lp, "imap").await?;
