@@ -83,8 +83,8 @@ fn criterion_benchmark(c: &mut Criterion) {
             let secret = secrets[NUM_SECRETS / 2].clone();
             symm_encrypt_message(
                 plain.clone(),
-                black_box(&secret),
                 create_dummy_keypair("alice@example.org").unwrap().secret,
+                black_box(&secret),
                 true,
             )
             .await

@@ -74,7 +74,7 @@ impl EncryptHelper {
         mail_to_encrypt.clone().write_part(cursor).ok();
 
         let ctext =
-            pgp::symm_encrypt_message(raw_message, shared_secret, sign_key, compress).await?;
+            pgp::symm_encrypt_message(raw_message, sign_key, shared_secret, compress).await?;
 
         Ok(ctext)
     }

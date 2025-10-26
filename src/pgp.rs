@@ -251,8 +251,8 @@ pub fn decrypt(
     let empty_pw = Password::empty();
 
     let decrypt_options = DecryptionOptions::new();
-    let try_symmetric_decryption = should_try_symmetric_decryption(&msg);
-    if try_symmetric_decryption.is_err() {
+    let symmetric_encryption_res = check_symmetric_encryption(&msg);
+    if symmetric_encryption_res.is_err() {
         shared_secrets = &[];
     }
 
@@ -279,7 +279,7 @@ pub fn decrypt(
     let (msg, _ring_result) = match res {
         Ok(it) => it,
         Err(err) => {
-            if let Err(reason) = try_symmetric_decryption {
+            if let Err(reason) = symmetric_encryption_res {
                 bail!("{err:#} (Note: symmetric decryption was not tried: {reason})")
             } else {
                 bail!("{err:#}");
@@ -302,7 +302,7 @@ pub fn decrypt(
 /// with all of the known shared secrets.
 /// In order to prevent this, we do not try to symmetrically decrypt messages
 /// that use a string2key algorithm other than 'Salted'.
-fn should_try_symmetric_decryption(msg: &Message<'_>) -> std::result::Result<(), &'static str> {
+fn check_symmetric_encryption(msg: &Message<'_>) -> std::result::Result<(), &'static str> {
     let Message::Encrypted { esk, .. } = msg else {
         return Err("not encrypted");
     };
@@ -384,8 +384,8 @@ pub async fn symm_encrypt_autocrypt_setup(passphrase: &str, plain: Vec<u8>) -> R
 /// `shared secret` is the secret that will be used for symmetric encryption.
 pub async fn symm_encrypt_message(
     plain: Vec<u8>,
-    shared_secret: &str,
     private_key_for_signing: SignedSecretKey,
+    shared_secret: &str,
     compress: bool,
 ) -> Result<String> {
     let shared_secret = Password::from(shared_secret.to_string());
@@ -655,8 +655,8 @@ mod tests {
         let shared_secret = "shared secret";
         let ctext = symm_encrypt_message(
             plain.clone(),
-            shared_secret,
             load_self_secret_key(alice).await?,
+            shared_secret,
             true,
         )
         .await?;

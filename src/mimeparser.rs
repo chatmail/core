@@ -1612,11 +1612,10 @@ impl MimeMessage {
 
     pub fn replace_msg_by_error(&mut self, error_msg: &str) {
         self.is_system_message = SystemMessage::Unknown;
-        if let Some(part) = self.parts.first_mut() {
-            part.typ = Viewtype::Text;
-            part.msg = format!("[{error_msg}]");
-            self.parts.truncate(1);
-        }
+        let mut new_part = Part::default();
+        new_part.typ = Viewtype::Text;
+        new_part.msg = format!("[{error_msg}]");
+        self.parts = vec![new_part];
     }
 
     pub(crate) fn get_rfc724_mid(&self) -> Option<String> {

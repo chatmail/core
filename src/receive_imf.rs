@@ -1651,10 +1651,10 @@ async fn add_parts(
             if chat.typ == Chattype::InBroadcast {
                 let s = stock_str::error(context, "This message was not sent by the channel owner")
                     .await;
+                mime_parser.replace_msg_by_error(&s);
                 if let Some(part) = mime_parser.parts.first_mut() {
                     part.error = Some(format!("{s}:\n\"{}\"", part.msg));
                 }
-                mime_parser.replace_msg_by_error(&s);
             }
         }
     }
