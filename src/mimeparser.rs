@@ -272,7 +272,7 @@ impl MimeMessage {
             &mut from,
             &mut list_post,
             &mut chat_disposition_notification_to,
-            &mail.headers,
+            &mail,
         );
         headers.retain(|k, _| {
             !is_hidden(k) || {
@@ -300,7 +300,7 @@ impl MimeMessage {
                         &mut from,
                         &mut list_post,
                         &mut chat_disposition_notification_to,
-                        &part.headers,
+                        part,
                     );
                     (part, part.ctype.mimetype.parse::<Mime>()?)
                 } else {
@@ -530,7 +530,7 @@ impl MimeMessage {
                 &mut inner_from,
                 &mut list_post,
                 &mut chat_disposition_notification_to,
-                &mail.headers,
+                mail,
             );
 
             if !signatures.is_empty() {
@@ -1634,10 +1634,16 @@ impl MimeMessage {
         from: &mut Option<SingleInfo>,
         list_post: &mut Option<String>,
         chat_disposition_notification_to: &mut Option<SingleInfo>,
-        fields: &[mailparse::MailHeader<'_>],
+        part: &mailparse::ParsedMail,
     ) {
+        let fields = &part.headers;
+        // See https://www.rfc-editor.org/rfc/rfc9788.html "Header Protection for Cryptographically
+        // Protected Email". We don't check if `part` is a root of the Cryptographic Payload because
+        // this function is only called with nonempty `headers` for such parts.
+        let has_header_protection = part.ctype.params.contains_key("hp");
+
         headers.retain(|k, _| {
-            !is_protected(k) || {
+            !(has_header_protection || is_protected(k)) || {
                 headers_removed.insert(k.to_string());
                 false
             }
@@ -2088,7 +2094,8 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
 }
 
 /// Returns whether the outer header value must be ignored if the message contains a signed (and
-/// optionally encrypted) part.
+/// optionally encrypted) part. This is independent from the modern Header Protection defined in
+/// <https://www.rfc-editor.org/rfc/rfc9788.html>.
 ///
 /// NB: There are known cases when Subject and List-ID only appear in the outer headers of
 /// signed-only messages. Such messages are shown as unencrypted anyway.
