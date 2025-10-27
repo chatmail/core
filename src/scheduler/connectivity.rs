@@ -359,10 +359,11 @@ impl Context {
             .get_config_bool(crate::config::Config::ProxyEnabled)
             .await
         {
-            ret += &format!("<h3>Proxy Enabled</h3>");
+            ret += &format!("<h3>Proxy Enabled</h3><ul>");
             ret += &format!(
-                "<p>You are using a proxy. If you're having trouble connecting, try a different proxy.</p>"
+                "<li>You are using a proxy. If you're having trouble connecting, try a different proxy.</li>"
             );
+            ret += &format!("</ul>");
         }
 
         // =============================================================================================
