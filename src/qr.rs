@@ -9,6 +9,8 @@ pub use dclogin_scheme::LoginOptions;
 pub(crate) use dclogin_scheme::login_param_from_login_qr;
 use deltachat_contact_tools::{ContactAddress, addr_normalize, may_be_valid_addr};
 use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
+use rand::TryRngCore as _;
+use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
 
 use crate::config::Config;
@@ -543,21 +545,29 @@ async fn decode_ideltachat(context: &Context, prefix: &str, qr: &str) -> Result<
         .with_context(|| format!("failed to decode {prefix} QR code"))
 }
 
-/// scheme: `DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3`
+/// scheme: `DCACCOUNT:example.org`
+/// or `DCACCOUNT:https://example.org/new`
+/// or `DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3`
 fn decode_account(qr: &str) -> Result<Qr> {
     let payload = qr
         .get(DCACCOUNT_SCHEME.len()..)
         .context("Invalid DCACCOUNT payload")?;
-    let url = url::Url::parse(payload).context("Invalid account URL")?;
-    if url.scheme() == "http" || url.scheme() == "https" {
-        Ok(Qr::Account {
-            domain: url
-                .host_str()
-                .context("can't extract account setup domain")?
-                .to_string(),
-        })
+    if payload.starts_with("https://") {
+        let url = url::Url::parse(payload).context("Invalid account URL")?;
+        if url.scheme() == "https" {
+            Ok(Qr::Account {
+                domain: url
+                    .host_str()
+                    .context("can't extract account setup domain")?
+                    .to_string(),
+            })
+        } else {
+            bail!("Bad scheme for account URL: {:?}.", url.scheme());
+        }
     } else {
-        bail!("Bad scheme for account URL: {:?}.", url.scheme());
+        Ok(Qr::Account {
+            domain: payload.to_string(),
+        })
     }
 }
 
@@ -659,15 +669,30 @@ pub(crate) async fn login_param_from_account_qr(
     context: &Context,
     qr: &str,
 ) -> Result<EnteredLoginParam> {
-    let url_str = qr
+    let payload = qr
         .get(DCACCOUNT_SCHEME.len()..)
         .context("Invalid DCACCOUNT scheme")?;
 
-    if !url_str.starts_with(HTTPS_SCHEME) {
-        bail!("DCACCOUNT QR codes must use HTTPS scheme");
+    if !payload.starts_with(HTTPS_SCHEME) {
+        let rng = &mut rand::rngs::OsRng.unwrap_err();
+        let username = Alphanumeric.sample_string(rng, 9);
+        let addr = username + "@" + payload;
+        let password = Alphanumeric.sample_string(rng, 50);
+
+        let param = EnteredLoginParam {
+            addr,
+            imap: EnteredServerLoginParam {
+                password,
+                ..Default::default()
+            },
+            smtp: Default::default(),
+            certificate_checks: EnteredCertificateChecks::Strict,
+            oauth2: false,
+        };
+        return Ok(param);
     }
 
-    let (response_text, response_success) = post_empty(context, url_str).await?;
+    let (response_text, response_success) = post_empty(context, payload).await?;
     if response_success {
         let CreateAccountSuccessResponse { password, email } = serde_json::from_str(&response_text)
             .with_context(|| {
