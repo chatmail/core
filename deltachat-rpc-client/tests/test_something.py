@@ -816,7 +816,7 @@ def test_configured_imap_certificate_checks(acfactory):
     alice = acfactory.new_configured_account()
 
     # Certificate checks should be configured (not None)
-    assert "cert_automatic" in alice.get_info().used_account_settings
+    assert "cert_strict" in alice.get_info().used_account_settings
 
     # "cert_old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)

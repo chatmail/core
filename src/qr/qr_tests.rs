@@ -643,30 +643,20 @@ async fn test_decode_dclogin_advanced_options() -> Result<()> {
 async fn test_decode_account() -> Result<()> {
     let ctx = TestContext::new().await;
 
-    let qr = check_qr(
-        &ctx.ctx,
+    for text in [
+        "DCACCOUNT:example.org",
+        "dcaccount:example.org",
         "DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
-    )
-    .await?;
-    assert_eq!(
-        qr,
-        Qr::Account {
-            domain: "example.org".to_string()
-        }
-    );
-
-    // Test it again with lowercased "dcaccount:" uri scheme
-    let qr = check_qr(
-        &ctx.ctx,
         "dcaccount:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
-    )
-    .await?;
-    assert_eq!(
-        qr,
-        Qr::Account {
-            domain: "example.org".to_string()
-        }
-    );
+    ] {
+        let qr = check_qr(&ctx.ctx, text).await?;
+        assert_eq!(
+            qr,
+            Qr::Account {
+                domain: "example.org".to_string()
+            }
+        );
+    }
 
     Ok(())
 }
@@ -732,25 +722,6 @@ async fn test_decode_tg_socks_proxy() -> Result<()> {
     assert!(qr.is_err());
 
     Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_decode_account_bad_scheme() {
-    let ctx = TestContext::new().await;
-    let res = check_qr(
-        &ctx.ctx,
-        "DCACCOUNT:ftp://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
-    )
-    .await;
-    assert!(res.is_err());
-
-    // Test it again with lowercased "dcaccount:" uri scheme
-    let res = check_qr(
-        &ctx.ctx,
-        "dcaccount:ftp://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
-    )
-    .await;
-    assert!(res.is_err());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
