@@ -41,7 +41,7 @@ use deltachat::{
     pgp::{KeyPair, decrypt, pk_encrypt, symm_encrypt_message},
     stock_str::StockStrings,
 };
-use rand::{Rng, thread_rng};
+use rand::{Rng, rng};
 use tempfile::tempdir;
 
 const NUM_SECRETS: usize = 500;
@@ -191,7 +191,7 @@ fn generate_secrets() -> Vec<String> {
 
 fn generate_plaintext() -> Vec<u8> {
     let mut plain: Vec<u8> = vec![0; 500];
-    thread_rng().fill(&mut plain[..]);
+    rng().fill(&mut plain[..]);
     plain
 }
 
