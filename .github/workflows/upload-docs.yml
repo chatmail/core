@@ -36,7 +36,7 @@ jobs:
           show-progress: false
           persist-credentials: false
           fetch-depth: 0 # Fetch history to calculate VCS version number.
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
       - name: Build Python documentation
         run: nix build .#python-docs
       - name: Upload to py.delta.chat
@@ -55,7 +55,7 @@ jobs:
           show-progress: false
           persist-credentials: false
           fetch-depth: 0 # Fetch history to calculate VCS version number.
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
       - name: Build C documentation
         run: nix build .#docs
       - name: Upload to c.delta.chat
@@ -78,7 +78,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # Fetch history to calculate VCS version number.
       - name: Use Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v6
         with:
           node-version: '18'
       - name: npm install

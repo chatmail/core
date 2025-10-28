@@ -34,7 +34,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux
@@ -58,7 +58,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}
@@ -109,7 +109,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
 
       - name: Build deltachat-rpc-server binaries
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android
@@ -136,7 +136,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@7ab6e7fd29da88e74b1e314a4ae9ac6b5cda3801 # v31
+      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
 
       - name: Download Linux aarch64 binary
         uses: actions/download-artifact@v5
@@ -401,7 +401,7 @@ jobs:
             deltachat-rpc-server/npm-package/*.tgz
 
       # Configure Node.js for publishing.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"

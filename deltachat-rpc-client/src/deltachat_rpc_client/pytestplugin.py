@@ -45,8 +45,8 @@ class ACFactory:
         """Create a new configured account."""
         addr, password = self.get_credentials()
         account = self.get_unconfigured_account()
-        params = {"addr": addr, "password": password}
-        yield account.add_or_update_transport.future(params)
+        domain = os.getenv("CHATMAIL_DOMAIN")
+        yield account.add_transport_from_qr.future(f"dcaccount:{domain}")
 
         assert account.is_configured()
         return account

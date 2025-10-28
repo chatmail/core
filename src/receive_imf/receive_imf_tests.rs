@@ -1,4 +1,3 @@
-use rand::Rng;
 use std::time::Duration;
 
 use tokio::fs;
@@ -19,6 +18,8 @@ use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
 };
 use crate::tools::{SystemTime, time};
+
+use rand::distr::SampleString;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing() -> Result<()> {
@@ -4339,11 +4340,8 @@ async fn test_download_later() -> Result<()> {
     let bob_chat = bob.create_chat(&alice).await;
 
     // Generate a random string so OpenPGP does not compress it.
-    let text: String = rand::rng()
-        .sample_iter(&rand::distr::Alphanumeric)
-        .take(MIN_DOWNLOAD_LIMIT as usize)
-        .map(char::from)
-        .collect();
+    let text =
+        rand::distr::Alphanumeric.sample_string(&mut rand::rng(), MIN_DOWNLOAD_LIMIT as usize);
 
     let sent_msg = bob.send_text(bob_chat.id, &text).await;
     let msg = alice.recv_msg(&sent_msg).await;

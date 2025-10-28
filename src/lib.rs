@@ -101,7 +101,7 @@ pub mod color;
 pub mod html;
 pub mod net;
 pub mod plaintext;
-mod push;
+pub mod push;
 mod stats;
 pub use stats::SecurejoinSource;
 pub use stats::SecurejoinUiPath;
