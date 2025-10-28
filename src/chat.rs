@@ -3881,7 +3881,6 @@ pub async fn remove_contact_from_chat(
 
                     if contact_id == ContactId::SELF {
                         res?;
-                        set_group_explicitly_left(context, &chat.grpid).await?;
                     } else if let Err(e) = res {
                         warn!(
                             context,
@@ -3933,25 +3932,6 @@ async fn send_member_removal_msg(
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 
     send_msg(context, chat.id, &mut msg).await
-}
-
-async fn set_group_explicitly_left(context: &Context, grpid: &str) -> Result<()> {
-    if !is_group_explicitly_left(context, grpid).await? {
-        context
-            .sql
-            .execute("INSERT INTO leftgrps (grpid) VALUES(?);", (grpid,))
-            .await?;
-    }
-
-    Ok(())
-}
-
-pub(crate) async fn is_group_explicitly_left(context: &Context, grpid: &str) -> Result<bool> {
-    let exists = context
-        .sql
-        .exists("SELECT COUNT(*) FROM leftgrps WHERE grpid=?;", (grpid,))
-        .await?;
-    Ok(exists)
 }
 
 /// Sets group or mailing list chat name.

@@ -2562,26 +2562,12 @@ async fn create_group(
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
 
-    async fn self_explicitly_added(
-        context: &Context,
-        mime_parser: &&mut MimeMessage,
-    ) -> Result<bool> {
-        let ret = match mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-            Some(member_addr) => context.is_self_addr(member_addr).await?,
-            None => false,
-        };
-        Ok(ret)
-    }
-
     if chat_id.is_none()
             && !mime_parser.is_mailinglist_message()
             && !grpid.is_empty()
             && mime_parser.get_header(HeaderDef::ChatGroupName).is_some()
             // otherwise, a pending "quit" message may pop up
             && mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved).is_none()
-            // re-create explicitly left groups only if ourself is re-added
-            && (!chat::is_group_explicitly_left(context, grpid).await?
-                || self_explicitly_added(context, &mime_parser).await?)
     {
         // Group does not exist but should be created.
         let grpname = mime_parser
