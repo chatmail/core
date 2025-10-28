@@ -832,8 +832,8 @@ async fn test_protected_headers_directive() -> Result<()> {
             .count(),
         1
     );
-    assert_eq!(part.match_indices("Subject:").count(), 1);
-
+    assert_eq!(part.match_indices("Subject:").count(), 2);
+    assert_eq!(part.match_indices("HP-Outer: Subject:").count(), 1);
     Ok(())
 }
 
