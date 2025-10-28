@@ -357,11 +357,7 @@ impl MimeMessage {
         let decrypted_msg; // Decrypted signed OpenPGP message.
         let secrets: Vec<String> = context
             .sql
-            .query_map_vec(
-                "SELECT secret FROM broadcast_secrets ORDER BY chat_id DESC",
-                (),
-                |row| row.get(0),
-            )
+            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| row.get(0))
             .await?;
 
         let (mail, is_encrypted) =
