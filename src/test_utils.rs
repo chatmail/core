@@ -1679,7 +1679,6 @@ Until the false-positive is fixed:
     }
 }
 
-#[cfg(test)]
 mod tests {
     use super::*;
 

@@ -1232,6 +1232,12 @@ impl MimeFactory {
             // once new core versions are sufficiently deployed.
             let anonymous_recipients = false;
 
+            if context.get_config_bool(Config::TestHooks).await? {
+                if let Some(hook) = &*context.pre_encrypt_mime_hook.lock() {
+                    message = hook(context, message);
+                }
+            }
+
             let encrypted = if let Some(shared_secret) = shared_secret {
                 encrypt_helper
                     .encrypt_symmetrically(context, &shared_secret, message, compress)
