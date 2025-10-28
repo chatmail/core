@@ -951,7 +951,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
     assert alice_contacts[0].id == alice_bob_contact.id
 
     member_added_msg = bob.wait_for_incoming_msg()
-    assert member_added_msg.get_snapshot().text == f"Member Me added by {alice.get_config('addr')}."
+    assert member_added_msg.get_snapshot().text == "You joined the channel."
 
     def get_broadcast(ac):
         chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
@@ -976,7 +976,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
         if inviter_side:
             assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
         else:
-            assert member_added_msg.text == f"Member Me added by {contact_snapshot.display_name}."
+            assert member_added_msg.text == "You joined the channel."
         assert member_added_msg.is_info
 
         if not inviter_side:
@@ -1018,7 +1018,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
     bob2.start_io()
 
     member_added_msg = bob2.wait_for_incoming_msg()
-    assert member_added_msg.get_snapshot().text == f"Member Me added by {alice.get_config('addr')}."
+    assert member_added_msg.get_snapshot().text == "You joined the channel."
 
     bob2_chat = get_broadcast(bob2)
 

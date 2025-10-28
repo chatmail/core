@@ -143,7 +143,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         chat = get_broadcast(ac)
 
         snapshot = ac.wait_for_incoming_msg().get_snapshot()
-        assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+        assert snapshot.text == "You joined the channel."
         assert snapshot.chat_id == chat.id
 
         snapshot = ac.wait_for_incoming_msg().get_snapshot()
@@ -171,7 +171,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         if inviter_side:
             assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
         else:
-            assert member_added_msg.text == f"Member Me added by {contact_snapshot.display_name}."
+            assert member_added_msg.text == "You joined the channel."
         assert member_added_msg.is_info
 
         hello_msg = chat_msgs[2].get_snapshot()
@@ -236,7 +236,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     fiona.wait_for_securejoin_joiner_success()
 
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == f"Member Me added by {alice.get_config('addr')}."
+    assert snapshot.text == "You joined the channel."
 
     get_broadcast(alice2).get_messages()[2].resend()
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
