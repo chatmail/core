@@ -1344,16 +1344,30 @@ impl MimeMessage {
 
                         let (simplified_txt, simplified_quote) = if mime_type.type_() == mime::TEXT
                             && mime_type.subtype() == mime::PLAIN
-                            && is_format_flowed
                         {
-                            let delsp = if let Some(delsp) = mail.ctype.params.get("delsp") {
-                                delsp.as_str().eq_ignore_ascii_case("yes")
-                            } else {
-                                false
+                            // Don't check that we're inside an encrypted or signed part for
+                            // simplicity and ease of testing.
+                            let simplified_txt = match mail
+                                .ctype
+                                .params
+                                .get("hp-legacy-display")
+                                .is_some_and(|v| v == "1")
+                            {
+                                false => simplified_txt,
+                                true => rm_legacy_display_elements(&simplified_txt),
                             };
-                            let unflowed_text = unformat_flowed(&simplified_txt, delsp);
-                            let unflowed_quote = top_quote.map(|q| unformat_flowed(&q, delsp));
-                            (unflowed_text, unflowed_quote)
+                            if is_format_flowed {
+                                let delsp = if let Some(delsp) = mail.ctype.params.get("delsp") {
+                                    delsp.as_str().eq_ignore_ascii_case("yes")
+                                } else {
+                                    false
+                                };
+                                let unflowed_text = unformat_flowed(&simplified_txt, delsp);
+                                let unflowed_quote = top_quote.map(|q| unformat_flowed(&q, delsp));
+                                (unflowed_text, unflowed_quote)
+                            } else {
+                                (simplified_txt, top_quote)
+                            }
                         } else {
                             (simplified_txt, top_quote)
                         };
@@ -1968,6 +1982,20 @@ impl MimeMessage {
             Vec::new()
         }
     }
+}
+
+fn rm_legacy_display_elements(text: &str) -> String {
+    let mut res = None;
+    for l in text.lines() {
+        res = res.map(|r: String| match r.is_empty() {
+            true => l.to_string(),
+            false => r + "\r\n" + l,
+        });
+        if l.is_empty() {
+            res = Some(String::new());
+        }
+    }
+    res.unwrap_or_default()
 }
 
 fn remove_header(

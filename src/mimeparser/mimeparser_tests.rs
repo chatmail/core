@@ -1751,6 +1751,43 @@ async fn test_time_in_future() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_hp_legacy_display() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+
+    let msg = MimeMessage::from_bytes(
+        bob,
+        br#"Date: Fri, 21 Jan 2022 20:40:48 -0500
+From: Alice <alice@example.net>
+To: Bob <bob@example.net>
+Subject: Dinner plans
+Message-ID: <text-plain-legacy-display@lhp.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"; hp-legacy-display="1";
+ hp="cipher"
+HP-Outer: Date: Fri, 21 Jan 2022 20:40:48 -0500
+HP-Outer: From: Alice <alice@example.net>
+HP-Outer: To: Bob <bob@example.net>
+HP-Outer: Subject: [...]
+HP-Outer: Message-ID: <text-plain-legacy-display@lhp.example>
+
+Subject: Dinner plans
+
+Let's meet at Rama's Roti Shop at 8pm and go to the park
+from there.
+"#,
+        None,
+    )
+    .await?;
+    assert_eq!(
+        msg.parts[0].msg,
+        "Dinner plans – Let's meet at Rama's Roti Shop at 8pm and go to the park\r\n\
+        from there."
+    );
+    Ok(())
+}
+
 /// Tests that subject is not prepended to the message
 /// when bot receives it.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
