@@ -3235,7 +3235,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         )
         .await?;
 
-    tcm.section("Bob receives an answer, but ignores it because of a fingerprint mismatch");
+    tcm.section("Bob receives an answer, but replaces it with an error of a fingerprint mismatch");
     let rcvd = bob.recv_msg(&member_added).await;
     assert_eq!(
         rcvd.text,
@@ -3245,6 +3245,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         rcvd.error.unwrap(),
         "Error: This message was not sent by the channel owner:\n\"I added member bob@example.net.\""
     );
+    assert_eq!(rcvd.chat_id, bob_broadcast_id);
 
     assert!(
         load_broadcast_secret(bob, bob_broadcast_id)
@@ -3312,6 +3313,7 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
         r#"Error: This message was not sent by the channel owner:
 "Hi""#
     );
+    assert_eq!(rcvd.chat_id, bob_broadcast_id);
 
     Ok(())
 }
@@ -4219,7 +4221,6 @@ async fn test_sync_name() -> Result<()> {
     let a0_broadcast_chat = Chat::load_from_db(alice0, a0_broadcast_id).await?;
 
     set_chat_name(alice0, a0_broadcast_id, "Broadcast channel 42").await?;
-    //sync(alice0, alice1).await; // crash
 
     let sent = alice0.pop_sent_msg().await;
     let rcvd = alice1.recv_msg(&sent).await;
