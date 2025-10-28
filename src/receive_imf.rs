@@ -1651,9 +1651,11 @@ async fn add_parts(
             if chat.typ == Chattype::InBroadcast {
                 let s = stock_str::error(context, "This message was not sent by the channel owner")
                     .await;
+                let original_msg = mime_parser.parts.first().map(|p| p.msg.clone());
                 mime_parser.replace_msg_by_error(&s);
                 if let Some(part) = mime_parser.parts.first_mut() {
-                    part.error = Some(format!("{s}:\n\"{}\"", part.msg));
+                    // Make original message available:
+                    part.error = Some(format!("{s}:\n\"{}\"", original_msg.unwrap_or_default()));
                 }
             }
         }
@@ -3538,8 +3540,6 @@ async fn apply_in_broadcast_changes(
             &[ContactId::SELF],
         )
         .await?;
-        let msg = stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await;
-        better_msg.get_or_insert(msg);
         send_event_chat_modified = true;
     }
 
