@@ -245,7 +245,7 @@ impl TestContextManager {
     /// All of the `inviters` devices will get the messages and send replies.
     ///
     /// The [`ChatId`] of the created chat is returned, for a SetupContact QR this is the 1:1
-    /// chat with `inviter`, for a SecureJoin QR this is the group chat.
+    /// chat with the inviter, for a SecureJoin QR this is the group chat.
     pub async fn exec_securejoin_qr_multi_device(
         &self,
         joiner: &TestContext,
