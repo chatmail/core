@@ -1031,10 +1031,7 @@ impl MimeFactory {
                 if is_encrypted {
                     protected_headers.push(header.clone());
                 } else {
-                    warn!(
-                        context,
-                        "Message is unnecrypted, not including broadcast secret"
-                    );
+                    bail!("Message is unnecrypted, not including broadcast secret");
                 }
             } else if is_encrypted && header_name == "date" {
                 protected_headers.push(header.clone());
@@ -1241,7 +1238,6 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
             };
 
             let encrypted = if let Some(shared_secret) = shared_secret {
-                info!(context, "Encrypting symmetrically.");
                 encrypt_helper
                     .encrypt_symmetrically(context, &shared_secret, message, compress)
                     .await?
