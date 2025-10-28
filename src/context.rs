@@ -303,6 +303,17 @@ pub struct InnerContext {
     /// `Connectivity` values for mailboxes, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
     pub(crate) connectivities: parking_lot::Mutex<Vec<ConnectivityStore>>,
+
+    #[expect(clippy::type_complexity)]
+    /// Transforms the root of the cryptographic payload before encryption.
+    pub(crate) pre_encrypt_mime_hook: parking_lot::Mutex<
+        Option<
+            for<'a> fn(
+                &Context,
+                mail_builder::mime::MimePart<'a>,
+            ) -> mail_builder::mime::MimePart<'a>,
+        >,
+    >,
 }
 
 /// The state of ongoing process.
@@ -467,6 +478,7 @@ impl Context {
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
             connectivities: parking_lot::Mutex::new(Vec::new()),
+            pre_encrypt_mime_hook: None.into(),
         };
 
         let ctx = Context {
@@ -1050,6 +1062,13 @@ impl Context {
             self.get_config_i64(Config::StatsLastSent)
                 .await?
                 .to_string(),
+        );
+        res.insert(
+            "test_hooks",
+            self.sql
+                .get_raw_config("test_hooks")
+                .await?
+                .unwrap_or_default(),
         );
         res.insert(
             "fail_on_receiving_full_msg",
