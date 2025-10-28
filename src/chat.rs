@@ -3555,6 +3555,16 @@ pub(crate) async fn save_broadcast_secret(
     Ok(())
 }
 
+pub(crate) async fn delete_broadcast_secret(context: &Context, chat_id: ChatId) -> Result<()> {
+    info!(context, "Removing broadcast secret for chat {chat_id}");
+    context
+        .sql
+        .execute("DELETE FROM broadcast_secrets WHERE chat_id=?", (chat_id,))
+        .await?;
+
+    Ok(())
+}
+
 /// Set chat contacts in the `chats_contacts` table.
 pub(crate) async fn update_chat_contacts_table(
     context: &Context,
@@ -3928,6 +3938,7 @@ pub async fn remove_contact_from_chat(
             contact_id == ContactId::SELF,
             "Cannot remove other member from incoming broadcast channel"
         );
+        delete_broadcast_secret(context, chat_id).await?;
     }
 
     if matches!(

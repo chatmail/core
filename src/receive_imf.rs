@@ -3530,6 +3530,7 @@ async fn apply_in_broadcast_changes(
 
         chat::remove_from_chat_contacts_table_without_trace(context, chat.id, ContactId::SELF)
             .await?;
+        chat::delete_broadcast_secret(context, chat.id).await?;
         send_event_chat_modified = true;
     } else if !chat.is_self_in_chat(context).await? {
         // Apparently, self is in the chat now, because we're receiving messages

@@ -3047,6 +3047,7 @@ async fn test_leave_broadcast() -> Result<()> {
     tcm.section("Alice sends first message to broadcast.");
     let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
     let bob_msg = bob.recv_msg(&sent_msg).await;
+    let bob_chat_id = bob_msg.chat_id;
 
     assert_eq!(get_chat_contacts(alice, alice_chat_id).await?.len(), 1);
 
@@ -3057,8 +3058,12 @@ async fn test_leave_broadcast() -> Result<()> {
     // Shift the time so that we can later check the "Broadcast channel left" message's timestamp:
     SystemTime::shift(Duration::from_secs(60));
 
+    assert_eq!(
+        load_broadcast_secret(bob, bob_chat_id).await?,
+        load_broadcast_secret(alice, alice_chat_id).await?
+    );
+
     tcm.section("Bob leaves the broadcast channel.");
-    let bob_chat_id = bob_msg.chat_id;
     bob_chat_id.accept(bob).await?;
     remove_contact_from_chat(bob, bob_chat_id, ContactId::SELF).await?;
 
@@ -3089,6 +3094,46 @@ async fn test_leave_broadcast() -> Result<()> {
             _ => false,
         })
         .await;
+
+    assert_eq!(load_broadcast_secret(bob, bob_chat_id).await?, None);
+
+    Ok(())
+}
+
+/// Test removing Bob from the channel.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_remove_member_from_broadcast() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.section("Alice creates broadcast channel with Bob.");
+    let alice_chat_id = create_broadcast(alice, "foo".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    tcm.section("Alice sends first message to broadcast.");
+    let sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
+    let bob_msg = bob.recv_msg(&sent_msg).await;
+    let bob_chat_id = bob_msg.chat_id;
+
+    assert_eq!(
+        load_broadcast_secret(bob, bob_chat_id).await?,
+        load_broadcast_secret(alice, alice_chat_id).await?
+    );
+
+    tcm.section("Alice removes Bob from the channel.");
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    remove_contact_from_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+
+    let remove_msg = alice.pop_sent_msg().await;
+    let rcvd = bob.recv_msg(&remove_msg).await;
+    assert_eq!(rcvd.text, "Member Me removed by alice@example.org.");
+
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.is_self_in_chat(bob).await?, false);
+
+    assert_eq!(load_broadcast_secret(bob, bob_chat_id).await?, None);
 
     Ok(())
 }
