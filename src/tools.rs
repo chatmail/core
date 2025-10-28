@@ -304,11 +304,9 @@ pub(crate) fn create_id() -> String {
 /// and so that the shared secret definitely won't be the weak spot.
 pub(crate) fn create_broadcast_secret() -> String {
     // ThreadRng implements CryptoRng trait and is supposed to be cryptographically secure.
-    let mut rng = rand::rng();
-
     // Generate 264 random bits.
     let mut arr = [0u8; 33];
-    rng.fill(&mut arr[..]);
+    rand::fill(&mut arr[..]);
 
     let mut res = base64::engine::general_purpose::URL_SAFE.encode(arr);
     res.truncate(43);
