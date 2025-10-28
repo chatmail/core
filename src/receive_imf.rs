@@ -3505,7 +3505,7 @@ async fn apply_in_broadcast_changes(
                 info!(context, "No-op broadcast 'Member added' message (TRASH)");
                 "".to_string()
             } else {
-                stock_str::msg_add_member_local(context, ContactId::SELF, from_id).await
+                stock_str::msg_you_joined_broadcast(context).await
             };
 
             better_msg.get_or_insert(msg);
