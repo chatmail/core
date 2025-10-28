@@ -5315,3 +5315,47 @@ async fn test_long_group_name() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for the case
+/// when Bob leaves the group, joins back and deletes the chat.
+/// Previously this resulted in the group
+/// never appearing again without removing Bob
+/// and readding back because the group was
+/// recorded in `leftgrps` for Bob and everyone else
+/// thought that Bob is part of the group.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_leftgrps() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice creates a group with Bob and Bob accepts it.
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let alice_chat_id = create_group(alice, "Group").await?;
+    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
+    let alice_sent = alice.send_text(alice_chat_id, "Hi!").await;
+    let bob_chat_id = bob.recv_msg(&alice_sent).await.chat_id;
+    bob_chat_id.accept(bob).await?;
+
+    // Bob leaves the group.
+    remove_contact_from_chat(bob, bob_chat_id, ContactId::SELF).await?;
+    let bob_sent = bob.pop_sent_msg().await;
+    alice.recv_msg(&bob_sent).await;
+
+    // Alice adds Bob back, Bob recognizes that the chat is the same.
+    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
+    let alice_sent = alice.pop_sent_msg().await;
+    let bob_chat_id2 = bob.recv_msg(&alice_sent).await.chat_id;
+    assert_eq!(bob_chat_id, bob_chat_id2);
+
+    // Bob deletes the chat.
+    bob_chat_id.delete(bob).await?;
+    let alice_sent = alice.send_text(alice_chat_id, "Hi again!").await;
+    let bob_chat_id3 = bob.recv_msg(&alice_sent).await.chat_id;
+
+    // Chat ID is new, but not a trash chat.
+    assert_ne!(bob_chat_id3, bob_chat_id);
+    assert!(!bob_chat_id3.is_special());
+
+    Ok(())
+}

@@ -70,11 +70,6 @@ async fn reset_tables(context: &Context, bits: i32) {
             .await
             .unwrap();
         context.sql().config_cache().write().await.clear();
-        context
-            .sql()
-            .execute("DELETE FROM leftgrps;", ())
-            .await
-            .unwrap();
         println!("(8) Rest but server config reset.");
     }
 
