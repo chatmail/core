@@ -2629,22 +2629,10 @@ async fn test_can_send_group() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_change_name() -> Result<()> {
-    // create two context, send two messages so both know the other
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let fiona = &tcm.fiona().await;
-
-    tcm.section("Alice sends a message to Bob");
-    let chat_alice = alice.create_chat(bob).await;
-    send_text_msg(alice, chat_alice.id, "hi!".to_string()).await?;
-    bob.recv_msg(&alice.pop_sent_msg().await).await;
-
-    tcm.section("Bob sends a message to Alice");
-    let chat_bob = bob.create_chat(alice).await;
-    send_text_msg(bob, chat_bob.id, "ho!".to_string()).await?;
-    let msg = alice.recv_msg(&bob.pop_sent_msg().await).await;
-    assert!(msg.get_showpadlock());
 
     let broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
     let qr = get_securejoin_qr(alice, Some(broadcast_id)).await.unwrap();
@@ -2706,6 +2694,7 @@ async fn test_broadcast_change_name() -> Result<()> {
         assert!(msg.get_override_sender_name().is_none());
         let chat = Chat::load_from_db(bob, msg.chat_id).await?;
         assert_eq!(chat.typ, Chattype::InBroadcast);
+        let chat_bob = bob.create_chat(alice).await;
         assert_ne!(chat.id, chat_bob.id);
         assert_eq!(chat.name, "Broadcast channel");
         assert!(!chat.is_self_talk());

@@ -89,7 +89,7 @@ pub enum Qr {
         name: String,
 
         /// A string of random characters,
-        /// uniquely identifying this broadcast channel in the database.
+        /// uniquely identifying this broadcast channel across all databases/clients.
         /// Called `grpid` for historic reasons:
         /// The id of multi-user chats is always called `grpid` in the database
         /// because groups were once the only multi-user chats.
