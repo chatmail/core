@@ -1031,7 +1031,7 @@ impl MimeFactory {
                 if is_encrypted {
                     protected_headers.push(header.clone());
                 } else {
-                    bail!("Message is unnecrypted, not including broadcast secret");
+                    bail!("Message is unecrypted, cannot include broadcast secret");
                 }
             } else if is_encrypted && header_name == "date" {
                 protected_headers.push(header.clone());
