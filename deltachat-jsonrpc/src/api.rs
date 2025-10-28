@@ -53,6 +53,7 @@ use types::contact::{ContactObject, VcardContact};
 use types::events::Event;
 use types::http::HttpResponse;
 use types::message::{MessageData, MessageObject, MessageReadReceipt};
+use types::notify_state::JsonrpcNotifyState;
 use types::provider_info::ProviderInfo;
 use types::reactions::JsonrpcReactions;
 use types::webxdc::WebxdcMessageInfo;
@@ -310,6 +311,12 @@ impl CommandApi {
                 "account with id {account_id} doesn't exist anymore"
             ))
         }
+    }
+
+    /// Get the current push notification state.
+    async fn get_push_state(&self, account_id: u32) -> Result<JsonrpcNotifyState> {
+        let ctx = self.get_context(account_id).await?;
+        Ok(ctx.push_state().await.into())
     }
 
     /// Get the combined filesize of an account in bytes

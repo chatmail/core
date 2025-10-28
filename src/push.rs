@@ -170,6 +170,7 @@ pub(crate) struct PushSubscriberState {
     heartbeat_subscribed: bool,
 }
 
+/// Push notification state
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive)]
 #[repr(i8)]
 pub enum NotifyState {
