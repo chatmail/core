@@ -40,7 +40,12 @@ const constants = data
       key.startsWith("DC_DOWNLOAD") ||
       key.startsWith("DC_INFO_") ||
       (key.startsWith("DC_MSG") && !key.startsWith("DC_MSG_ID")) ||
-      key.startsWith("DC_QR_")
+      key.startsWith("DC_QR_") ||
+      key.startsWith("DC_CERTCK_") ||
+      key.startsWith("DC_SOCKET_") ||
+      key.startsWith("DC_LP_AUTH_") ||
+      key.startsWith("DC_PUSH_") ||
+      key.startsWith("DC_TEXT1_")
     );
   })
   .map((row) => {
