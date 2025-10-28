@@ -1077,6 +1077,13 @@ impl Context {
                 .await?
                 .unwrap_or_default(),
         );
+        res.insert(
+            "std_header_protection_composing",
+            self.sql
+                .get_raw_config("std_header_protection_composing")
+                .await?
+                .unwrap_or_default(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
