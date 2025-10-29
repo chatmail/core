@@ -56,9 +56,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             .await
             .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
 
-    // The chat id of the 1:1 chat, group or broadcast that is being joined
-    let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
-
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
 
@@ -129,6 +126,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
     match invite {
         QrInvite::Group { .. } => {
+            let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
             // We created the group already, now we need to add Alice to the group.
             // The group will only become usable once the protocol is finished.
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
@@ -145,6 +143,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
+            let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
             // We created the broadcast channel already, now we need to add Alice to it.
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
