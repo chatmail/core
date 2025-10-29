@@ -1602,16 +1602,6 @@ impl MimeMessage {
             .is_some_and(|part| part.typ == Viewtype::Call)
     }
 
-    pub fn replace_msg_by_error(&mut self, error_msg: &str) {
-        self.is_system_message = SystemMessage::Unknown;
-        let new_part = Part {
-            typ: Viewtype::Text,
-            msg: format!("[{error_msg}]"),
-            ..Default::default()
-        };
-        self.parts = vec![new_part];
-    }
-
     pub(crate) fn get_rfc724_mid(&self) -> Option<String> {
         self.get_header(HeaderDef::MessageId)
             .and_then(|msgid| parse_message_id(msgid).ok())

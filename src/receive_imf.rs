@@ -1613,8 +1613,8 @@ async fn add_parts(
     is_partial_download: Option<u32>,
     mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
-    chat_id: ChatId,
-    chat_id_blocked: Blocked,
+    mut chat_id: ChatId,
+    mut chat_id_blocked: Blocked,
     is_dc_message: MessengerMessage,
 ) -> Result<ReceivedMsg> {
     let to_id = if mime_parser.incoming {
@@ -1649,14 +1649,15 @@ async fn add_parts(
             }
 
             if chat.typ == Chattype::InBroadcast {
-                let s = stock_str::error(context, "This message was not sent by the channel owner")
-                    .await;
-                let original_msg = mime_parser.parts.first().map(|p| p.msg.clone());
-                mime_parser.replace_msg_by_error(&s);
-                if let Some(part) = mime_parser.parts.first_mut() {
-                    // Make original message available:
-                    part.error = Some(format!("{s}:\n\"{}\"", original_msg.unwrap_or_default()));
-                }
+                warn!(
+                    context,
+                    "Not assigning msg '{rfc724_mid}' to broadcast {chat_id}: wrong sender"
+                );
+                let direct_chat =
+                    ChatIdBlocked::get_for_contact(context, from_id, Blocked::Request).await?;
+                chat_id = direct_chat.id;
+                chat_id_blocked = direct_chat.blocked;
+                chat = Chat::load_from_db(context, chat_id).await?;
             }
         }
     }

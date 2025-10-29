@@ -3280,17 +3280,14 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         )
         .await?;
 
-    tcm.section("Bob receives an answer, but replaces it with an error of a fingerprint mismatch");
+    tcm.section(
+        "Bob receives an answer, but shows it in 1:1 chat because of a fingerprint mismatch",
+    );
     let rcvd = bob.recv_msg(&member_added).await;
-    assert_eq!(
-        rcvd.text,
-        "[Error: This message was not sent by the channel owner]"
-    );
-    assert_eq!(
-        rcvd.error.unwrap(),
-        "Error: This message was not sent by the channel owner:\n\"I added member bob@example.net.\""
-    );
-    assert_eq!(rcvd.chat_id, bob_broadcast_id);
+    assert_eq!(rcvd.text, "I added member bob@example.net.");
+
+    let bob_alice_chat_id = bob.get_chat(alice).await.id;
+    assert_eq!(rcvd.chat_id, bob_alice_chat_id);
 
     assert!(
         load_broadcast_secret(bob, bob_broadcast_id)
@@ -3309,8 +3306,8 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &mut tcm.bob().await;
+    let alice = &mut tcm.alice().await;
+    let bob = &tcm.bob().await;
 
     tcm.section("Alice creates broadcast channel and creates a QR code.");
     let alice_broadcast_id = create_broadcast(alice, "foo".to_string()).await?;
@@ -3332,6 +3329,7 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
     let sent = alice.send_text(alice_broadcast_id, "Hi").await;
     let rcvd = bob.recv_msg(&sent).await;
     assert_eq!(rcvd.text, "Hi");
+    assert_eq!(rcvd.chat_id, bob_broadcast_id);
 
     tcm.section("Now, Alice's fingerprint changes");
 
@@ -3341,24 +3339,19 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
         .execute("DELETE FROM config WHERE keyname='key_id'", ())
         .await?;
     // Invalidate cached self fingerprint:
-    Arc::get_mut(&mut bob.ctx.inner)
+    Arc::get_mut(&mut alice.ctx.inner)
         .unwrap()
         .self_fingerprint
         .take();
 
-    tcm.section("Alice sends a message, which doesn't arrive fine");
+    tcm.section(
+        "Alice sends a message, which is not put into the broadcast chat but into a 1:1 chat",
+    );
     let sent = alice.send_text(alice_broadcast_id, "Hi").await;
     let rcvd = bob.recv_msg(&sent).await;
-    assert_eq!(
-        rcvd.text,
-        "[Error: This message was not sent by the channel owner]"
-    );
-    assert_eq!(
-        rcvd.error.unwrap(),
-        r#"Error: This message was not sent by the channel owner:
-"Hi""#
-    );
-    assert_eq!(rcvd.chat_id, bob_broadcast_id);
+    assert_eq!(rcvd.text, "Hi");
+    let bob_alice_chat_id = bob.get_chat(alice).await.id;
+    assert_eq!(rcvd.chat_id, bob_alice_chat_id);
 
     Ok(())
 }
