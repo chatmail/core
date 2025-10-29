@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import os
 from typing import TYPE_CHECKING
 
 from deltachat_rpc_client import Account, EventType, const
@@ -129,7 +127,7 @@ def test_download_on_demand(acfactory: ACFactory) -> None:
     msg.get_snapshot().chat.accept()
     bob.get_chat_by_id(chat_id).send_message(
         "Hello World, this message is bigger than 5 bytes",
-        html=base64.b64encode(os.urandom(300000)).decode("utf-8"),
+        file="../test-data/image/screenshot.jpg",
     )
 
     message = alice.wait_for_incoming_msg()

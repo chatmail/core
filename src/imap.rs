@@ -67,7 +67,6 @@ const RFC724MID_UID: &str = "(UID BODY.PEEK[HEADER.FIELDS (\
                              X-MICROSOFT-ORIGINAL-MESSAGE-ID\
                              )])";
 const BODY_FULL: &str = "(FLAGS BODY.PEEK[])";
-const BODY_PARTIAL: &str = "(FLAGS RFC822.SIZE BODY.PEEK[HEADER])";
 
 #[derive(Debug)]
 pub(crate) struct Imap {
@@ -615,11 +614,22 @@ impl Imap {
             .context("prefetch")?;
         let read_cnt = msgs.len();
 
-        let download_limit = context.download_limit().await?;
-        let mut uids_fetch = Vec::<(u32, bool /* partially? */)>::with_capacity(msgs.len() + 1);
+        let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
+        let mut available_post_msgs = Vec::<String>::with_capacity(msgs.len());
+        let mut download_when_normal_starts = Vec::<String>::with_capacity(msgs.len());
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
+
+        let download_limit = {
+            let download_limit: Option<u32> =
+                context.get_config_parsed(Config::DownloadLimit).await?;
+            if download_limit == Some(0) {
+                None
+            } else {
+                download_limit
+            }
+        };
 
         // Store the info about IMAP messages in the database.
         for (uid, ref fetch_response) in msgs {
@@ -632,6 +642,9 @@ impl Imap {
             };
 
             let message_id = prefetch_get_message_id(&headers);
+            let size = fetch_response
+                .size
+                .context("imap fetch response does not contain size")?;
 
             // Determine the target folder where the message should be moved to.
             //
@@ -706,14 +719,23 @@ impl Imap {
                 )
                 .await.context("prefetch_should_download")?
             {
-                match download_limit {
-                    Some(download_limit) => uids_fetch.push((
-                        uid,
-                        fetch_response.size.unwrap_or_default() > download_limit,
-                    )),
-                    None => uids_fetch.push((uid, false)),
-                }
-                uid_message_ids.insert(uid, message_id);
+                if headers
+                    .get_header_value(HeaderDef::ChatIsPostMessage)
+                    .is_some()
+                {
+                    info!(context, "{message_id:?} is a post-message.");
+                    available_post_msgs.push(message_id.clone());
+
+                    // whether it fits download size limit
+                    if download_limit.is_none_or(|download_limit| size < download_limit) {
+                        download_when_normal_starts.push(message_id.clone());
+                    }
+                } else {
+                    info!(context, "{message_id:?} is not a post-message.");
+
+                    uids_fetch.push(uid);
+                    uid_message_ids.insert(uid, message_id);
+                };
             } else {
                 largest_uid_skipped = Some(uid);
             }
@@ -747,29 +769,10 @@ impl Imap {
         };
 
         let actually_download_messages_future = async {
-            let sender = sender;
-            let mut uids_fetch_in_batch = Vec::with_capacity(max(uids_fetch.len(), 1));
-            let mut fetch_partially = false;
-            uids_fetch.push((0, !uids_fetch.last().unwrap_or(&(0, false)).1));
-            for (uid, fp) in uids_fetch {
-                if fp != fetch_partially {
-                    session
-                        .fetch_many_msgs(
-                            context,
-                            folder,
-                            uids_fetch_in_batch.split_off(0),
-                            &uid_message_ids,
-                            fetch_partially,
-                            sender.clone(),
-                        )
-                        .await
-                        .context("fetch_many_msgs")?;
-                    fetch_partially = fp;
-                }
-                uids_fetch_in_batch.push(uid);
-            }
-
-            anyhow::Ok(())
+            session
+                .fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender)
+                .await
+                .context("fetch_many_msgs")
         };
 
         let (largest_uid_fetched, fetch_res) =
@@ -803,6 +806,30 @@ impl Imap {
         }
 
         chat::mark_old_messages_as_noticed(context, received_msgs).await?;
+
+        if fetch_res.is_ok() {
+            info!(
+                context,
+                "available_post_msgs: {}, download_when_normal_starts: {}",
+                available_post_msgs.len(),
+                download_when_normal_starts.len()
+            );
+            for rfc724_mid in available_post_msgs {
+                context
+                    .sql
+                    .insert("INSERT INTO available_post_msgs VALUES (?)", (rfc724_mid,))
+                    .await?;
+            }
+            for rfc724_mid in download_when_normal_starts {
+                context
+                    .sql
+                    .insert(
+                        "INSERT INTO download (rfc724_mid, msg_id) VALUES (?,0)",
+                        (rfc724_mid,),
+                    )
+                    .await?;
+            }
+        }
 
         // Now fail if fetching failed, so we will
         // establish a new session if this one is broken.
@@ -1373,7 +1400,6 @@ impl Session {
         folder: &str,
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
-        fetch_partially: bool,
         received_msgs_channel: Sender<(u32, Option<ReceivedMsg>)>,
     ) -> Result<()> {
         if request_uids.is_empty() {
@@ -1381,25 +1407,10 @@ impl Session {
         }
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
-            info!(
-                context,
-                "Starting a {} FETCH of message set \"{}\".",
-                if fetch_partially { "partial" } else { "full" },
-                set
-            );
-            let mut fetch_responses = self
-                .uid_fetch(
-                    &set,
-                    if fetch_partially {
-                        BODY_PARTIAL
-                    } else {
-                        BODY_FULL
-                    },
-                )
-                .await
-                .with_context(|| {
-                    format!("fetching messages {} from folder \"{}\"", &set, folder)
-                })?;
+            info!(context, "Starting a full FETCH of message set \"{}\".", set);
+            let mut fetch_responses = self.uid_fetch(&set, BODY_FULL).await.with_context(|| {
+                format!("fetching messages {} from folder \"{}\"", &set, folder)
+            })?;
 
             // Map from UIDs to unprocessed FETCH results. We put unprocessed FETCH results here
             // when we want to process other messages first.
@@ -1456,11 +1467,7 @@ impl Session {
                 count += 1;
 
                 let is_deleted = fetch_response.flags().any(|flag| flag == Flag::Deleted);
-                let (body, partial) = if fetch_partially {
-                    (fetch_response.header(), fetch_response.size) // `BODY.PEEK[HEADER]` goes to header() ...
-                } else {
-                    (fetch_response.body(), None) // ... while `BODY.PEEK[]` goes to body() - and includes header()
-                };
+                let body = fetch_response.body();
 
                 if is_deleted {
                     info!(context, "Not processing deleted msg {}.", request_uid);
@@ -1494,7 +1501,7 @@ impl Session {
                     context,
                     "Passing message UID {} to receive_imf().", request_uid
                 );
-                let res = receive_imf_inner(context, rfc724_mid, body, is_seen, partial).await;
+                let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
                 let received_msg = match res {
                     Err(err) => {
                         warn!(context, "receive_imf error: {err:#}.");
