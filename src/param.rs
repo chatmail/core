@@ -99,10 +99,8 @@ pub enum Param {
 
     /// For Messages
     ///
-    /// For "MemberRemovedFromGroup", this is the email address
-    /// removed from the group.
-    ///
-    /// For "MemberAddedToGroup", this is the email address added to the group.
+    /// For "MemberAddedToGroup" and "MemberRemovedFromGroup",
+    /// this is the email address added to / removed from the group.
     ///
     /// For securejoin messages other than `vg-member-added`, this is the step,
     /// which is put into the `Secure-Join` header.
@@ -134,6 +132,9 @@ pub enum Param {
     /// For Messages
     ///
     /// Deprecated `Secure-Join-Group` header for `BobHandshakeMsg::RequestWithAuth` messages.
+    ///
+    /// For "MemberAddedToGroup" and "MemberRemovedFromGroup",
+    /// this is the fingerprint added to / removed from the group.
     ///
     /// For call messages, this is the end timsetamp.
     Arg4 = b'H',

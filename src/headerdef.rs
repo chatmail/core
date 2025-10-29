@@ -65,6 +65,7 @@ pub enum HeaderDef {
     ChatGroupMemberRemoved,
     ChatGroupMemberRemovedFpr,
     ChatGroupMemberAdded,
+    ChatGroupMemberAddedFpr,
     ChatContent,
 
     /// Past members of the group.

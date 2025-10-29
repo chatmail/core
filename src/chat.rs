@@ -3772,6 +3772,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         msg.param.set_cmd(SystemMessage::MemberAddedToGroup);
         msg.param.set(Param::Arg, contact_addr);
         msg.param.set_int(Param::Arg2, from_handshake.into());
+        msg.param.set_optional(Param::Arg4, contact.fingerprint());
         msg.param
             .set_int(Param::ContactAddedRemoved, contact.id.to_u32() as i32);
         if chat.typ == Chattype::OutBroadcast {
@@ -4023,7 +4024,7 @@ async fn send_member_removal_msg(
 
     msg.param.set_cmd(SystemMessage::MemberRemovedFromGroup);
     msg.param.set(Param::Arg, addr.to_lowercase());
-    msg.param.set_optional(Param::Arg2, fingerprint);
+    msg.param.set_optional(Param::Arg4, fingerprint);
     msg.param
         .set(Param::ContactAddedRemoved, contact_id.to_u32());
 

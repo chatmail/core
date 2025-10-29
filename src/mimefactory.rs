@@ -1454,7 +1454,7 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
-                    let fingerprint_to_remove = msg.param.get(Param::Arg2).unwrap_or_default();
+                    let fingerprint_to_remove = msg.param.get(Param::Arg4).unwrap_or_default();
 
                     if email_to_remove
                         == context
@@ -1485,9 +1485,9 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
                     }
                 }
                 SystemMessage::MemberAddedToGroup => {
-                    // TODO: lookup the contact by ID rather than email address.
-                    // We are adding key-contacts, the cannot be looked up by address.
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
+                    let fingerprint_to_add = msg.param.get(Param::Arg4).unwrap_or_default();
+
                     placeholdertext =
                         Some(stock_str::msg_add_member_remote(context, email_to_add).await);
 
@@ -1495,6 +1495,13 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
                         headers.push((
                             "Chat-Group-Member-Added",
                             mail_builder::headers::raw::Raw::new(email_to_add.to_string()).into(),
+                        ));
+                    }
+                    if !fingerprint_to_add.is_empty() {
+                        headers.push((
+                            "Chat-Group-Member-Added-Fpr",
+                            mail_builder::headers::raw::Raw::new(fingerprint_to_add.to_string())
+                                .into(),
                         ));
                     }
                     if 0 != msg.param.get_int(Param::Arg2).unwrap_or_default() & DC_FROM_HANDSHAKE {

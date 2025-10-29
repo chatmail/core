@@ -209,7 +209,6 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
     # Start second Alice device, if it wasn't started already.
     alice2.start_io()
-    alice2.wait_for_securejoin_inviter_success()
 
     while True:
         msg_id = alice2.wait_for_msgs_changed_event().msg_id

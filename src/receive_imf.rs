@@ -2841,10 +2841,8 @@ async fn apply_group_changes(
         } else if let Some(key) = mime_parser.gossiped_keys.get(added_addr) {
             // TODO: if gossiped keys contain the same address multiple times,
             // we may lookup the wrong contact.
-            // This could be fixed by looking up the contact with
-            // highest `add_timestamp` to disambiguate.
-            // Alternatively, this can be fixed by a header ChatGroupMemberAddedFpr,
-            // just like we have ChatGroupMemberRemovedFpr.
+            // This can be fixed by looking at ChatGroupMemberAddedFpr,
+            // just like we look at ChatGroupMemberRemovedFpr.
             // The result of the error is that info message
             // may contain display name of the wrong contact.
             let fingerprint = key.public_key.dc_fingerprint().hex();
@@ -3427,12 +3425,29 @@ async fn apply_out_broadcast_changes(
         .await?;
     }
 
-    if let Some(_added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        // This message can be safely ignored,
-        // because the only way to add a member is by having them scan a QR code.
-        // All devices will receive the vg-request-with-auth message and add the member to the channel.
-        info!(context, "Second device adding a member (TRASH)");
-        better_msg.get_or_insert("".to_string());
+    if let Some(added_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAddedFpr) {
+        if from_id == ContactId::SELF {
+            let added_id = lookup_key_contact_by_fingerprint(context, added_fpr).await?;
+            if let Some(added_id) = added_id {
+                if chat::is_contact_in_chat(context, chat.id, added_id).await? {
+                    info!(context, "No-op broadcast addition (TRASH)");
+                    better_msg.get_or_insert("".to_string());
+                } else {
+                    chat::add_to_chat_contacts_table(
+                        context,
+                        mime_parser.timestamp_sent,
+                        chat.id,
+                        &[added_id],
+                    )
+                    .await?;
+                    let msg =
+                        stock_str::msg_add_member_local(context, added_id, ContactId::UNDEFINED)
+                            .await;
+                    better_msg.get_or_insert(msg);
+                    send_event_chat_modified = true;
+                }
+            }
+        }
     } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
         send_event_chat_modified = true;
         let removed_id = lookup_key_contact_by_fingerprint(context, removed_fpr).await?;

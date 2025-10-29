@@ -509,16 +509,9 @@ pub(crate) async fn handle_securejoin_handshake(
                 let chat = Chat::load_from_db(context, joining_chat_id).await?;
 
                 inviter_progress(context, contact_id, joining_chat_id, chat.typ)?;
-                if chat.typ == Chattype::OutBroadcast {
-                    // For broadcasts, we don't want to delete the message,
-                    // because the other device should also internally add the member
-                    // and see the key. This makes the whole logic of member-addition simpler.
-                    Ok(HandshakeMessage::Ignore)
-                } else {
-                    // IMAP-delete the message to avoid handling it by another device and adding the
-                    // member twice. Another device will know the member's key from Autocrypt-Gossip.
-                    Ok(HandshakeMessage::Done)
-                }
+                // IMAP-delete the message to avoid handling it by another device and adding the
+                // member twice. Another device will know the member's key from Autocrypt-Gossip.
+                Ok(HandshakeMessage::Done)
             } else {
                 let chat_id = info_chat_id(context, contact_id).await?;
                 // Setup verified contact.
