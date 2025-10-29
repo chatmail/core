@@ -2,7 +2,7 @@ use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
-use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
+use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager};
 
 struct CallSetup {
@@ -607,68 +607,6 @@ async fn test_end_text_call() -> Result<()> {
     .unwrap();
     assert_eq!(received2.msg_ids.len(), 1);
     assert_eq!(received2.chat_id, DC_CHAT_ID_TRASH);
-
-    Ok(())
-}
-
-/// Tests that partially downloaded "call ended"
-/// messages are not processed.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_no_partial_calls() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-
-    let seen = false;
-
-    // The messages in the test
-    // have no `Date` on purpose,
-    // so they are treated as new.
-    let received_call = receive_imf(
-        alice,
-        b"From: bob@example.net\n\
-        To: alice@example.org\n\
-        Message-ID: <first@example.net>\n\
-        Chat-Version: 1.0\n\
-        Chat-Content: call\n\
-        Chat-Webrtc-Room: YWFhYWFhYWFhCg==\n\
-        \n\
-        Hello, this is a call\n",
-        seen,
-    )
-    .await?
-    .unwrap();
-    assert_eq!(received_call.msg_ids.len(), 1);
-    let call_msg = Message::load_from_db(alice, received_call.msg_ids[0])
-        .await
-        .unwrap();
-    assert_eq!(call_msg.viewtype, Viewtype::Call);
-    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Alerting);
-
-    let imf_raw = b"From: bob@example.net\n\
-        To: alice@example.org\n\
-        Message-ID: <second@example.net>\n\
-        In-Reply-To: <first@example.net>\n\
-        Chat-Version: 1.0\n\
-        Chat-Content: call-ended\n\
-        \n\
-        Call ended\n";
-    receive_imf_from_inbox(
-        alice,
-        "second@example.net",
-        imf_raw,
-        seen,
-        Some(imf_raw.len().try_into().unwrap()),
-    )
-    .await?;
-
-    // The call is still not ended.
-    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Alerting);
-
-    // Fully downloading the message ends the call.
-    receive_imf_from_inbox(alice, "second@example.net", imf_raw, seen, None)
-        .await
-        .context("Failed to fully download end call message")?;
-    assert_eq!(call_state(alice, call_msg.id).await?, CallState::Missed);
 
     Ok(())
 }

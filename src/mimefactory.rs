@@ -59,6 +59,15 @@ pub enum Loaded {
     },
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreMessageMode {
+    /// adds the Chat-Is-Full-Message header in unprotected part
+    FullMessage,
+    /// adds the Chat-Full-Message-ID header to protected part
+    /// also adds metadata and explicitly excludes attachment
+    PreMessage { full_msg_rfc724_mid: String },
+}
+
 /// Helper to construct mime messages.
 #[derive(Debug, Clone)]
 pub struct MimeFactory {
@@ -146,6 +155,9 @@ pub struct MimeFactory {
 
     /// This field is used to sustain the topic id of webxdcs needed for peer channels.
     webxdc_topic: Option<TopicId>,
+
+    /// This field is used when this is either a pre-message or a full-message.
+    pre_message_mode: Option<PreMessageMode>,
 }
 
 /// Result of rendering a message, ready to be submitted to a send job.
@@ -500,6 +512,7 @@ impl MimeFactory {
             sync_ids_to_delete: None,
             attach_selfavatar,
             webxdc_topic,
+            pre_message_mode: None,
         };
         Ok(factory)
     }
@@ -548,6 +561,7 @@ impl MimeFactory {
             sync_ids_to_delete: None,
             attach_selfavatar: false,
             webxdc_topic: None,
+            pre_message_mode: None,
         };
 
         Ok(res)
@@ -779,7 +793,10 @@ impl MimeFactory {
         headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
 
         let rfc724_mid = match &self.loaded {
-            Loaded::Message { msg, .. } => msg.rfc724_mid.clone(),
+            Loaded::Message { msg, .. } => match &self.pre_message_mode {
+                Some(PreMessageMode::PreMessage { .. }) => create_outgoing_rfc724_mid(),
+                _ => msg.rfc724_mid.clone(),
+            },
             Loaded::Mdn { .. } => create_outgoing_rfc724_mid(),
         };
         headers.push((
@@ -893,7 +910,7 @@ impl MimeFactory {
             ));
         }
 
-        let is_encrypted = self.encryption_pubkeys.is_some();
+        let is_encrypted = self.will_be_encrypted();
 
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
@@ -978,6 +995,22 @@ impl MimeFactory {
             "MIME-Version",
             mail_builder::headers::raw::Raw::new("1.0").into(),
         ));
+
+        if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
+            unprotected_headers.push((
+                "Chat-Is-Full-Message",
+                mail_builder::headers::raw::Raw::new("1").into(),
+            ));
+        } else if let Some(PreMessageMode::PreMessage {
+            full_msg_rfc724_mid,
+        }) = self.pre_message_mode.clone()
+        {
+            protected_headers.push((
+                "Chat-Full-Message-ID",
+                mail_builder::headers::message_id::MessageId::new(full_msg_rfc724_mid).into(),
+            ));
+        }
+
         for header @ (original_header_name, _header_value) in &headers {
             let header_name = original_header_name.to_lowercase();
             if header_name == "message-id" {
@@ -1119,6 +1152,10 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
+                            if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
+                                continue;
+                            }
+
                             let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
                                 || cmd == SystemMessage::SecurejoinMessage
                                 || multiple_recipients && {
@@ -1875,8 +1912,12 @@ impl MimeFactory {
 
         // add attachment part
         if msg.viewtype.has_file() {
-            let file_part = build_body_file(context, &msg).await?;
-            parts.push(file_part);
+            if let Some(PreMessageMode::PreMessage { .. }) = self.pre_message_mode {
+                // TODO: generate thumbnail and attach it instead (if it makes sense)
+            } else {
+                let file_part = build_body_file(context, &msg).await?;
+                parts.push(file_part);
+            }
         }
 
         if let Some(msg_kml_part) = self.get_message_kml_part() {
@@ -1921,6 +1962,8 @@ impl MimeFactory {
             }
         }
 
+        self.attach_selfavatar =
+            self.attach_selfavatar && self.pre_message_mode != Some(PreMessageMode::FullMessage);
         if self.attach_selfavatar {
             match context.get_config(Config::Selfavatar).await? {
                 Some(path) => match build_avatar_file(context, &path).await {
@@ -1989,6 +2032,20 @@ impl MimeFactory {
         ));
 
         Ok(message)
+    }
+
+    pub fn will_be_encrypted(&self) -> bool {
+        self.encryption_pubkeys.is_some()
+    }
+
+    pub fn set_as_full_message(&mut self) {
+        self.pre_message_mode = Some(PreMessageMode::FullMessage);
+    }
+
+    pub fn set_as_pre_message_for(&mut self, full_message: &RenderedEmail) {
+        self.pre_message_mode = Some(PreMessageMode::PreMessage {
+            full_msg_rfc724_mid: full_message.rfc724_mid.clone(),
+        });
     }
 }
 

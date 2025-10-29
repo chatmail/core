@@ -157,24 +157,7 @@ pub async fn receive_imf(
     let mail = mailparse::parse_mail(imf_raw).context("can't parse mail")?;
     let rfc724_mid = crate::imap::prefetch_get_message_id(&mail.headers)
         .unwrap_or_else(crate::imap::create_message_id);
-    if let Some(download_limit) = context.download_limit().await? {
-        let download_limit: usize = download_limit.try_into()?;
-        if imf_raw.len() > download_limit {
-            let head = std::str::from_utf8(imf_raw)?
-                .split("\r\n\r\n")
-                .next()
-                .context("No empty line in the message")?;
-            return receive_imf_from_inbox(
-                context,
-                &rfc724_mid,
-                head.as_bytes(),
-                seen,
-                Some(imf_raw.len().try_into()?),
-            )
-            .await;
-        }
-    }
-    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen, None).await
+    receive_imf_from_inbox(context, &rfc724_mid, imf_raw, seen).await
 }
 
 /// Emulates reception of a message from "INBOX".
@@ -186,9 +169,8 @@ pub(crate) async fn receive_imf_from_inbox(
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
-    is_partial_download: Option<u32>,
 ) -> Result<Option<ReceivedMsg>> {
-    receive_imf_inner(context, rfc724_mid, imf_raw, seen, is_partial_download).await
+    receive_imf_inner(context, rfc724_mid, imf_raw, seen).await
 }
 
 /// Inserts a tombstone into `msgs` table
@@ -211,7 +193,6 @@ async fn get_to_and_past_contact_ids(
     context: &Context,
     mime_parser: &MimeMessage,
     chat_assignment: &ChatAssignment,
-    is_partial_download: Option<u32>,
     parent_message: &Option<Message>,
     incoming_origin: Origin,
 ) -> Result<(Vec<Option<ContactId>>, Vec<Option<ContactId>>)> {
@@ -254,7 +235,7 @@ async fn get_to_and_past_contact_ids(
         ChatAssignment::ExistingChat { chat_id, .. } => Some(*chat_id),
         ChatAssignment::MailingListOrBroadcast => None,
         ChatAssignment::OneOneChat => {
-            if is_partial_download.is_none() && !mime_parser.incoming {
+            if !mime_parser.incoming {
                 parent_message.as_ref().map(|m| m.chat_id)
             } else {
                 None
@@ -484,15 +465,17 @@ async fn get_to_and_past_contact_ids(
 /// downloaded again, sets `chat_id=DC_CHAT_ID_TRASH` and returns `Ok(Some(…))`.
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
-///
-/// If `is_partial_download` is set, it contains the full message size in bytes.
 pub(crate) async fn receive_imf_inner(
     context: &Context,
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
-    is_partial_download: Option<u32>,
 ) -> Result<Option<ReceivedMsg>> {
+    ensure!(
+        !context
+            .get_config_bool(Config::SimulateReceiveImfError)
+            .await?
+    );
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
             context,
@@ -500,16 +483,8 @@ pub(crate) async fn receive_imf_inner(
             String::from_utf8_lossy(imf_raw),
         );
     }
-    if is_partial_download.is_none() {
-        ensure!(
-            !context
-                .get_config_bool(Config::FailOnReceivingFullMsg)
-                .await?
-        );
-    }
 
-    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, is_partial_download).await
-    {
+    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw).await {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
             if rfc724_mid.starts_with(GENERATED_PREFIX) {
@@ -551,6 +526,8 @@ pub(crate) async fn receive_imf_inner(
             // the message was partially downloaded before and is fully downloaded now.
             info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
+
+            // TODO: look at this place
         } else {
             // The message was already fully downloaded
             // or cannot be loaded because it is deleted.
@@ -615,11 +592,7 @@ pub(crate) async fn receive_imf_inner(
         &mime_parser.from,
         fingerprint,
         prevent_rename,
-        is_partial_download.is_some()
-            && mime_parser
-                .get_header(HeaderDef::ContentType)
-                .unwrap_or_default()
-                .starts_with("multipart/encrypted"),
+        false,
     )
     .await?
     {
@@ -651,22 +624,14 @@ pub(crate) async fn receive_imf_inner(
     .await?
     .filter(|p| Some(p.id) != replace_msg_id);
 
-    let chat_assignment = decide_chat_assignment(
-        context,
-        &mime_parser,
-        &parent_message,
-        rfc724_mid,
-        from_id,
-        &is_partial_download,
-    )
-    .await?;
+    let chat_assignment =
+        decide_chat_assignment(context, &mime_parser, &parent_message, rfc724_mid, from_id).await?;
     info!(context, "Chat assignment is {chat_assignment:?}.");
 
     let (to_ids, past_ids) = get_to_and_past_contact_ids(
         context,
         &mime_parser,
         &chat_assignment,
-        is_partial_download,
         &parent_message,
         incoming_origin,
     )
@@ -773,7 +738,6 @@ pub(crate) async fn receive_imf_inner(
             to_id,
             allow_creation,
             &mut mime_parser,
-            is_partial_download,
             parent_message,
         )
         .await?;
@@ -789,7 +753,6 @@ pub(crate) async fn receive_imf_inner(
             rfc724_mid_orig,
             from_id,
             seen,
-            is_partial_download,
             replace_msg_id,
             prevent_rename,
             chat_id,
@@ -957,9 +920,7 @@ pub(crate) async fn receive_imf_inner(
     let delete_server_after = context.get_config_delete_server_after().await?;
 
     if !received_msg.msg_ids.is_empty() {
-        let target = if received_msg.needs_delete_job
-            || (delete_server_after == Some(0) && is_partial_download.is_none())
-        {
+        let target = if received_msg.needs_delete_job || delete_server_after == Some(0) {
             Some(context.get_delete_msgs_target().await?)
         } else {
             None
@@ -988,7 +949,7 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if is_partial_download.is_none() && mime_parser.is_call() {
+    if mime_parser.is_call() {
         context
             .handle_call_msg(insert_msg_id, &mime_parser, from_id)
             .await?;
@@ -1037,7 +998,7 @@ pub(crate) async fn receive_imf_inner(
 /// * `find_key_contact_by_addr`: if true, we only know the e-mail address
 ///   of the contact, but not the fingerprint,
 ///   yet want to assign the message to some key-contact.
-///   This can happen during prefetch or when the message is partially downloaded.
+///   This can happen during prefetch.
 ///   If we get it wrong, the message will be placed into the correct
 ///   chat after downloading.
 ///
@@ -1131,7 +1092,6 @@ async fn decide_chat_assignment(
     parent_message: &Option<Message>,
     rfc724_mid: &str,
     from_id: ContactId,
-    is_partial_download: &Option<u32>,
 ) -> Result<ChatAssignment> {
     let should_trash = if !mime_parser.mdn_reports.is_empty() {
         info!(context, "Message is an MDN (TRASH).");
@@ -1147,9 +1107,8 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
-    } else if is_partial_download.is_none()
-        && (mime_parser.is_system_message == SystemMessage::CallAccepted
-            || mime_parser.is_system_message == SystemMessage::CallEnded)
+    } else if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
     {
         info!(context, "Call state changed (TRASH).");
         true
@@ -1250,7 +1209,7 @@ async fn decide_chat_assignment(
             }
         } else if let Some(parent) = &parent_message {
             if let Some((chat_id, chat_id_blocked)) =
-                lookup_chat_by_reply(context, mime_parser, parent, is_partial_download).await?
+                lookup_chat_by_reply(context, mime_parser, parent).await?
             {
                 // Try to assign to a chat based on In-Reply-To/References.
                 ChatAssignment::ExistingChat {
@@ -1272,7 +1231,7 @@ async fn decide_chat_assignment(
         }
     } else if let Some(parent) = &parent_message {
         if let Some((chat_id, chat_id_blocked)) =
-            lookup_chat_by_reply(context, mime_parser, parent, is_partial_download).await?
+            lookup_chat_by_reply(context, mime_parser, parent).await?
         {
             // Try to assign to a chat based on In-Reply-To/References.
             ChatAssignment::ExistingChat {
@@ -1314,7 +1273,6 @@ async fn do_chat_assignment(
     to_id: ContactId,
     allow_creation: bool,
     mime_parser: &mut MimeMessage,
-    is_partial_download: Option<u32>,
     parent_message: Option<Message>,
 ) -> Result<(ChatId, Blocked, bool)> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
@@ -1365,7 +1323,6 @@ async fn do_chat_assignment(
                     && let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
-                        is_partial_download.is_some(),
                         create_blocked,
                         from_id,
                         to_ids,
@@ -1414,7 +1371,6 @@ async fn do_chat_assignment(
                         to_ids,
                         allow_creation || test_normal_chat.is_some(),
                         create_blocked,
-                        is_partial_download.is_some(),
                     )
                     .await?
                 {
@@ -1496,7 +1452,6 @@ async fn do_chat_assignment(
                     && let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
-                        is_partial_download.is_some(),
                         Blocked::Not,
                         from_id,
                         to_ids,
@@ -1560,7 +1515,6 @@ async fn do_chat_assignment(
                         to_ids,
                         allow_creation,
                         Blocked::Not,
-                        is_partial_download.is_some(),
                     )
                     .await?
                 {
@@ -1641,7 +1595,6 @@ async fn add_parts(
     rfc724_mid: &str,
     from_id: ContactId,
     seen: bool,
-    is_partial_download: Option<u32>,
     mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
     mut chat_id: ChatId,
@@ -1713,10 +1666,9 @@ async fn add_parts(
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
 
-    // Extract ephemeral timer from the message or use the existing timer if the message is not fully downloaded.
-    let mut ephemeral_timer = if is_partial_download.is_some() {
-        chat_id.get_ephemeral_timer(context).await?
-    } else if let Some(value) = mime_parser.get_header(HeaderDef::EphemeralTimer) {
+    // Extract ephemeral timer from the message
+    let mut ephemeral_timer = if let Some(value) = mime_parser.get_header(HeaderDef::EphemeralTimer)
+    {
         match value.parse::<EphemeralTimer>() {
             Ok(timer) => timer,
             Err(err) => {
@@ -1919,7 +1871,6 @@ async fn add_parts(
     let chat_id = if better_msg
         .as_ref()
         .is_some_and(|better_msg| better_msg.is_empty())
-        && is_partial_download.is_none()
     {
         DC_CHAT_ID_TRASH
     } else {
@@ -1969,9 +1920,8 @@ async fn add_parts(
 
     handle_edit_delete(context, mime_parser, from_id).await?;
 
-    if is_partial_download.is_none()
-        && (mime_parser.is_system_message == SystemMessage::CallAccepted
-            || mime_parser.is_system_message == SystemMessage::CallEnded)
+    if mime_parser.is_system_message == SystemMessage::CallAccepted
+        || mime_parser.is_system_message == SystemMessage::CallEnded
     {
         if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(call) =
@@ -2128,8 +2078,6 @@ RETURNING id
                     if trash { 0 } else { ephemeral_timestamp },
                     if trash {
                         DownloadState::Done
-                    } else if is_partial_download.is_some() {
-                        DownloadState::Available
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
                     } else {
@@ -2413,7 +2361,6 @@ async fn lookup_chat_by_reply(
     context: &Context,
     mime_parser: &MimeMessage,
     parent: &Message,
-    is_partial_download: &Option<u32>,
 ) -> Result<Option<(ChatId, Blocked)>> {
     // If the message is encrypted and has group ID,
     // lookup by reply should never be needed
@@ -2445,10 +2392,7 @@ async fn lookup_chat_by_reply(
     }
 
     // Do not assign unencrypted messages to encrypted chats.
-    if is_partial_download.is_none()
-        && parent_chat.is_encrypted(context).await?
-        && !mime_parser.was_encrypted()
-    {
+    if parent_chat.is_encrypted(context).await? && !mime_parser.was_encrypted() {
         return Ok(None);
     }
 
@@ -2465,18 +2409,7 @@ async fn lookup_or_create_adhoc_group(
     to_ids: &[Option<ContactId>],
     allow_creation: bool,
     create_blocked: Blocked,
-    is_partial_download: bool,
 ) -> Result<Option<(ChatId, Blocked, bool)>> {
-    // Partial download may be an encrypted message with protected Subject header. We do not want to
-    // create a group with "..." or "Encrypted message" as a subject. The same is for undecipherable
-    // messages. Instead, assign the message to 1:1 chat with the sender.
-    if is_partial_download {
-        info!(
-            context,
-            "Ad-hoc group cannot be created from partial download."
-        );
-        return Ok(None);
-    }
     if mime_parser.decrypting_failed {
         warn!(
             context,
@@ -2612,11 +2545,9 @@ async fn is_probably_private_reply(
 /// than two members, a new ad hoc group is created.
 ///
 /// On success the function returns the created (chat_id, chat_blocked) tuple.
-#[expect(clippy::too_many_arguments)]
 async fn create_group(
     context: &Context,
     mime_parser: &mut MimeMessage,
-    is_partial_download: bool,
     create_blocked: Blocked,
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
@@ -2698,7 +2629,7 @@ async fn create_group(
 
     if let Some(chat_id) = chat_id {
         Ok(Some((chat_id, chat_id_blocked)))
-    } else if is_partial_download || mime_parser.decrypting_failed {
+    } else if mime_parser.decrypting_failed {
         // It is possible that the message was sent to a valid,
         // yet unknown group, which was rejected because
         // Chat-Group-Name, which is in the encrypted part, was
