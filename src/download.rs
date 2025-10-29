@@ -13,7 +13,6 @@ use crate::imap::session::Session;
 use crate::log::info;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, Part};
-use crate::tools::time;
 use crate::{EventType, chatlist_events, stock_str};
 
 /// Download limits should not be used below `MIN_DOWNLOAD_LIMIT`.
@@ -231,14 +230,6 @@ impl MimeMessage {
             "[{}]",
             stock_str::partial_download_msg_body(context, org_bytes).await
         );
-        if let Some(delete_server_after) = context.get_config_delete_server_after().await? {
-            let until = stock_str::download_availability(
-                context,
-                time() + max(delete_server_after, MIN_DELETE_SERVER_AFTER),
-            )
-            .await;
-            text += format!(" [{until}]").as_str();
-        };
 
         info!(context, "Partial download: {}", text);
 
