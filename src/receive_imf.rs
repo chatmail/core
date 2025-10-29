@@ -3690,10 +3690,16 @@ async fn mark_recipients_as_verified(
     mimeparser: &MimeMessage,
 ) -> Result<()> {
     let verifier_id = Some(from_id).filter(|&id| id != ContactId::SELF);
+
+    // We don't yet send the _verified property in autocrypt headers.
+    // Until we do, we instead accept the Chat-Verified header as indication all contacts are verified.
+    // TODO: Ignore ChatVerified header once we reset existing verifications.
+    let chat_verified = mimeparser.get_header(HeaderDef::ChatVerified).is_some();
+
     for gossiped_key in mimeparser
         .gossiped_keys
         .values()
-        .filter(|gossiped_key| gossiped_key.verified)
+        .filter(|gossiped_key| gossiped_key.verified || chat_verified)
     {
         let fingerprint = gossiped_key.public_key.dc_fingerprint().hex();
         let Some(to_id) = lookup_key_contact_by_fingerprint(context, &fingerprint).await? else {
