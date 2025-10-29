@@ -438,8 +438,8 @@ pub enum Config {
     /// using this still run unmodified code.
     TestHooks,
 
-    /// Return an error from `receive_imf_inner()` for a fully downloaded message. For tests.
-    FailOnReceivingFullMsg,
+    /// Return an error from `receive_imf_inner()`. For tests.
+    SimulateReceiveImfError,
 
     /// Enable composing emails with Header Protection as defined in
     /// <https://www.rfc-editor.org/rfc/rfc9788.html> "Header Protection for Cryptographically

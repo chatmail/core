@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use anyhow::Result;
 use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
@@ -711,6 +712,32 @@ impl TestContext {
         })
     }
 
+    pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
+        self.ctx
+            .sql
+            .query_map_vec(
+                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
+                (msg_id,),
+                |row| {
+                    let _id: MsgId = row.get(0)?;
+                    let msg_id: MsgId = row.get(1)?;
+                    let mime: String = row.get(2)?;
+                    let recipients: String = row.get(3)?;
+                    Ok((msg_id, mime, recipients))
+                },
+            )
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(msg_id, mime, recipients)| SentMessage {
+                payload: mime,
+                sender_msg_id: msg_id,
+                sender_context: &self.ctx,
+                recipients,
+            })
+            .collect()
+    }
+
     /// Parses a message.
     ///
     /// Parsing a message does not run the entire receive pipeline, but is not without
@@ -719,7 +746,7 @@ impl TestContext {
     /// unlikely to be affected as the message would be processed again in exactly the
     /// same way.
     pub(crate) async fn parse_msg(&self, msg: &SentMessage<'_>) -> MimeMessage {
-        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes(), None)
+        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes())
             .await
             .unwrap()
     }
@@ -1661,6 +1688,21 @@ Until the false-positive is fixed:
             );
         }
     }
+}
+
+/// Method to create a test image file
+pub(crate) fn create_test_image(width: u32, height: u32) -> Result<Vec<u8>> {
+    use image::{ImageBuffer, Rgb, RgbImage};
+    use std::io::Cursor;
+
+    let mut img: RgbImage = ImageBuffer::new(width, height);
+    // fill with some pattern so it stays large after compression
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        *pixel = Rgb([(x % 255) as u8, (x + y % 255) as u8, (y % 255) as u8]);
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    img.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)?;
+    Ok(bytes)
 }
 
 mod tests {

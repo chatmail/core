@@ -8,6 +8,9 @@ use std::str;
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
 use deltachat_derive::{FromSql, ToSql};
+use humansize::BINARY;
+use humansize::format_size;
+use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -430,6 +433,10 @@ pub struct Message {
     pub(crate) ephemeral_timer: EphemeralTimer,
     pub(crate) ephemeral_timestamp: i64,
     pub(crate) text: String,
+    /// Text that is added to the end of Message.text
+    ///
+    /// Currently used for adding the download information on pre-messages
+    pub(crate) additional_text: String,
 
     /// Message subject.
     ///
@@ -488,7 +495,7 @@ impl Message {
             !id.is_special(),
             "Can not load special message ID {id} from DB"
         );
-        let msg = context
+        let mut msg = context
             .sql
             .query_row_optional(
                 concat!(
@@ -570,6 +577,7 @@ impl Message {
                         original_msg_id: row.get("original_msg_id")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
+                        additional_text: String::new(),
                         subject: row.get("subject")?,
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
                         hidden: row.get("hidden")?,
@@ -584,7 +592,46 @@ impl Message {
             .await
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
+        if let Some(msg) = &mut msg {
+            msg.additional_text =
+                Self::get_additional_text(context, msg.download_state, &msg.param).await?;
+        }
+
         Ok(msg)
+    }
+
+    /// Returns additional text which is appended to the message's text field
+    /// when it is loaded from the database.
+    /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
+    async fn get_additional_text(
+        context: &Context,
+        download_state: DownloadState,
+        param: &Params,
+    ) -> Result<String> {
+        if download_state != DownloadState::Done {
+            let file_size = param
+                .get(Param::PostMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+                .map(|file_size: usize| format_size(file_size, BINARY))
+                .unwrap_or("?".to_owned());
+            let viewtype = param
+                .get_i64(Param::PostMessageViewtype)
+                .and_then(Viewtype::from_i64)
+                .unwrap_or(Viewtype::Unknown);
+            let file_name = param
+                .get(Param::Filename)
+                .map(sanitize_filename)
+                .unwrap_or("?".to_owned());
+
+            return match viewtype {
+                Viewtype::File => Ok(format!(" [{file_name} - {file_size}]")),
+                _ => {
+                    let translated_viewtype = viewtype.to_locale_string(context).await;
+                    Ok(format!(" [{translated_viewtype} - {file_size}]"))
+                }
+            };
+        }
+        Ok(String::new())
     }
 
     /// Returns the MIME type of an attached file if it exists.
@@ -769,7 +816,7 @@ impl Message {
 
     /// Returns the text of the message.
     pub fn get_text(&self) -> String {
-        self.text.clone()
+        self.text.clone() + &self.additional_text
     }
 
     /// Returns message subject.
@@ -791,7 +838,17 @@ impl Message {
     }
 
     /// Returns the size of the file in bytes, if applicable.
+    /// If message is a pre-message, then this returns size of the to be downloaded file.
     pub async fn get_filebytes(&self, context: &Context) -> Result<Option<u64>> {
+        // if download state is not downloaded then return value from from params metadata
+        if self.download_state != DownloadState::Done
+            && let Some(file_size) = self
+                .param
+                .get(Param::PostMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+        {
+            return Ok(Some(file_size));
+        }
         if let Some(path) = self.param.get_file_path(context)? {
             Ok(Some(get_filebytes(context, &path).await.with_context(
                 || format!("failed to get {} size in bytes", path.display()),
@@ -799,6 +856,21 @@ impl Message {
         } else {
             Ok(None)
         }
+    }
+
+    /// If message is a Pre-Message,
+    /// then this returns the viewtype it will have when it is downloaded.
+    #[cfg(test)]
+    pub(crate) fn get_post_message_viewtype(&self) -> Option<Viewtype> {
+        if self.download_state != DownloadState::Done
+            && let Some(viewtype) = self
+                .param
+                .get_i64(Param::PostMessageViewtype)
+                .and_then(Viewtype::from_i64)
+        {
+            return Some(viewtype);
+        }
+        None
     }
 
     /// Returns width of associated image or video file.
@@ -1681,9 +1753,17 @@ pub async fn delete_msgs_ex(
         let update_db = |trans: &mut rusqlite::Transaction| {
             trans.execute(
                 "UPDATE imap SET target=? WHERE rfc724_mid=?",
-                (target, msg.rfc724_mid),
+                (target, &msg.rfc724_mid),
             )?;
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
+            trans.execute(
+                "DELETE FROM download WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
+            trans.execute(
+                "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
             Ok(())
         };
         if let Err(e) = context.sql.transaction(update_db).await {
@@ -1752,7 +1832,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 "SELECT
                     m.chat_id AS chat_id,
                     m.state AS state,
-                    m.download_state as download_state,
                     m.ephemeral_timer AS ephemeral_timer,
                     m.param AS param,
                     m.from_id AS from_id,
@@ -1765,7 +1844,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 |row| {
                     let chat_id: ChatId = row.get("chat_id")?;
                     let state: MessageState = row.get("state")?;
-                    let download_state: DownloadState = row.get("download_state")?;
                     let param: Params = row.get::<_, String>("param")?.parse().unwrap_or_default();
                     let from_id: ContactId = row.get("from_id")?;
                     let rfc724_mid: String = row.get("rfc724_mid")?;
@@ -1777,7 +1855,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                             id,
                             chat_id,
                             state,
-                            download_state,
                             param,
                             from_id,
                             rfc724_mid,
@@ -1810,7 +1887,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             id,
             curr_chat_id,
             curr_state,
-            curr_download_state,
             curr_param,
             curr_from_id,
             curr_rfc724_mid,
@@ -1820,14 +1896,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
         _curr_ephemeral_timer,
     ) in msgs
     {
-        if curr_download_state != DownloadState::Done {
-            if curr_state == MessageState::InFresh {
-                // Don't mark partially downloaded messages as seen or send a read receipt since
-                // they are not really seen by the user.
-                update_msg_state(context, id, MessageState::InNoticed).await?;
-                updated_chat_ids.insert(curr_chat_id);
-            }
-        } else if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
+        if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
             update_msg_state(context, id, MessageState::InSeen).await?;
             info!(context, "Seen message {}.", id);
 

@@ -5,13 +5,12 @@ import logging
 import os
 import socket
 import subprocess
-import time
 from unittest.mock import MagicMock
 
 import pytest
 
-from deltachat_rpc_client import Contact, EventType, Message, events
-from deltachat_rpc_client.const import DownloadState, MessageState
+from deltachat_rpc_client import EventType, events
+from deltachat_rpc_client.const import MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
@@ -333,7 +332,7 @@ def test_receive_imf_failure(acfactory) -> None:
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
 
-    bob.set_config("fail_on_receiving_full_msg", "1")
+    bob.set_config("simulate_receive_imf_error", "1")
     alice_chat_bob.send_text("Hello!")
     event = bob.wait_for_event(EventType.MSGS_CHANGED)
     assert event.chat_id == bob.get_device_chat().id
@@ -343,18 +342,17 @@ def test_receive_imf_failure(acfactory) -> None:
     version = bob.get_info()["deltachat_core_version"]
     assert (
         snapshot.text == "❌ Failed to receive a message:"
-        " Condition failed: `!context.get_config_bool(Config::FailOnReceivingFullMsg).await?`."
+        " Condition failed: `!context.get_config_bool(Config::SimulateReceiveImfError).await?`."
         f" Core version {version}."
         " Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
     )
 
     # The failed message doesn't break the IMAP loop.
-    bob.set_config("fail_on_receiving_full_msg", "0")
+    bob.set_config("simulate_receive_imf_error", "0")
     alice_chat_bob.send_text("Hello again!")
     message = bob.wait_for_incoming_msg()
     snapshot = message.get_snapshot()
     assert snapshot.text == "Hello again!"
-    assert snapshot.download_state == DownloadState.DONE
     assert snapshot.error is None
 
 
@@ -685,94 +683,6 @@ def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
     bob_chat_alice.send_text("Hi Alice!")
     snapshot = alice.wait_for_incoming_msg().get_snapshot()
     assert snapshot.show_padlock
-
-
-def test_reaction_to_partially_fetched_msg(acfactory, tmp_path):
-    """See https://github.com/deltachat/deltachat-core-rust/issues/3688 "Partially downloaded
-    messages are received out of order".
-
-    If the Inbox contains X small messages followed by Y large messages followed by Z small
-    messages, Delta Chat first downloaded a batch of X+Z messages, and then a batch of Y messages.
-
-    This bug was discovered by @Simon-Laux while testing reactions PR #3644 and can be reproduced
-    with online test as follows:
-    - Bob enables download limit and goes offline.
-    - Alice sends a large message to Bob and reacts to this message with a thumbs-up.
-    - Bob goes online
-    - Bob first processes a reaction message and throws it away because there is no corresponding
-      message, then processes a partially downloaded message.
-    - As a result, Bob does not see a reaction
-    """
-    download_limit = 300000
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1_addr = ac1.get_config("addr")
-    chat = ac1.create_chat(ac2)
-    ac2.set_config("download_limit", str(download_limit))
-    ac2.stop_io()
-
-    logging.info("sending small+large messages from ac1 to ac2")
-    msgs = []
-    msgs.append(chat.send_text("hi"))
-    path = tmp_path / "large"
-    path.write_bytes(os.urandom(download_limit + 1))
-    msgs.append(chat.send_file(str(path)))
-    for m in msgs:
-        m.wait_until_delivered()
-
-    logging.info("sending a reaction to the large message from ac1 to ac2")
-    # TODO: Find the reason of an occasional message reordering on the server (so that the reaction
-    # has a lower UID than the previous message). W/a is to sleep for some time to let the reaction
-    # have a later INTERNALDATE.
-    time.sleep(1.1)
-    react_str = "\N{THUMBS UP SIGN}"
-    msgs.append(msgs[-1].send_reaction(react_str))
-    msgs[-1].wait_until_delivered()
-
-    ac2.start_io()
-
-    logging.info("wait for ac2 to receive a reaction")
-    msg2 = Message(ac2, ac2.wait_for_reactions_changed().msg_id)
-    assert msg2.get_sender_contact().get_snapshot().address == ac1_addr
-    assert msg2.get_snapshot().download_state == DownloadState.AVAILABLE
-    reactions = msg2.get_reactions()
-    contacts = [Contact(ac2, int(i)) for i in reactions.reactions_by_contact]
-    assert len(contacts) == 1
-    assert contacts[0].get_snapshot().address == ac1_addr
-    assert list(reactions.reactions_by_contact.values())[0] == [react_str]
-
-
-@pytest.mark.parametrize("n_accounts", [3, 2])
-def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
-    download_limit = 300000
-
-    alice, *others = acfactory.get_online_accounts(n_accounts)
-    bob = others[0]
-
-    alice_group = alice.create_group("test group")
-    for account in others:
-        chat = account.create_chat(alice)
-        chat.send_text("Hello Alice!")
-        assert alice.wait_for_incoming_msg().get_snapshot().text == "Hello Alice!"
-
-        contact = alice.create_contact(account)
-        alice_group.add_contact(contact)
-
-    bob.set_config("download_limit", str(download_limit))
-
-    alice_group.send_text("hi")
-    snapshot = bob.wait_for_incoming_msg().get_snapshot()
-    assert snapshot.text == "hi"
-    bob_group = snapshot.chat
-
-    path = tmp_path / "large"
-    path.write_bytes(os.urandom(download_limit + 1))
-
-    for i in range(10):
-        logging.info("Sending message %s", i)
-        alice_group.send_file(str(path))
-        snapshot = bob.wait_for_incoming_msg().get_snapshot()
-        assert snapshot.download_state == DownloadState.AVAILABLE
-        assert snapshot.chat == bob_group
 
 
 def test_markseen_contact_request(acfactory):

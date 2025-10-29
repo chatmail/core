@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
+use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -27,7 +28,9 @@ use crate::constants::{
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
-use crate::download::DownloadState;
+use crate::download::{
+    DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PRE_MSG_SIZE_WARNING_THRESHOLD,
+};
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::self_fingerprint;
@@ -35,7 +38,7 @@ use crate::location;
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
-use crate::mimefactory::MimeFactory;
+use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::receive_imf::ReceivedMsg;
@@ -2736,6 +2739,57 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
+/// Renders the Message or splits it into Post-Message and Pre-Message.
+///
+/// Pre-Message is a small message with metadata which announces a larger Post-Message.
+/// Post-Messages are not downloaded in the background.
+///
+/// If pre-message is not nessesary this returns a normal message instead.
+async fn render_mime_message_and_pre_message(
+    context: &Context,
+    msg: &mut Message,
+    mimefactory: MimeFactory,
+) -> Result<(RenderedEmail, Option<RenderedEmail>)> {
+    let needs_pre_message = msg.viewtype.has_file()
+        && mimefactory.will_be_encrypted() // unencrypted is likely email, we don't want to spam by sending multiple messages
+        && msg
+            .get_filebytes(context)
+            .await?
+            .context("filebytes not available, even though message has attachment")?
+            > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
+
+    if needs_pre_message {
+        info!(
+            context,
+            "Message is large and will be split into a pre- and a post-message.",
+        );
+
+        let mut mimefactory_post_msg = mimefactory.clone();
+        mimefactory_post_msg.set_as_post_message();
+        let rendered_msg = mimefactory_post_msg.render(context).await?;
+
+        let mut mimefactory_pre_msg = mimefactory;
+        mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
+        let rendered_pre_msg = mimefactory_pre_msg
+            .render(context)
+            .await
+            .context("pre-message failed to render")?;
+
+        if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
+            warn!(
+                context,
+                "Pre-message for message (MsgId={}) is larger than expected: {}.",
+                msg.id,
+                rendered_pre_msg.message.len()
+            );
+        }
+
+        Ok((rendered_msg, Some(rendered_pre_msg)))
+    } else {
+        Ok((mimefactory.render(context).await?, None))
+    }
+}
+
 /// Constructs jobs for sending a message and inserts them into the `smtp` table.
 ///
 /// Updates the message `GuaranteeE2ee` parameter and persists it
@@ -2807,13 +2861,29 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         return Ok(Vec::new());
     }
 
-    let rendered_msg = match mimefactory.render(context).await {
-        Ok(res) => Ok(res),
-        Err(err) => {
-            message::set_msg_failed(context, msg, &err.to_string()).await?;
-            Err(err)
-        }
-    }?;
+    let (rendered_msg, rendered_pre_msg) =
+        match render_mime_message_and_pre_message(context, msg, mimefactory).await {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                message::set_msg_failed(context, msg, &err.to_string()).await?;
+                Err(err)
+            }
+        }?;
+
+    if let (post_msg, Some(pre_msg)) = (&rendered_msg, &rendered_pre_msg) {
+        info!(
+            context,
+            "Message Sizes: Pre-Message {}; Post-Message: {}",
+            format_size(pre_msg.message.len(), BINARY),
+            format_size(post_msg.message.len(), BINARY)
+        );
+    } else {
+        info!(
+            context,
+            "Message will be sent as normal message (no pre- and post message). Size: {}",
+            format_size(rendered_msg.message.len(), BINARY)
+        );
+    }
 
     if needs_encryption && !rendered_msg.is_encrypted {
         /* unrecoverable */
@@ -2867,19 +2937,28 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 (),
             )?;
         }
-
+        let mut stmt = t.prepare(
+            "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
+            VALUES            (?1,         ?2,         ?3,   ?4)",
+        )?;
         for recipients_chunk in recipients.chunks(chunk_size) {
             let recipients_chunk = recipients_chunk.join(" ");
-            let row_id = t.execute(
-                "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
-                VALUES            (?1,         ?2,         ?3,   ?4)",
-                (
-                    &rendered_msg.rfc724_mid,
-                    recipients_chunk,
-                    &rendered_msg.message,
+            // send pre-message before actual message
+            if let Some(pre_msg) = &rendered_pre_msg {
+                let row_id = stmt.execute((
+                    &pre_msg.rfc724_mid,
+                    &recipients_chunk,
+                    &pre_msg.message,
                     msg.id,
-                ),
-            )?;
+                ))?;
+                row_ids.push(row_id.try_into()?);
+            }
+            let row_id = stmt.execute((
+                &rendered_msg.rfc724_mid,
+                &recipients_chunk,
+                &rendered_msg.message,
+                msg.id,
+            ))?;
             row_ids.push(row_id.try_into()?);
         }
         Ok(row_ids)
@@ -4261,6 +4340,14 @@ pub async fn forward_msgs_2ctx(
             msg.viewtype = Viewtype::Text;
         }
 
+        if msg.download_state != DownloadState::Done {
+            // we don't use Message.get_text() here,
+            // because it may change in future,
+            // when UI shows this info itself,
+            // then the additional_text will not be added in get_text anymore.
+            msg.text += &msg.additional_text;
+        }
+
         let param = &mut param;
         msg.param.steal(param, Param::File);
         msg.param.steal(param, Param::Filename);
@@ -4337,12 +4424,22 @@ pub(crate) async fn save_copy_in_self_talk(
     msg.param.remove(Param::WebxdcDocumentTimestamp);
     msg.param.remove(Param::WebxdcSummary);
     msg.param.remove(Param::WebxdcSummaryTimestamp);
+    msg.param.remove(Param::PostMessageFileBytes);
+    msg.param.remove(Param::PostMessageViewtype);
+
+    if msg.download_state != DownloadState::Done {
+        // we don't use Message.get_text() here,
+        // because it may change in future,
+        // when UI shows this info itself,
+        // then the additional_text will not be added in get_text anymore.
+        msg.text += &msg.additional_text;
+    }
 
     if !msg.original_msg_id.is_unset() {
         bail!("message already saved.");
     }
 
-    let copy_fields = "from_id, to_id, timestamp_rcvd, type, txt,
+    let copy_fields = "from_id, to_id, timestamp_rcvd, type,
                        mime_modified, mime_headers, mime_compressed, mime_in_reply_to, subject, msgrmsg";
     let row_id = context
         .sql
@@ -4350,7 +4447,7 @@ pub(crate) async fn save_copy_in_self_talk(
             &format!(
                 "INSERT INTO msgs ({copy_fields},
                                    timestamp_sent,
-                                   chat_id, rfc724_mid, state, timestamp, param, starred)
+                                   txt, chat_id, rfc724_mid, state, timestamp, param, starred)
                  SELECT            {copy_fields},
                                    -- Outgoing messages on originating device
                                    -- have timestamp_sent == 0.
@@ -4358,10 +4455,11 @@ pub(crate) async fn save_copy_in_self_talk(
                                    -- so UIs display the same timestamp
                                    -- for saved and original message.
                                    IIF(timestamp_sent == 0, timestamp, timestamp_sent),
-                                   ?, ?, ?, ?, ?, ?
+                                   ?, ?, ?, ?, ?, ?, ?
                  FROM msgs WHERE id=?;"
             ),
             (
+                msg.text,
                 dest_chat_id,
                 dest_rfc724_mid,
                 if msg.from_id == ContactId::SELF {

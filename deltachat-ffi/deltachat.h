@@ -485,11 +485,11 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    0=use IMAP IDLE if the server supports it.
  *                    This is a developer option used for testing polling used as an IDLE fallback.
  * - `download_limit` = Messages up to this number of bytes are downloaded automatically.
- *                    For larger messages, only the header is downloaded and a placeholder is shown.
+ *                    For messages with large attachments, two messages are sent:
+ *                    a Pre-Message containing metadata and a Post-Message containing the attachment.
+ *                    Pre-Messages are always downloaded and show a placeholder message.
  *                    These messages can be downloaded fully using dc_download_full_msg() later.
- *                    The limit is compared against raw message sizes, including headers.
- *                    The actually used limit may be corrected
- *                    to not mess up with non-delivery-reports or read-receipts.
+ *                    Post-Messages are automatically downloaded if they are smaller than the download_limit.
  *                    0=no limit (default).
  *                    Changes affect future messages only.
  * - `protect_autocrypt` = Enable Header Protection for Autocrypt header.
@@ -4311,7 +4311,8 @@ char*             dc_msg_get_webxdc_info      (const dc_msg_t* msg);
 
 /**
  * Get the size of the file. Returns the size of the file associated with a
- * message, if applicable.
+ * message, if applicable. 
+ * If message is a pre-message, then this returns size of the to be downloaded file.
  *
  * Typically, this is used to show the size of document files, e.g. a PDF.
  *
@@ -7274,21 +7275,8 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced by the percentage used
 #define DC_STR_QUOTA_EXCEEDING_MSG_BODY   98
 
-/// "%1$s message"
-///
-/// Used as the message body when a message
-/// was not yet downloaded completely
-/// (dc_msg_get_download_state() is e.g. @ref DC_DOWNLOAD_AVAILABLE).
-///
-/// `%1$s` will be replaced by human-readable size (e.g. "1.2 MiB").
+/// @deprecated Deprecated 2025-11-12, this string is no longer needed.
 #define DC_STR_PARTIAL_DOWNLOAD_MSG_BODY  99
-
-/// "Download maximum available until %1$s"
-///
-/// Appended after some separator to @ref DC_STR_PARTIAL_DOWNLOAD_MSG_BODY.
-///
-/// `%1$s` will be replaced by human-readable date and time.
-#define DC_STR_DOWNLOAD_AVAILABILITY      100
 
 /// "Multi Device Synchronization"
 ///
@@ -7780,6 +7768,11 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as the first info messages in newly created classic email threads.
 #define DC_STR_CHAT_UNENCRYPTED_EXPLANATON 230
+
+/// "Contact"
+///
+/// Used in summaries.
+#define DC_STR_CONTACT 231
 
 /**
  * @}
