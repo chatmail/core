@@ -17,7 +17,6 @@ use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
-use crate::tools::timestamp_to_str;
 
 /// Storage for string translations.
 #[derive(Debug, Clone)]
@@ -169,9 +168,6 @@ pub enum StockMessage {
 
     #[strum(props(fallback = "%1$s message"))]
     PartialDownloadMsgBody = 99,
-
-    #[strum(props(fallback = "Download maximum available until %1$s"))]
-    DownloadAvailability = 100,
 
     #[strum(props(fallback = "Multi Device Synchronization"))]
     SyncMsgSubject = 101,
@@ -1125,13 +1121,6 @@ pub(crate) async fn partial_download_msg_body(context: &Context, org_bytes: u32)
     translated(context, StockMessage::PartialDownloadMsgBody)
         .await
         .replace1(size)
-}
-
-/// Stock string: `Download maximum available until %1$s`.
-pub(crate) async fn download_availability(context: &Context, timestamp: i64) -> String {
-    translated(context, StockMessage::DownloadAvailability)
-        .await
-        .replace1(&timestamp_to_str(timestamp))
 }
 
 /// Stock string: `Incoming Messages`.
