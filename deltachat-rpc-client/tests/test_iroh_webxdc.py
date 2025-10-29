@@ -214,7 +214,9 @@ def test_advertisement_after_chatting(acfactory, path_to_webxdc):
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="WebXDC", file=path_to_webxdc)
     ac2_webxdc_msg = ac2.wait_for_incoming_msg()
-    assert ac2_webxdc_msg.get_snapshot().text == "WebXDC"
+    ac2_webxdc_msg_snapshot = ac2_webxdc_msg.get_snapshot()
+    assert ac2_webxdc_msg_snapshot.text == "WebXDC"
+    ac2_webxdc_msg_snapshot.chat.accept()
 
     ac1_ac2_chat.send_text("Hello!")
     ac2_hello_msg = ac2.wait_for_incoming_msg()

@@ -103,7 +103,7 @@ def test_no_contact_request_call(acfactory) -> None:
         # There should be no incoming call notification.
         assert event.kind != EventType.INCOMING_CALL
 
-        if event.kind == EventType.INCOMING_MSG:
+        if event.kind == EventType.MSGS_CHANGED:
             msg = bob.get_message_by_id(event.msg_id)
-            assert msg.get_snapshot().text == "Hello!"
-            break
+            if msg.get_snapshot().text == "Hello!":
+                break
