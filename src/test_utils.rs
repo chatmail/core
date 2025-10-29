@@ -1121,6 +1121,18 @@ impl TestContext {
 
         chat_id
     }
+
+    /// Set the legacy `protected` column in the chats table to 1,
+    /// because for now, only these chats that were once protected can be used
+    /// to gossip verifications.
+    // TODO remove the next statement
+    // when we send the _verified header for all verified contacts
+    pub(crate) async fn set_chat_protected(self: &TestContext, chat_id: chat::ChatId) {
+        self.sql
+            .execute("UPDATE chats SET protected=1 WHERE id=?", (chat_id,))
+            .await
+            .unwrap();
+    }
 }
 
 impl Deref for TestContext {
