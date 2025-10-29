@@ -7263,21 +7263,8 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced by the percentage used
 #define DC_STR_QUOTA_EXCEEDING_MSG_BODY   98
 
-/// "%1$s message"
-///
-/// Used as the message body when a message
-/// was not yet downloaded completely
-/// (dc_msg_get_download_state() is e.g. @ref DC_DOWNLOAD_AVAILABLE).
-///
-/// `%1$s` will be replaced by human-readable size (e.g. "1.2 MiB").
+/// @deprecated Deprecated 2025-11-12, this string is no longer needed.
 #define DC_STR_PARTIAL_DOWNLOAD_MSG_BODY  99
-
-/// "Download maximum available until %1$s"
-///
-/// Appended after some separator to @ref DC_STR_PARTIAL_DOWNLOAD_MSG_BODY.
-///
-/// `%1$s` will be replaced by human-readable date and time.
-#define DC_STR_DOWNLOAD_AVAILABILITY      100
 
 /// "Multi Device Synchronization"
 ///

@@ -711,6 +711,32 @@ impl TestContext {
         })
     }
 
+    pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
+        self.ctx
+            .sql
+            .query_map_vec(
+                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
+                (msg_id,),
+                |row| {
+                    let _id: MsgId = row.get(0)?;
+                    let msg_id: MsgId = row.get(1)?;
+                    let mime: String = row.get(2)?;
+                    let recipients: String = row.get(3)?;
+                    Ok((msg_id, mime, recipients))
+                },
+            )
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|(msg_id, mime, recipients)| SentMessage {
+                payload: mime,
+                sender_msg_id: msg_id,
+                sender_context: &self.ctx,
+                recipients,
+            })
+            .collect()
+    }
+
     /// Retrieves a sent sync message from the db.
     ///
     /// This retrieves and removes a sync message which has been scheduled to send from the jobs
@@ -759,7 +785,7 @@ impl TestContext {
     /// unlikely to be affected as the message would be processed again in exactly the
     /// same way.
     pub(crate) async fn parse_msg(&self, msg: &SentMessage<'_>) -> MimeMessage {
-        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes(), None)
+        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes())
             .await
             .unwrap()
     }
