@@ -347,6 +347,7 @@ def test_receive_imf_failure(acfactory) -> None:
     assert snapshot.download_state == DownloadState.AVAILABLE
     assert snapshot.error is not None
     assert snapshot.show_padlock
+    snapshot.chat.accept()
 
     # The failed message doesn't break the IMAP loop.
     bob.set_config("fail_on_receiving_full_msg", "0")
@@ -888,10 +889,12 @@ def test_rename_group(acfactory):
     bob_msg = bob.wait_for_incoming_msg()
     bob_chat = bob_msg.get_snapshot().chat
     assert bob_chat.get_basic_snapshot().name == "Test group"
+    bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
 
     for name in ["Baz", "Foo bar", "Xyzzy"]:
         alice_group.set_name(name)
-        bob.wait_for_incoming_msg_event()
+        bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
+        bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
         assert bob_chat.get_basic_snapshot().name == name
 
 
