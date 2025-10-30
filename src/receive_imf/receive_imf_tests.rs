@@ -10,7 +10,6 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
-use crate::download::MIN_DOWNLOAD_LIMIT;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::securejoin::get_securejoin_qr;
@@ -18,8 +17,6 @@ use crate::test_utils::{
     E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
 };
 use crate::tools::{SystemTime, time};
-
-use rand::distr::SampleString;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_outgoing() -> Result<()> {
@@ -4360,37 +4357,6 @@ async fn test_adhoc_grp_name_no_prefix() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_download_later() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    alice.set_config(Config::DownloadLimit, Some("1")).await?;
-    assert_eq!(alice.download_limit().await?, Some(MIN_DOWNLOAD_LIMIT));
-
-    let bob = tcm.bob().await;
-    let bob_chat = bob.create_chat(&alice).await;
-
-    // Generate a random string so OpenPGP does not compress it.
-    let text =
-        rand::distr::Alphanumeric.sample_string(&mut rand::rng(), MIN_DOWNLOAD_LIMIT as usize);
-
-    let sent_msg = bob.send_text(bob_chat.id, &text).await;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Available);
-    assert_eq!(msg.state, MessageState::InFresh);
-
-    let hi_msg = tcm.send_recv(&bob, &alice, "hi").await;
-
-    alice.set_config(Config::DownloadLimit, None).await?;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.state, MessageState::InFresh);
-    assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, hi_msg.id);
-    assert!(msg.timestamp_sort <= hi_msg.timestamp_sort);
-
-    Ok(())
-}
-
 /// Malice can pretend they have the same address as Alice and sends a message encrypted to Alice's
 /// key but signed with another one. Alice must detect that this message is wrongly signed and not
 /// treat it as Autocrypt-encrypted.
@@ -4421,81 +4387,6 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     let msg = alice.recv_msg(&sent_msg).await;
     assert_eq!(msg.state, MessageState::OutDelivered);
     assert!(!msg.get_showpadlock());
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_create_group_with_big_msg() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    let ba_contact = bob.add_or_lookup_contact_id(&alice).await;
-    let ab_chat_id = alice.create_chat(&bob).await.id;
-
-    let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
-
-    let bob_grp_id = create_group(&bob, "Group").await?;
-    add_contact_to_chat(&bob, bob_grp_id, ba_contact).await?;
-    let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(&bob, "a.jpg", file_bytes, None)?;
-    let sent_msg = bob.send_msg(bob_grp_id, &mut msg).await;
-    assert!(msg.get_showpadlock());
-
-    alice.set_config(Config::DownloadLimit, Some("1")).await?;
-    assert_eq!(alice.download_limit().await?, Some(MIN_DOWNLOAD_LIMIT));
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Available);
-    let alice_chat = Chat::load_from_db(&alice, msg.chat_id).await?;
-    // Incomplete message is assigned to 1:1 chat.
-    assert_eq!(alice_chat.typ, Chattype::Single);
-
-    alice.set_config(Config::DownloadLimit, None).await?;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.state, MessageState::InFresh);
-    assert_eq!(msg.viewtype, Viewtype::Image);
-    assert_ne!(msg.chat_id, alice_chat.id);
-    let alice_grp = Chat::load_from_db(&alice, msg.chat_id).await?;
-    assert_eq!(alice_grp.typ, Chattype::Group);
-    assert_eq!(alice_grp.name, "Group");
-    assert_eq!(
-        chat::get_chat_contacts(&alice, alice_grp.id).await?.len(),
-        2
-    );
-
-    // Now Bob can send encrypted messages to Alice.
-
-    let bob_grp_id = create_group(&bob, "Group1").await?;
-    add_contact_to_chat(&bob, bob_grp_id, ba_contact).await?;
-    let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(&bob, "a.jpg", file_bytes, None)?;
-    let sent_msg = bob.send_msg(bob_grp_id, &mut msg).await;
-    assert!(msg.get_showpadlock());
-
-    alice.set_config(Config::DownloadLimit, Some("1")).await?;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Available);
-    // Until fully downloaded, an encrypted message must sit in the 1:1 chat.
-    assert_eq!(msg.chat_id, ab_chat_id);
-
-    alice.set_config(Config::DownloadLimit, None).await?;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.state, MessageState::InFresh);
-    assert_eq!(msg.viewtype, Viewtype::Image);
-    assert_ne!(msg.chat_id, ab_chat_id);
-    let alice_grp = Chat::load_from_db(&alice, msg.chat_id).await?;
-    assert_eq!(alice_grp.typ, Chattype::Group);
-    assert_eq!(alice_grp.name, "Group1");
-    assert_eq!(
-        chat::get_chat_contacts(&alice, alice_grp.id).await?.len(),
-        2
-    );
-
-    // The big message must go away from the 1:1 chat.
-    let msgs = chat::get_chat_msgs(&alice, ab_chat_id).await?;
-    assert_eq!(msgs.len(), E2EE_INFO_MSGS);
 
     Ok(())
 }
@@ -4734,48 +4625,6 @@ async fn test_references() -> Result<()> {
     // When the message is received, it is assigned correctly because of `Chat-Group-ID` header.
     let bob_received_msg = bob.recv_msg(&sent).await;
     assert_eq!(bob_chat_id, bob_received_msg.chat_id);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_prefer_references_to_downloaded_msgs() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    bob.set_config(Config::DownloadLimit, Some("1")).await?;
-    let fiona = &tcm.fiona().await;
-    let alice_bob_id = tcm.send_recv(bob, alice, "hi").await.from_id;
-    let alice_fiona_id = tcm.send_recv(fiona, alice, "hi").await.from_id;
-    let alice_chat_id = create_group(alice, "Group").await?;
-    add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
-    // W/o fiona the test doesn't work -- the last message is assigned to the 1:1 chat due to
-    // `is_probably_private_reply()`.
-    add_contact_to_chat(alice, alice_chat_id, alice_fiona_id).await?;
-    let sent = alice.send_text(alice_chat_id, "Hi").await;
-    let received = bob.recv_msg(&sent).await;
-    assert_eq!(received.download_state, DownloadState::Done);
-    let bob_chat_id = received.chat_id;
-
-    let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
-    let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "file", file_bytes, None)?;
-    let mut sent = alice.send_msg(alice_chat_id, &mut msg).await;
-    sent.payload = sent
-        .payload
-        .replace("References:", "X-Microsoft-Original-References:")
-        .replace("In-Reply-To:", "X-Microsoft-Original-In-Reply-To:");
-    let received = bob.recv_msg(&sent).await;
-    assert_eq!(received.download_state, DownloadState::Available);
-    assert_ne!(received.chat_id, bob_chat_id);
-    assert_eq!(received.chat_id, bob.get_chat(alice).await.id);
-
-    let mut msg = Message::new(Viewtype::File);
-    msg.set_file_from_bytes(alice, "file", file_bytes, None)?;
-    let sent = alice.send_msg(alice_chat_id, &mut msg).await;
-    let received = bob.recv_msg(&sent).await;
-    assert_eq!(received.download_state, DownloadState::Available);
-    assert_eq!(received.chat_id, bob_chat_id);
 
     Ok(())
 }
