@@ -437,9 +437,6 @@ pub enum Config {
     /// to avoid encrypting it differently and
     /// storing the same token multiple times on the server.
     EncryptedDeviceToken,
-
-    /// Return an error from `receive_imf_inner()` for a fully downloaded message. For tests.
-    FailOnReceivingFullMsg,
 }
 
 impl Config {

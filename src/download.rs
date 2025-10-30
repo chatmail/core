@@ -11,9 +11,8 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::info;
-use crate::message::{Message, MsgId, Viewtype};
-use crate::mimeparser::{MimeMessage, Part};
-use crate::{EventType, chatlist_events, stock_str};
+use crate::message::{Message, MsgId};
+use crate::{EventType, chatlist_events};
 
 /// Download limits should not be used below `MIN_DOWNLOAD_LIMIT`.
 ///
@@ -205,40 +204,11 @@ impl Session {
         let mut uid_message_ids: BTreeMap<u32, String> = BTreeMap::new();
         uid_message_ids.insert(uid, rfc724_mid);
         let (sender, receiver) = async_channel::unbounded();
-        self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, false, sender)
+        self.fetch_many_msgs(context, folder, vec![uid], &uid_message_ids, sender)
             .await?;
         if receiver.recv().await.is_err() {
             bail!("Failed to fetch UID {uid}");
         }
-        Ok(())
-    }
-}
-
-impl MimeMessage {
-    /// Creates a placeholder part and add that to `parts`.
-    ///
-    /// To create the placeholder, only the outermost header can be used,
-    /// the mime-structure itself is not available.
-    ///
-    /// The placeholder part currently contains a text with size and availability of the message.
-    pub(crate) async fn create_stub_from_partial_download(
-        &mut self,
-        context: &Context,
-        org_bytes: u32,
-    ) -> Result<()> {
-        let text = format!(
-            "[{}]",
-            stock_str::partial_download_msg_body(context, org_bytes).await
-        );
-
-        info!(context, "Partial download: {}", text);
-
-        self.do_add_single_part(Part {
-            typ: Viewtype::Text,
-            msg: text,
-            ..Default::default()
-        });
-
         Ok(())
     }
 }
