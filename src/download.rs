@@ -1,26 +1,16 @@
 //! # Download large messages manually.
 
-use std::cmp::max;
 use std::collections::BTreeMap;
 
 use anyhow::{Result, anyhow, bail, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::info;
 use crate::message::{Message, MsgId};
 use crate::{EventType, chatlist_events};
-
-/// Download limits should not be used below `MIN_DOWNLOAD_LIMIT`.
-///
-/// For better UX, some messages as add-member, non-delivery-reports (NDN) or read-receipts (MDN)
-/// should always be downloaded completely to handle them correctly,
-/// also in larger groups and if group and contact avatar are attached.
-/// Most of these cases are caught by `MIN_DOWNLOAD_LIMIT`.
-pub(crate) const MIN_DOWNLOAD_LIMIT: u32 = 163840;
 
 /// If a message is downloaded only partially
 /// and `delete_server_after` is set to small timeouts (eg. "at once"),
@@ -61,18 +51,6 @@ pub enum DownloadState {
 
     /// Full download of the message is in progress.
     InProgress = 1000,
-}
-
-impl Context {
-    // Returns validated download limit or `None` for "no limit".
-    pub(crate) async fn download_limit(&self) -> Result<Option<u32>> {
-        let download_limit = self.get_config_int(Config::DownloadLimit).await?;
-        if download_limit <= 0 {
-            Ok(None)
-        } else {
-            Ok(Some(max(MIN_DOWNLOAD_LIMIT, download_limit as u32)))
-        }
-    }
 }
 
 impl MsgId {
