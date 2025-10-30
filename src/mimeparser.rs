@@ -1317,6 +1317,10 @@ impl MimeMessage {
                             let is_html = mime_type == mime::TEXT_HTML;
                             if is_html {
                                 self.is_mime_modified = true;
+                                // NB: This unconditionally removes Legacy Display Elements (see
+                                // <https://www.rfc-editor.org/rfc/rfc9788.html#section-4.5.3.3>). We
+                                // don't check for the "hp-legacy-display" Content-Type parameter
+                                // for simplicity.
                                 if let Some(text) = dehtml(&decoded_data) {
                                     text
                                 } else {
