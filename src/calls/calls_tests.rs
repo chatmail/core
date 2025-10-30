@@ -652,20 +652,13 @@ async fn test_no_partial_calls() -> Result<()> {
         Chat-Content: call-ended\n\
         \n\
         Call ended\n";
-    receive_imf_from_inbox(
-        alice,
-        "second@example.net",
-        imf_raw,
-        seen,
-        Some(imf_raw.len().try_into().unwrap()),
-    )
-    .await?;
+    receive_imf_from_inbox(alice, "second@example.net", imf_raw, seen).await?;
 
     // The call is still not ended.
     assert_eq!(call_state(alice, call_msg.id).await?, CallState::Alerting);
 
     // Fully downloading the message ends the call.
-    receive_imf_from_inbox(alice, "second@example.net", imf_raw, seen, None)
+    receive_imf_from_inbox(alice, "second@example.net", imf_raw, seen)
         .await
         .context("Failed to fully download end call message")?;
     assert_eq!(call_state(alice, call_msg.id).await?, CallState::Missed);

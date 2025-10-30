@@ -3130,7 +3130,7 @@ async fn test_broadcast_channel_protected_listid() -> Result<()> {
         .await?
         .grpid;
 
-    let parsed = mimeparser::MimeMessage::from_bytes(bob, sent.payload.as_bytes(), None).await?;
+    let parsed = mimeparser::MimeMessage::from_bytes(bob, sent.payload.as_bytes()).await?;
     assert_eq!(
         parsed.get_mailinglist_header().unwrap(),
         format!("My Channel <{}>", alice_list_id)
@@ -3325,7 +3325,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     remove_contact_from_chat(bob0, bob_chat_id, ContactId::SELF).await?;
 
     let leave_msg = bob0.pop_sent_msg().await;
-    let parsed = MimeMessage::from_bytes(bob1, leave_msg.payload().as_bytes(), None).await?;
+    let parsed = MimeMessage::from_bytes(bob1, leave_msg.payload().as_bytes()).await?;
     assert_eq!(
         parsed.parts[0].msg,
         stock_str::msg_group_left_remote(bob0).await

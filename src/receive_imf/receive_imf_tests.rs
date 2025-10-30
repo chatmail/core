@@ -28,7 +28,7 @@ async fn test_outgoing() -> Result<()> {
                 From: alice@example.org\n\
                 \n\
                 hello";
-    let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..], None).await?;
+    let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..]).await?;
     assert_eq!(mimeparser.incoming, false);
     Ok(())
 }
@@ -43,7 +43,7 @@ async fn test_bad_from() {
                     References: <Gr.HcxyMARjyJy.9-uvzWPTLtV@nauta.cu>\n\
                     \n\
                     hello\x00";
-    let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..], None).await;
+    let mimeparser = MimeMessage::from_bytes(&context.ctx, &raw[..]).await;
     assert!(mimeparser.is_err());
 }
 
@@ -2817,7 +2817,7 @@ References: <second@example.net> <nonexistent@example.net> <first@example.net>
 Content-Type: text/plain; charset=utf-8; format=flowed; delsp=no
 
 Message with references."#;
-    let mime_parser = MimeMessage::from_bytes(&t, &mime[..], None).await?;
+    let mime_parser = MimeMessage::from_bytes(&t, &mime[..]).await?;
 
     let parent = get_parent_message(&t, &mime_parser).await?.unwrap();
     assert_eq!(parent.id, first.id);
@@ -4501,87 +4501,6 @@ async fn test_create_group_with_big_msg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_partial_group_consistency() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = tcm.alice().await;
-    let bob = tcm.bob().await;
-    let fiona = tcm.fiona().await;
-    let bob_id = alice.add_or_lookup_contact_id(&bob).await;
-    let alice_chat_id = create_group(&alice, "foos").await?;
-    add_contact_to_chat(&alice, alice_chat_id, bob_id).await?;
-
-    send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
-    let add = alice.pop_sent_msg().await;
-    bob.recv_msg(&add).await;
-    let bob_chat_id = bob.get_last_msg().await.chat_id;
-    let contacts = get_chat_contacts(&bob, bob_chat_id).await?;
-    assert_eq!(contacts.len(), 2);
-
-    // Bob receives partial message.
-    let msg_id = receive_imf_from_inbox(
-        &bob,
-        "first@example.org",
-        b"From: Alice <alice@example.org>\n\
-To: <bob@example.net>, <charlie@example.com>\n\
-Chat-Version: 1.0\n\
-Subject: subject\n\
-Message-ID: <first@example.org>\n\
-Date: Sun, 14 Nov 2021 00:10:00 +0000\
-Content-Type: text/plain
-Chat-Group-Member-Added: charlie@example.com",
-        false,
-        Some(100000),
-    )
-    .await?
-    .context("no received message")?;
-
-    let msg = Message::load_from_db(&bob, msg_id.msg_ids[0]).await?;
-
-    // Partial download does not change the member list.
-    assert_eq!(msg.download_state, DownloadState::Available);
-    assert_eq!(get_chat_contacts(&bob, bob_chat_id).await?, contacts);
-
-    // Alice sends normal message to bob, adding fiona.
-    add_contact_to_chat(
-        &alice,
-        alice_chat_id,
-        alice.add_or_lookup_contact_id(&fiona).await,
-    )
-    .await?;
-
-    bob.recv_msg(&alice.pop_sent_msg().await).await;
-
-    let contacts = get_chat_contacts(&bob, bob_chat_id).await?;
-    assert_eq!(contacts.len(), 3);
-
-    // Bob fully receives the partial message.
-    let msg_id = receive_imf_from_inbox(
-        &bob,
-        "first@example.org",
-        b"From: Alice <alice@example.org>\n\
-To: Bob <bob@example.net>\n\
-Chat-Version: 1.0\n\
-Subject: subject\n\
-Message-ID: <first@example.org>\n\
-Date: Sun, 14 Nov 2021 00:10:00 +0000\
-Content-Type: text/plain
-Chat-Group-Member-Added: charlie@example.com",
-        false,
-        None,
-    )
-    .await?
-    .context("no received message")?;
-
-    let msg = Message::load_from_db(&bob, msg_id.msg_ids[0]).await?;
-
-    // After full download, the old message should not change group state.
-    assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(get_chat_contacts(&bob, bob_chat_id).await?, contacts);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
@@ -5309,41 +5228,6 @@ async fn test_outgoing_plaintext_two_member_group() -> Result<()> {
 
     let chat = Chat::load_from_db(alice, msg.chat_id).await?;
     assert_eq!(chat.typ, Chattype::Group);
-
-    Ok(())
-}
-
-/// Tests that large messages are assigned
-/// to non-key-contacts if the type is not `multipart/encrypted`.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_partial_download_key_contact_lookup() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    // Create two chats with Alice, both with key-contact and email address contact.
-    let encrypted_chat = bob.create_chat(alice).await;
-    let unencrypted_chat = bob.create_email_chat(alice).await;
-
-    let seen = false;
-    let is_partial_download = Some(9999);
-    let received = receive_imf_from_inbox(
-        bob,
-        "3333@example.org",
-        b"From: alice@example.org\n\
-        To: bob@example.net\n\
-        Message-ID: <3333@example.org>\n\
-        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-        \n\
-        hello\n",
-        seen,
-        is_partial_download,
-    )
-    .await?
-    .unwrap();
-
-    assert_ne!(received.chat_id, encrypted_chat.id);
-    assert_eq!(received.chat_id, unencrypted_chat.id);
 
     Ok(())
 }
