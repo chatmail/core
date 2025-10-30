@@ -2520,7 +2520,6 @@ async fn is_probably_private_reply(
 /// than two members, a new ad hoc group is created.
 ///
 /// On success the function returns the created (chat_id, chat_blocked) tuple.
-#[expect(clippy::too_many_arguments)]
 async fn create_group(
     context: &Context,
     mime_parser: &mut MimeMessage,
