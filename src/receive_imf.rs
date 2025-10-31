@@ -320,7 +320,7 @@ async fn get_to_and_past_contact_ids(
                 .await?;
             }
         }
-        ChatAssignment::Trash | ChatAssignment::MailingListOrBroadcast => {
+        ChatAssignment::Trash => {
             to_ids = Vec::new();
             past_ids = Vec::new();
         }
@@ -385,7 +385,10 @@ async fn get_to_and_past_contact_ids(
             )
             .await?;
         }
-        ChatAssignment::OneOneChat => {
+        // Sometimes, messages are sent just to a single recipient
+        // in a broadcast (e.g. securejoin messages).
+        // In this case, we need to look them up like in a 1:1 chat:
+        ChatAssignment::OneOneChat | ChatAssignment::MailingListOrBroadcast => {
             let pgp_to_ids = add_or_lookup_key_contacts(
                 context,
                 &mime_parser.recipients,
@@ -3432,6 +3435,8 @@ async fn apply_out_broadcast_changes(
                     better_msg.get_or_insert(msg);
                     send_event_chat_modified = true;
                 }
+            } else {
+                warn!(context, "Failed to find contact with fpr {added_fpr}");
             }
         }
     } else if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
