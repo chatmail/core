@@ -451,6 +451,8 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     let t = TestContext::new_alice().await;
     const HOUR: i64 = 60 * 60;
     let now = time();
+    let transport_id = 1;
+    let uidvalidity = 12345;
     for (id, timestamp, ephemeral_timestamp) in &[
         (900, now - 2 * HOUR, 0),
         (1000, now - 23 * HOUR - MIN_DELETE_SERVER_AFTER, 0),
@@ -470,8 +472,8 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
                .await?;
         t.sql
             .execute(
-                "INSERT INTO imap (rfc724_mid, folder, uid, target) VALUES (?,'INBOX',?, 'INBOX');",
-                (&message_id, id),
+                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, target, uidvalidity) VALUES (?, ?,'INBOX',?, 'INBOX', ?);",
+                (transport_id, &message_id, id, uidvalidity),
             )
             .await?;
     }
