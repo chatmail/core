@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import EventType, events
-from deltachat_rpc_client.const import DownloadState, MessageState
+from deltachat_rpc_client.const import MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
@@ -354,7 +354,6 @@ def test_receive_imf_failure(acfactory) -> None:
     message = bob.wait_for_incoming_msg()
     snapshot = message.get_snapshot()
     assert snapshot.text == "Hello again!"
-    assert snapshot.download_state == DownloadState.DONE
     assert snapshot.error is None
 
 

@@ -23,6 +23,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
+use crate::download::pre_msg_metadata::PreMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
@@ -147,6 +148,23 @@ pub(crate) struct MimeMessage {
     /// Sender timestamp in secs since epoch. Allowed to be in the future due to unsynchronized
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
+
+    pub(crate) pre_message: Option<PreMessageMode>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum PreMessageMode {
+    /// This is Post-Message
+    /// it replaces it's Pre-Message attachment if it exists already,
+    /// and if the Pre-Message does not exist it is treated as normal message
+    PostMessage,
+    /// This is a Pre-Message,
+    /// it adds a message preview for a Post-Message
+    /// and it is ignored if the Post-Message was downloaded already
+    PreMessage {
+        post_msg_rfc724_mid: String,
+        metadata: Option<PreMsgMetadata>,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -239,6 +257,9 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 
 impl MimeMessage {
     /// Parse a mime message.
+    ///
+    /// This method has some side-effects,
+    /// such as saving blobs and saving found public keys to the database.
     pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
@@ -345,6 +366,16 @@ impl MimeMessage {
         let incoming = !context.is_self_addr(&from.addr).await?;
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
+
+        let mut pre_message = if mail
+            .headers
+            .get_header_value(HeaderDef::ChatIsPostMessage)
+            .is_some()
+        {
+            Some(PreMessageMode::PostMessage)
+        } else {
+            None
+        };
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
@@ -574,6 +605,37 @@ impl MimeMessage {
             signatures.clear();
         }
 
+        if let (Ok(mail), true) = (mail, is_encrypted) {
+            if let Some(post_msg_rfc724_mid) =
+                mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
+            {
+                let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
+                let metadata = if let Some(value) = mail
+                    .headers
+                    .get_header_value(HeaderDef::ChatPostMessageMetadata)
+                {
+                    match PreMsgMetadata::try_from_header_value(&value) {
+                        Ok(metadata) => Some(metadata),
+                        Err(error) => {
+                            error!(
+                                context,
+                                "failed to parse metadata header in pre-message: {error:#?}"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    warn!(context, "expected pre-message to have metadata header");
+                    None
+                };
+
+                pre_message = Some(PreMessageMode::PreMessage {
+                    post_msg_rfc724_mid,
+                    metadata,
+                });
+            }
+        }
+
         let mut parser = MimeMessage {
             parts: Vec::new(),
             headers,
@@ -609,6 +671,7 @@ impl MimeMessage {
             is_bot: None,
             timestamp_rcvd,
             timestamp_sent,
+            pre_message,
         };
 
         match mail {

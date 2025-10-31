@@ -609,7 +609,7 @@ impl Context {
                     convert_folder_meaning(self, folder_meaning).await?
                 {
                     connection
-                        .fetch_move_delete(self, &mut session, &watch_folder, folder_meaning)
+                        .fetch_move_delete(self, &mut session, true, &watch_folder, folder_meaning)
                         .await?;
                 }
             }
@@ -622,6 +622,12 @@ impl Context {
             {
                 warn!(self, "Failed to update quota: {err:#}.");
             }
+
+            // OPTIONAL TODO: if time left start downloading messages
+            // while (msg = download_when_normal_starts) {
+            //  if not time_left {break;}
+            //  connection.download_message(msg) }
+            // }
         }
 
         info!(
@@ -1077,13 +1083,6 @@ impl Context {
             "test_hooks",
             self.sql
                 .get_raw_config("test_hooks")
-                .await?
-                .unwrap_or_default(),
-        );
-        res.insert(
-            "fail_on_receiving_full_msg",
-            self.sql
-                .get_raw_config("fail_on_receiving_full_msg")
                 .await?
                 .unwrap_or_default(),
         );

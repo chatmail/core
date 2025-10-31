@@ -1504,6 +1504,26 @@ ORDER BY last_seen DESC LIMIT 10000
             .await?;
     }
 
+    inc_and_check(&mut migration_version, 144)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE download_new (
+                rfc724_mid TEXT NOT NULL
+            );
+            INSERT INTO download_new (rfc724_mid)
+             SELECT m.rfc724_mid FROM download d
+             JOIN msgs m ON d.msg_id = m.id
+             WHERE m.rfc724_mid IS NOT NULL AND m.rfc724_mid != '';
+            DROP TABLE download;
+            ALTER TABLE download_new RENAME TO download;
+            CREATE TABLE available_post_msgs (
+                rfc724_mid TEXT NOT NULL
+            );",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

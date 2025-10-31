@@ -21,6 +21,7 @@ use crate::constants::{ASM_SUBJECT, BROADCAST_INCOMPATIBILITY_MSG};
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
+use crate::download::pre_msg_metadata::PreMsgMetadata;
 use crate::e2ee::EncryptHelper;
 use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
@@ -61,11 +62,11 @@ pub enum Loaded {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreMessageMode {
-    /// adds the Chat-Is-Full-Message header in unprotected part
-    FullMessage,
-    /// adds the Chat-Full-Message-ID header to protected part
+    /// adds the Chat-Is-Post-Message header in unprotected part
+    PostMessage,
+    /// adds the Chat-Post-Message-ID header to protected part
     /// also adds metadata and explicitly excludes attachment
-    PreMessage { full_msg_rfc724_mid: String },
+    PreMessage { post_msg_rfc724_mid: String },
 }
 
 /// Helper to construct mime messages.
@@ -156,7 +157,7 @@ pub struct MimeFactory {
     /// This field is used to sustain the topic id of webxdcs needed for peer channels.
     webxdc_topic: Option<TopicId>,
 
-    /// This field is used when this is either a pre-message or a full-message.
+    /// This field is used when this is either a pre-message or a Post-Message.
     pre_message_mode: Option<PreMessageMode>,
 }
 
@@ -996,18 +997,18 @@ impl MimeFactory {
             mail_builder::headers::raw::Raw::new("1.0").into(),
         ));
 
-        if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
+        if self.pre_message_mode == Some(PreMessageMode::PostMessage) {
             unprotected_headers.push((
-                "Chat-Is-Full-Message",
+                "Chat-Is-Post-Message",
                 mail_builder::headers::raw::Raw::new("1").into(),
             ));
         } else if let Some(PreMessageMode::PreMessage {
-            full_msg_rfc724_mid,
+            post_msg_rfc724_mid,
         }) = self.pre_message_mode.clone()
         {
             protected_headers.push((
-                "Chat-Full-Message-ID",
-                mail_builder::headers::message_id::MessageId::new(full_msg_rfc724_mid).into(),
+                "Chat-Post-Message-ID",
+                mail_builder::headers::message_id::MessageId::new(post_msg_rfc724_mid).into(),
             ));
         }
 
@@ -1152,7 +1153,7 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
+                            if self.pre_message_mode == Some(PreMessageMode::PostMessage) {
                                 continue;
                             }
 
@@ -1913,6 +1914,14 @@ impl MimeFactory {
         // add attachment part
         if msg.viewtype.has_file() {
             if let Some(PreMessageMode::PreMessage { .. }) = self.pre_message_mode {
+                let Some(metadata) = PreMsgMetadata::from_msg(context, &msg).await? else {
+                    bail!("failed to generate metadata for pre-message")
+                };
+
+                headers.push((
+                    HeaderDef::ChatPostMessageMetadata.into(),
+                    mail_builder::headers::raw::Raw::new(metadata.to_header_value()?).into(),
+                ));
                 // TODO: generate thumbnail and attach it instead (if it makes sense)
             } else {
                 let file_part = build_body_file(context, &msg).await?;
@@ -1963,7 +1972,7 @@ impl MimeFactory {
         }
 
         self.attach_selfavatar =
-            self.attach_selfavatar && self.pre_message_mode != Some(PreMessageMode::FullMessage);
+            self.attach_selfavatar && self.pre_message_mode != Some(PreMessageMode::PostMessage);
         if self.attach_selfavatar {
             match context.get_config(Config::Selfavatar).await? {
                 Some(path) => match build_avatar_file(context, &path).await {
@@ -2038,13 +2047,13 @@ impl MimeFactory {
         self.encryption_pubkeys.is_some()
     }
 
-    pub fn set_as_full_message(&mut self) {
-        self.pre_message_mode = Some(PreMessageMode::FullMessage);
+    pub fn set_as_post_message(&mut self) {
+        self.pre_message_mode = Some(PreMessageMode::PostMessage);
     }
 
-    pub fn set_as_pre_message_for(&mut self, full_message: &RenderedEmail) {
+    pub fn set_as_pre_message_for(&mut self, post_message: &RenderedEmail) {
         self.pre_message_mode = Some(PreMessageMode::PreMessage {
-            full_msg_rfc724_mid: full_message.rfc724_mid.clone(),
+            post_msg_rfc724_mid: post_message.rfc724_mid.clone(),
         });
     }
 }

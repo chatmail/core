@@ -14,13 +14,12 @@ pub(crate) use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
-use crate::download::{DownloadState, download_msg};
+use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
 use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
 use crate::imap::{FolderMeaning, Imap, session::Session};
 use crate::location;
 use crate::log::{LogExt, warn};
-use crate::message::MsgId;
 use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
@@ -349,38 +348,6 @@ pub(crate) struct Scheduler {
     recently_seen_loop: RecentlySeenLoop,
 }
 
-async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
-    let msg_ids = context
-        .sql
-        .query_map_vec("SELECT msg_id FROM download", (), |row| {
-            let msg_id: MsgId = row.get(0)?;
-            Ok(msg_id)
-        })
-        .await?;
-
-    for msg_id in msg_ids {
-        if let Err(err) = download_msg(context, msg_id, session).await {
-            warn!(context, "Failed to download message {msg_id}: {:#}.", err);
-
-            // Update download state to failure
-            // so it can be retried.
-            //
-            // On success update_download_state() is not needed
-            // as receive_imf() already
-            // set the state and emitted the event.
-            msg_id
-                .update_download_state(context, DownloadState::Failure)
-                .await?;
-        }
-        context
-            .sql
-            .execute("DELETE FROM download WHERE msg_id=?", (msg_id,))
-            .await?;
-    }
-
-    Ok(())
-}
-
 async fn inbox_loop(
     ctx: Context,
     started: oneshot::Sender<()>,
@@ -606,7 +573,7 @@ async fn fetch_idle(
     {
         // Fetch the watched folder.
         connection
-            .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
+            .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
             .await
             .context("fetch_move_delete")?;
 
@@ -617,6 +584,11 @@ async fn fetch_idle(
         delete_expired_imap_messages(ctx)
             .await
             .context("delete_expired_imap_messages")?;
+
+        //-------
+        // TODO: verify that this is the correct position for this call
+        // in order to guard against lost pre-messages:
+        download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
     }
@@ -645,7 +617,7 @@ async fn fetch_idle(
                 // no new messages. We want to select the watched folder anyway before going IDLE
                 // there, so this does not take additional protocol round-trip.
                 connection
-                    .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
+                    .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
                     .await
                     .context("fetch_move_delete after scan_folders")?;
             }
@@ -702,6 +674,7 @@ async fn fetch_idle(
     Ok(session)
 }
 
+/// The simplified IMAP IDLE loop to watch non primary folders (non-inbox folders)
 async fn simple_imap_loop(
     ctx: Context,
     started: oneshot::Sender<()>,

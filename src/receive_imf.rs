@@ -20,16 +20,14 @@ use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX,
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
-use crate::download::DownloadState;
+use crate::download::{DownloadState, premessage_is_downloaded_for};
 use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
 use crate::key::{self_fingerprint, self_fingerprint_opt};
-use crate::log::LogExt;
-use crate::log::warn;
-use crate::logged_debug_assert;
+use crate::log::{LogExt as _, warn};
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
@@ -47,6 +45,7 @@ use crate::tools::{
     self, buf_compress, normalize_text, remove_subject_prefix, validate_broadcast_secret,
 };
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
+use crate::{logged_debug_assert, mimeparser};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
 ///
@@ -517,7 +516,15 @@ pub(crate) async fn receive_imf_inner(
     // check, if the mail is already in our database.
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
-    if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+    if mime_parser.pre_message == Some(mimeparser::PreMessageMode::PostMessage) {
+        // Post-Message just replace the attachment and mofified Params, not the whole message
+        // This is done in the `handle_post_message` method.
+        replace_msg_id = None;
+        replace_chat_id = None;
+    } else if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+        // This code handles the download of old partial download stub messages
+        // It will be removed after a transitioning period,
+        // after we have released a few versions with pre-messages
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
             .await?
@@ -526,8 +533,6 @@ pub(crate) async fn receive_imf_inner(
             // the message was partially downloaded before and is fully downloaded now.
             info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
-
-            // TODO: look at this place
         } else {
             // The message was already fully downloaded
             // or cannot be loaded because it is deleted.
@@ -1097,6 +1102,38 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
+    } else if let Some(pre_message) = &mime_parser.pre_message {
+        use crate::mimeparser::PreMessageMode::*;
+        match pre_message {
+            PostMessage => {
+                // if pre message exist, then trash after replacing, otherwise treat as normal message
+                let pre_message_exists = premessage_is_downloaded_for(context, rfc724_mid).await?;
+                info!(
+                    context,
+                    "Message is a Post-Message ({}).",
+                    if pre_message_exists {
+                        "pre-message exists already, so trash after replacing attachment"
+                    } else {
+                        "no pre-message -> Keep"
+                    }
+                );
+                pre_message_exists
+            }
+            PreMessage {
+                post_msg_rfc724_mid,
+                ..
+            } => {
+                // if post message already exists, then trash/ignore
+                let post_msg_exists =
+                    premessage_is_downloaded_for(context, post_msg_rfc724_mid).await?;
+                info!(
+                    context,
+                    "Message is a Pre-Message (post_msg_exists:{post_msg_exists})."
+                );
+                post_msg_exists
+                // TODO find out if trashing affects multi device usage?
+            }
+        }
     } else if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
     {
@@ -1909,6 +1946,7 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
+    handle_post_message(context, mime_parser, from_id).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
@@ -1992,6 +2030,14 @@ async fn add_parts(
             }
         };
 
+        if let Some(mimeparser::PreMessageMode::PreMessage {
+            metadata: Some(metadata),
+            ..
+        }) = &mime_parser.pre_message
+        {
+            param.apply_from_pre_msg_metadata(metadata);
+        };
+
         // If you change which information is skipped if the message is trashed,
         // also change `MsgId::trash()` and `delete_expired_messages()`
         let trash = chat_id.is_trash() || (is_location_kml && part_is_empty && !save_mime_modified);
@@ -2035,14 +2081,20 @@ RETURNING id
 "#)?;
                 let row_id: MsgId = stmt.query_row(params![
                     replace_msg_id,
-                    rfc724_mid_orig,
+                    if let Some(mimeparser::PreMessageMode::PreMessage {post_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
+                        post_msg_rfc724_mid
+                    } else { rfc724_mid_orig },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },
                     sort_timestamp,
                     if trash { 0 } else { mime_parser.timestamp_sent },
                     if trash { 0 } else { mime_parser.timestamp_rcvd },
-                    if trash { Viewtype::Unknown } else { typ },
+                    if trash {
+                        Viewtype::Unknown
+                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                        Viewtype::Text
+                    } else { typ },
                     if trash { MessageState::Undefined } else { state },
                     if trash { MessengerMessage::No } else { is_dc_message },
                     if trash || hidden { "" } else { msg },
@@ -2054,7 +2106,11 @@ RETURNING id
                         param.to_string()
                     },
                     !trash && hidden,
-                    if trash { 0 } else { part.bytes as isize },
+                    if trash {
+                        0
+                    } else {
+                        part.bytes as isize
+                    },
                     if save_mime_modified && !(trash || hidden) {
                         mime_headers.clone()
                     } else {
@@ -2070,6 +2126,8 @@ RETURNING id
                         DownloadState::Done
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
+                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
@@ -2259,6 +2317,82 @@ async fn handle_edit_delete(
             warn!(context, "Delete message: Not encrypted.");
         }
     }
+    Ok(())
+}
+
+async fn handle_post_message(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    from_id: ContactId,
+) -> Result<()> {
+    if let Some(mimeparser::PreMessageMode::PostMessage) = &mime_parser.pre_message {
+        // if Pre-Message exist, replace attachment
+        // only replacing attachment ensures that doesn't overwrite the text if it was edited before.
+        let rfc724_mid = mime_parser
+            .get_rfc724_mid()
+            .context("expected Post-Message to have a message id")?;
+
+        let Some(msg_id) = message::rfc724_mid_exists(context, &rfc724_mid).await? else {
+            warn!(
+                context,
+                "Download Post-Message: Database entry does not exist."
+            );
+            return Ok(());
+        };
+        let Some(original_msg) = Message::load_from_db_optional(context, msg_id).await? else {
+            // else: message is processed like a normal message
+            warn!(
+                context,
+                "Download Post-Message: pre message was not downloaded, yet so treat as normal message"
+            );
+            return Ok(());
+        };
+
+        if original_msg.from_id != from_id {
+            warn!(context, "Download Post-Message: Bad sender.");
+            return Ok(());
+        }
+        if let Some(part) = mime_parser.parts.first() {
+            if !part.typ.has_file() {
+                warn!(
+                    context,
+                    "Download Post-Message: First mime part's message-viewtype has no file"
+                );
+                return Ok(());
+            }
+
+            let edit_msg_showpadlock = part
+                .param
+                .get_bool(Param::GuaranteeE2ee)
+                .unwrap_or_default();
+
+            if edit_msg_showpadlock || !original_msg.get_showpadlock() {
+                let mut new_params = original_msg.param.clone();
+                new_params
+                    .merge_in_from_params(part.param.clone())
+                    .remove(Param::PostMessageFileBytes)
+                    .remove(Param::PostMessageViewtype);
+                context
+                        .sql
+                        .execute(
+                            "UPDATE msgs SET param=?, type=?, bytes=?, error=?, download_state=? WHERE id=?",
+                            (
+                                new_params.to_string(),
+                                part.typ,
+                                part.bytes as isize,
+                                part.error.as_deref().unwrap_or_default(),
+                                DownloadState::Done as u32,
+                                original_msg.id,
+                            ),
+                        )
+                        .await?;
+                context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
+            } else {
+                warn!(context, "Download Post-Message: Not encrypted.");
+            }
+        }
+    }
+
     Ok(())
 }
 
