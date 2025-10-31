@@ -104,15 +104,19 @@ pub enum HeaderDef {
     ChatBroadcastSecret,
     /// A message with a large attachment is split into two MIME messages:
     /// A pre-message, which contains everything but the attachment,
-    /// and a full-message.
-    /// The pre-message gets a `Chat-Full-Message-Id` header
-    /// referencing the full-message's rfc724_mid.
-    ChatFullMessageId,
+    /// and a Post-Message.
+    /// The Pre-Message gets a `Chat-Post-Message-Id` header
+    /// referencing the Post-Message's rfc724_mid.
+    ChatPostMessageId,
 
-    /// This message is preceded by a pre-message
+    /// Announce Post-Message metadata in a Pre-Message.
+    /// contains serialized PreMsgMetadata struct
+    ChatPostMessageMetadata,
+
+    /// This message is preceded by a Pre-Message
     /// and thus this message can be skipped while fetching messages.
     /// This is a cleartext / unproteced header.
-    ChatIsFullMessage,
+    ChatIsPostMessage,
 
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
