@@ -1354,6 +1354,33 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     inc_and_check(&mut migration_version, 138)?;
     if dbversion < migration_version {
         sql.execute_migration(
+            "CREATE TABLE new_imap (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+transport_id INTEGER NOT NULL, -- ID of the transport in the `transports` table.
+rfc724_mid TEXT NOT NULL, -- Message-ID header
+folder TEXT NOT NULL, -- IMAP folder
+target TEXT NOT NULL, -- Destination folder, empty to delete.
+uid INTEGER NOT NULL, -- UID
+uidvalidity INTEGER NOT NULL,
+UNIQUE (transport_id, folder, uid, uidvalidity)
+) STRICT;
+
+INSERT OR IGNORE INTO new_imap SELECT
+  id, 1, rfc724_mid, folder, target, uid, uidvalidity
+FROM imap;
+DROP TABLE imap;
+ALTER TABLE new_imap RENAME TO imap;
+CREATE INDEX imap_folder ON imap(folder);
+CREATE INDEX imap_messageid ON imap(rfc724_mid);
+",
+            migration_version,
+        )
+        .await?;
+    }
+
+    inc_and_check(&mut migration_version, 139)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
             "CREATE TABLE broadcast_secrets(
                 chat_id INTEGER PRIMARY KEY NOT NULL,
                 secret TEXT NOT NULL
