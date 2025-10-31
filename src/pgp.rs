@@ -166,6 +166,7 @@ pub async fn pk_encrypt(
     public_keys_for_encryption: Vec<SignedPublicKey>,
     private_key_for_signing: Option<SignedSecretKey>,
     compress: bool,
+    anonymous_recipients: bool,
 ) -> Result<String> {
     Handle::current()
         .spawn_blocking(move || {
@@ -178,7 +179,11 @@ pub async fn pk_encrypt(
             let msg = MessageBuilder::from_bytes("", plain);
             let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
             for pkey in pkeys {
-                msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
+                if anonymous_recipients {
+                    msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
+                } else {
+                    msg.encrypt_to_key(&mut rng, &pkey)?;
+                }
             }
 
             if let Some(ref skey) = private_key_for_signing {
@@ -434,6 +439,7 @@ mod tests {
 
     /// A ciphertext encrypted to Alice & Bob, signed by Alice.
     async fn ctext_signed() -> &'static String {
+        let anonymous_recipients = true;
         CTEXT_SIGNED
             .get_or_init(|| async {
                 let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
@@ -444,6 +450,7 @@ mod tests {
                     keyring,
                     Some(KEYS.alice_secret.clone()),
                     compress,
+                    anonymous_recipients,
                 )
                 .await
                 .unwrap()
@@ -453,14 +460,21 @@ mod tests {
 
     /// A ciphertext encrypted to Alice & Bob, not signed.
     async fn ctext_unsigned() -> &'static String {
+        let anonymous_recipients = true;
         CTEXT_UNSIGNED
             .get_or_init(|| async {
                 let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
                 let compress = true;
 
-                pk_encrypt(CLEARTEXT.to_vec(), keyring, None, compress)
-                    .await
-                    .unwrap()
+                pk_encrypt(
+                    CLEARTEXT.to_vec(),
+                    keyring,
+                    None,
+                    compress,
+                    anonymous_recipients,
+                )
+                .await
+                .unwrap()
             })
             .await
     }
