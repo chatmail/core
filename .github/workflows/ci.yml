@@ -20,7 +20,7 @@ permissions: {}
 
 env:
   RUSTFLAGS: -Dwarnings
-  RUST_VERSION: 1.90.0
+  RUST_VERSION: 1.91.0
 
   # Minimum Supported Rust Version
   MSRV: 1.85.0
