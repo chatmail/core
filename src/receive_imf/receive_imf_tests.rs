@@ -2709,17 +2709,19 @@ async fn test_gmx_forwarded_msg() -> Result<()> {
     Ok(())
 }
 
-/// Tests that user is notified about new incoming contact requests.
+/// Tests that user is notified about new incoming contact requests,
+/// but not about additional messages arriving in the contact request chat.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_incoming_contact_request() -> Result<()> {
-    let t = TestContext::new_alice().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    receive_imf(&t, MSGRMSG, false).await?;
-    let msg = t.get_last_msg().await;
-    let chat = chat::Chat::load_from_db(&t, msg.chat_id).await?;
+    let msg = tcm.send_recv(alice, bob, "Hello!").await;
+    let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
     assert!(chat.is_contact_request());
 
-    let event = t
+    let event = bob
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingMsg { .. }))
         .await;
@@ -2727,10 +2729,39 @@ async fn test_incoming_contact_request() -> Result<()> {
         EventType::IncomingMsg { chat_id, msg_id } => {
             assert_eq!(msg.chat_id, chat_id);
             assert_eq!(msg.id, msg_id);
-            Ok(())
         }
         _ => unreachable!(),
     }
+
+    // Bob ignores contact request.
+    // The second and third message does not result in notification.
+    for text in ["Hello!!??", "Hello!!!!????"] {
+        let msg = tcm.send_recv(alice, bob, text).await;
+
+        // There are only `MsgsChanged` events for each message,
+        // but no `IncomingMsg` before or after.
+        let event = bob
+            .evtracker
+            .get_matching(|evt| {
+                matches!(
+                    evt,
+                    EventType::MsgsChanged { .. } | EventType::IncomingMsg { .. }
+                )
+            })
+            .await;
+        match event {
+            EventType::MsgsChanged { chat_id, msg_id } => {
+                assert_eq!(msg.chat_id, chat_id);
+                assert_eq!(msg.id, msg_id);
+
+                let msg = Message::load_from_db(bob, msg_id).await?;
+                assert_eq!(msg.text, text);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    Ok(())
 }
 
 async fn get_parent_message(

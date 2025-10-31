@@ -381,20 +381,16 @@ impl rusqlite::types::FromSql for MsgId {
     ToSql,
     Serialize,
     Deserialize,
+    Default,
 )]
 #[repr(u8)]
 pub(crate) enum MessengerMessage {
+    #[default]
     No = 0,
     Yes = 1,
 
     /// No, but reply to messenger message.
     Reply = 2,
-}
-
-impl Default for MessengerMessage {
-    fn default() -> Self {
-        Self::No
-    }
 }
 
 /// An object representing a single message in memory.

@@ -460,7 +460,7 @@ def test_forward_own_message(acfactory, lp):
 
 def test_resend_message(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
-    chat1 = ac1.create_chat(ac2)
+    chat1 = acfactory.get_accepted_chat(ac1, ac2)
 
     lp.sec("ac1: send message to ac2")
     chat1.send_text("message")

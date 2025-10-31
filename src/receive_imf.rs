@@ -719,7 +719,9 @@ pub(crate) async fn receive_imf_inner(
         mark_recipients_as_verified(context, from_id, &mime_parser).await?;
     }
 
+    let is_old_contact_request;
     let received_msg = if let Some(received_msg) = received_msg {
+        is_old_contact_request = false;
         received_msg
     } else {
         let is_dc_message = if mime_parser.has_chat_version() {
@@ -758,9 +760,9 @@ pub(crate) async fn receive_imf_inner(
             to_ids.first().copied().flatten().unwrap_or(ContactId::SELF)
         };
 
-        let (chat_id, chat_id_blocked) = do_chat_assignment(
+        let (chat_id, chat_id_blocked, is_created) = do_chat_assignment(
             context,
-            chat_assignment,
+            &chat_assignment,
             from_id,
             &to_ids,
             &past_ids,
@@ -771,6 +773,7 @@ pub(crate) async fn receive_imf_inner(
             parent_message,
         )
         .await?;
+        is_old_contact_request = chat_id_blocked == Blocked::Request && !is_created;
 
         // Add parts
         add_parts(
@@ -988,8 +991,9 @@ pub(crate) async fn receive_imf_inner(
         let fresh = received_msg.state == MessageState::InFresh
             && mime_parser.is_system_message != SystemMessage::CallAccepted
             && mime_parser.is_system_message != SystemMessage::CallEnded;
+        let important = mime_parser.incoming && fresh && !is_old_contact_request;
         for msg_id in &received_msg.msg_ids {
-            chat_id.emit_msg_event(context, *msg_id, mime_parser.incoming && fresh);
+            chat_id.emit_msg_event(context, *msg_id, important);
         }
     }
     context.new_msgs_notify.notify_one();
@@ -1283,10 +1287,15 @@ async fn decide_chat_assignment(
 /// Assigns the message to a chat.
 ///
 /// Creates a new chat if necessary.
+///
+/// Returns the chat ID,
+/// whether it is blocked
+/// and if the chat was created by this function
+/// (as opposed to being looked up among existing chats).
 #[expect(clippy::too_many_arguments)]
 async fn do_chat_assignment(
     context: &Context,
-    chat_assignment: ChatAssignment,
+    chat_assignment: &ChatAssignment,
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
@@ -1295,11 +1304,12 @@ async fn do_chat_assignment(
     mime_parser: &mut MimeMessage,
     is_partial_download: Option<u32>,
     parent_message: Option<Message>,
-) -> Result<(ChatId, Blocked)> {
+) -> Result<(ChatId, Blocked, bool)> {
     let is_bot = context.get_config_bool(Config::Bot).await?;
 
     let mut chat_id = None;
     let mut chat_id_blocked = Blocked::Not;
+    let mut chat_created = false;
 
     if mime_parser.incoming {
         let test_normal_chat = ChatIdBlocked::lookup_by_contact(context, from_id).await?;
@@ -1354,12 +1364,13 @@ async fn do_chat_assignment(
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
+                        chat_created = true;
                     }
                 }
             }
             ChatAssignment::MailingListOrBroadcast => {
                 if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                    if let Some((new_chat_id, new_chat_id_blocked)) =
+                    if let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) =
                         create_or_lookup_mailinglist_or_broadcast(
                             context,
                             allow_creation,
@@ -1372,6 +1383,7 @@ async fn do_chat_assignment(
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
+                        chat_created = new_chat_created;
 
                         apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
                     }
@@ -1385,18 +1397,20 @@ async fn do_chat_assignment(
                 chat_id_blocked = *new_chat_id_blocked;
             }
             ChatAssignment::AdHocGroup => {
-                if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
-                    context,
-                    mime_parser,
-                    to_ids,
-                    allow_creation || test_normal_chat.is_some(),
-                    create_blocked,
-                    is_partial_download.is_some(),
-                )
-                .await?
+                if let Some((new_chat_id, new_chat_id_blocked, new_created)) =
+                    lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        allow_creation || test_normal_chat.is_some(),
+                        create_blocked,
+                        is_partial_download.is_some(),
+                    )
+                    .await?
                 {
                     chat_id = Some(new_chat_id);
                     chat_id_blocked = new_chat_id_blocked;
+                    chat_created = new_created;
                 }
             }
             ChatAssignment::OneOneChat => {}
@@ -1432,6 +1446,7 @@ async fn do_chat_assignment(
                     .context("Failed to get (new) chat for contact")?;
                 chat_id = Some(chat.id);
                 chat_id_blocked = chat.blocked;
+                chat_created = true;
             }
 
             if let Some(chat_id) = chat_id {
@@ -1484,6 +1499,7 @@ async fn do_chat_assignment(
                     {
                         chat_id = Some(new_chat_id);
                         chat_id_blocked = new_chat_id_blocked;
+                        chat_created = true;
                     }
                 }
             }
@@ -1529,18 +1545,20 @@ async fn do_chat_assignment(
                 }
             }
             ChatAssignment::AdHocGroup => {
-                if let Some((new_chat_id, new_chat_id_blocked)) = lookup_or_create_adhoc_group(
-                    context,
-                    mime_parser,
-                    to_ids,
-                    allow_creation,
-                    Blocked::Not,
-                    is_partial_download.is_some(),
-                )
-                .await?
+                if let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) =
+                    lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        allow_creation,
+                        Blocked::Not,
+                        is_partial_download.is_some(),
+                    )
+                    .await?
                 {
                     chat_id = Some(new_chat_id);
                     chat_id_blocked = new_chat_id_blocked;
+                    chat_created = new_chat_created;
                 }
             }
             ChatAssignment::OneOneChat => {}
@@ -1560,6 +1578,7 @@ async fn do_chat_assignment(
                     let chat = ChatIdBlocked::get_for_contact(context, to_id, Blocked::Not).await?;
                     chat_id = Some(chat.id);
                     chat_id_blocked = chat.blocked;
+                    chat_created = true;
                 }
             }
             if chat_id.is_none() && mime_parser.has_chat_version() {
@@ -1597,7 +1616,7 @@ async fn do_chat_assignment(
         info!(context, "No chat id for message (TRASH).");
         DC_CHAT_ID_TRASH
     });
-    Ok((chat_id, chat_id_blocked))
+    Ok((chat_id, chat_id_blocked, chat_created))
 }
 
 /// Creates a `ReceivedMsg` from given parts which might consist of
@@ -2436,7 +2455,7 @@ async fn lookup_or_create_adhoc_group(
     allow_creation: bool,
     create_blocked: Blocked,
     is_partial_download: bool,
-) -> Result<Option<(ChatId, Blocked)>> {
+) -> Result<Option<(ChatId, Blocked, bool)>> {
     // Partial download may be an encrypted message with protected Subject header. We do not want to
     // create a group with "..." or "Encrypted message" as a subject. The same is for undecipherable
     // messages. Instead, assign the message to 1:1 chat with the sender.
@@ -2526,12 +2545,12 @@ async fn lookup_or_create_adhoc_group(
             context,
             "Assigning message to ad-hoc group {chat_id} with matching name and members."
         );
-        return Ok(Some((chat_id, blocked)));
+        return Ok(Some((chat_id, blocked, false)));
     }
     if !allow_creation {
         return Ok(None);
     }
-    create_adhoc_group(
+    Ok(create_adhoc_group(
         context,
         mime_parser,
         create_blocked,
@@ -2540,7 +2559,8 @@ async fn lookup_or_create_adhoc_group(
         &grpname,
     )
     .await
-    .context("Could not create ad hoc group")
+    .context("Could not create ad hoc group")?
+    .map(|(chat_id, blocked)| (chat_id, blocked, true)))
 }
 
 /// If this method returns true, the message shall be assigned to the 1:1 chat with the sender.
@@ -3179,6 +3199,11 @@ fn mailinglist_header_listid(list_id_header: &str) -> Result<String> {
 ///
 /// `mime_parser` is the corresponding message
 /// and is used to figure out the mailing list name from different header fields.
+///
+/// Returns the chat ID,
+/// whether it is blocked
+/// and if the chat was created by this function
+/// (as opposed to being looked up among existing chats).
 async fn create_or_lookup_mailinglist_or_broadcast(
     context: &Context,
     allow_creation: bool,
@@ -3186,11 +3211,11 @@ async fn create_or_lookup_mailinglist_or_broadcast(
     list_id_header: &str,
     from_id: ContactId,
     mime_parser: &MimeMessage,
-) -> Result<Option<(ChatId, Blocked)>> {
+) -> Result<Option<(ChatId, Blocked, bool)>> {
     let listid = mailinglist_header_listid(list_id_header)?;
 
     if let Some((chat_id, blocked)) = chat::get_chat_id_by_grpid(context, &listid).await? {
-        return Ok(Some((chat_id, blocked)));
+        return Ok(Some((chat_id, blocked, false)));
     }
 
     let chattype = if mime_parser.was_encrypted() {
@@ -3246,7 +3271,7 @@ async fn create_or_lookup_mailinglist_or_broadcast(
         chatlist_events::emit_chatlist_changed(context);
         chatlist_events::emit_chatlist_item_changed(context, chat_id);
 
-        Ok(Some((chat_id, create_blocked)))
+        Ok(Some((chat_id, create_blocked, true)))
     } else {
         info!(context, "Creating list forbidden by caller.");
         Ok(None)

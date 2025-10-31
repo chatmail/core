@@ -88,9 +88,10 @@ use crate::tools::{SystemTime, duration_to_str, time};
 use crate::{location, stats};
 
 /// Ephemeral timer value.
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Serialize, Deserialize, Default)]
 pub enum Timer {
     /// Timer is disabled.
+    #[default]
     Disabled,
 
     /// Timer is enabled.
@@ -122,12 +123,6 @@ impl Timer {
         } else {
             Self::Enabled { duration }
         }
-    }
-}
-
-impl Default for Timer {
-    fn default() -> Self {
-        Self::Disabled
     }
 }
 

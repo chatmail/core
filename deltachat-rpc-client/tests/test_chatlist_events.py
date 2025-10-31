@@ -169,6 +169,8 @@ def test_imap_sync_seen_msgs(acfactory: ACFactory) -> None:
     """
     alice, alice_second_device, bob, alice_chat_bob = get_multi_account_test_setup(acfactory)
 
+    bob.create_chat(alice)
+
     alice_chat_bob.send_text("hello")
 
     msg = bob.wait_for_incoming_msg()
