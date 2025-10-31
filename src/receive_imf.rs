@@ -895,7 +895,7 @@ pub(crate) async fn receive_imf_inner(
     let delete_server_after = context.get_config_delete_server_after().await?;
 
     if !received_msg.msg_ids.is_empty() {
-        let target = if received_msg.needs_delete_job || (delete_server_after == Some(0)) {
+        let target = if received_msg.needs_delete_job || delete_server_after == Some(0) {
             Some(context.get_delete_msgs_target().await?)
         } else {
             None
