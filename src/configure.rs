@@ -198,6 +198,11 @@ impl Context {
         Ok(transports)
     }
 
+    /// Returns the number of configured transports.
+    pub async fn count_transports(&self) -> Result<usize> {
+        self.sql.count("SELECT COUNT(*) FROM transports", ()).await
+    }
+
     /// Removes the transport with the specified email address
     /// (i.e. [EnteredLoginParam::addr]).
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
