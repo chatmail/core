@@ -7,6 +7,12 @@ def test_add_second_address(acfactory) -> None:
     account = acfactory.new_configured_account()
     assert len(account.list_transports()) == 1
 
+    # When the first transport is created,
+    # mvbox_move and only_fetch_mvbox should be disabled.
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("only_fetch_mvbox") == "0"
+    assert account.get_config("show_emails") == "2"
+
     qr = acfactory.get_account_qr()
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 2
@@ -23,6 +29,12 @@ def test_add_second_address(acfactory) -> None:
 
     account.delete_transport(second_addr)
     assert len(account.list_transports()) == 2
+
+    # Enabling mvbox_move or only_fetch_mvbox
+    # is not allowed when multi-transport is enabled.
+    for option in ["mvbox_move", "only_fetch_mvbox"]:
+        with pytest.raises(JsonRpcError):
+            account.set_config(option, "1")
 
 
 def test_change_address(acfactory) -> None:
