@@ -2427,12 +2427,13 @@ pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) 
 /// See <https://tools.ietf.org/html/rfc3501#section-2.3.1.1>
 /// This function is used to update our uid_next after fetching messages.
 pub(crate) async fn set_uid_next(context: &Context, folder: &str, uid_next: u32) -> Result<()> {
+    let transport_id = 1; // FIXME
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uid_next) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uid_next=excluded.uid_next",
-            (folder, uid_next),
+            "INSERT INTO imap_sync (transport_id, folder, uid_next) VALUES (?, ?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uid_next=excluded.uid_next",
+            (transport_id, folder, uid_next),
         )
         .await?;
     Ok(())
@@ -2456,12 +2457,13 @@ pub(crate) async fn set_uidvalidity(
     folder: &str,
     uidvalidity: u32,
 ) -> Result<()> {
+    let transport_id = 1;
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uidvalidity) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
-            (folder, uidvalidity),
+            "INSERT INTO imap_sync (transport_id, folder, uidvalidity) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
+            (transport_id, folder, uidvalidity),
         )
         .await?;
     Ok(())
@@ -2479,12 +2481,13 @@ async fn get_uidvalidity(context: &Context, folder: &str) -> Result<u32> {
 }
 
 pub(crate) async fn set_modseq(context: &Context, folder: &str, modseq: u64) -> Result<()> {
+    let transport_id = 1; // FIXME
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, modseq) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET modseq=excluded.modseq",
-            (folder, modseq),
+            "INSERT INTO imap_sync (transport_id, folder, modseq) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET modseq=excluded.modseq",
+            (transport_id, folder, modseq),
         )
         .await?;
     Ok(())
