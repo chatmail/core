@@ -659,15 +659,23 @@ impl Imap {
                 &_target
             };
 
+            let transport_id = 1; // FIXME
             context
                 .sql
                 .execute(
-                    "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                       VALUES         (?1,         ?2,     ?3,  ?4,          ?5)
-                       ON CONFLICT(folder, uid, uidvalidity)
+                    "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                       VALUES         (?,            ?,          ?,      ?,   ?,           ?)
+                       ON CONFLICT(transport_id, folder, uid, uidvalidity)
                        DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                      target=excluded.target",
-                    (&message_id, &folder, uid, uid_validity, target),
+                    (
+                        transport_id,
+                        &message_id,
+                        &folder,
+                        uid,
+                        uid_validity,
+                        target,
+                    ),
                 )
                 .await?;
 
@@ -896,6 +904,7 @@ impl Session {
             uid_validity = 0;
         }
 
+        let transport_id = 1; // FIXME
         // Write collected UIDs to SQLite database.
         context
             .sql
@@ -905,12 +914,12 @@ impl Session {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
                     transaction.execute(
-                        "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                         VALUES           (?1,         ?2,     ?3,  ?4,          ?5)
-                         ON CONFLICT(folder, uid, uidvalidity)
+                        "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                         VALUES           (?,            ?,          ?,      ?,   ?,           ?)
+                         ON CONFLICT(transport_id, folder, uid, uidvalidity)
                          DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                        target=excluded.target",
-                        (rfc724_mid, folder, uid, uid_validity, target),
+                        (transport_id, rfc724_mid, folder, uid, uid_validity, target),
                     )?;
                 }
                 Ok(())
