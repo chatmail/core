@@ -355,15 +355,13 @@ impl Context {
         //                              Get proxy state
         // =============================================================================================
 
-        if let Ok(true) = self
+        if self
             .get_config_bool(crate::config::Config::ProxyEnabled)
-            .await
+            .await?
         {
-            ret += &format!("<h3>Proxy Enabled</h3><ul>");
-            ret += &format!(
-                "<li>You are using a proxy. If you're having trouble connecting, try a different proxy.</li>"
-            );
-            ret += &format!("</ul>");
+            let proxy_enabled = stock_str::proxy_enabled(self).await;
+            let proxy_description = stock_str::proxy_description(self).await;
+            ret += &format!("<h3>{proxy_enabled}</h3><ul><li>{proxy_description}</li></ul>");
         }
 
         // =============================================================================================
