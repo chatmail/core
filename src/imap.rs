@@ -2261,11 +2261,16 @@ pub(crate) async fn prefetch_should_download(
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
-    if message::rfc724_mid_exists(context, message_id)
-        .await?
-        .is_some()
+    if let Some((.., seen)) = message::rfc724_mid_exists_ex(
+        context,
+        message_id,
+        "state>=16", // `InSeen`
+    )
+    .await?
     {
-        markseen_on_imap_table(context, message_id).await?;
+        if seen {
+            markseen_on_imap_table(context, message_id).await?;
+        }
         return Ok(false);
     }
 
@@ -2401,6 +2406,11 @@ async fn mark_seen_by_uid(
 /// Schedule marking the message as Seen on IMAP by adding all known IMAP messages corresponding to
 /// the given Message-ID to `imap_markseen` table.
 pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) -> Result<()> {
+    if !context.get_config_bool(Config::BccSelf).await?
+        || context.get_config_bool(Config::Bot).await?
+    {
+        return Ok(());
+    }
     context
         .sql
         .execute(
