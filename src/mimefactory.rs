@@ -1178,11 +1178,28 @@ impl MimeFactory {
             let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
             encryption_keyring.extend(encryption_keys.iter().map(|(_addr, key)| (*key).clone()));
 
+            // Do not anonymize OpenPGP recipients.
+            //
+            // This is disabled to avoid interoperability problems
+            // with old core versions <1.160.0 that do not support
+            // receiving messages with wildcard Key IDs:
+            // <https://github.com/chatmail/core/issues/7378>
+            //
+            // The option should be changed to true
+            // once new core versions are sufficiently deployed.
+            let anonymous_recipients = false;
+
             // XXX: additional newline is needed
             // to pass filtermail at
             // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>
             let encrypted = encrypt_helper
-                .encrypt(context, encryption_keyring, message, compress)
+                .encrypt(
+                    context,
+                    encryption_keyring,
+                    message,
+                    compress,
+                    anonymous_recipients,
+                )
                 .await?
                 + "\n";
 
