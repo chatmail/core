@@ -1651,7 +1651,7 @@ async fn add_parts(
             if chat.typ == Chattype::InBroadcast {
                 warn!(
                     context,
-                    "Not assigning msg '{rfc724_mid}' to broadcast {chat_id}: wrong sender"
+                    "Not assigning msg '{rfc724_mid}' to broadcast {chat_id}: wrong sender: {from_id}."
                 );
                 let direct_chat =
                     ChatIdBlocked::get_for_contact(context, from_id, Blocked::Request).await?;
