@@ -1242,6 +1242,26 @@ pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
     translated(context, StockMessage::ChatUnencryptedExplanation).await
 }
 
+impl Viewtype {
+    /// returns Localized name for message viewtype
+    pub async fn to_locale_string(&self, context: &Context) -> String {
+        match self {
+            Viewtype::Image => image(context).await,
+            Viewtype::Gif => gif(context).await,
+            Viewtype::Sticker => sticker(context).await,
+            Viewtype::Audio => audio(context).await,
+            Viewtype::Voice => voice_message(context).await,
+            Viewtype::Video => video(context).await,
+            Viewtype::File => file(context).await,
+            Viewtype::Webxdc => "Mini App".to_owned(), // TODO stock-string
+            Viewtype::Vcard => "Contact".to_owned(),   // TODO stock-string
+            // OPTIONAL TODO - would not be used right now,
+            // because this method is only used for metadata on large attachments
+            Viewtype::Unknown | Viewtype::Text | Viewtype::Call => self.to_string(),
+        }
+    }
+}
+
 impl Context {
     /// Set the stock string for the [StockMessage].
     ///
