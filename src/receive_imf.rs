@@ -1525,6 +1525,7 @@ async fn do_chat_assignment(
                             .get_header(HeaderDef::ChatBroadcastSecret)
                             .filter(|s| validate_broadcast_secret(s))
                         {
+                            chat_created = true;
                             chat_id = Some(
                                 chat::create_out_broadcast_ex(
                                     context,
