@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import Contact, EventType, Message, events
-from deltachat_rpc_client.const import DownloadState, MessageState
+from deltachat_rpc_client.const import MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
