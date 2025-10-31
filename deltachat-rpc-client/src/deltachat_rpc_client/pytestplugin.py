@@ -43,7 +43,6 @@ class ACFactory:
     @futuremethod
     def new_configured_account(self):
         """Create a new configured account."""
-        addr, password = self.get_credentials()
         account = self.get_unconfigured_account()
         domain = os.getenv("CHATMAIL_DOMAIN")
         yield account.add_transport_from_qr.future(f"dcaccount:{domain}")
