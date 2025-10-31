@@ -308,7 +308,7 @@ pub struct InnerContext {
 }
 
 /// The state of ongoing process.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum RunningState {
     /// Ongoing process is allocated.
     Running { cancel_sender: Sender<()> },
@@ -317,13 +317,8 @@ enum RunningState {
     ShallStop { request: tools::Time },
 
     /// There is no ongoing process, a new one can be allocated.
+    #[default]
     Stopped,
-}
-
-impl Default for RunningState {
-    fn default() -> Self {
-        Self::Stopped
-    }
 }
 
 /// Return some info about deltachat-core

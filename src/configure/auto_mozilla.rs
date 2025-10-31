@@ -28,19 +28,14 @@ struct MozAutoconfigure {
     pub outgoing_servers: Vec<Server>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum MozConfigTag {
+    #[default]
     Undefined,
     Hostname,
     Port,
     Sockettype,
     Username,
-}
-
-impl Default for MozConfigTag {
-    fn default() -> Self {
-        Self::Undefined
-    }
 }
 
 impl FromStr for MozConfigTag {
