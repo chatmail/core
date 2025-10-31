@@ -4,7 +4,7 @@ use std::env;
 use std::path::Path;
 use std::str::FromStr;
 
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use deltachat_contact_tools::{addr_cmp, sanitize_single_line};
 use serde::{Deserialize, Serialize};
@@ -708,6 +708,11 @@ impl Context {
     /// set to the default if there is one.
     pub async fn set_config(&self, key: Config, value: Option<&str>) -> Result<()> {
         Self::check_config(key, value)?;
+
+        let n_transports = self.count_transports().await?;
+        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
+            bail!("Cannot reconfigure {key} when multiple transports are configured");
+        }
 
         let _pause = match key.needs_io_restart() {
             true => self.scheduler.pause(self).await?,

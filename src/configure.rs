@@ -231,6 +231,15 @@ impl Context {
         info!(self, "Configure ...");
 
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
+        if old_addr.is_some() {
+            if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
+                bail!("Cannot use multi-transport with mvbox_move enabled.");
+            }
+            if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
+                bail!("Cannot use multi-transport with only_fetch_mvbox enabled.");
+            }
+        }
+
         let provider = configure(self, param).await?;
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
@@ -559,11 +568,8 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
         }
         true => ctx.get_config_bool(Config::IsChatmail).await?,
     };
-    if is_chatmail {
-        ctx.set_config(Config::MvboxMove, Some("0")).await?;
-        ctx.set_config(Config::OnlyFetchMvbox, None).await?;
-        ctx.set_config(Config::ShowEmails, None).await?;
-    }
+    ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
+    ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
 
     let create_mvbox = !is_chatmail;
     imap.configure_folders(ctx, &mut imap_session, create_mvbox)
