@@ -648,50 +648,6 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     assert list(reactions.reactions_by_contact.values())[0] == [react_str]
 
 
-@pytest.mark.parametrize("n_accounts", [3, 2])
-def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
-    download_limit = 300000
-
-    alice, *others = acfactory.get_online_accounts(n_accounts)
-    bob = others[0]
-
-    alice_group = alice.create_group("test group")
-    for account in others:
-        chat = account.create_chat(alice)
-        chat.send_text("Hello Alice!")
-        assert alice.get_message_by_id(alice.wait_for_incoming_msg_event().msg_id).get_snapshot().text == "Hello Alice!"
-
-        contact = alice.create_contact(account)
-        alice_group.add_contact(contact)
-
-    if n_accounts == 2:
-        bob_chat_alice = bob.create_chat(alice)
-    bob.set_config("download_limit", str(download_limit))
-
-    alice_group.send_text("hi")
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
-    assert snapshot.text == "hi"
-    bob_group = snapshot.chat
-
-    path = tmp_path / "large"
-    path.write_bytes(os.urandom(download_limit + 1))
-
-    for i in range(10):
-        logging.info("Sending message %s", i)
-        alice_group.send_file(str(path))
-        snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
-        assert snapshot.download_state == DownloadState.AVAILABLE
-        if n_accounts > 2:
-            assert snapshot.chat == bob_group
-        else:
-            # Group contains only Alice and Bob,
-            # so partially downloaded messages are
-            # hard to distinguish from private replies to group messages.
-            #
-            # Message may be a private reply, so we assign it to 1:1 chat with Alice.
-            assert snapshot.chat == bob_chat_alice
-
-
 def test_markseen_contact_request(acfactory):
     """
     Test that seen status is synchronized for contact request messages
