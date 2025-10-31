@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import os
 from typing import TYPE_CHECKING
 
 from deltachat_rpc_client import Account, EventType, const
