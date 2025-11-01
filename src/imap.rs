@@ -276,7 +276,7 @@ impl Imap {
         context: &Context,
         idle_interrupt_receiver: Receiver<()>,
     ) -> Result<Self> {
-        let param = ConfiguredLoginParam::load(context)
+        let (_transport_id, param) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
         let proxy_config = ProxyConfig::load(context).await?;
