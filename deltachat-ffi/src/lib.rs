@@ -28,7 +28,7 @@ use deltachat::contact::{Contact, ContactId, Origin};
 use deltachat::context::{Context, ContextBuilder};
 use deltachat::ephemeral::Timer as EphemeralTimer;
 use deltachat::imex::BackupProvider;
-use deltachat::key::preconfigure_keypair;
+use deltachat::key::{load_self_public_key, preconfigure_keypair};
 use deltachat::message::MsgId;
 use deltachat::qr_code_generator::{create_qr_svg, generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::stock_str::StockMessage;
@@ -4240,6 +4240,19 @@ pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32
         return 0;
     }
     let ffi_contact = &*contact;
+    let ctx = &*ffi_contact.context;
+    if ffi_contact.contact.id == ContactId::SELF
+        && block_on(async move {
+            // We don't want any UI displaying gray self-color until own key is generated.
+            load_self_public_key(ctx)
+                .await
+                .context("load_self_public_key")
+                .log_err(ctx)
+                .is_ok() as libc::c_int
+        }) == 0
+    {
+        return 0;
+    }
     ffi_contact.contact.get_color()
 }
 

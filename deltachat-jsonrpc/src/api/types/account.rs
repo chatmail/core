@@ -1,6 +1,7 @@
 use anyhow::Result;
 use deltachat::config::Config;
 use deltachat::contact::{Contact, ContactId};
+use deltachat::key;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
@@ -28,6 +29,8 @@ pub enum Account {
 impl Account {
     pub async fn from_context(ctx: &deltachat::context::Context, id: u32) -> Result<Self> {
         if ctx.is_configured().await? {
+            // We don't want any UI displaying gray self-color until own key is generated.
+            key::load_self_public_key(ctx).await?;
             let display_name = ctx.get_config(Config::Displayname).await?;
             let addr = ctx.get_config(Config::Addr).await?;
             let profile_image = ctx.get_config(Config::Selfavatar).await?;
