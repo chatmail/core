@@ -145,7 +145,7 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
 /// Loads own public key.
 ///
 /// If no key is generated yet, generates a new one.
-pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPublicKey> {
+pub async fn load_self_public_key(context: &Context) -> Result<SignedPublicKey> {
     match load_self_public_key_opt(context).await? {
         Some(public_key) => Ok(public_key),
         None => {
