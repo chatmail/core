@@ -89,7 +89,7 @@ impl Smtp {
         }
 
         self.connectivity.set_connecting(context);
-        let lp = ConfiguredLoginParam::load(context)
+        let (_transport_id, lp) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
         let proxy_config = ProxyConfig::load(context).await?;
