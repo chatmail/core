@@ -71,6 +71,11 @@ const BODY_PARTIAL: &str = "(FLAGS RFC822.SIZE BODY.PEEK[HEADER])";
 
 #[derive(Debug)]
 pub(crate) struct Imap {
+    /// ID of the transport configuration in the `transports` table.
+    ///
+    /// This ID is used to namespace records in the `imap` table.
+    transport_id: u32,
+
     pub(crate) idle_interrupt_receiver: Receiver<()>,
 
     /// Email address.
@@ -251,7 +256,9 @@ impl Imap {
     /// Creates new disconnected IMAP client using the specific login parameters.
     ///
     /// `addr` is used to renew token if OAuth2 authentication is used.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
+        transport_id: u32,
         lp: Vec<ConfiguredServerLoginParam>,
         password: String,
         proxy_config: Option<ProxyConfig>,
@@ -262,6 +269,7 @@ impl Imap {
     ) -> Self {
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
         Imap {
+            transport_id,
             idle_interrupt_receiver,
             addr: addr.to_string(),
             lp,
@@ -285,12 +293,13 @@ impl Imap {
         context: &Context,
         idle_interrupt_receiver: Receiver<()>,
     ) -> Result<Self> {
-        let (_transport_id, param) = ConfiguredLoginParam::load(context)
+        let (transport_id, param) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
         let proxy_config = ProxyConfig::load(context).await?;
         let strict_tls = param.strict_tls(proxy_config.is_some());
         let imap = Self::new(
+            transport_id,
             param.imap.clone(),
             param.imap_password.clone(),
             proxy_config,
@@ -659,7 +668,6 @@ impl Imap {
                 &_target
             };
 
-            let transport_id = 1; // FIXME
             context
                 .sql
                 .execute(
@@ -669,7 +677,7 @@ impl Imap {
                        DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                      target=excluded.target",
                     (
-                        transport_id,
+                        self.transport_id,
                         &message_id,
                         &folder,
                         uid,
