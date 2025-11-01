@@ -806,9 +806,10 @@ impl Context {
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
         let l = EnteredLoginParam::load(self).await?;
-        let l2 = ConfiguredLoginParam::load(self)
-            .await?
-            .map_or_else(|| "Not configured".to_string(), |param| param.to_string());
+        let l2 = ConfiguredLoginParam::load(self).await?.map_or_else(
+            || "Not configured".to_string(),
+            |(_transport_id, param)| param.to_string(),
+        );
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
         let chats = get_chat_cnt(self).await?;
         let unblocked_msgs = message::get_unblocked_msg_cnt(self).await;
