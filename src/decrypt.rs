@@ -179,7 +179,7 @@ mod tests {
         receive_imf(&bob, attachment_mime, false).await?;
         let msg = bob.get_last_msg().await;
         // Subject should be prepended because the attachment doesn't have "Chat-Version".
-        assert_eq!(msg.text, "Hello, Bob! – Hello from Thunderbird!");
+        assert_eq!(msg.text, "Hello, Bob! — Hello from Thunderbird!");
 
         Ok(())
     }

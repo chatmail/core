@@ -483,7 +483,7 @@ async fn test_escaped_recipients() {
         .await
         .unwrap();
     assert_eq!(msg.is_dc_message, MessengerMessage::No);
-    assert_eq!(msg.text, "foo – hello");
+    assert_eq!(msg.text, "foo — hello");
 }
 
 /// Tests that `Cc` header updates display name
@@ -534,7 +534,7 @@ async fn test_parse_ndn_tiscali() {
             "shenauithz@testrun.org",
             "Mr.un2NYERi1RM.lbQ5F9q-QyJ@tiscali.it",
             include_bytes!("../../test-data/message/tiscali_ndn.eml"),
-            Some("Delivery status notification –       This is an automatically generated Delivery Status Notification.      \n\nDelivery to the following recipients was aborted after 2 second(s):\n\n  * shenauithz@testrun.org"),
+            Some("Delivery status notification —       This is an automatically generated Delivery Status Notification.      \n\nDelivery to the following recipients was aborted after 2 second(s):\n\n  * shenauithz@testrun.org"),
         )
         .await;
 }
@@ -546,7 +546,7 @@ async fn test_parse_ndn_testrun() {
             "hcksocnsofoejx@five.chat",
             "Mr.A7pTA5IgrUA.q4bP41vAJOp@testrun.org",
             include_bytes!("../../test-data/message/testrun_ndn.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)"),
+            Some("Undelivered Mail Returned to Sender — This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)"),
         )
         .await;
 }
@@ -558,7 +558,7 @@ async fn test_parse_ndn_yahoo() {
             "haeclirth.sinoenrat@yahoo.com",
             "1680295672.3657931.1591783872936@mail.yahoo.com",
             include_bytes!("../../test-data/message/yahoo_ndn.eml"),
-            Some("Failure Notice – Sorry, we were unable to deliver your message to the following address.\n\n<haeclirth.sinoenrat@yahoo.com>:\n554: delivery error: dd Not a valid recipient - atlas117.free.mail.ne1.yahoo.com [...]"),
+            Some("Failure Notice — Sorry, we were unable to deliver your message to the following address.\n\n<haeclirth.sinoenrat@yahoo.com>:\n554: delivery error: dd Not a valid recipient - atlas117.free.mail.ne1.yahoo.com [...]"),
         )
         .await;
 }
@@ -570,7 +570,7 @@ async fn test_parse_ndn_gmail() {
             "assidhfaaspocwaeofi@gmail.com",
             "CABXKi8zruXJc_6e4Dr087H5wE7sLp+u250o0N2q5DdjF_r-8wg@mail.gmail.com",
             include_bytes!("../../test-data/message/gmail_ndn.eml"),
-            Some("Delivery Status Notification (Failure) – ** Die Adresse wurde nicht gefunden **\n\nIhre Nachricht wurde nicht an assidhfaaspocwaeofi@gmail.com zugestellt, weil die Adresse nicht gefunden wurde oder keine E-Mails empfangen kann.\n\nHier erfahren Sie mehr: https://support.google.com/mail/?p=NoSuchUser\n\nAntwort:\n\n550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address for typos or unnecessary spaces. Learn more at https://support.google.com/mail/?p=NoSuchUser i18sor6261697wrs.38 - gsmtp"),
+            Some("Delivery Status Notification (Failure) — ** Die Adresse wurde nicht gefunden **\n\nIhre Nachricht wurde nicht an assidhfaaspocwaeofi@gmail.com zugestellt, weil die Adresse nicht gefunden wurde oder keine E-Mails empfangen kann.\n\nHier erfahren Sie mehr: https://support.google.com/mail/?p=NoSuchUser\n\nAntwort:\n\n550 5.1.1 The email account that you tried to reach does not exist. Please try double-checking the recipient\'s email address for typos or unnecessary spaces. Learn more at https://support.google.com/mail/?p=NoSuchUser i18sor6261697wrs.38 - gsmtp"),
         )
         .await;
 }
@@ -582,7 +582,7 @@ async fn test_parse_ndn_gmx() {
             "snaerituhaeirns@gmail.com",
             "9c9c2a32-056b-3592-c372-d7e8f0bd4bc2@gmx.de",
             include_bytes!("../../test-data/message/gmx_ndn.eml"),
-            Some("Mail delivery failed: returning message to sender – This message was created automatically by mail delivery software.\n\nA message that you sent could not be delivered to one or more of\nits recipients. This is a permanent error. The following address(es)\nfailed:\n\nsnaerituhaeirns@gmail.com:\nSMTP error from remote server for RCPT TO command, host: gmail-smtp-in.l.google.com (66.102.1.27) reason: 550-5.1.1 The email account that you tried to reach does not exist. Please\n try\n550-5.1.1 double-checking the recipient\'s email address for typos or\n550-5.1.1 unnecessary spaces. Learn more at\n550 5.1.1  https://support.google.com/mail/?p=NoSuchUser f6si2517766wmc.21\n9 - gsmtp [...]"),
+            Some("Mail delivery failed: returning message to sender — This message was created automatically by mail delivery software.\n\nA message that you sent could not be delivered to one or more of\nits recipients. This is a permanent error. The following address(es)\nfailed:\n\nsnaerituhaeirns@gmail.com:\nSMTP error from remote server for RCPT TO command, host: gmail-smtp-in.l.google.com (66.102.1.27) reason: 550-5.1.1 The email account that you tried to reach does not exist. Please\n try\n550-5.1.1 double-checking the recipient\'s email address for typos or\n550-5.1.1 unnecessary spaces. Learn more at\n550 5.1.1  https://support.google.com/mail/?p=NoSuchUser f6si2517766wmc.21\n9 - gsmtp [...]"),
         )
         .await;
 }
@@ -594,7 +594,7 @@ async fn test_parse_ndn_posteo() {
             "hanerthaertidiuea@gmx.de",
             "04422840-f884-3e37-5778-8192fe22d8e1@posteo.de",
             include_bytes!("../../test-data/message/posteo_ndn.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host mout01.posteo.de.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)"),
+            Some("Undelivered Mail Returned to Sender — This is the mail system at host mout01.posteo.de.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)"),
         )
         .await;
 }
@@ -606,7 +606,7 @@ async fn test_parse_ndn_testrun_2() {
             "bob@example.org",
             "Mr.5xqflwt0YFv.IXDFfHauvWx@testrun.org",
             include_bytes!("../../test-data/message/testrun_ndn_2.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.org>: Host or domain name not found. Name service error for\n    name=echedelyr.tk type=AAAA: Host not found"),
+            Some("Undelivered Mail Returned to Sender — This is the mail system at host hq5.merlinux.eu.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.org>: Host or domain name not found. Name service error for\n    name=echedelyr.tk type=AAAA: Host not found"),
         )
         .await;
 }
@@ -619,7 +619,7 @@ async fn test_parse_ndn_with_attachment() {
             "bob@example.net",
             "Mr.I6Da6dXcTel.TroC5J3uSDH@example.org",
             include_bytes!("../../test-data/message/ndn_with_attachment.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host relay01.example.org.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.net>: host mx2.example.net[80.241.60.215] said: 552 5.2.2\n    <bob@example.net>: Recipient address rejected: Mailbox quota exceeded (in\n    reply to RCPT TO command)\n\n<bob2@example.net>: host mx1.example.net[80.241.60.212] said: 552 5.2.2\n    <bob2@example.net>: Recipient address rejected: Mailbox quota\n    exceeded (in reply to RCPT TO command)")
+            Some("Undelivered Mail Returned to Sender — This is the mail system at host relay01.example.org.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<bob@example.net>: host mx2.example.net[80.241.60.215] said: 552 5.2.2\n    <bob@example.net>: Recipient address rejected: Mailbox quota exceeded (in\n    reply to RCPT TO command)\n\n<bob2@example.net>: host mx1.example.net[80.241.60.212] said: 552 5.2.2\n    <bob2@example.net>: Recipient address rejected: Mailbox quota\n    exceeded (in reply to RCPT TO command)")
         )
         .await;
 }
@@ -701,7 +701,7 @@ async fn test_resend_after_ndn() -> Result<()> {
             "hcksocnsofoejx@five.chat",
             "Mr.A7pTA5IgrUA.q4bP41vAJOp@testrun.org",
             include_bytes!("../../test-data/message/testrun_ndn.eml"),
-            Some("Undelivered Mail Returned to Sender – This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)"),
+            Some("Undelivered Mail Returned to Sender — This is the mail system at host hq5.merlinux.eu.\n\nI\'m sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It\'s attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hcksocnsofoejx@five.chat>: host mail.five.chat[195.62.125.103] said: 550 5.1.1\n    <hcksocnsofoejx@five.chat>: Recipient address rejected: User unknown in\n    virtual mailbox table (in reply to RCPT TO command)"),
         )
         .await;
     chat::resend_msgs(&t, &[msg_id]).await?;
@@ -801,7 +801,7 @@ async fn test_concat_multiple_ndns() -> Result<()> {
 
     let msg = Message::load_from_db(&t, msg_id).await?;
 
-    let err = "Undelivered Mail Returned to Sender – This is the mail system at host mout01.posteo.de.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)".to_string();
+    let err = "Undelivered Mail Returned to Sender — This is the mail system at host mout01.posteo.de.\n\nI'm sorry to have to inform you that your message could not\nbe delivered to one or more recipients. It's attached below.\n\nFor further assistance, please send mail to postmaster.\n\nIf you do so, please include this problem report. You can\ndelete your own text from the attached returned message.\n\n                   The mail system\n\n<hanerthaertidiuea@gmx.de>: host mx01.emig.gmx.net[212.227.17.5] said: 550\n    Requested action not taken: mailbox unavailable (in reply to RCPT TO\n    command)".to_string();
     assert_eq!(msg.error(), Some(err.clone()));
     assert_eq!(msg.state, MessageState::OutFailed);
 
@@ -1260,7 +1260,7 @@ async fn test_dhl_mailing_list() -> Result<()> {
     .await
     .unwrap();
     let msg = t.get_last_msg().await;
-    assert_eq!(msg.text, "Ihr Paket ist in der Packstation 123 – bla bla");
+    assert_eq!(msg.text, "Ihr Paket ist in der Packstation 123 — bla bla");
     assert!(msg.has_html());
     let chat = Chat::load_from_db(&t, msg.chat_id).await.unwrap();
     assert_eq!(chat.typ, Chattype::Mailinglist);
@@ -1285,7 +1285,7 @@ async fn test_dpd_mailing_list() -> Result<()> {
     .await
     .unwrap();
     let msg = t.get_last_msg().await;
-    assert_eq!(msg.text, "Bald ist Ihr DPD Paket da – bla bla");
+    assert_eq!(msg.text, "Bald ist Ihr DPD Paket da — bla bla");
     assert!(msg.has_html());
     let chat = Chat::load_from_db(&t, msg.chat_id).await.unwrap();
     assert_eq!(chat.typ, Chattype::Mailinglist);
@@ -1390,7 +1390,7 @@ async fn test_mailing_list_with_mimepart_footer() {
     .await
     .unwrap();
     let msg = t.get_last_msg().await;
-    assert_eq!(msg.text, "[Intern] important stuff – Hi mr ... [text part]");
+    assert_eq!(msg.text, "[Intern] important stuff — Hi mr ... [text part]");
     assert!(msg.has_html());
     let chat = Chat::load_from_db(&t, msg.chat_id).await.unwrap();
     assert_eq!(get_chat_msgs(&t, msg.chat_id).await.unwrap().len(), 1);
@@ -1910,7 +1910,7 @@ async fn test_dont_assign_to_trash_by_parent() {
     chat_id.accept(&t).await.unwrap();
     let msg = get_chat_msg(&t, chat_id, 0, 1).await; // Make sure that the message is actually in the chat
     assert!(!msg.chat_id.is_special());
-    assert_eq!(msg.text, "Hi – hello");
+    assert_eq!(msg.text, "Hi — hello");
 
     println!("\n========= Delete the message ==========");
     msg.id.trash(&t, false).await.unwrap();
@@ -2044,7 +2044,7 @@ Message content",
 
     // Outgoing email should create a chat.
     let msg = alice.get_last_msg().await;
-    assert_eq!(msg.get_text(), "Subj – Message content");
+    assert_eq!(msg.get_text(), "Subj — Message content");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -2293,7 +2293,7 @@ Message-ID: <Gr.eJ_llQIXf0K.buxmrnMmG0Y@gmx.de>"
         assert_eq!(
             group_msg.text,
             if *outgoing_is_classical {
-                "single reply-to – Hello, I\'ve just created the group \"single reply-to\" for us."
+                "single reply-to — Hello, I\'ve just created the group \"single reply-to\" for us."
             } else {
                 "Hello, I've just created the group \"single reply-to\" for us."
             }
@@ -2382,7 +2382,7 @@ Message-ID: <Gr.iy1KCE2y65_.mH2TM52miv9@testrun.org>"
         assert_eq!(
             group_msg.text,
             if *outgoing_is_classical {
-                "single reply-to – Hello, I\'ve just created the group \"single reply-to\" for us."
+                "single reply-to — Hello, I\'ve just created the group \"single reply-to\" for us."
             } else {
                 "Hello, I've just created the group \"single reply-to\" for us."
             }
@@ -2470,7 +2470,7 @@ Message-ID: <Gr.eJ_llQIXf0K.buxmrnMmG0Y@gmx.de>"
         assert_eq!(
             group_msg.text,
             if *outgoing_is_classical {
-                "single reply-to – Hello, I\'ve just created the group \"single reply-to\" for us."
+                "single reply-to — Hello, I\'ve just created the group \"single reply-to\" for us."
             } else {
                 "Hello, I've just created the group \"single reply-to\" for us."
             }
@@ -2505,7 +2505,7 @@ Outgoing reply to all"#,
         .unwrap();
 
         let reply = t.get_last_msg().await;
-        assert_eq!(reply.text, "Out subj – Outgoing reply to all");
+        assert_eq!(reply.text, "Out subj — Outgoing reply to all");
         let reply_chat = Chat::load_from_db(&t, reply.chat_id).await.unwrap();
         assert_eq!(reply_chat.typ, Chattype::Group);
         assert_eq!(reply.chat_id, group_msg.chat_id);
@@ -2528,7 +2528,7 @@ Reply to all"#,
         .unwrap();
 
         let reply = t.get_last_msg().await;
-        assert_eq!(reply.text, "In subj – Reply to all");
+        assert_eq!(reply.text, "In subj — Reply to all");
         let reply_chat = Chat::load_from_db(&t, reply.chat_id).await.unwrap();
         assert_eq!(reply_chat.typ, Chattype::Group);
         assert_eq!(reply.chat_id, group_msg.chat_id);
@@ -5591,7 +5591,7 @@ async fn test_calendar_alternative() -> Result<()> {
     assert_eq!(msg.msg_ids.len(), 1);
 
     let calendar_msg = Message::load_from_db(t, msg.msg_ids[0]).await?;
-    assert_eq!(calendar_msg.text, "Subject was here – Hello!");
+    assert_eq!(calendar_msg.text, "Subject was here — Hello!");
     assert_eq!(calendar_msg.viewtype, Viewtype::File);
     assert_eq!(calendar_msg.get_filename().unwrap(), "calendar.ics");
 

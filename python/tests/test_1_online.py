@@ -968,7 +968,7 @@ def test_dont_show_emails(acfactory, lp):
     msg = fresh_msgs[0]
     chat_msgs = msg.chat.get_messages()
     assert len(chat_msgs) == 1
-    assert any(msg.text == "subj – Actually interesting message in Spam" for msg in chat_msgs)
+    assert any(msg.text == "subj — Actually interesting message in Spam" for msg in chat_msgs)
 
     assert not any("unknown.address" in c.get_name() for c in ac1.get_chats())
     ac1.direct_imap.select_folder("Spam")
@@ -983,7 +983,7 @@ def test_dont_show_emails(acfactory, lp):
     ac1.start_io()
     msg2 = ac1._evtracker.wait_next_messages_changed()
 
-    assert msg2.text == "subj – message in Drafts received later"
+    assert msg2.text == "subj — message in Drafts received later"
     assert len(msg.chat.get_messages()) == 2
 
 

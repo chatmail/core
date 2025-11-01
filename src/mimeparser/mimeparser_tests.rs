@@ -763,7 +763,7 @@ MDYyMDYxNTE1RTlDOEE4Cj4+CnN0YXJ0eHJlZgo4Mjc4CiUlRU9GCg==
 
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::File);
-    assert_eq!(message.parts[0].msg, "Mail with inline attachment – Hello!");
+    assert_eq!(message.parts[0].msg, "Mail with inline attachment — Hello!");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -846,7 +846,7 @@ iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFu
 
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::Image);
-    assert_eq!(message.parts[0].msg, "example – Test");
+    assert_eq!(message.parts[0].msg, "example — Test");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -910,7 +910,7 @@ iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFu
 
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::Image);
-    assert_eq!(message.parts[0].msg, "Test subject – Test");
+    assert_eq!(message.parts[0].msg, "Test subject — Test");
 }
 
 // Outlook specifies filename in the "name" attribute of Content-Type
@@ -976,7 +976,7 @@ iVBORw0KGgoAAAANSUhEUgAAACAAAAAeCAAAAABoYUP1AAAAAXNSR0IArs4c6QAAAo1JREFUKJFdkdFu
 
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::Image);
-    assert_eq!(message.parts[0].msg, "Delta Chat is great stuff! – Test");
+    assert_eq!(message.parts[0].msg, "Delta Chat is great stuff! — Test");
 }
 
 #[test]
@@ -1199,7 +1199,7 @@ async fn test_add_subj_to_multimedia_msg() {
     let msg_id = chats.get_msg_id(0).unwrap().unwrap();
     let msg = Message::load_from_db(&t.ctx, msg_id).await.unwrap();
 
-    assert_eq!(msg.text, "subj with important info – body text");
+    assert_eq!(msg.text, "subj with important info — body text");
     assert_eq!(msg.viewtype, Viewtype::Image);
     assert_eq!(msg.error(), None);
     assert_eq!(msg.is_dc_message, MessengerMessage::No);
@@ -1233,7 +1233,7 @@ async fn test_mime_modified_alt_plain_html() {
     assert!(mimeparser.is_mime_modified);
     assert_eq!(
         mimeparser.parts[0].msg,
-        "mime-modified test – this is plain"
+        "mime-modified test — this is plain"
     );
 }
 
@@ -1245,7 +1245,7 @@ async fn test_mime_modified_alt_plain() {
     assert!(!mimeparser.is_mime_modified);
     assert_eq!(
         mimeparser.parts[0].msg,
-        "mime-modified test – \
+        "mime-modified test — \
         mime-modified should not be set set as there is no html and no special stuff;\n\
         although not being a delta-message.\n\
         test some special html-characters as < > and & but also \" and ' :)"
@@ -1260,7 +1260,7 @@ async fn test_mime_modified_alt_html() {
     assert!(mimeparser.is_mime_modified);
     assert_eq!(
         mimeparser.parts[0].msg,
-        "mime-modified test – mime-modified *set*; simplify is always regarded as lossy."
+        "mime-modified test — mime-modified *set*; simplify is always regarded as lossy."
     );
 }
 
@@ -1272,7 +1272,7 @@ async fn test_mime_modified_html() {
     assert!(mimeparser.is_mime_modified);
     assert_eq!(
         mimeparser.parts[0].msg,
-        "mime-modified test – mime-modified *set*; simplify is always regarded as lossy."
+        "mime-modified test — mime-modified *set*; simplify is always regarded as lossy."
     );
 }
 
@@ -1614,7 +1614,7 @@ async fn test_receive_eml() -> Result<()> {
     );
     assert_eq!(
         mime_message.parts[0].msg,
-        "this is a classic email – I attached the .EML file".to_string()
+        "this is a classic email — I attached the .EML file".to_string()
     );
     assert_eq!(
         mime_message.parts[0].param.get(Param::Filename),
@@ -1713,7 +1713,7 @@ async fn test_tlsrpt() -> Result<()> {
     assert_eq!(msg.parts[0].typ, Viewtype::File);
     assert_eq!(
         msg.parts[0].msg,
-        "Report Domain: nine.testrun.org Submitter: google.com Report-ID: <2024.01.20T00.00.00Z+nine.testrun.org@google.com> – This is an aggregate TLS report from google.com"
+        "Report Domain: nine.testrun.org Submitter: google.com Report-ID: <2024.01.20T00.00.00Z+nine.testrun.org@google.com> — This is an aggregate TLS report from google.com"
     );
 
     Ok(())
@@ -1774,7 +1774,7 @@ Content-Type: text/plain; charset=utf-8
 
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::Text);
-    // Not "Some subject – /help"
+    // Not "Some subject — /help"
     assert_eq!(message.parts[0].msg, "/help");
 }
 
