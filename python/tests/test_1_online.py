@@ -1,7 +1,6 @@
 import os
 import queue
 import sys
-import base64
 from datetime import datetime, timezone
 
 import pytest
