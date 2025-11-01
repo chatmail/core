@@ -854,6 +854,10 @@ impl MimeMessage {
                         .iter_mut()
                         .find(|part| !part.msg.is_empty() && !part.is_reaction);
                     if let Some(part) = part_with_text {
+                        // Message bubbles are small, so we use en dash to save space. In some
+                        // languages there may be em dashes in the message text added by the author,
+                        // they may look stronger than Subject separation, this is a known thing.
+                        // Anyway, classic email support isn't a priority as of 2025.
                         part.msg = format!("{} – {}", subject, part.msg);
                     }
                 }
