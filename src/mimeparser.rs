@@ -355,9 +355,13 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let secrets: Vec<String> = context
+            .sql
+            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| row.get(0))
+            .await?;
 
         let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring)) {
+            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
                 Ok(Some(mut msg)) => {
                     mail_raw = msg.as_data_vec().unwrap_or_default();
 
@@ -1567,6 +1571,8 @@ impl MimeMessage {
             // The message belongs to a mailing list and has a `ListId:`-header
             // that should be used to get a unique id.
             return Some(list_id);
+        } else if let Some(chat_list_id) = self.get_header(HeaderDef::ChatListId) {
+            return Some(chat_list_id);
         } else if let Some(sender) = self.get_header(HeaderDef::Sender) {
             // the `Sender:`-header alone is no indicator for mailing list
             // as also used for bot-impersonation via `set_override_sender_name()`

@@ -432,6 +432,9 @@ https://delta.chat/donate"))]
     #[strum(props(fallback = "Scan to join channel %1$s"))]
     SecureJoinBrodcastQRDescription = 201,
 
+    #[strum(props(fallback = "You joined the channel."))]
+    MsgYouJoinedBroadcast = 202,
+
     #[strum(props(
         fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
     ))]
@@ -730,6 +733,11 @@ pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactI
 /// Stock string: `You left the channel.`
 pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
     translated(context, StockMessage::MsgYouLeftBroadcast).await
+}
+
+/// Stock string: `You joined the channel.`
+pub(crate) async fn msg_you_joined_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouJoinedBroadcast).await
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.

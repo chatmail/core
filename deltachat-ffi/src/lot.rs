@@ -45,6 +45,7 @@ impl Lot {
             Self::Qr(qr) => match qr {
                 Qr::AskVerifyContact { .. } => None,
                 Qr::AskVerifyGroup { grpname, .. } => Some(Cow::Borrowed(grpname)),
+                Qr::AskJoinBroadcast { name, .. } => Some(Cow::Borrowed(name)),
                 Qr::FprOk { .. } => None,
                 Qr::FprMismatch { .. } => None,
                 Qr::FprWithoutAddr { fingerprint, .. } => Some(Cow::Borrowed(fingerprint)),
@@ -98,6 +99,7 @@ impl Lot {
             Self::Qr(qr) => match qr {
                 Qr::AskVerifyContact { .. } => LotState::QrAskVerifyContact,
                 Qr::AskVerifyGroup { .. } => LotState::QrAskVerifyGroup,
+                Qr::AskJoinBroadcast { .. } => LotState::QrAskJoinBroadcast,
                 Qr::FprOk { .. } => LotState::QrFprOk,
                 Qr::FprMismatch { .. } => LotState::QrFprMismatch,
                 Qr::FprWithoutAddr { .. } => LotState::QrFprWithoutAddr,
@@ -124,6 +126,7 @@ impl Lot {
             Self::Qr(qr) => match qr {
                 Qr::AskVerifyContact { contact_id, .. } => contact_id.to_u32(),
                 Qr::AskVerifyGroup { .. } => Default::default(),
+                Qr::AskJoinBroadcast { .. } => Default::default(),
                 Qr::FprOk { contact_id } => contact_id.to_u32(),
                 Qr::FprMismatch { contact_id } => contact_id.unwrap_or_default().to_u32(),
                 Qr::FprWithoutAddr { .. } => Default::default(),
@@ -165,6 +168,9 @@ pub enum LotState {
 
     /// text1=groupname
     QrAskVerifyGroup = 202,
+
+    /// text1=broadcast_name
+    QrAskJoinBroadcast = 204,
 
     /// id=contact
     QrFprOk = 210,

@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashSet};
 use std::io::{BufRead, Cursor};
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
@@ -12,12 +12,13 @@ use pgp::composed::{
     Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey,
     SignedSecretKey, SubkeyParamsBuilder, TheRing,
 };
+use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
-use rand_old::thread_rng;
+use rand_old::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -25,7 +26,7 @@ use crate::key::{DcKey, Fingerprint};
 #[cfg(test)]
 pub(crate) const HEADER_AUTOCRYPT: &str = "autocrypt-prefer-encrypt";
 
-pub const HEADER_SETUPCODE: &str = "passphrase-begin";
+pub(crate) const HEADER_SETUPCODE: &str = "passphrase-begin";
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
@@ -236,13 +237,17 @@ pub fn pk_calc_signature(
     Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
-/// Decrypts the message with keys from the private key keyring.
+/// Decrypts the message:
+/// - with keys from the private key keyring (passed in `private_keys_for_decryption`)
+///   if the message was asymmetrically encrypted,
+/// - with a shared secret/password (passed in `shared_secrets`),
+///   if the message was symmetrically encrypted.
 ///
-/// Receiver private keys are provided in
-/// `private_keys_for_decryption`.
-pub fn pk_decrypt(
+/// Returns the decrypted and decompressed message.
+pub fn decrypt(
     ctext: Vec<u8>,
     private_keys_for_decryption: &[SignedSecretKey],
+    mut shared_secrets: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
     let cursor = Cursor::new(ctext);
     let (msg, _headers) = Message::from_armor(cursor)?;
@@ -251,23 +256,74 @@ pub fn pk_decrypt(
     let empty_pw = Password::empty();
 
     let decrypt_options = DecryptionOptions::new();
+    let symmetric_encryption_res = check_symmetric_encryption(&msg);
+    if symmetric_encryption_res.is_err() {
+        shared_secrets = &[];
+    }
+
+    // We always try out all passwords here,
+    // but benchmarking (see `benches/decrypting.rs`)
+    // showed that the performance impact is negligible.
+    // We can improve this in the future if necessary.
+    let message_password: Vec<Password> = shared_secrets
+        .iter()
+        .map(|p| Password::from(p.as_str()))
+        .collect();
+    let message_password: Vec<&Password> = message_password.iter().collect();
+
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![&empty_pw],
-        message_password: vec![],
+        message_password,
         session_keys: vec![],
         decrypt_options,
     };
-    let (msg, ring_result) = msg.decrypt_the_ring(ring, true)?;
-    anyhow::ensure!(
-        !ring_result.secret_keys.is_empty(),
-        "decryption failed, no matching secret keys"
-    );
+
+    let res = msg.decrypt_the_ring(ring, true);
+
+    let (msg, _ring_result) = match res {
+        Ok(it) => it,
+        Err(err) => {
+            if let Err(reason) = symmetric_encryption_res {
+                bail!("{err:#} (Note: symmetric decryption was not tried: {reason})")
+            } else {
+                bail!("{err:#}");
+            }
+        }
+    };
 
     // remove one layer of compression
     let msg = msg.decompress()?;
 
     Ok(msg)
+}
+
+/// Returns Ok(()) if we want to try symmetrically decrypting the message,
+/// and Err with a reason if symmetric decryption should not be tried.
+///
+/// A DOS attacker could send a message with a lot of encrypted session keys,
+/// all of which use a very hard-to-compute string2key algorithm.
+/// We would then try to decrypt all of the encrypted session keys
+/// with all of the known shared secrets.
+/// In order to prevent this, we do not try to symmetrically decrypt messages
+/// that use a string2key algorithm other than 'Salted'.
+fn check_symmetric_encryption(msg: &Message<'_>) -> std::result::Result<(), &'static str> {
+    let Message::Encrypted { esk, .. } = msg else {
+        return Err("not encrypted");
+    };
+
+    if esk.len() > 1 {
+        return Err("too many esks");
+    }
+
+    let [pgp::composed::Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] else {
+        return Err("not symmetrically encrypted");
+    };
+
+    match esk.s2k() {
+        Some(StringToKey::Salted { .. }) => Ok(()),
+        _ => Err("unsupported string2key algorithm"),
+    }
 }
 
 /// Returns fingerprints
@@ -310,8 +366,8 @@ pub fn pk_validate(
     Ok(ret)
 }
 
-/// Symmetric encryption.
-pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
+/// Symmetric encryption for the autocrypt setup message (ASM).
+pub async fn symm_encrypt_autocrypt_setup(passphrase: &str, plain: Vec<u8>) -> Result<String> {
     let passphrase = Password::from(passphrase.to_string());
 
     tokio::task::spawn_blocking(move || {
@@ -322,6 +378,46 @@ pub async fn symm_encrypt(passphrase: &str, plain: Vec<u8>) -> Result<String> {
         builder.encrypt_with_password(s2k, &passphrase)?;
 
         let encoded_msg = builder.to_armored_string(&mut rng, Default::default())?;
+
+        Ok(encoded_msg)
+    })
+    .await?
+}
+
+/// Symmetrically encrypt the message.
+/// This is used for broadcast channels and for version 2 of the Securejoin protocol.
+/// `shared secret` is the secret that will be used for symmetric encryption.
+pub async fn symm_encrypt_message(
+    plain: Vec<u8>,
+    private_key_for_signing: SignedSecretKey,
+    shared_secret: &str,
+    compress: bool,
+) -> Result<String> {
+    let shared_secret = Password::from(shared_secret.to_string());
+
+    tokio::task::spawn_blocking(move || {
+        let msg = MessageBuilder::from_bytes("", plain);
+        let mut rng = thread_rng();
+        let mut salt = [0u8; 8];
+        rng.fill(&mut salt[..]);
+        let s2k = StringToKey::Salted {
+            hash_alg: HashAlgorithm::default(),
+            salt,
+        };
+        let mut msg = msg.seipd_v2(
+            &mut rng,
+            SymmetricKeyAlgorithm::AES128,
+            AeadAlgorithm::Ocb,
+            ChunkSize::C8KiB,
+        );
+        msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
+
+        msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+        if compress {
+            msg.compression(CompressionAlgorithm::ZLIB);
+        }
+
+        let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
 
         Ok(encoded_msg)
     })
@@ -351,7 +447,10 @@ mod tests {
     use tokio::sync::OnceCell;
 
     use super::*;
-    use crate::test_utils::{alice_keypair, bob_keypair};
+    use crate::{
+        key::{load_self_public_key, load_self_secret_key},
+        test_utils::{TestContextManager, alice_keypair, bob_keypair},
+    };
     use pgp::composed::Esk;
     use pgp::packet::PublicKeyEncryptedSessionKey;
 
@@ -364,7 +463,7 @@ mod tests {
         HashSet<Fingerprint>,
         Vec<u8>,
     )> {
-        let mut msg = pk_decrypt(ctext.to_vec(), private_keys_for_decryption)?;
+        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -558,6 +657,105 @@ mod tests {
                 .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_encrypt_decrypt_broadcast() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let shared_secret = "shared secret";
+        let ctext = symm_encrypt_message(
+            plain.clone(),
+            load_self_secret_key(alice).await?,
+            shared_secret,
+            true,
+        )
+        .await?;
+
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let mut decrypted = decrypt(
+            ctext.into(),
+            &bob_private_keyring,
+            &[shared_secret.to_string()],
+        )?;
+
+        assert_eq!(decrypted.as_data_vec()?, plain);
+
+        Ok(())
+    }
+
+    /// Test that we don't try to decrypt a message
+    /// that is symmetrically encrypted
+    /// with an expensive string2key algorithm
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_dont_decrypt_expensive_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let shared_secret = "shared secret";
+
+        // Create a symmetrically encrypted message
+        // with an IteratedAndSalted string2key algorithm:
+
+        let shared_secret_pw = Password::from(shared_secret.to_string());
+        let msg = MessageBuilder::from_bytes("", plain);
+        let mut rng = thread_rng();
+        let s2k = StringToKey::new_default(&mut rng); // Default is IteratedAndSalted
+
+        let mut msg = msg.seipd_v2(
+            &mut rng,
+            SymmetricKeyAlgorithm::AES128,
+            AeadAlgorithm::Ocb,
+            ChunkSize::C8KiB,
+        );
+        msg.encrypt_with_password(&mut rng, s2k, &shared_secret_pw)?;
+
+        let ctext = msg.to_armored_string(&mut rng, Default::default())?;
+
+        // Trying to decrypt it should fail with a helpful error message:
+
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let error = decrypt(
+            ctext.into(),
+            &bob_private_keyring,
+            &[shared_secret.to_string()],
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "missing key (Note: symmetric decryption was not tried: unsupported string2key algorithm)"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_decryption_error_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let plain = Vec::from(b"this is the secret message");
+        let pk_for_encryption = load_self_public_key(alice).await?;
+
+        // Encrypt a message, but only to self, not to Bob:
+        let ctext = pk_encrypt(plain, vec![pk_for_encryption], None, true, true).await?;
+
+        // Trying to decrypt it should fail with an OK error message:
+        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
+        let error = decrypt(ctext.into(), &bob_private_keyring, &[]).unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "missing key (Note: symmetric decryption was not tried: not symmetrically encrypted)"
+        );
+
+        Ok(())
     }
 
     /// Tests that recipient key IDs and fingerprints

@@ -882,7 +882,7 @@ async fn test_github_mailing_list() -> Result<()> {
         Some("reply+elernshsetushoyseshetihseusaferuhsedtisneu@reply.github.com")
     );
     assert_eq!(chat.name, "deltachat/deltachat-core-rust");
-    assert_eq!(chat::get_chat_contacts(&t.ctx, chat_id).await?.len(), 1);
+    assert_eq!(chat::get_chat_contacts(&t.ctx, chat_id).await?.len(), 0);
 
     receive_imf(&t.ctx, GH_MAILINGLIST2.as_bytes(), false).await?;
 
