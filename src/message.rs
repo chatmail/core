@@ -1440,7 +1440,15 @@ pub(crate) fn guess_msgtype_from_path_suffix(path: &Path) -> Option<(Viewtype, &
     let extension: &str = &path.extension()?.to_str()?.to_lowercase();
     let info = match extension {
         // before using viewtype other than Viewtype::File,
-        // make sure, all target UIs support that type in the context of the used viewer/player.
+        // make sure, all target UIs support that type.
+        //
+        // it is a non-goal to support as many formats as possible in-app.
+        // additional parser come at security and maintainance costs and
+        // should only be added when strictly neccessary,
+        // eg. when a format comes from the camera app on a significant number of devices.
+        // it is okay, when eg. dragging some video from a browser results in a "File"
+        // for everyone, sender as well as all receivers.
+        //
         // if in doubt, it is better to default to Viewtype::File that passes handing to an external app.
         // (cmp. <https://developer.android.com/guide/topics/media/media-formats>)
         "3gp" => (Viewtype::Video, "video/3gpp"),
@@ -1503,7 +1511,7 @@ pub(crate) fn guess_msgtype_from_path_suffix(path: &Path) -> Option<(Viewtype, &
         "vcf" => (Viewtype::Vcard, "text/vcard"),
         "wav" => (Viewtype::Audio, "audio/wav"),
         "weba" => (Viewtype::File, "audio/webm"),
-        "webm" => (Viewtype::Video, "video/webm"),
+        "webm" => (Viewtype::File, "video/webm"), // not supported natively by iOS nor by SDWebImage
         "webp" => (Viewtype::Image, "image/webp"), // iOS via SDWebImage, Android since 4.0
         "wmv" => (Viewtype::Video, "video/x-ms-wmv"),
         "xdc" => (Viewtype::Webxdc, "application/webxdc+zip"),
