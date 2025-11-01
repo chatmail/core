@@ -527,8 +527,10 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     // Configure IMAP
 
+    let transport_id = 0;
     let (_s, r) = async_channel::bounded(1);
     let mut imap = Imap::new(
+        transport_id,
         configured_param.imap.clone(),
         configured_param.imap_password.clone(),
         proxy_config,
