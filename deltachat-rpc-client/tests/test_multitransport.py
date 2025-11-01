@@ -37,6 +37,22 @@ def test_add_second_address(acfactory) -> None:
             account.set_config(option, "1")
 
 
+@pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
+def test_no_second_transport_with_mvbox(acfactory, key) -> None:
+    """Test that second transport cannot be configured if mvbox is used."""
+    account = acfactory.new_configured_account()
+    assert len(account.list_transports()) == 1
+
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("only_fetch_mvbox") == "0"
+
+    qr = acfactory.get_account_qr()
+    account.set_config(key, "1")
+
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+
 def test_change_address(acfactory) -> None:
     """Test Alice configuring a second transport and setting it as a primary one."""
     alice, bob = acfactory.get_online_accounts(2)
