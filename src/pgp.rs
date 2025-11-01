@@ -744,7 +744,7 @@ mod tests {
         let pk_for_encryption = load_self_public_key(alice).await?;
 
         // Encrypt a message, but only to self, not to Bob:
-        let ctext = pk_encrypt(plain, vec![pk_for_encryption], None, true).await?;
+        let ctext = pk_encrypt(plain, vec![pk_for_encryption], None, true, true).await?;
 
         // Trying to decrypt it should fail with an OK error message:
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;

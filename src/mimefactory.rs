@@ -835,7 +835,7 @@ impl MimeFactory {
         if let Loaded::Message { msg, chat } = &self.loaded {
             if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
                 headers.push((
-                    "List-ID",
+                    "Chat-List-ID",
                     mail_builder::headers::text::Text::new(format!(
                         "{} <{}>",
                         chat.name, chat.grpid

@@ -1571,6 +1571,8 @@ impl MimeMessage {
             // The message belongs to a mailing list and has a `ListId:`-header
             // that should be used to get a unique id.
             return Some(list_id);
+        } else if let Some(chat_list_id) = self.get_header(HeaderDef::ChatListId) {
+            return Some(chat_list_id);
         } else if let Some(sender) = self.get_header(HeaderDef::Sender) {
             // the `Sender:`-header alone is no indicator for mailing list
             // as also used for bot-impersonation via `set_override_sender_name()`

@@ -39,6 +39,8 @@ pub enum HeaderDef {
     /// Mailing list ID defined in [RFC 2919](https://tools.ietf.org/html/rfc2919).
     ListId,
     ListPost,
+    /// Mailing list id, belonging to a broadcast channel created by Delta Chat
+    ChatListId,
 
     /// List-Help header defined in [RFC 2369](https://datatracker.ietf.org/doc/html/rfc2369).
     ListHelp,
