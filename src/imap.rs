@@ -71,6 +71,11 @@ const BODY_PARTIAL: &str = "(FLAGS RFC822.SIZE BODY.PEEK[HEADER])";
 
 #[derive(Debug)]
 pub(crate) struct Imap {
+    /// ID of the transport configuration in the `transports` table.
+    ///
+    /// This ID is used to namespace records in the `imap` table.
+    transport_id: u32,
+
     pub(crate) idle_interrupt_receiver: Receiver<()>,
 
     /// Email address.
@@ -245,7 +250,9 @@ impl Imap {
     /// Creates new disconnected IMAP client using the specific login parameters.
     ///
     /// `addr` is used to renew token if OAuth2 authentication is used.
+    #[expect(clippy::too_many_arguments)]
     pub fn new(
+        transport_id: u32,
         lp: Vec<ConfiguredServerLoginParam>,
         password: String,
         proxy_config: Option<ProxyConfig>,
@@ -255,6 +262,7 @@ impl Imap {
         idle_interrupt_receiver: Receiver<()>,
     ) -> Self {
         Imap {
+            transport_id,
             idle_interrupt_receiver,
             addr: addr.to_string(),
             lp,
@@ -276,12 +284,13 @@ impl Imap {
         context: &Context,
         idle_interrupt_receiver: Receiver<()>,
     ) -> Result<Self> {
-        let param = ConfiguredLoginParam::load(context)
+        let (transport_id, param) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
         let proxy_config = ProxyConfig::load(context).await?;
         let strict_tls = param.strict_tls(proxy_config.is_some());
         let imap = Self::new(
+            transport_id,
             param.imap.clone(),
             param.imap_password.clone(),
             proxy_config,
@@ -652,12 +661,19 @@ impl Imap {
             context
                 .sql
                 .execute(
-                    "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                       VALUES         (?1,         ?2,     ?3,  ?4,          ?5)
-                       ON CONFLICT(folder, uid, uidvalidity)
+                    "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                       VALUES         (?,            ?,          ?,      ?,   ?,           ?)
+                       ON CONFLICT(transport_id, folder, uid, uidvalidity)
                        DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                      target=excluded.target",
-                    (&message_id, &folder, uid, uid_validity, target),
+                    (
+                        self.transport_id,
+                        &message_id,
+                        &folder,
+                        uid,
+                        uid_validity,
+                        target,
+                    ),
                 )
                 .await?;
 
@@ -886,6 +902,7 @@ impl Session {
             uid_validity = 0;
         }
 
+        let transport_id = 1; // FIXME
         // Write collected UIDs to SQLite database.
         context
             .sql
@@ -895,12 +912,12 @@ impl Session {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
                     transaction.execute(
-                        "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                         VALUES           (?1,         ?2,     ?3,  ?4,          ?5)
-                         ON CONFLICT(folder, uid, uidvalidity)
+                        "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                         VALUES           (?,            ?,          ?,      ?,   ?,           ?)
+                         ON CONFLICT(transport_id, folder, uid, uidvalidity)
                          DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                        target=excluded.target",
-                        (rfc724_mid, folder, uid, uid_validity, target),
+                        (transport_id, rfc724_mid, folder, uid, uid_validity, target),
                     )?;
                 }
                 Ok(())
@@ -2418,12 +2435,13 @@ pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) 
 /// See <https://tools.ietf.org/html/rfc3501#section-2.3.1.1>
 /// This function is used to update our uid_next after fetching messages.
 pub(crate) async fn set_uid_next(context: &Context, folder: &str, uid_next: u32) -> Result<()> {
+    let transport_id = 1; // FIXME
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uid_next) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uid_next=excluded.uid_next",
-            (folder, uid_next),
+            "INSERT INTO imap_sync (transport_id, folder, uid_next) VALUES (?, ?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uid_next=excluded.uid_next",
+            (transport_id, folder, uid_next),
         )
         .await?;
     Ok(())
@@ -2447,12 +2465,13 @@ pub(crate) async fn set_uidvalidity(
     folder: &str,
     uidvalidity: u32,
 ) -> Result<()> {
+    let transport_id = 1;
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uidvalidity) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
-            (folder, uidvalidity),
+            "INSERT INTO imap_sync (transport_id, folder, uidvalidity) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
+            (transport_id, folder, uidvalidity),
         )
         .await?;
     Ok(())
@@ -2470,12 +2489,13 @@ async fn get_uidvalidity(context: &Context, folder: &str) -> Result<u32> {
 }
 
 pub(crate) async fn set_modseq(context: &Context, folder: &str, modseq: u64) -> Result<()> {
+    let transport_id = 1; // FIXME
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, modseq) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET modseq=excluded.modseq",
-            (folder, modseq),
+            "INSERT INTO imap_sync (transport_id, folder, modseq) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET modseq=excluded.modseq",
+            (transport_id, folder, modseq),
         )
         .await?;
     Ok(())

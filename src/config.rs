@@ -706,6 +706,11 @@ impl Context {
     pub async fn set_config(&self, key: Config, value: Option<&str>) -> Result<()> {
         Self::check_config(key, value)?;
 
+        let n_transports = self.count_transports().await?;
+        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
+            bail!("Cannot reconfigure {key} when multiple transports are configured");
+        }
+
         let _pause = match key.needs_io_restart() {
             true => self.scheduler.pause(self).await?,
             _ => Default::default(),
@@ -791,20 +796,20 @@ impl Context {
                     .await?;
             }
             Config::ConfiguredAddr => {
-                if self.is_configured().await? {
-                    bail!("Cannot change ConfiguredAddr");
+                if !self.is_configured().await? {
+                    if let Some(addr) = value {
+                        info!(
+                            self,
+                            "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
+                        );
+                        ConfiguredLoginParam::from_json(&format!(
+                            r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
+                        ))?
+                        .save_to_transports_table(self, &EnteredLoginParam::default())
+                        .await?;
+                    }
                 }
-                if let Some(addr) = value {
-                    info!(
-                        self,
-                        "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
-                    );
-                    ConfiguredLoginParam::from_json(&format!(
-                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
-                    ))?
-                    .save_to_transports_table(self, &EnteredLoginParam::default())
-                    .await?;
-                }
+                self.sql.set_raw_config(key.as_ref(), value).await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
