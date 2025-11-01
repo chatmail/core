@@ -1401,22 +1401,30 @@ async fn test_x_microsoft_original_message_id_precedence() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_extra_imf_chat_header() -> Result<()> {
+async fn test_extra_imf_headers() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
     let chat_id = t.get_self_chat().await.id;
 
-    chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
-    let sent_msg = t.pop_sent_msg().await;
-    // Check removal of some nonexistent "Chat-*" header to protect the code from future breakages.
-    let payload = sent_msg
-        .payload
-        .replace("Message-ID:", "Chat-Forty-Two: 42\r\nMessage-ID:");
-    let msg = MimeMessage::from_bytes(t, payload.as_bytes(), None)
-        .await
-        .unwrap();
-    assert!(msg.headers.contains_key("chat-version"));
-    assert!(!msg.headers.contains_key("chat-forty-two"));
+    for std_hp_composing in [false, true] {
+        t.set_config_bool(Config::StdHeaderProtectionComposing, std_hp_composing)
+            .await?;
+        chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
+        let sent_msg = t.pop_sent_msg().await;
+        // Check removal of some nonexistent "Chat-*" header to protect the code from future
+        // breakages. But headers not prefixed with "Chat-" remain unless a message has standard
+        // Header Protection.
+        let payload = sent_msg.payload.replace(
+            "Message-ID:",
+            "Chat-Forty-Two: 42\r\nForty-Two: 42\r\nMessage-ID:",
+        );
+        let msg = MimeMessage::from_bytes(t, payload.as_bytes(), None)
+            .await
+            .unwrap();
+        assert!(msg.headers.contains_key("chat-version"));
+        assert!(!msg.headers.contains_key("chat-forty-two"));
+        assert_ne!(msg.headers.contains_key("forty-two"), std_hp_composing);
+    }
     Ok(())
 }
 
@@ -1748,6 +1756,43 @@ async fn test_time_in_future() -> Result<()> {
     assert!(mime_message.timestamp_sent >= beginning_time + 60);
     assert!(mime_message.timestamp_rcvd <= time());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_hp_legacy_display() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let bob = &tcm.bob().await;
+
+    let msg = MimeMessage::from_bytes(
+        bob,
+        br#"Date: Fri, 21 Jan 2022 20:40:48 -0500
+From: Alice <alice@example.net>
+To: Bob <bob@example.net>
+Subject: Dinner plans
+Message-ID: <text-plain-legacy-display@lhp.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset="us-ascii"; hp-legacy-display="1";
+ hp="cipher"
+HP-Outer: Date: Fri, 21 Jan 2022 20:40:48 -0500
+HP-Outer: From: Alice <alice@example.net>
+HP-Outer: To: Bob <bob@example.net>
+HP-Outer: Subject: [...]
+HP-Outer: Message-ID: <text-plain-legacy-display@lhp.example>
+
+Subject: Dinner plans
+
+Let's meet at Rama's Roti Shop at 8pm and go to the park
+from there.
+"#,
+        None,
+    )
+    .await?;
+    assert_eq!(
+        msg.parts[0].msg,
+        "Dinner plans – Let's meet at Rama's Roti Shop at 8pm and go to the park\r\n\
+        from there."
+    );
     Ok(())
 }
 

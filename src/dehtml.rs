@@ -13,6 +13,7 @@ use quick_xml::{
 
 use crate::simplify::{SimplifiedText, simplify_quote};
 
+#[derive(Default)]
 struct Dehtml {
     strbuilder: String,
     quote: String,
@@ -25,6 +26,9 @@ struct Dehtml {
     /// Everything between `<div name="quote">` and `<div name="quoted-content">` is usually metadata
     /// If this is > `0`, then we are inside a `<div name="quoted-content">`.
     divs_since_quoted_content_div: u32,
+    /// `<div class="header-protection-legacy-display">` elements should be omitted, see
+    /// <https://www.rfc-editor.org/rfc/rfc9788.html#section-4.5.3.3>.
+    divs_since_hp_legacy_display: u32,
     /// All-Inkl just puts the quote into `<blockquote> </blockquote>`. This count is
     /// increased at each `<blockquote>` and decreased at each `</blockquote>`.
     blockquotes_since_blockquote: u32,
@@ -48,20 +52,25 @@ impl Dehtml {
     }
 
     fn get_add_text(&self) -> AddText {
-        if self.divs_since_quote_div > 0 && self.divs_since_quoted_content_div == 0 {
-            AddText::No // Everything between `<div name="quoted">` and `<div name="quoted_content">` is metadata which we don't want
+        // Everything between `<div name="quoted">` and `<div name="quoted_content">` is
+        // metadata which we don't want.
+        if self.divs_since_quote_div > 0 && self.divs_since_quoted_content_div == 0
+            || self.divs_since_hp_legacy_display > 0
+        {
+            AddText::No
         } else {
             self.add_text
         }
     }
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 enum AddText {
     /// Inside `<script>`, `<style>` and similar tags
     /// which contents should not be displayed.
     No,
 
+    #[default]
     YesRemoveLineEnds,
 
     /// Inside `<pre>`.
@@ -121,12 +130,7 @@ fn dehtml_quick_xml(buf: &str) -> (String, String) {
 
     let mut dehtml = Dehtml {
         strbuilder: String::with_capacity(buf.len()),
-        quote: String::new(),
-        add_text: AddText::YesRemoveLineEnds,
-        last_href: None,
-        divs_since_quote_div: 0,
-        divs_since_quoted_content_div: 0,
-        blockquotes_since_blockquote: 0,
+        ..Default::default()
     };
 
     let mut reader = quick_xml::Reader::from_str(buf);
@@ -244,6 +248,7 @@ fn dehtml_endtag_cb(event: &BytesEnd, dehtml: &mut Dehtml) {
         "div" => {
             pop_tag(&mut dehtml.divs_since_quote_div);
             pop_tag(&mut dehtml.divs_since_quoted_content_div);
+            pop_tag(&mut dehtml.divs_since_hp_legacy_display);
 
             *dehtml.get_buf() += "\n\n";
             dehtml.add_text = AddText::YesRemoveLineEnds;
@@ -295,6 +300,8 @@ fn dehtml_starttag_cb<B: std::io::BufRead>(
         "div" => {
             maybe_push_tag(event, reader, "quote", &mut dehtml.divs_since_quote_div);
             maybe_push_tag(event, reader, "quoted-content", &mut dehtml.divs_since_quoted_content_div);
+            maybe_push_tag(event, reader, "header-protection-legacy-display",
+                &mut dehtml.divs_since_hp_legacy_display);
 
             *dehtml.get_buf() += "\n\n";
             dehtml.add_text = AddText::YesRemoveLineEnds;
@@ -537,6 +544,27 @@ mod tests {
         let input = "<html><pre>\ntwo\nlines\n</pre></html>";
         let txt = dehtml(input).unwrap();
         assert_eq!(txt.text.trim(), "two\nlines");
+    }
+
+    #[test]
+    fn test_hp_legacy_display() {
+        let input = r#"
+<html><head><title></title></head><body>
+<div class="header-protection-legacy-display">
+<pre>Subject: Dinner plans</pre>
+</div>
+<p>
+Let's meet at Rama's Roti Shop at 8pm and go to the park
+from there.
+</p>
+</body>
+</html>
+        "#;
+        let txt = dehtml(input).unwrap();
+        assert_eq!(
+            txt.text.trim(),
+            "Let's meet at Rama's Roti Shop at 8pm and go to the park from there."
+        );
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

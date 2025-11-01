@@ -272,7 +272,7 @@ impl MimeMessage {
             &mut from,
             &mut list_post,
             &mut chat_disposition_notification_to,
-            &mail.headers,
+            &mail,
         );
         headers.retain(|k, _| {
             !is_hidden(k) || {
@@ -300,7 +300,7 @@ impl MimeMessage {
                         &mut from,
                         &mut list_post,
                         &mut chat_disposition_notification_to,
-                        &part.headers,
+                        part,
                     );
                     (part, part.ctype.mimetype.parse::<Mime>()?)
                 } else {
@@ -530,7 +530,7 @@ impl MimeMessage {
                 &mut inner_from,
                 &mut list_post,
                 &mut chat_disposition_notification_to,
-                &mail.headers,
+                mail,
             );
 
             if !signatures.is_empty() {
@@ -1317,6 +1317,10 @@ impl MimeMessage {
                             let is_html = mime_type == mime::TEXT_HTML;
                             if is_html {
                                 self.is_mime_modified = true;
+                                // NB: This unconditionally removes Legacy Display Elements (see
+                                // <https://www.rfc-editor.org/rfc/rfc9788.html#section-4.5.3.3>). We
+                                // don't check for the "hp-legacy-display" Content-Type parameter
+                                // for simplicity.
                                 if let Some(text) = dehtml(&decoded_data) {
                                     text
                                 } else {
@@ -1344,16 +1348,30 @@ impl MimeMessage {
 
                         let (simplified_txt, simplified_quote) = if mime_type.type_() == mime::TEXT
                             && mime_type.subtype() == mime::PLAIN
-                            && is_format_flowed
                         {
-                            let delsp = if let Some(delsp) = mail.ctype.params.get("delsp") {
-                                delsp.as_str().eq_ignore_ascii_case("yes")
-                            } else {
-                                false
+                            // Don't check that we're inside an encrypted or signed part for
+                            // simplicity and ease of testing.
+                            let simplified_txt = match mail
+                                .ctype
+                                .params
+                                .get("hp-legacy-display")
+                                .is_some_and(|v| v == "1")
+                            {
+                                false => simplified_txt,
+                                true => rm_legacy_display_elements(&simplified_txt),
                             };
-                            let unflowed_text = unformat_flowed(&simplified_txt, delsp);
-                            let unflowed_quote = top_quote.map(|q| unformat_flowed(&q, delsp));
-                            (unflowed_text, unflowed_quote)
+                            if is_format_flowed {
+                                let delsp = if let Some(delsp) = mail.ctype.params.get("delsp") {
+                                    delsp.as_str().eq_ignore_ascii_case("yes")
+                                } else {
+                                    false
+                                };
+                                let unflowed_text = unformat_flowed(&simplified_txt, delsp);
+                                let unflowed_quote = top_quote.map(|q| unformat_flowed(&q, delsp));
+                                (unflowed_text, unflowed_quote)
+                            } else {
+                                (simplified_txt, top_quote)
+                            }
                         } else {
                             (simplified_txt, top_quote)
                         };
@@ -1634,10 +1652,16 @@ impl MimeMessage {
         from: &mut Option<SingleInfo>,
         list_post: &mut Option<String>,
         chat_disposition_notification_to: &mut Option<SingleInfo>,
-        fields: &[mailparse::MailHeader<'_>],
+        part: &mailparse::ParsedMail,
     ) {
+        let fields = &part.headers;
+        // See https://www.rfc-editor.org/rfc/rfc9788.html "Header Protection for Cryptographically
+        // Protected Email". We don't check if `part` is a root of the Cryptographic Payload because
+        // this function is only called with nonempty `headers` for such parts.
+        let has_header_protection = part.ctype.params.contains_key("hp");
+
         headers.retain(|k, _| {
-            !is_protected(k) || {
+            !(has_header_protection || is_protected(k)) || {
                 headers_removed.insert(k.to_string());
                 false
             }
@@ -1964,6 +1988,20 @@ impl MimeMessage {
     }
 }
 
+fn rm_legacy_display_elements(text: &str) -> String {
+    let mut res = None;
+    for l in text.lines() {
+        res = res.map(|r: String| match r.is_empty() {
+            true => l.to_string(),
+            false => r + "\r\n" + l,
+        });
+        if l.is_empty() {
+            res = Some(String::new());
+        }
+    }
+    res.unwrap_or_default()
+}
+
 fn remove_header(
     headers: &mut HashMap<String, String>,
     key: &str,
@@ -2088,7 +2126,8 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
 }
 
 /// Returns whether the outer header value must be ignored if the message contains a signed (and
-/// optionally encrypted) part.
+/// optionally encrypted) part. This is independent from the modern Header Protection defined in
+/// <https://www.rfc-editor.org/rfc/rfc9788.html>.
 ///
 /// NB: There are known cases when Subject and List-ID only appear in the outer headers of
 /// signed-only messages. Such messages are shown as unencrypted anyway.
