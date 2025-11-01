@@ -7739,6 +7739,16 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` will be replaced with the channel name.
 #define DC_STR_SECURE_JOIN_CHANNEL_QR_DESC  201
 
+/// "Proxy Enabled"
+///
+/// Title for proxy section in connectivity view.
+#define DC_STR_PROXY_ENABLED  220
+
+/// "You are using a proxy. If you're having trouble connecting, try a different proxy."
+///
+/// Description in connectivity view when proxy is enabled.
+#define DC_STR_PROXY_ENABLED_DESCRIPTION  221
+
 /**
  * @}
  */

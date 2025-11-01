@@ -352,6 +352,19 @@ impl Context {
             .to_string();
 
         // =============================================================================================
+        //                              Get proxy state
+        // =============================================================================================
+
+        if self
+            .get_config_bool(crate::config::Config::ProxyEnabled)
+            .await?
+        {
+            let proxy_enabled = stock_str::proxy_enabled(self).await;
+            let proxy_description = stock_str::proxy_description(self).await;
+            ret += &format!("<h3>{proxy_enabled}</h3><ul><li>{proxy_description}</li></ul>");
+        }
+
+        // =============================================================================================
         //                              Get the states from the RwLock
         // =============================================================================================
 

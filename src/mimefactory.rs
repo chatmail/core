@@ -1237,6 +1237,17 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
                 _ => None,
             };
 
+            // Do not anonymize OpenPGP recipients.
+            //
+            // This is disabled to avoid interoperability problems
+            // with old core versions <1.160.0 that do not support
+            // receiving messages with wildcard Key IDs:
+            // <https://github.com/chatmail/core/issues/7378>
+            //
+            // The option should be changed to true
+            // once new core versions are sufficiently deployed.
+            let anonymous_recipients = false;
+
             let encrypted = if let Some(shared_secret) = shared_secret {
                 encrypt_helper
                     .encrypt_symmetrically(context, &shared_secret, message, compress)
@@ -1251,7 +1262,13 @@ If you have any questions, please send an email to delta@merlinux.eu or ask at h
                     .extend(encryption_pubkeys.iter().map(|(_addr, key)| (*key).clone()));
 
                 encrypt_helper
-                    .encrypt(context, encryption_keyring, message, compress)
+                    .encrypt(
+                        context,
+                        encryption_keyring,
+                        message,
+                        compress,
+                        anonymous_recipients,
+                    )
                     .await?
             };
 

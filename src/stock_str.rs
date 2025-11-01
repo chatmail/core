@@ -439,6 +439,14 @@ https://delta.chat/donate"))]
         fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
     ))]
     StatsMsgBody = 210,
+
+    #[strum(props(fallback = "Proxy Enabled"))]
+    ProxyEnabled = 220,
+
+    #[strum(props(
+        fallback = "You are using a proxy. If you're having trouble connecting, try a different proxy."
+    ))]
+    ProxyEnabledDescription = 221,
 }
 
 impl StockMessage {
@@ -1315,6 +1323,16 @@ pub(crate) async fn backup_transfer_qr(context: &Context) -> Result<String> {
 
 pub(crate) async fn backup_transfer_msg_body(context: &Context) -> String {
     translated(context, StockMessage::BackupTransferMsgBody).await
+}
+
+/// Stock string: `Proxy Enabled`.
+pub(crate) async fn proxy_enabled(context: &Context) -> String {
+    translated(context, StockMessage::ProxyEnabled).await
+}
+
+/// Stock string: `You are using a proxy. If you're having trouble connecting, try a different proxy.`.
+pub(crate) async fn proxy_description(context: &Context) -> String {
+    translated(context, StockMessage::ProxyEnabledDescription).await
 }
 
 impl Context {
