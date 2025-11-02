@@ -144,13 +144,13 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             )
         } else {
             format!(
-                "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
-                fingerprint.hex(),
-                self_addr_urlencoded,
-                &chat_name_urlencoded,
-                &chat.grpid,
-                &invitenumber,
-                &auth,
+                "https://i.delta.chat/#{}&x={}&i={}&s={}&a={}&g={}",
+                fingerprint.hex(),      // #
+                &chat.grpid,            // &x=
+                &invitenumber,          // &i=
+                &auth,                  // &s=
+                self_addr_urlencoded,   // &a=
+                &group_name_urlencoded, // &g=
             )
         }
     } else {
@@ -160,12 +160,12 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             context.scheduler.interrupt_inbox().await;
         }
         format!(
-            "https://i.delta.chat/#{}&a={}&n={}&i={}&s={}",
-            fingerprint.hex(),
-            self_addr_urlencoded,
-            self_name_urlencoded,
-            &invitenumber,
-            &auth,
+            "https://i.delta.chat/#{}&i={}&s={}&a={}&n={}",
+            fingerprint.hex(),    // #
+            &invitenumber,        // &i=
+            &auth,                // &s=
+            self_addr_urlencoded, // &a=
+            self_name_urlencoded, // &n=
         )
     };
 
