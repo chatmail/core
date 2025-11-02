@@ -27,7 +27,9 @@ use crate::constants::{
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
-use crate::download::DownloadState;
+use crate::download::{
+    DownloadState, PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD, PRE_MESSAGE_SIZE_WARNING_THRESHOLD,
+};
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
 use crate::key::self_fingerprint;
@@ -35,7 +37,7 @@ use crate::location;
 use crate::log::{LogExt, error, info, warn};
 use crate::logged_debug_assert;
 use crate::message::{self, Message, MessageState, MsgId, Viewtype};
-use crate::mimefactory::MimeFactory;
+use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::receive_imf::ReceivedMsg;
@@ -2804,7 +2806,47 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         return Ok(Vec::new());
     }
 
-    let rendered_msg = match mimefactory.render(context).await {
+    // render message and pre message.
+    // pre message is a small message with metadata
+    // which announces a larger message. Large messages are not downloaded in the background.
+
+    let needs_pre_message = msg.viewtype.has_file()
+        && msg
+            .get_filebytes(context)
+            .await?
+            .context("filebytes not available, even though message has attachment")?
+            > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD;
+
+    let render_result: Result<(RenderedEmail, Option<RenderedEmail>)> = async {
+        if needs_pre_message {
+            let mut mimefactory_full_msg = mimefactory.clone();
+            mimefactory_full_msg.set_as_full_message();
+            let rendered_msg = mimefactory_full_msg.render(context).await?;
+
+            let mut mimefactory_pre_msg = mimefactory;
+            mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
+            let rendered_pre_msg = mimefactory_pre_msg
+                .render(context)
+                .await
+                .context("pre-message failed to render")?;
+
+            if rendered_pre_msg.message.len() > PRE_MESSAGE_SIZE_WARNING_THRESHOLD {
+                warn!(
+                    context,
+                    "pre message for message (MsgId={}) is larger than expected: {}",
+                    msg.id,
+                    rendered_pre_msg.message.len()
+                );
+            }
+
+            Ok((rendered_msg, Some(rendered_pre_msg)))
+        } else {
+            Ok((mimefactory.render(context).await?, None))
+        }
+    }
+    .await;
+
+    let (rendered_msg, rendered_pre_msg) = match render_result {
         Ok(res) => Ok(res),
         Err(err) => {
             message::set_msg_failed(context, msg, &err.to_string()).await?;
@@ -2825,7 +2867,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             msg.id,
             needs_encryption
         );
-    }
+    };
 
     let now = smeared_time(context);
 
@@ -2870,12 +2912,26 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         } else {
             for recipients_chunk in recipients.chunks(chunk_size) {
                 let recipients_chunk = recipients_chunk.join(" ");
+                // send pre-message before actual message
+                if let Some(pre_msg) = &rendered_pre_msg {
+                    let row_id = t.execute(
+                        "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
+                    VALUES            (?1,         ?2,         ?3,   ?4)",
+                        (
+                            &pre_msg.rfc724_mid,
+                            &recipients_chunk,
+                            &pre_msg.message,
+                            msg.id, // TODO: check if this is correct or we need another id here?
+                        ),
+                    )?;
+                    row_ids.push(row_id.try_into()?);
+                }
                 let row_id = t.execute(
                     "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
                     VALUES            (?1,         ?2,         ?3,   ?4)",
                     (
                         &rendered_msg.rfc724_mid,
-                        recipients_chunk,
+                        &recipients_chunk,
                         &rendered_msg.message,
                         msg.id,
                     ),
