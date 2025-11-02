@@ -812,7 +812,26 @@ impl Context {
                         .await?;
                     }
                 }
-                self.sql.set_raw_config(key.as_ref(), value).await?;
+                self.sql
+                    .transaction(|transaction| {
+                        if transaction.query_row(
+                            "SELECT COUNT(*) FROM transports WHERE addr=?",
+                            (value,),
+                            |row| {
+                                let res: i64 = row.get(0)?;
+                                Ok(res)
+                            },
+                        )? == 0
+                        {
+                            bail!("Address does not belong to any transport.");
+                        }
+                        transaction.execute(
+                            "UPDATE config SET value=? WHERE keyname='configured_addr'",
+                            (value,),
+                        )?;
+                        Ok(())
+                    })
+                    .await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;
