@@ -965,11 +965,6 @@ pub(crate) async fn receive_imf_inner(
                 )
                 .await?;
         }
-        if target.is_none() && !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version()
-        {
-            // This is a Delta Chat MDN. Mark as read.
-            markseen_on_imap_table(context, rfc724_mid_orig).await?;
-        }
     }
 
     if is_partial_download.is_none() && mime_parser.is_call() {
@@ -1121,8 +1116,9 @@ async fn decide_chat_assignment(
         info!(context, "Message is an MDN (TRASH).");
         true
     } else if mime_parser.delivery_report.is_some() {
+        // Auto-marking DSNs as IMAP-seen should be avoided because the user may want to see them in
+        // another MUA.
         info!(context, "Message is a DSN (TRASH).");
-        markseen_on_imap_table(context, rfc724_mid).await.ok();
         true
     } else if mime_parser.get_header(HeaderDef::ChatEdit).is_some()
         || mime_parser.get_header(HeaderDef::ChatDelete).is_some()

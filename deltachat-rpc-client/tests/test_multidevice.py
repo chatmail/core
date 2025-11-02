@@ -44,7 +44,6 @@ def test_one_account_send_bcc_setting(acfactory, log, direct_imap):
 
     # now make sure we are sending message to ourselves too
     assert self_addr in ev.msg
-    assert self_addr in ev.msg
 
     # BCC-self messages are marked as seen by the sender device.
     while True:
