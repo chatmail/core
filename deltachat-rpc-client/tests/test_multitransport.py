@@ -71,6 +71,8 @@ def test_change_address(acfactory) -> None:
     alice.add_transport_from_qr(qr)
     new_alice_addr = alice.list_transports()[1]["addr"]
     alice.set_config("configured_addr", new_alice_addr)
+    with pytest.raises(JsonRpcError):
+        alice.delete_transport(new_alice_addr)
     alice.start_io()
 
     alice_chat_bob.send_text("Hello again!")
