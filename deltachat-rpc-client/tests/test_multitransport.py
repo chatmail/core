@@ -57,6 +57,7 @@ def test_change_address(acfactory) -> None:
     """Test Alice configuring a second transport and setting it as a primary one."""
     alice, bob = acfactory.get_online_accounts(2)
 
+    bob_addr = bob.get_config("configured_addr")
     bob.create_chat(alice)
 
     alice_chat_bob = alice.create_chat(bob)
@@ -70,6 +71,10 @@ def test_change_address(acfactory) -> None:
     qr = acfactory.get_account_qr()
     alice.add_transport_from_qr(qr)
     new_alice_addr = alice.list_transports()[1]["addr"]
+    with pytest.raises(JsonRpcError):
+        # Cannot use the address that is not
+        # configured for any transport.
+        alice.set_config("configured_addr", bob_addr)
     alice.set_config("configured_addr", new_alice_addr)
     with pytest.raises(JsonRpcError):
         alice.delete_transport(new_alice_addr)
