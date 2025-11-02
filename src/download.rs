@@ -18,6 +18,20 @@ use crate::{EventType, chatlist_events};
 /// `MIN_DELETE_SERVER_AFTER` increases the timeout in this case.
 pub(crate) const MIN_DELETE_SERVER_AFTER: i64 = 48 * 60 * 60;
 
+/// From this point onward outgoing messages are considered large
+/// and get a pre-message, which announces the full message.
+// this is only about sending so we can modify it any time.
+pub(crate) const PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
+
+/// Max message size to be fetched in the background.
+/// This limit defines what messages are fully fetched in the background.
+/// This is for all messages that don't have the full message header.
+pub(crate) const MAX_FETCH_MSG_SIZE: usize = 1_000_000;
+
+/// Max size for pre messages. A warning is emitted when this is exceeded.
+/// Should be well below `MAX_FETCH_MSG_SIZE`
+pub(crate) const PRE_MESSAGE_SIZE_WARNING_THRESHOLD: usize = 150_000;
+
 /// Download state of the message.
 #[derive(
     Debug,
