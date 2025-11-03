@@ -94,3 +94,27 @@ def test_change_address(acfactory) -> None:
     assert sender_addr1 != sender_addr2
     assert sender_addr1 == old_alice_addr
     assert sender_addr2 == new_alice_addr
+
+
+@pytest.mark.parametrize("is_chatmail", ["0", "1"])
+def test_mvbox_move_first_transport(acfactory, is_chatmail) -> None:
+    """Test that mvbox_move is disabled by default even for non-chatmail accounts.
+    Disabling mvbox_move is required to be able to setup a second transport.
+    """
+    account = acfactory.get_unconfigured_account()
+
+    account.set_config("fix_is_chatmail", "1")
+    account.set_config("is_chatmail", is_chatmail)
+
+    # The default value when the setting is unset is "1".
+    # This is not changed for compatibility with old databases
+    # imported from backups.
+    assert account.get_config("mvbox_move") == "1"
+
+    qr = acfactory.get_account_qr()
+    account.add_transport_from_qr(qr)
+
+    # Once the first transport is set up,
+    # mvbox_move is disabled.
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("is_chatmail") == is_chatmail
