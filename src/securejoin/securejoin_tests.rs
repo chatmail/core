@@ -1070,3 +1070,21 @@ async fn test_rejoin_group() -> Result<()> {
 
     Ok(())
 }
+
+/// To make invite links a little bit nicer, we put the readable part at the end and encode spaces by `+` instead of `%20`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_securejoin_qr_name_is_last() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    alice
+        .set_config(Config::Displayname, Some("Alice Axe"))
+        .await?;
+    let qr = get_securejoin_qr(alice, None).await?;
+    assert!(qr.ends_with("Alice+Axe"));
+
+    let alice_chat_id = chat::create_group(alice, "The Chat").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    assert!(qr.ends_with("The+Chat"));
+
+    Ok(())
+}
