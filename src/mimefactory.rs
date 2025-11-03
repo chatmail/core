@@ -292,7 +292,7 @@ impl MimeFactory {
 
                             // In a broadcast channel, only send member-added/removed messages
                             // to the affected member:
-                            if let Some(fp) = should_only_send_to_one_recipient(&msg, &chat){
+                            if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
                                 if fp? != fingerprint {
                                     continue;
                                 }
@@ -1969,7 +1969,7 @@ fn hidden_recipients() -> Address<'static> {
 }
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
-    chat.typ == Chattype::OutBroadcast && should_only_send_to_one_recipient(msg, chat).is_none()
+    chat.typ == Chattype::OutBroadcast && must_have_only_one_recipient(msg, chat).is_none()
 }
 
 fn should_hide_recipients(msg: &Message, chat: &Chat) -> bool {
@@ -1984,7 +1984,7 @@ fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
 /// should only go to a single recipient,
 /// rather than all recipients.
 /// This function returns the fingerprint of the recipient the message should be sent to.
-fn should_only_send_to_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
+fn must_have_only_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
     if chat.typ == Chattype::OutBroadcast
         && matches!(
             msg.param.get_cmd(),

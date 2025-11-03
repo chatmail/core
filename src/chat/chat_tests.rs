@@ -2667,7 +2667,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
             "charlie@example.net alice@example.org"
         );
         let parsed = charlie.parse_msg(&auth_required).await;
-        assert!(parsed.header_exists(HeaderDef::AutocryptGossip));
+        assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
         assert!(contains(&parsed, "charlie@example.net"));
         assert_eq!(contains(&parsed, "bob@example.net"), false);
 
@@ -2696,7 +2696,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
             "charlie@example.net alice@example.org"
         );
         let parsed = charlie.parse_msg(&member_added).await;
-        assert!(parsed.header_exists(HeaderDef::AutocryptGossip));
+        assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
         assert!(contains(&parsed, "charlie@example.net"));
         assert_eq!(contains(&parsed, "bob@example.net"), false);
 
