@@ -194,16 +194,11 @@ impl Context {
     pub async fn list_transports(&self) -> Result<Vec<EnteredLoginParam>> {
         let transports = self
             .sql
-            .query_map(
-                "SELECT entered_param FROM transports",
-                (),
-                |row| row.get::<_, String>(0),
-                |rows| {
-                    rows.flatten()
-                        .map(|s| Ok(serde_json::from_str(&s)?))
-                        .collect::<Result<Vec<EnteredLoginParam>>>()
-                },
-            )
+            .query_map_vec("SELECT entered_param FROM transports", (), |row| {
+                let entered_param: String = row.get(0)?;
+                let transport: EnteredLoginParam = serde_json::from_str(&entered_param)?;
+                Ok(transport)
+            })
             .await?;
 
         Ok(transports)

@@ -202,7 +202,11 @@ impl Context {
             .query_map(
                 "SELECT id, item FROM multi_device_sync ORDER BY id;",
                 (),
-                |row| Ok((row.get::<_, u32>(0)?, row.get::<_, String>(1)?)),
+                |row| {
+                    let id: u32 = row.get(0)?;
+                    let item: String = row.get(1)?;
+                    Ok((id, item))
+                },
                 |rows| {
                     let mut ids = vec![];
                     let mut serialized = String::default();

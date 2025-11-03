@@ -348,7 +348,10 @@ pub async fn set(context: &Context, latitude: f64, longitude: f64, accuracy: f64
         .query_map_vec(
             "SELECT id FROM chats WHERE locations_send_until>?;",
             (now,),
-            |row| row.get::<_, i32>(0),
+            |row| {
+                let id: i32 = row.get(0)?;
+                Ok(id)
+            },
         )
         .await?;
 

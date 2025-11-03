@@ -2029,7 +2029,10 @@ impl Chat {
                     ON c.id=cc.contact_id \
                     WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp",
                     (self.id,),
-                    |row| row.get::<_, String>(0),
+                    |row| {
+                        let addr: String = row.get(0)?;
+                        Ok(addr)
+                    },
                 )
                 .await?;
             self.sync(context, SyncAction::SetContacts(addrs)).await?;
@@ -3038,7 +3041,7 @@ pub async fn get_chat_msgs_ex(
             ))
         }
     };
-    let process_rows = |rows: rusqlite::MappedRows<_>| {
+    let process_rows = |rows: rusqlite::AndThenRows<_>| {
         // It is faster to sort here rather than
         // let sqlite execute an ORDER BY clause.
         let mut sorted_rows = Vec::new();
@@ -3120,7 +3123,10 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
                     LEFT JOIN chats c ON m.chat_id=c.id
                     WHERE m.state=10 AND m.hidden=0 AND m.chat_id>9 AND c.archived=1",
                 (),
-                |row| row.get::<_, ChatId>(0),
+                |row| {
+                    let chat_id: ChatId = row.get(0)?;
+                    Ok(chat_id)
+                },
             )
             .await?;
         if chat_ids_in_archive.is_empty() {
@@ -3298,7 +3304,10 @@ pub async fn get_chat_media(
                     DC_CHAT_ID_TRASH,
                     Viewtype::Webxdc,
                 ),
-                |row| row.get::<_, MsgId>(0),
+                |row| {
+                    let msg_id: MsgId = row.get(0)?;
+                    Ok(msg_id)
+                },
             )
             .await?
     } else {
@@ -3328,7 +3337,10 @@ pub async fn get_chat_media(
                         msg_type
                     },
                 ),
-                |row| row.get::<_, MsgId>(0),
+                |row| {
+                    let msg_id: MsgId = row.get(0)?;
+                    Ok(msg_id)
+                },
             )
             .await?
     };
@@ -3349,7 +3361,10 @@ pub async fn get_chat_contacts(context: &Context, chat_id: ChatId) -> Result<Vec
               WHERE cc.chat_id=? AND cc.add_timestamp >= cc.remove_timestamp
               ORDER BY c.id=1, c.last_seen DESC, c.id DESC;",
             (chat_id,),
-            |row| row.get::<_, ContactId>(0),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                Ok(contact_id)
+            },
         )
         .await
 }
@@ -3371,7 +3386,10 @@ pub async fn get_past_chat_contacts(context: &Context, chat_id: ChatId) -> Resul
              AND ? < cc.remove_timestamp
              ORDER BY c.id=1, cc.remove_timestamp DESC, c.id DESC",
             (chat_id, now.saturating_sub(60 * 24 * 3600)),
-            |row| row.get::<_, ContactId>(0),
+            |row| {
+                let contact_id: ContactId = row.get(0)?;
+                Ok(contact_id)
+            },
         )
         .await
 }
@@ -3734,11 +3752,13 @@ pub(crate) async fn shall_attach_selfavatar(context: &Context, chat_id: ChatId) 
              LEFT JOIN contacts c ON c.id=cc.contact_id
              WHERE cc.chat_id=? AND cc.contact_id!=? AND cc.add_timestamp >= cc.remove_timestamp",
             (chat_id, ContactId::SELF),
-            |row| Ok(row.get::<_, i64>(0)),
+            |row| {
+                let selfavatar_sent: i64 = row.get(0)?;
+                Ok(selfavatar_sent)
+            },
             |rows| {
                 let mut needs_attach = false;
                 for row in rows {
-                    let row = row?;
                     let selfavatar_sent = row?;
                     if selfavatar_sent < timestamp_some_days_ago {
                         needs_attach = true;

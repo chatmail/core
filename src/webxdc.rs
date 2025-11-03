@@ -732,8 +732,8 @@ impl Context {
                 "SELECT update_item, id FROM msgs_status_updates WHERE msg_id=? AND id>? ORDER BY id",
                 (instance_msg_id, last_known_serial),
                 |row| {
-                    let update_item_str = row.get::<_, String>(0)?;
-                    let serial = row.get::<_, StatusUpdateSerial>(1)?;
+                    let update_item_str: String = row.get(0)?;
+                    let serial: StatusUpdateSerial = row.get(1)?;
                     Ok((update_item_str, serial))
                 },
                 |rows| {
