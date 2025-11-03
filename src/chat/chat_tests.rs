@@ -2633,7 +2633,7 @@ async fn test_can_send_group() -> Result<()> {
 async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
     fn contains(parsed: &MimeMessage, s: &str) -> bool {
         assert_eq!(parsed.decrypting_failed, false);
-        let decoded_str = str::from_utf8(&parsed.decoded_data).unwrap();
+        let decoded_str = std::str::from_utf8(&parsed.decoded_data).unwrap();
         decoded_str.contains(s)
     }
 
