@@ -530,15 +530,11 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     let transport_id = 0;
     let (_s, r) = async_channel::bounded(1);
     let mut imap = Imap::new(
+        ctx,
         transport_id,
-        configured_param.imap.clone(),
-        configured_param.imap_password.clone(),
-        proxy_config,
-        &configured_param.addr,
-        strict_tls,
-        configured_param.oauth2,
+        configured_param.clone(),
         r,
-    );
+    ).await?;
     let configuring = true;
     let mut imap_session = match imap.connect(ctx, configuring).await {
         Ok(session) => session,

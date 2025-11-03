@@ -27,6 +27,7 @@ use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
+use crate::transport::ConfiguredLoginParam;
 use crate::{constants, stats};
 
 pub(crate) mod connectivity;
@@ -862,7 +863,11 @@ impl Scheduler {
         let mut oboxes = Vec::new();
         let mut start_recvs = Vec::new();
 
-        let (conn_state, inbox_handlers) = ImapConnectionState::new(ctx).await?;
+        let (transport_id, configured_login_param) = ConfiguredLoginParam::load(ctx)
+            .await?
+            .context("Not configured")?;
+        let (conn_state, inbox_handlers) =
+            ImapConnectionState::new(ctx, transport_id, configured_login_param.clone()).await?;
         let (inbox_start_send, inbox_start_recv) = oneshot::channel();
         let handle = {
             let ctx = ctx.clone();
@@ -876,7 +881,7 @@ impl Scheduler {
         start_recvs.push(inbox_start_recv);
 
         if ctx.should_watch_mvbox().await? {
-            let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
+            let (conn_state, handlers) = ImapConnectionState::new(ctx, transport_id, configured_login_param).await?;
             let (start_send, start_recv) = oneshot::channel();
             let ctx = ctx.clone();
             let meaning = FolderMeaning::Mvbox;
@@ -1097,12 +1102,17 @@ pub(crate) struct ImapConnectionState {
 
 impl ImapConnectionState {
     /// Construct a new connection.
-    async fn new(context: &Context) -> Result<(Self, ImapConnectionHandlers)> {
+    async fn new(
+        context: &Context,
+        transport_id: u32,
+        login_param: ConfiguredLoginParam,
+    ) -> Result<(Self, ImapConnectionHandlers)> {
         let stop_token = CancellationToken::new();
         let (idle_interrupt_sender, idle_interrupt_receiver) = channel::bounded(1);
 
         let handlers = ImapConnectionHandlers {
-            connection: Imap::new_configured(context, idle_interrupt_receiver).await?,
+            connection: Imap::new(context, transport_id, login_param, idle_interrupt_receiver)
+                .await?,
             stop_token: stop_token.clone(),
         };
 
