@@ -260,7 +260,7 @@ impl Imap {
         let addr = &param.addr;
         let strict_tls = param.strict_tls(proxy_config.is_some());
         let oauth2 = param.oauth2;
-        Ok( Imap {
+        Ok(Imap {
             transport_id,
             idle_interrupt_receiver,
             addr: addr.to_string(),
