@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import Contact, EventType, Message, events
-from deltachat_rpc_client.const import ChatType, DownloadState, MessageState
+from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
@@ -930,34 +930,103 @@ def test_delete_deltachat_folder(acfactory, direct_imap):
     assert "DeltaChat" in ac1_direct_imap.list_folders()
 
 
-def test_broadcast(acfactory):
+@pytest.mark.parametrize("all_devices_online", [True, False])
+def test_leave_broadcast(acfactory, all_devices_online):
     alice, bob = acfactory.get_online_accounts(2)
 
-    alice_chat = alice.create_broadcast("My great channel")
-    snapshot = alice_chat.get_basic_snapshot()
-    assert snapshot.name == "My great channel"
-    assert snapshot.is_unpromoted
-    assert snapshot.is_encrypted
-    assert snapshot.chat_type == ChatType.OUT_BROADCAST
+    bob2 = bob.clone()
 
-    alice_contact_bob = alice.create_contact(bob, "Bob")
-    alice_chat.add_contact(alice_contact_bob)
+    if all_devices_online:
+        bob2.start_io()
 
-    alice_msg = alice_chat.send_message(text="hello").get_snapshot()
-    assert alice_msg.text == "hello"
-    assert alice_msg.show_padlock
+    logging.info("===================== Alice creates a broadcast =====================")
+    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
 
-    bob_msg = bob.wait_for_incoming_msg().get_snapshot()
-    assert bob_msg.text == "hello"
-    assert bob_msg.show_padlock
-    assert bob_msg.error is None
+    logging.info("===================== Bob joins the broadcast =====================")
+    qr_code = alice_chat.get_qr_code()
+    bob.secure_join(qr_code)
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
 
-    bob_chat = bob.get_chat_by_id(bob_msg.chat_id)
-    bob_chat_snapshot = bob_chat.get_basic_snapshot()
-    assert bob_chat_snapshot.name == "My great channel"
-    assert not bob_chat_snapshot.is_unpromoted
-    assert bob_chat_snapshot.is_encrypted
-    assert bob_chat_snapshot.chat_type == ChatType.IN_BROADCAST
-    assert bob_chat_snapshot.is_contact_request
+    alice_bob_contact = alice.create_contact(bob)
+    alice_contacts = alice_chat.get_contacts()
+    assert len(alice_contacts) == 1  # 1 recipient
+    assert alice_contacts[0].id == alice_bob_contact.id
 
-    assert not bob_chat.can_send()
+    member_added_msg = bob.wait_for_incoming_msg()
+    assert member_added_msg.get_snapshot().text == "You joined the channel."
+
+    def get_broadcast(ac):
+        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        return chat
+
+    def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
+        chat = get_broadcast(ac)
+        contact_snapshot = contact.get_snapshot()
+        chat_msgs = chat.get_messages()
+
+        if please_wait_info_msg:
+            first_msg = chat_msgs.pop(0).get_snapshot()
+            assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
+            assert first_msg.is_info
+
+        encrypted_msg = chat_msgs.pop(0).get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
+        member_added_msg = chat_msgs.pop(0).get_snapshot()
+        if inviter_side:
+            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+        else:
+            assert member_added_msg.text == "You joined the channel."
+        assert member_added_msg.is_info
+
+        if not inviter_side:
+            leave_msg = chat_msgs.pop(0).get_snapshot()
+            assert leave_msg.text == "You left the channel."
+
+        assert len(chat_msgs) == 0
+
+        chat_snapshot = chat.get_full_snapshot()
+
+        # On Alice's side, SELF is not in the list of contact ids
+        # because OutBroadcast chats never contain SELF in the list.
+        # On Bob's side, SELF is not in the list because he left.
+        if inviter_side:
+            assert len(chat_snapshot.contact_ids) == 0
+        else:
+            assert chat_snapshot.contact_ids == [contact.id]
+
+    logging.info("===================== Bob leaves the broadcast =====================")
+    bob_chat = get_broadcast(bob)
+    assert bob_chat.get_full_snapshot().self_in_group
+    assert len(bob_chat.get_contacts()) == 2  # Alice and Bob
+
+    bob_chat.leave()
+    assert not bob_chat.get_full_snapshot().self_in_group
+    # After Bob left, only Alice will be left in Bob's memberlist
+    assert len(bob_chat.get_contacts()) == 1
+
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
+
+    logging.info("===================== Test Alice's device =====================")
+    while len(alice_chat.get_contacts()) != 0:  # After Bob left, there will be 0 recipients
+        alice.wait_for_event(EventType.CHAT_MODIFIED)
+
+    check_account(alice, alice.create_contact(bob), inviter_side=True)
+
+    logging.info("===================== Test Bob's second device =====================")
+    # Start second Bob device, if it wasn't started already.
+    bob2.start_io()
+
+    member_added_msg = bob2.wait_for_incoming_msg()
+    assert member_added_msg.get_snapshot().text == "You joined the channel."
+
+    bob2_chat = get_broadcast(bob2)
+
+    # After Bob left, only Alice will be left in Bob's memberlist
+    while len(bob2_chat.get_contacts()) != 1:
+        bob2.wait_for_event(EventType.CHAT_MODIFIED)
+
+    check_account(bob2, bob2.create_contact(alice), inviter_side=False)

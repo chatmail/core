@@ -85,6 +85,30 @@ pub enum Qr {
         authcode: String,
     },
 
+    /// Ask whether to join the broadcast channel.
+    AskJoinBroadcast {
+        /// The user-visible name of this broadcast channel
+        name: String,
+
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel across all databases/clients.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
+        grpid: String,
+
+        /// ID of the contact who owns the channel and created the QR code.
+        contact_id: ContactId,
+
+        /// Fingerprint of the contact's key as scanned from the QR code.
+        fingerprint: Fingerprint,
+
+        /// Invite number.
+        invitenumber: String,
+        /// Authentication code.
+        authcode: String,
+    },
+
     /// Contact fingerprint is verified.
     ///
     /// Ask the user if they want to start chatting.
@@ -371,6 +395,7 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 
 /// scheme: `OPENPGP4FPR:FINGERPRINT#a=ADDR&n=NAME&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
+///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&b=BROADCAST_NAME&x=BROADCAST_ID&j=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
@@ -407,18 +432,12 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         None
     };
 
-    let name = if let Some(encoded_name) = param.get("n") {
-        let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-        match percent_decode_str(&encoded_name).decode_utf8() {
-            Ok(name) => name.to_string(),
-            Err(err) => bail!("Invalid name: {err}"),
-        }
-    } else {
-        "".to_string()
-    };
+    let name = decode_name(&param, "n")?.unwrap_or_default();
 
     let invitenumber = param
         .get("i")
+        // For historic reansons, broadcasts currently use j instead of i for the invitenumber:
+        .or_else(|| param.get("j"))
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
     let authcode = param
@@ -430,19 +449,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
 
-    let grpname = if grpid.is_some() {
-        if let Some(encoded_name) = param.get("g") {
-            let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-            match percent_decode_str(&encoded_name).decode_utf8() {
-                Ok(name) => Some(name.to_string()),
-                Err(err) => bail!("Invalid group name: {err}"),
-            }
-        } else {
-            None
-        }
-    } else {
-        None
-    };
+    let grpname = decode_name(&param, "g")?;
+    let broadcast_name = decode_name(&param, "b")?;
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
@@ -456,7 +464,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         .await
         .with_context(|| format!("failed to add or lookup contact for address {addr:?}"))?;
 
-        if let (Some(grpid), Some(grpname)) = (grpid, grpname) {
+        if let (Some(grpid), Some(grpname)) = (grpid.clone(), grpname) {
             if context
                 .is_self_addr(&addr)
                 .await
@@ -491,6 +499,15 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     authcode,
                 })
             }
+        } else if let (Some(grpid), Some(name)) = (grpid, broadcast_name) {
+            Ok(Qr::AskJoinBroadcast {
+                name,
+                grpid,
+                contact_id,
+                fingerprint,
+                invitenumber,
+                authcode,
+            })
         } else if context.is_self_addr(&addr).await? {
             if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
                 Ok(Qr::WithdrawVerifyContact {
@@ -533,6 +550,18 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         Ok(Qr::FprWithoutAddr {
             fingerprint: fingerprint.to_string(),
         })
+    }
+}
+
+fn decode_name(param: &BTreeMap<&str, &str>, key: &str) -> Result<Option<String>> {
+    if let Some(encoded_name) = param.get(key) {
+        let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
+        match percent_decode_str(&encoded_name).decode_utf8() {
+            Ok(name) => Ok(Some(name.to_string())),
+            Err(err) => bail!("Invalid QR param {key}: {err}"),
+        }
+    } else {
+        Ok(None)
     }
 }
 

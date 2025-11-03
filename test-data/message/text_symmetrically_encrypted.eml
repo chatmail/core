@@ -1,0 +1,56 @@
+Content-Type: multipart/encrypted; protocol="application/pgp-encrypted"; 
+	boundary="1858db5a667e9817_308656fa7edcc46c_c8ec5a6c260b51bc"
+MIME-Version: 1.0
+From: <alice@example.org>
+To: "hidden-recipients": ;
+Subject: [...]
+Date: Tue, 5 Aug 2025 11:27:17 +0000
+Message-ID: <5f9a3e21-fbbd-43aa-9638-1927da98b772@localhost>
+References: <5f9a3e21-fbbd-43aa-9638-1927da98b772@localhost>
+Chat-Version: 1.0
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+	 C0GUFsaWNlIDxhbGljZUBleGFtcGxlLm9yZz7CkgQQFggAOgUCaJHqlBYhBC5vossjtTLXKGNLWGSw
+	 j2Gp7ZRDAhsDAh4BBQsJCAcCBhUKCQgLAgQWAgMBAScCGQEACgkQZLCPYantlEM55QD9H8bPo4J8Yz
+	 TlMuMQms7o7rW89FYX+WH//0IDbfgWysAA/2lDEwfcP0ufyJPvUMGUi62JcFS9LBwS0riKGpC6hiMM
+	 uDgEXlh13RIKKwYBBAGXVQEFAQEHQAbtyNbLZIUBTwqeW2W5tVbrusWLJ+nTUmtF7perLbYdAwEIB8
+	 J4BBgWCAAgBQJokeqUAhsMFiEELm+iyyO1MtcoY0tYZLCPYantlEMACgkQZLCPYantlEPdsAEA8cjS
+	 XsAtWnQtW6m7Yn53j5Wk+jl5b3plydWhh8kk8uAA/2gx7wuDYDW9V32NdacJFV2H7UtItsTjN3qp8f
+	 l00TQB
+
+
+--1858db5a667e9817_308656fa7edcc46c_c8ec5a6c260b51bc
+Content-Type: application/pgp-encrypted; charset="utf-8"
+Content-Description: PGP/MIME version identification
+Content-Transfer-Encoding: 7bit
+
+Version: 1
+
+--1858db5a667e9817_308656fa7edcc46c_c8ec5a6c260b51bc
+Content-Type: application/octet-stream; name="encrypted.asc"; 
+	charset="utf-8"
+Content-Description: OpenPGP encrypted message
+Content-Disposition: inline; filename="encrypted.asc";
+Content-Transfer-Encoding: 7bit
+
+-----BEGIN PGP MESSAGE-----
+
+wz4GHAcCCgEI44vuKOnsZubFQrI4MW7LbfmxKq5N2VIQ8c2CIRIAnvAa3AMV3Deq
+P69ilwwDCf2NRy8Xg42Dc9LBkAIHAgdRy6G2xao09tPMEBBhY9dF01x21w+MyWd4
+Hm8Qz/No8BPkvxJO8WqFmbO/U0EHMEXGpADzNjU82I1bamslr0xjohgkL7goDkKl
+ZbHMV1XTrG4No57fpXZSlWKRK+cJaY9S5pdwAboHuzdxhbWf+lAT2mqntkXLAtdT
+tYv0piXH5+czWFsFpJRH4egYknhO+V9kpE4QX4wnwSwDinsBqAeMawcU93V4Eso+
+JYacb9Rd6Sv3ApjB12vAQTlc5KAxSFdCRGQBFIWNAMf6X04dSrURgh/gy2AnnO4q
+ViU2+o5yITN+6KXxQrfmtL+xcPY1vKiATH/n5HYo/MgkwkwCSqvC5eajuMmKqncX
+4877OzvCq7ohAnZVuaQFHLJlavKNzS76Hx4AGKX8MojCzhpUfmLwcjBtmteohAJd
+COxhIS6hQDrgipscFmPW7fHIlHPvz0B4G/oorMzg9sN/vu+IerCoP8DCIbVIN3eK
+Nt8XZtY2bNnzzQyh6XP5E5dhHWMGFlJFA1rdnAZ6O36Vdmm5++E4oFhluOTXNKRd
+XapcxtXwwHfm+294pi9P8TWpADXwH6Mt2gwhHh9BE68SstjdM29hSA89q4Kn4y8p
+EEsplNl2A4ZeD2Xz868PwoLnRa1f2b5nzdeZhUtj4K2JFGbAJ6alJ5sjRZaZIxnE
+rQVvpwRVgaBp9scIsKVT14czCVAYW3n4RMYB3zwTkSIoW0prWZAGlzMAjzlaspnU
+zxXzeY7woy+vjRPCFJCxWRrZ20cDQzs5pnrjapxS8j72ByQ=
+=SwRI
+-----END PGP MESSAGE-----
+
+
+--1858db5a667e9817_308656fa7edcc46c_c8ec5a6c260b51bc--
+

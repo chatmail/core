@@ -39,6 +39,8 @@ pub enum HeaderDef {
     /// Mailing list ID defined in [RFC 2919](https://tools.ietf.org/html/rfc2919).
     ListId,
     ListPost,
+    /// Mailing list id, belonging to a broadcast channel created by Delta Chat
+    ChatListId,
 
     /// List-Help header defined in [RFC 2369](https://datatracker.ietf.org/doc/html/rfc2369).
     ListHelp,
@@ -63,7 +65,9 @@ pub enum HeaderDef {
     ChatUserAvatar,
     ChatVoiceMessage,
     ChatGroupMemberRemoved,
+    ChatGroupMemberRemovedFpr,
     ChatGroupMemberAdded,
+    ChatGroupMemberAddedFpr,
     ChatContent,
 
     /// Past members of the group.
@@ -93,6 +97,11 @@ pub enum HeaderDef {
 
     /// This message obsoletes the text of the message defined here by rfc724_mid.
     ChatEdit,
+
+    /// The secret shared amongst all recipients of this broadcast channel,
+    /// used to encrypt and decrypt messages.
+    /// This secret is sent to a new member in the member-addition message.
+    ChatBroadcastSecret,
 
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,

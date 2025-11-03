@@ -99,19 +99,44 @@ pub enum Param {
 
     /// For Messages
     ///
-    /// For "MemberRemovedFromGroup" this is the email address
-    /// removed from the group.
+    /// For "MemberAddedToGroup" and "MemberRemovedFromGroup",
+    /// this is the email address added to / removed from the group.
     ///
-    /// For "MemberAddedToGroup" this is the email address added to the group.
+    /// For securejoin messages other than `vg-member-added`, this is the step,
+    /// which is put into the `Secure-Join` header.
     Arg = b'E',
 
     /// For Messages
+    ///
+    /// For `BobHandshakeMsg::Request`, this is the `Secure-Join-Invitenumber` header.
+    ///
+    /// For `BobHandshakeMsg::RequestWithAuth`, this is the `Secure-Join-Auth` header.
+    ///
+    /// For [`SystemMessage::MultiDeviceSync`], this contains the ids that are synced.
+    ///
+    /// For [`SystemMessage::MemberAddedToGroup`],
+    /// this is '1' if it was added because of a securejoin-handshake, and '0' otherwise.
+    ///
+    /// For call messages, this is the accept timestamp.
     Arg2 = b'F',
 
-    /// `Secure-Join-Fingerprint` header for `{vc,vg}-request-with-auth` messages.
+    /// For Messages
+    ///
+    /// For `BobHandshakeMsg::RequestWithAuth`,
+    /// this contains the `Secure-Join-Fingerprint` header.
+    ///
+    /// For [`SystemMessage::MemberAddedToGroup`] that add to a broadcast channel,
+    /// this contains the broadcast channel's shared secret.
     Arg3 = b'G',
 
-    /// Deprecated `Secure-Join-Group` header for messages.
+    /// For Messages
+    ///
+    /// Deprecated `Secure-Join-Group` header for `BobHandshakeMsg::RequestWithAuth` messages.
+    ///
+    /// For "MemberAddedToGroup" and "MemberRemovedFromGroup",
+    /// this is the fingerprint added to / removed from the group.
+    ///
+    /// For call messages, this is the end timsetamp.
     Arg4 = b'H',
 
     /// For Messages

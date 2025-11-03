@@ -3,6 +3,7 @@ import logging
 import pytest
 
 from deltachat_rpc_client import Chat, EventType, SpecialContactId
+from deltachat_rpc_client.const import ChatType
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -107,6 +108,143 @@ def test_qr_securejoin(acfactory):
     fiona.secure_join(qr_code)
     alice2.wait_for_securejoin_inviter_success()
     fiona.wait_for_securejoin_joiner_success()
+
+
+@pytest.mark.parametrize("all_devices_online", [True, False])
+def test_qr_securejoin_broadcast(acfactory, all_devices_online):
+    alice, bob, fiona = acfactory.get_online_accounts(3)
+
+    alice2 = alice.clone()
+    bob2 = bob.clone()
+
+    if all_devices_online:
+        alice2.start_io()
+        bob2.start_io()
+
+    logging.info("===================== Alice creates a broadcast =====================")
+    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+    snapshot = alice_chat.get_basic_snapshot()
+    assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
+
+    logging.info("===================== Bob joins the broadcast =====================")
+
+    qr_code = alice_chat.get_qr_code()
+    bob.secure_join(qr_code)
+    alice.wait_for_securejoin_inviter_success()
+    bob.wait_for_securejoin_joiner_success()
+    alice_chat.send_text("Hello everyone!")
+
+    def get_broadcast(ac):
+        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        return chat
+
+    def wait_for_broadcast_messages(ac):
+        chat = get_broadcast(ac)
+
+        snapshot = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot.text == "You joined the channel."
+        assert snapshot.chat_id == chat.id
+
+        snapshot = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot.text == "Hello everyone!"
+        assert snapshot.chat_id == chat.id
+
+    def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
+        # Check that the chat partner is verified.
+        contact_snapshot = contact.get_snapshot()
+        assert contact_snapshot.is_verified
+
+        chat = get_broadcast(ac)
+        chat_msgs = chat.get_messages()
+
+        if please_wait_info_msg:
+            first_msg = chat_msgs.pop(0).get_snapshot()
+            assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
+            assert first_msg.is_info
+
+        encrypted_msg = chat_msgs[0].get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
+        member_added_msg = chat_msgs[1].get_snapshot()
+        if inviter_side:
+            assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+        else:
+            assert member_added_msg.text == "You joined the channel."
+        assert member_added_msg.is_info
+
+        hello_msg = chat_msgs[2].get_snapshot()
+        assert hello_msg.text == "Hello everyone!"
+        assert not hello_msg.is_info
+        assert hello_msg.show_padlock
+        assert hello_msg.error is None
+
+        assert len(chat_msgs) == 3
+
+        chat_snapshot = chat.get_full_snapshot()
+        assert chat_snapshot.is_encrypted
+        assert chat_snapshot.name == "Broadcast channel for everyone!"
+        if inviter_side:
+            assert chat_snapshot.chat_type == ChatType.OUT_BROADCAST
+        else:
+            assert chat_snapshot.chat_type == ChatType.IN_BROADCAST
+        assert chat_snapshot.can_send == inviter_side
+
+        chat_contacts = chat_snapshot.contact_ids
+        assert contact.id in chat_contacts
+        if inviter_side:
+            assert len(chat_contacts) == 1
+        else:
+            assert len(chat_contacts) == 2
+            assert SpecialContactId.SELF in chat_contacts
+            assert chat_snapshot.self_in_group
+
+    wait_for_broadcast_messages(bob)
+
+    check_account(alice, alice.create_contact(bob), inviter_side=True)
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
+
+    logging.info("===================== Test Alice's second device =====================")
+
+    # Start second Alice device, if it wasn't started already.
+    alice2.start_io()
+
+    while True:
+        msg_id = alice2.wait_for_msgs_changed_event().msg_id
+        if msg_id:
+            snapshot = alice2.get_message_by_id(msg_id).get_snapshot()
+            if snapshot.text == "Hello everyone!":
+                break
+
+    check_account(alice2, alice2.create_contact(bob), inviter_side=True)
+
+    logging.info("===================== Test Bob's second device =====================")
+
+    # Start second Bob device, if it wasn't started already.
+    bob2.start_io()
+    bob2.wait_for_securejoin_joiner_success()
+    wait_for_broadcast_messages(bob2)
+    check_account(bob2, bob2.create_contact(alice), inviter_side=False)
+
+    # The QR code token is synced, so alice2 must be able to handle join requests.
+    logging.info("===================== Fiona joins the group via alice2 =====================")
+    alice.stop_io()
+    fiona.secure_join(qr_code)
+    alice2.wait_for_securejoin_inviter_success()
+    fiona.wait_for_securejoin_joiner_success()
+
+    snapshot = fiona.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "You joined the channel."
+
+    get_broadcast(alice2).get_messages()[2].resend()
+    snapshot = fiona.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "Hello everyone!"
+
+    check_account(fiona, fiona.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
+
+    # For Bob, the channel must not have changed:
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
 
 def test_qr_securejoin_contact_request(acfactory) -> None:
