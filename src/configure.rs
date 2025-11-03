@@ -28,18 +28,20 @@ use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
 use crate::log::{LogExt, info, warn};
+use crate::login_param::EnteredCertificateChecks;
 pub use crate::login_param::EnteredLoginParam;
-use crate::login_param::{
-    ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
-    ConnectionCandidate, EnteredCertificateChecks, ProxyConfig,
-};
 use crate::message::Message;
+use crate::net::proxy::ProxyConfig;
 use crate::oauth2::get_oauth2_addr;
 use crate::provider::{Protocol, Provider, Socket, UsernamePattern};
 use crate::qr::{login_param_from_account_qr, login_param_from_login_qr};
 use crate::smtp::Smtp;
 use crate::sync::Sync::*;
 use crate::tools::time;
+use crate::transport::{
+    ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
+    ConnectionCandidate,
+};
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 use deltachat_contact_tools::addr_cmp;

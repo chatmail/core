@@ -33,9 +33,6 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::log::{LogExt, error, info, warn};
-use crate::login_param::{
-    ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
-};
 use crate::message::{self, Message, MessageState, MessengerMessage, MsgId};
 use crate::mimeparser;
 use crate::net::proxy::ProxyConfig;
@@ -48,6 +45,9 @@ use crate::receive_imf::{
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
+use crate::transport::{
+    ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
+};
 
 pub(crate) mod capabilities;
 mod client;

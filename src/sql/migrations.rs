@@ -17,11 +17,11 @@ use crate::context::Context;
 use crate::imap;
 use crate::key::DcKey;
 use crate::log::{info, warn};
-use crate::login_param::ConfiguredLoginParam;
 use crate::message::MsgId;
 use crate::provider::get_provider_info;
 use crate::sql::Sql;
 use crate::tools::{Time, inc_and_check, time_elapsed};
+use crate::transport::ConfiguredLoginParam;
 
 const DBVERSION: i32 = 68;
 const VERSION_CFG: &str = "dbversion";

@@ -14,8 +14,6 @@ use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{error, info, warn};
-use crate::login_param::prioritize_server_login_params;
-use crate::login_param::{ConfiguredLoginParam, ConfiguredServerLoginParam};
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory::MimeFactory;
@@ -24,6 +22,9 @@ use crate::net::session::SessionBufStream;
 use crate::scheduler::connectivity::ConnectivityStore;
 use crate::stock_str::unencrypted_email;
 use crate::tools::{self, time_elapsed};
+use crate::transport::{
+    ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
+};
 
 #[derive(Default)]
 pub(crate) struct Smtp {

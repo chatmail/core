@@ -23,7 +23,7 @@ use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::self_fingerprint;
 use crate::log::{info, warn};
 use crate::logged_debug_assert;
-use crate::login_param::{ConfiguredLoginParam, EnteredLoginParam};
+use crate::login_param::EnteredLoginParam;
 use crate::message::{self, MessageState, MsgId};
 use crate::net::tls::TlsSessionStore;
 use crate::peer_channels::Iroh;
@@ -34,6 +34,7 @@ use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
 use crate::tools::{self, duration_to_str, time, time_elapsed};
+use crate::transport::ConfiguredLoginParam;
 use crate::{chatlist_events, stats};
 
 /// Builder for the [`Context`].
