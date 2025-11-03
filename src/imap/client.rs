@@ -9,13 +9,14 @@ use tokio::io::BufWriter;
 use super::capabilities::Capabilities;
 use crate::context::Context;
 use crate::log::{LoggingStream, info, warn};
-use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_tls;
 use crate::net::{connect_tcp_inner, run_connection_attempts, update_connection_history};
 use crate::tools::time;
+use crate::transport::ConnectionCandidate;
+use crate::transport::ConnectionSecurity;
 
 #[derive(Debug)]
 pub(crate) struct Client {

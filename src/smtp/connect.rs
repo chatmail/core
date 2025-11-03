@@ -8,7 +8,6 @@ use tokio::io::{AsyncBufRead, AsyncWrite, BufStream};
 
 use crate::context::Context;
 use crate::log::{info, warn};
-use crate::login_param::{ConnectionCandidate, ConnectionSecurity};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
@@ -18,6 +17,8 @@ use crate::net::{
 };
 use crate::oauth2::get_oauth2_access_token;
 use crate::tools::time;
+use crate::transport::ConnectionCandidate;
+use crate::transport::ConnectionSecurity;
 
 /// Converts port number to ALPN.
 fn alpn(port: u16) -> &'static str {

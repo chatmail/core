@@ -17,11 +17,11 @@ use crate::configure::EnteredLoginParam;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::{LogExt, info};
-use crate::login_param::ConfiguredLoginParam;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
+use crate::transport::ConfiguredLoginParam;
 use crate::{constants, stats};
 
 /// The available configuration keys.
