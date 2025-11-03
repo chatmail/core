@@ -265,20 +265,14 @@ impl ConfiguredLoginParam {
     }
 
     /// Loads configured login parameters for all transports.
-    pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, ConfiguredLoginParam)>> {
+    pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, Self)>> {
         context
             .sql
-            .query_map("SELECT id, configured_param FROM transports", (), |row| {
+            .query_map_vec("SELECT id, configured_param FROM transports", (), |row| {
                 let id: u32 = row.get(0)?;
                 let json: String = row.get(1)?;
-                Ok((id, json))
-            }, |rows| {
-                let mut res = Vec::new();
-                for row in rows {
-                    let (id, json) = row?;
-                    res.push((id, Self::from_json(&json)?));
-                }
-                Ok(res)
+                let param = Self::from_json(&json)?;
+                Ok((id, param))
             })
             .await
     }
