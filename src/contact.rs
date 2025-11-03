@@ -1285,7 +1285,10 @@ impl Contact {
             .query_map_vec(
                 "SELECT id FROM contacts WHERE id>? AND blocked!=0 ORDER BY last_seen DESC, id DESC;",
                 (ContactId::LAST_SPECIAL,),
-                |row| row.get::<_, ContactId>(0),
+                |row| {
+                    let contact_id: ContactId = row.get(0)?;
+                    Ok(contact_id)
+                }
             )
             .await?;
         Ok(list)
@@ -2044,7 +2047,7 @@ impl RecentlySeenLoop {
         // become unseen in the future.
         let mut unseen_queue: BinaryHeap<MyHeapElem> = context
             .sql
-            .query_map(
+            .query_map_collect(
                 "SELECT id, last_seen FROM contacts
                  WHERE last_seen > ?",
                 (now_ts - SEEN_RECENTLY_SECONDS,),
@@ -2052,10 +2055,6 @@ impl RecentlySeenLoop {
                     let contact_id: ContactId = row.get("id")?;
                     let last_seen: i64 = row.get("last_seen")?;
                     Ok((Reverse(last_seen + SEEN_RECENTLY_SECONDS), contact_id))
-                },
-                |rows| {
-                    rows.collect::<std::result::Result<BinaryHeap<MyHeapElem>, _>>()
-                        .map_err(Into::into)
                 },
             )
             .await

@@ -373,14 +373,14 @@ impl Sql {
         g: G,
     ) -> Result<H>
     where
-        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
-        G: Send + FnOnce(rusqlite::MappedRows<F>) -> Result<H>,
+        F: Send + FnMut(&rusqlite::Row) -> Result<T>,
+        G: Send + FnOnce(rusqlite::AndThenRows<F>) -> Result<H>,
         H: Send + 'static,
     {
         let query_only = true;
         self.call(query_only, move |conn| {
             let mut stmt = conn.prepare(sql)?;
-            let res = stmt.query_map(params, f)?;
+            let res = stmt.query_and_then(params, f)?;
             g(res)
         })
         .await
@@ -398,11 +398,10 @@ impl Sql {
     where
         T: Send + 'static,
         C: Send + 'static + std::iter::FromIterator<T>,
-        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+        F: Send + FnMut(&rusqlite::Row) -> Result<T>,
     {
         self.query_map(sql, params, f, |rows| {
             rows.collect::<std::result::Result<C, _>>()
-                .map_err(Into::into)
         })
         .await
     }
@@ -418,7 +417,7 @@ impl Sql {
     ) -> Result<Vec<T>>
     where
         T: Send + 'static,
-        F: Send + FnMut(&rusqlite::Row) -> rusqlite::Result<T>,
+        F: Send + FnMut(&rusqlite::Row) -> Result<T>,
     {
         self.query_map_collect(sql, params, f).await
     }
@@ -969,7 +968,10 @@ pub async fn remove_unused_files(context: &Context) -> Result<()> {
         .query_map(
             "SELECT value FROM config;",
             (),
-            |row| row.get::<_, String>(0),
+            |row| {
+                let row: String = row.get(0)?;
+                Ok(row)
+            },
             |rows| {
                 for row in rows {
                     maybe_add_file(&mut files_in_use, &row?);
@@ -985,7 +987,10 @@ pub async fn remove_unused_files(context: &Context) -> Result<()> {
         .query_map(
             "SELECT blobname FROM http_cache",
             (),
-            |row| row.get::<_, String>(0),
+            |row| {
+                let row: String = row.get(0)?;
+                Ok(row)
+            },
             |rows| {
                 for row in rows {
                     maybe_add_file(&mut files_in_use, &row?);
@@ -1125,7 +1130,10 @@ async fn maybe_add_from_param(
     sql.query_map(
         query,
         (),
-        |row| row.get::<_, String>(0),
+        |row| {
+            let row: String = row.get(0)?;
+            Ok(row)
+        },
         |rows| {
             for row in rows {
                 let param: Params = row?.parse().unwrap_or_default();

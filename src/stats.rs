@@ -378,7 +378,10 @@ async fn get_timestamps(context: &Context, sql_table: &str) -> Result<Vec<i64>> 
         .query_map_vec(
             &format!("SELECT timestamp FROM {sql_table} LIMIT 1000"),
             (),
-            |row| row.get(0),
+            |row| {
+                let timestamp: i64 = row.get(0)?;
+                Ok(timestamp)
+            },
         )
         .await
 }

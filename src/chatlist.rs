@@ -107,11 +107,6 @@ impl Chatlist {
             Ok((chat_id, msg_id))
         };
 
-        let process_rows = |rows: rusqlite::MappedRows<_>| {
-            rows.collect::<std::result::Result<Vec<_>, _>>()
-                .map_err(Into::into)
-        };
-
         let skip_id = if flag_for_forwarding {
             ChatId::lookup_by_contact(context, ContactId::DEVICE)
                 .await?
@@ -132,7 +127,7 @@ impl Chatlist {
         // groups. Otherwise it would be hard to follow conversations.
         let ids = if let Some(query_contact_id) = query_contact_id {
             // show chats shared with a given contact
-            context.sql.query_map(
+            context.sql.query_map_vec(
                 "SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
@@ -150,7 +145,6 @@ impl Chatlist {
                  ORDER BY c.archived=?3 DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
                 (MessageState::OutDraft, query_contact_id, ChatVisibility::Pinned),
                 process_row,
-                process_rows,
             ).await?
         } else if flag_archived_only {
             // show archived chats
@@ -159,7 +153,7 @@ impl Chatlist {
             // and adapting the number requires larger refactorings and seems not to be worth the effort)
             context
                 .sql
-                .query_map(
+                .query_map_vec(
                     "SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
@@ -177,7 +171,6 @@ impl Chatlist {
                  ORDER BY IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft,),
                     process_row,
-                    process_rows,
                 )
                 .await?
         } else if let Some(query) = query {
@@ -195,7 +188,7 @@ impl Chatlist {
             let str_like_cmd = format!("%{query}%");
             context
                 .sql
-                .query_map(
+                .query_map_vec(
                     "SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
@@ -214,7 +207,6 @@ impl Chatlist {
                  ORDER BY IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft, skip_id, str_like_cmd, only_unread, MessageState::InFresh),
                     process_row,
-                    process_rows,
                 )
                 .await?
         } else {
@@ -229,7 +221,7 @@ impl Chatlist {
                     let msg_id: Option<MsgId> = row.get(3)?;
                     Ok((chat_id, typ, param, msg_id))
                 };
-                let process_rows = |rows: rusqlite::MappedRows<_>| {
+                let process_rows = |rows: rusqlite::AndThenRows<_>| {
                     rows.filter_map(|row: std::result::Result<(_, _, Params, _), _>| match row {
                         Ok((chat_id, typ, param, msg_id)) => {
                             if typ == Chattype::Mailinglist
@@ -243,7 +235,6 @@ impl Chatlist {
                         Err(e) => Some(Err(e)),
                     })
                     .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(Into::into)
                 };
                 context.sql.query_map(
                     "SELECT c.id, c.type, c.param, m.id
@@ -272,7 +263,7 @@ impl Chatlist {
                 ).await?
             } else {
                 //  show normal chatlist
-                context.sql.query_map(
+                context.sql.query_map_vec(
                     "SELECT c.id, m.id
                      FROM chats c
                      LEFT JOIN msgs m
@@ -290,7 +281,6 @@ impl Chatlist {
                      ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft, skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
-                    process_rows,
                 ).await?
             };
             if !flag_no_specials && get_archived_cnt(context).await? > 0 {

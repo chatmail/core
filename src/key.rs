@@ -159,13 +159,15 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
 pub(crate) async fn load_self_public_keyring(context: &Context) -> Result<Vec<SignedPublicKey>> {
     let keys = context
         .sql
-        .query_map(
+        .query_map_vec(
             r#"SELECT public_key
                FROM keypairs
                ORDER BY id=(SELECT value FROM config WHERE keyname='key_id') DESC"#,
             (),
-            |row| row.get::<_, Vec<u8>>(0),
-            |keys| keys.collect::<Result<Vec<_>, _>>().map_err(Into::into),
+            |row| {
+                let public_key_bytes: Vec<u8> = row.get(0)?;
+                Ok(public_key_bytes)
+            },
         )
         .await?
         .into_iter()
@@ -232,13 +234,15 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
 pub(crate) async fn load_self_secret_keyring(context: &Context) -> Result<Vec<SignedSecretKey>> {
     let keys = context
         .sql
-        .query_map(
+        .query_map_vec(
             r#"SELECT private_key
                FROM keypairs
                ORDER BY id=(SELECT value FROM config WHERE keyname='key_id') DESC"#,
             (),
-            |row| row.get::<_, Vec<u8>>(0),
-            |keys| keys.collect::<Result<Vec<_>, _>>().map_err(Into::into),
+            |row| {
+                let bytes: Vec<u8> = row.get(0)?;
+                Ok(bytes)
+            },
         )
         .await?
         .into_iter()
