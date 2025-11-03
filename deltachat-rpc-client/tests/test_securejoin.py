@@ -243,6 +243,8 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
     check_account(fiona, fiona.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
+    # For Bob, the channel must not have changed:
+    check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
 
 def test_qr_securejoin_contact_request(acfactory) -> None:
     """Alice invites Bob to a group when Bob's chat with Alice is in a contact request mode."""

@@ -110,6 +110,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 vec![black_box(key_pair.public.clone())],
                 Some(key_pair.secret.clone()),
                 true,
+                true,
             )
             .await
             .unwrap()

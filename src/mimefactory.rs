@@ -3,7 +3,7 @@
 use std::collections::{BTreeSet, HashSet};
 use std::io::Cursor;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, format_err};
 use base64::Engine as _;
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::sanitize_bidi_characters;
@@ -290,6 +290,14 @@ impl MimeFactory {
                         for row in rows {
                             let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
 
+                            // In a broadcast channel, only send member-added/removed messages
+                            // to the affected member:
+                            if let Some(fp) = should_only_send_to_one_recipient(&msg, &chat){
+                                if fp? != fingerprint {
+                                    continue;
+                                }
+                            }
+
                             let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
                                 Some(SignedPublicKey::from_slice(public_key_bytes)?)
                             } else {
@@ -413,20 +421,6 @@ impl MimeFactory {
                 && context.should_request_mdns().await?
             {
                 req_mdn = true;
-            }
-
-            // If undisclosed_recipients, and this is a member-added/removed message,
-            // only send to the added/removed member
-            if undisclosed_recipients
-                && matches!(
-                    msg.param.get_cmd(),
-                    SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
-                )
-            {
-                let Some(member) = msg.param.get(Param::Arg) else {
-                    bail!("Missing removed/added member");
-                };
-                recipients.retain(|addr| addr == member);
             }
 
             encryption_pubkeys = if !is_encrypted {
@@ -1975,12 +1969,7 @@ fn hidden_recipients() -> Address<'static> {
 }
 
 fn should_encrypt_with_broadcast_secret(msg: &Message, chat: &Chat) -> bool {
-    chat.typ == Chattype::OutBroadcast
-        // We encrypt securejoin messages asymmetrically
-        && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
-        // The member-added message in a broadcast must be asymmetrically encrypted,
-        // because the newly-added member doesn't know the broadcast shared secret yet:
-        && msg.param.get_cmd() != SystemMessage::MemberAddedToGroup
+    chat.typ == Chattype::OutBroadcast && should_only_send_to_one_recipient(msg, chat).is_none()
 }
 
 fn should_hide_recipients(msg: &Message, chat: &Chat) -> bool {
@@ -1989,6 +1978,25 @@ fn should_hide_recipients(msg: &Message, chat: &Chat) -> bool {
 
 fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
     should_encrypt_with_broadcast_secret(msg, chat)
+}
+
+/// Some messages sent into outgoing broadcast channels (member-added/member-removed)
+/// should only go to a single recipient,
+/// rather than all recipients.
+/// This function returns the fingerprint of the recipient the message should be sent to.
+fn should_only_send_to_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
+    if chat.typ == Chattype::OutBroadcast
+        && matches!(
+            msg.param.get_cmd(),
+            SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
+        )
+    {
+        let Some(fp) = msg.param.get(Param::Arg4) else {
+            return Some(Err(format_err!("Missing removed/added member")));
+        };
+        return Some(Ok(fp));
+    }
+    None
 }
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {

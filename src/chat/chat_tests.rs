@@ -2627,6 +2627,121 @@ async fn test_can_send_group() -> Result<()> {
     Ok(())
 }
 
+/// Tests that in a broadcast channel,
+/// the recipients can't see the identity of their fellow recipients.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
+    fn contains(parsed: &MimeMessage, s: &str) -> bool {
+        assert_eq!(parsed.decrypting_failed, false);
+        let decoded_str = str::from_utf8(&parsed.decoded_data).unwrap();
+        decoded_str.contains(s)
+    }
+
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    tcm.section("Alice creates a channel, Bob joins.");
+    let alice_broadcast_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_broadcast_id))
+        .await
+        .unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    tcm.section("Charlie scans the QR code and sends request.");
+    {
+        join_securejoin(charlie, &qr).await.unwrap();
+
+        let request = charlie.pop_sent_msg().await;
+        assert_eq!(request.recipients, "alice@example.org charlie@example.net");
+
+        alice.recv_msg_trash(&request).await;
+    }
+
+    tcm.section("Alice sends auth-required");
+    {
+        let auth_required = alice.pop_sent_msg().await;
+        assert_eq!(
+            auth_required.recipients,
+            "charlie@example.net alice@example.org"
+        );
+        let parsed = charlie.parse_msg(&auth_required).await;
+        assert!(parsed.header_exists(HeaderDef::AutocryptGossip));
+        assert!(contains(&parsed, "charlie@example.net"));
+        assert_eq!(contains(&parsed, "bob@example.net"), false);
+
+        let parsed_by_bob = bob.parse_msg(&auth_required).await;
+        assert!(parsed_by_bob.decrypting_failed);
+
+        charlie.recv_msg_trash(&auth_required).await;
+    }
+
+    tcm.section("Charlie sends request-with-auth");
+    {
+        let request_with_auth = charlie.pop_sent_msg().await;
+        assert_eq!(
+            request_with_auth.recipients,
+            "alice@example.org charlie@example.net"
+        );
+
+        alice.recv_msg_trash(&request_with_auth).await;
+    }
+
+    tcm.section("Alice adds member");
+    {
+        let member_added = alice.pop_sent_msg().await;
+        assert_eq!(
+            member_added.recipients,
+            "charlie@example.net alice@example.org"
+        );
+        let parsed = charlie.parse_msg(&member_added).await;
+        assert!(parsed.header_exists(HeaderDef::AutocryptGossip));
+        assert!(contains(&parsed, "charlie@example.net"));
+        assert_eq!(contains(&parsed, "bob@example.net"), false);
+
+        let parsed_by_bob = bob.parse_msg(&member_added).await;
+        assert!(parsed_by_bob.decrypting_failed);
+
+        let rcvd = charlie.recv_msg(&member_added).await;
+        assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberAddedToGroup);
+    }
+
+    tcm.section("Alice sends into the channel.");
+    {
+        let hi_msg = alice.send_text(alice_broadcast_id, "hi").await;
+        let parsed = charlie.parse_msg(&hi_msg).await;
+        assert_eq!(parsed.header_exists(HeaderDef::AutocryptGossip), false);
+        assert_eq!(contains(&parsed, "charlie@example.net"), false);
+        assert_eq!(contains(&parsed, "bob@example.net"), false);
+
+        let parsed_by_bob = bob.parse_msg(&hi_msg).await;
+        assert_eq!(parsed_by_bob.decrypting_failed, false);
+    }
+
+    tcm.section("Alice removes Charlie. Bob must not see it.");
+    {
+        let alice_charlie_contact = alice.add_or_lookup_contact_id(charlie).await;
+        remove_contact_from_chat(alice, alice_broadcast_id, alice_charlie_contact).await?;
+        let member_removed = alice.pop_sent_msg().await;
+        assert_eq!(
+            member_removed.recipients,
+            "charlie@example.net alice@example.org"
+        );
+        let parsed = charlie.parse_msg(&member_removed).await;
+        assert!(contains(&parsed, "charlie@example.net"));
+        assert_eq!(contains(&parsed, "bob@example.net"), false);
+
+        let parsed_by_bob = bob.parse_msg(&member_removed).await;
+        assert!(parsed_by_bob.decrypting_failed);
+
+        let rcvd = charlie.recv_msg(&member_removed).await;
+        assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberRemovedFromGroup);
+    }
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_change_name() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -3174,10 +3289,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 
     alice.recv_msg_trash(&request_with_auth).await;
     let member_added = alice.pop_sent_msg().await;
-    assert_eq!(
-        request_with_auth.recipients,
-        "alice@example.org bob@example.net"
-    );
+    assert_eq!(member_added.recipients, "bob@example.net alice@example.org");
 
     tcm.section("Bob receives the member-added message answer, and processes it");
     let rcvd = bob0.recv_msg(&member_added).await;
