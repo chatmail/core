@@ -68,6 +68,8 @@ def test_change_address(acfactory) -> None:
 
     alice.stop_io()
     old_alice_addr = alice.get_config("configured_addr")
+    alice_vcard = alice.self_contact.make_vcard()
+    assert old_alice_addr in alice_vcard
     qr = acfactory.get_account_qr()
     alice.add_transport_from_qr(qr)
     new_alice_addr = alice.list_transports()[1]["addr"]
@@ -76,6 +78,9 @@ def test_change_address(acfactory) -> None:
         # configured for any transport.
         alice.set_config("configured_addr", bob_addr)
     alice.set_config("configured_addr", new_alice_addr)
+    alice_vcard = alice.self_contact.make_vcard()
+    assert old_alice_addr not in alice_vcard
+    assert new_alice_addr in alice_vcard
     with pytest.raises(JsonRpcError):
         alice.delete_transport(new_alice_addr)
     alice.start_io()
