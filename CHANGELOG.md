@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.24.0] - 2025-11-03
+
+### Documentation
+
+- Comment why spaced en dash is used to separate message Subject from text.
+
+### Features / Changes
+
+- [**breaking**] QR codes and symmetric encryption for broadcast channels ([#7268](https://github.com/chatmail/core/pull/7268)).
+  - A new QR type AskJoinBroadcast; cloning a broadcast
+    channel is no longer possible; manually adding a member to a broadcast
+    channel is no longer possible (the only way to join a channel is scanning a QR code or clicking a link)
+
+### Refactor
+
+- Split "transport" module out of "login_param".
+
 ## [2.23.0] - 2025-11-01
 
 ### API-Changes
@@ -7057,3 +7074,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.21.0]: https://github.com/chatmail/core/compare/v2.20.0..v2.21.0
 [2.22.0]: https://github.com/chatmail/core/compare/v2.21.0..v2.22.0
 [2.23.0]: https://github.com/chatmail/core/compare/v2.22.0..v2.23.0
+[2.24.0]: https://github.com/chatmail/core/compare/v2.23.0..v2.24.0
