@@ -40,7 +40,7 @@ jobs:
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: deltachat-rpc-server-${{ matrix.arch }}-linux
           path: result/bin/deltachat-rpc-server
@@ -64,7 +64,7 @@ jobs:
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: deltachat-rpc-server-${{ matrix.arch }}
           path: result/bin/deltachat-rpc-server.exe
@@ -91,7 +91,7 @@ jobs:
         run: cargo build --release --package deltachat-rpc-server --target ${{ matrix.arch }}-apple-darwin --features vendored
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: deltachat-rpc-server-${{ matrix.arch }}-macos
           path: target/${{ matrix.arch }}-apple-darwin/release/deltachat-rpc-server
@@ -115,7 +115,7 @@ jobs:
         run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: deltachat-rpc-server-${{ matrix.arch }}-android
           path: result/bin/deltachat-rpc-server
@@ -384,7 +384,7 @@ jobs:
           ls -lah
 
       - name: Upload to artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: deltachat-rpc-server-npm-package
           path: deltachat-rpc-server/npm-package/*.tgz

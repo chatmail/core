@@ -23,7 +23,7 @@ jobs:
         working-directory: deltachat-rpc-client
         run: python3 -m build
       - name: Store the distribution packages
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: python-package-distributions
           path: deltachat-rpc-client/dist/
