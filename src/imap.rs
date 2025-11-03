@@ -254,21 +254,20 @@ impl<T: Iterator<Item = (i64, u32, String)>> Iterator for UidGrouper<T> {
 
 impl Imap {
     /// Creates new disconnected IMAP client using the specific login parameters.
-    ///
-    /// `addr` is used to renew token if OAuth2 authentication is used.
-    #[expect(clippy::too_many_arguments)]
-    pub fn new(
+    pub async fn new(
+        context: &Context,
         transport_id: u32,
-        lp: Vec<ConfiguredServerLoginParam>,
-        password: String,
-        proxy_config: Option<ProxyConfig>,
-        addr: &str,
-        strict_tls: bool,
-        oauth2: bool,
+        param: ConfiguredLoginParam,
         idle_interrupt_receiver: Receiver<()>,
-    ) -> Self {
+    ) -> Result<Self> {
+        let lp = param.imap.clone();
+        let password = param.imap_password.clone();
+        let proxy_config = ProxyConfig::load(context).await?;
+        let addr = &param.addr;
+        let strict_tls = param.strict_tls(proxy_config.is_some());
+        let oauth2 = param.oauth2;
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
-        Imap {
+        Ok(Imap {
             transport_id,
             idle_interrupt_receiver,
             addr: addr.to_string(),
@@ -285,7 +284,7 @@ impl Imap {
             ratelimit: Ratelimit::new(Duration::new(120, 0), 2.0),
             resync_request_sender,
             resync_request_receiver,
-        }
+        })
     }
 
     /// Creates new disconnected IMAP client using configured parameters.
@@ -296,18 +295,7 @@ impl Imap {
         let (transport_id, param) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
-        let proxy_config = ProxyConfig::load(context).await?;
-        let strict_tls = param.strict_tls(proxy_config.is_some());
-        let imap = Self::new(
-            transport_id,
-            param.imap.clone(),
-            param.imap_password.clone(),
-            proxy_config,
-            &param.addr,
-            strict_tls,
-            param.oauth2,
-            idle_interrupt_receiver,
-        );
+        let imap = Self::new(context, transport_id, param, idle_interrupt_receiver).await?;
         Ok(imap)
     }
 
