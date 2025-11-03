@@ -168,7 +168,7 @@ jobs:
         run: cargo build -p deltachat_ffi
 
       - name: Upload C library
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.os }}-libdeltachat.a
           path: target/debug/libdeltachat.a
@@ -193,7 +193,7 @@ jobs:
         run: cargo build -p deltachat-rpc-server
 
       - name: Upload deltachat-rpc-server
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ matrix.os }}-deltachat-rpc-server
           path: ${{ matrix.os == 'windows-latest' && 'target/debug/deltachat-rpc-server.exe' || 'target/debug/deltachat-rpc-server' }}
