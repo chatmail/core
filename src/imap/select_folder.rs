@@ -146,15 +146,16 @@ impl ImapSession {
                 },
             }
         };
+        let transport_id = self.transport_id();
         let mailbox = self
             .selected_mailbox
             .as_mut()
             .with_context(|| format!("No mailbox selected, folder: {folder:?}"))?;
 
-        let old_uid_validity = get_uidvalidity(context, folder)
+        let old_uid_validity = get_uidvalidity(context, transport_id, folder)
             .await
             .with_context(|| format!("Failed to get old UID validity for folder {folder:?}"))?;
-        let old_uid_next = get_uid_next(context, folder)
+        let old_uid_next = get_uid_next(context, transport_id, folder)
             .await
             .with_context(|| format!("Failed to get old UID NEXT for folder {folder:?}"))?;
 
@@ -205,7 +206,7 @@ impl ImapSession {
                             context,
                             "The server illegally decreased the uid_next of folder {folder:?} from {old_uid_next} to {new_uid_next} without changing validity ({new_uid_validity}), resyncing UIDs...",
                         );
-                        set_uid_next(context, folder, new_uid_next).await?;
+                        set_uid_next(context, transport_id, folder, new_uid_next).await?;
                         context.schedule_resync().await?;
                     }
 
@@ -223,14 +224,15 @@ impl ImapSession {
             return Ok(true);
         }
 
+        let transport_id = self.transport_id();
         // UIDVALIDITY is modified, reset highest seen MODSEQ.
-        set_modseq(context, folder, 0).await?;
+        set_modseq(context, transport_id, folder, 0).await?;
 
         // ==============  uid_validity has changed or is being set the first time.  ==============
 
         let new_uid_next = new_uid_next.unwrap_or_default();
-        set_uid_next(context, folder, new_uid_next).await?;
-        set_uidvalidity(context, folder, new_uid_validity).await?;
+        set_uid_next(context, transport_id, folder, new_uid_next).await?;
+        set_uidvalidity(context, transport_id, folder, new_uid_validity).await?;
         self.new_mail = true;
 
         // Collect garbage entries in `imap` table.

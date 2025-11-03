@@ -30,6 +30,8 @@ const PREFETCH_FLAGS: &str = "(UID INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIE
 
 #[derive(Debug)]
 pub(crate) struct Session {
+    transport_id: u32,
+
     pub(super) inner: ImapSession<Box<dyn SessionStream>>,
 
     pub capabilities: Capabilities,
@@ -68,8 +70,10 @@ impl Session {
     pub(crate) fn new(
         inner: ImapSession<Box<dyn SessionStream>>,
         capabilities: Capabilities,
+        transport_id: u32,
     ) -> Self {
         Self {
+            transport_id,
             inner,
             capabilities,
             selected_folder: None,
@@ -78,6 +82,11 @@ impl Session {
             last_full_folder_scan: Mutex::new(None),
             new_mail: false,
         }
+    }
+
+    /// Returns ID of the transport for which this session was created.
+    pub(crate) fn transport_id(&self) -> u32 {
+        self.transport_id
     }
 
     pub fn can_idle(&self) -> bool {
