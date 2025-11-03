@@ -123,7 +123,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         }
 
         let chat_name = chat.get_name();
-        let chat_name_urlencoded = utf8_percent_encode(chat_name, NON_ALPHANUMERIC).to_string();
+        let chat_name_urlencoded = utf8_percent_encode(chat_name, NON_ALPHANUMERIC).to_string().replace("%20", "+");
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
@@ -152,8 +152,9 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             .get_config(Config::Displayname)
             .await?
             .unwrap_or_default();
-        let self_name_urlencoded =
-            utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
+        let self_name_urlencoded = utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT)
+            .to_string()
+            .replace("%20", "+");
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;
