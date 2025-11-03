@@ -1088,3 +1088,26 @@ async fn test_get_securejoin_qr_name_is_last() -> Result<()> {
 
     Ok(())
 }
+
+/// QR codes should not get arbitrary big because of long names.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    alice
+        .set_config(
+            Config::Displayname,
+            Some("Alice Axe Has A Very Long Family Name Really Indeed"),
+        )
+        .await?;
+    let qr = get_securejoin_qr(alice, None).await?;
+    assert!(qr.ends_with("Alice+Axe+Has+A+Very+Long+Fami.."));
+
+    let alice_chat_id =
+        chat::create_group(alice, "The Chat With One Of The Longest Titles Around").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    println!("-------------- {}", qr);
+    assert!(qr.ends_with("The+Chat+With+One+Of+The+Longe.."));
+
+    Ok(())
+}

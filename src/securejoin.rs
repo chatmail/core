@@ -2,7 +2,7 @@
 
 use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::utf8_percent_encode;
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid};
 use crate::config::Config;
@@ -58,6 +58,16 @@ fn inviter_progress(
     });
 
     Ok(())
+}
+
+/// Shorten name to max. 32 characters.
+/// This is to not make QR codes or invite links arbitrary long.
+fn shorten_name(name: &str) -> String {
+    if name.chars().count() > 32 {
+        format!("{}..", &name.chars().take(30).collect::<String>())
+    } else {
+        name.to_string()
+    }
 }
 
 /// Generates a Secure Join QR code.
@@ -123,7 +133,10 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         }
 
         let chat_name = chat.get_name();
-        let chat_name_urlencoded = utf8_percent_encode(chat_name, NON_ALPHANUMERIC).to_string().replace("%20", "+");
+        let chat_name_shortened = shorten_name(chat_name);
+        let chat_name_urlencoded = utf8_percent_encode(chat_name_shortened, NON_ALPHANUMERIC)
+            .to_string()
+            .replace("%20", "+");
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
@@ -152,9 +165,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             .get_config(Config::Displayname)
             .await?
             .unwrap_or_default();
-        let self_name_urlencoded = utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT)
-            .to_string()
-            .replace("%20", "+");
+        let self_name_shortened = shorten_name(&self_name);
+        let self_name_urlencoded =
+            utf8_percent_encode(&self_name_shortened, NON_ALPHANUMERIC_WITHOUT_DOT)
+                .to_string()
+                .replace("%20", "+");
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;
