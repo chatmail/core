@@ -131,21 +131,28 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
 
         let chat_name = chat.get_name();
         let chat_name_urlencoded = utf8_percent_encode(chat_name, NON_ALPHANUMERIC).to_string();
-        let name_attribute = if chat.typ == Chattype::OutBroadcast {
-            "b"
+        if chat.typ == Chattype::OutBroadcast {
+            // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
+            format!(
+                "https://i.delta.chat/#{}&a={}&b={}&x={}&j={}&s={}",
+                fingerprint.hex(),
+                self_addr_urlencoded,
+                &chat_name_urlencoded,
+                &chat.grpid,
+                &invitenumber,
+                &auth,
+            )
         } else {
-            "g"
-        };
-        format!(
-            "https://i.delta.chat/#{}&a={}&{}={}&x={}&i={}&s={}",
-            fingerprint.hex(),
-            self_addr_urlencoded,
-            name_attribute,
-            &chat_name_urlencoded,
-            &chat.grpid,
-            &invitenumber,
-            &auth,
-        )
+            format!(
+                "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
+                fingerprint.hex(),
+                self_addr_urlencoded,
+                &chat_name_urlencoded,
+                &chat.grpid,
+                &invitenumber,
+                &auth,
+            )
+        }
     } else {
         // parameters used: a=n=i=s=
         if sync_token {

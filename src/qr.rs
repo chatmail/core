@@ -395,7 +395,7 @@ pub fn format_backup(qr: &Qr) -> Result<String> {
 
 /// scheme: `OPENPGP4FPR:FINGERPRINT#a=ADDR&n=NAME&i=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&g=GROUPNAME&x=GROUPID&i=INVITENUMBER&s=AUTH`
-///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&b=BROADCAST_NAME&x=BROADCAST_ID&i=INVITENUMBER&s=AUTH`
+///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR&b=BROADCAST_NAME&x=BROADCAST_ID&j=INVITENUMBER&s=AUTH`
 ///     or: `OPENPGP4FPR:FINGERPRINT#a=ADDR`
 async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let payload = qr
@@ -436,6 +436,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     let invitenumber = param
         .get("i")
+        // For historic reansons, broadcasts currently use j instead of i for the invitenumber:
+        .or_else(|| param.get("j"))
         .filter(|&s| validate_id(s))
         .map(|s| s.to_string());
     let authcode = param
