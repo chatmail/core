@@ -2,7 +2,7 @@
 
 use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
-use percent_encoding::utf8_percent_encode;
+use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid};
 use crate::config::Config;
@@ -60,11 +60,11 @@ fn inviter_progress(
     Ok(())
 }
 
-/// Shorten name to max. 32 characters.
+/// Shorten name to max. 25 characters.
 /// This is to not make QR codes or invite links arbitrary long.
 fn shorten_name(name: &str) -> String {
-    if name.chars().count() > 32 {
-        format!("{}..", &name.chars().take(30).collect::<String>())
+    if name.chars().count() > 25 {
+        format!("{}..", &name.chars().take(19).collect::<String>()) // 19 characters as .. gets encoded to %2E%2E (we do the encoding to avoid having dots at the end of the url)
     } else {
         name.to_string()
     }
@@ -166,10 +166,9 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             .await?
             .unwrap_or_default();
         let self_name_shortened = shorten_name(&self_name);
-        let self_name_urlencoded =
-            utf8_percent_encode(&self_name_shortened, NON_ALPHANUMERIC_WITHOUT_DOT)
-                .to_string()
-                .replace("%20", "+");
+        let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, NON_ALPHANUMERIC)
+            .to_string()
+            .replace("%20", "+");
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;

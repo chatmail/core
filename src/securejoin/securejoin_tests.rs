@@ -1090,6 +1090,7 @@ async fn test_get_securejoin_qr_name_is_last() -> Result<()> {
 }
 
 /// QR codes should not get arbitrary big because of long names.
+/// The truncation, however, should not let the url end with a `.`, which is a call for trouble in linkfiers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -1101,13 +1102,14 @@ async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
         )
         .await?;
     let qr = get_securejoin_qr(alice, None).await?;
-    assert!(qr.ends_with("Alice+Axe+Has+A+Very+Long+Fami.."));
+    assert!(qr.ends_with("Alice+Axe+Has+A+Ver%2E%2E"));
+    assert!(!qr.ends_with("."));
 
     let alice_chat_id =
         chat::create_group(alice, "The Chat With One Of The Longest Titles Around").await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
-    println!("-------------- {}", qr);
-    assert!(qr.ends_with("The+Chat+With+One+Of+The+Longe.."));
+    assert!(qr.ends_with("The+Chat+With+One+O%2E%2E"));
+    assert!(!qr.ends_with("."));
 
     Ok(())
 }
