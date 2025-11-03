@@ -108,18 +108,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let auth = create_id();
     token::save(context, Namespace::Auth, grpid, &auth, time()).await?;
 
-    let self_addr = context.get_primary_self_addr().await?;
-    let self_name = context
-        .get_config(Config::Displayname)
-        .await?
-        .unwrap_or_default();
-
     let fingerprint = get_self_fingerprint(context).await?;
 
+    let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded =
         utf8_percent_encode(&self_addr, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
-    let self_name_urlencoded =
-        utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
 
     let qr = if let Some(chat) = chat {
         if sync_token {
@@ -155,6 +148,12 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         }
     } else {
         // parameters used: a=n=i=s=
+        let self_name = context
+            .get_config(Config::Displayname)
+            .await?
+            .unwrap_or_default();
+        let self_name_urlencoded =
+            utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;
