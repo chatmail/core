@@ -1007,6 +1007,14 @@ impl MimeMessage {
         self.headers.contains_key(hname) || self.headers_removed.contains(hname)
     }
 
+    #[cfg(test)]
+    /// Returns whether the decrypted data contains the given `&str`.
+    pub(crate) fn decoded_data_contains(&self, s: &str) -> bool {
+        assert!(!self.decrypting_failed);
+        let decoded_str = str::from_utf8(&self.decoded_data).unwrap();
+        decoded_str.contains(s)
+    }
+
     /// Returns `Chat-Group-ID` header value if it is a valid group ID.
     pub fn get_chat_group_id(&self) -> Option<&str> {
         self.get_header(HeaderDef::ChatGroupId)
