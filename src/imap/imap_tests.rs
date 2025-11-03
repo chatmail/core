@@ -11,17 +11,23 @@ fn test_get_folder_meaning_by_name() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_uid_next_validity() {
     let t = TestContext::new_alice().await;
-    assert_eq!(get_uid_next(&t.ctx, "Inbox").await.unwrap(), 0);
-    assert_eq!(get_uidvalidity(&t.ctx, "Inbox").await.unwrap(), 0);
+    assert_eq!(get_uid_next(&t.ctx, 1, "Inbox").await.unwrap(), 0);
+    assert_eq!(get_uidvalidity(&t.ctx, 1, "Inbox").await.unwrap(), 0);
 
-    set_uidvalidity(&t.ctx, "Inbox", 7).await.unwrap();
-    assert_eq!(get_uidvalidity(&t.ctx, "Inbox").await.unwrap(), 7);
-    assert_eq!(get_uid_next(&t.ctx, "Inbox").await.unwrap(), 0);
+    set_uidvalidity(&t.ctx, 1, "Inbox", 7).await.unwrap();
+    assert_eq!(get_uidvalidity(&t.ctx, 1, "Inbox").await.unwrap(), 7);
+    assert_eq!(get_uid_next(&t.ctx, 1, "Inbox").await.unwrap(), 0);
 
-    set_uid_next(&t.ctx, "Inbox", 5).await.unwrap();
-    set_uidvalidity(&t.ctx, "Inbox", 6).await.unwrap();
-    assert_eq!(get_uid_next(&t.ctx, "Inbox").await.unwrap(), 5);
-    assert_eq!(get_uidvalidity(&t.ctx, "Inbox").await.unwrap(), 6);
+    // For another transport there is still no UIDVALIDITY set.
+    assert_eq!(get_uidvalidity(&t.ctx, 2, "Inbox").await.unwrap(), 0);
+
+    set_uid_next(&t.ctx, 1, "Inbox", 5).await.unwrap();
+    set_uidvalidity(&t.ctx, 1, "Inbox", 6).await.unwrap();
+    assert_eq!(get_uid_next(&t.ctx, 1, "Inbox").await.unwrap(), 5);
+    assert_eq!(get_uidvalidity(&t.ctx, 1, "Inbox").await.unwrap(), 6);
+
+    assert_eq!(get_uid_next(&t.ctx, 2, "Inbox").await.unwrap(), 0);
+    assert_eq!(get_uidvalidity(&t.ctx, 2, "Inbox").await.unwrap(), 0);
 }
 
 #[test]
