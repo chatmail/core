@@ -838,6 +838,30 @@ async fn test_protected_headers_directive() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_hp_outer_headers() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let chat_id = t.get_self_chat().await.id;
+
+    for std_hp_composing in [false, true] {
+        t.set_config_bool(Config::StdHeaderProtectionComposing, std_hp_composing)
+            .await?;
+        chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
+        let sent_msg = t.pop_sent_msg().await;
+        let msg = MimeMessage::from_bytes(t, sent_msg.payload.as_bytes(), None).await?;
+        assert_eq!(msg.header_exists(HeaderDef::HpOuter), std_hp_composing);
+        for hdr in ["Date", "From", "Message-ID"] {
+            assert_eq!(
+                msg.decoded_data_contains(&format!("HP-Outer: {hdr}:")),
+                std_hp_composing,
+            );
+        }
+        assert!(!msg.decoded_data_contains("HP-Outer: Content-Type"));
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_dont_remove_self() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;

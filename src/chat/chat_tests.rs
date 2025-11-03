@@ -2632,12 +2632,6 @@ async fn test_can_send_group() -> Result<()> {
 /// the recipients can't see the identity of their fellow recipients.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
-    fn contains(parsed: &MimeMessage, s: &str) -> bool {
-        assert_eq!(parsed.decrypting_failed, false);
-        let decoded_str = std::str::from_utf8(&parsed.decoded_data).unwrap();
-        decoded_str.contains(s)
-    }
-
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -2669,8 +2663,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         );
         let parsed = charlie.parse_msg(&auth_required).await;
         assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
-        assert!(contains(&parsed, "charlie@example.net"));
-        assert_eq!(contains(&parsed, "bob@example.net"), false);
+        assert!(parsed.decoded_data_contains("charlie@example.net"));
+        assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&auth_required).await;
         assert!(parsed_by_bob.decrypting_failed);
@@ -2698,8 +2692,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         );
         let parsed = charlie.parse_msg(&member_added).await;
         assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
-        assert!(contains(&parsed, "charlie@example.net"));
-        assert_eq!(contains(&parsed, "bob@example.net"), false);
+        assert!(parsed.decoded_data_contains("charlie@example.net"));
+        assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&member_added).await;
         assert!(parsed_by_bob.decrypting_failed);
@@ -2713,8 +2707,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         let hi_msg = alice.send_text(alice_broadcast_id, "hi").await;
         let parsed = charlie.parse_msg(&hi_msg).await;
         assert_eq!(parsed.header_exists(HeaderDef::AutocryptGossip), false);
-        assert_eq!(contains(&parsed, "charlie@example.net"), false);
-        assert_eq!(contains(&parsed, "bob@example.net"), false);
+        assert_eq!(parsed.decoded_data_contains("charlie@example.net"), false);
+        assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&hi_msg).await;
         assert_eq!(parsed_by_bob.decrypting_failed, false);
@@ -2730,8 +2724,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
             "charlie@example.net alice@example.org"
         );
         let parsed = charlie.parse_msg(&member_removed).await;
-        assert!(contains(&parsed, "charlie@example.net"));
-        assert_eq!(contains(&parsed, "bob@example.net"), false);
+        assert!(parsed.decoded_data_contains("charlie@example.net"));
+        assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&member_removed).await;
         assert!(parsed_by_bob.decrypting_failed);

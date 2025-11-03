@@ -138,6 +138,9 @@ pub enum HeaderDef {
     /// Advertised gossip topic for one webxdc.
     IrohGossipTopic,
 
+    /// See <https://www.rfc-editor.org/rfc/rfc9788.html#name-hp-outer-header-field>.
+    HpOuter,
+
     #[cfg(test)]
     TestHeader,
 }
