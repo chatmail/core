@@ -2,7 +2,7 @@
 
 use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{AsciiSet, utf8_percent_encode};
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid};
 use crate::config::Config;
@@ -42,6 +42,8 @@ use crate::token::Namespace;
 // when Delta Chat v2.22.0 is sufficiently rolled out
 const VERIFICATION_TIMEOUT_SECONDS: i64 = 7 * 24 * 3600;
 
+const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_');
+
 fn inviter_progress(
     context: &Context,
     contact_id: ContactId,
@@ -64,7 +66,8 @@ fn inviter_progress(
 /// This is to not make QR codes or invite links arbitrary long.
 fn shorten_name(name: &str) -> String {
     if name.chars().count() > 25 {
-        format!("{}..", &name.chars().take(19).collect::<String>()) // 19 characters as .. gets encoded to %2E%2E (we do the encoding to avoid having dots at the end of the url)
+        // We use _ rather than ... to avoid dots at the end of the URL, which would confuse linkifiers
+        format!("{}_", &name.chars().take(24).collect::<String>())
     } else {
         name.to_string()
     }
@@ -121,8 +124,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let fingerprint = get_self_fingerprint(context).await?;
 
     let self_addr = context.get_primary_self_addr().await?;
-    let self_addr_urlencoded =
-        utf8_percent_encode(&self_addr, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
+    let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
     let qr = if let Some(chat) = chat {
         if sync_token {
@@ -134,7 +136,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
 
         let chat_name = chat.get_name();
         let chat_name_shortened = shorten_name(chat_name);
-        let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, NON_ALPHANUMERIC)
+        let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
         if chat.typ == Chattype::OutBroadcast {
@@ -165,7 +167,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             .await?
             .unwrap_or_default();
         let self_name_shortened = shorten_name(&self_name);
-        let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, NON_ALPHANUMERIC)
+        let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
         if sync_token {

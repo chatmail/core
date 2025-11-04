@@ -556,10 +556,14 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 fn decode_name(param: &BTreeMap<&str, &str>, key: &str) -> Result<Option<String>> {
     if let Some(encoded_name) = param.get(key) {
         let encoded_name = encoded_name.replace('+', "%20"); // sometimes spaces are encoded as `+`
-        match percent_decode_str(&encoded_name).decode_utf8() {
-            Ok(name) => Ok(Some(name.to_string())),
+        let mut name = match percent_decode_str(&encoded_name).decode_utf8() {
+            Ok(name) => name.to_string(),
             Err(err) => bail!("Invalid QR param {key}: {err}"),
+        };
+        if let Some(n) = name.strip_suffix('_') {
+            name = format!("{n}…");
         }
+        Ok(Some(name))
     } else {
         Ok(None)
     }

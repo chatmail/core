@@ -1102,13 +1102,13 @@ async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
         )
         .await?;
     let qr = get_securejoin_qr(alice, None).await?;
-    assert!(qr.ends_with("Alice+Axe+Has+A+Ver%2E%2E"));
+    assert!(qr.ends_with("Alice+Axe+Has+A+Very+Lon_"));
     assert!(!qr.ends_with("."));
 
     let alice_chat_id =
         chat::create_group(alice, "The Chat With One Of The Longest Titles Around").await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
-    assert!(qr.ends_with("The+Chat+With+One+O%2E%2E"));
+    assert!(qr.ends_with("The+Chat+With+One+Of+The_"));
     assert!(!qr.ends_with("."));
 
     Ok(())
