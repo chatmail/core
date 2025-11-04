@@ -186,14 +186,7 @@ pub(crate) async fn receive_imf_from_inbox(
     seen: bool,
     is_partial_download: Option<u32>,
 ) -> Result<Option<ReceivedMsg>> {
-    receive_imf_inner(
-        context,
-        rfc724_mid,
-        imf_raw,
-        seen,
-        is_partial_download.map(|msg_size| (msg_size, None)),
-    )
-    .await
+    receive_imf_inner(context, rfc724_mid, imf_raw, seen, is_partial_download).await
 }
 
 /// Inserts a tombstone into `msgs` table
@@ -490,14 +483,13 @@ async fn get_to_and_past_contact_ids(
 /// If the message is so wrong that we didn't even create a database entry,
 /// returns `Ok(None)`.
 ///
-/// If `partial` is set, it contains the full message size in bytes and an optional error text for
-/// the partially downloaded message.
+/// If `is_partial_download` is set, it contains the full message size in bytes.
 pub(crate) async fn receive_imf_inner(
     context: &Context,
     rfc724_mid: &str,
     imf_raw: &[u8],
     seen: bool,
-    partial: Option<(u32, Option<String>)>,
+    is_partial_download: Option<u32>,
 ) -> Result<Option<ReceivedMsg>> {
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
@@ -506,7 +498,7 @@ pub(crate) async fn receive_imf_inner(
             String::from_utf8_lossy(imf_raw),
         );
     }
-    if partial.is_none() {
+    if is_partial_download.is_none() {
         ensure!(
             !context
                 .get_config_bool(Config::FailOnReceivingFullMsg)
@@ -514,8 +506,8 @@ pub(crate) async fn receive_imf_inner(
         );
     }
 
-    let is_partial_download = partial.as_ref().map(|(msg_size, _err)| *msg_size);
-    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, partial).await {
+    let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw, is_partial_download).await
+    {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
             if rfc724_mid.starts_with(GENERATED_PREFIX) {
