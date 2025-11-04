@@ -1070,3 +1070,46 @@ async fn test_rejoin_group() -> Result<()> {
 
     Ok(())
 }
+
+/// To make invite links a little bit nicer, we put the readable part at the end and encode spaces by `+` instead of `%20`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_securejoin_qr_name_is_last() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    alice
+        .set_config(Config::Displayname, Some("Alice Axe"))
+        .await?;
+    let qr = get_securejoin_qr(alice, None).await?;
+    assert!(qr.ends_with("Alice+Axe"));
+
+    let alice_chat_id = chat::create_group(alice, "The Chat").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    assert!(qr.ends_with("The+Chat"));
+
+    Ok(())
+}
+
+/// QR codes should not get arbitrary big because of long names.
+/// The truncation, however, should not let the url end with a `.`, which is a call for trouble in linkfiers.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    alice
+        .set_config(
+            Config::Displayname,
+            Some("Alice Axe Has A Very Long Family Name Really Indeed"),
+        )
+        .await?;
+    let qr = get_securejoin_qr(alice, None).await?;
+    assert!(qr.ends_with("Alice+Axe+Has+A+Very+Lon_"));
+    assert!(!qr.ends_with("."));
+
+    let alice_chat_id =
+        chat::create_group(alice, "The Chat With One Of The Longest Titles Around").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    assert!(qr.ends_with("The+Chat+With+One+Of+The_"));
+    assert!(!qr.ends_with("."));
+
+    Ok(())
+}

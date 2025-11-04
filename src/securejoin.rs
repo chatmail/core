@@ -2,7 +2,7 @@
 
 use anyhow::{Context as _, Error, Result, bail, ensure};
 use deltachat_contact_tools::ContactAddress;
-use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use percent_encoding::{AsciiSet, utf8_percent_encode};
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, get_chat_id_by_grpid};
 use crate::config::Config;
@@ -42,6 +42,8 @@ use crate::token::Namespace;
 // when Delta Chat v2.22.0 is sufficiently rolled out
 const VERIFICATION_TIMEOUT_SECONDS: i64 = 7 * 24 * 3600;
 
+const DISALLOWED_CHARACTERS: &AsciiSet = &NON_ALPHANUMERIC_WITHOUT_DOT.remove(b'_');
+
 fn inviter_progress(
     context: &Context,
     contact_id: ContactId,
@@ -58,6 +60,17 @@ fn inviter_progress(
     });
 
     Ok(())
+}
+
+/// Shorten name to max. 25 characters.
+/// This is to not make QR codes or invite links arbitrary long.
+fn shorten_name(name: &str) -> String {
+    if name.chars().count() > 25 {
+        // We use _ rather than ... to avoid dots at the end of the URL, which would confuse linkifiers
+        format!("{}_", &name.chars().take(24).collect::<String>())
+    } else {
+        name.to_string()
+    }
 }
 
 /// Generates a Secure Join QR code.
@@ -108,18 +121,10 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let auth = create_id();
     token::save(context, Namespace::Auth, grpid, &auth, time()).await?;
 
+    let fingerprint = get_self_fingerprint(context).await?.hex();
+
     let self_addr = context.get_primary_self_addr().await?;
-    let self_name = context
-        .get_config(Config::Displayname)
-        .await?
-        .unwrap_or_default();
-
-    let fingerprint = get_self_fingerprint(context).await?;
-
-    let self_addr_urlencoded =
-        utf8_percent_encode(&self_addr, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
-    let self_name_urlencoded =
-        utf8_percent_encode(&self_name, NON_ALPHANUMERIC_WITHOUT_DOT).to_string();
+    let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
     let qr = if let Some(chat) = chat {
         if sync_token {
@@ -130,42 +135,36 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         }
 
         let chat_name = chat.get_name();
-        let chat_name_urlencoded = utf8_percent_encode(chat_name, NON_ALPHANUMERIC).to_string();
+        let chat_name_shortened = shorten_name(chat_name);
+        let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, DISALLOWED_CHARACTERS)
+            .to_string()
+            .replace("%20", "+");
+        let grpid = &chat.grpid;
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
-                "https://i.delta.chat/#{}&a={}&b={}&x={}&j={}&s={}",
-                fingerprint.hex(),
-                self_addr_urlencoded,
-                &chat_name_urlencoded,
-                &chat.grpid,
-                &invitenumber,
-                &auth,
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}&b={chat_name_urlencoded}",
             )
         } else {
             format!(
-                "https://i.delta.chat/#{}&a={}&g={}&x={}&i={}&s={}",
-                fingerprint.hex(),
-                self_addr_urlencoded,
-                &chat_name_urlencoded,
-                &chat.grpid,
-                &invitenumber,
-                &auth,
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&g={chat_name_urlencoded}",
             )
         }
     } else {
-        // parameters used: a=n=i=s=
+        let self_name = context
+            .get_config(Config::Displayname)
+            .await?
+            .unwrap_or_default();
+        let self_name_shortened = shorten_name(&self_name);
+        let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, DISALLOWED_CHARACTERS)
+            .to_string()
+            .replace("%20", "+");
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
             context.scheduler.interrupt_inbox().await;
         }
         format!(
-            "https://i.delta.chat/#{}&a={}&n={}&i={}&s={}",
-            fingerprint.hex(),
-            self_addr_urlencoded,
-            self_name_urlencoded,
-            &invitenumber,
-            &auth,
+            "https://i.delta.chat/#{fingerprint}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}",
         )
     };
 

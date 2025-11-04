@@ -940,7 +940,7 @@ def test_leave_broadcast(acfactory, all_devices_online):
         bob2.start_io()
 
     logging.info("===================== Alice creates a broadcast =====================")
-    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+    alice_chat = alice.create_broadcast("Broadcast channel!")
 
     logging.info("===================== Bob joins the broadcast =====================")
     qr_code = alice_chat.get_qr_code()
@@ -957,8 +957,8 @@ def test_leave_broadcast(acfactory, all_devices_online):
     assert member_added_msg.get_snapshot().text == "You joined the channel."
 
     def get_broadcast(ac):
-        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
-        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        chat = ac.get_chatlist(query="Broadcast channel!")[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel!"
         return chat
 
     def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
