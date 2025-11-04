@@ -122,7 +122,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         bob2.start_io()
 
     logging.info("===================== Alice creates a broadcast =====================")
-    alice_chat = alice.create_broadcast("Broadcast channel for everyone!")
+    alice_chat = alice.create_broadcast("Broadcast channel!")
     snapshot = alice_chat.get_basic_snapshot()
     assert not snapshot.is_unpromoted  # Broadcast channels are never unpromoted
 
@@ -135,8 +135,8 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     alice_chat.send_text("Hello everyone!")
 
     def get_broadcast(ac):
-        chat = ac.get_chatlist(query="Broadcast channel for everyone!")[0]
-        assert chat.get_basic_snapshot().name == "Broadcast channel for everyone!"
+        chat = ac.get_chatlist(query="Broadcast channel!")[0]
+        assert chat.get_basic_snapshot().name == "Broadcast channel!"
         return chat
 
     def wait_for_broadcast_messages(ac):
@@ -184,7 +184,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
         chat_snapshot = chat.get_full_snapshot()
         assert chat_snapshot.is_encrypted
-        assert chat_snapshot.name == "Broadcast channel for everyone!"
+        assert chat_snapshot.name == "Broadcast channel!"
         if inviter_side:
             assert chat_snapshot.chat_type == ChatType.OUT_BROADCAST
         else:
