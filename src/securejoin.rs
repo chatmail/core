@@ -134,33 +134,32 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
 
         let chat_name = chat.get_name();
         let chat_name_shortened = shorten_name(chat_name);
-        let chat_name_urlencoded = utf8_percent_encode(chat_name_shortened, NON_ALPHANUMERIC)
+        let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, NON_ALPHANUMERIC)
             .to_string()
             .replace("%20", "+");
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
-                "https://i.delta.chat/#{}&a={}&b={}&x={}&j={}&s={}",
-                fingerprint.hex(),
-                self_addr_urlencoded,
-                &chat_name_urlencoded,
-                &chat.grpid,
-                &invitenumber,
-                &auth,
+                "https://i.delta.chat/#{}&x={}&j={}&s={}&a={}&b={}",
+                fingerprint.hex(),     // #
+                &chat.grpid,           // &x=
+                &invitenumber,         // &j=
+                &auth,                 // &s=
+                self_addr_urlencoded,  // &a=
+                &chat_name_urlencoded, // &b=
             )
         } else {
             format!(
                 "https://i.delta.chat/#{}&x={}&i={}&s={}&a={}&g={}",
-                fingerprint.hex(),      // #
-                &chat.grpid,            // &x=
-                &invitenumber,          // &i=
-                &auth,                  // &s=
-                self_addr_urlencoded,   // &a=
-                &group_name_urlencoded, // &g=
+                fingerprint.hex(),     // #
+                &chat.grpid,           // &x=
+                &invitenumber,         // &i=
+                &auth,                 // &s=
+                self_addr_urlencoded,  // &a=
+                &chat_name_urlencoded, // &g=
             )
         }
     } else {
-        // parameters used: a=n=i=s=
         let self_name = context
             .get_config(Config::Displayname)
             .await?
