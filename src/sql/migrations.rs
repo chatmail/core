@@ -14,7 +14,6 @@ use crate::config::Config;
 use crate::configure::EnteredLoginParam;
 use crate::constants::ShowEmails;
 use crate::context::Context;
-use crate::imap;
 use crate::key::DcKey;
 use crate::log::{info, warn};
 use crate::message::MsgId;
@@ -413,11 +412,36 @@ CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, 
             "configured_mvbox_folder",
         ] {
             if let Some(folder) = context.sql.get_raw_config(c).await? {
+                let key = format!("imap.mailbox.{folder}");
+
                 let (uid_validity, last_seen_uid) =
-                    imap::get_config_last_seen_uid(context, &folder).await?;
+                    if let Some(entry) = context.sql.get_raw_config(&key).await? {
+                        // the entry has the format `imap.mailbox.<folder>=<uidvalidity>:<lastseenuid>`
+                        let mut parts = entry.split(':');
+                        (
+                            parts.next().unwrap_or_default().parse().unwrap_or(0),
+                            parts.next().unwrap_or_default().parse().unwrap_or(0),
+                        )
+                    } else {
+                        (0, 0)
+                    };
                 if last_seen_uid > 0 {
-                    imap::set_uid_next(context, &folder, last_seen_uid + 1).await?;
-                    imap::set_uidvalidity(context, &folder, uid_validity).await?;
+                    context
+                        .sql
+                        .execute(
+                            "INSERT INTO imap_sync (folder, uid_next) VALUES (?,?)
+                             ON CONFLICT(folder) DO UPDATE SET uid_next=excluded.uid_next",
+                            (&folder, last_seen_uid + 1),
+                        )
+                        .await?;
+                    context
+                        .sql
+                        .execute(
+                            "INSERT INTO imap_sync (folder, uidvalidity) VALUES (?,?)
+                             ON CONFLICT(folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
+                            (&folder, uid_validity),
+                        )
+                        .await?;
                 }
             }
         }
