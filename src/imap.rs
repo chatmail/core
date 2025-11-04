@@ -24,7 +24,7 @@ use ratelimit::Ratelimit;
 use url::Url;
 
 use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata};
-use crate::chat::{self, ChatId, ChatIdBlocked};
+use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, ShowEmails};
@@ -1468,29 +1468,19 @@ impl Session {
                     context,
                     "Passing message UID {} to receive_imf().", request_uid
                 );
-                let res = receive_imf_inner(
-                    context,
-                    rfc724_mid,
-                    body,
-                    is_seen,
-                    partial.map(|msg_size| (msg_size, None)),
-                )
-                .await;
-                let received_msg = if let Err(err) = res {
-                    warn!(context, "receive_imf error: {:#}.", err);
-                    if partial.is_some() {
-                        return Err(err);
+                let res = receive_imf_inner(context, rfc724_mid, body, is_seen, partial).await;
+                let received_msg = match res {
+                    Err(err) => {
+                        warn!(context, "receive_imf error: {err:#}.");
+
+                        let text = format!(
+                            "❌ Failed to receive a message: {err:#}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
+                        );
+                        let mut msg = Message::new_text(text);
+                        add_device_msg(context, None, Some(&mut msg)).await?;
+                        None
                     }
-                    receive_imf_inner(
-                        context,
-                        rfc724_mid,
-                        body,
-                        is_seen,
-                        Some((body.len().try_into()?, Some(format!("{err:#}")))),
-                    )
-                    .await?
-                } else {
-                    res?
+                    Ok(msg) => msg,
                 };
                 received_msgs_channel
                     .send((request_uid, received_msg))
