@@ -62,12 +62,18 @@ fn inviter_progress(
     Ok(())
 }
 
-/// Shorten name to max. 25 characters.
+/// Shorten name to max. `length` characters.
 /// This is to not make QR codes or invite links arbitrary long.
-fn shorten_name(name: &str) -> String {
-    if name.chars().count() > 25 {
+fn shorten_name(name: &str, length: usize) -> String {
+    if name.chars().count() > length {
         // We use _ rather than ... to avoid dots at the end of the URL, which would confuse linkifiers
-        format!("{}_", &name.chars().take(24).collect::<String>())
+        format!(
+            "{}_",
+            &name
+                .chars()
+                .take(length.saturating_sub(1))
+                .collect::<String>()
+        )
     } else {
         name.to_string()
     }
@@ -126,6 +132,11 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
 
+    let self_name = context
+        .get_config(Config::Displayname)
+        .await?
+        .unwrap_or_default();
+
     let qr = if let Some(chat) = chat {
         if sync_token {
             context
@@ -135,27 +146,29 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         }
 
         let chat_name = chat.get_name();
-        let chat_name_shortened = shorten_name(chat_name);
+        let chat_name_shortened = shorten_name(chat_name, 25);
         let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
         let grpid = &chat.grpid;
+
+        let self_name_shortened = shorten_name(&self_name, 16);
+        let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, DISALLOWED_CHARACTERS)
+            .to_string()
+            .replace("%20", "+");
+
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
-                "https://i.delta.chat/#{fingerprint}&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}&b={chat_name_urlencoded}",
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}&b={chat_name_urlencoded}",
             )
         } else {
             format!(
-                "https://i.delta.chat/#{fingerprint}&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&g={chat_name_urlencoded}",
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}&g={chat_name_urlencoded}",
             )
         }
     } else {
-        let self_name = context
-            .get_config(Config::Displayname)
-            .await?
-            .unwrap_or_default();
-        let self_name_shortened = shorten_name(&self_name);
+        let self_name_shortened = shorten_name(&self_name, 25);
         let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
