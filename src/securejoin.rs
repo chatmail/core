@@ -121,7 +121,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let auth = create_id();
     token::save(context, Namespace::Auth, grpid, &auth, time()).await?;
 
-    let fingerprint = get_self_fingerprint(context).await?;
+    let fingerprint = get_self_fingerprint(context).await?.hex();
 
     let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
@@ -139,26 +139,15 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         let chat_name_urlencoded = utf8_percent_encode(&chat_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
+        let grpid = &chat.grpid;
         if chat.typ == Chattype::OutBroadcast {
             // For historic reansons, broadcasts currently use j instead of i for the invitenumber.
             format!(
-                "https://i.delta.chat/#{}&x={}&j={}&s={}&a={}&b={}",
-                fingerprint.hex(),     // #
-                &chat.grpid,           // &x=
-                &invitenumber,         // &j=
-                &auth,                 // &s=
-                self_addr_urlencoded,  // &a=
-                &chat_name_urlencoded, // &b=
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&j={invitenumber}&s={auth}&a={self_addr_urlencoded}&b={chat_name_urlencoded}",
             )
         } else {
             format!(
-                "https://i.delta.chat/#{}&x={}&i={}&s={}&a={}&g={}",
-                fingerprint.hex(),     // #
-                &chat.grpid,           // &x=
-                &invitenumber,         // &i=
-                &auth,                 // &s=
-                self_addr_urlencoded,  // &a=
-                &chat_name_urlencoded, // &g=
+                "https://i.delta.chat/#{fingerprint}&x={grpid}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&g={chat_name_urlencoded}",
             )
         }
     } else {
@@ -175,12 +164,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             context.scheduler.interrupt_inbox().await;
         }
         format!(
-            "https://i.delta.chat/#{}&i={}&s={}&a={}&n={}",
-            fingerprint.hex(),    // #
-            &invitenumber,        // &i=
-            &auth,                // &s=
-            self_addr_urlencoded, // &a=
-            self_name_urlencoded, // &n=
+            "https://i.delta.chat/#{fingerprint}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}",
         )
     };
 
