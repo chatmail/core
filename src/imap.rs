@@ -2491,21 +2491,6 @@ pub(crate) async fn get_imap_self_sent_search_command(context: &Context) -> Resu
     Ok(search_command)
 }
 
-/// Deprecated, use get_uid_next() and get_uidvalidity()
-pub async fn get_config_last_seen_uid(context: &Context, folder: &str) -> Result<(u32, u32)> {
-    let key = format!("imap.mailbox.{folder}");
-    if let Some(entry) = context.sql.get_raw_config(&key).await? {
-        // the entry has the format `imap.mailbox.<folder>=<uidvalidity>:<lastseenuid>`
-        let mut parts = entry.split(':');
-        Ok((
-            parts.next().unwrap_or_default().parse().unwrap_or(0),
-            parts.next().unwrap_or_default().parse().unwrap_or(0),
-        ))
-    } else {
-        Ok((0, 0))
-    }
-}
-
 /// Whether to ignore fetching messages from a folder.
 ///
 /// This caters for the [`Config::OnlyFetchMvbox`] setting which means mails from folders
