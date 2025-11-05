@@ -105,9 +105,8 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             if chat.typ == Chattype::OutBroadcast {
                 // If the user created the broadcast before updating Delta Chat,
                 // then the secret will be missing, and the user needs to recreate the broadcast:
-                // let secret = load_broadcast_secret(context, chat.id).await?;
-                // ensure!(secret.is_some(), BROADCAST_INCOMPATIBILITY_MSG);
                 if load_broadcast_secret(context, chat.id).await?.is_none() {
+                    warn!(context, "Not creating securejoin QR for old broadcast");
                     let text = BROADCAST_INCOMPATIBILITY_MSG;
                     add_info_msg(context, chat.id, text, time()).await?;
                     bail!(text.to_string());
