@@ -48,6 +48,8 @@ pub(crate) struct Session {
     ///
     /// Should be false if no folder is currently selected.
     pub new_mail: bool,
+
+    pub resync_request_sender: async_channel::Sender<()>,
 }
 
 impl Deref for Session {
@@ -68,6 +70,7 @@ impl Session {
     pub(crate) fn new(
         inner: ImapSession<Box<dyn SessionStream>>,
         capabilities: Capabilities,
+        resync_request_sender: async_channel::Sender<()>,
     ) -> Self {
         Self {
             inner,
@@ -77,6 +80,7 @@ impl Session {
             selected_folder_needs_expunge: false,
             last_full_folder_scan: Mutex::new(None),
             new_mail: false,
+            resync_request_sender,
         }
     }
 
