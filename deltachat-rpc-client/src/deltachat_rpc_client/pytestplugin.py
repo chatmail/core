@@ -82,6 +82,7 @@ class ACFactory:
         ac_clone = self.get_unconfigured_account()
         for transport in transports:
             ac_clone.add_or_update_transport(transport)
+        ac_clone.bring_online()
         return ac_clone
 
     def get_accepted_chat(self, ac1: Account, ac2: Account) -> Chat:
