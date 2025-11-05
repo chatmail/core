@@ -466,7 +466,10 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(self, Config::MvboxMove | Config::OnlyFetchMvbox)
+        matches!(
+            self,
+            Config::MvboxMove | Config::OnlyFetchMvbox | Config::ConfiguredAddr
+        )
     }
 }
 
