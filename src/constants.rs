@@ -250,7 +250,7 @@ pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
 /// Period between `sql::housekeeping()` runs.
 pub(crate) const HOUSEKEEPING_PERIOD: i64 = 24 * 60 * 60;
 
-pub(crate) const BROADCAST_INCOMPATIBILITY_MSG: &'static str = r#"The up to now "experimental channels feature" is about to become an officially supported one. By that, privacy will be improved, it will become faster, and less traffic will be consumed.
+pub(crate) const BROADCAST_INCOMPATIBILITY_MSG: &str = r#"The up to now "experimental channels feature" is about to become an officially supported one. By that, privacy will be improved, it will become faster, and less traffic will be consumed.
 
 As we do not guarantee feature-stability for such experiments, this means, that you will need to create the channel again. 
 
