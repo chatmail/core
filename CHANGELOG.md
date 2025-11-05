@@ -1,6 +1,31 @@
 # Changelog
 
+## [2.25.0] - 2025-11-05
+
+### Features / Changes
+
+- Put self-name into group invite codes ([#7398](https://github.com/chatmail/core/pull/7398)).
+- Slightly nicer and shorter QR and invite codes ([#7390](https://github.com/chatmail/core/pull/7390))
+
+### Fixes
+
+- Add device message instead of partial message when receive_imf fails. This fixes a rare bug where the IMAP loop got stuck.
+- Add info message if user tries to create a QR code for deprecated channel ([#7399](https://github.com/chatmail/core/pull/7399)).
+
+### Miscellaneous Tasks
+
+- deps: Bump actions/upload-artifact from 4 to 5.
+- deps: Bump actions/download-artifact from 5 to 6.
+- deps: Bump astral-sh/setup-uv from 7.1.0 to 7.1.2.
+
+### Refactor
+
+- sql: Do not expose rusqlite Error type in query_map methods.
+
 ## [2.24.0] - 2025-11-03
+
+***Note that in v2.24.0, the IMAP loop can get stuck in rare circumstances;
+use v2.23.0 or v2.25.0 instead.***
 
 ### Documentation
 
@@ -7075,3 +7100,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.22.0]: https://github.com/chatmail/core/compare/v2.21.0..v2.22.0
 [2.23.0]: https://github.com/chatmail/core/compare/v2.22.0..v2.23.0
 [2.24.0]: https://github.com/chatmail/core/compare/v2.23.0..v2.24.0
+[2.25.0]: https://github.com/chatmail/core/compare/v2.24.0..v2.25.0
