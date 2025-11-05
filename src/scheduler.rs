@@ -1,5 +1,4 @@
 use std::cmp;
-use std::iter::{self, once};
 use std::num::NonZeroUsize;
 
 use anyhow::{Context as _, Error, Result, bail};
@@ -26,6 +25,7 @@ use crate::smtp::{Smtp, send_smtp_messages};
 use crate::sql;
 use crate::stats::maybe_send_stats;
 use crate::tools::{self, duration_to_str, maybe_add_time_based_warnings, time, time_elapsed};
+use crate::transport::ConfiguredLoginParam;
 use crate::{constants, stats};
 
 pub(crate) mod connectivity;
@@ -212,21 +212,25 @@ impl SchedulerState {
     /// Indicate that the network likely has come back.
     pub(crate) async fn maybe_network(&self) {
         let inner = self.inner.read().await;
-        let (inbox, oboxes) = match *inner {
+        let (inboxes, oboxes) = match *inner {
             InnerSchedulerState::Started(ref scheduler) => {
                 scheduler.maybe_network();
-                let inbox = scheduler.inbox.conn_state.state.connectivity.clone();
+                let inboxes = scheduler
+                    .inboxes
+                    .iter()
+                    .map(|b| b.conn_state.state.connectivity.clone())
+                    .collect::<Vec<_>>();
                 let oboxes = scheduler
                     .oboxes
                     .iter()
                     .map(|b| b.conn_state.state.connectivity.clone())
                     .collect::<Vec<_>>();
-                (inbox, oboxes)
+                (inboxes, oboxes)
             }
             _ => return,
         };
         drop(inner);
-        connectivity::idle_interrupted(inbox, oboxes);
+        connectivity::idle_interrupted(inboxes, oboxes);
     }
 
     /// Indicate that the network likely is lost.
@@ -331,7 +335,8 @@ struct SchedBox {
 /// Job and connection scheduler.
 #[derive(Debug)]
 pub(crate) struct Scheduler {
-    inbox: SchedBox,
+    /// Inboxes, one per transport.
+    inboxes: Vec<SchedBox>,
     /// Optional boxes -- mvbox.
     oboxes: Vec<SchedBox>,
     smtp: SmtpConnectionState,
@@ -857,34 +862,40 @@ impl Scheduler {
         let (ephemeral_interrupt_send, ephemeral_interrupt_recv) = channel::bounded(1);
         let (location_interrupt_send, location_interrupt_recv) = channel::bounded(1);
 
+        let mut inboxes = Vec::new();
         let mut oboxes = Vec::new();
         let mut start_recvs = Vec::new();
 
-        let (conn_state, inbox_handlers) = ImapConnectionState::new(ctx).await?;
-        let (inbox_start_send, inbox_start_recv) = oneshot::channel();
-        let handle = {
-            let ctx = ctx.clone();
-            task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
-        };
-        let inbox = SchedBox {
-            meaning: FolderMeaning::Inbox,
-            conn_state,
-            handle,
-        };
-        start_recvs.push(inbox_start_recv);
-
-        if ctx.should_watch_mvbox().await? {
-            let (conn_state, handlers) = ImapConnectionState::new(ctx).await?;
-            let (start_send, start_recv) = oneshot::channel();
-            let ctx = ctx.clone();
-            let meaning = FolderMeaning::Mvbox;
-            let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
-            oboxes.push(SchedBox {
-                meaning,
+        for (transport_id, configured_login_param) in ConfiguredLoginParam::load_all(ctx).await? {
+            let (conn_state, inbox_handlers) =
+                ImapConnectionState::new(ctx, transport_id, configured_login_param.clone()).await?;
+            let (inbox_start_send, inbox_start_recv) = oneshot::channel();
+            let handle = {
+                let ctx = ctx.clone();
+                task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
+            };
+            let inbox = SchedBox {
+                meaning: FolderMeaning::Inbox,
                 conn_state,
                 handle,
-            });
-            start_recvs.push(start_recv);
+            };
+            inboxes.push(inbox);
+            start_recvs.push(inbox_start_recv);
+
+            if ctx.should_watch_mvbox().await? {
+                let (conn_state, handlers) =
+                    ImapConnectionState::new(ctx, transport_id, configured_login_param).await?;
+                let (start_send, start_recv) = oneshot::channel();
+                let ctx = ctx.clone();
+                let meaning = FolderMeaning::Mvbox;
+                let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
+                oboxes.push(SchedBox {
+                    meaning,
+                    conn_state,
+                    handle,
+                });
+                start_recvs.push(start_recv);
+            }
         }
 
         let smtp_handle = {
@@ -910,7 +921,7 @@ impl Scheduler {
         let recently_seen_loop = RecentlySeenLoop::new(ctx.clone());
 
         let res = Self {
-            inbox,
+            inboxes,
             oboxes,
             smtp,
             smtp_handle,
@@ -930,8 +941,8 @@ impl Scheduler {
         Ok(res)
     }
 
-    fn boxes(&self) -> iter::Chain<iter::Once<&SchedBox>, std::slice::Iter<'_, SchedBox>> {
-        once(&self.inbox).chain(self.oboxes.iter())
+    fn boxes(&self) -> impl Iterator<Item = &SchedBox> {
+        self.inboxes.iter().chain(self.oboxes.iter())
     }
 
     fn maybe_network(&self) {
@@ -949,7 +960,9 @@ impl Scheduler {
     }
 
     fn interrupt_inbox(&self) {
-        self.inbox.conn_state.interrupt();
+        for b in &self.inboxes {
+            b.conn_state.interrupt();
+        }
     }
 
     fn interrupt_oboxes(&self) {
@@ -989,7 +1002,7 @@ impl Scheduler {
         let timeout_duration = std::time::Duration::from_secs(30);
 
         let tracker = TaskTracker::new();
-        for b in once(self.inbox).chain(self.oboxes) {
+        for b in self.inboxes.into_iter().chain(self.oboxes.into_iter()) {
             let context = context.clone();
             tracker.spawn(async move {
                 tokio::time::timeout(timeout_duration, b.handle)
@@ -1095,12 +1108,17 @@ pub(crate) struct ImapConnectionState {
 
 impl ImapConnectionState {
     /// Construct a new connection.
-    async fn new(context: &Context) -> Result<(Self, ImapConnectionHandlers)> {
+    async fn new(
+        context: &Context,
+        transport_id: u32,
+        login_param: ConfiguredLoginParam,
+    ) -> Result<(Self, ImapConnectionHandlers)> {
         let stop_token = CancellationToken::new();
         let (idle_interrupt_sender, idle_interrupt_receiver) = channel::bounded(1);
 
         let handlers = ImapConnectionHandlers {
-            connection: Imap::new_configured(context, idle_interrupt_receiver).await?,
+            connection: Imap::new(context, transport_id, login_param, idle_interrupt_receiver)
+                .await?,
             stop_token: stop_token.clone(),
         };
 

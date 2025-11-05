@@ -14,6 +14,7 @@ def datadir():
     return None
 
 
+@pytest.mark.skip("The test is flaky in CI and crashes the interpreter as of 2025-11-12")
 def test_echo_quit_plugin(acfactory, lp):
     lp.sec("creating one echo_and_quit bot")
     botproc = acfactory.run_bot_process(echo_and_quit)

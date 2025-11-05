@@ -5,6 +5,7 @@ use anyhow::Context as _;
 use super::session::Session as ImapSession;
 use super::{get_uid_next, get_uidvalidity, set_modseq, set_uid_next, set_uidvalidity};
 use crate::context::Context;
+use crate::ensure_and_debug_assert;
 use crate::log::warn;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -129,7 +130,7 @@ impl ImapSession {
         context: &Context,
         folder: &str,
         create: bool,
-    ) -> Result<bool> {
+    ) -> anyhow::Result<bool> {
         let newly_selected = if create {
             self.select_or_create_folder(context, folder)
                 .await
@@ -146,15 +147,24 @@ impl ImapSession {
                 },
             }
         };
+        let transport_id = self.transport_id();
+
+        // Folders should not be selected when transport_id is not assigned yet
+        // because we cannot save UID validity then.
+        ensure_and_debug_assert!(
+            transport_id > 0,
+            "Cannot select folder when transport ID is unknown"
+        );
+
         let mailbox = self
             .selected_mailbox
             .as_mut()
             .with_context(|| format!("No mailbox selected, folder: {folder:?}"))?;
 
-        let old_uid_validity = get_uidvalidity(context, folder)
+        let old_uid_validity = get_uidvalidity(context, transport_id, folder)
             .await
             .with_context(|| format!("Failed to get old UID validity for folder {folder:?}"))?;
-        let old_uid_next = get_uid_next(context, folder)
+        let old_uid_next = get_uid_next(context, transport_id, folder)
             .await
             .with_context(|| format!("Failed to get old UID NEXT for folder {folder:?}"))?;
 
@@ -205,7 +215,7 @@ impl ImapSession {
                             context,
                             "The server illegally decreased the uid_next of folder {folder:?} from {old_uid_next} to {new_uid_next} without changing validity ({new_uid_validity}), resyncing UIDs...",
                         );
-                        set_uid_next(context, folder, new_uid_next).await?;
+                        set_uid_next(context, transport_id, folder, new_uid_next).await?;
                         self.resync_request_sender.try_send(()).ok();
                     }
 
@@ -224,21 +234,21 @@ impl ImapSession {
         }
 
         // UIDVALIDITY is modified, reset highest seen MODSEQ.
-        set_modseq(context, folder, 0).await?;
+        set_modseq(context, transport_id, folder, 0).await?;
 
         // ==============  uid_validity has changed or is being set the first time.  ==============
 
         let new_uid_next = new_uid_next.unwrap_or_default();
-        set_uid_next(context, folder, new_uid_next).await?;
-        set_uidvalidity(context, folder, new_uid_validity).await?;
+        set_uid_next(context, transport_id, folder, new_uid_next).await?;
+        set_uidvalidity(context, transport_id, folder, new_uid_validity).await?;
         self.new_mail = true;
 
         // Collect garbage entries in `imap` table.
         context
             .sql
             .execute(
-                "DELETE FROM imap WHERE folder=? AND uidvalidity!=?",
-                (&folder, new_uid_validity),
+                "DELETE FROM imap WHERE transport_id=? AND folder=? AND uidvalidity!=?",
+                (transport_id, &folder, new_uid_validity),
             )
             .await?;
 
@@ -247,12 +257,7 @@ impl ImapSession {
         }
         info!(
             context,
-            "uid/validity change folder {}: new {}/{} previous {}/{}.",
-            folder,
-            new_uid_next,
-            new_uid_validity,
-            old_uid_next,
-            old_uid_validity,
+            "transport {transport_id}: UID validity for folder {folder} changed from {old_uid_validity}/{old_uid_next} to {new_uid_validity}/{new_uid_next}.",
         );
         Ok(true)
     }

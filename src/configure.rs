@@ -130,12 +130,6 @@ impl Context {
             "cannot configure, database not opened."
         );
         param.addr = addr_normalize(&param.addr);
-        let old_addr = self.get_config(Config::ConfiguredAddr).await?;
-        if self.is_configured().await? && !addr_cmp(&old_addr.unwrap_or_default(), &param.addr) {
-            let error_msg = "Changing your email address is not supported right now. Check back in a few months!";
-            progress!(self, 0, Some(error_msg.to_string()));
-            bail!(error_msg);
-        }
         let cancel_channel = self.alloc_ongoing().await?;
 
         let res = self
@@ -204,19 +198,72 @@ impl Context {
         Ok(transports)
     }
 
+    /// Returns the number of configured transports.
+    pub async fn count_transports(&self) -> Result<usize> {
+        self.sql.count("SELECT COUNT(*) FROM transports", ()).await
+    }
+
     /// Removes the transport with the specified email address
     /// (i.e. [EnteredLoginParam::addr]).
-    #[expect(clippy::unused_async)]
-    pub async fn delete_transport(&self, _addr: &str) -> Result<()> {
-        bail!(
-            "Adding and removing additional transports is not supported yet. Check back in a few months!"
-        )
+    pub async fn delete_transport(&self, addr: &str) -> Result<()> {
+        self.sql
+            .transaction(|transaction| {
+                let primary_addr = transaction.query_row(
+                    "SELECT value FROM config WHERE keyname='configured_addr'",
+                    (),
+                    |row| {
+                        let addr: String = row.get(0)?;
+                        Ok(addr)
+                    },
+                )?;
+
+                if primary_addr == addr {
+                    bail!("Cannot delete primary transport");
+                }
+                let transport_id = transaction.query_row(
+                    "DELETE FROM transports WHERE addr=? RETURNING id",
+                    (addr,),
+                    |row| {
+                        let id: u32 = row.get(0)?;
+                        Ok(id)
+                    },
+                )?;
+                transaction.execute("DELETE FROM imap WHERE transport_id=?", (transport_id,))?;
+                transaction.execute(
+                    "DELETE FROM imap_sync WHERE transport_id=?",
+                    (transport_id,),
+                )?;
+
+                Ok(())
+            })
+            .await?;
+        Ok(())
     }
 
     async fn inner_configure(&self, param: &EnteredLoginParam) -> Result<()> {
         info!(self, "Configure ...");
 
         let old_addr = self.get_config(Config::ConfiguredAddr).await?;
+        if old_addr.is_some()
+            && !self
+                .sql
+                .exists(
+                    "SELECT COUNT(*) FROM transports WHERE addr=?",
+                    (&param.addr,),
+                )
+                .await?
+        {
+            if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
+                bail!("Cannot use multi-transport with mvbox_move enabled.");
+            }
+            if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
+                bail!("Cannot use multi-transport with only_fetch_mvbox enabled.");
+            }
+            if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
+                bail!("Cannot use multi-transport with disabled fetching of classic emails.");
+            }
+        }
+
         let provider = configure(self, param).await?;
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
@@ -503,16 +550,9 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     // Configure IMAP
 
+    let transport_id = 0;
     let (_s, r) = async_channel::bounded(1);
-    let mut imap = Imap::new(
-        configured_param.imap.clone(),
-        configured_param.imap_password.clone(),
-        proxy_config,
-        &configured_param.addr,
-        strict_tls,
-        configured_param.oauth2,
-        r,
-    );
+    let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
     let configuring = true;
     let mut imap_session = match imap.connect(ctx, configuring).await {
         Ok(session) => session,
@@ -529,36 +569,14 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     progress!(ctx, 900);
 
-    let is_chatmail = match ctx.get_config_bool(Config::FixIsChatmail).await? {
-        false => {
-            let is_chatmail = imap_session.is_chatmail();
-            ctx.set_config(
-                Config::IsChatmail,
-                Some(match is_chatmail {
-                    false => "0",
-                    true => "1",
-                }),
-            )
-            .await?;
-            is_chatmail
-        }
-        true => ctx.get_config_bool(Config::IsChatmail).await?,
-    };
-    if is_chatmail {
-        ctx.set_config(Config::MvboxMove, Some("0")).await?;
-        ctx.set_config(Config::OnlyFetchMvbox, None).await?;
-        ctx.set_config(Config::ShowEmails, None).await?;
+    if !ctx.is_configured().await? {
+        ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
+        ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
     }
 
-    let create_mvbox = !is_chatmail;
+    let create_mvbox = false;
     imap.configure_folders(ctx, &mut imap_session, create_mvbox)
         .await?;
-
-    let create = true;
-    imap_session
-        .select_with_uidvalidity(ctx, "INBOX", create)
-        .await
-        .context("could not read INBOX status")?;
 
     drop(imap);
 

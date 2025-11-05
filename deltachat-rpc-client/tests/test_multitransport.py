@@ -1,0 +1,158 @@
+import pytest
+
+from deltachat_rpc_client.rpc import JsonRpcError
+
+
+def test_add_second_address(acfactory) -> None:
+    account = acfactory.new_configured_account()
+    assert len(account.list_transports()) == 1
+
+    # When the first transport is created,
+    # mvbox_move and only_fetch_mvbox should be disabled.
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("only_fetch_mvbox") == "0"
+    assert account.get_config("show_emails") == "2"
+
+    qr = acfactory.get_account_qr()
+    account.add_transport_from_qr(qr)
+    assert len(account.list_transports()) == 2
+
+    account.add_transport_from_qr(qr)
+    assert len(account.list_transports()) == 3
+
+    first_addr = account.list_transports()[0]["addr"]
+    second_addr = account.list_transports()[1]["addr"]
+
+    # Cannot delete the first address.
+    with pytest.raises(JsonRpcError):
+        account.delete_transport(first_addr)
+
+    account.delete_transport(second_addr)
+    assert len(account.list_transports()) == 2
+
+    # Enabling mvbox_move or only_fetch_mvbox
+    # is not allowed when multi-transport is enabled.
+    for option in ["mvbox_move", "only_fetch_mvbox"]:
+        with pytest.raises(JsonRpcError):
+            account.set_config(option, "1")
+
+    with pytest.raises(JsonRpcError):
+        account.set_config("show_emails", "0")
+
+
+@pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
+def test_no_second_transport_with_mvbox(acfactory, key) -> None:
+    """Test that second transport cannot be configured if mvbox is used."""
+    account = acfactory.new_configured_account()
+    assert len(account.list_transports()) == 1
+
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("only_fetch_mvbox") == "0"
+
+    qr = acfactory.get_account_qr()
+    account.set_config(key, "1")
+
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+
+def test_no_second_transport_without_classic_emails(acfactory) -> None:
+    """Test that second transport cannot be configured if classic emails are not fetched."""
+    account = acfactory.new_configured_account()
+    assert len(account.list_transports()) == 1
+
+    assert account.get_config("show_emails") == "2"
+
+    qr = acfactory.get_account_qr()
+    account.set_config("show_emails", "0")
+
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+
+def test_change_address(acfactory) -> None:
+    """Test Alice configuring a second transport and setting it as a primary one."""
+    alice, bob = acfactory.get_online_accounts(2)
+
+    bob_addr = bob.get_config("configured_addr")
+    bob.create_chat(alice)
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.send_text("Hello!")
+
+    msg1 = bob.wait_for_incoming_msg().get_snapshot()
+    sender_addr1 = msg1.sender.get_snapshot().address
+
+    alice.stop_io()
+    old_alice_addr = alice.get_config("configured_addr")
+    alice_vcard = alice.self_contact.make_vcard()
+    assert old_alice_addr in alice_vcard
+    qr = acfactory.get_account_qr()
+    alice.add_transport_from_qr(qr)
+    new_alice_addr = alice.list_transports()[1]["addr"]
+    with pytest.raises(JsonRpcError):
+        # Cannot use the address that is not
+        # configured for any transport.
+        alice.set_config("configured_addr", bob_addr)
+
+    # Load old address so it is cached.
+    assert alice.get_config("configured_addr") == old_alice_addr
+    alice.set_config("configured_addr", new_alice_addr)
+    # Make sure that setting `configured_addr` invalidated the cache.
+    assert alice.get_config("configured_addr") == new_alice_addr
+
+    alice_vcard = alice.self_contact.make_vcard()
+    assert old_alice_addr not in alice_vcard
+    assert new_alice_addr in alice_vcard
+    with pytest.raises(JsonRpcError):
+        alice.delete_transport(new_alice_addr)
+    alice.start_io()
+
+    alice_chat_bob.send_text("Hello again!")
+
+    msg2 = bob.wait_for_incoming_msg().get_snapshot()
+    sender_addr2 = msg2.sender.get_snapshot().address
+
+    assert msg1.sender == msg2.sender
+    assert sender_addr1 != sender_addr2
+    assert sender_addr1 == old_alice_addr
+    assert sender_addr2 == new_alice_addr
+
+
+@pytest.mark.parametrize("is_chatmail", ["0", "1"])
+def test_mvbox_move_first_transport(acfactory, is_chatmail) -> None:
+    """Test that mvbox_move is disabled by default even for non-chatmail accounts.
+    Disabling mvbox_move is required to be able to setup a second transport.
+    """
+    account = acfactory.get_unconfigured_account()
+
+    account.set_config("fix_is_chatmail", "1")
+    account.set_config("is_chatmail", is_chatmail)
+
+    # The default value when the setting is unset is "1".
+    # This is not changed for compatibility with old databases
+    # imported from backups.
+    assert account.get_config("mvbox_move") == "1"
+
+    qr = acfactory.get_account_qr()
+    account.add_transport_from_qr(qr)
+
+    # Once the first transport is set up,
+    # mvbox_move is disabled.
+    assert account.get_config("mvbox_move") == "0"
+    assert account.get_config("is_chatmail") == is_chatmail
+
+
+def test_reconfigure_transport(acfactory) -> None:
+    """Test that reconfiguring the transport works
+    even if settings not supported for multi-transport
+    like mvbox_move are enabled."""
+    account = acfactory.get_online_account()
+    account.set_config("mvbox_move", "1")
+
+    [transport] = account.list_transports()
+    account.add_or_update_transport(transport)
+
+    # Reconfiguring the transport should not reset
+    # the settings as if when configuring the first transport.
+    assert account.get_config("mvbox_move") == "1"

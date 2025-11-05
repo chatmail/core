@@ -40,12 +40,17 @@ class ACFactory:
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))
         return f"{username}@{domain}", f"{username}${username}"
 
+    def get_account_qr(self):
+        """Return "dcaccount:" QR code for testing chatmail relay."""
+        domain = os.getenv("CHATMAIL_DOMAIN")
+        return f"dcaccount:{domain}"
+
     @futuremethod
     def new_configured_account(self):
         """Create a new configured account."""
         account = self.get_unconfigured_account()
-        domain = os.getenv("CHATMAIL_DOMAIN")
-        yield account.add_transport_from_qr.future(f"dcaccount:{domain}")
+        qr = self.get_account_qr()
+        yield account.add_transport_from_qr.future(qr)
 
         assert account.is_configured()
         return account
@@ -77,6 +82,7 @@ class ACFactory:
         ac_clone = self.get_unconfigured_account()
         for transport in transports:
             ac_clone.add_or_update_transport(transport)
+        ac_clone.bring_online()
         return ac_clone
 
     def get_accepted_chat(self, ac1: Account, ac2: Account) -> Chat:
