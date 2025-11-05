@@ -201,19 +201,20 @@ impl ConnectivityStore {
 /// Set all folder states to InterruptingIdle in case they were `Idle` before.
 /// Called during `dc_maybe_network()` to make sure that `all_work_done()`
 /// returns false immediately after `dc_maybe_network()`.
-pub(crate) fn idle_interrupted(inbox: ConnectivityStore, oboxes: Vec<ConnectivityStore>) {
-    let mut connectivity_lock = inbox.0.lock();
-    // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
-    // NotConfigured before: If all folders are NotConfigured, dc_get_connectivity()
-    // returns Connected. But after dc_maybe_network(), dc_get_connectivity() must not
-    // return Connected until DC is completely done with fetching folders; this also
-    // includes scan_folders() which happens on the inbox thread.
-    if *connectivity_lock == DetailedConnectivity::Idle
-        || *connectivity_lock == DetailedConnectivity::NotConfigured
-    {
-        *connectivity_lock = DetailedConnectivity::InterruptingIdle;
+pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>, oboxes: Vec<ConnectivityStore>) {
+    for inbox in inboxes {
+        let mut connectivity_lock = inbox.0.lock();
+        // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
+        // NotConfigured before: If all folders are NotConfigured, dc_get_connectivity()
+        // returns Connected. But after dc_maybe_network(), dc_get_connectivity() must not
+        // return Connected until DC is completely done with fetching folders; this also
+        // includes scan_folders() which happens on the inbox thread.
+        if *connectivity_lock == DetailedConnectivity::Idle
+            || *connectivity_lock == DetailedConnectivity::NotConfigured
+        {
+            *connectivity_lock = DetailedConnectivity::InterruptingIdle;
+        }
     }
-    drop(connectivity_lock);
 
     for state in oboxes {
         let mut connectivity_lock = state.0.lock();

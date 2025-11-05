@@ -1402,6 +1402,49 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 140)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+CREATE TABLE new_imap (
+id INTEGER PRIMARY KEY AUTOINCREMENT,
+transport_id INTEGER NOT NULL, -- ID of the transport in the `transports` table.
+rfc724_mid TEXT NOT NULL, -- Message-ID header
+folder TEXT NOT NULL, -- IMAP folder
+target TEXT NOT NULL, -- Destination folder. Empty string means that the message shall be deleted.
+uid INTEGER NOT NULL, -- UID
+uidvalidity INTEGER NOT NULL,
+UNIQUE (transport_id, folder, uid, uidvalidity)
+) STRICT;
+
+INSERT OR IGNORE INTO new_imap SELECT
+  id, 1, rfc724_mid, folder, target, uid, uidvalidity
+FROM imap;
+DROP TABLE imap;
+ALTER TABLE new_imap RENAME TO imap;
+CREATE INDEX imap_folder ON imap(transport_id, folder);
+CREATE INDEX imap_rfc724_mid ON imap(transport_id, rfc724_mid);
+
+CREATE TABLE new_imap_sync (
+    transport_id INTEGER NOT NULL, -- ID of the transport in the `transports` table.
+    folder TEXT NOT NULL,
+    uidvalidity INTEGER NOT NULL DEFAULT 0,
+    uid_next INTEGER NOT NULL DEFAULT 0,
+    modseq INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (transport_id, folder)
+) STRICT;
+INSERT OR IGNORE INTO new_imap_sync SELECT
+    1, folder, uidvalidity, uid_next, modseq
+FROM imap_sync;
+DROP TABLE imap_sync;
+ALTER TABLE new_imap_sync RENAME TO imap_sync;
+CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
+",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

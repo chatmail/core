@@ -143,7 +143,7 @@ def test_delete_deltachat_folder(acfactory, direct_imap):
     # Wait until new folder is created and UIDVALIDITY is updated.
     while True:
         event = ac1.wait_for_event()
-        if event.kind == EventType.INFO and "uid/validity change folder DeltaChat" in event.msg:
+        if event.kind == EventType.INFO and "transport 1: UID validity for folder DeltaChat changed from " in event.msg:
             break
 
     ac2 = acfactory.get_online_account()

@@ -71,6 +71,11 @@ const BODY_PARTIAL: &str = "(FLAGS RFC822.SIZE BODY.PEEK[HEADER])";
 
 #[derive(Debug)]
 pub(crate) struct Imap {
+    /// ID of the transport configuration in the `transports` table.
+    ///
+    /// This ID is used to namespace records in the `imap` table.
+    transport_id: u32,
+
     pub(crate) idle_interrupt_receiver: Receiver<()>,
 
     /// Email address.
@@ -249,19 +254,21 @@ impl<T: Iterator<Item = (i64, u32, String)>> Iterator for UidGrouper<T> {
 
 impl Imap {
     /// Creates new disconnected IMAP client using the specific login parameters.
-    ///
-    /// `addr` is used to renew token if OAuth2 authentication is used.
-    pub fn new(
-        lp: Vec<ConfiguredServerLoginParam>,
-        password: String,
-        proxy_config: Option<ProxyConfig>,
-        addr: &str,
-        strict_tls: bool,
-        oauth2: bool,
+    pub async fn new(
+        context: &Context,
+        transport_id: u32,
+        param: ConfiguredLoginParam,
         idle_interrupt_receiver: Receiver<()>,
-    ) -> Self {
+    ) -> Result<Self> {
+        let lp = param.imap.clone();
+        let password = param.imap_password.clone();
+        let proxy_config = ProxyConfig::load(context).await?;
+        let addr = &param.addr;
+        let strict_tls = param.strict_tls(proxy_config.is_some());
+        let oauth2 = param.oauth2;
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
-        Imap {
+        Ok(Imap {
+            transport_id,
             idle_interrupt_receiver,
             addr: addr.to_string(),
             lp,
@@ -277,7 +284,7 @@ impl Imap {
             ratelimit: Ratelimit::new(Duration::new(120, 0), 2.0),
             resync_request_sender,
             resync_request_receiver,
-        }
+        })
     }
 
     /// Creates new disconnected IMAP client using configured parameters.
@@ -285,20 +292,10 @@ impl Imap {
         context: &Context,
         idle_interrupt_receiver: Receiver<()>,
     ) -> Result<Self> {
-        let param = ConfiguredLoginParam::load(context)
+        let (transport_id, param) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
-        let proxy_config = ProxyConfig::load(context).await?;
-        let strict_tls = param.strict_tls(proxy_config.is_some());
-        let imap = Self::new(
-            param.imap.clone(),
-            param.imap_password.clone(),
-            proxy_config,
-            &param.addr,
-            strict_tls,
-            param.oauth2,
-            idle_interrupt_receiver,
-        );
+        let imap = Self::new(context, transport_id, param, idle_interrupt_receiver).await?;
         Ok(imap)
     }
 
@@ -412,9 +409,19 @@ impl Imap {
                             })
                             .await
                             .context("Failed to enable IMAP compression")?;
-                        Session::new(compressed_session, capabilities, resync_request_sender)
+                        Session::new(
+                            compressed_session,
+                            capabilities,
+                            resync_request_sender,
+                            self.transport_id,
+                        )
                     } else {
-                        Session::new(session, capabilities, resync_request_sender)
+                        Session::new(
+                            session,
+                            capabilities,
+                            resync_request_sender,
+                            self.transport_id,
+                        )
                     };
 
                     // Store server ID in the context to display in account info.
@@ -593,8 +600,9 @@ impl Imap {
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<(usize, bool)> {
-        let uid_validity = get_uidvalidity(context, folder).await?;
-        let old_uid_next = get_uid_next(context, folder).await?;
+        let transport_id = self.transport_id;
+        let uid_validity = get_uidvalidity(context, transport_id, folder).await?;
+        let old_uid_next = get_uid_next(context, transport_id, folder).await?;
         info!(
             context,
             "fetch_new_msg_batch({folder}): UIDVALIDITY={uid_validity}, UIDNEXT={old_uid_next}."
@@ -662,12 +670,19 @@ impl Imap {
             context
                 .sql
                 .execute(
-                    "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                       VALUES         (?1,         ?2,     ?3,  ?4,          ?5)
-                       ON CONFLICT(folder, uid, uidvalidity)
+                    "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                       VALUES         (?,            ?,          ?,      ?,   ?,           ?)
+                       ON CONFLICT(transport_id, folder, uid, uidvalidity)
                        DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                      target=excluded.target",
-                    (&message_id, &folder, uid, uid_validity, target),
+                    (
+                        self.transport_id,
+                        &message_id,
+                        &folder,
+                        uid,
+                        uid_validity,
+                        target,
+                    ),
                 )
                 .await?;
 
@@ -778,7 +793,7 @@ impl Imap {
             prefetch_uid_next < mailbox_uid_next
         };
         if new_uid_next > old_uid_next {
-            set_uid_next(context, folder, new_uid_next).await?;
+            set_uid_next(context, self.transport_id, folder, new_uid_next).await?;
         }
 
         info!(context, "{} mails read from \"{}\".", read_cnt, folder);
@@ -858,6 +873,7 @@ impl Session {
         let folder_exists = self
             .select_with_uidvalidity(context, folder, create)
             .await?;
+        let transport_id = self.transport_id();
         if folder_exists {
             let mut list = self
                 .uid_fetch("1:*", RFC724MID_UID)
@@ -890,7 +906,7 @@ impl Session {
                 msgs.len(),
             );
 
-            uid_validity = get_uidvalidity(context, folder).await?;
+            uid_validity = get_uidvalidity(context, transport_id, folder).await?;
         } else {
             warn!(context, "resync_folder_uids: No folder {folder}.");
             uid_validity = 0;
@@ -905,12 +921,12 @@ impl Session {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
                     transaction.execute(
-                        "INSERT INTO imap (rfc724_mid, folder, uid, uidvalidity, target)
-                         VALUES           (?1,         ?2,     ?3,  ?4,          ?5)
-                         ON CONFLICT(folder, uid, uidvalidity)
+                        "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, uidvalidity, target)
+                         VALUES           (?,            ?,          ?,      ?,   ?,           ?)
+                         ON CONFLICT(transport_id, folder, uid, uidvalidity)
                          DO UPDATE SET rfc724_mid=excluded.rfc724_mid,
                                        target=excluded.target",
-                        (rfc724_mid, folder, uid, uid_validity, target),
+                        (transport_id, rfc724_mid, folder, uid, uid_validity, target),
                     )?;
                 }
                 Ok(())
@@ -1232,11 +1248,12 @@ impl Session {
             return Ok(());
         }
 
+        let transport_id = self.transport_id();
         let mut updated_chat_ids = BTreeSet::new();
-        let uid_validity = get_uidvalidity(context, folder)
+        let uid_validity = get_uidvalidity(context, transport_id, folder)
             .await
             .with_context(|| format!("failed to get UID validity for folder {folder}"))?;
-        let mut highest_modseq = get_modseq(context, folder)
+        let mut highest_modseq = get_modseq(context, transport_id, folder)
             .await
             .with_context(|| format!("failed to get MODSEQ for folder {folder}"))?;
         let mut list = self
@@ -1287,7 +1304,7 @@ impl Session {
             self.new_mail = true;
         }
 
-        set_modseq(context, folder, highest_modseq)
+        set_modseq(context, transport_id, folder, highest_modseq)
             .await
             .with_context(|| format!("failed to set MODSEQ for folder {folder}"))?;
         if !updated_chat_ids.is_empty() {
@@ -2417,13 +2434,18 @@ pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) 
 /// uid_next is the next unique identifier value from the last time we fetched a folder
 /// See <https://tools.ietf.org/html/rfc3501#section-2.3.1.1>
 /// This function is used to update our uid_next after fetching messages.
-pub(crate) async fn set_uid_next(context: &Context, folder: &str, uid_next: u32) -> Result<()> {
+pub(crate) async fn set_uid_next(
+    context: &Context,
+    transport_id: u32,
+    folder: &str,
+    uid_next: u32,
+) -> Result<()> {
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uid_next) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uid_next=excluded.uid_next",
-            (folder, uid_next),
+            "INSERT INTO imap_sync (transport_id, folder, uid_next) VALUES (?, ?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uid_next=excluded.uid_next",
+            (transport_id, folder, uid_next),
         )
         .await?;
     Ok(())
@@ -2434,57 +2456,69 @@ pub(crate) async fn set_uid_next(context: &Context, folder: &str, uid_next: u32)
 /// This method returns the uid_next from the last time we fetched messages.
 /// We can compare this to the current uid_next to find out whether there are new messages
 /// and fetch from this value on to get all new messages.
-async fn get_uid_next(context: &Context, folder: &str) -> Result<u32> {
+async fn get_uid_next(context: &Context, transport_id: u32, folder: &str) -> Result<u32> {
     Ok(context
         .sql
-        .query_get_value("SELECT uid_next FROM imap_sync WHERE folder=?;", (folder,))
+        .query_get_value(
+            "SELECT uid_next FROM imap_sync WHERE transport_id=? AND folder=?",
+            (transport_id, folder),
+        )
         .await?
         .unwrap_or(0))
 }
 
 pub(crate) async fn set_uidvalidity(
     context: &Context,
+    transport_id: u32,
     folder: &str,
     uidvalidity: u32,
 ) -> Result<()> {
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, uidvalidity) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
-            (folder, uidvalidity),
+            "INSERT INTO imap_sync (transport_id, folder, uidvalidity) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET uidvalidity=excluded.uidvalidity",
+            (transport_id, folder, uidvalidity),
         )
         .await?;
     Ok(())
 }
 
-async fn get_uidvalidity(context: &Context, folder: &str) -> Result<u32> {
+async fn get_uidvalidity(context: &Context, transport_id: u32, folder: &str) -> Result<u32> {
     Ok(context
         .sql
         .query_get_value(
-            "SELECT uidvalidity FROM imap_sync WHERE folder=?;",
-            (folder,),
+            "SELECT uidvalidity FROM imap_sync WHERE transport_id=? AND folder=?",
+            (transport_id, folder),
         )
         .await?
         .unwrap_or(0))
 }
 
-pub(crate) async fn set_modseq(context: &Context, folder: &str, modseq: u64) -> Result<()> {
+pub(crate) async fn set_modseq(
+    context: &Context,
+    transport_id: u32,
+    folder: &str,
+    modseq: u64,
+) -> Result<()> {
     context
         .sql
         .execute(
-            "INSERT INTO imap_sync (folder, modseq) VALUES (?,?)
-                ON CONFLICT(folder) DO UPDATE SET modseq=excluded.modseq",
-            (folder, modseq),
+            "INSERT INTO imap_sync (transport_id, folder, modseq) VALUES (?,?,?)
+                ON CONFLICT(transport_id, folder) DO UPDATE SET modseq=excluded.modseq",
+            (transport_id, folder, modseq),
         )
         .await?;
     Ok(())
 }
 
-async fn get_modseq(context: &Context, folder: &str) -> Result<u64> {
+async fn get_modseq(context: &Context, transport_id: u32, folder: &str) -> Result<u64> {
     Ok(context
         .sql
-        .query_get_value("SELECT modseq FROM imap_sync WHERE folder=?;", (folder,))
+        .query_get_value(
+            "SELECT modseq FROM imap_sync WHERE transport_id=? AND folder=?",
+            (transport_id, folder),
+        )
         .await?
         .unwrap_or(0))
 }
