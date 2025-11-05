@@ -250,6 +250,18 @@ pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
 /// Period between `sql::housekeeping()` runs.
 pub(crate) const HOUSEKEEPING_PERIOD: i64 = 24 * 60 * 60;
 
+pub(crate) const BROADCAST_INCOMPATIBILITY_MSG: &str = r#"The up to now "experimental channels feature" is about to become an officially supported one. By that, privacy will be improved, it will become faster, and less traffic will be consumed.
+
+As we do not guarantee feature-stability for such experiments, this means, that you will need to create the channel again. 
+
+Here is what to do:
+ • Create a new channel
+ • Tap on the channel name
+ • Tap on "QR Invite Code"
+ • Have all recipients scan the QR code, or send them the link
+
+If you have any questions, please send an email to delta@merlinux.eu or ask at https://support.delta.chat/."#;
+
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;
