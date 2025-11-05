@@ -2414,7 +2414,14 @@ async fn lookup_chat_by_reply(
 
     // If this was a private message just to self, it was probably a private reply.
     // It should not go into the group then, but into the private chat.
-    if is_probably_private_reply(context, mime_parser, parent_chat_id).await? {
+    if is_probably_private_reply(
+        context,
+        mime_parser,
+        is_partial_download.is_some(),
+        parent_chat_id,
+    )
+    .await?
+    {
         return Ok(None);
     }
 
@@ -2561,6 +2568,7 @@ async fn lookup_or_create_adhoc_group(
 async fn is_probably_private_reply(
     context: &Context,
     mime_parser: &MimeMessage,
+    is_partial_download: bool,
     parent_chat_id: ChatId,
 ) -> Result<bool> {
     // Message cannot be a private reply if it has an explicit Chat-Group-ID header.
@@ -2579,7 +2587,7 @@ async fn is_probably_private_reply(
         return Ok(false);
     }
 
-    if !mime_parser.has_chat_version() {
+    if !is_partial_download && !mime_parser.has_chat_version() {
         let chat_contacts = chat::get_chat_contacts(context, parent_chat_id).await?;
         if chat_contacts.len() == 2 && chat_contacts.contains(&ContactId::SELF) {
             return Ok(false);
