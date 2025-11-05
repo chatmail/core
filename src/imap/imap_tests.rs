@@ -94,14 +94,14 @@ fn test_build_sequence_sets() {
 async fn check_target_folder_combination(
     folder: &str,
     mvbox_move: bool,
-    chat_msg: bool,
+    is_encrypted: bool,
     expected_destination: &str,
     accepted_chat: bool,
     outgoing: bool,
     setupmessage: bool,
 ) -> Result<()> {
     println!(
-        "Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}"
+        "Testing: For folder {folder}, mvbox_move {mvbox_move}, is_encrypted {is_encrypted}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}"
     );
 
     let t = TestContext::new_alice().await;
@@ -124,7 +124,6 @@ async fn check_target_folder_combination(
         temp = format!(
             "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
                     {}\
-                    Subject: foo\n\
                     Message-ID: <abc@example.com>\n\
                     {}\
                     Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
@@ -135,7 +134,12 @@ async fn check_target_folder_combination(
             } else {
                 "From: bob@example.net\nTo: alice@example.org\n"
             },
-            if chat_msg { "Chat-Version: 1.0\n" } else { "" },
+            if is_encrypted {
+                "Subject: [...]\n\
+                Content-Type: multipart/mixed; boundary=\"someboundary\"\n"
+            } else {
+                "Subject: foo\n"
+            },
         );
         temp.as_bytes()
     };
@@ -157,30 +161,31 @@ async fn check_target_folder_combination(
     assert_eq!(
         expected,
         actual.as_deref(),
-        "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}: expected {expected:?}, got {actual:?}"
+        "For folder {folder}, mvbox_move {mvbox_move}, is_encrypted {is_encrypted}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}: expected {expected:?}, got {actual:?}"
     );
     Ok(())
 }
 
-// chat_msg means that the message was sent by Delta Chat
-// The tuples are (folder, mvbox_move, chat_msg, expected_destination)
+// The tuples are (folder, mvbox_move, is_encrypted, expected_destination)
 const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, false, "INBOX"),
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "DeltaChat"),
-    ("Spam", false, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
+    ("INBOX", true, true, "INBOX"),
+    ("Spam", false, false, "INBOX"),
     ("Spam", false, true, "INBOX"),
-    ("Spam", true, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
+    // Move unencrypted emails in accepted chats from Spam to INBOX, not 100% sure on this, we could
+    // also not move unencrypted emails or, if mvbox_move=1, move them to DeltaChat.
+    ("Spam", true, false, "INBOX"),
     ("Spam", true, true, "DeltaChat"),
 ];
 
-// These are the same as above, but non-chat messages in Spam stay in Spam
+// These are the same as above, but unencrypted messages in Spam stay in Spam.
 const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, false, "INBOX"),
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "DeltaChat"),
+    ("INBOX", true, true, "INBOX"),
     ("Spam", false, false, "Spam"),
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "Spam"),
@@ -189,11 +194,11 @@ const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_incoming_accepted() -> Result<()> {
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
+    for (folder, mvbox_move, is_encrypted, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
         check_target_folder_combination(
             folder,
             *mvbox_move,
-            *chat_msg,
+            *is_encrypted,
             expected_destination,
             true,
             false,
@@ -206,11 +211,11 @@ async fn test_target_folder_incoming_accepted() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_incoming_request() -> Result<()> {
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_REQUEST {
+    for (folder, mvbox_move, is_encrypted, expected_destination) in COMBINATIONS_REQUEST {
         check_target_folder_combination(
             folder,
             *mvbox_move,
-            *chat_msg,
+            *is_encrypted,
             expected_destination,
             false,
             false,
@@ -224,11 +229,11 @@ async fn test_target_folder_incoming_request() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_outgoing() -> Result<()> {
     // Test outgoing emails
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
+    for (folder, mvbox_move, is_encrypted, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
         check_target_folder_combination(
             folder,
             *mvbox_move,
-            *chat_msg,
+            *is_encrypted,
             expected_destination,
             true,
             true,
@@ -242,11 +247,11 @@ async fn test_target_folder_outgoing() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_setupmsg() -> Result<()> {
     // Test setupmessages
-    for (folder, mvbox_move, chat_msg, _expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
+    for (folder, mvbox_move, is_encrypted, _expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
         check_target_folder_combination(
             folder,
             *mvbox_move,
-            *chat_msg,
+            *is_encrypted,
             if folder == &"Spam" { "INBOX" } else { folder }, // Never move setup messages, except if they are in "Spam"
             false,
             true,

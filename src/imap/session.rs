@@ -14,17 +14,20 @@ use crate::tools;
 /// Prefetch:
 /// - Message-ID to check if we already have the message.
 /// - In-Reply-To and References to check if message is a reply to chat message.
-/// - Chat-Version to check if a message is a chat message
 /// - Autocrypt-Setup-Message to check if a message is an autocrypt setup message,
 ///   not necessarily sent by Delta Chat.
+///
+/// NB: We don't look at Chat-Version as we don't want any "better" handling for unencrypted
+/// messages.
 const PREFETCH_FLAGS: &str = "(UID INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (\
                               MESSAGE-ID \
                               DATE \
                               X-MICROSOFT-ORIGINAL-MESSAGE-ID \
                               FROM \
                               IN-REPLY-TO REFERENCES \
-                              CHAT-VERSION \
-                              AUTO-SUBMITTED \
+                              CONTENT-TYPE \
+                              SECURE-JOIN \
+                              SUBJECT \
                               AUTOCRYPT-SETUP-MESSAGE\
                               )])";
 

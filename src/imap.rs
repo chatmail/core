@@ -1964,21 +1964,24 @@ impl Session {
     }
 }
 
+fn is_encrypted(headers: &[mailparse::MailHeader<'_>]) -> bool {
+    let content_type = headers.get_header_value(HeaderDef::ContentType);
+    let content_type = content_type.as_ref();
+    let res = content_type.is_some_and(|v| v.contains("multipart/encrypted"));
+    // Some MUAs use "multipart/mixed", look also at Subject in this case. We can't only look at
+    // Subject as it's not mandatory (<https://datatracker.ietf.org/doc/html/rfc5322#section-3.6>)
+    // and may be user-formed.
+    res || content_type.is_some_and(|v| v.contains("multipart/mixed"))
+        && headers
+            .get_header_value(HeaderDef::Subject)
+            .is_some_and(|v| v == "..." || v == "[...]")
+}
+
 async fn should_move_out_of_spam(
     context: &Context,
     headers: &[mailparse::MailHeader<'_>],
 ) -> Result<bool> {
-    if headers.get_header_value(HeaderDef::ChatVersion).is_some() {
-        // If this is a chat message (i.e. has a ChatVersion header), then this might be
-        // a securejoin message. We can't find out at this point as we didn't prefetch
-        // the SecureJoin header. So, we always move chat messages out of Spam.
-        // Two possibilities to change this would be:
-        // 1. Remove the `&& !context.is_spam_folder(folder).await?` check from
-        // `fetch_new_messages()`, and then let `receive_imf()` check
-        // if it's a spam message and should be hidden.
-        // 2. Or add a flag to the ChatVersion header that this is a securejoin
-        // request, and return `true` here only if the message has this flag.
-        // `receive_imf()` can then check if the securejoin request is valid.
+    if headers.get_header_value(HeaderDef::SecureJoin).is_some() || is_encrypted(headers) {
         return Ok(true);
     }
 
@@ -2037,7 +2040,8 @@ async fn spam_target_folder_cfg(
         return Ok(None);
     }
 
-    if needs_move_to_mvbox(context, headers).await?
+    if is_encrypted(headers) && context.get_config_bool(Config::MvboxMove).await?
+        || needs_move_to_mvbox(context, headers).await?
         // If OnlyFetchMvbox is set, we don't want to move the message to
         // the inbox where we wouldn't fetch it again:
         || context.get_config_bool(Config::OnlyFetchMvbox).await?
@@ -2090,20 +2094,6 @@ async fn needs_move_to_mvbox(
     context: &Context,
     headers: &[mailparse::MailHeader<'_>],
 ) -> Result<bool> {
-    let has_chat_version = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    if !context.get_config_bool(Config::IsChatmail).await?
-        && has_chat_version
-        && headers
-            .get_header_value(HeaderDef::AutoSubmitted)
-            .filter(|val| val.eq_ignore_ascii_case("auto-generated"))
-            .is_some()
-    {
-        if let Some(from) = mimeparser::get_from(headers) {
-            if context.is_self_addr(&from.addr).await? {
-                return Ok(true);
-            }
-        }
-    }
     if !context.get_config_bool(Config::MvboxMove).await? {
         return Ok(false);
     }
@@ -2117,7 +2107,7 @@ async fn needs_move_to_mvbox(
         return Ok(false);
     }
 
-    if has_chat_version {
+    if headers.get_header_value(HeaderDef::SecureJoin).is_some() {
         Ok(true)
     } else if let Some(parent) = get_prefetch_parent_message(context, headers).await? {
         match parent.is_dc_message {
@@ -2309,27 +2299,24 @@ pub(crate) async fn prefetch_should_download(
         return Ok(false);
     }
 
-    let is_chat_message = headers.get_header_value(HeaderDef::ChatVersion).is_some();
     let accepted_contact = origin.is_known();
-    let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
-        .await?
-        .map(|parent| match parent.is_dc_message {
-            MessengerMessage::No => false,
-            MessengerMessage::Yes | MessengerMessage::Reply => true,
-        })
-        .unwrap_or_default();
-
-    let show_emails =
-        ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
-
     let show = is_autocrypt_setup_message
-        || match show_emails {
-            ShowEmails::Off => is_chat_message || is_reply_to_chat_message,
-            ShowEmails::AcceptedContacts => {
-                is_chat_message || is_reply_to_chat_message || accepted_contact
-            }
+        || headers.get_header_value(HeaderDef::SecureJoin).is_some()
+        || is_encrypted(headers)
+        || match ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
+            .unwrap_or_default()
+        {
+            ShowEmails::Off => false,
+            ShowEmails::AcceptedContacts => accepted_contact,
             ShowEmails::All => true,
-        };
+        }
+        || get_prefetch_parent_message(context, headers)
+            .await?
+            .map(|parent| match parent.is_dc_message {
+                MessengerMessage::No => false,
+                MessengerMessage::Yes | MessengerMessage::Reply => true,
+            })
+            .unwrap_or_default();
 
     let should_download = (show && !blocked_contact) || maybe_ndn;
     Ok(should_download)
