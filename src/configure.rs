@@ -220,7 +220,20 @@ impl Context {
                 if current_addr == addr {
                     bail!("Cannot delete current transport");
                 }
-                transaction.execute("DELETE FROM transports WHERE addr=?", (addr,))?;
+                let transport_id = transaction.query_row(
+                    "DELETE FROM transports WHERE addr=? RETURNING id",
+                    (addr,),
+                    |row| {
+                        let id: u32 = row.get(0)?;
+                        Ok(id)
+                    },
+                )?;
+                transaction.execute("DELETE FROM imap WHERE transport_id=?", (transport_id,))?;
+                transaction.execute(
+                    "DELETE FROM imap_sync WHERE transport_id=?",
+                    (transport_id,),
+                )?;
+
                 Ok(())
             })
             .await?;
