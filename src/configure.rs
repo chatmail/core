@@ -565,14 +565,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     progress!(ctx, 910);
 
-    if let Some(configured_addr) = ctx.get_config(Config::ConfiguredAddr).await? {
-        if configured_addr != param.addr {
-            // Switched account, all server UIDs we know are invalid
-            info!(ctx, "Scheduling resync because the address has changed.");
-            ctx.schedule_resync().await?;
-        }
-    }
-
     let provider = configured_param.provider;
     configured_param
         .save_to_transports_table(ctx, param)

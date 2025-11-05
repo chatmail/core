@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -243,9 +243,6 @@ pub struct InnerContext {
     /// Set to `None` if quota was never tried to load.
     pub(crate) quota: RwLock<Option<QuotaInfo>>,
 
-    /// IMAP UID resync request.
-    pub(crate) resync_request: AtomicBool,
-
     /// Notify about new messages.
     ///
     /// This causes [`Context::wait_next_msgs`] to wake up.
@@ -457,7 +454,6 @@ impl Context {
             scheduler: SchedulerState::new(),
             ratelimit: RwLock::new(Ratelimit::new(Duration::new(60, 0), 6.0)), // Allow at least 1 message every 10 seconds + a burst of 6.
             quota: RwLock::new(None),
-            resync_request: AtomicBool::new(false),
             new_msgs_notify,
             server_id: RwLock::new(None),
             metadata: RwLock::new(None),
@@ -613,12 +609,6 @@ impl Context {
             time_elapsed(&time_start),
         );
 
-        Ok(())
-    }
-
-    pub(crate) async fn schedule_resync(&self) -> Result<()> {
-        self.resync_request.store(true, Ordering::Relaxed);
-        self.scheduler.interrupt_inbox().await;
         Ok(())
     }
 

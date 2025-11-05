@@ -1,7 +1,6 @@
 use std::cmp;
 use std::iter::{self, once};
 use std::num::NonZeroUsize;
-use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Error, Result, bail};
 use async_channel::{self as channel, Receiver, Sender};
@@ -481,11 +480,10 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     }
 
-    let resync_requested = ctx.resync_request.swap(false, Ordering::Relaxed);
-    if resync_requested {
+    if let Ok(()) = imap.resync_request_receiver.try_recv() {
         if let Err(err) = session.resync_folders(ctx).await {
             warn!(ctx, "Failed to resync folders: {:#}.", err);
-            ctx.resync_request.store(true, Ordering::Relaxed);
+            imap.resync_request_sender.try_send(()).ok();
         }
     }
 
