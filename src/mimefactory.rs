@@ -17,7 +17,7 @@ use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
 use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
-use crate::constants::ASM_SUBJECT;
+use crate::constants::{ASM_SUBJECT, BROADCAST_INCOMPATIBILITY_MSG};
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
@@ -1212,17 +1212,7 @@ impl MimeFactory {
                         // because this is an old broadcast channel,
                         // created before we had symmetric encryption,
                         // we show an error message.
-                        let text = r#"The up to now "experimental channels feature" is about to become an officially supported one. By that, privacy will be improved, it will become faster, and less traffic will be consumed.
-
-As we do not guarantee feature-stability for such experiments, this means, that you will need to create the channel again. 
-
-Here is what to do:
- • Create a new channel
- • Tap on the channel name
- • Tap on "QR Invite Code"
- • Have all recipients scan the QR code, or send them the link
-
-If you have any questions, please send an email to delta@merlinux.eu or ask at https://support.delta.chat/."#;
+                        let text = BROADCAST_INCOMPATIBILITY_MSG;
                         chat::add_info_msg(context, chat.id, text, time()).await?;
                         bail!(text);
                     }
