@@ -249,12 +249,7 @@ impl ImapSession {
         }
         info!(
             context,
-            "uid/validity change folder {}: new {}/{} previous {}/{}.",
-            folder,
-            new_uid_next,
-            new_uid_validity,
-            old_uid_next,
-            old_uid_validity,
+            "UID validity for folder {folder} and transport {transport_id} changed from {old_uid_validity}/{old_uid_next} to {new_uid_validity}/{new_uid_next}.",
         );
         Ok(true)
     }
