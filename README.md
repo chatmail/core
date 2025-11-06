@@ -197,12 +197,10 @@ and then run the script.
 Language bindings are available for:
 
 - **C** \[[📂 source](./deltachat-ffi) | [📚 docs](https://c.delta.chat)\]
+   - -> libdeltachat is going to be deprecated and only exists because Android, iOS and Ubuntu Touch are still using it. If you build a new project, then please use the jsonrpc api instead.
 - **JS**: \[[📂 source](./deltachat-rpc-client) | [📦 npm](https://www.npmjs.com/package/@deltachat/jsonrpc-client) | [📚 docs](https://js.jsonrpc.delta.chat/)\]
 - **Python** \[[📂 source](./python) | [📦 pypi](https://pypi.org/project/deltachat) | [📚 docs](https://py.delta.chat)\]
-- **Go**
-  - over jsonrpc: \[[📂 source](https://github.com/deltachat/deltachat-rpc-client-go/)\]
-  - over cffi[^1]: \[[📂 source](https://github.com/deltachat/go-deltachat/)\]
-- **Free Pascal**[^1] \[[📂 source](https://github.com/deltachat/deltachat-fp/)\]
+- **Go** \[[📂 source](https://github.com/deltachat/deltachat-rpc-client-go/)\]
 - **Java** and **Swift** (contained in the Android/iOS repos)
 
 The following "frontend" projects make use of the Rust-library
@@ -215,5 +213,3 @@ or its language bindings:
 - [Telepathy](https://code.ur.gs/lupine/telepathy-padfoot/)
 - [Ubuntu Touch](https://codeberg.org/lk108/deltatouch)
 - several **Bots**
-
-[^1]: Out of date / unmaintained, if you like those languages feel free to start maintaining them. If you have questions we'll help you, please ask in the issues.
