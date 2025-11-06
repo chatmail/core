@@ -921,6 +921,28 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .log_err(context)
         .ok();
 
+    // Delete call SDPs for ended calls (older than 24 hours) or orphaned calls.
+    // Ended calls have Param::Arg4 (H=timestamp) set in their params.
+    // We clean up calls that ended more than 24 hours ago to protect privacy
+    // as SDPs contain IP addresses.
+    context
+        .sql
+        .execute(
+            "DELETE FROM calls WHERE msg_id IN (
+                SELECT calls.msg_id FROM calls 
+                LEFT JOIN msgs ON calls.msg_id = msgs.id
+                WHERE msgs.id IS NULL
+                   OR msgs.chat_id = ?
+                   OR (msgs.param LIKE '%H=%'
+                       AND msgs.timestamp_sent < ?)
+            )",
+            (DC_CHAT_ID_TRASH, time() - 86400),
+        )
+        .await
+        .context("Failed to delete old call SDPs")
+        .log_err(context)
+        .ok();
+
     info!(context, "Housekeeping done.");
     Ok(())
 }

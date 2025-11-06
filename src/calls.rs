@@ -195,8 +195,23 @@ impl Context {
             text: "Outgoing call".into(),
             ..Default::default()
         };
+        
+        // Set a placeholder parameter so the message is recognized as a call
+        // This will be used by mimefactory until the DB entry is available
         call.param.set(Param::WebrtcRoom, &place_call_info);
         call.id = send_msg(self, chat_id, &mut call).await?;
+
+        // Store SDP offer in calls table and remove from params
+        self.sql
+            .execute(
+                "INSERT OR REPLACE INTO calls (msg_id, offer_sdp) VALUES (?, ?)",
+                (call.id, &place_call_info),
+            )
+            .await?;
+        
+        // Remove SDP from message params for privacy
+        call.param.remove(Param::WebrtcRoom);
+        call.update_param(self).await?;
 
         let wait = RINGING_SECONDS;
         task::spawn(Context::emit_end_call_if_unaccepted(
@@ -229,6 +244,14 @@ impl Context {
             chat.id.accept(self).await?;
         }
 
+        // Store SDP answer in calls table
+        self.sql
+            .execute(
+                "UPDATE calls SET answer_sdp=? WHERE msg_id=?",
+                (&accept_call_info, call_id),
+            )
+            .await?;
+
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
             viewtype: Viewtype::Text,
@@ -237,8 +260,6 @@ impl Context {
         };
         msg.param.set_cmd(SystemMessage::CallAccepted);
         msg.hidden = true;
-        msg.param
-            .set(Param::WebrtcAccepted, accept_call_info.to_string());
         msg.set_quote(self, Some(&call.msg)).await?;
         msg.id = send_msg(self, call.msg.chat_id, &mut msg).await?;
         self.emit_event(EventType::IncomingCallAccepted {
@@ -327,6 +348,16 @@ impl Context {
         from_id: ContactId,
     ) -> Result<()> {
         if mime_message.is_call() {
+            // Extract SDP from message headers and store in calls table
+            if let Some(offer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcRoom) {
+                self.sql
+                    .execute(
+                        "INSERT OR IGNORE INTO calls (msg_id, offer_sdp) VALUES (?, ?)",
+                        (call_id, offer_sdp),
+                    )
+                    .await?;
+            }
+
             let Some(call) = self.load_call_by_id(call_id).await? else {
                 warn!(self, "{call_id} does not refer to a call message");
                 return Ok(());
@@ -389,6 +420,16 @@ impl Context {
                     if call.is_ended() || call.is_accepted() {
                         info!(self, "CallAccepted received for accepted/ended call");
                         return Ok(());
+                    }
+
+                    // Store SDP answer in calls table
+                    if let Some(answer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcAccepted) {
+                        self.sql
+                            .execute(
+                                "UPDATE calls SET answer_sdp=? WHERE msg_id=?",
+                                (answer_sdp, call.msg.id),
+                            )
+                            .await?;
                     }
 
                     call.mark_as_accepted(self).await?;
@@ -463,33 +504,40 @@ impl Context {
     /// not a call message, returns `None`.
     pub async fn load_call_by_id(&self, call_id: MsgId) -> Result<Option<CallInfo>> {
         let call = Message::load_from_db(self, call_id).await?;
-        Ok(self.load_call_by_message(call))
+        self.load_call_by_message(call).await
     }
 
     // Loads information about the call given the `Message`.
     //
     // If the `Message` is not a call message, returns `None`
-    fn load_call_by_message(&self, call: Message) -> Option<CallInfo> {
+    async fn load_call_by_message(&self, call: Message) -> Result<Option<CallInfo>> {
         if call.viewtype != Viewtype::Call {
             // This can happen e.g. if a "call accepted"
             // or "call ended" message is received
             // with `In-Reply-To` referring to non-call message.
-            return None;
+            return Ok(None);
         }
 
-        Some(CallInfo {
-            place_call_info: call
-                .param
-                .get(Param::WebrtcRoom)
-                .unwrap_or_default()
-                .to_string(),
-            accept_call_info: call
-                .param
-                .get(Param::WebrtcAccepted)
-                .unwrap_or_default()
-                .to_string(),
+        // Load SDP from calls table
+        let (place_call_info, accept_call_info) = self
+            .sql
+            .query_row_optional(
+                "SELECT offer_sdp, answer_sdp FROM calls WHERE msg_id=?",
+                (call.id,),
+                |row| {
+                    let offer: Option<String> = row.get(0)?;
+                    let answer: Option<String> = row.get(1)?;
+                    Ok((offer.unwrap_or_default(), answer.unwrap_or_default()))
+                },
+            )
+            .await?
+            .unwrap_or_default();
+
+        Ok(Some(CallInfo {
+            place_call_info,
+            accept_call_info,
             msg: call,
-        })
+        }))
     }
 }
 

@@ -1680,6 +1680,27 @@ impl MimeFactory {
                     "Chat-Content",
                     mail_builder::headers::raw::Raw::new("call-accepted").into(),
                 ));
+                // Get SDP answer from the referenced call message in calls table,
+                // or fall back to params if not yet migrated
+                if let Some(ref quoted_msg_id) = msg.in_reply_to {
+                    let answer_sdp = context
+                        .sql
+                        .query_row_optional(
+                            "SELECT answer_sdp FROM calls WHERE msg_id=?",
+                            (quoted_msg_id,),
+                            |row| row.get::<_, Option<String>>(0),
+                        )
+                        .await?
+                        .flatten()
+                        .or_else(|| msg.param.get(Param::WebrtcAccepted).map(|s| s.to_string()));
+                        
+                    if let Some(answer_sdp) = answer_sdp {
+                        headers.push((
+                            "Chat-Webrtc-Accepted",
+                            mail_builder::headers::raw::Raw::new(b_encode(&answer_sdp)).into(),
+                        ));
+                    }
+                }
             }
             SystemMessage::CallEnded => {
                 headers.push((
@@ -1716,16 +1737,25 @@ impl MimeFactory {
             );
         }
 
-        if let Some(offer) = msg.param.get(Param::WebrtcRoom) {
-            headers.push((
-                "Chat-Webrtc-Room",
-                mail_builder::headers::raw::Raw::new(b_encode(offer)).into(),
-            ));
-        } else if let Some(answer) = msg.param.get(Param::WebrtcAccepted) {
-            headers.push((
-                "Chat-Webrtc-Accepted",
-                mail_builder::headers::raw::Raw::new(b_encode(answer)).into(),
-            ));
+        if msg.viewtype == Viewtype::Call {
+            // Get SDP offer from calls table, or fall back to params if not yet migrated
+            let offer_sdp = context
+                .sql
+                .query_row_optional(
+                    "SELECT offer_sdp FROM calls WHERE msg_id=?",
+                    (msg.id,),
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .await?
+                .flatten()
+                .or_else(|| msg.param.get(Param::WebrtcRoom).map(|s| s.to_string()));
+                
+            if let Some(offer_sdp) = offer_sdp {
+                headers.push((
+                    "Chat-Webrtc-Room",
+                    mail_builder::headers::raw::Raw::new(b_encode(&offer_sdp)).into(),
+                ));
+            }
         }
 
         if msg.viewtype == Viewtype::Voice
