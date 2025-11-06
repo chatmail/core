@@ -801,6 +801,7 @@ async fn test_self_talk() -> Result<()> {
     let chat = &t.get_self_chat().await;
     assert!(!chat.id.is_special());
     assert!(chat.is_self_talk());
+    assert!(chat.is_encrypted(&t).await?);
     assert!(chat.visibility == ChatVisibility::Normal);
     assert!(!chat.is_device_talk());
     assert!(chat.can_send(&t).await?);
