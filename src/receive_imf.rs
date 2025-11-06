@@ -469,6 +469,11 @@ pub(crate) async fn receive_imf_inner(
     imf_raw: &[u8],
     seen: bool,
 ) -> Result<Option<ReceivedMsg>> {
+    ensure!(
+        !context
+            .get_config_bool(Config::SimulateReceiveImfError)
+            .await?
+    );
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(
             context,
