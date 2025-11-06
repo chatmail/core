@@ -922,17 +922,18 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .ok();
 
     // Delete call SDPs for ended calls (older than 24 hours) or orphaned calls.
-    // Ended calls have Param::Arg4 (H=timestamp) set in their params.
     // We clean up calls that ended more than 24 hours ago to protect privacy
-    // as SDPs contain IP addresses.
+    // as SDPs contain IP addresses. Ended calls are identified by having
+    // the CALL_ENDED_TIMESTAMP parameter (Param::Arg4) set.
+    // The ON DELETE CASCADE foreign key will handle orphaned entries automatically,
+    // but we also check for trash and old ended calls.
     context
         .sql
         .execute(
             "DELETE FROM calls WHERE msg_id IN (
                 SELECT calls.msg_id FROM calls 
-                LEFT JOIN msgs ON calls.msg_id = msgs.id
-                WHERE msgs.id IS NULL
-                   OR msgs.chat_id = ?
+                INNER JOIN msgs ON calls.msg_id = msgs.id
+                WHERE msgs.chat_id = ?
                    OR (msgs.param LIKE '%H=%'
                        AND msgs.timestamp_sent < ?)
             )",

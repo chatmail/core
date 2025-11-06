@@ -509,7 +509,10 @@ impl Context {
 
     // Loads information about the call given the `Message`.
     //
-    // If the `Message` is not a call message, returns `None`
+    // If the `Message` is not a call message, returns `None`.
+    //
+    // This function is async because it queries the calls table
+    // to retrieve SDP offers and answers.
     async fn load_call_by_message(&self, call: Message) -> Result<Option<CallInfo>> {
         if call.viewtype != Viewtype::Call {
             // This can happen e.g. if a "call accepted"
