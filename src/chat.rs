@@ -2921,7 +2921,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                             &pre_msg.rfc724_mid,
                             &recipients_chunk,
                             &pre_msg.message,
-                            msg.id, // TODO: check if this is correct or we need another id here?
+                            msg.id,
                         ),
                     )?;
                     row_ids.push(row_id.try_into()?);
