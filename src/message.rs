@@ -443,6 +443,13 @@ pub struct Message {
     pub(crate) location_id: u32,
     pub(crate) error: Option<String>,
     pub(crate) param: Params,
+    
+    /// SDP offer for outgoing calls.
+    /// This field is used to pass the SDP offer to the database
+    /// without storing it in message parameters.
+    /// It is not persisted in the msgs table, only in the calls table.
+    #[serde(skip)]
+    pub(crate) call_sdp_offer: Option<String>,
 }
 
 impl Message {
@@ -572,6 +579,7 @@ impl Message {
                         chat_blocked: row
                             .get::<_, Option<Blocked>>("blocked")?
                             .unwrap_or_default(),
+                        call_sdp_offer: None,
                     };
                     Ok(msg)
                 },

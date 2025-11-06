@@ -1750,17 +1750,24 @@ impl MimeFactory {
         }
 
         if msg.viewtype == Viewtype::Call {
-            // Get SDP offer from calls table, or fall back to params if not yet migrated
-            let offer_sdp = context
-                .sql
-                .query_row_optional(
-                    "SELECT offer_sdp FROM calls WHERE msg_id=?",
-                    (msg.id,),
-                    |row| row.get::<_, Option<String>>(0),
-                )
-                .await?
-                .flatten()
-                .or_else(|| msg.param.get(Param::WebrtcRoom).map(|s| s.to_string()));
+            // Get SDP offer from the message field (if being sent), calls table, or params (for old messages)
+            let offer_sdp = if let Some(ref offer) = msg.call_sdp_offer {
+                Some(offer.clone())
+            } else if !msg.id.is_unset() {
+                // Try to get from calls table if message is already stored
+                context
+                    .sql
+                    .query_row_optional(
+                        "SELECT offer_sdp FROM calls WHERE msg_id=?",
+                        (msg.id,),
+                        |row| row.get::<_, Option<String>>(0),
+                    )
+                    .await?
+                    .flatten()
+            } else {
+                None
+            }
+            .or_else(|| msg.param.get(Param::WebrtcRoom).map(|s| s.to_string()));
                 
             if let Some(offer_sdp) = offer_sdp {
                 headers.push((

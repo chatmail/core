@@ -135,8 +135,18 @@ impl CallInfo {
     }
 
     async fn mark_as_ended(&mut self, context: &Context) -> Result<()> {
-        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, time());
+        let now = time();
+        self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
+        
+        // Also store ended timestamp in calls table
+        context
+            .sql
+            .execute(
+                "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
+                (now, self.msg.id),
+            )
+            .await?;
         Ok(())
     }
 
@@ -152,6 +162,15 @@ impl CallInfo {
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
         self.msg.param.set_i64(CALL_CANCELED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
+        
+        // Also store ended timestamp in calls table
+        context
+            .sql
+            .execute(
+                "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
+                (now, self.msg.id),
+            )
+            .await?;
         Ok(())
     }
 
@@ -193,27 +212,19 @@ impl Context {
         let mut call = Message {
             viewtype: Viewtype::Call,
             text: "Outgoing call".into(),
+            call_sdp_offer: Some(place_call_info.clone()),
             ..Default::default()
         };
         
-        // Set a placeholder parameter so the message is recognized as a call during sending.
-        // This ensures mimefactory can read the SDP during the brief window between
-        // send_msg() starting and the calls table entry being available.
-        // The param will be removed after send_msg() completes.
-        call.param.set(Param::WebrtcRoom, &place_call_info);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
-        // Store SDP offer in calls table and remove from params
+        // Store SDP offer in calls table
         self.sql
             .execute(
                 "INSERT OR REPLACE INTO calls (msg_id, offer_sdp) VALUES (?, ?)",
                 (call.id, &place_call_info),
             )
             .await?;
-        
-        // Remove SDP from message params for privacy
-        call.param.remove(Param::WebrtcRoom);
-        call.update_param(self).await?;
 
         let wait = RINGING_SECONDS;
         task::spawn(Context::emit_end_call_if_unaccepted(

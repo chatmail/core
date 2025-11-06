@@ -1343,12 +1343,11 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
     if dbversion < migration_version {
         sql.execute_migration(
             "CREATE TABLE calls(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                msg_id INTEGER NOT NULL UNIQUE REFERENCES msgs(id) ON DELETE CASCADE,
+                msg_id INTEGER PRIMARY KEY REFERENCES msgs(id) ON DELETE CASCADE,
                 offer_sdp TEXT,
-                answer_sdp TEXT
-            ) STRICT;
-            CREATE INDEX calls_msg_id_index ON calls (msg_id);",
+                answer_sdp TEXT,
+                ended_timestamp INTEGER
+            ) STRICT;",
             migration_version,
         )
         .await?;

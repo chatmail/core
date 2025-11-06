@@ -923,10 +923,7 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
 
     // Delete call SDPs for ended calls (older than 24 hours) or trashed calls.
     // We clean up calls that ended more than 24 hours ago to protect privacy
-    // as SDPs contain IP addresses. Ended calls are identified by having
-    // the CALL_ENDED_TIMESTAMP parameter (Param::Arg4='H') set.
-    // The pattern '%H=%' matches this parameter since params are stored as
-    // newline-separated key=value pairs (e.g., "E=123\nH=456\n").
+    // as SDPs contain IP addresses.
     // The ON DELETE CASCADE foreign key handles orphaned entries automatically.
     context
         .sql
@@ -935,8 +932,8 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
                 SELECT calls.msg_id FROM calls 
                 INNER JOIN msgs ON calls.msg_id = msgs.id
                 WHERE msgs.chat_id = ?
-                   OR (msgs.param LIKE '%H=%'
-                       AND msgs.timestamp_sent < ?)
+                   OR (calls.ended_timestamp IS NOT NULL
+                       AND calls.ended_timestamp < ?)
             )",
             (DC_CHAT_ID_TRASH, time() - 86400),
         )
