@@ -1643,36 +1643,37 @@ impl Chat {
 
     /// Returns true if the chat is encrypted.
     pub async fn is_encrypted(&self, context: &Context) -> Result<bool> {
-        let is_encrypted = match self.typ {
-            Chattype::Single => {
-                match context
-                    .sql
-                    .query_row_optional(
-                        "SELECT cc.contact_id, c.fingerprint<>''
+        let is_encrypted = self.is_self_talk()
+            || match self.typ {
+                Chattype::Single => {
+                    match context
+                        .sql
+                        .query_row_optional(
+                            "SELECT cc.contact_id, c.fingerprint<>''
                              FROM chats_contacts cc LEFT JOIN contacts c
                                  ON c.id=cc.contact_id
                              WHERE cc.chat_id=?
                             ",
-                        (self.id,),
-                        |row| {
-                            let id: ContactId = row.get(0)?;
-                            let is_key: bool = row.get(1)?;
-                            Ok((id, is_key))
-                        },
-                    )
-                    .await?
-                {
-                    Some((id, is_key)) => is_key || id == ContactId::DEVICE,
-                    None => true,
+                            (self.id,),
+                            |row| {
+                                let id: ContactId = row.get(0)?;
+                                let is_key: bool = row.get(1)?;
+                                Ok((id, is_key))
+                            },
+                        )
+                        .await?
+                    {
+                        Some((id, is_key)) => is_key || id == ContactId::DEVICE,
+                        None => true,
+                    }
                 }
-            }
-            Chattype::Group => {
-                // Do not encrypt ad-hoc groups.
-                !self.grpid.is_empty()
-            }
-            Chattype::Mailinglist => false,
-            Chattype::OutBroadcast | Chattype::InBroadcast => true,
-        };
+                Chattype::Group => {
+                    // Do not encrypt ad-hoc groups.
+                    !self.grpid.is_empty()
+                }
+                Chattype::Mailinglist => false,
+                Chattype::OutBroadcast | Chattype::InBroadcast => true,
+            };
         Ok(is_encrypted)
     }
 
