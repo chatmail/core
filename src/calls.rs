@@ -196,8 +196,10 @@ impl Context {
             ..Default::default()
         };
         
-        // Set a placeholder parameter so the message is recognized as a call
-        // This will be used by mimefactory until the DB entry is available
+        // Set a placeholder parameter so the message is recognized as a call during sending.
+        // This ensures mimefactory can read the SDP during the brief window between
+        // send_msg() starting and the calls table entry being available.
+        // The param will be removed after send_msg() completes.
         call.param.set(Param::WebrtcRoom, &place_call_info);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
@@ -521,7 +523,9 @@ impl Context {
             return Ok(None);
         }
 
-        // Load SDP from calls table
+        // Load SDP from calls table. Returns empty strings if no record exists,
+        // which can happen for old messages from before the migration or for
+        // calls where SDPs have been cleaned up by housekeeping.
         let (place_call_info, accept_call_info) = self
             .sql
             .query_row_optional(
