@@ -1682,23 +1682,35 @@ impl MimeFactory {
                 ));
                 // Get SDP answer from the referenced call message in calls table,
                 // or fall back to params if not yet migrated
-                if let Some(ref quoted_msg_id) = msg.in_reply_to {
-                    let answer_sdp = context
+                if let Some(ref quoted_rfc724_mid) = msg.in_reply_to {
+                    // Look up msg_id from rfc724_mid first
+                    let quoted_msg_id: Option<MsgId> = context
                         .sql
                         .query_row_optional(
-                            "SELECT answer_sdp FROM calls WHERE msg_id=?",
-                            (quoted_msg_id,),
-                            |row| row.get::<_, Option<String>>(0),
+                            "SELECT id FROM msgs WHERE rfc724_mid=?",
+                            (quoted_rfc724_mid,),
+                            |row| row.get(0),
                         )
-                        .await?
-                        .flatten()
-                        .or_else(|| msg.param.get(Param::WebrtcAccepted).map(|s| s.to_string()));
-                        
-                    if let Some(answer_sdp) = answer_sdp {
-                        headers.push((
-                            "Chat-Webrtc-Accepted",
-                            mail_builder::headers::raw::Raw::new(b_encode(&answer_sdp)).into(),
-                        ));
+                        .await?;
+                    
+                    if let Some(quoted_msg_id) = quoted_msg_id {
+                        let answer_sdp = context
+                            .sql
+                            .query_row_optional(
+                                "SELECT answer_sdp FROM calls WHERE msg_id=?",
+                                (quoted_msg_id,),
+                                |row| row.get::<_, Option<String>>(0),
+                            )
+                            .await?
+                            .flatten()
+                            .or_else(|| msg.param.get(Param::WebrtcAccepted).map(|s| s.to_string()));
+                            
+                        if let Some(answer_sdp) = answer_sdp {
+                            headers.push((
+                                "Chat-Webrtc-Accepted",
+                                mail_builder::headers::raw::Raw::new(b_encode(&answer_sdp)).into(),
+                            ));
+                        }
                     }
                 }
             }

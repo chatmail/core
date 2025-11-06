@@ -672,3 +672,76 @@ async fn test_no_partial_calls() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
+    use crate::sql::housekeeping;
+
+    let alice = TestContext::new_alice().await;
+    let bob = alice.create_chat_with_contact("", "bob@example.net").await;
+
+    // Place a call
+    let call_id = alice
+        .place_outgoing_call(bob.id, PLACE_INFO.to_string())
+        .await?;
+
+    // Verify SDP is stored in calls table
+    let sdp_before: Option<String> = alice
+        .sql
+        .query_row_optional(
+            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            (call_id,),
+            |row| row.get(0),
+        )
+        .await?;
+    assert_eq!(sdp_before, Some(PLACE_INFO.to_string()));
+
+    // End the call
+    alice.end_call(call_id).await?;
+
+    // Verify the call message is marked as ended
+    let call = alice.load_call_by_id(call_id).await?.unwrap();
+    assert!(call.is_ended());
+
+    // SDP should still be there after ending
+    let sdp_after_end: Option<String> = alice
+        .sql
+        .query_row_optional(
+            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            (call_id,),
+            |row| row.get(0),
+        )
+        .await?;
+    assert_eq!(sdp_after_end, Some(PLACE_INFO.to_string()));
+
+    // Simulate passage of time by modifying the message timestamp
+    // to be older than 24 hours
+    let old_timestamp = crate::tools::time() - 86400 - 1; // 24 hours + 1 second ago
+    alice
+        .sql
+        .execute(
+            "UPDATE msgs SET timestamp_sent=? WHERE id=?",
+            (old_timestamp, call_id),
+        )
+        .await?;
+
+    // Run housekeeping
+    housekeeping(&alice).await?;
+
+    // Verify SDP has been deleted from calls table
+    let sdp_after_housekeeping: Option<String> = alice
+        .sql
+        .query_row_optional(
+            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            (call_id,),
+            |row| row.get(0),
+        )
+        .await?;
+    assert_eq!(sdp_after_housekeeping, None);
+
+    // The call message should still exist
+    let msg = Message::load_from_db(&alice, call_id).await?;
+    assert_eq!(msg.viewtype, Viewtype::Call);
+
+    Ok(())
+}
