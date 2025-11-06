@@ -139,12 +139,13 @@ impl CallInfo {
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
         
-        // Also store ended timestamp in calls table
+        // Store ended timestamp in calls table. If no entry exists yet, create one.
         context
             .sql
             .execute(
-                "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
-                (now, self.msg.id),
+                "INSERT INTO calls (msg_id, ended_timestamp) VALUES (?, ?)
+                 ON CONFLICT(msg_id) DO UPDATE SET ended_timestamp=excluded.ended_timestamp",
+                (self.msg.id, now),
             )
             .await?;
         Ok(())
@@ -163,12 +164,13 @@ impl CallInfo {
         self.msg.param.set_i64(CALL_CANCELED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
         
-        // Also store ended timestamp in calls table
+        // Store ended timestamp in calls table. If no entry exists yet, create one.
         context
             .sql
             .execute(
-                "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
-                (now, self.msg.id),
+                "INSERT INTO calls (msg_id, ended_timestamp) VALUES (?, ?)
+                 ON CONFLICT(msg_id) DO UPDATE SET ended_timestamp=excluded.ended_timestamp",
+                (self.msg.id, now),
             )
             .await?;
         Ok(())
