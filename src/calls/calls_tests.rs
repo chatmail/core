@@ -714,13 +714,13 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
         .await?;
     assert_eq!(sdp_after_end, Some(PLACE_INFO.to_string()));
 
-    // Simulate passage of time by modifying the message timestamp
+    // Simulate passage of time by modifying the ended_timestamp in calls table
     // to be older than 24 hours
     let old_timestamp = crate::tools::time() - 86400 - 1; // 24 hours + 1 second ago
     alice
         .sql
         .execute(
-            "UPDATE msgs SET timestamp_sent=? WHERE id=?",
+            "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
             (old_timestamp, call_id),
         )
         .await?;
