@@ -1,7 +1,8 @@
 use deltachat::{Event as CoreEvent, EventType as CoreEventType};
-use num_traits::ToPrimitive;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
+
+use super::chat::JsonrpcChatType;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -307,7 +308,7 @@ pub enum EventType {
         /// The type of the joined chat.
         /// This can take the same values
         /// as `BasicChat.chatType` ([`crate::api::types::chat::BasicChat::chat_type`]).
-        chat_type: u32,
+        chat_type: JsonrpcChatType,
         /// ID of the chat in case of success.
         chat_id: u32,
 
@@ -570,7 +571,7 @@ impl From<CoreEventType> for EventType {
                 progress,
             } => SecurejoinInviterProgress {
                 contact_id: contact_id.to_u32(),
-                chat_type: chat_type.to_u32().unwrap_or(0),
+                chat_type: chat_type.into(),
                 chat_id: chat_id.to_u32(),
                 progress,
             },

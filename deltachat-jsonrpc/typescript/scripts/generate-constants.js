@@ -45,15 +45,30 @@ const constants = data
       key.startsWith("DC_SOCKET_") ||
       key.startsWith("DC_LP_AUTH_") ||
       key.startsWith("DC_PUSH_") ||
-      key.startsWith("DC_TEXT1_")
+      key.startsWith("DC_TEXT1_") ||
+      key.startsWith("DC_CHAT_TYPE")
     );
   })
   .map((row) => {
-    return `  ${row.key}: ${row.value}`;
+    return `  export const ${row.key} = ${row.value};`;
   })
-  .join(",\n");
+  .join("\n");
 
 writeFileSync(
   resolve(__dirname, "../generated/constants.ts"),
-  `// Generated!\n\nexport enum C {\n${constants.replace(/:/g, " =")},\n}\n`,
+  `// Generated!
+
+export namespace C {
+${constants}
+  /** @deprecated 10-8-2025 compare string directly with \`== "Group"\` */
+  export const DC_CHAT_TYPE_GROUP = "Group";
+  /** @deprecated 10-8-2025 compare string directly with \`== "InBroadcast"\`*/
+  export const DC_CHAT_TYPE_IN_BROADCAST = "InBroadcast";
+  /** @deprecated 10-8-2025 compare string directly with \`== "Mailinglist"\` */
+  export const DC_CHAT_TYPE_MAILINGLIST = "Mailinglist";
+  /** @deprecated 10-8-2025 compare string directly with \`== "OutBroadcast"\` */
+  export const DC_CHAT_TYPE_OUT_BROADCAST = "OutBroadcast";
+  /** @deprecated 10-8-2025 compare string directly with \`== "Single"\` */
+  export const DC_CHAT_TYPE_SINGLE = "Single";
+}\n`,
 );

@@ -11,6 +11,7 @@ use num_traits::cast::ToPrimitive;
 use serde::Serialize;
 use typescript_type_def::TypeDef;
 
+use super::chat::JsonrpcChatType;
 use super::color_int_to_hex_string;
 use super::message::MessageViewtype;
 
@@ -23,7 +24,7 @@ pub enum ChatListItemFetchResult {
         name: String,
         avatar_path: Option<String>,
         color: String,
-        chat_type: u32,
+        chat_type: JsonrpcChatType,
         last_updated: Option<i64>,
         summary_text1: String,
         summary_text2: String,
@@ -151,7 +152,7 @@ pub(crate) async fn get_chat_list_item_by_id(
         name: chat.get_name().to_owned(),
         avatar_path,
         color,
-        chat_type: chat.get_type().to_u32().context("unknown chat type id")?,
+        chat_type: chat.get_type().into(),
         last_updated,
         summary_text1,
         summary_text2,
