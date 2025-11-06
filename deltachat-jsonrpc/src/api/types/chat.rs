@@ -6,7 +6,6 @@ use deltachat::chat::{Chat, ChatId};
 use deltachat::constants::Chattype;
 use deltachat::contact::{Contact, ContactId};
 use deltachat::context::Context;
-use num_traits::cast::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use typescript_type_def::TypeDef;
 
@@ -46,7 +45,7 @@ pub struct FullChat {
     archived: bool,
     pinned: bool,
     // subtitle  - will be moved to frontend because it uses translation functions
-    chat_type: u32,
+    chat_type: JSONRPCChatType,
     is_unpromoted: bool,
     is_self_talk: bool,
     contacts: Vec<ContactObject>,
@@ -130,7 +129,7 @@ impl FullChat {
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,
-            chat_type: chat.get_type().to_u32().context("unknown chat type id")?,
+            chat_type: chat.get_type().into(),
             is_unpromoted: chat.is_unpromoted(),
             is_self_talk: chat.is_self_talk(),
             contacts,
@@ -192,7 +191,7 @@ pub struct BasicChat {
     profile_image: Option<String>, //BLOBS ?
     archived: bool,
     pinned: bool,
-    chat_type: u32,
+    chat_type: JSONRPCChatType,
     is_unpromoted: bool,
     is_self_talk: bool,
     color: String,
@@ -220,7 +219,7 @@ impl BasicChat {
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
             pinned: chat.get_visibility() == chat::ChatVisibility::Pinned,
-            chat_type: chat.get_type().to_u32().context("unknown chat type id")?,
+            chat_type: chat.get_type().into(),
             is_unpromoted: chat.is_unpromoted(),
             is_self_talk: chat.is_self_talk(),
             color,
@@ -271,6 +270,40 @@ impl JsonrpcChatVisibility {
             JsonrpcChatVisibility::Normal => ChatVisibility::Normal,
             JsonrpcChatVisibility::Archived => ChatVisibility::Archived,
             JsonrpcChatVisibility::Pinned => ChatVisibility::Pinned,
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize, PartialEq, TypeDef, schemars::JsonSchema)]
+#[serde(rename = "ChatType")]
+pub enum JSONRPCChatType {
+    Single,
+    Group,
+    Mailinglist,
+    OutBroadcast,
+    InBroadcast,
+}
+
+impl From<Chattype> for JSONRPCChatType {
+    fn from(chattype: Chattype) -> Self {
+        match chattype {
+            Chattype::Single => JSONRPCChatType::Single,
+            Chattype::Group => JSONRPCChatType::Group,
+            Chattype::Mailinglist => JSONRPCChatType::Mailinglist,
+            Chattype::OutBroadcast => JSONRPCChatType::OutBroadcast,
+            Chattype::InBroadcast => JSONRPCChatType::InBroadcast,
+        }
+    }
+}
+
+impl From<JSONRPCChatType> for Chattype {
+    fn from(chattype: JSONRPCChatType) -> Self {
+        match chattype {
+            JSONRPCChatType::Single => Chattype::Single,
+            JSONRPCChatType::Group => Chattype::Group,
+            JSONRPCChatType::Mailinglist => Chattype::Mailinglist,
+            JSONRPCChatType::OutBroadcast => Chattype::OutBroadcast,
+            JSONRPCChatType::InBroadcast => Chattype::InBroadcast,
         }
     }
 }
