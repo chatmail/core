@@ -1341,14 +1341,15 @@ async fn do_chat_assignment(
                 chat_id_blocked = *new_chat_id_blocked;
             }
             ChatAssignment::AdHocGroup => {
-                if let Some((new_chat_id, new_chat_id_blocked, new_created)) = lookup_or_create_adhoc_group(
-                    context,
-                    mime_parser,
-                    to_ids,
-                    allow_creation || test_normal_chat.is_some(),
-                    create_blocked,
-                )
-                .await?
+                if let Some((new_chat_id, new_chat_id_blocked, new_created)) =
+                    lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        allow_creation || test_normal_chat.is_some(),
+                        create_blocked,
+                    )
+                    .await?
                 {
                     chat_id = Some(new_chat_id);
                     chat_id_blocked = new_chat_id_blocked;
@@ -1487,14 +1488,15 @@ async fn do_chat_assignment(
                 }
             }
             ChatAssignment::AdHocGroup => {
-                if let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) = lookup_or_create_adhoc_group(
-                    context,
-                    mime_parser,
-                    to_ids,
-                    allow_creation,
-                    Blocked::Not,
-                )
-                .await?
+                if let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) =
+                    lookup_or_create_adhoc_group(
+                        context,
+                        mime_parser,
+                        to_ids,
+                        allow_creation,
+                        Blocked::Not,
+                    )
+                    .await?
                 {
                     chat_id = Some(new_chat_id);
                     chat_id_blocked = new_chat_id_blocked;
@@ -2384,7 +2386,7 @@ async fn lookup_or_create_adhoc_group(
     to_ids: &[Option<ContactId>],
     allow_creation: bool,
     create_blocked: Blocked,
-) -> Result<Option<(ChatId, Blocked)>> {
+) -> Result<Option<(ChatId, Blocked, bool)>> {
     if mime_parser.decrypting_failed {
         warn!(
             context,
