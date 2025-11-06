@@ -1344,8 +1344,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         sql.execute_migration(
             "CREATE TABLE calls(
                 msg_id INTEGER PRIMARY KEY REFERENCES msgs(id) ON DELETE CASCADE,
-                offer_sdp TEXT,
-                answer_sdp TEXT,
+                sdp TEXT NOT NULL,
                 ended_timestamp INTEGER
             ) STRICT;",
             migration_version,

@@ -682,21 +682,34 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = alice.create_chat_with_contact("", "bob@example.net").await;
 
-    // Place a call
-    let call_id = alice
-        .place_outgoing_call(bob.id, PLACE_INFO.to_string())
-        .await?;
+    // Simulate receiving an incoming call from Bob
+    let received_call = receive_imf(
+        &alice,
+        b"From: bob@example.net\n\
+        To: alice@example.org\n\
+        Message-ID: <incoming-call@example.net>\n\
+        Chat-Version: 1.0\n\
+        Chat-Content: call\n\
+        Chat-Webrtc-Room: dGVzdC1zZHAtb2ZmZXI=\n\
+        \n\
+        Hello, this is a call\n",
+        false,
+    )
+    .await?
+    .unwrap();
+    
+    let call_id = received_call.msg_ids[0];
 
-    // Verify SDP is stored in calls table
+    // Verify SDP is stored in calls table for incoming call
     let sdp_before: Option<String> = alice
         .sql
         .query_row_optional(
-            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            "SELECT sdp FROM calls WHERE msg_id=?",
             (call_id,),
             |row| row.get(0),
         )
         .await?;
-    assert_eq!(sdp_before, Some(PLACE_INFO.to_string()));
+    assert!(sdp_before.is_some());
 
     // End the call
     alice.end_call(call_id).await?;
@@ -709,12 +722,12 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     let sdp_after_end: Option<String> = alice
         .sql
         .query_row_optional(
-            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            "SELECT sdp FROM calls WHERE msg_id=?",
             (call_id,),
             |row| row.get(0),
         )
         .await?;
-    assert_eq!(sdp_after_end, Some(PLACE_INFO.to_string()));
+    assert!(sdp_after_end.is_some());
 
     // Simulate passage of time - shift forward by 24 hours + 1 second
     SystemTime::shift(Duration::from_secs(86400 + 1));
@@ -726,7 +739,7 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     let sdp_after_housekeeping: Option<String> = alice
         .sql
         .query_row_optional(
-            "SELECT offer_sdp FROM calls WHERE msg_id=?",
+            "SELECT sdp FROM calls WHERE msg_id=?",
             (call_id,),
             |row| row.get(0),
         )

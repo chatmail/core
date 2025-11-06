@@ -220,13 +220,8 @@ impl Context {
         
         call.id = send_msg(self, chat_id, &mut call).await?;
 
-        // Store SDP offer in calls table
-        self.sql
-            .execute(
-                "INSERT OR REPLACE INTO calls (msg_id, offer_sdp) VALUES (?, ?)",
-                (call.id, &place_call_info),
-            )
-            .await?;
+        // For outgoing calls, we don't store our own offer SDP in the database.
+        // It's only kept in memory for sending the message.
 
         let wait = RINGING_SECONDS;
         task::spawn(Context::emit_end_call_if_unaccepted(
@@ -259,10 +254,10 @@ impl Context {
             chat.id.accept(self).await?;
         }
 
-        // Store SDP answer in calls table
+        // Store our answer SDP in calls table (replacing the offer from the other side)
         self.sql
             .execute(
-                "UPDATE calls SET answer_sdp=? WHERE msg_id=?",
+                "UPDATE calls SET sdp=? WHERE msg_id=?",
                 (&accept_call_info, call_id),
             )
             .await?;
@@ -363,11 +358,11 @@ impl Context {
         from_id: ContactId,
     ) -> Result<()> {
         if mime_message.is_call() {
-            // Extract SDP from message headers and store in calls table
+            // Extract SDP offer from message headers and store in calls table for incoming calls
             if let Some(offer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcRoom) {
                 self.sql
                     .execute(
-                        "INSERT OR IGNORE INTO calls (msg_id, offer_sdp) VALUES (?, ?)",
+                        "INSERT OR IGNORE INTO calls (msg_id, sdp) VALUES (?, ?)",
                         (call_id, offer_sdp),
                     )
                     .await?;
@@ -437,12 +432,13 @@ impl Context {
                         return Ok(());
                     }
 
-                    // Store SDP answer in calls table
+                    // Store SDP answer in calls table for outgoing calls
+                    // (for incoming calls, we've already replaced our offer with our answer in accept_incoming_call)
                     if let Some(answer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcAccepted) {
                         self.sql
                             .execute(
-                                "UPDATE calls SET answer_sdp=? WHERE msg_id=?",
-                                (answer_sdp, call.msg.id),
+                                "INSERT OR REPLACE INTO calls (msg_id, sdp) VALUES (?, ?)",
+                                (call.msg.id, answer_sdp),
                             )
                             .await?;
                     }
@@ -539,19 +535,25 @@ impl Context {
         // Load SDP from calls table. Returns empty strings if no record exists,
         // which can happen for old messages from before the migration or for
         // calls where SDPs have been cleaned up by housekeeping.
-        let (place_call_info, accept_call_info) = self
+        // For incoming calls, the SDP is the offer from the other side.
+        // For outgoing calls (after acceptance), the SDP is the answer from the other side.
+        let sdp = self
             .sql
             .query_row_optional(
-                "SELECT offer_sdp, answer_sdp FROM calls WHERE msg_id=?",
+                "SELECT sdp FROM calls WHERE msg_id=?",
                 (call.id,),
-                |row| {
-                    let offer: Option<String> = row.get(0)?;
-                    let answer: Option<String> = row.get(1)?;
-                    Ok((offer.unwrap_or_default(), answer.unwrap_or_default()))
-                },
+                |row| row.get::<_, String>(0),
             )
             .await?
             .unwrap_or_default();
+
+        let (place_call_info, accept_call_info) = if call.from_id == ContactId::SELF {
+            // Outgoing call: the stored SDP (if any) is the answer from the other side
+            (String::new(), sdp)
+        } else {
+            // Incoming call: the stored SDP is the offer from the other side
+            (sdp, String::new())
+        };
 
         Ok(Some(CallInfo {
             place_call_info,

@@ -1694,10 +1694,11 @@ impl MimeFactory {
                         .await?;
                     
                     if let Some(quoted_msg_id) = quoted_msg_id {
+                        // For CallAccepted messages, retrieve the SDP (which is our answer)
                         let answer_sdp = context
                             .sql
                             .query_row_optional(
-                                "SELECT answer_sdp FROM calls WHERE msg_id=?",
+                                "SELECT sdp FROM calls WHERE msg_id=?",
                                 (quoted_msg_id,),
                                 |row| row.get::<_, Option<String>>(0),
                             )
@@ -1750,24 +1751,15 @@ impl MimeFactory {
         }
 
         if msg.viewtype == Viewtype::Call {
-            // Get SDP offer from the message field (if being sent), calls table, or params (for old messages)
+            // Get SDP offer from the message field (if being sent) or params (for old messages).
+            // For outgoing calls, we don't store the offer in the database, only in memory.
+            // For incoming calls that are stored, we could query the database, but we typically
+            // only render outgoing call messages where we use the call_sdp_offer field.
             let offer_sdp = if let Some(ref offer) = msg.call_sdp_offer {
                 Some(offer.clone())
-            } else if !msg.id.is_unset() {
-                // Try to get from calls table if message is already stored
-                context
-                    .sql
-                    .query_row_optional(
-                        "SELECT offer_sdp FROM calls WHERE msg_id=?",
-                        (msg.id,),
-                        |row| row.get::<_, Option<String>>(0),
-                    )
-                    .await?
-                    .flatten()
             } else {
-                None
-            }
-            .or_else(|| msg.param.get(Param::WebrtcRoom).map(|s| s.to_string()));
+                msg.param.get(Param::WebrtcRoom).map(|s| s.to_string())
+            };
                 
             if let Some(offer_sdp) = offer_sdp {
                 headers.push((
