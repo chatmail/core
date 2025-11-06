@@ -5087,6 +5087,28 @@ async fn test_send_edit_request() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_edit_saved_messages() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+
+    alice1.set_config_bool(Config::BccSelf, true).await?;
+    alice2.set_config_bool(Config::BccSelf, true).await?;
+
+    let alice1_chat_id = ChatId::create_for_contact(alice1, ContactId::SELF).await?;
+    let alice1_sent_msg = alice1.send_text(alice1_chat_id, "Original message").await;
+    let alice1_msg_id = alice1_sent_msg.sender_msg_id;
+    let received_msg = alice2.recv_msg(&alice1_sent_msg).await;
+    assert_eq!(received_msg.text, "Original message");
+
+    send_edit_request(alice1, alice1_msg_id, "Edited message".to_string()).await?;
+    alice2.recv_msg_trash(&alice1.pop_sent_msg().await).await;
+    let received_msg = Message::load_from_db(alice2, received_msg.id).await?;
+    assert_eq!(received_msg.text, "Edited message");
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_receive_edit_request_after_removal() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
