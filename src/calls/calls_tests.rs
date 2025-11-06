@@ -4,6 +4,8 @@ use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::receive_imf::{receive_imf, receive_imf_from_inbox};
 use crate::test_utils::{TestContext, TestContextManager};
+use crate::tools::SystemTime;
+use std::time::Duration;
 
 struct CallSetup {
     pub alice: TestContext,
@@ -714,16 +716,8 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
         .await?;
     assert_eq!(sdp_after_end, Some(PLACE_INFO.to_string()));
 
-    // Simulate passage of time by modifying the ended_timestamp in calls table
-    // to be older than 24 hours
-    let old_timestamp = crate::tools::time() - 86400 - 1; // 24 hours + 1 second ago
-    alice
-        .sql
-        .execute(
-            "UPDATE calls SET ended_timestamp=? WHERE msg_id=?",
-            (old_timestamp, call_id),
-        )
-        .await?;
+    // Simulate passage of time - shift forward by 24 hours + 1 second
+    SystemTime::shift(Duration::from_secs(86400 + 1));
 
     // Run housekeeping
     housekeeping(&alice).await?;
