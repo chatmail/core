@@ -336,7 +336,7 @@ def test_receive_imf_failure(acfactory) -> None:
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
 
-    bob.set_config("fail_on_receiving_full_msg", "1")
+    bob.set_config("simulate_receive_imf_error", "1")
     alice_chat_bob.send_text("Hello!")
     event = bob.wait_for_event(EventType.MSGS_CHANGED)
     assert event.chat_id == bob.get_device_chat().id
@@ -345,12 +345,12 @@ def test_receive_imf_failure(acfactory) -> None:
     snapshot = message.get_snapshot()
     assert (
         snapshot.text == "❌ Failed to receive a message:"
-        " Condition failed: `!context.get_config_bool(Config::FailOnReceivingFullMsg).await?`."
+        " Condition failed: `!context.get_config_bool(Config::SimulateReceiveImfError).await?`."
         " Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
     )
 
     # The failed message doesn't break the IMAP loop.
-    bob.set_config("fail_on_receiving_full_msg", "0")
+    bob.set_config("simulate_receive_imf_error", "0")
     alice_chat_bob.send_text("Hello again!")
     event = bob.wait_for_incoming_msg_event()
     msg_id = event.msg_id
