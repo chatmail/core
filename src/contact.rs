@@ -31,7 +31,7 @@ use crate::key::{
     DcKey, Fingerprint, SignedPublicKey, load_self_public_key, self_fingerprint,
     self_fingerprint_opt,
 };
-use crate::log::{LogExt, info, warn};
+use crate::log::{LogExt, warn};
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};

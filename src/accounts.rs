@@ -18,7 +18,7 @@ use tokio::time::{Duration, sleep};
 
 use crate::context::{Context, ContextBuilder};
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::push::PushSubscriber;
 use crate::stock_str::StockStrings;
 

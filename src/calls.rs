@@ -9,7 +9,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::net::dns::lookup_host_with_cache;

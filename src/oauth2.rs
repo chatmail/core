@@ -7,7 +7,7 @@ use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use serde::Deserialize;
 
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::net::http::post_form;
 use crate::net::read_url_blob;
 use crate::provider;

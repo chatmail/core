@@ -26,7 +26,7 @@ use crate::dehtml::dehtml;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
-use crate::log::{error, info, warn};
+use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
 use crate::param::{Param, Params};
 use crate::simplify::{SimplifiedText, simplify};

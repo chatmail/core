@@ -23,7 +23,6 @@ macro_rules! info {
     }};
 }
 
-pub(crate) use info;
 
 // Workaround for <https://github.com/rust-lang/rust/issues/133708>.
 #[macro_use]
@@ -60,7 +59,6 @@ macro_rules! error {
     }};
 }
 
-pub(crate) use error;
 
 impl Context {
     /// Set last error string.

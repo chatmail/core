@@ -19,7 +19,7 @@ use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, Fingerprint, load_self_public_key};
 use crate::log::LogExt as _;
-use crate::log::{error, info, warn};
+use crate::log::warn;
 use crate::message::{Message, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;

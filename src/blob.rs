@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::constants::{self, MediaQuality};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{LogExt, error, info, warn};
+use crate::log::{LogExt, warn};
 use crate::message::Viewtype;
 use crate::tools::sanitize_filename;
 

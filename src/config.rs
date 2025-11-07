@@ -16,7 +16,7 @@ use crate::blob::BlobObject;
 use crate::configure::EnteredLoginParam;
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{LogExt, info};
+use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::{Provider, get_provider_by_id};
 use crate::sync::{self, Sync::*, SyncData};

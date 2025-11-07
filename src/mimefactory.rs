@@ -27,7 +27,7 @@ use crate::ephemeral::Timer as EphemeralTimer;
 use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, SignedPublicKey, self_fingerprint};
 use crate::location;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
