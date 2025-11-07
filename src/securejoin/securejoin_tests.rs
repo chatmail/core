@@ -1113,3 +1113,34 @@ async fn test_get_securejoin_qr_name_is_truncated() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression test for the bug
+/// that resulted in an info message
+/// about Bob addition to the group on Fiona's device.
+///
+/// There should be no info messages about implicit
+/// member changes when we are added to the group.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_two_group_securejoins() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let group_id = chat::create_group(alice, "Group").await?;
+
+    let qr = get_securejoin_qr(alice, Some(group_id)).await?;
+
+    // Bob joins using QR code.
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    // Fiona joins using QR code.
+    tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+
+    let fiona_chat_id = fiona.get_last_msg().await.chat_id;
+    fiona
+        .golden_test_chat(fiona_chat_id, "two_group_securejoins")
+        .await;
+
+    Ok(())
+}
