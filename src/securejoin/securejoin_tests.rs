@@ -605,6 +605,10 @@ async fn test_secure_join() -> Result<()> {
     let bob_chat = Chat::load_from_db(&bob.ctx, bob_chatid).await?;
     assert!(bob_chat.typ == Chattype::Group);
 
+    // At the end of the protocol
+    // Bob should have two members in the chat.
+    assert_eq!(chat::get_chat_contacts(&bob, bob_chatid).await?.len(), 2);
+
     // On this "happy path", Alice and Bob get only a group-chat where all information are added to.
     // The one-to-one chats are used internally for the hidden handshake messages,
     // however, should not be visible in the UIs.
