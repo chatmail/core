@@ -399,9 +399,10 @@ class Account:
         next_msg_ids = self._rpc.get_next_msgs(self.id)
         return [Message(self, msg_id) for msg_id in next_msg_ids]
 
+    @futuremethod
     def wait_next_messages(self) -> list[Message]:
         """Wait for new messages and return a list of them."""
-        next_msg_ids = self._rpc.wait_next_msgs(self.id)
+        next_msg_ids = yield self._rpc.wait_next_msgs.future(self.id)
         return [Message(self, msg_id) for msg_id in next_msg_ids]
 
     def wait_for_incoming_msg_event(self):
