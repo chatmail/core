@@ -3742,7 +3742,11 @@ pub(crate) async fn add_contact_to_chat_ex(
         context.emit_event(EventType::ErrorSelfNotInGroup(
             "Cannot add contact to group; self not in group.".into(),
         ));
-        bail!("can not add contact because the account is not part of the group/broadcast");
+        warn!(
+            context,
+            "Can not add contact because the account is not part of the group/broadcast."
+        );
+        return Ok(false);
     }
 
     let sync_qr_code_tokens;
