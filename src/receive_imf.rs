@@ -28,7 +28,7 @@ use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
 use crate::key::{self_fingerprint, self_fingerprint_opt};
 use crate::log::LogExt;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,

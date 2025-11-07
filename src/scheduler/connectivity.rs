@@ -7,7 +7,6 @@ use humansize::{BINARY, format_size};
 
 use crate::events::EventType;
 use crate::imap::{FolderMeaning, scan_folders::get_watched_folder_configs};
-use crate::log::info;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
 use crate::{context::Context, log::LogExt};

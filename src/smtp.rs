@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{error, info, warn};
+use crate::log::warn;
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory::MimeFactory;

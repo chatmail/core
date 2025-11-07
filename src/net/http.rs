@@ -10,7 +10,7 @@ use tokio::fs;
 
 use crate::blob::BlobObject;
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
 use crate::net::tls::wrap_rustls;

@@ -8,7 +8,7 @@ use tokio::time::timeout;
 use super::Imap;
 use super::session::Session;
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::net::TIMEOUT;
 use crate::tools::{self, time_elapsed};
 

@@ -80,7 +80,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
-use crate::log::{LogExt, error, info, warn};
+use crate::log::{LogExt, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::stock_str;

@@ -15,7 +15,7 @@ use tokio::runtime::Handle;
 
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{LogExt, info};
+use crate::log::LogExt;
 use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
 

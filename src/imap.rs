@@ -32,7 +32,7 @@ use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::log::{LogExt, error, info, warn};
+use crate::log::{LogExt, warn};
 use crate::message::{self, Message, MessageState, MessengerMessage, MsgId};
 use crate::mimeparser;
 use crate::net::proxy::ProxyConfig;

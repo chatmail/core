@@ -20,7 +20,7 @@ use crate::context::Context;
 use crate::e2ee;
 use crate::events::EventType;
 use crate::key::{self, DcKey, DcSecretKey, SignedPublicKey, SignedSecretKey};
-use crate::log::{LogExt, error, info, warn};
+use crate::log::{LogExt, warn};
 use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;

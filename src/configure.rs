@@ -27,7 +27,7 @@ use crate::config::{self, Config};
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
-use crate::log::{LogExt, info, warn};
+use crate::log::{LogExt, warn};
 use crate::login_param::EnteredCertificateChecks;
 pub use crate::login_param::EnteredLoginParam;
 use crate::message::Message;

@@ -21,7 +21,7 @@ use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::imap::{FolderMeaning, Imap, ServerMetadata};
 use crate::key::self_fingerprint;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::logged_debug_assert;
 use crate::login_param::EnteredLoginParam;
 use crate::message::{self, MessageState, MsgId};

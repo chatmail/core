@@ -40,7 +40,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::message::{Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::mimeparser::SystemMessage;

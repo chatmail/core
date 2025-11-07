@@ -40,7 +40,7 @@ use crate::EventType;
 use crate::chat::send_msg;
 use crate::config::Config;
 use crate::context::Context;
-use crate::log::{info, warn};
+use crate::log::warn;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 

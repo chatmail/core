@@ -8,7 +8,7 @@ use tokio::io::BufWriter;
 
 use super::capabilities::Capabilities;
 use crate::context::Context;
-use crate::log::{LoggingStream, info, warn};
+use crate::log::{LoggingStream, warn};
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
