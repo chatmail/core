@@ -477,6 +477,13 @@ async fn test_secure_join() -> Result<()> {
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
+    // At this point Alice is still not part of the chat.
+    // The final step of Alice adding Bob to the chat
+    // may not work out and we don't want Bob
+    // to implicitly add Alice if he manages to join the group
+    // much later via another member.
+    assert_eq!(chat::get_chat_contacts(&bob, bob_chatid).await?.len(), 0);
+
     let contact_alice_id = bob.add_or_lookup_contact_no_key(&alice).await.id;
 
     // Check Bob emitted the JoinerProgress event.
