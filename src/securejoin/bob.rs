@@ -127,33 +127,18 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     match invite {
         QrInvite::Group { .. } => {
             let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
-            // We created the group already, now we need to add Alice to the group.
-            // The group will only become usable once the protocol is finished.
-            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
-                chat::add_to_chat_contacts_table(
-                    context,
-                    time(),
-                    joining_chat_id,
-                    &[invite.contact_id()],
-                )
-                .await?;
-            }
+            // We create the group but do NOT add the inviter to it yet.
+            // The inviter will only be added if the secure-join protocol completes successfully,
+            // or when we receive a vg-member-added message that includes the correct member list.
+            // This prevents adding removed members back to the group when scanning outdated QR codes.
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
             chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
             let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
-            // We created the broadcast channel already, now we need to add Alice to it.
-            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
-                chat::add_to_chat_contacts_table(
-                    context,
-                    time(),
-                    joining_chat_id,
-                    &[invite.contact_id()],
-                )
-                .await?;
-            }
+            // We create the broadcast channel but do NOT add the inviter to it yet.
+            // The inviter will only be added if the secure-join protocol completes successfully.
 
             // If we were not in the broadcast channel before, show a 'please wait' info message.
             // Since we don't have any specific stock string for this,
