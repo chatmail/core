@@ -3,7 +3,7 @@ use std::time::Duration;
 use deltachat_contact_tools::EmailAddress;
 
 use super::*;
-use crate::chat::{CantSendReason, remove_contact_from_chat};
+use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::key::self_fingerprint;
@@ -1152,6 +1152,68 @@ async fn test_two_group_securejoins() -> Result<()> {
     fiona
         .golden_test_chat(fiona_chat_id, "two_group_securejoins")
         .await;
+
+    Ok(())
+}
+
+/// Tests that scanning an outdated QR code does not add the removed inviter back to the group.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_qr_no_implicit_inviter_addition() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    // Alice creates a group with Bob.
+    let alice_chat_id = alice
+        .create_group_with_members("Group with Bob", &[bob])
+        .await;
+    let alice_qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+
+    // Bob joins the group via QR code.
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &alice_qr).await;
+
+    // Bob creates a QR code for joining the group.
+    let bob_qr = get_securejoin_qr(bob, Some(bob_chat_id)).await?;
+
+    // Alice removes Bob from the group.
+    let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    remove_contact_from_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
+
+    // Deliver the removal message to Bob.
+    let removal_msg = alice.pop_sent_msg().await;
+    bob.recv_msg(&removal_msg).await;
+
+    // Charlie scans Bob's outdated QR code.
+    let charlie_chat_id = join_securejoin(charlie, &bob_qr).await?;
+
+    // Charlie sends vg-request to Bob.
+    let sent = charlie.pop_sent_msg().await;
+    bob.recv_msg_trash(&sent).await;
+
+    // Bob sends vg-auth-required to Charlie.
+    let sent = bob.pop_sent_msg().await;
+    charlie.recv_msg_trash(&sent).await;
+
+    // Bob receives vg-request-with-auth, but cannot add Charlie
+    // because Bob himself is not in the group.
+    let sent = charlie.pop_sent_msg().await;
+    bob.recv_msg_trash(&sent).await;
+
+    // Charlie still has no contacts in the list.
+    let charlie_chat_contacts = chat::get_chat_contacts(charlie, charlie_chat_id).await?;
+    assert_eq!(charlie_chat_contacts.len(), 0);
+
+    // Alice adds Charlie to the group
+    let alice_charlie_contact_id = alice.add_or_lookup_contact_id(charlie).await;
+    add_contact_to_chat(alice, alice_chat_id, alice_charlie_contact_id).await?;
+
+    let sent = alice.pop_sent_msg().await;
+    assert_eq!(charlie.recv_msg(&sent).await.chat_id, charlie_chat_id);
+
+    // Charlie has two contacts in the list: Alice and self.
+    let charlie_chat_contacts = chat::get_chat_contacts(charlie, charlie_chat_id).await?;
+    assert_eq!(charlie_chat_contacts.len(), 2);
 
     Ok(())
 }
