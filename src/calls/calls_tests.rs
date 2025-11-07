@@ -680,7 +680,6 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     use crate::sql::housekeeping;
 
     let alice = TestContext::new_alice().await;
-    let bob = alice.create_chat_with_contact("", "bob@example.net").await;
 
     // Simulate receiving an incoming call from Bob
     let received_call = receive_imf(
@@ -697,17 +696,15 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     )
     .await?
     .unwrap();
-    
+
     let call_id = received_call.msg_ids[0];
 
     // Verify SDP is stored in calls table for incoming call
     let sdp_before: Option<String> = alice
         .sql
-        .query_row_optional(
-            "SELECT sdp FROM calls WHERE msg_id=?",
-            (call_id,),
-            |row| row.get(0),
-        )
+        .query_row_optional("SELECT sdp FROM calls WHERE msg_id=?", (call_id,), |row| {
+            row.get(0)
+        })
         .await?;
     assert!(sdp_before.is_some());
 
@@ -721,11 +718,9 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     // SDP should still be there after ending
     let sdp_after_end: Option<String> = alice
         .sql
-        .query_row_optional(
-            "SELECT sdp FROM calls WHERE msg_id=?",
-            (call_id,),
-            |row| row.get(0),
-        )
+        .query_row_optional("SELECT sdp FROM calls WHERE msg_id=?", (call_id,), |row| {
+            row.get(0)
+        })
         .await?;
     assert!(sdp_after_end.is_some());
 
@@ -738,11 +733,9 @@ async fn test_housekeeping_deletes_old_call_sdps() -> Result<()> {
     // Verify SDP has been deleted from calls table
     let sdp_after_housekeeping: Option<String> = alice
         .sql
-        .query_row_optional(
-            "SELECT sdp FROM calls WHERE msg_id=?",
-            (call_id,),
-            |row| row.get(0),
-        )
+        .query_row_optional("SELECT sdp FROM calls WHERE msg_id=?", (call_id,), |row| {
+            row.get(0)
+        })
         .await?;
     assert_eq!(sdp_after_housekeeping, None);
 

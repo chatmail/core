@@ -138,7 +138,7 @@ impl CallInfo {
         let now = time();
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
-        
+
         // Store ended timestamp in calls table. If no entry exists yet, create one.
         context
             .sql
@@ -163,7 +163,7 @@ impl CallInfo {
         self.msg.param.set_i64(CALL_ENDED_TIMESTAMP, now);
         self.msg.param.set_i64(CALL_CANCELED_TIMESTAMP, now);
         self.msg.update_param(context).await?;
-        
+
         // Store ended timestamp in calls table. If no entry exists yet, create one.
         context
             .sql
@@ -217,7 +217,7 @@ impl Context {
             call_sdp_offer: Some(place_call_info.clone()),
             ..Default::default()
         };
-        
+
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         // For outgoing calls, we don't store our own offer SDP in the database.
@@ -434,7 +434,8 @@ impl Context {
 
                     // Store SDP answer in calls table for outgoing calls
                     // (for incoming calls, we've already replaced our offer with our answer in accept_incoming_call)
-                    if let Some(answer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcAccepted) {
+                    if let Some(answer_sdp) = mime_message.get_header(HeaderDef::ChatWebrtcAccepted)
+                    {
                         self.sql
                             .execute(
                                 "INSERT OR REPLACE INTO calls (msg_id, sdp) VALUES (?, ?)",
@@ -539,11 +540,9 @@ impl Context {
         // For outgoing calls (after acceptance), the SDP is the answer from the other side.
         let sdp = self
             .sql
-            .query_row_optional(
-                "SELECT sdp FROM calls WHERE msg_id=?",
-                (call.id,),
-                |row| row.get::<_, String>(0),
-            )
+            .query_row_optional("SELECT sdp FROM calls WHERE msg_id=?", (call.id,), |row| {
+                row.get::<_, String>(0)
+            })
             .await?
             .unwrap_or_default();
 

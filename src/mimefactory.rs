@@ -1692,7 +1692,7 @@ impl MimeFactory {
                             |row| row.get(0),
                         )
                         .await?;
-                    
+
                     if let Some(quoted_msg_id) = quoted_msg_id {
                         // For CallAccepted messages, retrieve the SDP (which is our answer)
                         let answer_sdp = context
@@ -1704,8 +1704,10 @@ impl MimeFactory {
                             )
                             .await?
                             .flatten()
-                            .or_else(|| msg.param.get(Param::WebrtcAccepted).map(|s| s.to_string()));
-                            
+                            .or_else(|| {
+                                msg.param.get(Param::WebrtcAccepted).map(|s| s.to_string())
+                            });
+
                         if let Some(answer_sdp) = answer_sdp {
                             headers.push((
                                 "Chat-Webrtc-Accepted",
@@ -1760,7 +1762,7 @@ impl MimeFactory {
             } else {
                 msg.param.get(Param::WebrtcRoom).map(|s| s.to_string())
             };
-                
+
             if let Some(offer_sdp) = offer_sdp {
                 headers.push((
                     "Chat-Webrtc-Room",

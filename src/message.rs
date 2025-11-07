@@ -443,7 +443,7 @@ pub struct Message {
     pub(crate) location_id: u32,
     pub(crate) error: Option<String>,
     pub(crate) param: Params,
-    
+
     /// SDP offer for outgoing calls.
     /// This field is used to pass the SDP offer to the database
     /// without storing it in message parameters.
