@@ -484,22 +484,21 @@ def test_wait_next_messages(acfactory) -> None:
     # There are no old messages and the call returns immediately.
     assert not bot.wait_next_messages()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-        # Bot starts waiting for messages.
-        next_messages_task = executor.submit(bot.wait_next_messages)
+    # Bot starts waiting for messages.
+    next_messages_task = bot.wait_next_messages.future()
 
-        alice_contact_bot = alice.create_contact(bot, "Bot")
-        alice_chat_bot = alice_contact_bot.create_chat()
-        alice_chat_bot.send_text("Hello!")
+    alice_contact_bot = alice.create_contact(bot, "Bot")
+    alice_chat_bot = alice_contact_bot.create_chat()
+    alice_chat_bot.send_text("Hello!")
 
-        next_messages = next_messages_task.result()
+    next_messages = next_messages_task()
 
-        if len(next_messages) == E2EE_INFO_MSGS:
-            next_messages += bot.wait_next_messages()
+    if len(next_messages) == E2EE_INFO_MSGS:
+        next_messages += bot.wait_next_messages()
 
-        assert len(next_messages) == 1 + E2EE_INFO_MSGS
-        snapshot = next_messages[0 + E2EE_INFO_MSGS].get_snapshot()
-        assert snapshot.text == "Hello!"
+    assert len(next_messages) == 1 + E2EE_INFO_MSGS
+    snapshot = next_messages[0 + E2EE_INFO_MSGS].get_snapshot()
+    assert snapshot.text == "Hello!"
 
 
 def test_import_export_backup(acfactory, tmp_path) -> None:
