@@ -147,6 +147,11 @@ impl ImapSession {
             }
         };
         let transport_id = self.transport_id();
+
+        // Folders should not be selected when transport_id is not assigned yet
+        // because we cannot save UID validity then.
+        debug_assert!(transport_id > 0);
+
         let mailbox = self
             .selected_mailbox
             .as_mut()
