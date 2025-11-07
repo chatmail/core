@@ -559,25 +559,10 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     progress!(ctx, 900);
 
-    let is_chatmail = match ctx.get_config_bool(Config::FixIsChatmail).await? {
-        false => {
-            let is_chatmail = imap_session.is_chatmail();
-            ctx.set_config(
-                Config::IsChatmail,
-                Some(match is_chatmail {
-                    false => "0",
-                    true => "1",
-                }),
-            )
-            .await?;
-            is_chatmail
-        }
-        true => ctx.get_config_bool(Config::IsChatmail).await?,
-    };
     ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
     ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
 
-    let create_mvbox = !is_chatmail;
+    let create_mvbox = false;
     imap.configure_folders(ctx, &mut imap_session, create_mvbox)
         .await?;
 
