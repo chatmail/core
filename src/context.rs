@@ -138,7 +138,7 @@ impl ContextBuilder {
     ///
     /// This is useful in order to share the same translation strings in all [`Context`]s.
     /// The mapping may be empty when set, it will be populated by
-    /// [`Context::set_stock-translation`] or [`Accounts::set_stock_translation`] calls.
+    /// [`Context::set_stock_translation`] or [`Accounts::set_stock_translation`] calls.
     ///
     /// Note that the [account manager](crate::accounts::Accounts) is designed to handle the
     /// common case for using multiple [`Context`] instances.
