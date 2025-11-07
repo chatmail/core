@@ -126,17 +126,6 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     match invite {
         QrInvite::Group { .. } => {
             let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
-            // We created the group already, now we need to add Alice to the group.
-            // The group will only become usable once the protocol is finished.
-            if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
-                chat::add_to_chat_contacts_table(
-                    context,
-                    time(),
-                    joining_chat_id,
-                    &[invite.contact_id()],
-                )
-                .await?;
-            }
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
             chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
             Ok(joining_chat_id)
