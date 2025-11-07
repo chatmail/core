@@ -23,7 +23,6 @@ macro_rules! info {
     }};
 }
 
-
 // Workaround for <https://github.com/rust-lang/rust/issues/133708>.
 #[macro_use]
 mod warn_macro_mod {
@@ -58,7 +57,6 @@ macro_rules! error {
         $ctx.emit_event($crate::EventType::Error(formatted));
     }};
 }
-
 
 impl Context {
     /// Set last error string.
