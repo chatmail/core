@@ -665,7 +665,7 @@ impl Context {
             Config::Selfavatar if value.is_empty() => None,
             Config::Selfavatar => {
                 config_value = BlobObject::store_from_base64(self, value)?;
-                Some(config_value.as_str())
+                config_value.as_deref()
             }
             _ => Some(value),
         };

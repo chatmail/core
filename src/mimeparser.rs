@@ -714,14 +714,16 @@ impl MimeMessage {
     }
 
     /// Parses avatar action headers.
-    fn parse_avatar_headers(&mut self, context: &Context) {
+    fn parse_avatar_headers(&mut self, context: &Context) -> Result<()> {
         if let Some(header_value) = self.get_header(HeaderDef::ChatGroupAvatar) {
-            self.group_avatar = self.avatar_action_from_header(context, header_value.to_string());
+            self.group_avatar =
+                self.avatar_action_from_header(context, header_value.to_string())?;
         }
 
         if let Some(header_value) = self.get_header(HeaderDef::ChatUserAvatar) {
-            self.user_avatar = self.avatar_action_from_header(context, header_value.to_string());
+            self.user_avatar = self.avatar_action_from_header(context, header_value.to_string())?;
         }
+        Ok(())
     }
 
     fn parse_videochat_headers(&mut self) {
@@ -828,7 +830,7 @@ impl MimeMessage {
 
     async fn parse_headers(&mut self, context: &Context) -> Result<()> {
         self.parse_system_message_headers(context);
-        self.parse_avatar_headers(context);
+        self.parse_avatar_headers(context)?;
         self.parse_videochat_headers();
         if self.delivery_report.is_none() {
             self.squash_attachment_parts();
@@ -930,21 +932,18 @@ impl MimeMessage {
         &mut self,
         context: &Context,
         header_value: String,
-    ) -> Option<AvatarAction> {
-        if header_value == "0" {
+    ) -> Result<Option<AvatarAction>> {
+        let res = if header_value == "0" {
             Some(AvatarAction::Delete)
         } else if let Some(base64) = header_value
             .split_ascii_whitespace()
             .collect::<String>()
             .strip_prefix("base64:")
         {
-            match BlobObject::store_from_base64(context, base64) {
-                Ok(path) => Some(AvatarAction::Change(path)),
-                Err(err) => {
-                    warn!(
-                        context,
-                        "Could not decode and save avatar to blob file: {:#}", err,
-                    );
+            match BlobObject::store_from_base64(context, base64)? {
+                Some(path) => Some(AvatarAction::Change(path)),
+                None => {
+                    warn!(context, "Could not decode avatar base64");
                     None
                 }
             }
@@ -958,7 +957,7 @@ impl MimeMessage {
                         if let Some(blob) = part.param.get(Param::File) {
                             let res = Some(AvatarAction::Change(blob.to_string()));
                             self.parts.remove(i);
-                            return res;
+                            return Ok(res);
                         }
                         break;
                     }
@@ -966,7 +965,8 @@ impl MimeMessage {
                 i += 1;
             }
             None
-        }
+        };
+        Ok(res)
     }
 
     /// Returns true if the message was encrypted as defined in

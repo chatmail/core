@@ -234,8 +234,13 @@ impl<'a> BlobObject<'a> {
     /// If `data` represents an image of known format, this adds the corresponding extension.
     ///
     /// Even though this function is not async, it's OK to call it from an async context.
-    pub(crate) fn store_from_base64(context: &Context, data: &str) -> Result<String> {
-        let buf = base64::engine::general_purpose::STANDARD.decode(data)?;
+    ///
+    /// Returns an error if there is an I/O problem,
+    /// but in case of a failure to decode base64 returns `Ok(None)`.
+    pub(crate) fn store_from_base64(context: &Context, data: &str) -> Result<Option<String>> {
+        let Ok(buf) = base64::engine::general_purpose::STANDARD.decode(data) else {
+            return Ok(None);
+        };
         let name = if let Ok(format) = image::guess_format(&buf) {
             if let Some(ext) = format.extensions_str().first() {
                 format!("file.{ext}")
@@ -246,7 +251,7 @@ impl<'a> BlobObject<'a> {
             String::new()
         };
         let blob = BlobObject::create_and_deduplicate_from_bytes(context, &buf, &name)?;
-        Ok(blob.as_name().to_string())
+        Ok(Some(blob.as_name().to_string()))
     }
 
     /// Recode image to avatar size.
