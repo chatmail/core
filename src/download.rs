@@ -216,6 +216,7 @@ mod tests {
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
     use crate::receive_imf::receive_imf_from_inbox;
+    use crate::mimeparser::MimeMessage;
     use crate::test_utils::TestContext;
 
     #[test]
@@ -315,11 +316,15 @@ mod tests {
     }
     /// Tests that pre message is sent for attachment larger than `PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD`
     /// Also test that pre message is sent first, before the full message
+    /// And that Autocrypt-gossip and selfavatar never go into full-messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_sending_pre_message() -> Result<()> {
         let alice = TestContext::new_alice().await;
         let bob = TestContext::new_bob().await;
-        let chat = alice.create_chat(&bob).await;
+        let fiona = TestContext::new_fiona().await;
+        let group_id = alice
+            .create_group_with_members("test group", &[&bob, &fiona])
+            .await;
 
         let mut msg = Message::new(Viewtype::File);
         msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
@@ -330,7 +335,9 @@ mod tests {
             msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD
         );
 
-        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg)
+            .await
+            .unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         //   pre-message and full message should be present
@@ -343,13 +350,12 @@ mod tests {
                 .2
                 .as_bytes(),
         )?;
-        let full_message = mailparse::parse_mail(
-            smtp_rows
-                .get(1)
-                .expect("second element exists")
-                .2
-                .as_bytes(),
-        )?;
+        let full_message_bytes = smtp_rows
+            .get(1)
+            .expect("second element exists")
+            .2
+            .as_bytes();
+        let full_message = mailparse::parse_mail(full_message_bytes)?;
 
         assert!(
             pre_message
@@ -390,7 +396,10 @@ mod tests {
         );
 
         // also test that Autocrypt-gossip and selfavatar should never go into full-messages
-        // TODO: (this needs decryption, right?)
+        let decrypted_full_message = MimeMessage::from_bytes(&bob.ctx, full_message_bytes).await?;
+        assert!(!decrypted_full_message.decrypting_failed);
+        assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
+        assert_eq!(decrypted_full_message.user_avatar, None);
         Ok(())
     }
 
