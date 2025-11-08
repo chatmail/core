@@ -1144,13 +1144,9 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            let is_full_msg =
-                                self.pre_message_mode == Some(PreMessageMode::FullMessage);
-                            let should_do_gossip = !is_full_msg
-                                && (cmd == SystemMessage::MemberAddedToGroup
-                                    || cmd == SystemMessage::SecurejoinMessage
-                                    || multiple_recipients)
-                                && {
+                            let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
+                                || cmd == SystemMessage::SecurejoinMessage
+                                || multiple_recipients && {
                                     let gossiped_timestamp: Option<i64> = context
                                         .sql
                                         .query_get_value(
@@ -1183,7 +1179,10 @@ impl MimeFactory {
                             let is_verified =
                                 verifier_id.is_some_and(|verifier_id| verifier_id != 0);
 
-                            if !should_do_gossip {
+                            let is_full_msg =
+                                self.pre_message_mode == Some(PreMessageMode::FullMessage);
+
+                            if !should_do_gossip || is_full_msg {
                                 continue;
                             }
 
