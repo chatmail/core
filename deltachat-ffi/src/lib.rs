@@ -4240,7 +4240,17 @@ pub unsafe extern "C" fn dc_contact_get_color(contact: *mut dc_contact_t) -> u32
         return 0;
     }
     let ffi_contact = &*contact;
-    ffi_contact.contact.get_color()
+    let ctx = &*ffi_contact.context;
+    block_on(async move {
+        ffi_contact
+            .contact
+            // We don't want any UIs displaying gray self-color.
+            .get_or_gen_color(ctx)
+            .await
+            .context("Contact::get_color()")
+            .log_err(ctx)
+            .unwrap_or(0)
+    })
 }
 
 #[no_mangle]

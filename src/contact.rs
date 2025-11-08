@@ -1573,9 +1573,22 @@ impl Contact {
     }
 
     /// Returns a color for the contact.
-    /// See [`self::get_color`].
+    /// For self-contact this returns gray if own keypair doesn't exist yet.
+    /// See also [`self::get_color`].
     pub fn get_color(&self) -> u32 {
         get_color(self.id == ContactId::SELF, &self.addr, &self.fingerprint())
+    }
+
+    /// Returns a color for the contact.
+    /// Ensures that the color isn't gray. For self-contact this generates own keypair if it doesn't
+    /// exist yet.
+    /// See also [`self::get_color`].
+    pub async fn get_or_gen_color(&self, context: &Context) -> Result<u32> {
+        let mut fpr = self.fingerprint();
+        if fpr.is_none() && self.id == ContactId::SELF {
+            fpr = Some(load_self_public_key(context).await?.dc_fingerprint());
+        }
+        Ok(get_color(self.id == ContactId::SELF, &self.addr, &fpr))
     }
 
     /// Gets the contact's status.
