@@ -32,7 +32,10 @@ impl Account {
             let addr = ctx.get_config(Config::Addr).await?;
             let profile_image = ctx.get_config(Config::Selfavatar).await?;
             let color = color_int_to_hex_string(
-                Contact::get_by_id(ctx, ContactId::SELF).await?.get_color(),
+                Contact::get_by_id(ctx, ContactId::SELF)
+                    .await?
+                    .get_or_gen_color(ctx)
+                    .await?,
             );
             let private_tag = ctx.get_config(Config::PrivateTag).await?;
             Ok(Account::Configured {
