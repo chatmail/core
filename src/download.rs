@@ -380,7 +380,7 @@ mod tests {
         // full message should have the rfc message id
         assert_eq!(
             full_message.headers.get_header_value(HeaderDef::MessageId),
-            Some(msg.rfc724_mid)
+            Some(format!("<{}>", msg.rfc724_mid))
         );
 
         //  test that message ids are different
