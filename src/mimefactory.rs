@@ -1009,7 +1009,7 @@ impl MimeFactory {
         {
             unprotected_headers.push((
                 HeaderDef::ChatFullMessageId.get_headername(),
-                mail_builder::headers::raw::Raw::new(full_msg_rfc724_mid).into(),
+                mail_builder::headers::message_id::MessageId::new(full_msg_rfc724_mid).into(),
             ));
         }
 
