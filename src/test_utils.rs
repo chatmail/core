@@ -697,6 +697,27 @@ impl TestContext {
         })
     }
 
+    pub async fn get_smtp_rows_for_msg(&self, msg_id: MsgId) -> Vec<(i64, MsgId, String, String)> {
+        self.ctx
+            .sql
+            .query_map_vec(
+                r#"
+                SELECT id, msg_id, mime, recipients
+                FROM smtp
+                WHERE msg_id=?"#,
+                (msg_id,),
+                |row| {
+                    let rowid: i64 = row.get(0)?;
+                    let msg_id: MsgId = row.get(1)?;
+                    let mime: String = row.get(2)?;
+                    let recipients: String = row.get(3)?;
+                    Ok((rowid, msg_id, mime, recipients))
+                },
+            )
+            .await
+            .unwrap()
+    }
+
     /// Retrieves a sent sync message from the db.
     ///
     /// This retrieves and removes a sync message which has been scheduled to send from the jobs

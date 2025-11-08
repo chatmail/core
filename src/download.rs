@@ -208,10 +208,13 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
+    use mailparse::MailHeaderMap;
     use num_traits::FromPrimitive;
 
     use super::*;
-    use crate::chat::send_msg;
+    use crate::chat::{self, create_group, send_msg};
+    use crate::headerdef::{HeaderDef, HeaderDefMap};
+    use crate::message::Viewtype;
     use crate::receive_imf::receive_imf_from_inbox;
     use crate::test_utils::TestContext;
 
@@ -308,6 +311,224 @@ mod tests {
         assert_eq!(msg.get_subject(), "foo");
         assert_eq!(msg.get_text(), "100k text...");
 
+        Ok(())
+    }
+    /// Tests that pre message is sent for attachment larger than `PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD`
+    /// Also test that pre message is sent first, before the full message
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sending_pre_message() -> Result<()> {
+        let alice = TestContext::new_alice().await;
+        let bob = TestContext::new_bob().await;
+        let chat = alice.create_chat(&bob).await;
+
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_text("test".to_owned());
+
+        // assert that test attachment is bigger than limit
+        assert!(
+            msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD
+        );
+
+        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        //   pre-message and full message should be present
+        //   and test that correct headers are present on both messages
+        assert_eq!(smtp_rows.len(), 2);
+        let pre_message = mailparse::parse_mail(
+            smtp_rows
+                .first()
+                .expect("first element exists")
+                .2
+                .as_bytes(),
+        )?;
+        let full_message = mailparse::parse_mail(
+            smtp_rows
+                .get(1)
+                .expect("second element exists")
+                .2
+                .as_bytes(),
+        )?;
+
+        assert!(
+            pre_message
+                .get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none()
+        );
+        assert!(
+            full_message
+                .get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_some()
+        );
+
+        assert_eq!(
+            pre_message
+                .headers
+                .get_header_value(HeaderDef::ChatFullMessageId),
+            full_message.headers.get_header_value(HeaderDef::MessageId)
+        );
+        assert!(
+            full_message
+                .headers
+                .get_header_value(HeaderDef::ChatFullMessageId)
+                .is_none()
+        );
+
+        // full message should have the rfc message id
+        assert_eq!(
+            full_message.headers.get_header_value(HeaderDef::MessageId),
+            Some(msg.rfc724_mid)
+        );
+
+        //  test that message ids are different
+        assert_ne!(
+            pre_message.headers.get_header_value(HeaderDef::MessageId),
+            full_message.headers.get_header_value(HeaderDef::MessageId)
+        );
+
+        // also test that Autocrypt-gossip and selfavatar should never go into full-messages
+        // TODO: (this needs decryption, right?)
+        Ok(())
+    }
+
+    /// Tests that no pre message is sent for normal message
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_not_sending_pre_message_no_attachment() -> Result<()> {
+        let alice = TestContext::new_alice().await;
+        let bob = TestContext::new_bob().await;
+        let chat = alice.create_chat(&bob).await;
+
+        // send normal text message
+        let mut msg = Message::new(Viewtype::Text);
+        msg.set_text("test".to_owned());
+        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        //   only one message and no "is full message" header should be present
+        assert_eq!(smtp_rows.len(), 1);
+
+        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mail = mailparse::parse_mail(mime.as_bytes())?;
+
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none()
+        );
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .is_none()
+        );
+        Ok(())
+    }
+
+    /// Tests that no pre message is sent for attachment smaller than `PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD`
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_not_sending_pre_message_for_small_attachment() -> Result<()> {
+        let alice = TestContext::new_alice().await;
+        let bob = TestContext::new_bob().await;
+        let chat = alice.create_chat(&bob).await;
+
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 100_000], None)?;
+        msg.set_text("test".to_owned());
+
+        // assert that test attachment is smaller than limit
+        assert!(
+            msg.get_filebytes(&alice.ctx).await?.unwrap() < PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD
+        );
+
+        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        //   only one message and no "is full message" header should be present
+        assert_eq!(smtp_rows.len(), 1);
+
+        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mail = mailparse::parse_mail(mime.as_bytes())?;
+
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none()
+        );
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .is_none()
+        );
+
+        Ok(())
+    }
+
+    /// Tests that pre message is not send for large webxdc updates
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_render_webxdc_status_update_object_range() -> Result<()> {
+        let t = TestContext::new_alice().await;
+        let chat_id = create_group(&t, "a chat").await?;
+
+        let instance = {
+            let mut instance = Message::new(Viewtype::File);
+            instance.set_file_from_bytes(
+                &t,
+                "minimal.xdc",
+                include_bytes!("../test-data/webxdc/minimal.xdc"),
+                None,
+            )?;
+            let instance_msg_id = send_msg(&t, chat_id, &mut instance).await?;
+            assert_eq!(instance.viewtype, Viewtype::Webxdc);
+            Message::load_from_db(&t, instance_msg_id).await
+        }
+        .unwrap();
+
+        t.pop_sent_msg().await;
+        assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 0);
+
+        let long_text = String::from_utf8(vec![b'a'; 300_000])?;
+        assert!(long_text.len() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
+        t.send_webxdc_status_update(instance.id, &format!("{{\"payload\": \"{long_text}\"}}"))
+            .await?;
+        t.flush_status_updates().await?;
+
+        assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 1);
+        Ok(())
+    }
+
+    // test that pre message is not send for large large text
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_not_sending_pre_message_for_large_text() -> Result<()> {
+        let alice = TestContext::new_alice().await;
+        let bob = TestContext::new_bob().await;
+        let chat = alice.create_chat(&bob).await;
+
+        // send normal text message
+        let mut msg = Message::new(Viewtype::Text);
+        let long_text = String::from_utf8(vec![b'a'; 300_000])?;
+        assert!(long_text.len() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
+        msg.set_text(long_text);
+        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        //   only one message and no "is full message" header should be present
+        assert_eq!(smtp_rows.len(), 1);
+
+        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mail = mailparse::parse_mail(mime.as_bytes())?;
+
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none()
+        );
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .is_none()
+        );
         Ok(())
     }
 }
