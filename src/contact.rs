@@ -369,16 +369,15 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
         return Ok(id);
     }
     let path = match &contact.profile_image {
-        Some(image) => match BlobObject::store_from_base64(context, image) {
-            Err(e) => {
+        Some(image) => match BlobObject::store_from_base64(context, image)? {
+            None => {
                 warn!(
                     context,
-                    "import_vcard_contact: Could not decode and save avatar for {}: {e:#}.",
-                    contact.addr
+                    "import_vcard_contact: Could not decode avatar for {}.", contact.addr
                 );
                 None
             }
-            Ok(path) => Some(path),
+            Some(path) => Some(path),
         },
         None => None,
     };
