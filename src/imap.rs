@@ -2107,17 +2107,7 @@ async fn needs_move_to_mvbox(
         // there may be a non-delta device that wants to handle it
         return Ok(false);
     }
-
-    if headers.get_header_value(HeaderDef::SecureJoin).is_some() {
-        Ok(true)
-    } else if let Some(parent) = get_prefetch_parent_message(context, headers).await? {
-        match parent.is_dc_message {
-            MessengerMessage::No => Ok(false),
-            MessengerMessage::Yes | MessengerMessage::Reply => Ok(true),
-        }
-    } else {
-        Ok(false)
-    }
+    Ok(headers.get_header_value(HeaderDef::SecureJoin).is_some() || is_encrypted(headers))
 }
 
 /// Try to get the folder meaning by the name of the folder only used if the server does not support XLIST.
