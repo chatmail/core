@@ -23,7 +23,6 @@ use num_traits::FromPrimitive;
 use ratelimit::Ratelimit;
 use url::Url;
 
-use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata};
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
@@ -47,6 +46,10 @@ use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
+};
+use crate::{
+    calls::{create_fallback_ice_servers, create_ice_servers_from_metadata},
+    download::MAX_FETCH_MSG_SIZE,
 };
 
 pub(crate) mod capabilities;
@@ -503,6 +506,7 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
+        is_background_fetch: bool,
         watch_folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<()> {
@@ -512,7 +516,13 @@ impl Imap {
         }
 
         let msgs_fetched = self
-            .fetch_new_messages(context, session, watch_folder, folder_meaning)
+            .fetch_new_messages(
+                context,
+                session,
+                is_background_fetch,
+                watch_folder,
+                folder_meaning,
+            )
             .await
             .context("fetch_new_messages")?;
         if msgs_fetched && context.get_config_delete_device_after().await?.is_some() {
@@ -538,6 +548,7 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
+        is_background_fetch: bool,
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<bool> {
@@ -565,7 +576,13 @@ impl Imap {
         let mut read_cnt = 0;
         loop {
             let (n, fetch_more) = self
-                .fetch_new_msg_batch(context, session, folder, folder_meaning)
+                .fetch_new_msg_batch(
+                    context,
+                    session,
+                    is_background_fetch,
+                    folder,
+                    folder_meaning,
+                )
                 .await?;
             read_cnt += n;
             if !fetch_more {
@@ -579,6 +596,7 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
+        is_background_fetch: bool,
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<(usize, bool)> {
@@ -597,9 +615,21 @@ impl Imap {
         let read_cnt = msgs.len();
 
         let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
+        let mut available_full_msgs = Vec::<String>::with_capacity(msgs.len());
+        let mut download_when_normal_starts = Vec::<String>::with_capacity(msgs.len());
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
+
+        let download_limit = {
+            let download_limit: Option<u32> =
+                context.get_config_parsed(Config::DownloadLimit).await?;
+            if download_limit == Some(0) {
+                None
+            } else {
+                download_limit
+            }
+        };
 
         // Store the info about IMAP messages in the database.
         for (uid, ref fetch_response) in msgs {
@@ -679,8 +709,57 @@ impl Imap {
                 )
                 .await.context("prefetch_should_download")?
             {
-                uids_fetch.push(uid);
-                uid_message_ids.insert(uid, message_id);
+                let fetch_now: bool = if headers
+                    .get_header_value(HeaderDef::ChatIsFullMessage)
+                    .is_some()
+                {
+                    // This is a full-message
+                    available_full_msgs.push(message_id.clone());
+
+                    //TODO simplify this code
+                    let fits_download_size_limit = download_limit.is_none()
+                        || if let (Some(size), Some(download_limit)) =
+                            (fetch_response.size, download_limit)
+                            && size < download_limit
+                        {
+                            true
+                        } else {
+                            false
+                        };
+
+                    if fits_download_size_limit {
+                        if is_background_fetch {
+                            download_when_normal_starts.push(message_id.clone());
+                            false
+                        } else {
+                            true
+                        }
+                    } else {
+                        false
+                    }
+                } else {
+                    // This is not a full message
+                    if is_background_fetch {
+                        if let Some(size) = fetch_response.size
+                            && size < MAX_FETCH_MSG_SIZE
+                        {
+                            // may be a pre-message or a pure-text message, fetch now
+                            true
+                        } else {
+                            // This is e.g. a classical email
+                            // Queue for full download, in order to prevent missing messages
+                            download_when_normal_starts.push(message_id.clone());
+                            false
+                        }
+                    } else {
+                        true
+                    }
+                };
+
+                if fetch_now {
+                    uids_fetch.push(uid);
+                    uid_message_ids.insert(uid, message_id);
+                }
             } else {
                 largest_uid_skipped = Some(uid);
             }
@@ -751,6 +830,25 @@ impl Imap {
         }
 
         chat::mark_old_messages_as_noticed(context, received_msgs).await?;
+
+        // TODO: is there correct place for this?
+        if fetch_res.is_ok() {
+            for rfc724_mid in available_full_msgs {
+                context
+                    .sql
+                    .insert("INSERT INTO available_full_msgs VALUES (?)", (rfc724_mid,))
+                    .await?;
+            }
+            for rfc724_mid in download_when_normal_starts {
+                context
+                    .sql
+                    .insert(
+                        "INSERT INTO download (rfc724_mid) VALUES (?)",
+                        (rfc724_mid,),
+                    )
+                    .await?;
+            }
+        }
 
         // Now fail if fetching failed, so we will
         // establish a new session if this one is broken.

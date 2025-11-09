@@ -591,7 +591,7 @@ impl Context {
                     convert_folder_meaning(self, folder_meaning).await?
                 {
                     connection
-                        .fetch_move_delete(self, &mut session, &watch_folder, folder_meaning)
+                        .fetch_move_delete(self, &mut session, true, &watch_folder, folder_meaning)
                         .await?;
                 }
             }
@@ -605,6 +605,12 @@ impl Context {
                     warn!(self, "Failed to update quota: {err:#}.");
                 }
             }
+
+            // OPTIONAL TODO: if time left start downloading messages
+            // while (msg = download_when_normal_starts) {
+            //  if not time_left {break;}
+            //  connection.download_message(msg) }
+            // }
         }
 
         info!(

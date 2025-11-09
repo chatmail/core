@@ -28,7 +28,7 @@ pub(crate) const PRE_MSG_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 /// This limit defines what messages are fully fetched in the background.
 /// This is for all messages that don't have the Chat-Is-Full-Message header.
 #[allow(unused)]
-pub(crate) const MAX_FETCH_MSG_SIZE: usize = 1_000_000;
+pub(crate) const MAX_FETCH_MSG_SIZE: u32 = 1_000_000;
 
 /// Max size for pre messages. A warning is emitted when this is exceeded.
 /// Should be well below `MAX_FETCH_MSG_SIZE`
@@ -79,11 +79,17 @@ impl MsgId {
             }
             DownloadState::InProgress => return Err(anyhow!("Download already in progress.")),
             DownloadState::Available | DownloadState::Failure => {
+                if msg.rfc724_mid().is_empty() {
+                    return Err(anyhow!("Download not possible, message has no rfc724_mid"));
+                }
                 self.update_download_state(context, DownloadState::InProgress)
                     .await?;
                 context
                     .sql
-                    .execute("INSERT INTO download (msg_id) VALUES (?)", (self,))
+                    .execute(
+                        "INSERT INTO download (msg_id) VALUES (?)",
+                        (msg.rfc724_mid(),),
+                    )
                     .await?;
                 context.scheduler.interrupt_inbox().await;
             }
@@ -132,25 +138,14 @@ impl Message {
 /// Most messages are downloaded automatically on fetch instead.
 pub(crate) async fn download_msg(
     context: &Context,
-    msg_id: MsgId,
+    rfc724_mid: String,
     session: &mut Session,
 ) -> Result<()> {
-    let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
-        // If partially downloaded message was already deleted
-        // we do not know its Message-ID anymore
-        // so cannot download it.
-        //
-        // Probably the message expired due to `delete_device_after`
-        // setting or was otherwise removed from the device,
-        // so we don't want it to reappear anyway.
-        return Ok(());
-    };
-
     let row = context
         .sql
         .query_row_optional(
             "SELECT uid, folder FROM imap WHERE rfc724_mid=? AND target!=''",
-            (&msg.rfc724_mid,),
+            (&rfc724_mid,),
             |row| {
                 let server_uid: u32 = row.get(0)?;
                 let server_folder: String = row.get(1)?;
@@ -165,7 +160,7 @@ pub(crate) async fn download_msg(
     };
 
     session
-        .fetch_single_msg(context, &server_folder, server_uid, msg.rfc724_mid.clone())
+        .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
         .await?;
     Ok(())
 }
