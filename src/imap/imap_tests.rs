@@ -171,7 +171,7 @@ const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, false, "INBOX"),
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "INBOX"),
+    ("INBOX", true, true, "DeltaChat"),
     ("Spam", false, false, "INBOX"),
     ("Spam", false, true, "INBOX"),
     // Move unencrypted emails in accepted chats from Spam to INBOX, not 100% sure on this, we could
@@ -185,7 +185,7 @@ const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
     ("INBOX", false, false, "INBOX"),
     ("INBOX", false, true, "INBOX"),
     ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "INBOX"),
+    ("INBOX", true, true, "DeltaChat"),
     ("Spam", false, false, "Spam"),
     ("Spam", false, true, "INBOX"),
     ("Spam", true, false, "Spam"),
