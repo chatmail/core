@@ -1152,3 +1152,20 @@ def test_dont_show_emails(acfactory, direct_imap, log):
 
     assert msg2.text == "subj – message in Drafts received later"
     assert len(msg.chat.get_messages()) == 2
+
+
+def test_move_works_on_self_sent(acfactory):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+
+    # Enable movebox and wait until it is created.
+    ac1.set_config("mvbox_move", "1")
+    ac1.set_config("bcc_self", "1")
+    ac1.bring_online()
+
+    chat = ac1.create_chat(ac2)
+    chat.send_text("message1")
+    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
+    chat.send_text("message2")
+    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
+    chat.send_text("message3")
+    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)

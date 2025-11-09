@@ -360,21 +360,6 @@ def test_move_avoids_loop(acfactory):
     assert len(ac2.direct_imap.get_all_messages()) == 1
 
 
-def test_move_works_on_self_sent(acfactory):
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.bring_accounts_online()
-    ac1.set_config("bcc_self", "1")
-
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    chat.send_text("message1")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-    chat.send_text("message2")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-    chat.send_text("message3")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-
-
 def test_move_sync_msgs(acfactory):
     ac1 = acfactory.new_online_configuring_account(bcc_self=True, sync_msgs=True, fix_is_chatmail=True)
     acfactory.bring_accounts_online()
