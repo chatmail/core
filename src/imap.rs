@@ -27,7 +27,7 @@ use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, ShowEmails};
+use crate::constants::{self, Blocked, ShowEmails};
 use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
@@ -2229,21 +2229,6 @@ pub(crate) fn create_message_id() -> String {
     format!("{}{}", GENERATED_PREFIX, create_id())
 }
 
-/// Returns chat by prefetched headers.
-async fn prefetch_get_chat(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<Option<chat::Chat>> {
-    let parent = get_prefetch_parent_message(context, headers).await?;
-    if let Some(parent) = &parent {
-        return Ok(Some(
-            chat::Chat::load_from_db(context, parent.get_chat_id()).await?,
-        ));
-    }
-
-    Ok(None)
-}
-
 /// Determines whether the message should be downloaded based on prefetched headers.
 pub(crate) async fn prefetch_should_download(
     context: &Context,
@@ -2261,14 +2246,6 @@ pub(crate) async fn prefetch_should_download(
 
     // We do not know the Message-ID or the Message-ID is missing (in this case, we create one in
     // the further process).
-
-    if let Some(chat) = prefetch_get_chat(context, headers).await? {
-        if chat.typ == Chattype::Group && !chat.id.is_special() {
-            // This might be a group command, like removing a group member.
-            // We really need to fetch this to avoid inconsistent group state.
-            return Ok(true);
-        }
-    }
 
     let maybe_ndn = if let Some(from) = headers.get_header_value(HeaderDef::From_) {
         let from = from.to_ascii_lowercase();
