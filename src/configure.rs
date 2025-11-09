@@ -566,12 +566,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     imap.configure_folders(ctx, &mut imap_session, create_mvbox)
         .await?;
 
-    let create = true;
-    imap_session
-        .select_with_uidvalidity(ctx, "INBOX", create)
-        .await
-        .context("could not read INBOX status")?;
-
     drop(imap);
 
     progress!(ctx, 910);
