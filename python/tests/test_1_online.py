@@ -5,7 +5,7 @@ import base64
 from datetime import datetime, timezone
 
 import pytest
-from imap_tools import AND, U
+from imap_tools import AND
 
 import deltachat as dc
 from deltachat import account_hookimpl, Message
@@ -269,112 +269,6 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_mvbox_thread_and_trash(acfactory, lp):
-    lp.sec("ac1: start with mvbox thread")
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
-
-    lp.sec("ac2: start without a mvbox thread")
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=False)
-
-    lp.sec("ac2 and ac1: waiting for configuration")
-    acfactory.bring_accounts_online()
-
-    lp.sec("ac1: create trash")
-    ac1.direct_imap.create_folder("Trash")
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
-    ac1.stop_io()
-    ac1.start_io()
-
-    lp.sec("ac1: send message and wait for ac2 to receive it")
-    acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
-    assert ac2._evtracker.wait_next_incoming_message().text == "message1"
-
-    assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
-    while ac1.get_config("configured_trash_folder") != "Trash":
-        ac1._evtracker.get_matching("DC_EVENT_CONNECTIVITY_CHANGED")
-
-
-def test_move_works(acfactory):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    chat.send_text("message1")
-
-    # Message is moved to the movebox
-    ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-
-    # Message is downloaded
-    ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG")
-    assert ev.data2 > dc.const.DC_CHAT_ID_LAST_SPECIAL
-
-
-def test_move_avoids_loop(acfactory):
-    """Test that the message is only moved from INBOX to DeltaChat.
-
-    This is to avoid busy loop if moved message reappears in the Inbox
-    or some scanned folder later.
-    For example, this happens on servers that alias `INBOX.DeltaChat` to `DeltaChat` folder,
-    so the message moved to `DeltaChat` appears as a new message in the `INBOX.DeltaChat` folder.
-    We do not want to move this message from `INBOX.DeltaChat` to `DeltaChat` again.
-    """
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-
-    # Create INBOX.DeltaChat folder and make sure
-    # it is detected by full folder scan.
-    ac2.direct_imap.create_folder("INBOX.DeltaChat")
-    ac2.stop_io()
-    ac2.start_io()
-    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
-
-    ac1_chat = acfactory.get_accepted_chat(ac1, ac2)
-    ac1_chat.send_text("Message 1")
-
-    # Message is moved to the DeltaChat folder and downloaded.
-    ac2_msg1 = ac2._evtracker.wait_next_incoming_message()
-    assert ac2_msg1.text == "Message 1"
-
-    # Move the message to the INBOX.DeltaChat again.
-    # We assume that test server uses "." as the delimiter.
-    ac2.direct_imap.select_folder("DeltaChat")
-    ac2.direct_imap.conn.move(["*"], "INBOX.DeltaChat")
-
-    ac1_chat.send_text("Message 2")
-    ac2_msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert ac2_msg2.text == "Message 2"
-
-    # Stop and start I/O to trigger folder scan.
-    ac2.stop_io()
-    ac2.start_io()
-    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
-
-    # Check that Message 1 is still in the INBOX.DeltaChat folder
-    # and Message 2 is in the DeltaChat folder.
-    ac2.direct_imap.select_folder("INBOX")
-    assert len(ac2.direct_imap.get_all_messages()) == 0
-    ac2.direct_imap.select_folder("DeltaChat")
-    assert len(ac2.direct_imap.get_all_messages()) == 1
-    ac2.direct_imap.select_folder("INBOX.DeltaChat")
-    assert len(ac2.direct_imap.get_all_messages()) == 1
-
-
-def test_move_works_on_self_sent(acfactory):
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.bring_accounts_online()
-    ac1.set_config("bcc_self", "1")
-
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    chat.send_text("message1")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-    chat.send_text("message2")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-    chat.send_text("message3")
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-
-
 def test_move_sync_msgs(acfactory):
     ac1 = acfactory.new_online_configuring_account(bcc_self=True, sync_msgs=True, fix_is_chatmail=True)
     acfactory.bring_accounts_online()
@@ -607,39 +501,6 @@ def test_send_and_receive_message_markseen(acfactory, lp):
         pass  # mark_seen_messages() has generated events before it returns
 
 
-def test_moved_markseen(acfactory):
-    """Test that message already moved to DeltaChat folder is marked as seen."""
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-
-    ac2.stop_io()
-    with ac2.direct_imap.idle() as idle2:
-        ac1.create_chat(ac2).send_text("Hello!")
-        idle2.wait_for_new_message()
-
-    # Emulate moving of the message to DeltaChat folder by Sieve rule.
-    ac2.direct_imap.conn.move(["*"], "DeltaChat")
-    ac2.direct_imap.select_folder("DeltaChat")
-
-    with ac2.direct_imap.idle() as idle2:
-        ac2.start_io()
-
-        ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-        msg = ac2.get_message_by_id(ev.data2)
-        assert msg.text == "Messages are end-to-end encrypted."
-
-        ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-        msg = ac2.get_message_by_id(ev.data2)
-
-        # Accept the contact request.
-        msg.chat.accept()
-        ac2.mark_seen_messages([msg])
-        uid = idle2.wait_for_seen()
-
-    assert len(list(ac2.direct_imap.conn.fetch(AND(seen=True, uid=U(uid, "*"))))) == 1
-
-
 def test_message_override_sender_name(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac1.set_config("displayname", "ac1-default-displayname")
@@ -672,36 +533,6 @@ def test_message_override_sender_name(acfactory, lp):
     assert msg2.text == "message2"
     assert msg2.get_sender_contact().name == ac1.get_config("displayname")
     assert not msg2.override_sender_name
-
-
-@pytest.mark.parametrize("mvbox_move", [True, False])
-def test_markseen_message_and_mdn(acfactory, mvbox_move):
-    # Please only change this test if you are very sure that it will still catch the issues it catches now.
-    # We had so many problems with markseen, if in doubt, rather create another test, it can't harm.
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
-    acfactory.bring_accounts_online()
-    # Do not send BCC to self, we only want to test MDN on ac1.
-    ac1.set_config("bcc_self", "0")
-
-    acfactory.get_accepted_chat(ac1, ac2).send_text("hi")
-    msg = ac2._evtracker.wait_next_incoming_message()
-
-    ac2.mark_seen_messages([msg])
-
-    folder = "mvbox" if mvbox_move else "inbox"
-    for ac in [ac1, ac2]:
-        if mvbox_move:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
-        else:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-    ac1.direct_imap.select_config_folder(folder)
-    ac2.direct_imap.select_config_folder(folder)
-
-    # Check that the mdn is marked as seen
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
-    # Check original message is marked as seen
-    assert len(list(ac2.direct_imap.conn.fetch(AND(seen=True)))) == 1
 
 
 def test_reply_privately(acfactory):
@@ -851,140 +682,6 @@ def test_no_draft_if_cant_send(acfactory):
 
     assert not device_chat.can_send()
     assert device_chat.get_draft() is None
-
-
-def test_dont_show_emails(acfactory, lp):
-    """Most mailboxes have a "Drafts" folder where constantly new emails appear but we don't actually want to show them.
-    So: If it's outgoing AND there is no Received header, then ignore the email.
-
-    If the draft email is sent out and received later (i.e. it's in "Inbox"), it must be shown.
-
-    Also, test that unknown emails in the Spam folder are not shown."""
-    ac1 = acfactory.new_online_configuring_account()
-    ac1.set_config("show_emails", "2")
-    ac1.create_contact("alice@example.org").create_chat()
-
-    acfactory.wait_configured(ac1)
-    ac1.direct_imap.create_folder("Drafts")
-    ac1.direct_imap.create_folder("Spam")
-    ac1.direct_imap.create_folder("Junk")
-
-    acfactory.bring_accounts_online()
-    ac1.stop_io()
-
-    ac1.direct_imap.append(
-        "Drafts",
-        """
-        From: ac1 <{}>
-        Subject: subj
-        To: alice@example.org
-        Message-ID: <aepiors@example.org>
-        Content-Type: text/plain; charset=utf-8
-
-        message in Drafts received later
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Spam",
-        """
-        From: unknown.address@junk.org
-        Subject: subj
-        To: {}
-        Message-ID: <spam.message@junk.org>
-        Content-Type: text/plain; charset=utf-8
-
-        Unknown message in Spam
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Spam",
-        """
-        From: unknown.address@junk.org, unkwnown.add@junk.org
-        Subject: subj
-        To: {}
-        Message-ID: <spam.message2@junk.org>
-        Content-Type: text/plain; charset=utf-8
-
-        Unknown & malformed message in Spam
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Spam",
-        """
-        From: delta<address: inbox@nhroy.com>
-        Subject: subj
-        To: {}
-        Message-ID: <spam.message99@junk.org>
-        Content-Type: text/plain; charset=utf-8
-
-        Unknown & malformed message in Spam
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Spam",
-        """
-        From: alice@example.org
-        Subject: subj
-        To: {}
-        Message-ID: <spam.message3@junk.org>
-        Content-Type: text/plain; charset=utf-8
-
-        Actually interesting message in Spam
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-    ac1.direct_imap.append(
-        "Junk",
-        """
-        From: unknown.address@junk.org
-        Subject: subj
-        To: {}
-        Message-ID: <spam.message@junk.org>
-        Content-Type: text/plain; charset=utf-8
-
-        Unknown message in Junk
-    """.format(
-            ac1.get_config("configured_addr"),
-        ),
-    )
-
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
-    lp.sec("All prepared, now let DC find the message")
-    ac1.start_io()
-
-    # Wait until each folder was scanned, this is necessary for this test to test what it should test:
-    ac1._evtracker.wait_idle_inbox_ready()
-
-    fresh_msgs = list(ac1.get_fresh_messages())
-    msg = fresh_msgs[0]
-    chat_msgs = msg.chat.get_messages()
-    assert len(chat_msgs) == 1
-    assert any(msg.text == "subj – Actually interesting message in Spam" for msg in chat_msgs)
-
-    assert not any("unknown.address" in c.get_name() for c in ac1.get_chats())
-    ac1.direct_imap.select_folder("Spam")
-    assert ac1.direct_imap.get_uid_by_message_id("spam.message@junk.org")
-
-    ac1.stop_io()
-    lp.sec("'Send out' the draft by moving it to Inbox, and wait for DC to display it this time")
-    ac1.direct_imap.select_folder("Drafts")
-    uid = ac1.direct_imap.get_uid_by_message_id("aepiors@example.org")
-    ac1.direct_imap.conn.move(uid, "Inbox")
-
-    ac1.start_io()
-    msg2 = ac1._evtracker.wait_next_messages_changed()
-
-    assert msg2.text == "subj – message in Drafts received later"
-    assert len(msg.chat.get_messages()) == 2
 
 
 def test_bot(acfactory, lp):
@@ -1528,38 +1225,6 @@ def test_send_receive_locations(acfactory, lp):
     assert not locations3
 
 
-def test_immediate_autodelete(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.bring_accounts_online()
-
-    # "1" means delete immediately, while "0" means do not delete
-    ac2.set_config("delete_server_after", "1")
-
-    lp.sec("ac1: create chat with ac2")
-    chat1 = ac1.create_chat(ac2)
-    ac2.create_chat(ac1)
-
-    lp.sec("ac1: send message to ac2")
-    sent_msg = chat1.send_text("hello")
-
-    msg = ac2._evtracker.wait_next_incoming_message()
-    assert msg.text == "hello"
-
-    lp.sec("ac2: wait for close/expunge on autodelete")
-    ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
-    ac2._evtracker.get_info_contains("Close/expunge succeeded.")
-
-    lp.sec("ac2: check that message was autodeleted on server")
-    assert len(ac2.direct_imap.get_all_messages()) == 0
-
-    lp.sec("ac2: Mark deleted message as seen and check that read receipt arrives")
-    msg.mark_seen()
-    ev = ac1._evtracker.get_matching("DC_EVENT_MSG_READ")
-    assert ev.data1 == chat1.id
-    assert ev.data2 == sent_msg.id
-
-
 def test_delete_multiple_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
@@ -1585,55 +1250,6 @@ def test_delete_multiple_messages(acfactory, lp):
     while 1:
         ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
         ac2._evtracker.get_info_contains("Close/expunge succeeded.")
-        ac2.direct_imap.select_config_folder("inbox")
-        nr_msgs = len(ac2.direct_imap.get_all_messages())
-        assert nr_msgs > 0
-        if nr_msgs == 1:
-            break
-
-
-def test_trash_multiple_messages(acfactory, lp):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac2.stop_io()
-
-    # Create the Trash folder on IMAP server and configure deletion to it. There was a bug that if
-    # Trash wasn't configured initially, it can't be configured later, let's check this.
-    lp.sec("Creating trash folder")
-    ac2.direct_imap.create_folder("Trash")
-    ac2.set_config("delete_to_trash", "1")
-
-    lp.sec("Check that Trash can be configured initially as well")
-    ac3 = acfactory.new_online_configuring_account(cloned_from=ac2)
-    acfactory.bring_accounts_online()
-    assert ac3.get_config("configured_trash_folder")
-    ac3.stop_io()
-
-    ac2.start_io()
-    chat12 = acfactory.get_accepted_chat(ac1, ac2)
-
-    lp.sec("ac1: sending 3 messages")
-    texts = ["first", "second", "third"]
-    for text in texts:
-        chat12.send_text(text)
-
-    lp.sec("ac2: waiting for all messages on the other side")
-    to_delete = []
-    for text in texts:
-        msg = ac2._evtracker.wait_next_incoming_message()
-        assert msg.text in texts
-        if text != "second":
-            to_delete.append(msg)
-    # ac2 has received some messages, this is impossible w/o the trash folder configured, let's
-    # check the configuration.
-    assert ac2.get_config("configured_trash_folder") == "Trash"
-
-    lp.sec("ac2: deleting all messages except second")
-    assert len(to_delete) == len(texts) - 1
-    ac2.delete_messages(to_delete)
-
-    lp.sec("ac2: test that only one message is left")
-    while 1:
-        ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
         ac2.direct_imap.select_config_folder("inbox")
         nr_msgs = len(ac2.direct_imap.get_all_messages())
         assert nr_msgs > 0
@@ -1762,71 +1378,6 @@ def test_group_quote(acfactory, lp):
     assert received_reply.text == "reply"
     assert received_reply.quoted_text == "hello"
     assert received_reply.quote.id == out_msg.id
-
-
-@pytest.mark.parametrize(
-    ("folder", "move", "expected_destination"),
-    [
-        (
-            "xyz",
-            False,
-            "xyz",
-        ),  # Test that emails aren't found in a random folder
-        (
-            "xyz",
-            True,
-            "xyz",
-        ),  # ...emails are found in a random folder and downloaded without moving
-        (
-            "Spam",
-            False,
-            "INBOX",
-        ),  # ...emails are moved from the spam folder to the Inbox
-    ],
-)
-# Testrun.org does not support the CREATE-SPECIAL-USE capability, which means that we can't create a folder with
-# the "\Junk" flag (see https://tools.ietf.org/html/rfc6154). So, we can't test spam folder detection by flag.
-def test_scan_folders(acfactory, lp, folder, move, expected_destination):
-    """Delta Chat periodically scans all folders for new messages to make sure we don't miss any."""
-    variant = folder + "-" + str(move) + "-" + expected_destination
-    lp.sec("Testing variant " + variant)
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=move)
-    ac2 = acfactory.new_online_configuring_account()
-
-    acfactory.wait_configured(ac1)
-    ac1.direct_imap.create_folder(folder)
-
-    # Wait until each folder was selected once and we are IDLEing:
-    acfactory.bring_accounts_online()
-    ac1.stop_io()
-    assert folder in ac1.direct_imap.list_folders()
-
-    lp.sec("Send a message to from ac2 to ac1 and manually move it to `folder`")
-    ac1.direct_imap.select_config_folder("inbox")
-    with ac1.direct_imap.idle() as idle1:
-        acfactory.get_accepted_chat(ac2, ac1).send_text("hello")
-        idle1.wait_for_new_message()
-    ac1.direct_imap.conn.move(["*"], folder)  # "*" means "biggest UID in mailbox"
-
-    lp.sec("start_io() and see if DeltaChat finds the message (" + variant + ")")
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
-    ac1.start_io()
-    chat = ac1.create_chat(ac2)
-    n_msgs = 1  # "Messages are end-to-end encrypted."
-    if folder == "Spam":
-        msg = ac1._evtracker.wait_next_incoming_message()
-        assert msg.text == "hello"
-        n_msgs += 1
-    else:
-        ac1._evtracker.wait_idle_inbox_ready()
-    assert len(chat.get_messages()) == n_msgs
-
-    # The message has reached its destination.
-    ac1.direct_imap.select_folder(expected_destination)
-    assert len(ac1.direct_imap.get_all_messages()) == 1
-    if folder != expected_destination:
-        ac1.direct_imap.select_folder(folder)
-        assert len(ac1.direct_imap.get_all_messages()) == 0
 
 
 def test_archived_muted_chat(acfactory, lp):

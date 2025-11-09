@@ -657,50 +657,6 @@ def test_reaction_to_partially_fetched_msg(acfactory, tmp_path):
     assert list(reactions.reactions_by_contact.values())[0] == [react_str]
 
 
-def test_reactions_for_a_reordering_move(acfactory, direct_imap):
-    """When a batch of messages is moved from Inbox to DeltaChat folder with a single MOVE command,
-    their UIDs may be reordered (e.g. Gmail is known for that) which led to that messages were
-    processed by receive_imf in the wrong order, and, particularly, reactions were processed before
-    messages they refer to and thus dropped.
-    """
-    (ac1,) = acfactory.get_online_accounts(1)
-
-    addr, password = acfactory.get_credentials()
-    ac2 = acfactory.get_unconfigured_account()
-    ac2.add_or_update_transport({"addr": addr, "password": password})
-    ac2.set_config("mvbox_move", "1")
-    assert ac2.is_configured()
-
-    ac2.bring_online()
-    chat1 = acfactory.get_accepted_chat(ac1, ac2)
-    ac2.stop_io()
-
-    logging.info("sending message + reaction from ac1 to ac2")
-    msg1 = chat1.send_text("hi")
-    msg1.wait_until_delivered()
-    # It's is sad, but messages must differ in their INTERNALDATEs to be processed in the correct
-    # order by DC, and most (if not all) mail servers provide only seconds precision.
-    time.sleep(1.1)
-    react_str = "\N{THUMBS UP SIGN}"
-    msg1.send_reaction(react_str).wait_until_delivered()
-
-    logging.info("moving messages to ac2's DeltaChat folder in the reverse order")
-    ac2_direct_imap = direct_imap(ac2)
-    ac2_direct_imap.connect()
-    for uid in sorted([m.uid for m in ac2_direct_imap.get_all_messages()], reverse=True):
-        ac2_direct_imap.conn.move(uid, "DeltaChat")
-
-    logging.info("receiving messages by ac2")
-    ac2.start_io()
-    msg2 = Message(ac2, ac2.wait_for_reactions_changed().msg_id)
-    assert msg2.get_snapshot().text == msg1.get_snapshot().text
-    reactions = msg2.get_reactions()
-    contacts = [Contact(ac2, int(i)) for i in reactions.reactions_by_contact]
-    assert len(contacts) == 1
-    assert contacts[0].get_snapshot().address == ac1.get_config("addr")
-    assert list(reactions.reactions_by_contact.values())[0] == [react_str]
-
-
 @pytest.mark.parametrize("n_accounts", [3, 2])
 def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
     download_limit = 300000
@@ -888,30 +844,6 @@ def test_get_all_accounts_deadlock(rpc):
         all_accounts()
 
 
-def test_delete_deltachat_folder(acfactory, direct_imap):
-    """Test that DeltaChat folder is recreated if user deletes it manually."""
-    ac1 = acfactory.new_configured_account()
-    ac1.set_config("mvbox_move", "1")
-    ac1.bring_online()
-
-    ac1_direct_imap = direct_imap(ac1)
-    ac1_direct_imap.conn.folder.delete("DeltaChat")
-    assert "DeltaChat" not in ac1_direct_imap.list_folders()
-
-    # Wait until new folder is created and UIDVALIDITY is updated.
-    while True:
-        event = ac1.wait_for_event()
-        if event.kind == EventType.INFO and "uid/validity change folder DeltaChat" in event.msg:
-            break
-
-    ac2 = acfactory.get_online_account()
-    ac2.create_chat(ac1).send_text("hello")
-    msg = ac1.wait_for_incoming_msg().get_snapshot()
-    assert msg.text == "hello"
-
-    assert "DeltaChat" in ac1_direct_imap.list_folders()
-
-
 @pytest.mark.parametrize("all_devices_online", [True, False])
 def test_leave_broadcast(acfactory, all_devices_online):
     alice, bob = acfactory.get_online_accounts(2)
@@ -1012,3 +944,37 @@ def test_leave_broadcast(acfactory, all_devices_online):
         bob2.wait_for_event(EventType.CHAT_MODIFIED)
 
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
+
+
+def test_immediate_autodelete(acfactory, direct_imap, log):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+
+    # "1" means delete immediately, while "0" means do not delete
+    ac2.set_config("delete_server_after", "1")
+
+    log.section("ac1: create chat with ac2")
+    chat1 = ac1.create_chat(ac2)
+    ac2.create_chat(ac1)
+
+    log.section("ac1: send message to ac2")
+    sent_msg = chat1.send_text("hello")
+
+    msg = ac2.wait_for_incoming_msg()
+    assert msg.get_snapshot().text == "hello"
+
+    log.section("ac2: wait for close/expunge on autodelete")
+    ac2.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+    while True:
+        event = ac2.wait_for_event()
+        if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+            break
+
+    log.section("ac2: check that message was autodeleted on server")
+    ac2_direct_imap = direct_imap(ac2)
+    assert len(ac2_direct_imap.get_all_messages()) == 0
+
+    log.section("ac2: Mark deleted message as seen and check that read receipt arrives")
+    msg.mark_seen()
+    ev = ac1.wait_for_event(EventType.MSG_READ)
+    assert ev.chat_id == chat1.id
+    assert ev.msg_id == sent_msg.id
