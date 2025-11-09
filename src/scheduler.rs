@@ -345,37 +345,148 @@ pub(crate) struct Scheduler {
     recently_seen_loop: RecentlySeenLoop,
 }
 
-async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
-    let msg_ids = context
+// #region todo-move-to-download.rs
+
+async fn get_msg_id_by_rfc724_mid(context: &Context, rfc724_mid: &str) -> Result<Option<MsgId>> {
+    context
         .sql
-        .query_map_vec("SELECT msg_id FROM download", (), |row| {
-            let msg_id: MsgId = row.get(0)?;
-            Ok(msg_id)
+        .query_get_value::<MsgId>("SELECT id FROM msgs WHERE rfc724_mid=?", (&rfc724_mid,))
+        .await
+}
+
+async fn available_full_msgs_contains_rfc724_mid(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<bool> {
+    Ok(context
+        .sql
+        .query_get_value::<MsgId>(
+            "SELECT rfc724_mid FROM available_full_msgs WHERE rfc724_mid=?",
+            (&rfc724_mid,),
+        )
+        .await?
+        .is_some())
+}
+
+async fn set_msg_state_to_failed(context: &Context, rfc724_mid: &str) -> Result<()> {
+    if let Some(msg_id) = get_msg_id_by_rfc724_mid(context, rfc724_mid).await? {
+        // Update download state to failure
+        // so it can be retried.
+        //
+        // On success update_download_state() is not needed
+        // as receive_imf() already
+        // set the state and emitted the event.
+        msg_id
+            .update_download_state(context, DownloadState::Failure)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn remove_from_download_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+    context
+        .sql
+        .execute("DELETE FROM download WHERE rfc724_mid=?", (&rfc724_mid,))
+        .await?;
+    Ok(())
+}
+
+async fn remove_from_available_full_msgs_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "DELETE FROM available_full_msgs WHERE rfc724_mid=?",
+            (&rfc724_mid,),
+        )
+        .await?;
+    Ok(())
+}
+
+async fn premessage_is_downloaded_for(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    Ok(get_msg_id_by_rfc724_mid(context, rfc724_mid)
+        .await?
+        .is_some())
+}
+
+async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
+    let rfc724_mids = context
+        .sql
+        .query_map_vec("SELECT rfc724_mid FROM download", (), |row| {
+            let rfc724_mid: String = row.get(0)?;
+            Ok(rfc724_mid)
         })
         .await?;
 
-    for msg_id in msg_ids {
-        if let Err(err) = download_msg(context, msg_id, session).await {
-            warn!(context, "Failed to download message {msg_id}: {:#}.", err);
-
-            // Update download state to failure
-            // so it can be retried.
-            //
-            // On success update_download_state() is not needed
-            // as receive_imf() already
-            // set the state and emitted the event.
-            msg_id
-                .update_download_state(context, DownloadState::Failure)
-                .await?;
+    for rfc724_mid in &rfc724_mids {
+        let res = download_msg(context, rfc724_mid.clone(), session).await;
+        if res.is_ok() {
+            remove_from_download_table(context, rfc724_mid).await?;
+            remove_from_available_full_msgs_table(context, rfc724_mid).await?;
         }
-        context
-            .sql
-            .execute("DELETE FROM download WHERE msg_id=?", (msg_id,))
-            .await?;
+        if let Err(err) = res {
+            warn!(
+                context,
+                "Failed to download message rfc724_mid={rfc724_mid}: {:#}.", err
+            );
+            if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+                // This is probably a classical email that vanished before we could download it
+                warn!(
+                    context,
+                    "{rfc724_mid} is probably a classical email that vanished before we could download it"
+                );
+                remove_from_download_table(context, rfc724_mid).await?;
+            } else if available_full_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
+                // set the message to DownloadState::Failure - probably it was deleted on the server in the meantime
+                set_msg_state_to_failed(context, rfc724_mid).await?;
+                remove_from_download_table(context, rfc724_mid).await?;
+                remove_from_available_full_msgs_table(context, rfc724_mid).await?;
+            } else {
+                // leave the message in DownloadState::InProgress;
+                // it will be downloaded once it arrives.
+            }
+        }
     }
 
     Ok(())
 }
+
+/// Download known full messages without pre_message
+/// in order to guard against lost pre-messages:
+// TODO better fn name
+pub async fn download_known_full_messages_without_pre_message(
+    context: &Context,
+    session: &mut Session,
+) -> Result<()> {
+    let rfc724_mids = context
+        .sql
+        .query_map_vec("SELECT rfc724_mid FROM available_full_msgs", (), |row| {
+            let rfc724_mid: String = row.get(0)?;
+            Ok(rfc724_mid)
+        })
+        .await?;
+    for rfc724_mid in &rfc724_mids {
+        if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+            // Download the full-message unconditionally,
+            // because the pre-message got lost.
+            // The message may be in the wrong order,
+            // but at least we have it at all.
+            let res = download_msg(context, rfc724_mid.clone(), session).await;
+            if res.is_ok() {
+                remove_from_available_full_msgs_table(context, rfc724_mid).await?;
+            }
+            if let Err(err) = res {
+                warn!(
+                    context,
+                    "download_known_full_messages_without_pre_message: Failed to download message rfc724_mid={rfc724_mid}: {:#}.",
+                    err
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+// #endregion
 
 async fn inbox_loop(
     ctx: Context,
@@ -596,7 +707,7 @@ async fn fetch_idle(
     {
         // Fetch the watched folder.
         connection
-            .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
+            .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
             .await
             .context("fetch_move_delete")?;
 
@@ -607,6 +718,11 @@ async fn fetch_idle(
         delete_expired_imap_messages(ctx)
             .await
             .context("delete_expired_imap_messages")?;
+
+        //-------
+        // TODO: verify that this is the correct position for this call
+        // in order to guard against lost pre-messages:
+        download_known_full_messages_without_pre_message(ctx, &mut session).await?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
     }
@@ -635,7 +751,7 @@ async fn fetch_idle(
                 // no new messages. We want to select the watched folder anyway before going IDLE
                 // there, so this does not take additional protocol round-trip.
                 connection
-                    .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
+                    .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
                     .await
                     .context("fetch_move_delete after scan_folders")?;
             }

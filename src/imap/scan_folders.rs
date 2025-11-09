@@ -76,7 +76,7 @@ impl Imap {
                 && folder_meaning != FolderMeaning::Trash
                 && folder_meaning != FolderMeaning::Unknown
             {
-                self.fetch_move_delete(context, session, folder.name(), folder_meaning)
+                self.fetch_move_delete(context, session, false, folder.name(), folder_meaning)
                     .await
                     .context("Can't fetch new msgs in scanned folder")
                     .log_err(context)
