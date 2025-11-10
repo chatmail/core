@@ -5,7 +5,7 @@ import base64
 from datetime import datetime, timezone
 
 import pytest
-from imap_tools import AND, U
+from imap_tools import AND
 
 import deltachat as dc
 from deltachat import account_hookimpl, Message
@@ -590,39 +590,6 @@ def test_send_and_receive_message_markseen(acfactory, lp):
         ac2._evtracker.get_matching("DC_EVENT_MSG_READ", timeout=0.01)
     except queue.Empty:
         pass  # mark_seen_messages() has generated events before it returns
-
-
-def test_moved_markseen(acfactory):
-    """Test that message already moved to DeltaChat folder is marked as seen."""
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-
-    ac2.stop_io()
-    with ac2.direct_imap.idle() as idle2:
-        ac1.create_chat(ac2).send_text("Hello!")
-        idle2.wait_for_new_message()
-
-    # Emulate moving of the message to DeltaChat folder by Sieve rule.
-    ac2.direct_imap.conn.move(["*"], "DeltaChat")
-    ac2.direct_imap.select_folder("DeltaChat")
-
-    with ac2.direct_imap.idle() as idle2:
-        ac2.start_io()
-
-        ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-        msg = ac2.get_message_by_id(ev.data2)
-        assert msg.text == "Messages are end-to-end encrypted."
-
-        ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG|DC_EVENT_MSGS_CHANGED")
-        msg = ac2.get_message_by_id(ev.data2)
-
-        # Accept the contact request.
-        msg.chat.accept()
-        ac2.mark_seen_messages([msg])
-        uid = idle2.wait_for_seen()
-
-    assert len(list(ac2.direct_imap.conn.fetch(AND(seen=True, uid=U(uid, "*"))))) == 1
 
 
 def test_message_override_sender_name(acfactory, lp):

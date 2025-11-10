@@ -9,6 +9,7 @@ import time
 from unittest.mock import MagicMock
 
 import pytest
+from imap_tools import AND, U
 
 from deltachat_rpc_client import Contact, EventType, Message, events
 from deltachat_rpc_client.const import DownloadState, MessageState
@@ -1169,3 +1170,41 @@ def test_move_works_on_self_sent(acfactory):
     ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
     chat.send_text("message3")
     ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
+
+
+def test_moved_markseen(acfactory, direct_imap):
+    """Test that message already moved to DeltaChat folder is marked as seen."""
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2.set_config("mvbox_move", "1")
+    ac2.set_config("delete_server_after", "0")
+    ac2.set_config("sync_msgs", "0")  # Do not send a sync message when accepting a contact request.
+    ac2.bring_online()
+
+    ac2.stop_io()
+    ac2_direct_imap = direct_imap(ac2)
+    with ac2_direct_imap.idle() as idle2:
+        ac1.create_chat(ac2).send_text("Hello!")
+        idle2.wait_for_new_message()
+
+    # Emulate moving of the message to DeltaChat folder by Sieve rule.
+    ac2_direct_imap.conn.move(["*"], "DeltaChat")
+    ac2_direct_imap.select_folder("DeltaChat")
+    assert len(list(ac2_direct_imap.conn.fetch("*", mark_seen=False))) == 1
+
+    with ac2_direct_imap.idle() as idle2:
+        ac2.start_io()
+
+        ev = ac2.wait_for_event(EventType.MSGS_CHANGED)
+        msg = ac2.get_message_by_id(ev.msg_id)
+        assert msg.get_snapshot().text == "Messages are end-to-end encrypted."
+
+        ev = ac2.wait_for_event(EventType.INCOMING_MSG)
+        msg = ac2.get_message_by_id(ev.msg_id)
+        chat = ac2.get_chat_by_id(ev.chat_id)
+
+        # Accept the contact request.
+        chat.accept()
+        msg.mark_seen()
+        idle2.wait_for_seen()
+
+    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True, uid=U(1, "*")), mark_seen=False))) == 1
