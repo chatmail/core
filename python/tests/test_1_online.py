@@ -626,36 +626,6 @@ def test_message_override_sender_name(acfactory, lp):
     assert not msg2.override_sender_name
 
 
-@pytest.mark.parametrize("mvbox_move", [True, False])
-def test_markseen_message_and_mdn(acfactory, mvbox_move):
-    # Please only change this test if you are very sure that it will still catch the issues it catches now.
-    # We had so many problems with markseen, if in doubt, rather create another test, it can't harm.
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=mvbox_move)
-    acfactory.bring_accounts_online()
-    # Do not send BCC to self, we only want to test MDN on ac1.
-    ac1.set_config("bcc_self", "0")
-
-    acfactory.get_accepted_chat(ac1, ac2).send_text("hi")
-    msg = ac2._evtracker.wait_next_incoming_message()
-
-    ac2.mark_seen_messages([msg])
-
-    folder = "mvbox" if mvbox_move else "inbox"
-    for ac in [ac1, ac2]:
-        if mvbox_move:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
-        else:
-            ac._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
-    ac1.direct_imap.select_config_folder(folder)
-    ac2.direct_imap.select_config_folder(folder)
-
-    # Check that the mdn is marked as seen
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
-    # Check original message is marked as seen
-    assert len(list(ac2.direct_imap.conn.fetch(AND(seen=True)))) == 1
-
-
 def test_reply_privately(acfactory):
     ac1, ac2 = acfactory.get_online_accounts(2)
 

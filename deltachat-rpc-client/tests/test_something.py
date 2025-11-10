@@ -3,6 +3,7 @@ import concurrent.futures
 import json
 import logging
 import os
+import re
 import socket
 import subprocess
 import time
@@ -1208,3 +1209,44 @@ def test_moved_markseen(acfactory, direct_imap):
         idle2.wait_for_seen()
 
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True, uid=U(1, "*")), mark_seen=False))) == 1
+
+
+@pytest.mark.parametrize("mvbox_move", [True, False])
+def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+
+    for ac in ac1, ac2:
+        ac.set_config("delete_server_after", "0")
+        if mvbox_move:
+            ac.set_config("mvbox_move", "1")
+            ac.bring_online()
+
+    # Do not send BCC to self, we only want to test MDN on ac1.
+    ac1.set_config("bcc_self", "0")
+
+    acfactory.get_accepted_chat(ac1, ac2).send_text("hi")
+    msg = ac2.wait_for_incoming_msg()
+    msg.mark_seen()
+
+    if mvbox_move:
+        rex = re.compile("Marked messages [0-9]+ in folder DeltaChat as seen.")
+    else:
+        rex = re.compile("Marked messages [0-9]+ in folder INBOX as seen.")
+
+    for ac in ac1, ac2:
+        while True:
+            event = ac.wait_for_event()
+            if event.kind == EventType.INFO and rex.search(event.msg):
+                break
+
+    folder = "mvbox" if mvbox_move else "inbox"
+    ac1_direct_imap = direct_imap(ac1)
+    ac2_direct_imap = direct_imap(ac2)
+
+    ac1_direct_imap.select_config_folder(folder)
+    ac2_direct_imap.select_config_folder(folder)
+
+    # Check that the mdn is marked as seen
+    assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
+    # Check original message is marked as seen
+    assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
