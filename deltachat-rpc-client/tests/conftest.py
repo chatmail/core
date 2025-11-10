@@ -85,11 +85,11 @@ class DirectImap:
 
     def get_all_messages(self) -> list[MailMessage]:
         assert not self._idling
-        return list(self.conn.fetch())
+        return list(self.conn.fetch(mark_seen=False))
 
     def get_unread_messages(self) -> list[str]:
         assert not self._idling
-        return [msg.uid for msg in self.conn.fetch(AND(seen=False))]
+        return [msg.uid for msg in self.conn.fetch(AND(seen=False), mark_seen=False)]
 
     def mark_all_read(self):
         messages = self.get_unread_messages()
@@ -173,7 +173,6 @@ class DirectImap:
 class IdleManager:
     def __init__(self, direct_imap) -> None:
         self.direct_imap = direct_imap
-        self.log = direct_imap.account.log
         # fetch latest messages before starting idle so that it only
         # returns messages that arrive anew
         self.direct_imap.conn.fetch("1:*")
@@ -181,14 +180,11 @@ class IdleManager:
 
     def check(self, timeout=None) -> list[bytes]:
         """(blocking) wait for next idle message from server."""
-        self.log("imap-direct: calling idle_check")
-        res = self.direct_imap.conn.idle.poll(timeout=timeout)
-        self.log(f"imap-direct: idle_check returned {res!r}")
-        return res
+        return self.direct_imap.conn.idle.poll(timeout=timeout)
 
-    def wait_for_new_message(self, timeout=None) -> bytes:
+    def wait_for_new_message(self) -> bytes:
         while True:
-            for item in self.check(timeout=timeout):
+            for item in self.check():
                 if b"EXISTS" in item or b"RECENT" in item:
                     return item
 
@@ -196,10 +192,8 @@ class IdleManager:
         """Return first message with SEEN flag from a running idle-stream."""
         while True:
             for item in self.check(timeout=timeout):
-                if FETCH in item:
-                    self.log(str(item))
-                    if FLAGS in item and rb"\Seen" in item:
-                        return int(item.split(b" ")[1])
+                if FETCH in item and FLAGS in item and rb"\Seen" in item:
+                    return int(item.split(b" ")[1])
 
     def done(self):
         """send idle-done to server if we are currently in idle mode."""
