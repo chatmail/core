@@ -44,8 +44,13 @@ class AttrDict(dict):
         super().__setattr__(attr, val)
 
 
+def _forever(_event: AttrDict) -> bool:
+    return False
+
+
 def run_client_cli(
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
+    until: Callable[[AttrDict], bool] = _forever,
     argv: Optional[list] = None,
     **kwargs,
 ) -> None:
@@ -55,10 +60,11 @@ def run_client_cli(
     """
     from .client import Client
 
-    _run_cli(Client, hooks, argv, **kwargs)
+    _run_cli(Client, until, hooks, argv, **kwargs)
 
 
 def run_bot_cli(
+    until: Callable[[AttrDict], bool] = _forever,
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
     **kwargs,
@@ -69,11 +75,12 @@ def run_bot_cli(
     """
     from .client import Bot
 
-    _run_cli(Bot, hooks, argv, **kwargs)
+    _run_cli(Bot, until, hooks, argv, **kwargs)
 
 
 def _run_cli(
     client_type: Type["Client"],
+    until: Callable[[AttrDict], bool] = _forever,
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
     **kwargs,
@@ -111,7 +118,7 @@ def _run_cli(
                 kwargs={"email": args.email, "password": args.password},
             )
             configure_thread.start()
-        client.run_forever()
+        client.run_until(until)
 
 
 def extract_addr(text: str) -> str:
