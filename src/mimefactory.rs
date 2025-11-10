@@ -1062,7 +1062,7 @@ impl MimeFactory {
                             mail_builder::headers::raw::Raw::new("[...]").into(),
                         ));
                     }
-                    "in-reply-to" | "references" | "auto-submitted" | "autocrypt-setup-message" => {
+                    "in-reply-to" | "references" | "autocrypt-setup-message" => {
                         unprotected_headers.push(header.clone());
                     }
                     _ => {
