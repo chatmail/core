@@ -335,3 +335,74 @@ def test_mvbox_and_trash(acfactory, direct_imap, log):
     assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
     while ac1.get_config("configured_trash_folder") != "Trash":
         ac1.wait_for_event(EventType.CONNECTIVITY_CHANGED)
+
+
+@pytest.mark.parametrize(
+    ("folder", "move", "expected_destination"),
+    [
+        (
+            "xyz",
+            False,
+            "xyz",
+        ),  # Test that emails aren't found in a random folder
+        (
+            "xyz",
+            True,
+            "xyz",
+        ),  # ...emails are found in a random folder and downloaded without moving
+        (
+            "Spam",
+            False,
+            "INBOX",
+        ),  # ...emails are moved from the spam folder to the Inbox
+    ],
+)
+# Testrun.org does not support the CREATE-SPECIAL-USE capability, which means that we can't create a folder with
+# the "\Junk" flag (see https://tools.ietf.org/html/rfc6154). So, we can't test spam folder detection by flag.
+def test_scan_folders(acfactory, log, direct_imap, folder, move, expected_destination):
+    """Delta Chat periodically scans all folders for new messages to make sure we don't miss any."""
+    variant = folder + "-" + str(move) + "-" + expected_destination
+    log.section("Testing variant " + variant)
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1.set_config("delete_server_after", "0")
+    if move:
+        ac1.set_config("mvbox_move", "1")
+        ac1.bring_online()
+
+    ac1.stop_io()
+    ac1_direct_imap = direct_imap(ac1)
+    ac1_direct_imap.create_folder(folder)
+
+    # Wait until each folder was selected once and we are IDLEing:
+    ac1.start_io()
+    ac1.bring_online()
+
+    ac1.stop_io()
+    assert folder in ac1_direct_imap.list_folders()
+
+    log.section("Send a message from ac2 to ac1 and manually move it to `folder`")
+    ac1_direct_imap.select_config_folder("inbox")
+    with ac1_direct_imap.idle() as idle1:
+        acfactory.get_accepted_chat(ac2, ac1).send_text("hello")
+        idle1.wait_for_new_message()
+    ac1_direct_imap.conn.move(["*"], folder)  # "*" means "biggest UID in mailbox"
+
+    log.section("start_io() and see if DeltaChat finds the message (" + variant + ")")
+    ac1.set_config("scan_all_folders_debounce_secs", "0")
+    ac1.start_io()
+    chat = ac1.create_chat(ac2)
+    n_msgs = 1  # "Messages are end-to-end encrypted."
+    if folder == "Spam":
+        msg = ac1.wait_for_incoming_msg().get_snapshot()
+        assert msg.text == "hello"
+        n_msgs += 1
+    else:
+        ac1.wait_for_event(EventType.IMAP_INBOX_IDLE)
+    assert len(chat.get_messages()) == n_msgs
+
+    # The message has reached its destination.
+    ac1_direct_imap.select_folder(expected_destination)
+    assert len(ac1_direct_imap.get_all_messages()) == 1
+    if folder != expected_destination:
+        ac1_direct_imap.select_folder(folder)
+        assert len(ac1_direct_imap.get_all_messages()) == 0
