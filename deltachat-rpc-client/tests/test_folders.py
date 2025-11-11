@@ -8,6 +8,22 @@ from imap_tools import AND, U
 from deltachat_rpc_client import Contact, EventType, Message
 
 
+def test_move_works(acfactory):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2.set_config("mvbox_move", "1")
+    ac2.bring_online()
+
+    chat = ac1.create_chat(ac2)
+    chat.send_text("message1")
+
+    # Message is moved to the movebox
+    ac2.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
+
+    # Message is downloaded
+    msg = ac2.wait_for_incoming_msg().get_snapshot()
+    assert msg.text == "message1"
+
+
 def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     """When a batch of messages is moved from Inbox to DeltaChat folder with a single MOVE command,
     their UIDs may be reordered (e.g. Gmail is known for that) which led to that messages were

@@ -269,21 +269,6 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_move_works(acfactory):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-    chat = acfactory.get_accepted_chat(ac1, ac2)
-    chat.send_text("message1")
-
-    # Message is moved to the movebox
-    ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-
-    # Message is downloaded
-    ev = ac2._evtracker.get_matching("DC_EVENT_INCOMING_MSG")
-    assert ev.data2 > dc.const.DC_CHAT_ID_LAST_SPECIAL
-
-
 def test_move_avoids_loop(acfactory):
     """Test that the message is only moved from INBOX to DeltaChat.
 
