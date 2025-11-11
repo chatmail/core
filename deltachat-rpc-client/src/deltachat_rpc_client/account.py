@@ -417,12 +417,21 @@ class Account:
         """Wait for messages noticed event and return it."""
         return self.wait_for_event(EventType.MSGS_NOTICED)
 
+    def wait_for_msg(self, event_type) -> Message:
+        """Wait for an event about the message.
+
+        Consumes all events before the matching event.
+        Returns a message corresponding to the msg_id field of the event.
+        """
+        event = self.wait_for_event(event_type)
+        return self.get_message_by_id(event.msg_id)
+
     def wait_for_incoming_msg(self):
         """Wait for incoming message and return it.
 
         Consumes all events before the next incoming message event.
         """
-        return self.get_message_by_id(self.wait_for_incoming_msg_event().msg_id)
+        return self.wait_for_msg(EventType.INCOMING_MSG)
 
     def wait_for_securejoin_inviter_success(self):
         """Wait until SecureJoin process finishes successfully on the inviter side."""
