@@ -84,7 +84,7 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
 
     # share a webxdc app between ac1 and ac2
     ac1_webxdc_msg = acfactory.send_message(from_account=ac1, to_account=ac2, text="play", file=path_to_webxdc)
-    ac2_webxdc_msg = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id)
+    ac2_webxdc_msg = ac2.wait_for_incoming_msg()
     snapshot = ac2_webxdc_msg.get_snapshot()
     assert snapshot.text == "play"
 
@@ -94,7 +94,7 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
     acfactory.send_message(from_account=ac1, to_account=ac2, text="ping1")
 
     log("waiting for incoming message on ac2")
-    snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac2.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "ping1"
 
     log("sending ac2 -> ac1 realtime advertisement and additional message")
@@ -102,7 +102,7 @@ def test_realtime_sequentially(acfactory, path_to_webxdc):
     acfactory.send_message(from_account=ac2, to_account=ac1, text="ping2")
 
     log("waiting for incoming message on ac1")
-    snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac1.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "ping2"
 
     log("sending realtime data ac1 -> ac2")
