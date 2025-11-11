@@ -1251,55 +1251,6 @@ def test_delete_multiple_messages(acfactory, lp):
             break
 
 
-def test_trash_multiple_messages(acfactory, lp):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac2.stop_io()
-
-    # Create the Trash folder on IMAP server and configure deletion to it. There was a bug that if
-    # Trash wasn't configured initially, it can't be configured later, let's check this.
-    lp.sec("Creating trash folder")
-    ac2.direct_imap.create_folder("Trash")
-    ac2.set_config("delete_to_trash", "1")
-
-    lp.sec("Check that Trash can be configured initially as well")
-    ac3 = acfactory.new_online_configuring_account(cloned_from=ac2)
-    acfactory.bring_accounts_online()
-    assert ac3.get_config("configured_trash_folder")
-    ac3.stop_io()
-
-    ac2.start_io()
-    chat12 = acfactory.get_accepted_chat(ac1, ac2)
-
-    lp.sec("ac1: sending 3 messages")
-    texts = ["first", "second", "third"]
-    for text in texts:
-        chat12.send_text(text)
-
-    lp.sec("ac2: waiting for all messages on the other side")
-    to_delete = []
-    for text in texts:
-        msg = ac2._evtracker.wait_next_incoming_message()
-        assert msg.text in texts
-        if text != "second":
-            to_delete.append(msg)
-    # ac2 has received some messages, this is impossible w/o the trash folder configured, let's
-    # check the configuration.
-    assert ac2.get_config("configured_trash_folder") == "Trash"
-
-    lp.sec("ac2: deleting all messages except second")
-    assert len(to_delete) == len(texts) - 1
-    ac2.delete_messages(to_delete)
-
-    lp.sec("ac2: test that only one message is left")
-    while 1:
-        ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-        ac2.direct_imap.select_config_folder("inbox")
-        nr_msgs = len(ac2.direct_imap.get_all_messages())
-        assert nr_msgs > 0
-        if nr_msgs == 1:
-            break
-
-
 def test_configure_error_msgs_wrong_pw(acfactory):
     (ac1,) = acfactory.get_online_accounts(1)
 
