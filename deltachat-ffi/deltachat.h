@@ -7749,6 +7749,11 @@ void dc_event_unref(dc_event_t* event);
 /// Description in connectivity view when proxy is enabled.
 #define DC_STR_PROXY_ENABLED_DESCRIPTION  221
 
+/// "Messages in this chat use classic email and are not encrypted."
+///
+/// Used as the first info messages in newly created classic email threads.
+#define DC_STR_CHAT_UNENCRYPTED_EXPLANATON 230
+
 /**
  * @}
  */
