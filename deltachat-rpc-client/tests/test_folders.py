@@ -310,3 +310,28 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
     assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
     # Check original message is marked as seen
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
+
+
+def test_mvbox_and_trash(acfactory, direct_imap, log):
+    log.section("ac1: start with mvbox")
+    ac1 = acfactory.get_online_account()
+    ac1.set_config("mvbox_move", "1")
+    ac1.bring_online()
+
+    log.section("ac2: start without a mvbox")
+    ac2 = acfactory.get_online_account()
+
+    log.section("ac1: create trash")
+    ac1_direct_imap = direct_imap(ac1)
+    ac1_direct_imap.create_folder("Trash")
+    ac1.set_config("scan_all_folders_debounce_secs", "0")
+    ac1.stop_io()
+    ac1.start_io()
+
+    log.section("ac1: send message and wait for ac2 to receive it")
+    acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
+    assert ac2.wait_for_incoming_msg().get_snapshot().text == "message1"
+
+    assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
+    while ac1.get_config("configured_trash_folder") != "Trash":
+        ac1.wait_for_event(EventType.CONNECTIVITY_CHANGED)

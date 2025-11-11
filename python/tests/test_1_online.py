@@ -269,31 +269,6 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_mvbox_thread_and_trash(acfactory, lp):
-    lp.sec("ac1: start with mvbox thread")
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
-
-    lp.sec("ac2: start without a mvbox thread")
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=False)
-
-    lp.sec("ac2 and ac1: waiting for configuration")
-    acfactory.bring_accounts_online()
-
-    lp.sec("ac1: create trash")
-    ac1.direct_imap.create_folder("Trash")
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
-    ac1.stop_io()
-    ac1.start_io()
-
-    lp.sec("ac1: send message and wait for ac2 to receive it")
-    acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
-    assert ac2._evtracker.wait_next_incoming_message().text == "message1"
-
-    assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
-    while ac1.get_config("configured_trash_folder") != "Trash":
-        ac1._evtracker.get_matching("DC_EVENT_CONNECTIVITY_CHANGED")
-
-
 def test_move_works(acfactory):
     ac1 = acfactory.new_online_configuring_account()
     ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
