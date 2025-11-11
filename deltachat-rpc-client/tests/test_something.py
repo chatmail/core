@@ -944,3 +944,37 @@ def test_leave_broadcast(acfactory, all_devices_online):
         bob2.wait_for_event(EventType.CHAT_MODIFIED)
 
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
+
+
+def test_immediate_autodelete(acfactory, direct_imap, log):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+
+    # "1" means delete immediately, while "0" means do not delete
+    ac2.set_config("delete_server_after", "1")
+
+    log.section("ac1: create chat with ac2")
+    chat1 = ac1.create_chat(ac2)
+    ac2.create_chat(ac1)
+
+    log.section("ac1: send message to ac2")
+    sent_msg = chat1.send_text("hello")
+
+    msg = ac2.wait_for_incoming_msg()
+    assert msg.get_snapshot().text == "hello"
+
+    log.section("ac2: wait for close/expunge on autodelete")
+    ac2.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+    while True:
+        event = ac2.wait_for_event()
+        if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+            break
+
+    log.section("ac2: check that message was autodeleted on server")
+    ac2_direct_imap = direct_imap(ac2)
+    assert len(ac2_direct_imap.get_all_messages()) == 0
+
+    log.section("ac2: Mark deleted message as seen and check that read receipt arrives")
+    msg.mark_seen()
+    ev = ac1.wait_for_event(EventType.MSG_READ)
+    assert ev.chat_id == chat1.id
+    assert ev.msg_id == sent_msg.id

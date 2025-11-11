@@ -1219,38 +1219,6 @@ def test_send_receive_locations(acfactory, lp):
     assert not locations3
 
 
-def test_immediate_autodelete(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account()
-    acfactory.bring_accounts_online()
-
-    # "1" means delete immediately, while "0" means do not delete
-    ac2.set_config("delete_server_after", "1")
-
-    lp.sec("ac1: create chat with ac2")
-    chat1 = ac1.create_chat(ac2)
-    ac2.create_chat(ac1)
-
-    lp.sec("ac1: send message to ac2")
-    sent_msg = chat1.send_text("hello")
-
-    msg = ac2._evtracker.wait_next_incoming_message()
-    assert msg.text == "hello"
-
-    lp.sec("ac2: wait for close/expunge on autodelete")
-    ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
-    ac2._evtracker.get_info_contains("Close/expunge succeeded.")
-
-    lp.sec("ac2: check that message was autodeleted on server")
-    assert len(ac2.direct_imap.get_all_messages()) == 0
-
-    lp.sec("ac2: Mark deleted message as seen and check that read receipt arrives")
-    msg.mark_seen()
-    ev = ac1._evtracker.get_matching("DC_EVENT_MSG_READ")
-    assert ev.data1 == chat1.id
-    assert ev.data2 == sent_msg.id
-
-
 def test_delete_multiple_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
