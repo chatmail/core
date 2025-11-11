@@ -3463,7 +3463,13 @@ pub(crate) async fn create_group_ex(
     if !context.get_config_bool(Config::Bot).await?
         && !context.get_config_bool(Config::SkipStartMessages).await?
     {
-        let text = stock_str::new_group_send_first_message(context).await;
+        let text = if !grpid.is_empty() {
+            // Add "Others will only see this group after you sent a first message." message.
+            stock_str::new_group_send_first_message(context).await
+        } else {
+            // Add "Messages in this chat use classic email and are not encrypted." message.
+            stock_str::chat_unencrypted_explanation(context).await
+        };
         add_info_msg(context, chat_id, &text, create_smeared_timestamp(context)).await?;
     }
     if let (true, true) = (sync.into(), !grpid.is_empty()) {

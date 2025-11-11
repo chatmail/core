@@ -447,6 +447,9 @@ https://delta.chat/donate"))]
         fallback = "You are using a proxy. If you're having trouble connecting, try a different proxy."
     ))]
     ProxyEnabledDescription = 221,
+
+    #[strum(props(fallback = "Messages in this chat use classic email and are not encrypted."))]
+    ChatUnencryptedExplanation = 230,
 }
 
 impl StockMessage {
@@ -1333,6 +1336,11 @@ pub(crate) async fn proxy_enabled(context: &Context) -> String {
 /// Stock string: `You are using a proxy. If you're having trouble connecting, try a different proxy.`.
 pub(crate) async fn proxy_description(context: &Context) -> String {
     translated(context, StockMessage::ProxyEnabledDescription).await
+}
+
+/// Stock string: `Messages in this chat use classic email and are not encrypted.`.
+pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
+    translated(context, StockMessage::ChatUnencryptedExplanation).await
 }
 
 impl Context {
