@@ -86,7 +86,7 @@ def test_qr_securejoin(acfactory):
     alice_contact_bob_snapshot = alice_contact_bob.get_snapshot()
     assert alice_contact_bob_snapshot.is_verified
 
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
 
     # Test that Bob verified Alice's profile.
@@ -255,7 +255,7 @@ def test_qr_securejoin_contact_request(acfactory) -> None:
     alice_chat_bob = alice_contact_bob.create_chat()
     alice_chat_bob.send_text("Hello!")
 
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello!"
     bob_chat_alice = snapshot.chat
     assert bob_chat_alice.get_basic_snapshot().is_contact_request
@@ -299,8 +299,7 @@ def test_qr_readreceipt(acfactory) -> None:
 
     logging.info("Bob and Charlie receive a group")
 
-    bob_msg_id = bob.wait_for_incoming_msg_event().msg_id
-    bob_message = bob.get_message_by_id(bob_msg_id)
+    bob_message = bob.wait_for_incoming_msg()
     bob_snapshot = bob_message.get_snapshot()
     assert bob_snapshot.text == "Hello"
 
@@ -311,8 +310,7 @@ def test_qr_readreceipt(acfactory) -> None:
 
     bob_out_message = bob_snapshot.chat.send_message(text="Hi from Bob!")
 
-    charlie_msg_id = charlie.wait_for_incoming_msg_event().msg_id
-    charlie_message = charlie.get_message_by_id(charlie_msg_id)
+    charlie_message = charlie.wait_for_incoming_msg()
     charlie_snapshot = charlie_message.get_snapshot()
     assert charlie_snapshot.text == "Hi from Bob!"
 
@@ -387,7 +385,7 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     ac3_contact_ac2 = ac3.create_contact(ac2)
     ac3_chat.remove_contact(ac3_contact_ac2_old)
 
-    snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac1.wait_for_incoming_msg().get_snapshot()
     assert "removed" in snapshot.text
 
     ac3_chat.add_contact(ac3_contact_ac2)
@@ -400,18 +398,17 @@ def test_verified_group_member_added_recovery(acfactory) -> None:
     logging.info("ac2 got event message: %s", snapshot.text)
     assert "added" in snapshot.text
 
-    snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac1.wait_for_incoming_msg().get_snapshot()
     assert "added" in snapshot.text
 
     chat = Chat(ac2, chat_id)
     chat.send_text("Works again!")
 
-    msg_id = ac3.wait_for_incoming_msg_event().msg_id
-    message = ac3.get_message_by_id(msg_id)
+    message = ac3.wait_for_incoming_msg()
     snapshot = message.get_snapshot()
     assert snapshot.text == "Works again!"
 
-    snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac1.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Works again!"
 
     ac1_contact_ac2 = ac1.create_contact(ac2)
@@ -447,7 +444,7 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     # ensure ac1 can write and ac2 receives messages in verified chat
     ch1.send_text("ac1 says hello")
     while 1:
-        snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+        snapshot = ac2.wait_for_incoming_msg().get_snapshot()
         if snapshot.text == "ac1 says hello":
             break
 
@@ -468,7 +465,7 @@ def test_qr_join_chat_with_pending_bobstate_issue4894(acfactory):
     # ensure ac2 receives message in VG
     vg.send_text("hello")
     while 1:
-        msg = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+        msg = ac2.wait_for_incoming_msg().get_snapshot()
         if msg.text == "hello":
             break
 
@@ -505,7 +502,7 @@ def test_qr_new_group_unblocked(acfactory):
     ac2.wait_for_incoming_msg_event()
 
     ac1_new_chat.send_text("Hello!")
-    ac2_msg = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    ac2_msg = ac2.wait_for_incoming_msg().get_snapshot()
     assert ac2_msg.text == "Hello!"
     assert ac2_msg.chat.get_basic_snapshot().is_contact_request
 
@@ -530,7 +527,7 @@ def test_aeap_flow_verified(acfactory):
 
     logging.info("receiving first message")
     ac2.wait_for_incoming_msg_event()  # member added message
-    msg_in_1 = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    msg_in_1 = ac2.wait_for_incoming_msg().get_snapshot()
     assert msg_in_1.text == msg_out.text
 
     logging.info("changing email account")
@@ -544,7 +541,7 @@ def test_aeap_flow_verified(acfactory):
     msg_out = chat.send_text("changed address").get_snapshot()
 
     logging.info("receiving second message")
-    msg_in_2 = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id)
+    msg_in_2 = ac2.wait_for_incoming_msg()
     msg_in_2_snapshot = msg_in_2.get_snapshot()
     assert msg_in_2_snapshot.text == msg_out.text
     assert msg_in_2_snapshot.chat.id == msg_in_1.chat.id
@@ -576,7 +573,7 @@ def test_gossip_verification(acfactory) -> None:
     bob_group_chat.add_contact(bob_contact_carol)
     bob_group_chat.send_message(text="Hello Autocrypt group")
 
-    snapshot = carol.get_message_by_id(carol.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = carol.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello Autocrypt group"
     assert snapshot.show_padlock
 
@@ -592,7 +589,7 @@ def test_gossip_verification(acfactory) -> None:
     bob_group_chat.add_contact(bob_contact_carol)
     bob_group_chat.send_message(text="Hello Securejoin group")
 
-    snapshot = carol.get_message_by_id(carol.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = carol.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello Securejoin group"
     assert snapshot.show_padlock
 
@@ -620,7 +617,7 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
     ac1.wait_for_securejoin_joiner_success()
 
     # ac1 waits for member added message and creates a QR code.
-    snapshot = ac1.get_message_by_id(ac1.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac1.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Member Me added by {}.".format(ac3.get_config("addr"))
     ac1_qr_code = snapshot.chat.get_qr_code()
 
@@ -657,7 +654,7 @@ def test_securejoin_after_contact_resetup(acfactory) -> None:
 
     # Wait for member added.
     logging.info("ac2 waits for member added message")
-    snapshot = ac2.get_message_by_id(ac2.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = ac2.wait_for_incoming_msg().get_snapshot()
     assert snapshot.is_info
     ac2_chat = snapshot.chat
     assert len(ac2_chat.get_contacts()) == 3
@@ -679,7 +676,7 @@ def test_withdraw_securejoin_qr(acfactory):
 
     alice.clear_all_events()
 
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Member Me added by {}.".format(alice.get_config("addr"))
     bob_chat.leave()
 

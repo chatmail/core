@@ -352,9 +352,7 @@ def test_receive_imf_failure(acfactory) -> None:
     # The failed message doesn't break the IMAP loop.
     bob.set_config("fail_on_receiving_full_msg", "0")
     alice_chat_bob.send_text("Hello again!")
-    event = bob.wait_for_incoming_msg_event()
-    msg_id = event.msg_id
-    message = bob.get_message_by_id(msg_id)
+    message = bob.wait_for_incoming_msg()
     snapshot = message.get_snapshot()
     assert snapshot.text == "Hello again!"
     assert snapshot.download_state == DownloadState.DONE
@@ -423,10 +421,7 @@ def test_is_bot(acfactory) -> None:
     alice.set_config("bot", "1")
     alice_chat_bob.send_text("Hello!")
 
-    event = bob.wait_for_incoming_msg_event()
-    message = bob.get_message_by_id(event.msg_id)
-    snapshot = message.get_snapshot()
-    assert snapshot.chat_id == event.chat_id
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello!"
     assert snapshot.is_bot
 
@@ -518,7 +513,7 @@ def test_import_export_keys(acfactory, tmp_path) -> None:
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_text("Hello Bob!")
 
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello Bob!"
 
     # Alice resetups account, but keeps the key.
@@ -530,7 +525,7 @@ def test_import_export_keys(acfactory, tmp_path) -> None:
 
     snapshot.chat.accept()
     snapshot.chat.send_text("Hello Alice!")
-    snapshot = alice.get_message_by_id(alice.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = alice.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello Alice!"
     assert snapshot.show_padlock
 
@@ -575,18 +570,13 @@ def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
 
     # Alice sends a message to Bob.
     alice_chat_bob.send_text("Hello Bob!")
-    event = bob.wait_for_incoming_msg_event()
-    msg_id = event.msg_id
-    message = bob.get_message_by_id(msg_id)
-    snapshot = message.get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
 
     # Bob sends a message to Alice.
     bob_chat_alice = snapshot.chat
     bob_chat_alice.accept()
     bob_chat_alice.send_text("Hello Alice!")
-    event = alice.wait_for_incoming_msg_event()
-    msg_id = event.msg_id
-    message = alice.get_message_by_id(msg_id)
+    message = alice.wait_for_incoming_msg()
     snapshot = message.get_snapshot()
     assert snapshot.show_padlock
 
@@ -596,10 +586,7 @@ def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
 
     # Bob sends a message to Alice, it should also be encrypted.
     bob_chat_alice.send_text("Hi Alice!")
-    event = alice.wait_for_incoming_msg_event()
-    msg_id = event.msg_id
-    message = alice.get_message_by_id(msg_id)
-    snapshot = message.get_snapshot()
+    snapshot = alice.wait_for_incoming_msg().get_snapshot()
     assert snapshot.show_padlock
 
 
@@ -668,7 +655,7 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
     for account in others:
         chat = account.create_chat(alice)
         chat.send_text("Hello Alice!")
-        assert alice.get_message_by_id(alice.wait_for_incoming_msg_event().msg_id).get_snapshot().text == "Hello Alice!"
+        assert alice.wait_for_incoming_msg().get_snapshot().text == "Hello Alice!"
 
         contact = alice.create_contact(account)
         alice_group.add_contact(contact)
@@ -678,7 +665,7 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
     bob.set_config("download_limit", str(download_limit))
 
     alice_group.send_text("hi")
-    snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "hi"
     bob_group = snapshot.chat
 
@@ -688,7 +675,7 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
     for i in range(10):
         logging.info("Sending message %s", i)
         alice_group.send_file(str(path))
-        snapshot = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id).get_snapshot()
+        snapshot = bob.wait_for_incoming_msg().get_snapshot()
         assert snapshot.download_state == DownloadState.AVAILABLE
         if n_accounts > 2:
             assert snapshot.chat == bob_group
@@ -715,8 +702,8 @@ def test_markseen_contact_request(acfactory):
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_text("Hello Bob!")
 
-    message = bob.get_message_by_id(bob.wait_for_incoming_msg_event().msg_id)
-    message2 = bob2.get_message_by_id(bob2.wait_for_incoming_msg_event().msg_id)
+    message = bob.wait_for_incoming_msg()
+    message2 = bob2.wait_for_incoming_msg()
     assert message2.get_snapshot().state == MessageState.IN_FRESH
 
     message.mark_seen()
