@@ -738,7 +738,7 @@ def test_read_receipt(acfactory):
     msg = bob.wait_for_incoming_msg()
     msg.mark_seen()
 
-    read_msg = alice.get_message_by_id(alice.wait_for_event(EventType.MSG_READ).msg_id)
+    read_msg = alice.wait_for_msg(EventType.MSG_READ)
     read_receipts = read_msg.get_read_receipts()
     assert len(read_receipts) == 1
     assert read_receipts[0].contact_id == alice_contact_bob.id
