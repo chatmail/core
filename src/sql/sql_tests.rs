@@ -263,7 +263,7 @@ async fn test_sql_change_passphrase() -> Result<()> {
     sql.open(&t, "foo".to_string())
         .await
         .context("failed to open the database second time")?;
-    sql.change_passphrase("bar".to_string())
+    sql.change_passphrase(&t, "bar".to_string())
         .await
         .context("failed to change passphrase")?;
 
