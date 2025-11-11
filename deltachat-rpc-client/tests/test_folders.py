@@ -24,6 +24,68 @@ def test_move_works(acfactory):
     assert msg.text == "message1"
 
 
+def test_move_avoids_loop(acfactory, direct_imap):
+    """Test that the message is only moved from INBOX to DeltaChat.
+
+    This is to avoid busy loop if moved message reappears in the Inbox
+    or some scanned folder later.
+    For example, this happens on servers that alias `INBOX.DeltaChat` to `DeltaChat` folder,
+    so the message moved to `DeltaChat` appears as a new message in the `INBOX.DeltaChat` folder.
+    We do not want to move this message from `INBOX.DeltaChat` to `DeltaChat` again.
+    """
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2.set_config("mvbox_move", "1")
+    ac2.set_config("delete_server_after", "0")
+    ac2.bring_online()
+
+    # Create INBOX.DeltaChat folder and make sure
+    # it is detected by full folder scan.
+    ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("INBOX.DeltaChat")
+    ac2.stop_io()
+    ac2.start_io()
+
+    while True:
+        event = ac2.wait_for_event()
+        # Wait until the end of folder scan.
+        if event.kind == EventType.INFO and "Found folders:" in event.msg:
+            break
+
+    ac1_chat = acfactory.get_accepted_chat(ac1, ac2)
+    ac1_chat.send_text("Message 1")
+
+    # Message is moved to the DeltaChat folder and downloaded.
+    ac2_msg1 = ac2.wait_for_incoming_msg().get_snapshot()
+    assert ac2_msg1.text == "Message 1"
+
+    # Move the message to the INBOX.DeltaChat again.
+    # We assume that test server uses "." as the delimiter.
+    ac2_direct_imap.select_folder("DeltaChat")
+    ac2_direct_imap.conn.move(["*"], "INBOX.DeltaChat")
+
+    ac1_chat.send_text("Message 2")
+    ac2_msg2 = ac2.wait_for_incoming_msg().get_snapshot()
+    assert ac2_msg2.text == "Message 2"
+
+    # Stop and start I/O to trigger folder scan.
+    ac2.stop_io()
+    ac2.start_io()
+    while True:
+        event = ac2.wait_for_event()
+        # Wait until the end of folder scan.
+        if event.kind == EventType.INFO and "Found folders:" in event.msg:
+            break
+
+    # Check that Message 1 is still in the INBOX.DeltaChat folder
+    # and Message 2 is in the DeltaChat folder.
+    ac2_direct_imap.select_folder("INBOX")
+    assert len(ac2_direct_imap.get_all_messages()) == 0
+    ac2_direct_imap.select_folder("DeltaChat")
+    assert len(ac2_direct_imap.get_all_messages()) == 1
+    ac2_direct_imap.select_folder("INBOX.DeltaChat")
+    assert len(ac2_direct_imap.get_all_messages()) == 1
+
+
 def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     """When a batch of messages is moved from Inbox to DeltaChat folder with a single MOVE command,
     their UIDs may be reordered (e.g. Gmail is known for that) which led to that messages were

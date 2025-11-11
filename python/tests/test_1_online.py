@@ -269,57 +269,6 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_move_avoids_loop(acfactory):
-    """Test that the message is only moved from INBOX to DeltaChat.
-
-    This is to avoid busy loop if moved message reappears in the Inbox
-    or some scanned folder later.
-    For example, this happens on servers that alias `INBOX.DeltaChat` to `DeltaChat` folder,
-    so the message moved to `DeltaChat` appears as a new message in the `INBOX.DeltaChat` folder.
-    We do not want to move this message from `INBOX.DeltaChat` to `DeltaChat` again.
-    """
-    ac1 = acfactory.new_online_configuring_account()
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=True)
-    acfactory.bring_accounts_online()
-
-    # Create INBOX.DeltaChat folder and make sure
-    # it is detected by full folder scan.
-    ac2.direct_imap.create_folder("INBOX.DeltaChat")
-    ac2.stop_io()
-    ac2.start_io()
-    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
-
-    ac1_chat = acfactory.get_accepted_chat(ac1, ac2)
-    ac1_chat.send_text("Message 1")
-
-    # Message is moved to the DeltaChat folder and downloaded.
-    ac2_msg1 = ac2._evtracker.wait_next_incoming_message()
-    assert ac2_msg1.text == "Message 1"
-
-    # Move the message to the INBOX.DeltaChat again.
-    # We assume that test server uses "." as the delimiter.
-    ac2.direct_imap.select_folder("DeltaChat")
-    ac2.direct_imap.conn.move(["*"], "INBOX.DeltaChat")
-
-    ac1_chat.send_text("Message 2")
-    ac2_msg2 = ac2._evtracker.wait_next_incoming_message()
-    assert ac2_msg2.text == "Message 2"
-
-    # Stop and start I/O to trigger folder scan.
-    ac2.stop_io()
-    ac2.start_io()
-    ac2._evtracker.get_info_contains("Found folders:")  #  Wait until the end of folder scan.
-
-    # Check that Message 1 is still in the INBOX.DeltaChat folder
-    # and Message 2 is in the DeltaChat folder.
-    ac2.direct_imap.select_folder("INBOX")
-    assert len(ac2.direct_imap.get_all_messages()) == 0
-    ac2.direct_imap.select_folder("DeltaChat")
-    assert len(ac2.direct_imap.get_all_messages()) == 1
-    ac2.direct_imap.select_folder("INBOX.DeltaChat")
-    assert len(ac2.direct_imap.get_all_messages()) == 1
-
-
 def test_move_sync_msgs(acfactory):
     ac1 = acfactory.new_online_configuring_account(bcc_self=True, sync_msgs=True, fix_is_chatmail=True)
     acfactory.bring_accounts_online()
