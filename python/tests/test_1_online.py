@@ -1509,8 +1509,14 @@ def test_send_receive_locations(acfactory, lp):
     assert locations[0].latitude == 2.0
     assert locations[0].longitude == 3.0
     assert locations[0].accuracy == 0.5
-    assert locations[0].timestamp > now
     assert locations[0].marker is None
+
+    # Make sure the timestamp is not in the past.
+    # Note that location timestamp has only 1 second precision,
+    # while `now` has a fractional part, so we have to truncate it
+    # first, otherwise `now` may appear to be in the future
+    # even though it is the same second.
+    assert int(locations[0].timestamp.timestamp()) >= int(now.timestamp())
 
     contact = ac2.create_contact(ac1)
     locations2 = chat2.get_locations(contact=contact)
