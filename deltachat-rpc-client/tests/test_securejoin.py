@@ -224,6 +224,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     # Start second Bob device, if it wasn't started already.
     bob2.start_io()
     bob2.wait_for_securejoin_joiner_success()
+    bob2.wait_for_event(EventType.CHATLIST_CHANGED)
     wait_for_broadcast_messages(bob2)
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
