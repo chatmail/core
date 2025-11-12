@@ -642,6 +642,9 @@ impl Imap {
             };
 
             let message_id = prefetch_get_message_id(&headers);
+            let size = fetch_response
+                .size
+                .context("imap fetch response does not contain size")?;
 
             // Determine the target folder where the message should be moved to.
             //
@@ -716,18 +719,8 @@ impl Imap {
                     // This is a full-message
                     available_full_msgs.push(message_id.clone());
 
-                    //TODO simplify this code
-                    let fits_download_size_limit = download_limit.is_none()
-                        || if let (Some(size), Some(download_limit)) =
-                            (fetch_response.size, download_limit)
-                            && size < download_limit
-                        {
-                            true
-                        } else {
-                            false
-                        };
-
-                    if fits_download_size_limit {
+                    // whether it fits download size limit
+                    if download_limit.is_none_or(|download_limit| size < download_limit) {
                         if is_background_fetch {
                             download_when_normal_starts.push(message_id.clone());
                             false
@@ -740,9 +733,7 @@ impl Imap {
                 } else {
                     // This is not a full message
                     if is_background_fetch {
-                        if let Some(size) = fetch_response.size
-                            && size < MAX_FETCH_MSG_SIZE
-                        {
+                        if size < MAX_FETCH_MSG_SIZE {
                             // may be a pre-message or a pure-text message, fetch now
                             true
                         } else {
