@@ -1182,15 +1182,6 @@ pub(crate) async fn quota_exceeding(context: &Context, highest_usage: u64) -> St
         .replace("%%", "%")
 }
 
-/// Stock string: `%1$s message` with placeholder replaced by human-readable size.
-#[allow(dead_code)]
-pub(crate) async fn partial_download_msg_body(context: &Context, org_bytes: u32) -> String {
-    let size = &format_size(org_bytes, BINARY);
-    translated(context, StockMessage::PartialDownloadMsgBody)
-        .await
-        .replace1(size)
-}
-
 /// Stock string: `Incoming Messages`.
 pub(crate) async fn incoming_messages(context: &Context) -> String {
     translated(context, StockMessage::IncomingMessages).await
