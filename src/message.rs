@@ -163,6 +163,16 @@ impl MsgId {
         self.0
     }
 
+    pub(crate) async fn get_by_rfc724_mid(
+        context: &Context,
+        rfc724_mid: &str,
+    ) -> Result<Option<Self>> {
+        context
+            .sql
+            .query_get_value::<MsgId>("SELECT id FROM msgs WHERE rfc724_mid=?", (&rfc724_mid,))
+            .await
+    }
+
     /// Returns server foldernames and UIDs of a message, used for message info
     pub async fn get_info_server_urls(
         context: &Context,
@@ -1671,9 +1681,18 @@ pub async fn delete_msgs_ex(
         let update_db = |trans: &mut rusqlite::Transaction| {
             trans.execute(
                 "UPDATE imap SET target=? WHERE rfc724_mid=?",
-                (target, msg.rfc724_mid),
+                (target, &msg.rfc724_mid),
             )?;
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
+            trans.execute(
+                "DELETE FROM download WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
+            // TODO: is the following nessesary?
+            trans.execute(
+                "DELETE FROM available_full_msgs WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
             Ok(())
         };
         if let Err(e) = context.sql.transaction(update_db).await {

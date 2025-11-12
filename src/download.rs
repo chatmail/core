@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::context::Context;
 use crate::imap::session::Session;
-use crate::log::info;
+use crate::log::{info, warn};
 use crate::message::{Message, MsgId};
 use crate::{EventType, chatlist_events};
 
@@ -26,8 +26,7 @@ pub(crate) const PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 /// Max message size to be fetched in the background.
 /// This limit defines what messages are fully fetched in the background.
 /// This is for all messages that don't have the full message header.
-#[allow(unused)]
-pub(crate) const MAX_FETCH_MSG_SIZE: usize = 1_000_000;
+pub(crate) const MAX_FETCH_MSG_SIZE: u32 = 1_000_000;
 
 /// Max size for pre messages. A warning is emitted when this is exceeded.
 /// Should be well below `MAX_FETCH_MSG_SIZE`
@@ -78,11 +77,17 @@ impl MsgId {
             }
             DownloadState::InProgress => return Err(anyhow!("Download already in progress.")),
             DownloadState::Available | DownloadState::Failure => {
+                if msg.rfc724_mid().is_empty() {
+                    return Err(anyhow!("Download not possible, message has no rfc724_mid"));
+                }
                 self.update_download_state(context, DownloadState::InProgress)
                     .await?;
                 context
                     .sql
-                    .execute("INSERT INTO download (msg_id) VALUES (?)", (self,))
+                    .execute(
+                        "INSERT INTO download (msg_id) VALUES (?)",
+                        (msg.rfc724_mid(),),
+                    )
                     .await?;
                 context.scheduler.interrupt_inbox().await;
             }
@@ -131,25 +136,14 @@ impl Message {
 /// Most messages are downloaded automatically on fetch instead.
 pub(crate) async fn download_msg(
     context: &Context,
-    msg_id: MsgId,
+    rfc724_mid: String,
     session: &mut Session,
 ) -> Result<()> {
-    let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
-        // If partially downloaded message was already deleted
-        // we do not know its Message-ID anymore
-        // so cannot download it.
-        //
-        // Probably the message expired due to `delete_device_after`
-        // setting or was otherwise removed from the device,
-        // so we don't want it to reappear anyway.
-        return Ok(());
-    };
-
     let row = context
         .sql
         .query_row_optional(
             "SELECT uid, folder FROM imap WHERE rfc724_mid=? AND target!=''",
-            (&msg.rfc724_mid,),
+            (&rfc724_mid,),
             |row| {
                 let server_uid: u32 = row.get(0)?;
                 let server_folder: String = row.get(1)?;
@@ -164,7 +158,7 @@ pub(crate) async fn download_msg(
     };
 
     session
-        .fetch_single_msg(context, &server_folder, server_uid, msg.rfc724_mid.clone())
+        .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
         .await?;
     Ok(())
 }
@@ -204,6 +198,139 @@ impl Session {
         }
         Ok(())
     }
+}
+
+async fn set_msg_state_to_failed(context: &Context, rfc724_mid: &str) -> Result<()> {
+    if let Some(msg_id) = MsgId::get_by_rfc724_mid(context, rfc724_mid).await? {
+        // Update download state to failure
+        // so it can be retried.
+        //
+        // On success update_download_state() is not needed
+        // as receive_imf() already
+        // set the state and emitted the event.
+        msg_id
+            .update_download_state(context, DownloadState::Failure)
+            .await?;
+    }
+    Ok(())
+}
+
+async fn available_full_msgs_contains_rfc724_mid(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<bool> {
+    Ok(context
+        .sql
+        .query_get_value::<MsgId>(
+            "SELECT rfc724_mid FROM available_full_msgs WHERE rfc724_mid=?",
+            (&rfc724_mid,),
+        )
+        .await?
+        .is_some())
+}
+
+async fn remove_from_available_full_msgs_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+    context
+        .sql
+        .execute(
+            "DELETE FROM available_full_msgs WHERE rfc724_mid=?",
+            (&rfc724_mid,),
+        )
+        .await?;
+    Ok(())
+}
+
+async fn remove_from_download_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+    context
+        .sql
+        .execute("DELETE FROM download WHERE rfc724_mid=?", (&rfc724_mid,))
+        .await?;
+    Ok(())
+}
+
+// this is a dedicated method because it is used in multiple places.
+async fn premessage_is_downloaded_for(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    Ok(MsgId::get_by_rfc724_mid(context, rfc724_mid)
+        .await?
+        .is_some())
+}
+
+pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> Result<()> {
+    let rfc724_mids = context
+        .sql
+        .query_map_vec("SELECT rfc724_mid FROM download", (), |row| {
+            let rfc724_mid: String = row.get(0)?;
+            Ok(rfc724_mid)
+        })
+        .await?;
+
+    for rfc724_mid in &rfc724_mids {
+        let res = download_msg(context, rfc724_mid.clone(), session).await;
+        if res.is_ok() {
+            remove_from_download_table(context, rfc724_mid).await?;
+            remove_from_available_full_msgs_table(context, rfc724_mid).await?;
+        }
+        if let Err(err) = res {
+            warn!(
+                context,
+                "Failed to download message rfc724_mid={rfc724_mid}: {:#}.", err
+            );
+            if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+                // This is probably a classical email that vanished before we could download it
+                warn!(
+                    context,
+                    "{rfc724_mid} is probably a classical email that vanished before we could download it"
+                );
+                remove_from_download_table(context, rfc724_mid).await?;
+            } else if available_full_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
+                // set the message to DownloadState::Failure - probably it was deleted on the server in the meantime
+                set_msg_state_to_failed(context, rfc724_mid).await?;
+                remove_from_download_table(context, rfc724_mid).await?;
+                remove_from_available_full_msgs_table(context, rfc724_mid).await?;
+            } else {
+                // leave the message in DownloadState::InProgress;
+                // it will be downloaded once it arrives.
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Download known full messages without pre_message
+/// in order to guard against lost pre-messages:
+// TODO better fn name
+pub(crate) async fn download_known_full_messages_without_pre_message(
+    context: &Context,
+    session: &mut Session,
+) -> Result<()> {
+    let rfc724_mids = context
+        .sql
+        .query_map_vec("SELECT rfc724_mid FROM available_full_msgs", (), |row| {
+            let rfc724_mid: String = row.get(0)?;
+            Ok(rfc724_mid)
+        })
+        .await?;
+    for rfc724_mid in &rfc724_mids {
+        if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+            // Download the full-message unconditionally,
+            // because the pre-message got lost.
+            // The message may be in the wrong order,
+            // but at least we have it at all.
+            let res = download_msg(context, rfc724_mid.clone(), session).await;
+            if res.is_ok() {
+                remove_from_available_full_msgs_table(context, rfc724_mid).await?;
+            }
+            if let Err(err) = res {
+                warn!(
+                    context,
+                    "download_known_full_messages_without_pre_message: Failed to download message rfc724_mid={rfc724_mid}: {:#}.",
+                    err
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
