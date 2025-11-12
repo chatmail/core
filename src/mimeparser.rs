@@ -297,8 +297,7 @@ impl MimeMessage {
                     );
                     (part, part.ctype.mimetype.parse::<Mime>()?)
                 } else {
-                    // If it's a partially fetched message, there are no subparts.
-                    // TODO: partial messages don't exist anymore -> so check if this here needs change
+                    // Not a valid signed message, handle it as plaintext.
                     (&mail, mimetype)
                 }
             } else {
