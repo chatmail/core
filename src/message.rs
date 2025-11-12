@@ -163,6 +163,16 @@ impl MsgId {
         self.0
     }
 
+    pub(crate) async fn get_by_rfc724_mid(
+        context: &Context,
+        rfc724_mid: &str,
+    ) -> Result<Option<Self>> {
+        context
+            .sql
+            .query_get_value::<MsgId>("SELECT id FROM msgs WHERE rfc724_mid=?", (&rfc724_mid,))
+            .await
+    }
+
     /// Returns server foldernames and UIDs of a message, used for message info
     pub async fn get_info_server_urls(
         context: &Context,
