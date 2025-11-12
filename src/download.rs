@@ -225,7 +225,7 @@ impl MimeMessage {
         context: &Context,
         org_bytes: u32,
     ) -> Result<()> {
-        let mut text = format!(
+        let text = format!(
             "[{}]",
             stock_str::partial_download_msg_body(context, org_bytes).await
         );
