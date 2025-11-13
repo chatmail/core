@@ -5028,6 +5028,17 @@ pub unsafe extern "C" fn dc_accounts_background_fetch(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dc_accounts_stop_background_fetch(accounts: *mut dc_accounts_t) {
+    if accounts.is_null() {
+        eprintln!("ignoring careless call to dc_accounts_stop_background_fetch()");
+        return;
+    }
+
+    let accounts = &*accounts;
+    block_on(accounts.read()).stop_background_fetch();
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dc_accounts_set_push_device_token(
     accounts: *mut dc_accounts_t,
     token: *const libc::c_char,

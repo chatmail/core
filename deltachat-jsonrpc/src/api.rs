@@ -283,6 +283,11 @@ impl CommandApi {
         Ok(())
     }
 
+    async fn stop_background_fetch(&self) -> Result<()> {
+        self.accounts.read().await.stop_background_fetch();
+        Ok(())
+    }
+
     // ---------------------------------------------
     // Methods that work on individual accounts
     // ---------------------------------------------

@@ -3,8 +3,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{Context as _, Result, bail, ensure};
+use async_channel::{self, Receiver, Sender};
+use futures::FutureExt as _;
+use futures_lite::FutureExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -41,6 +45,13 @@ pub struct Accounts {
 
     /// Push notification subscriber shared between accounts.
     push_subscriber: PushSubscriber,
+
+    /// Channel sender to cancel ongoing background_fetch().
+    ///
+    /// If background_fetch() is not running, this is `None`.
+    /// New background_fetch() should not be started if this
+    /// contains `Some`.
+    background_fetch_interrupt_sender: Arc<parking_lot::Mutex<Option<Sender<()>>>>,
 }
 
 impl Accounts {
@@ -96,6 +107,7 @@ impl Accounts {
             events,
             stockstrings,
             push_subscriber,
+            background_fetch_interrupt_sender: Default::default(),
         })
     }
 
@@ -352,6 +364,11 @@ impl Accounts {
     ///
     /// This is an auxiliary function and not part of public API.
     /// Use [Accounts::background_fetch] instead.
+    ///
+    /// This function is cancellation-safe.
+    /// It is intended to be cancellable,
+    /// either because of the timeout or because background
+    /// fetch was explicitly cancelled.
     async fn background_fetch_no_timeout(accounts: Vec<Context>, events: Events) {
         let n_accounts = accounts.len();
         events.emit(Event {
@@ -378,14 +395,33 @@ impl Accounts {
     }
 
     /// Auxiliary function for [Accounts::background_fetch].
+    ///
+    /// Runs `background_fetch` until it finishes
+    /// or until the timeout.
+    ///
+    /// Produces `AccountsBackgroundFetchDone` event in every case
+    /// and clears [`Self::background_fetch_interrupt_sender`]
+    /// so a new background fetch can be started.
+    ///
+    /// This function is not cancellation-safe.
+    /// Cancelling it before it returns may result
+    /// in not being able to run any new background fetch
+    /// if interrupt sender was not cleared.
     async fn background_fetch_with_timeout(
         accounts: Vec<Context>,
         events: Events,
         timeout: std::time::Duration,
+        interrupt_sender: Arc<parking_lot::Mutex<Option<Sender<()>>>>,
+        interrupt_receiver: Option<Receiver<()>>,
     ) {
+        let Some(interrupt_receiver) = interrupt_receiver else {
+            // Nothing to do if we got no interrupt receiver.
+            return;
+        };
         if let Err(_err) = tokio::time::timeout(
             timeout,
-            Self::background_fetch_no_timeout(accounts, events.clone()),
+            Self::background_fetch_no_timeout(accounts, events.clone())
+                .race(interrupt_receiver.recv().map(|_| ())),
         )
         .await
         {
@@ -398,9 +434,15 @@ impl Accounts {
             id: 0,
             typ: EventType::AccountsBackgroundFetchDone,
         });
+        (*interrupt_sender.lock()) = None;
     }
 
     /// Performs a background fetch for all accounts in parallel with a timeout.
+    ///
+    /// Ongoing background fetch can also be cancelled manually
+    /// by calling `stop_background_fetch()`, in which case it will
+    /// return immediately even before the timeout expiration
+    /// or finishing fetching.
     ///
     /// The `AccountsBackgroundFetchDone` event is emitted at the end,
     /// process all events until you get this one and you can safely return to the background
@@ -414,7 +456,39 @@ impl Accounts {
     ) -> impl Future<Output = ()> + use<> {
         let accounts: Vec<Context> = self.accounts.values().cloned().collect();
         let events = self.events.clone();
-        Self::background_fetch_with_timeout(accounts, events, timeout)
+        let (sender, receiver) = async_channel::bounded(1);
+        let receiver = {
+            let mut lock = self.background_fetch_interrupt_sender.lock();
+            if (*lock).is_some() {
+                // Another background_fetch() is already running,
+                // return immeidately.
+                None
+            } else {
+                *lock = Some(sender);
+                Some(receiver)
+            }
+        };
+        Self::background_fetch_with_timeout(
+            accounts,
+            events,
+            timeout,
+            self.background_fetch_interrupt_sender.clone(),
+            receiver,
+        )
+    }
+
+    /// Interrupts ongoing background_fetch() call,
+    /// making it return early.
+    ///
+    /// This method allows to cancel background_fetch() early,
+    /// e.g. on Android, when `Service.onTimeout` is called.
+    ///
+    /// If there is no ongoing background_fetch(), does nothing.
+    pub fn stop_background_fetch(&self) {
+        let mut lock = self.background_fetch_interrupt_sender.lock();
+        if let Some(sender) = lock.take() {
+            sender.try_send(()).ok();
+        }
     }
 
     /// Emits a single event.
