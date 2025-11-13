@@ -840,6 +840,13 @@ impl Context {
                             "UPDATE config SET value=? WHERE keyname='configured_addr'",
                             (value,),
                         )?;
+
+                        // Clean up SMTP queue.
+                        //
+                        // The messages in the queue have a different
+                        // From address so we cannot send them over
+                        // the new SMTP transport.
+                        transaction.execute("DELETE FROM smtp", ())?;
                         Ok(())
                     })
                     .await?;
