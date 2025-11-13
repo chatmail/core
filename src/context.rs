@@ -545,7 +545,7 @@ impl Context {
             .and_then(|provider| provider.opt.max_smtp_rcpt_to)
             .map_or_else(
                 || match is_chatmail {
-                    true => usize::MAX,
+                    true => constants::DEFAULT_CHATMAIL_MAX_SMTP_RCPT_TO,
                     false => constants::DEFAULT_MAX_SMTP_RCPT_TO,
                 },
                 usize::from,
