@@ -815,24 +815,26 @@ impl Context {
                     .await?;
             }
             Config::ConfiguredAddr => {
+                let Some(addr) = value else {
+                    bail!("Cannot unset configured_addr");
+                };
+
                 if !self.is_configured().await? {
-                    if let Some(addr) = value {
-                        info!(
-                            self,
-                            "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
-                        );
-                        ConfiguredLoginParam::from_json(&format!(
-                            r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
-                        ))?
-                        .save_to_transports_table(self, &EnteredLoginParam::default())
-                        .await?;
-                    }
+                    info!(
+                        self,
+                        "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
+                    );
+                    ConfiguredLoginParam::from_json(&format!(
+                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
+                    ))?
+                    .save_to_transports_table(self, &EnteredLoginParam::default())
+                    .await?;
                 }
                 self.sql
                     .transaction(|transaction| {
                         if transaction.query_row(
                             "SELECT COUNT(*) FROM transports WHERE addr=?",
-                            (value,),
+                            (addr,),
                             |row| {
                                 let res: i64 = row.get(0)?;
                                 Ok(res)
@@ -843,7 +845,7 @@ impl Context {
                         }
                         transaction.execute(
                             "UPDATE config SET value=? WHERE keyname='configured_addr'",
-                            (value,),
+                            (addr,),
                         )?;
 
                         // Clean up SMTP queue.
