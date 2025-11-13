@@ -262,6 +262,9 @@ impl Context {
             if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
                 bail!("Cannot use multi-transport with disabled fetching of classic emails.");
             }
+            if self.get_config_bool(Config::BccSelf).await? {
+                bail!("Cannot use multi-transport with multi-device yet.");
+            }
         }
 
         let provider = configure(self, param).await?;
