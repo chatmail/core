@@ -657,14 +657,11 @@ mod tests {
             alice1.set_config_bool(Config::SyncMsgs, true).await?;
             alice2.set_config_bool(Config::SyncMsgs, true).await?;
 
-            if chatmail {
-                alice1.set_config_bool(Config::IsChatmail, true).await?;
-                alice2.set_config_bool(Config::IsChatmail, true).await?;
-            } else {
-                alice2.set_config_bool(Config::BccSelf, false).await?;
-            }
+            alice1.set_config_bool(Config::IsChatmail, chatmail).await?;
+            alice2.set_config_bool(Config::IsChatmail, chatmail).await?;
 
             alice1.set_config_bool(Config::BccSelf, true).await?;
+            alice2.set_config_bool(Config::BccSelf, false).await?;
 
             let sent_msg = if sync_message_sent {
                 alice1

@@ -979,11 +979,10 @@ mod tests {
 
         let context1 = &TestContext::new_alice().await;
 
+        // `bcc_self` is enabled by default for test contexts. Unset it.
+        context1.set_config(Config::BccSelf, None).await?;
+
         // Check that the settings are displayed correctly.
-        assert_eq!(
-            context1.get_config(Config::BccSelf).await?,
-            Some("1".to_string())
-        );
         assert_eq!(
             context1.get_config(Config::DeleteServerAfter).await?,
             Some("0".to_string())
