@@ -2578,8 +2578,10 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_ERROR                  400 // text1=error string
 #define         DC_QR_WITHDRAW_VERIFYCONTACT 500
 #define         DC_QR_WITHDRAW_VERIFYGROUP   502 // text1=groupname
+#define         DC_QR_WITHDRAW_JOINBROADCAST 504 // text1=broadcast name
 #define         DC_QR_REVIVE_VERIFYCONTACT   510
 #define         DC_QR_REVIVE_VERIFYGROUP     512 // text1=groupname
+#define         DC_QR_REVIVE_JOINBROADCAST   514 // text1=broadcast name
 #define         DC_QR_LOGIN                  520 // text1=email_address
 
 /**
