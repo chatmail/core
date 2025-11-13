@@ -3296,10 +3296,28 @@ void           dc_accounts_maybe_network_lost    (dc_accounts_t* accounts);
  * without forgetting to create notifications caused by timing race conditions.
  *
  * @memberof dc_accounts_t
+ * @param accounts The account manager as created by dc_accounts_new().
  * @param timeout The timeout in seconds
  * @return Return 1 if DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE was emitted and 0 otherwise.
  */
 int            dc_accounts_background_fetch    (dc_accounts_t* accounts, uint64_t timeout);
+
+
+/**
+ * Stop ongoing background fetch.
+ *
+ * Calling this function allows to stop dc_accounts_background_fetch() early.
+ * dc_accounts_background_fetch() will then return immediately
+ * and emit DC_EVENT_ACCOUNTS_BACKGROUND_FETCH_DONE unless
+ * if it has failed and returned 0.
+ *
+ * If there is no ongoing dc_accounts_background_fetch() call,
+ * calling this function does nothing.
+ *
+ * @memberof dc_accounts_t
+ * @param accounts The account manager as created by dc_accounts_new().
+ */
+void           dc_accounts_stop_background_fetch (dc_accounts_t *accounts);
 
 
 /**
