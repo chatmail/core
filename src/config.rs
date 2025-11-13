@@ -146,6 +146,9 @@ pub enum Config {
     ///
     /// Should be enabled for multidevice setups.
     /// Default is 0 for chatmail accounts, 1 otherwise.
+    /// The default is only used for old accounts.
+    /// For new accounts this setting is explicitly
+    /// set to "0" during configuration.
     ///
     /// This is automatically enabled when importing/exporting a backup,
     /// setting up a second device, or receiving a sync message.
@@ -512,10 +515,16 @@ impl Context {
 
         // Default values
         let val = match key {
-            Config::BccSelf => match Box::pin(self.is_chatmail()).await? {
-                false => Some("1".to_string()),
-                true => Some("0".to_string()),
-            },
+            Config::BccSelf => {
+                if self.is_configured().await? {
+                    match Box::pin(self.is_chatmail()).await? {
+                        false => Some("1".to_string()),
+                        true => Some("0".to_string()),
+                    }
+                } else {
+                    Some("0".to_string())
+                }
+            }
             Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
             Config::DeleteServerAfter => {
                 match !Box::pin(self.get_config_bool(Config::BccSelf)).await?

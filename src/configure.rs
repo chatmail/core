@@ -550,6 +550,15 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
         ctx.set_config(Config::OnlyFetchMvbox, None).await?;
         ctx.set_config(Config::ShowEmails, None).await?;
     }
+    if !ctx.is_configured().await? {
+        // We don't change the meaning of `None`
+        // which is "1" for old non-chatmail profiles,
+        // to avoid breaking existing non-chatmail
+        // multi-device setups.
+        // We set the new default
+        // when configuring the first transport instead.
+        ctx.sql.set_raw_config("bcc_self", Some("0")).await?;
+    }
 
     let create_mvbox = !is_chatmail;
     imap.configure_folders(ctx, &mut imap_session, create_mvbox)
