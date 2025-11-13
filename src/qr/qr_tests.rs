@@ -1,11 +1,10 @@
-use std::time::Duration;
 
 use super::*;
 use crate::chat::{Chat, create_broadcast, create_group, get_chat_contacts};
 use crate::config::Config;
 use crate::login_param::EnteredCertificateChecks;
 use crate::provider::Socket;
-use crate::securejoin::{get_securejoin_qr, join_securejoin};
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{TestContext, TestContextManager, sync};
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
