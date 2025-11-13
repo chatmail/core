@@ -36,6 +36,9 @@ def test_add_second_address(acfactory) -> None:
         with pytest.raises(JsonRpcError):
             account.set_config(option, "1")
 
+    with pytest.raises(JsonRpcError):
+        account.set_config("show_emails", "0")
+
 
 @pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
 def test_no_second_transport_with_mvbox(acfactory, key) -> None:
@@ -48,6 +51,20 @@ def test_no_second_transport_with_mvbox(acfactory, key) -> None:
 
     qr = acfactory.get_account_qr()
     account.set_config(key, "1")
+
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+
+def test_no_second_transport_without_classic_emails(acfactory) -> None:
+    """Test that second transport cannot be configured if classic emails are not fetched."""
+    account = acfactory.new_configured_account()
+    assert len(account.list_transports()) == 1
+
+    assert account.get_config("show_emails") == "2"
+
+    qr = acfactory.get_account_qr()
+    account.set_config("show_emails", "0")
 
     with pytest.raises(JsonRpcError):
         account.add_transport_from_qr(qr)

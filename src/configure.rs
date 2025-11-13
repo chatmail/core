@@ -251,6 +251,9 @@ impl Context {
             if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
                 bail!("Cannot use multi-transport with only_fetch_mvbox enabled.");
             }
+            if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
+                bail!("Cannot use multi-transport with disabled fetching of classic emails.");
+            }
         }
 
         let provider = configure(self, param).await?;
