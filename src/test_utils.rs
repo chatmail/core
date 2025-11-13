@@ -549,6 +549,7 @@ impl TestContext {
         ctx.set_config(Config::SkipStartMessages, Some("1"))
             .await
             .unwrap();
+        ctx.set_config(Config::BccSelf, Some("1")).await.unwrap();
         ctx.set_config(Config::SyncMsgs, Some("0")).await.unwrap();
 
         Self {
