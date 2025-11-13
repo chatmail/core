@@ -377,7 +377,15 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
         res = check_backup_version(context).await;
     }
     if res.is_ok() {
-        res = adjust_bcc_self(context).await;
+        // All recent backups have `bcc_self` set to "1" before export.
+        //
+        // Setting `bcc_self` to "1" on export was introduced on 2024-12-17
+        // in commit 21664125d798021be75f47d5b0d5006d338b4531
+        //
+        // We additionally try to set `bcc_self` to "1" after import here
+        // for compatibility with older backups,
+        // but eventually this code can be removed.
+        res = context.set_config(Config::BccSelf, Some("1")).await;
     }
     fs::remove_file(unpacked_database)
         .await
@@ -751,7 +759,7 @@ async fn export_database(
         .to_str()
         .with_context(|| format!("path {} is not valid unicode", dest.display()))?;
 
-    adjust_bcc_self(context).await?;
+    context.set_config(Config::BccSelf, Some("1")).await?;
     context
         .sql
         .set_raw_config_int("backup_time", timestamp)
@@ -783,18 +791,6 @@ async fn export_database(
             Ok(())
         })
         .await
-}
-
-/// Sets `Config::BccSelf` (and `DeleteServerAfter` to "never" in effect) if needed so that new
-/// messages are present on the server after a backup restoration or available for all devices in
-/// multi-device case. NB: Calling this after a backup import isn't reliable as we can crash in
-/// between, but this is a problem only for old backups, new backups already have `BccSelf` set if
-/// necessary.
-async fn adjust_bcc_self(context: &Context) -> Result<()> {
-    if context.is_chatmail().await? && !context.config_exists(Config::BccSelf).await? {
-        context.set_config(Config::BccSelf, Some("1")).await?;
-    }
-    Ok(())
 }
 
 async fn check_backup_version(context: &Context) -> Result<()> {
