@@ -123,20 +123,23 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         }
     }
 
+    let timestamp = smeared_time(context);
     match invite {
         QrInvite::Group { .. } => {
-            let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
+            let joining_chat_id =
+                joining_chat_id(context, &invite, private_chat_id, timestamp).await?;
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
-            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            chat::add_info_msg(context, joining_chat_id, &msg, timestamp).await?;
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
-            let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
+            let joining_chat_id =
+                joining_chat_id(context, &invite, private_chat_id, timestamp).await?;
             // We created the broadcast channel already, now we need to add Alice to it.
             if !is_contact_in_chat(context, joining_chat_id, invite.contact_id()).await? {
                 chat::add_to_chat_contacts_table(
                     context,
-                    time(),
+                    timestamp,
                     joining_chat_id,
                     &[invite.contact_id()],
                 )
@@ -148,7 +151,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // use the generic `Establishing guaranteed end-to-end encryption, please wait…`
             if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
                 let msg = stock_str::securejoin_wait(context).await;
-                chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+                chat::add_info_msg(context, joining_chat_id, &msg, timestamp).await?;
             }
             Ok(joining_chat_id)
         }
@@ -162,14 +165,13 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             let ts_sort = private_chat_id
                 .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
                 .await?;
-            let ts_start = time();
             chat::add_info_msg_with_cmd(
                 context,
                 private_chat_id,
                 &stock_str::securejoin_wait(context).await,
                 SystemMessage::SecurejoinWait,
                 ts_sort,
-                Some(ts_start),
+                Some(timestamp),
                 None,
                 None,
                 None,
@@ -242,7 +244,8 @@ pub(super) async fn handle_auth_required(
                 // so only show it when joining a group and not for a 1:1 chat or broadcast channel.
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
-                let chat_id = joining_chat_id(context, &invite, chat_id).await?;
+                let timestamp = message.timestamp_sent;
+                let chat_id = joining_chat_id(context, &invite, chat_id, timestamp).await?;
                 chat::add_info_msg(context, chat_id, &msg, time()).await?;
             }
         }
@@ -368,6 +371,7 @@ async fn joining_chat_id(
     context: &Context,
     invite: &QrInvite,
     alice_chat_id: ChatId,
+    timestamp: i64,
 ) -> Result<ChatId> {
     match invite {
         QrInvite::Contact { .. } => Ok(alice_chat_id),
@@ -391,7 +395,7 @@ async fn joining_chat_id(
                         name,
                         Blocked::Not,
                         None,
-                        smeared_time(context),
+                        timestamp,
                     )
                     .await?
                 }
