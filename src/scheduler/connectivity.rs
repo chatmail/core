@@ -454,7 +454,8 @@ impl Context {
         let domain =
             &deltachat_contact_tools::EmailAddress::new(&self.get_primary_self_addr().await?)?
                 .domain;
-        let storage_on_domain = stock_str::storage_on_domain(self, domain).await;
+        let storage_on_domain =
+            escaper::encode_minimal(&stock_str::storage_on_domain(self, domain).await);
         ret += &format!("<h3>{storage_on_domain}</h3><ul>");
         let quota = self.quota.read().await;
         if let Some(quota) = &*quota {
@@ -528,11 +529,15 @@ impl Context {
                             }
                         }
                     } else {
-                        ret += format!("<li>Warning: {domain} claims to support quota but gives no information</li>").as_str();
+                        let domain_escaped = escaper::encode_minimal(domain);
+                        ret += &format!(
+                            "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                        );
                     }
                 }
                 Err(e) => {
-                    ret += format!("<li>{e}</li>").as_str();
+                    let error_escaped = escaper::encode_minimal(&e.to_string());
+                    ret += &format!("<li>{error_escaped}</li>");
                 }
             }
         } else {
