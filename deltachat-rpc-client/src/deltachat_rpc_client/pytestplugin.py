@@ -135,9 +135,15 @@ def rpc(tmp_path) -> AsyncGenerator:
 
 
 @pytest.fixture
-def acfactory(rpc) -> AsyncGenerator:
+def dc(rpc) -> DeltaChat:
+    """Return account manager."""
+    return DeltaChat(rpc)
+
+
+@pytest.fixture
+def acfactory(dc) -> AsyncGenerator:
     """Return account factory fixture."""
-    return ACFactory(DeltaChat(rpc))
+    return ACFactory(dc)
 
 
 @pytest.fixture
