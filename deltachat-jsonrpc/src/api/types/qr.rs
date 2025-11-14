@@ -200,9 +200,9 @@ pub enum QrObject {
     },
     /// Ask the user if they want to revive their own broadcast channel invite QR code.
     ReviveJoinBroadcast {
-        /// Contact ID.
+        /// Broadcast name.
         name: String,
-        /// Group ID.
+        /// Globally unique chat ID. Called grpid for historic reasons.
         grpid: String,
         /// Contact ID.
         contact_id: u32,
