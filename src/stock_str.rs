@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use humansize::{BINARY, format_size};
 use strum::EnumProperty as EnumPropertyTrait;
 use strum_macros::EnumProperty;
 use tokio::sync::RwLock;
@@ -1180,14 +1179,6 @@ pub(crate) async fn quota_exceeding(context: &Context, highest_usage: u64) -> St
         .await
         .replace1(&format!("{highest_usage}"))
         .replace("%%", "%")
-}
-
-/// Stock string: `%1$s message` with placeholder replaced by human-readable size.
-pub(crate) async fn partial_download_msg_body(context: &Context, org_bytes: u32) -> String {
-    let size = &format_size(org_bytes, BINARY);
-    translated(context, StockMessage::PartialDownloadMsgBody)
-        .await
-        .replace1(size)
 }
 
 /// Stock string: `Incoming Messages`.

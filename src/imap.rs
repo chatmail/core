@@ -67,7 +67,6 @@ const RFC724MID_UID: &str = "(UID BODY.PEEK[HEADER.FIELDS (\
                              X-MICROSOFT-ORIGINAL-MESSAGE-ID\
                              )])";
 const BODY_FULL: &str = "(FLAGS BODY.PEEK[])";
-const BODY_PARTIAL: &str = "(FLAGS RFC822.SIZE BODY.PEEK[HEADER])";
 
 #[derive(Debug)]
 pub(crate) struct Imap {
@@ -597,8 +596,7 @@ impl Imap {
             .context("prefetch")?;
         let read_cnt = msgs.len();
 
-        let download_limit = context.download_limit().await?;
-        let mut uids_fetch = Vec::<(u32, bool /* partially? */)>::with_capacity(msgs.len() + 1);
+        let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
@@ -681,13 +679,7 @@ impl Imap {
                 )
                 .await.context("prefetch_should_download")?
             {
-                match download_limit {
-                    Some(download_limit) => uids_fetch.push((
-                        uid,
-                        fetch_response.size.unwrap_or_default() > download_limit,
-                    )),
-                    None => uids_fetch.push((uid, false)),
-                }
+                uids_fetch.push(uid);
                 uid_message_ids.insert(uid, message_id);
             } else {
                 largest_uid_skipped = Some(uid);
@@ -722,29 +714,10 @@ impl Imap {
         };
 
         let actually_download_messages_future = async {
-            let sender = sender;
-            let mut uids_fetch_in_batch = Vec::with_capacity(max(uids_fetch.len(), 1));
-            let mut fetch_partially = false;
-            uids_fetch.push((0, !uids_fetch.last().unwrap_or(&(0, false)).1));
-            for (uid, fp) in uids_fetch {
-                if fp != fetch_partially {
-                    session
-                        .fetch_many_msgs(
-                            context,
-                            folder,
-                            uids_fetch_in_batch.split_off(0),
-                            &uid_message_ids,
-                            fetch_partially,
-                            sender.clone(),
-                        )
-                        .await
-                        .context("fetch_many_msgs")?;
-                    fetch_partially = fp;
-                }
-                uids_fetch_in_batch.push(uid);
-            }
-
-            anyhow::Ok(())
+            session
+                .fetch_many_msgs(context, folder, uids_fetch, &uid_message_ids, sender)
+                .await
+                .context("fetch_many_msgs")
         };
 
         let (largest_uid_fetched, fetch_res) =
@@ -1347,7 +1320,6 @@ impl Session {
         folder: &str,
         request_uids: Vec<u32>,
         uid_message_ids: &BTreeMap<u32, String>,
-        fetch_partially: bool,
         received_msgs_channel: Sender<(u32, Option<ReceivedMsg>)>,
     ) -> Result<()> {
         if request_uids.is_empty() {
@@ -1355,25 +1327,10 @@ impl Session {
         }
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
-            info!(
-                context,
-                "Starting a {} FETCH of message set \"{}\".",
-                if fetch_partially { "partial" } else { "full" },
-                set
-            );
-            let mut fetch_responses = self
-                .uid_fetch(
-                    &set,
-                    if fetch_partially {
-                        BODY_PARTIAL
-                    } else {
-                        BODY_FULL
-                    },
-                )
-                .await
-                .with_context(|| {
-                    format!("fetching messages {} from folder \"{}\"", &set, folder)
-                })?;
+            info!(context, "Starting a full FETCH of message set \"{}\".", set);
+            let mut fetch_responses = self.uid_fetch(&set, BODY_FULL).await.with_context(|| {
+                format!("fetching messages {} from folder \"{}\"", &set, folder)
+            })?;
 
             // Map from UIDs to unprocessed FETCH results. We put unprocessed FETCH results here
             // when we want to process other messages first.
@@ -1430,11 +1387,7 @@ impl Session {
                 count += 1;
 
                 let is_deleted = fetch_response.flags().any(|flag| flag == Flag::Deleted);
-                let (body, partial) = if fetch_partially {
-                    (fetch_response.header(), fetch_response.size) // `BODY.PEEK[HEADER]` goes to header() ...
-                } else {
-                    (fetch_response.body(), None) // ... while `BODY.PEEK[]` goes to body() - and includes header()
-                };
+                let body = fetch_response.body();
 
                 if is_deleted {
                     info!(context, "Not processing deleted msg {}.", request_uid);
@@ -1468,7 +1421,7 @@ impl Session {
                     context,
                     "Passing message UID {} to receive_imf().", request_uid
                 );
-                let res = receive_imf_inner(context, rfc724_mid, body, is_seen, partial).await;
+                let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
                 let received_msg = match res {
                     Err(err) => {
                         warn!(context, "receive_imf error: {err:#}.");

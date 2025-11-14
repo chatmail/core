@@ -558,7 +558,7 @@ async fn test_render_reply() {
         "1.0"
     );
 
-    let _mime_msg = MimeMessage::from_bytes(context, rendered_msg.message.as_bytes(), None)
+    let _mime_msg = MimeMessage::from_bytes(context, rendered_msg.message.as_bytes())
         .await
         .unwrap();
 }
@@ -824,7 +824,7 @@ async fn test_protected_headers_directive() -> Result<()> {
     assert!(msg.get_showpadlock());
     assert!(sent.payload.contains("\r\nSubject: [...]\r\n"));
 
-    let mime = MimeMessage::from_bytes(&alice, sent.payload.as_bytes(), None).await?;
+    let mime = MimeMessage::from_bytes(&alice, sent.payload.as_bytes()).await?;
     let mut payload = str::from_utf8(&mime.decoded_data)?.splitn(2, "\r\n\r\n");
     let part = payload.next().unwrap();
     assert_eq!(
@@ -854,7 +854,7 @@ async fn test_dont_remove_self() -> Result<()> {
         .await;
 
     println!("{}", sent.payload);
-    let mime_message = MimeMessage::from_bytes(alice, sent.payload.as_bytes(), None)
+    let mime_message = MimeMessage::from_bytes(alice, sent.payload.as_bytes())
         .await
         .unwrap();
     assert!(!mime_message.header_exists(HeaderDef::ChatGroupPastMembers));

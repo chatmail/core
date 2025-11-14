@@ -297,6 +297,7 @@ async fn test_get_info_completeness() {
         "encrypted_device_token",
         "stats_last_update",
         "stats_last_old_contact_id",
+        "simulate_receive_imf_error",
     ];
     let t = TestContext::new().await;
     let info = t.get_info().await.unwrap();
