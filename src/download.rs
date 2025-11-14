@@ -193,9 +193,27 @@ impl Session {
 
 #[cfg(test)]
 mod tests {
+    use num_traits::FromPrimitive;
+
     use super::*;
     use crate::chat::send_msg;
     use crate::test_utils::TestContext;
+
+    #[test]
+    fn test_downloadstate_values() {
+        // values may be written to disk and must not change
+        assert_eq!(DownloadState::Done, DownloadState::default());
+        assert_eq!(DownloadState::Done, DownloadState::from_i32(0).unwrap());
+        assert_eq!(
+            DownloadState::Available,
+            DownloadState::from_i32(10).unwrap()
+        );
+        assert_eq!(DownloadState::Failure, DownloadState::from_i32(20).unwrap());
+        assert_eq!(
+            DownloadState::InProgress,
+            DownloadState::from_i32(1000).unwrap()
+        );
+    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_update_download_state() -> Result<()> {
