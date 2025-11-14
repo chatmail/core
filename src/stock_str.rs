@@ -392,7 +392,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "Member %1$s removed."))]
     MsgDelMember = 178,
 
-    #[strum(props(fallback = "Establishing guaranteed end-to-end encryption, please wait…"))]
+    #[strum(props(fallback = "Establishing connection, please wait…"))]
     SecurejoinWait = 190,
 
     #[strum(props(fallback = "❤️ Seems you're enjoying Delta Chat!
@@ -811,7 +811,7 @@ pub(crate) async fn secure_join_replies(context: &Context, contact_id: ContactId
         .replace1(&contact_id.get_stock_name(context).await)
 }
 
-/// Stock string: `Establishing guaranteed end-to-end encryption, please wait…`.
+/// Stock string: `Establishing connection, please wait…`.
 pub(crate) async fn securejoin_wait(context: &Context) -> String {
     translated(context, StockMessage::SecurejoinWait).await
 }

@@ -7712,7 +7712,7 @@ void dc_event_unref(dc_event_t* event);
 /// Used in summaries.
 #define DC_STR_REACTED_BY 177
 
-/// "Establishing guaranteed end-to-end encryption, please wait…"
+/// "Establishing connection, please wait…"
 ///
 /// Used as info message.
 #define DC_STR_SECUREJOIN_WAIT 190

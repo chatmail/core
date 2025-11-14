@@ -145,7 +145,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
             // If we were not in the broadcast channel before, show a 'please wait' info message.
             // Since we don't have any specific stock string for this,
-            // use the generic `Establishing guaranteed end-to-end encryption, please wait…`
+            // use the generic `Establishing connection, please wait…`
             if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
                 let msg = stock_str::securejoin_wait(context).await;
                 chat::add_info_msg(context, joining_chat_id, &msg).await?;
