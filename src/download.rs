@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::context::Context;
 use crate::imap::session::Session;
 use crate::log::{info, warn};
-use crate::message::{Message, MsgId};
+use crate::message::{self, Message, MsgId, rfc724_mid_exists};
 use crate::{EventType, chatlist_events};
 
 /// If a message is downloaded only partially
@@ -202,7 +202,7 @@ impl Session {
 }
 
 async fn set_msg_state_to_failed(context: &Context, rfc724_mid: &str) -> Result<()> {
-    if let Some(msg_id) = MsgId::get_by_rfc724_mid(context, rfc724_mid).await? {
+    if let Some(msg_id) = rfc724_mid_exists(context, rfc724_mid).await? {
         // Update download state to failure
         // so it can be retried.
         //
@@ -254,7 +254,7 @@ pub(crate) async fn premessage_is_downloaded_for(
     context: &Context,
     rfc724_mid: &str,
 ) -> Result<bool> {
-    Ok(MsgId::get_by_rfc724_mid(context, rfc724_mid)
+    Ok(message::rfc724_mid_exists(context, rfc724_mid)
         .await?
         .is_some())
 }
