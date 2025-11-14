@@ -302,12 +302,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Message deletion timer is set to %1$s s by %2$s."))]
     MsgEphemeralTimerEnabledBy = 141,
 
-    #[strum(props(fallback = "You set message deletion timer to 1 minute."))]
-    MsgYouEphemeralTimerMinute = 142,
-
-    #[strum(props(fallback = "Message deletion timer is set to 1 minute by %1$s."))]
-    MsgEphemeralTimerMinuteBy = 143,
-
     #[strum(props(fallback = "You set message deletion timer to 1 hour."))]
     MsgYouEphemeralTimerHour = 144,
 
@@ -1001,17 +995,6 @@ pub(crate) async fn msg_ephemeral_timer_enabled(
             .await
             .replace1(timer)
             .replace2(&by_contact.get_stock_name(context).await)
-    }
-}
-
-/// Stock string: `Message deletion timer is set to 1 minute.`.
-pub(crate) async fn msg_ephemeral_timer_minute(context: &Context, by_contact: ContactId) -> String {
-    if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerMinute).await
-    } else {
-        translated(context, StockMessage::MsgEphemeralTimerMinuteBy)
-            .await
-            .replace1(&by_contact.get_stock_name(context).await)
     }
 }
 

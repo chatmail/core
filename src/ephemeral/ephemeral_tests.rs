@@ -38,7 +38,7 @@ async fn test_stock_ephemeral_messages() {
     assert_eq!(
         stock_ephemeral_timer_changed(&context, Timer::Enabled { duration: 60 }, ContactId::SELF)
             .await,
-        "You set message deletion timer to 1 minute."
+        "You set message deletion timer to 60 s."
     );
     assert_eq!(
         stock_ephemeral_timer_changed(&context, Timer::Enabled { duration: 90 }, ContactId::SELF)
@@ -142,7 +142,7 @@ async fn test_ephemeral_enable_disable() -> Result<()> {
     let bob_received_message = bob.recv_msg(&sent).await;
     assert_eq!(
         bob_received_message.text,
-        "Message deletion timer is set to 1 minute by alice@example.org."
+        "Message deletion timer is set to 60 s by alice@example.org."
     );
     assert_eq!(
         chat_bob.get_ephemeral_timer(bob).await?,
