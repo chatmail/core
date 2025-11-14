@@ -965,3 +965,40 @@ def test_immediate_autodelete(acfactory, direct_imap, log):
     ev = ac1.wait_for_event(EventType.MSG_READ)
     assert ev.chat_id == chat1.id
     assert ev.msg_id == sent_msg.id
+
+
+def test_background_fetch(acfactory, dc):
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1.stop_io()
+
+    ac1_chat = ac1.create_chat(ac2)
+
+    ac2_chat = ac2.create_chat(ac1)
+    ac2_chat.send_text("Hello!")
+
+    while True:
+        dc.background_fetch(300)
+        messages = ac1_chat.get_messages()
+        snapshot = messages[-1].get_snapshot()
+        if snapshot.text == "Hello!":
+            break
+
+    # Stopping background fetch immediately after starting
+    # does not result in any errors.
+    background_fetch_future = dc.background_fetch.future(300)
+    dc.stop_background_fetch()
+    background_fetch_future()
+
+    # Starting background fetch with zero timeout is ok,
+    # it should terminate immediately.
+    dc.background_fetch(0)
+
+    # Background fetch can still be used to send and receive messages.
+    ac2_chat.send_text("Hello again!")
+
+    while True:
+        dc.background_fetch(300)
+        messages = ac1_chat.get_messages()
+        snapshot = messages[-1].get_snapshot()
+        if snapshot.text == "Hello again!":
+            break
