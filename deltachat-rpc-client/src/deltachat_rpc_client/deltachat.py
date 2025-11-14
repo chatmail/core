@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ._utils import AttrDict
+from ._utils import AttrDict, futuremethod
 from .account import Account
 
 if TYPE_CHECKING:
@@ -38,6 +38,15 @@ class DeltaChat:
     def stop_io(self) -> None:
         """Stop the I/O of all accounts."""
         self.rpc.stop_io_for_all_accounts()
+
+    @futuremethod
+    def background_fetch(self, timeout_in_seconds: int) -> None:
+        """Run background fetch for all accounts."""
+        yield self.rpc.background_fetch.future(timeout_in_seconds)
+
+    def stop_background_fetch(self) -> None:
+        """Stop ongoing background fetch."""
+        self.rpc.stop_background_fetch()
 
     def maybe_network(self) -> None:
         """Indicate that the network conditions might have changed."""
