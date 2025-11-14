@@ -759,7 +759,7 @@ impl TestContext {
     /// unlikely to be affected as the message would be processed again in exactly the
     /// same way.
     pub(crate) async fn parse_msg(&self, msg: &SentMessage<'_>) -> MimeMessage {
-        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes(), None)
+        MimeMessage::from_bytes(&self.ctx, msg.payload().as_bytes())
             .await
             .unwrap()
     }

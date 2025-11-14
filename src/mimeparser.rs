@@ -239,13 +239,7 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 
 impl MimeMessage {
     /// Parse a mime message.
-    ///
-    /// If `partial` is set, it contains the full message size in bytes.
-    pub(crate) async fn from_bytes(
-        context: &Context,
-        body: &[u8],
-        partial: Option<u32>,
-    ) -> Result<Self> {
+    pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
         let timestamp_rcvd = smeared_time(context);
@@ -302,7 +296,7 @@ impl MimeMessage {
                     );
                     (part, part.ctype.mimetype.parse::<Mime>()?)
                 } else {
-                    // If it's a partially fetched message, there are no subparts.
+                    // Not a valid signed message, handle it as plaintext.
                     (&mail, mimetype)
                 }
             } else {
@@ -617,31 +611,24 @@ impl MimeMessage {
             timestamp_sent,
         };
 
-        match partial {
-            Some(org_bytes) => {
-                parser
-                    .create_stub_from_partial_download(context, org_bytes)
-                    .await?;
+        match mail {
+            Ok(mail) => {
+                parser.parse_mime_recursive(context, mail, false).await?;
             }
-            None => match mail {
-                Ok(mail) => {
-                    parser.parse_mime_recursive(context, mail, false).await?;
-                }
-                Err(err) => {
-                    let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
+            Err(err) => {
+                let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
 
-                    let part = Part {
-                        typ: Viewtype::Text,
-                        msg_raw: Some(txt.to_string()),
-                        msg: txt.to_string(),
-                        // Don't change the error prefix for now,
-                        // receive_imf.rs:lookup_chat_by_reply() checks it.
-                        error: Some(format!("Decrypting failed: {err:#}")),
-                        ..Default::default()
-                    };
-                    parser.do_add_single_part(part);
-                }
-            },
+                let part = Part {
+                    typ: Viewtype::Text,
+                    msg_raw: Some(txt.to_string()),
+                    msg: txt.to_string(),
+                    // Don't change the error prefix for now,
+                    // receive_imf.rs:lookup_chat_by_reply() checks it.
+                    error: Some(format!("Decrypting failed: {err:#}")),
+                    ..Default::default()
+                };
+                parser.do_add_single_part(part);
+            }
         };
 
         let is_location_only = parser.location_kml.is_some() && parser.parts.is_empty();

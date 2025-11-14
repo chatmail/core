@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-import os
 from typing import TYPE_CHECKING
 
 from deltachat_rpc_client import Account, EventType, const
@@ -109,40 +107,6 @@ def test_delivery_status_failed(acfactory: ACFactory) -> None:
     wait_for_chatlist_specific_item(alice, invalid_chat.id)
 
     assert failing_message.get_snapshot().state == const.MessageState.OUT_FAILED
-
-
-def test_download_on_demand(acfactory: ACFactory) -> None:
-    """
-    Test if download on demand emits chatlist update events.
-    This is only needed for last message in chat, but finding that out is too expensive, so it's always emitted
-    """
-    alice, bob = acfactory.get_online_accounts(2)
-
-    alice_contact_bob = alice.create_contact(bob, "Bob")
-    alice_chat_bob = alice_contact_bob.create_chat()
-    alice_chat_bob.send_text("hi")
-
-    alice.set_config("download_limit", "1")
-
-    msg = bob.wait_for_incoming_msg()
-    chat_id = msg.get_snapshot().chat_id
-    msg.get_snapshot().chat.accept()
-    bob.get_chat_by_id(chat_id).send_message(
-        "Hello World, this message is bigger than 5 bytes",
-        html=base64.b64encode(os.urandom(300000)).decode("utf-8"),
-    )
-
-    message = alice.wait_for_incoming_msg()
-    snapshot = message.get_snapshot()
-    assert snapshot.download_state == const.DownloadState.AVAILABLE
-
-    alice.clear_all_events()
-
-    snapshot = message.get_snapshot()
-    chat_id = snapshot.chat_id
-    alice._rpc.download_full_message(alice.id, message.id)
-
-    wait_for_chatlist_specific_item(alice, chat_id)
 
 
 def get_multi_account_test_setup(acfactory: ACFactory) -> [Account, Account, Account]:
