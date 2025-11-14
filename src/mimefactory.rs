@@ -60,7 +60,7 @@ pub enum Loaded {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreMessageMode {
-    /// adds a is full message header in unpretected part
+    /// adds a is full message header in unprotected part
     FullMessage,
     /// adds reference to full message to protected part
     /// also adds metadata and hashes and explicitly excludes attachment
