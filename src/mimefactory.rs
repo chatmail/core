@@ -947,8 +947,7 @@ impl MimeFactory {
         //
         // These are standard headers such as Date, In-Reply-To, References, which cannot be placed
         // anywhere else according to the standard. Placing headers here also allows them to be fetched
-        // individually over IMAP without downloading the message body. This is why Chat-Version is
-        // placed here.
+        // individually over IMAP without downloading the message body.
         let mut unprotected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
 
         // Headers that MUST NOT (only) go into IMF header section:
@@ -1063,11 +1062,7 @@ impl MimeFactory {
                             mail_builder::headers::raw::Raw::new("[...]").into(),
                         ));
                     }
-                    "in-reply-to"
-                    | "references"
-                    | "auto-submitted"
-                    | "chat-version"
-                    | "autocrypt-setup-message" => {
+                    "in-reply-to" | "references" | "autocrypt-setup-message" => {
                         unprotected_headers.push(header.clone());
                     }
                     _ => {
