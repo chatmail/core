@@ -158,29 +158,29 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         chat = get_broadcast(ac)
         chat_msgs = chat.get_messages()
 
+        encrypted_msg = chat_msgs.pop(0).get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
         if please_wait_info_msg:
             first_msg = chat_msgs.pop(0).get_snapshot()
             assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
             assert first_msg.is_info
 
-        encrypted_msg = chat_msgs[0].get_snapshot()
-        assert encrypted_msg.text == "Messages are end-to-end encrypted."
-        assert encrypted_msg.is_info
-
-        member_added_msg = chat_msgs[1].get_snapshot()
+        member_added_msg = chat_msgs.pop(0).get_snapshot()
         if inviter_side:
             assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
         else:
             assert member_added_msg.text == "You joined the channel."
         assert member_added_msg.is_info
 
-        hello_msg = chat_msgs[2].get_snapshot()
+        hello_msg = chat_msgs.pop(0).get_snapshot()
         assert hello_msg.text == "Hello everyone!"
         assert not hello_msg.is_info
         assert hello_msg.show_padlock
         assert hello_msg.error is None
 
-        assert len(chat_msgs) == 3
+        assert len(chat_msgs) == 0
 
         chat_snapshot = chat.get_full_snapshot()
         assert chat_snapshot.is_encrypted

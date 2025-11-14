@@ -867,14 +867,14 @@ def test_leave_broadcast(acfactory, all_devices_online):
         contact_snapshot = contact.get_snapshot()
         chat_msgs = chat.get_messages()
 
+        encrypted_msg = chat_msgs.pop(0).get_snapshot()
+        assert encrypted_msg.text == "Messages are end-to-end encrypted."
+        assert encrypted_msg.is_info
+
         if please_wait_info_msg:
             first_msg = chat_msgs.pop(0).get_snapshot()
             assert first_msg.text == "Establishing guaranteed end-to-end encryption, please wait…"
             assert first_msg.is_info
-
-        encrypted_msg = chat_msgs.pop(0).get_snapshot()
-        assert encrypted_msg.text == "Messages are end-to-end encrypted."
-        assert encrypted_msg.is_info
 
         member_added_msg = chat_msgs.pop(0).get_snapshot()
         if inviter_side:

@@ -1777,11 +1777,16 @@ async fn add_parts(
                     "Updated ephemeral timer to {ephemeral_timer:?} for chat {chat_id}."
                 );
                 if mime_parser.is_system_message != SystemMessage::EphemeralTimerChanged {
-                    chat::add_info_msg(
+                    chat::add_info_msg_with_cmd(
                         context,
                         chat_id,
                         &stock_ephemeral_timer_changed(context, ephemeral_timer, from_id).await,
-                        sort_timestamp,
+                        SystemMessage::Unknown,
+                        Some(sort_timestamp),
+                        mime_parser.timestamp_sent,
+                        None,
+                        None,
+                        None,
                     )
                     .await?;
                 }
@@ -1889,8 +1894,8 @@ async fn add_parts(
             chat_id,
             &group_changes_msg,
             cmd,
-            sort_timestamp,
-            None,
+            Some(sort_timestamp),
+            mime_parser.timestamp_sent,
             None,
             None,
             added_removed_id,

@@ -1239,7 +1239,7 @@ impl MimeFactory {
                         // created before we had symmetric encryption,
                         // we show an error message.
                         let text = BROADCAST_INCOMPATIBILITY_MSG;
-                        chat::add_info_msg(context, chat.id, text, time()).await?;
+                        chat::add_info_msg(context, chat.id, text).await?;
                         bail!(text);
                     }
                     secret
