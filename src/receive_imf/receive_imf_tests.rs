@@ -4849,14 +4849,15 @@ async fn test_prefer_references_to_downloaded_msgs() -> Result<()> {
     let received = bob.recv_msg(&sent).await;
     assert_eq!(received.download_state, DownloadState::Available);
     assert_ne!(received.chat_id, bob_chat_id);
-    assert_eq!(received.chat_id, bob.get_chat(alice).await.id);
+    let bob_alice_chat_id = bob.get_chat(alice).await.id;
+    assert_eq!(received.chat_id, bob_alice_chat_id);
 
     let mut msg = Message::new(Viewtype::File);
     msg.set_file_from_bytes(alice, "file", file_bytes, None)?;
     let sent = alice.send_msg(alice_chat_id, &mut msg).await;
     let received = bob.recv_msg(&sent).await;
     assert_eq!(received.download_state, DownloadState::Available);
-    assert_eq!(received.chat_id, bob_chat_id);
+    assert_eq!(received.chat_id, bob_alice_chat_id);
 
     Ok(())
 }
