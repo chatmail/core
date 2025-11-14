@@ -215,8 +215,8 @@ mod tests {
     use crate::chat::{self, create_group, send_msg};
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
-    use crate::receive_imf::receive_imf_from_inbox;
     use crate::mimeparser::MimeMessage;
+    use crate::receive_imf::receive_imf_from_inbox;
     use crate::test_utils::TestContext;
 
     #[test]
