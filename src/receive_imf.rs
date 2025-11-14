@@ -20,7 +20,7 @@ use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX,
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
-use crate::download::DownloadState;
+use crate::download::{DownloadState, premessage_is_downloaded_for};
 use crate::ephemeral::{Timer as EphemeralTimer, stock_ephemeral_timer_changed};
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -1087,6 +1087,37 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
+    } else if let Some(pre_message) = &mime_parser.pre_message {
+        use crate::mimeparser::PreMessageMode::*;
+        match pre_message {
+            FullMessage => {
+                // if pre message exist, then trash after replacing, otherwise treat as normal message
+                let pre_message_exists = premessage_is_downloaded_for(context, rfc724_mid).await?;
+                info!(
+                    context,
+                    "Message is a Full Message ({}).",
+                    if pre_message_exists {
+                        "pre-message exists already, so trash after replacing attachment"
+                    } else {
+                        "no pre-message -> Keep"
+                    }
+                );
+                pre_message_exists
+            }
+            PreMessage {
+                full_msg_rfc724_mid,
+            } => {
+                // if full message already exists, then trash/ignore
+                let full_msg_exists =
+                    premessage_is_downloaded_for(context, full_msg_rfc724_mid).await?;
+                info!(
+                    context,
+                    "Message is a Pre-Message (full_msg_exists:{full_msg_exists})."
+                );
+                full_msg_exists
+                // TODO find out if trashing affects multi device usage?
+            }
+        }
     } else if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
     {
@@ -2251,6 +2282,15 @@ async fn handle_edit_delete(
         }
     }
     Ok(())
+}
+
+async fn handle_full_message_replace(
+    context: &Context,
+    mime_parser: &MimeMessage,
+    from_id: ContactId,
+) -> Result<()> {
+    rfc724_mid_exists
+    todo!();
 }
 
 async fn tweak_sort_timestamp(

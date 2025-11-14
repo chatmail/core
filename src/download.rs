@@ -250,7 +250,10 @@ async fn remove_from_download_table(context: &Context, rfc724_mid: &str) -> Resu
 }
 
 // this is a dedicated method because it is used in multiple places.
-async fn premessage_is_downloaded_for(context: &Context, rfc724_mid: &str) -> Result<bool> {
+pub(crate) async fn premessage_is_downloaded_for(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<bool> {
     Ok(MsgId::get_by_rfc724_mid(context, rfc724_mid)
         .await?
         .is_some())
