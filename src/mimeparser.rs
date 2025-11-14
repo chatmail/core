@@ -147,6 +147,20 @@ pub(crate) struct MimeMessage {
     /// Sender timestamp in secs since epoch. Allowed to be in the future due to unsynchronized
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
+
+    pub(crate) pre_message: Option<PreMessageMode>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreMessageMode {
+    /// This is full messages
+    /// it replaces it's pre-message attachment if it exists already,
+    /// and if the pre-message does not exist it is treated as normal message
+    FullMessage,
+    /// This is a pre-message,
+    /// it adds a message preview for a full message
+    /// and it is ignored if the full message was downloaded already
+    PreMessage { full_msg_rfc724_mid: String },
 }
 
 #[derive(Debug, PartialEq)]
@@ -345,6 +359,22 @@ impl MimeMessage {
         let incoming = !context.is_self_addr(&from.addr).await?;
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
+
+        let pre_message = if let Some(full_msg_rfc724_mid) =
+            mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
+        {
+            Some(PreMessageMode::PreMessage {
+                full_msg_rfc724_mid,
+            })
+        } else if mail
+            .headers
+            .get_header_value(HeaderDef::ChatIsFullMessage)
+            .is_some()
+        {
+            Some(PreMessageMode::FullMessage)
+        } else {
+            None
+        };
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
@@ -609,6 +639,7 @@ impl MimeMessage {
             is_bot: None,
             timestamp_rcvd,
             timestamp_sent,
+            pre_message,
         };
 
         match mail {
