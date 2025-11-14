@@ -127,7 +127,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Group { .. } => {
             let joining_chat_id = joining_chat_id(context, &invite, private_chat_id).await?;
             let msg = stock_str::secure_join_started(context, invite.contact_id()).await;
-            chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+            chat::add_info_msg(context, joining_chat_id, &msg).await?;
             Ok(joining_chat_id)
         }
         QrInvite::Broadcast { .. } => {
@@ -148,28 +148,20 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // use the generic `Establishing guaranteed end-to-end encryption, please wait…`
             if !is_contact_in_chat(context, joining_chat_id, ContactId::SELF).await? {
                 let msg = stock_str::securejoin_wait(context).await;
-                chat::add_info_msg(context, joining_chat_id, &msg, time()).await?;
+                chat::add_info_msg(context, joining_chat_id, &msg).await?;
             }
             Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
             // uses it to send the handshake messages.
-            // Calculate the sort timestamp before checking the chat protection status so that if we
-            // race with its change, we don't add our message below the protection message.
-            let sort_to_bottom = true;
-            let (received, incoming) = (false, false);
-            let ts_sort = private_chat_id
-                .calc_sort_timestamp(context, 0, sort_to_bottom, received, incoming)
-                .await?;
-            let ts_start = time();
             chat::add_info_msg_with_cmd(
                 context,
                 private_chat_id,
                 &stock_str::securejoin_wait(context).await,
                 SystemMessage::SecurejoinWait,
-                ts_sort,
-                Some(ts_start),
+                None,
+                time(),
                 None,
                 None,
                 None,
@@ -243,7 +235,7 @@ pub(super) async fn handle_auth_required(
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
                 let chat_id = joining_chat_id(context, &invite, chat_id).await?;
-                chat::add_info_msg(context, chat_id, &msg, time()).await?;
+                chat::add_info_msg(context, chat_id, &msg).await?;
             }
         }
 

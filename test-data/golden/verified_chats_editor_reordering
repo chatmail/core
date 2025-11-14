@@ -1,10 +1,10 @@
 Group#Chat#3002: Group [3 member(s)]
 --------------------------------------------------------------------------------
+Msg#3003: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 Msg#3004: info (Contact#Contact#Info): alice@example.org invited you to join this group.
 
 Waiting for the device of alice@example.org to reply… [NOTICED][INFO]
 Msg#3006: info (Contact#Contact#Info): alice@example.org replied, waiting for being added to the group… [NOTICED][INFO]
-Msg#3003: info (Contact#Contact#Info): Messages are end-to-end encrypted. [NOTICED][INFO]
 Msg#3008🔒:  (Contact#Contact#3002):  [FRESH]
 Msg#3009: info (Contact#Contact#Info): Member bob@example.net added. [NOTICED][INFO]
 Msg#3010🔒:  (Contact#Contact#3001): Member Me added by alice@example.org. [FRESH][INFO]
