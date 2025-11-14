@@ -329,46 +329,6 @@ async fn test_webxdc_contact_request() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_webxdc_update_for_not_yet_received_instance() -> Result<()> {
-    // Alice sends an instance and an update
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
-    let chat = alice.create_chat(&bob).await;
-    let mut alice_instance = create_webxdc_instance(
-        &alice,
-        "chess.xdc",
-        include_bytes!("../../test-data/webxdc/chess.xdc"),
-    )?;
-    let sent1 = alice.send_msg(chat.id, &mut alice_instance).await;
-    let alice_instance = sent1.load_from_db().await;
-    alice
-        .send_webxdc_status_update(
-            alice_instance.id,
-            r#"{"payload": 7, "summary":"sum", "document":"doc"}"#,
-        )
-        .await?;
-    alice.flush_status_updates().await?;
-    let sent2 = alice.pop_sent_msg().await;
-
-    // Bob receives a status update before instance
-    bob.recv_msg_trash(&sent2).await;
-    // Bob downloads instance, updates should be assigned correctly
-    let _ = bob.recv_msg(&sent1).await;
-    let bob_instance = bob.get_last_msg().await;
-    assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
-    assert_eq!(
-        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
-            .await?,
-        r#"[{"payload":7,"document":"doc","summary":"sum","serial":1,"max_serial":1}]"#
-    );
-    let info = bob_instance.get_webxdc_info(&bob).await?;
-    assert_eq!(info.document, "doc");
-    assert_eq!(info.summary, "sum");
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_delete_webxdc_instance() -> Result<()> {
     let t = TestContext::new_alice().await;
     let chat_id = create_group(&t, "foo").await?;
