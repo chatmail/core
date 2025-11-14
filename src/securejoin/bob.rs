@@ -158,8 +158,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
         QrInvite::Contact { .. } => {
             // For setup-contact the BobState already ensured the 1:1 chat exists because it
             // uses it to send the handshake messages.
-            // Calculate the sort timestamp before checking the chat protection status so that if we
-            // race with its change, we don't add our message below the protection message.
+            // Use calc_sort_timestamp() to make sure that the new message is the last message in the chat.
             let sort_to_bottom = true;
             let (received, incoming) = (false, false);
             let ts_sort = private_chat_id
@@ -244,9 +243,9 @@ pub(super) async fn handle_auth_required(
                 // so only show it when joining a group and not for a 1:1 chat or broadcast channel.
                 let contact_id = invite.contact_id();
                 let msg = stock_str::secure_join_replies(context, contact_id).await;
-                let timestamp = message.timestamp_sent;
+                let timestamp = smeared_time(context);
                 let chat_id = joining_chat_id(context, &invite, chat_id, timestamp).await?;
-                chat::add_info_msg(context, chat_id, &msg, time()).await?;
+                chat::add_info_msg(context, chat_id, &msg, timestamp).await?;
             }
         }
 
