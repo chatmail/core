@@ -7536,14 +7536,13 @@ void dc_event_unref(dc_event_t* event);
 
 /// "You set message deletion timer to 1 minute."
 ///
-/// Used in status messages.
+/// @deprecated 2025-11-14, this string is no longer needed
 #define DC_STR_EPHEMERAL_TIMER_1_MINUTE_BY_YOU 142
 
 /// "Message deletion timer is set to 1 minute by %1$s."
 ///
 /// `%1$s` will be replaced by name and address of the contact.
-///
-/// Used in status messages.
+/// @deprecated 2025-11-14, this string is no longer needed
 #define DC_STR_EPHEMERAL_TIMER_1_MINUTE_BY_OTHER 143
 
 /// "You set message deletion timer to 1 hour."

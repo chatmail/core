@@ -241,10 +241,9 @@ pub(crate) async fn stock_ephemeral_timer_changed(
     match timer {
         Timer::Disabled => stock_str::msg_ephemeral_timer_disabled(context, from_id).await,
         Timer::Enabled { duration } => match duration {
-            0..=59 => {
+            0..=60 => {
                 stock_str::msg_ephemeral_timer_enabled(context, &timer.to_string(), from_id).await
             }
-            60 => stock_str::msg_ephemeral_timer_minute(context, from_id).await,
             61..=3599 => {
                 stock_str::msg_ephemeral_timer_minutes(
                     context,
