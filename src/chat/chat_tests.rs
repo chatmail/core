@@ -1238,7 +1238,7 @@ async fn test_unarchive_if_muted() -> Result<()> {
     chat_id.set_visibility(&t, ChatVisibility::Archived).await?;
     set_muted(&t, chat_id, MuteDuration::Forever).await?;
     send_text_msg(&t, chat_id, "out".to_string()).await?;
-    add_info_msg(&t, chat_id, "info", time()).await?;
+    add_info_msg(&t, chat_id, "info").await?;
     assert_eq!(get_archived_cnt(&t).await?, 1);
 
     // finally, unarchive on sending to not muted chat
@@ -1637,7 +1637,7 @@ async fn test_set_mute_duration() {
 async fn test_add_info_msg() -> Result<()> {
     let t = TestContext::new().await;
     let chat_id = create_group(&t, "foo").await?;
-    add_info_msg(&t, chat_id, "foo info", time()).await?;
+    add_info_msg(&t, chat_id, "foo info").await?;
 
     let msg = t.get_last_msg_in(chat_id).await;
     assert_eq!(msg.get_chat_id(), chat_id);
@@ -1659,8 +1659,8 @@ async fn test_add_info_msg_with_cmd() -> Result<()> {
         chat_id,
         "foo bar info",
         SystemMessage::EphemeralTimerChanged,
-        time(),
         None,
+        time(),
         None,
         None,
         None,
@@ -4507,7 +4507,7 @@ async fn test_info_not_referenced() -> Result<()> {
 
     let bob_received_message = tcm.send_recv_accept(alice, bob, "Hi!").await;
     let bob_chat_id = bob_received_message.chat_id;
-    add_info_msg(bob, bob_chat_id, "Some info", create_smeared_timestamp(bob)).await?;
+    add_info_msg(bob, bob_chat_id, "Some info").await?;
 
     // Bob sends a message.
     // This message should reference Alice's "Hi!" message and not the info message.

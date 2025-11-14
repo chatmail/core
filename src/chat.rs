@@ -462,19 +462,15 @@ impl ChatId {
     }
 
     /// Adds message "Messages are end-to-end encrypted".
-    pub(crate) async fn add_encrypted_msg(
-        self,
-        context: &Context,
-        timestamp_sort: i64,
-    ) -> Result<()> {
+    pub(crate) async fn add_encrypted_msg(self, context: &Context, timestamp: i64) -> Result<()> {
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
             self,
             &text,
             SystemMessage::ChatE2ee,
-            timestamp_sort,
-            None,
+            Some(timestamp),
+            timestamp,
             None,
             None,
             None,
@@ -3465,7 +3461,7 @@ pub(crate) async fn create_group_ex(
             // Add "Messages in this chat use classic email and are not encrypted." message.
             stock_str::chat_unencrypted_explanation(context).await
         };
-        add_info_msg(context, chat_id, &text, create_smeared_timestamp(context)).await?;
+        add_info_msg(context, chat_id, &text).await?;
     }
     if let (true, true) = (sync.into(), !grpid.is_empty()) {
         let id = SyncId::Grpid(grpid);
@@ -4616,9 +4612,11 @@ pub(crate) async fn add_info_msg_with_cmd(
     chat_id: ChatId,
     text: &str,
     cmd: SystemMessage,
-    timestamp_sort: i64,
-    // Timestamp to show to the user (if this is None, `timestamp_sort` will be shown to the user)
-    timestamp_sent_rcvd: Option<i64>,
+    // Timestamp where in the chat the message will be sorted.
+    // If this is None, the message will be sorted to the bottom.
+    timestamp_sort: Option<i64>,
+    // Timestamp to show to the user
+    timestamp_sent_rcvd: i64,
     parent: Option<&Message>,
     from_id: Option<ContactId>,
     added_removed_id: Option<ContactId>,
@@ -4634,6 +4632,22 @@ pub(crate) async fn add_info_msg_with_cmd(
         param.set(Param::ContactAddedRemoved, contact_id.to_u32().to_string());
     }
 
+    let timestamp_sort = if let Some(ts) = timestamp_sort {
+        ts
+    } else {
+        let sort_to_bottom = true;
+        let (received, incoming) = (false, false);
+        chat_id
+            .calc_sort_timestamp(
+                context,
+                smeared_time(context),
+                sort_to_bottom,
+                received,
+                incoming,
+            )
+            .await?
+    };
+
     let row_id =
     context.sql.insert(
         "INSERT INTO msgs (chat_id,from_id,to_id,timestamp,timestamp_sent,timestamp_rcvd,type,state,txt,txt_normalized,rfc724_mid,ephemeral_timer,param,mime_in_reply_to)
@@ -4643,8 +4657,8 @@ pub(crate) async fn add_info_msg_with_cmd(
             from_id.unwrap_or(ContactId::INFO),
             ContactId::INFO,
             timestamp_sort,
-            timestamp_sent_rcvd.unwrap_or(0),
-            timestamp_sent_rcvd.unwrap_or(0),
+            timestamp_sent_rcvd,
+            timestamp_sent_rcvd,
             Viewtype::Text,
             MessageState::InNoticed,
             text,
@@ -4664,19 +4678,14 @@ pub(crate) async fn add_info_msg_with_cmd(
 }
 
 /// Adds info message with a given text and `timestamp` to the chat.
-pub(crate) async fn add_info_msg(
-    context: &Context,
-    chat_id: ChatId,
-    text: &str,
-    timestamp: i64,
-) -> Result<MsgId> {
+pub(crate) async fn add_info_msg(context: &Context, chat_id: ChatId, text: &str) -> Result<MsgId> {
     add_info_msg_with_cmd(
         context,
         chat_id,
         text,
         SystemMessage::Unknown,
-        timestamp,
         None,
+        time(),
         None,
         None,
         None,
