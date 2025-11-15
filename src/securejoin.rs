@@ -118,7 +118,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
                         chat.id,
                     );
                     let text = BROADCAST_INCOMPATIBILITY_MSG;
-                    add_info_msg(context, chat.id, text, time()).await?;
+                    add_info_msg(context, chat.id, text).await?;
                     bail!(text.to_string());
                 }
             }
