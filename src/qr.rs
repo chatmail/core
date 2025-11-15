@@ -553,7 +553,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
             if context
                 .is_self_addr(&addr)
                 .await
-                .with_context(|| format!("can't check if {addr:?} is our address"))?
+                .with_context(|| format!("Can't check if {addr:?} is our address"))?
             {
                 if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
                     Ok(Qr::WithdrawJoinBroadcast {
