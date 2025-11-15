@@ -157,6 +157,21 @@ pub enum QrObject {
         /// Authentication code.
         authcode: String,
     },
+    /// Ask the user if they want to withdraw their own broadcast channel invite QR code.
+    WithdrawJoinBroadcast {
+        /// Broadcast name.
+        name: String,
+        /// ID, uniquely identifying this chat. Called grpid for historic reasons.
+        grpid: String,
+        /// Contact ID. Always `ContactId::SELF`.
+        contact_id: u32,
+        /// Fingerprint of the contact key as scanned from the QR code.
+        fingerprint: String,
+        /// Invite number.
+        invitenumber: String,
+        /// Authentication code.
+        authcode: String,
+    },
     /// Ask the user if they want to revive their own QR code.
     ReviveVerifyContact {
         /// Contact ID.
@@ -175,6 +190,21 @@ pub enum QrObject {
         /// Group ID.
         grpid: String,
         /// Contact ID.
+        contact_id: u32,
+        /// Fingerprint of the contact key as scanned from the QR code.
+        fingerprint: String,
+        /// Invite number.
+        invitenumber: String,
+        /// Authentication code.
+        authcode: String,
+    },
+    /// Ask the user if they want to revive their own broadcast channel invite QR code.
+    ReviveJoinBroadcast {
+        /// Broadcast name.
+        name: String,
+        /// Globally unique chat ID. Called grpid for historic reasons.
+        grpid: String,
+        /// Contact ID. Always `ContactId::SELF`.
         contact_id: u32,
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: String,
@@ -306,6 +336,25 @@ impl From<Qr> for QrObject {
                     authcode,
                 }
             }
+            Qr::WithdrawJoinBroadcast {
+                name,
+                grpid,
+                contact_id,
+                fingerprint,
+                invitenumber,
+                authcode,
+            } => {
+                let contact_id = contact_id.to_u32();
+                let fingerprint = fingerprint.to_string();
+                QrObject::WithdrawJoinBroadcast {
+                    name,
+                    grpid,
+                    contact_id,
+                    fingerprint,
+                    invitenumber,
+                    authcode,
+                }
+            }
             Qr::ReviveVerifyContact {
                 contact_id,
                 fingerprint,
@@ -333,6 +382,25 @@ impl From<Qr> for QrObject {
                 let fingerprint = fingerprint.to_string();
                 QrObject::ReviveVerifyGroup {
                     grpname,
+                    grpid,
+                    contact_id,
+                    fingerprint,
+                    invitenumber,
+                    authcode,
+                }
+            }
+            Qr::ReviveJoinBroadcast {
+                name,
+                grpid,
+                contact_id,
+                fingerprint,
+                invitenumber,
+                authcode,
+            } => {
+                let contact_id = contact_id.to_u32();
+                let fingerprint = fingerprint.to_string();
+                QrObject::ReviveJoinBroadcast {
+                    name,
                     grpid,
                     contact_id,
                     fingerprint,

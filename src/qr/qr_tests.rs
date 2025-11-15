@@ -1,5 +1,5 @@
 use super::*;
-use crate::chat::create_group;
+use crate::chat::{Chat, create_broadcast, create_group, get_chat_contacts};
 use crate::config::Config;
 use crate::login_param::EnteredCertificateChecks;
 use crate::provider::Socket;
@@ -507,6 +507,56 @@ async fn test_withdraw_verifygroup() -> Result<()> {
         bail!("Wrong QR type, expected AskVerifyGroup");
     }
     assert!(set_config_from_qr(&bob, &qr).await.is_err());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_withdraw_joinbroadcast() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let chat_id = create_broadcast(alice, "foo".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(chat_id)).await?;
+
+    // scanning own verify-group code offers withdrawing
+    if let Qr::WithdrawJoinBroadcast { name, .. } = check_qr(alice, &qr).await? {
+        assert_eq!(name, "foo");
+    } else {
+        bail!("Wrong QR type, expected WithdrawJoinBroadcast");
+    }
+    set_config_from_qr(alice, &qr).await?;
+
+    // scanning withdrawn verify-group code offers reviving
+    if let Qr::ReviveJoinBroadcast { name, .. } = check_qr(alice, &qr).await? {
+        assert_eq!(name, "foo");
+    } else {
+        bail!("Wrong QR type, expected ReviveJoinBroadcast");
+    }
+
+    // someone else always scans as ask-verify-group
+    if let Qr::AskJoinBroadcast { name, .. } = check_qr(bob, &qr).await? {
+        assert_eq!(name, "foo");
+    } else {
+        bail!("Wrong QR type, expected AskJoinBroadcast");
+    }
+    assert!(set_config_from_qr(bob, &qr).await.is_err());
+
+    // Bob can't join using this QR code, since it's still withdrawn
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.is_self_in_chat(bob).await?, false);
+    assert_eq!(get_chat_contacts(alice, chat_id).await?.len(), 0);
+
+    // Revive
+    set_config_from_qr(alice, &qr).await?;
+
+    // Now Bob can join
+    let bob_chat_id2 = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    assert_eq!(bob_chat_id, bob_chat_id2);
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.is_self_in_chat(bob).await?, true);
+    assert_eq!(get_chat_contacts(alice, chat_id).await?.len(), 1);
 
     Ok(())
 }

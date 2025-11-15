@@ -233,6 +233,31 @@ pub enum Qr {
         authcode: String,
     },
 
+    /// Ask the user if they want to withdraw their own broadcast channel invite QR code.
+    WithdrawJoinBroadcast {
+        /// The user-visible name of this broadcast channel
+        name: String,
+
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel across all databases/clients.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
+        grpid: String,
+
+        /// Contact ID. Always `ContactId::SELF`.
+        contact_id: ContactId,
+
+        /// Fingerprint of the contact's key as scanned from the QR code.
+        fingerprint: Fingerprint,
+
+        /// Invite number.
+        invitenumber: String,
+
+        /// Authentication code.
+        authcode: String,
+    },
+
     /// Ask the user if they want to revive their own QR code.
     ReviveVerifyContact {
         /// Contact ID.
@@ -260,6 +285,31 @@ pub enum Qr {
         contact_id: ContactId,
 
         /// Fingerprint of the contact key as scanned from the QR code.
+        fingerprint: Fingerprint,
+
+        /// Invite number.
+        invitenumber: String,
+
+        /// Authentication code.
+        authcode: String,
+    },
+
+    /// Ask the user if they want to revive their own broadcast channel invite QR code.
+    ReviveJoinBroadcast {
+        /// The user-visible name of this broadcast channel
+        name: String,
+
+        /// A string of random characters,
+        /// uniquely identifying this broadcast channel across all databases/clients.
+        /// Called `grpid` for historic reasons:
+        /// The id of multi-user chats is always called `grpid` in the database
+        /// because groups were once the only multi-user chats.
+        grpid: String,
+
+        /// Contact ID. Always `ContactId::SELF`.
+        contact_id: ContactId,
+
+        /// Fingerprint of the contact's key as scanned from the QR code.
         fingerprint: Fingerprint,
 
         /// Invite number.
@@ -500,14 +550,40 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 })
             }
         } else if let (Some(grpid), Some(name)) = (grpid, broadcast_name) {
-            Ok(Qr::AskJoinBroadcast {
-                name,
-                grpid,
-                contact_id,
-                fingerprint,
-                invitenumber,
-                authcode,
-            })
+            if context
+                .is_self_addr(&addr)
+                .await
+                .with_context(|| format!("Can't check if {addr:?} is our address"))?
+            {
+                if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
+                    Ok(Qr::WithdrawJoinBroadcast {
+                        name,
+                        grpid,
+                        contact_id,
+                        fingerprint,
+                        invitenumber,
+                        authcode,
+                    })
+                } else {
+                    Ok(Qr::ReviveJoinBroadcast {
+                        name,
+                        grpid,
+                        contact_id,
+                        fingerprint,
+                        invitenumber,
+                        authcode,
+                    })
+                }
+            } else {
+                Ok(Qr::AskJoinBroadcast {
+                    name,
+                    grpid,
+                    contact_id,
+                    fingerprint,
+                    invitenumber,
+                    authcode,
+                })
+            }
         } else if context.is_self_addr(&addr).await? {
             if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
                 Ok(Qr::WithdrawVerifyContact {
@@ -800,6 +876,12 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             invitenumber,
             authcode,
             ..
+        }
+        | Qr::WithdrawJoinBroadcast {
+            grpid,
+            invitenumber,
+            authcode,
+            ..
         } => {
             token::delete(context, &grpid).await?;
             context
@@ -825,6 +907,12 @@ pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
             context.scheduler.interrupt_inbox().await;
         }
         Qr::ReviveVerifyGroup {
+            invitenumber,
+            authcode,
+            grpid,
+            ..
+        }
+        | Qr::ReviveJoinBroadcast {
             invitenumber,
             authcode,
             grpid,
