@@ -140,15 +140,15 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         return chat
 
     def wait_for_broadcast_messages(ac):
+        snapshot1 = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot1.text == "You joined the channel."
+
+        snapshot2 = ac.wait_for_incoming_msg().get_snapshot()
+        assert snapshot2.text == "Hello everyone!"
+
         chat = get_broadcast(ac)
-
-        snapshot = ac.wait_for_incoming_msg().get_snapshot()
-        assert snapshot.text == "You joined the channel."
-        assert snapshot.chat_id == chat.id
-
-        snapshot = ac.wait_for_incoming_msg().get_snapshot()
-        assert snapshot.text == "Hello everyone!"
-        assert snapshot.chat_id == chat.id
+        assert snapshot1.chat_id == chat.id
+        assert snapshot2.chat_id == chat.id
 
     def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
         # Check that the chat partner is verified.
