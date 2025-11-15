@@ -245,7 +245,7 @@ pub enum Qr {
         /// because groups were once the only multi-user chats.
         grpid: String,
 
-        /// ID of the contact who owns the channel and created the QR code.
+        /// Contact ID. Always `ContactId::SELF`.
         contact_id: ContactId,
 
         /// Fingerprint of the contact's key as scanned from the QR code.
@@ -306,7 +306,7 @@ pub enum Qr {
         /// because groups were once the only multi-user chats.
         grpid: String,
 
-        /// ID of the contact who owns the channel and created the QR code.
+        /// Contact ID. Always `ContactId::SELF`.
         contact_id: ContactId,
 
         /// Fingerprint of the contact's key as scanned from the QR code.

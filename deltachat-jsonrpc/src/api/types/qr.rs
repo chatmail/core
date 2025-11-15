@@ -163,7 +163,7 @@ pub enum QrObject {
         name: String,
         /// ID, uniquely identifying this chat. Called grpid for historic reasons.
         grpid: String,
-        /// Contact ID.
+        /// Contact ID. Always `ContactId::SELF`.
         contact_id: u32,
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: String,
@@ -204,7 +204,7 @@ pub enum QrObject {
         name: String,
         /// Globally unique chat ID. Called grpid for historic reasons.
         grpid: String,
-        /// Contact ID.
+        /// Contact ID. Always `ContactId::SELF`.
         contact_id: u32,
         /// Fingerprint of the contact key as scanned from the QR code.
         fingerprint: String,
