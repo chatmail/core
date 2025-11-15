@@ -34,7 +34,6 @@
             ./Cargo.lock
             ./Cargo.toml
             ./CMakeLists.txt
-            ./CONTRIBUTING.md
             ./deltachat_derive
             ./deltachat-contact-tools
             ./deltachat-ffi
