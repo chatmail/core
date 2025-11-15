@@ -477,7 +477,10 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(self, Config::MvboxMove | Config::OnlyFetchMvbox)
+        matches!(
+            self,
+            Config::MvboxMove | Config::OnlyFetchMvbox | Config::ConfiguredAddr
+        )
     }
 }
 
@@ -717,6 +720,16 @@ impl Context {
     pub async fn set_config(&self, key: Config, value: Option<&str>) -> Result<()> {
         Self::check_config(key, value)?;
 
+        let n_transports = self.count_transports().await?;
+        if n_transports > 1
+            && matches!(
+                key,
+                Config::MvboxMove | Config::OnlyFetchMvbox | Config::ShowEmails
+            )
+        {
+            bail!("Cannot reconfigure {key} when multiple transports are configured");
+        }
+
         let _pause = match key.needs_io_restart() {
             true => self.scheduler.pause(self).await?,
             _ => Default::default(),
@@ -802,10 +815,11 @@ impl Context {
                     .await?;
             }
             Config::ConfiguredAddr => {
-                if self.is_configured().await? {
-                    bail!("Cannot change ConfiguredAddr");
-                }
-                if let Some(addr) = value {
+                let Some(addr) = value else {
+                    bail!("Cannot unset configured_addr");
+                };
+
+                if !self.is_configured().await? {
                     info!(
                         self,
                         "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
@@ -816,6 +830,33 @@ impl Context {
                     .save_to_transports_table(self, &EnteredLoginParam::default())
                     .await?;
                 }
+                self.sql
+                    .transaction(|transaction| {
+                        if transaction.query_row(
+                            "SELECT COUNT(*) FROM transports WHERE addr=?",
+                            (addr,),
+                            |row| {
+                                let res: i64 = row.get(0)?;
+                                Ok(res)
+                            },
+                        )? == 0
+                        {
+                            bail!("Address does not belong to any transport.");
+                        }
+                        transaction.execute(
+                            "UPDATE config SET value=? WHERE keyname='configured_addr'",
+                            (addr,),
+                        )?;
+
+                        // Clean up SMTP queue.
+                        //
+                        // The messages in the queue have a different
+                        // From address so we cannot send them over
+                        // the new SMTP transport.
+                        transaction.execute("DELETE FROM smtp", ())?;
+                        Ok(())
+                    })
+                    .await?;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

@@ -64,6 +64,7 @@ describe("online tests", function () {
     await dc.rpc.setConfig(accountId1, "addr", account1.email);
     await dc.rpc.setConfig(accountId1, "mail_pw", account1.password);
     await dc.rpc.configure(accountId1);
+    await waitForEvent(dc, "ImapInboxIdle", accountId1);
 
     accountId2 = await dc.rpc.addAccount();
     await dc.rpc.batchSetConfig(accountId2, {
@@ -71,6 +72,7 @@ describe("online tests", function () {
       mail_pw: account2.password,
     });
     await dc.rpc.configure(accountId2);
+    await waitForEvent(dc, "ImapInboxIdle", accountId2);
     accountsConfigured = true;
   });
 

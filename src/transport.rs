@@ -10,8 +10,8 @@
 
 use std::fmt;
 
-use anyhow::{Context as _, Result, bail, ensure, format_err};
-use deltachat_contact_tools::{EmailAddress, addr_cmp, addr_normalize};
+use anyhow::{Context as _, Result, bail, format_err};
+use deltachat_contact_tools::{EmailAddress, addr_normalize};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Config;
@@ -241,23 +241,40 @@ impl ConfiguredLoginParam {
     /// Load configured account settings from the database.
     ///
     /// Returns `None` if account is not configured.
-    pub(crate) async fn load(context: &Context) -> Result<Option<Self>> {
+    pub(crate) async fn load(context: &Context) -> Result<Option<(u32, Self)>> {
         let Some(self_addr) = context.get_config(Config::ConfiguredAddr).await? else {
             return Ok(None);
         };
 
-        let json: Option<String> = context
+        let Some((id, json)) = context
             .sql
-            .query_get_value(
-                "SELECT configured_param FROM transports WHERE addr=?",
+            .query_row_optional(
+                "SELECT id, configured_param FROM transports WHERE addr=?",
                 (&self_addr,),
+                |row| {
+                    let id: u32 = row.get(0)?;
+                    let json: String = row.get(1)?;
+                    Ok((id, json))
+                },
             )
-            .await?;
-        if let Some(json) = json {
-            Ok(Some(Self::from_json(&json)?))
-        } else {
+            .await?
+        else {
             bail!("Self address {self_addr} doesn't have a corresponding transport");
-        }
+        };
+        Ok(Some((id, Self::from_json(&json)?)))
+    }
+
+    /// Loads configured login parameters for all transports.
+    pub(crate) async fn load_all(context: &Context) -> Result<Vec<(u32, Self)>> {
+        context
+            .sql
+            .query_map_vec("SELECT id, configured_param FROM transports", (), |row| {
+                let id: u32 = row.get(0)?;
+                let json: String = row.get(1)?;
+                let param = Self::from_json(&json)?;
+                Ok((id, param))
+            })
+            .await
     }
 
     /// Loads legacy configured param. Only used for tests and the migration.
@@ -536,12 +553,6 @@ impl ConfiguredLoginParam {
         let addr = addr_normalize(&self.addr);
         let provider_id = self.provider.map(|provider| provider.id);
         let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-        if let Some(configured_addr) = &configured_addr {
-            ensure!(
-                addr_cmp(configured_addr, &addr),
-                "Adding a second transport is not supported right now."
-            );
-        }
         context
             .sql
             .execute(
@@ -680,7 +691,7 @@ mod tests {
             expected_param
         );
         assert_eq!(t.is_configured().await?, true);
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(param, loaded);
 
         // Legacy ConfiguredImapCertificateChecks config is ignored
@@ -789,7 +800,7 @@ mod tests {
         assert_eq!(loaded, param);
 
         migrate_configured_login_param(&t).await;
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(loaded, param);
 
         Ok(())
@@ -833,7 +844,7 @@ mod tests {
 
         migrate_configured_login_param(&t).await;
 
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(loaded.provider, Some(*provider));
         assert_eq!(loaded.imap.is_empty(), false);
         assert_eq!(loaded.smtp.is_empty(), false);
@@ -890,7 +901,7 @@ mod tests {
         .save_to_transports_table(&t, &EnteredLoginParam::default())
         .await?;
 
-        let loaded = ConfiguredLoginParam::load(&t).await?.unwrap();
+        let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();
         assert_eq!(loaded.provider, Some(*provider));
         assert_eq!(loaded.imap.is_empty(), false);
         assert_eq!(loaded.smtp.is_empty(), false);
