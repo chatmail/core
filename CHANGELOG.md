@@ -1,5 +1,46 @@
 # Changelog
 
+## [2.27.0] - 2025-11-16
+
+### API-Changes
+
+- Add APIs to stop background fetch.
+- [**breaking**]: rename JSON-RPC method accounts_background_fetch() into background_fetch()
+- rpc-client: Add APIs for background fetch.
+- rpc-client: Add Account.wait_for_msg().
+- Deprecate deletion timer string for '1 Minute'.
+
+### Features / Changes
+
+- Implement RFC 9788 (Header Protection for Cryptographically Protected Email) ([#7130](https://github.com/chatmail/core/pull/7130)).
+- Tweak initial info-message for unencrypted chats ([#7427](https://github.com/chatmail/core/pull/7427)).
+- Add Contact::get_or_gen_color. Use it in CFFI and JSON-RPC to avoid gray self-color ([#7374](https://github.com/chatmail/core/pull/7374)).
+- [**breaking**] Withdraw broadcast invites. Add Qr::WithdrawJoinBroadcast and Qr::ReviveJoinBroadcast QR code types. ([#7439](https://github.com/chatmail/core/pull/7439)).
+
+### Fixes
+
+- Set `get_max_smtp_rcpt_to` for chatmail to the actual limit of 1000 instead of unlimited. ([#7432](https://github.com/chatmail/core/pull/7432)).
+- Always set bcc_self on backup import/export.
+- Escape connectivity HTML.
+- Send webm as file, it is not supported by all UI.
+
+### Build system
+
+- nix: Exclude CONTRIBUTING.md from the source files.
+
+### Refactor
+
+- Use wait_for_incoming_msg() in more tests.
+
+### Tests
+
+- Fix flaky test_send_receive_locations.
+- Port folder-related CFFI tests to JSON-RPC.
+- HP-Outer headers are added to messages with standard Header Protection ([#7130](https://github.com/chatmail/core/pull/7130)).
+- rpc-client: Test_qr_securejoin_broadcast: Wait for incoming message before getting chatlist ([#7442](https://github.com/chatmail/core/pull/7442)).
+- Add pytest fixture for account manager.
+- Test background_fetch() and stop_background_fetch().
+
 ## [2.26.0] - 2025-11-11
 
 ### API-Changes
@@ -7143,3 +7184,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.24.0]: https://github.com/chatmail/core/compare/v2.23.0..v2.24.0
 [2.25.0]: https://github.com/chatmail/core/compare/v2.24.0..v2.25.0
 [2.26.0]: https://github.com/chatmail/core/compare/v2.25.0..v2.26.0
+[2.27.0]: https://github.com/chatmail/core/compare/v2.26.0..v2.27.0
