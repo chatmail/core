@@ -547,7 +547,7 @@
                   deltachat-python
                   deltachat-rpc-client
                   pkgs.python3Packages.breathe
-                  pkgs.python3Packages.sphinx_rtd_theme
+                  pkgs.python3Packages.sphinx-rtd-theme
                 ];
                 nativeBuildInputs = [ pkgs.sphinx ];
                 buildPhase = ''sphinx-build -b html -a python/doc/ dist/html'';
