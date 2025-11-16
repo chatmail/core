@@ -292,11 +292,10 @@ impl MimeFactory {
 
                             // In a broadcast channel, only send member-added/removed messages
                             // to the affected member:
-                            if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
-                                if fp? != fingerprint {
+                            if let Some(fp) = must_have_only_one_recipient(&msg, &chat)
+                                && fp? != fingerprint {
                                     continue;
                                 }
-                            }
 
                             let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
                                 Some(SignedPublicKey::from_slice(public_key_bytes)?)
@@ -347,8 +346,8 @@ impl MimeFactory {
                                 // Row is a tombstone,
                                 // member is not actually part of the group.
                                 if !recipients_contain_addr(&past_members, &addr) {
-                                    if let Some(email_to_remove) = email_to_remove {
-                                        if email_to_remove == addr {
+                                    if let Some(email_to_remove) = email_to_remove
+                                        && email_to_remove == addr {
                                             // This is a "member removed" message,
                                             // we need to notify removed member
                                             // that it was removed.
@@ -365,7 +364,6 @@ impl MimeFactory {
                                                 }
                                             }
                                         }
-                                    }
                                     if !undisclosed_recipients {
                                         past_members.push((name, addr.clone()));
                                         past_member_timestamps.push(remove_timestamp);
@@ -395,15 +393,14 @@ impl MimeFactory {
                             "member_fingerprints.len() ({}) < to.len() ({})",
                             member_fingerprints.len(), to.len());
 
-                        if to.len() > 1 {
-                            if let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
+                        if to.len() > 1
+                            && let Some(position) = to.iter().position(|(_, x)| x == &from_addr) {
                                 to.remove(position);
                                 member_timestamps.remove(position);
                                 if is_encrypted {
                                     member_fingerprints.remove(position);
                                 }
                             }
-                        }
 
                         member_timestamps.extend(past_member_timestamps);
                         if is_encrypted {
@@ -733,36 +730,35 @@ impl MimeFactory {
             ));
         }
 
-        if let Loaded::Message { chat, .. } = &self.loaded {
-            if chat.typ == Chattype::Group {
-                if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await?
-                {
-                    headers.push((
-                        "Chat-Group-Member-Timestamps",
-                        mail_builder::headers::raw::Raw::new(
-                            self.member_timestamps
-                                .iter()
-                                .map(|ts| ts.to_string())
-                                .collect::<Vec<String>>()
-                                .join(" "),
-                        )
-                        .into(),
-                    ));
-                }
+        if let Loaded::Message { chat, .. } = &self.loaded
+            && chat.typ == Chattype::Group
+        {
+            if !self.member_timestamps.is_empty() && !chat.member_list_is_stale(context).await? {
+                headers.push((
+                    "Chat-Group-Member-Timestamps",
+                    mail_builder::headers::raw::Raw::new(
+                        self.member_timestamps
+                            .iter()
+                            .map(|ts| ts.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                    )
+                    .into(),
+                ));
+            }
 
-                if !self.member_fingerprints.is_empty() {
-                    headers.push((
-                        "Chat-Group-Member-Fpr",
-                        mail_builder::headers::raw::Raw::new(
-                            self.member_fingerprints
-                                .iter()
-                                .map(|fp| fp.to_string())
-                                .collect::<Vec<String>>()
-                                .join(" "),
-                        )
-                        .into(),
-                    ));
-                }
+            if !self.member_fingerprints.is_empty() {
+                headers.push((
+                    "Chat-Group-Member-Fpr",
+                    mail_builder::headers::raw::Raw::new(
+                        self.member_fingerprints
+                            .iter()
+                            .map(|fp| fp.to_string())
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                    )
+                    .into(),
+                ));
             }
         }
 
@@ -814,37 +810,34 @@ impl MimeFactory {
                 "Auto-Submitted",
                 mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
             ));
-        } else if let Loaded::Message { msg, .. } = &self.loaded {
-            if msg.param.get_cmd() == SystemMessage::SecurejoinMessage {
-                let step = msg.param.get(Param::Arg).unwrap_or_default();
-                if step != "vg-request" && step != "vc-request" {
-                    headers.push((
-                        "Auto-Submitted",
-                        mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
-                    ));
-                }
+        } else if let Loaded::Message { msg, .. } = &self.loaded
+            && msg.param.get_cmd() == SystemMessage::SecurejoinMessage
+        {
+            let step = msg.param.get(Param::Arg).unwrap_or_default();
+            if step != "vg-request" && step != "vc-request" {
+                headers.push((
+                    "Auto-Submitted",
+                    mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
+                ));
             }
         }
 
-        if let Loaded::Message { msg, chat } = &self.loaded {
-            if chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast {
-                headers.push((
-                    "Chat-List-ID",
-                    mail_builder::headers::text::Text::new(format!(
-                        "{} <{}>",
-                        chat.name, chat.grpid
-                    ))
+        if let Loaded::Message { msg, chat } = &self.loaded
+            && (chat.typ == Chattype::OutBroadcast || chat.typ == Chattype::InBroadcast)
+        {
+            headers.push((
+                "Chat-List-ID",
+                mail_builder::headers::text::Text::new(format!("{} <{}>", chat.name, chat.grpid))
                     .into(),
-                ));
+            ));
 
-                if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup {
-                    if let Some(secret) = msg.param.get(PARAM_BROADCAST_SECRET) {
-                        headers.push((
-                            "Chat-Broadcast-Secret",
-                            mail_builder::headers::text::Text::new(secret.to_string()).into(),
-                        ));
-                    }
-                }
+            if msg.param.get_cmd() == SystemMessage::MemberAddedToGroup
+                && let Some(secret) = msg.param.get(PARAM_BROADCAST_SECRET)
+            {
+                headers.push((
+                    "Chat-Broadcast-Secret",
+                    mail_builder::headers::text::Text::new(secret.to_string()).into(),
+                ));
             }
         }
 
@@ -1204,16 +1197,16 @@ impl MimeFactory {
 
             // Set the appropriate Content-Type for the inner message.
             for (h, v) in &mut message.headers {
-                if h == "Content-Type" {
-                    if let mail_builder::headers::HeaderType::ContentType(ct) = v {
-                        let mut ct_new = ct.clone();
-                        ct_new = ct_new.attribute("protected-headers", "v1");
-                        if use_std_header_protection {
-                            ct_new = ct_new.attribute("hp", "cipher");
-                        }
-                        *ct = ct_new;
-                        break;
+                if h == "Content-Type"
+                    && let mail_builder::headers::HeaderType::ContentType(ct) = v
+                {
+                    let mut ct_new = ct.clone();
+                    ct_new = ct_new.attribute("protected-headers", "v1");
+                    if use_std_header_protection {
+                        ct_new = ct_new.attribute("hp", "cipher");
                     }
+                    *ct = ct_new;
+                    break;
                 }
             }
 
@@ -1257,10 +1250,10 @@ impl MimeFactory {
             // once new core versions are sufficiently deployed.
             let anonymous_recipients = false;
 
-            if context.get_config_bool(Config::TestHooks).await? {
-                if let Some(hook) = &*context.pre_encrypt_mime_hook.lock() {
-                    message = hook(context, message);
-                }
+            if context.get_config_bool(Config::TestHooks).await?
+                && let Some(hook) = &*context.pre_encrypt_mime_hook.lock()
+            {
+                message = hook(context, message);
             }
 
             let encrypted = if let Some(shared_secret) = shared_secret {
@@ -1348,16 +1341,16 @@ impl MimeFactory {
                 message
             } else {
                 for (h, v) in &mut message.headers {
-                    if h == "Content-Type" {
-                        if let mail_builder::headers::HeaderType::ContentType(ct) = v {
-                            let mut ct_new = ct.clone();
-                            ct_new = ct_new.attribute("protected-headers", "v1");
-                            if use_std_header_protection {
-                                ct_new = ct_new.attribute("hp", "clear");
-                            }
-                            *ct = ct_new;
-                            break;
+                    if h == "Content-Type"
+                        && let mail_builder::headers::HeaderType::ContentType(ct) = v
+                    {
+                        let mut ct_new = ct.clone();
+                        ct_new = ct_new.attribute("protected-headers", "v1");
+                        if use_std_header_protection {
+                            ct_new = ct_new.attribute("hp", "clear");
                         }
+                        *ct = ct_new;
+                        break;
                     }
                 }
 
@@ -1882,10 +1875,10 @@ impl MimeFactory {
             parts.push(msg_kml_part);
         }
 
-        if location::is_sending_locations_to_chat(context, Some(msg.chat_id)).await? {
-            if let Some(part) = self.get_location_kml_part(context).await? {
-                parts.push(part);
-            }
+        if location::is_sending_locations_to_chat(context, Some(msg.chat_id)).await?
+            && let Some(part) = self.get_location_kml_part(context).await?
+        {
+            parts.push(part);
         }
 
         // we do not piggyback sync-files to other self-sent-messages

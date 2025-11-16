@@ -1259,15 +1259,14 @@ impl Session {
                 continue;
             };
             let is_seen = fetch.flags().any(|flag| flag == Flag::Seen);
-            if is_seen {
-                if let Some(chat_id) = mark_seen_by_uid(context, folder, uid_validity, uid)
+            if is_seen
+                && let Some(chat_id) = mark_seen_by_uid(context, folder, uid_validity, uid)
                     .await
                     .with_context(|| {
                         format!("failed to update seen status for msg {folder}/{uid}")
                     })?
-                {
-                    updated_chat_ids.insert(chat_id);
-                }
+            {
+                updated_chat_ids.insert(chat_id);
             }
 
             if let Some(modseq) = fetch.modseq {
@@ -1321,10 +1320,10 @@ impl Session {
             while let Some(msg) = list.try_next().await? {
                 match get_fetch_headers(&msg) {
                     Ok(headers) => {
-                        if let Some(from) = mimeparser::get_from(&headers) {
-                            if context.is_self_addr(&from.addr).await? {
-                                result.extend(mimeparser::get_recipients(&headers));
-                            }
+                        if let Some(from) = mimeparser::get_from(&headers)
+                            && context.is_self_addr(&from.addr).await?
+                        {
+                            result.extend(mimeparser::get_recipients(&headers));
                         }
                     }
                     Err(err) => {
@@ -1557,17 +1556,17 @@ impl Session {
                 .await?;
             let mut got_turn_server = false;
             for m in metadata {
-                if m.entry == "/shared/vendor/deltachat/turn" {
-                    if let Some(value) = m.value {
-                        match create_ice_servers_from_metadata(context, &value).await {
-                            Ok((parsed_timestamp, parsed_ice_servers)) => {
-                                old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
-                                old_metadata.ice_servers = parsed_ice_servers;
-                                got_turn_server = false;
-                            }
-                            Err(err) => {
-                                warn!(context, "Failed to parse TURN server metadata: {err:#}.");
-                            }
+                if m.entry == "/shared/vendor/deltachat/turn"
+                    && let Some(value) = m.value
+                {
+                    match create_ice_servers_from_metadata(context, &value).await {
+                        Ok((parsed_timestamp, parsed_ice_servers)) => {
+                            old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
+                            old_metadata.ice_servers = parsed_ice_servers;
+                            got_turn_server = false;
+                        }
+                        Err(err) => {
+                            warn!(context, "Failed to parse TURN server metadata: {err:#}.");
                         }
                     }
                 }
@@ -1852,11 +1851,13 @@ impl Imap {
             info!(context, "Scanning folder: {:?}", folder);
 
             // Update the delimiter iff there is a different one, but only once.
-            if let Some(d) = folder.delimiter() {
-                if delimiter_is_default && !d.is_empty() && delimiter != d {
-                    delimiter = d.to_string();
-                    delimiter_is_default = false;
-                }
+            if let Some(d) = folder.delimiter()
+                && delimiter_is_default
+                && !d.is_empty()
+                && delimiter != d
+            {
+                delimiter = d.to_string();
+                delimiter_is_default = false;
             }
 
             let folder_meaning = get_folder_meaning_by_attrs(folder.attributes());
@@ -2097,12 +2098,10 @@ async fn needs_move_to_mvbox(
             .get_header_value(HeaderDef::AutoSubmitted)
             .filter(|val| val.eq_ignore_ascii_case("auto-generated"))
             .is_some()
+        && let Some(from) = mimeparser::get_from(headers)
+        && context.is_self_addr(&from.addr).await?
     {
-        if let Some(from) = mimeparser::get_from(headers) {
-            if context.is_self_addr(&from.addr).await? {
-                return Ok(true);
-            }
-        }
+        return Ok(true);
     }
     if !context.get_config_bool(Config::MvboxMove).await? {
         return Ok(false);
@@ -2272,12 +2271,13 @@ pub(crate) async fn prefetch_should_download(
     // We do not know the Message-ID or the Message-ID is missing (in this case, we create one in
     // the further process).
 
-    if let Some(chat) = prefetch_get_chat(context, headers).await? {
-        if chat.typ == Chattype::Group && !chat.id.is_special() {
-            // This might be a group command, like removing a group member.
-            // We really need to fetch this to avoid inconsistent group state.
-            return Ok(true);
-        }
+    if let Some(chat) = prefetch_get_chat(context, headers).await?
+        && chat.typ == Chattype::Group
+        && !chat.id.is_special()
+    {
+        // This might be a group command, like removing a group member.
+        // We really need to fetch this to avoid inconsistent group state.
+        return Ok(true);
     }
 
     let maybe_ndn = if let Some(from) = headers.get_header_value(HeaderDef::From_) {
@@ -2524,11 +2524,11 @@ fn build_sequence_sets(uids: &[u32]) -> Result<Vec<(Vec<u32>, String)>> {
     let mut ranges: Vec<UidRange> = vec![];
 
     for &current in uids {
-        if let Some(last) = ranges.last_mut() {
-            if last.end + 1 == current {
-                last.end = current;
-                continue;
-            }
+        if let Some(last) = ranges.last_mut()
+            && last.end + 1 == current
+        {
+            last.end = current;
+            continue;
         }
 
         ranges.push(UidRange {

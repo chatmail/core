@@ -884,53 +884,35 @@ pub(crate) async fn receive_imf_inner(
         }
     }
 
-    if let Some(avatar_action) = &mime_parser.user_avatar {
-        if from_id != ContactId::UNDEFINED
-            && context
-                .update_contacts_timestamp(
-                    from_id,
-                    Param::AvatarTimestamp,
-                    mime_parser.timestamp_sent,
-                )
-                .await?
-        {
-            if let Err(err) = contact::set_profile_image(
-                context,
-                from_id,
-                avatar_action,
-                mime_parser.was_encrypted(),
-            )
-            .await
-            {
-                warn!(context, "receive_imf cannot update profile image: {err:#}.");
-            };
-        }
-    }
+    if let Some(avatar_action) = &mime_parser.user_avatar
+        && from_id != ContactId::UNDEFINED
+        && context
+            .update_contacts_timestamp(from_id, Param::AvatarTimestamp, mime_parser.timestamp_sent)
+            .await?
+        && let Err(err) =
+            contact::set_profile_image(context, from_id, avatar_action, mime_parser.was_encrypted())
+                .await
+    {
+        warn!(context, "receive_imf cannot update profile image: {err:#}.");
+    };
 
     // Ignore footers from mailinglists as they are often created or modified by the mailinglist software.
-    if let Some(footer) = &mime_parser.footer {
-        if !mime_parser.is_mailinglist_message()
-            && from_id != ContactId::UNDEFINED
-            && context
-                .update_contacts_timestamp(
-                    from_id,
-                    Param::StatusTimestamp,
-                    mime_parser.timestamp_sent,
-                )
-                .await?
-        {
-            if let Err(err) = contact::set_status(
-                context,
-                from_id,
-                footer.to_string(),
-                mime_parser.was_encrypted(),
-                mime_parser.has_chat_version(),
-            )
-            .await
-            {
-                warn!(context, "Cannot update contact status: {err:#}.");
-            }
-        }
+    if let Some(footer) = &mime_parser.footer
+        && !mime_parser.is_mailinglist_message()
+        && from_id != ContactId::UNDEFINED
+        && context
+            .update_contacts_timestamp(from_id, Param::StatusTimestamp, mime_parser.timestamp_sent)
+            .await?
+        && let Err(err) = contact::set_status(
+            context,
+            from_id,
+            footer.to_string(),
+            mime_parser.was_encrypted(),
+            mime_parser.has_chat_version(),
+        )
+        .await
+    {
+        warn!(context, "Cannot update contact status: {err:#}.");
     }
 
     // Get user-configured server deletion
@@ -1341,8 +1323,8 @@ async fn do_chat_assignment(
                 if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
-                } else if allow_creation || test_normal_chat.is_some() {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
+                } else if (allow_creation || test_normal_chat.is_some())
+                    && let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
                         is_partial_download.is_some(),
@@ -1353,16 +1335,15 @@ async fn do_chat_assignment(
                         grpid,
                     )
                     .await?
-                    {
-                        chat_id = Some(new_chat_id);
-                        chat_id_blocked = new_chat_id_blocked;
-                        chat_created = true;
-                    }
+                {
+                    chat_id = Some(new_chat_id);
+                    chat_id_blocked = new_chat_id_blocked;
+                    chat_created = true;
                 }
             }
             ChatAssignment::MailingListOrBroadcast => {
-                if let Some(mailinglist_header) = mime_parser.get_mailinglist_header() {
-                    if let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) =
+                if let Some(mailinglist_header) = mime_parser.get_mailinglist_header()
+                    && let Some((new_chat_id, new_chat_id_blocked, new_chat_created)) =
                         create_or_lookup_mailinglist_or_broadcast(
                             context,
                             allow_creation,
@@ -1372,13 +1353,12 @@ async fn do_chat_assignment(
                             mime_parser,
                         )
                         .await?
-                    {
-                        chat_id = Some(new_chat_id);
-                        chat_id_blocked = new_chat_id_blocked;
-                        chat_created = new_chat_created;
+                {
+                    chat_id = Some(new_chat_id);
+                    chat_id_blocked = new_chat_id_blocked;
+                    chat_created = new_chat_created;
 
-                        apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
-                    }
+                    apply_mailinglist_changes(context, mime_parser, new_chat_id).await?;
                 }
             }
             ChatAssignment::ExistingChat {
@@ -1413,11 +1393,10 @@ async fn do_chat_assignment(
         if chat_id_blocked != Blocked::Not
             && create_blocked != Blocked::Yes
             && !matches!(chat_assignment, ChatAssignment::MailingListOrBroadcast)
+            && let Some(chat_id) = chat_id
         {
-            if let Some(chat_id) = chat_id {
-                chat_id.set_blocked(context, create_blocked).await?;
-                chat_id_blocked = create_blocked;
-            }
+            chat_id.set_blocked(context, create_blocked).await?;
+            chat_id_blocked = create_blocked;
         }
 
         if chat_id.is_none() {
@@ -1441,21 +1420,20 @@ async fn do_chat_assignment(
                 chat_created = true;
             }
 
-            if let Some(chat_id) = chat_id {
-                if chat_id_blocked != Blocked::Not {
-                    if chat_id_blocked != create_blocked {
-                        chat_id.set_blocked(context, create_blocked).await?;
-                    }
-                    if create_blocked == Blocked::Request && parent_message.is_some() {
-                        // we do not want any chat to be created implicitly.  Because of the origin-scale-up,
-                        // the contact requests will pop up and this should be just fine.
-                        ContactId::scaleup_origin(context, &[from_id], Origin::IncomingReplyTo)
-                            .await?;
-                        info!(
-                            context,
-                            "Message is a reply to a known message, mark sender as known.",
-                        );
-                    }
+            if let Some(chat_id) = chat_id
+                && chat_id_blocked != Blocked::Not
+            {
+                if chat_id_blocked != create_blocked {
+                    chat_id.set_blocked(context, create_blocked).await?;
+                }
+                if create_blocked == Blocked::Request && parent_message.is_some() {
+                    // we do not want any chat to be created implicitly.  Because of the origin-scale-up,
+                    // the contact requests will pop up and this should be just fine.
+                    ContactId::scaleup_origin(context, &[from_id], Origin::IncomingReplyTo).await?;
+                    info!(
+                        context,
+                        "Message is a reply to a known message, mark sender as known.",
+                    );
                 }
             }
         }
@@ -1476,8 +1454,8 @@ async fn do_chat_assignment(
                 if let Some((id, blocked)) = chat::get_chat_id_by_grpid(context, grpid).await? {
                     chat_id = Some(id);
                     chat_id_blocked = blocked;
-                } else if allow_creation {
-                    if let Some((new_chat_id, new_chat_id_blocked)) = create_group(
+                } else if allow_creation
+                    && let Some((new_chat_id, new_chat_id_blocked)) = create_group(
                         context,
                         mime_parser,
                         is_partial_download.is_some(),
@@ -1488,11 +1466,10 @@ async fn do_chat_assignment(
                         grpid,
                     )
                     .await?
-                    {
-                        chat_id = Some(new_chat_id);
-                        chat_id_blocked = new_chat_id_blocked;
-                        chat_created = true;
-                    }
+                {
+                    chat_id = Some(new_chat_id);
+                    chat_id_blocked = new_chat_id_blocked;
+                    chat_created = true;
                 }
             }
             ChatAssignment::ExistingChat {
@@ -1574,11 +1551,12 @@ async fn do_chat_assignment(
                     chat_created = true;
                 }
             }
-            if chat_id.is_none() && mime_parser.has_chat_version() {
-                if let Some(chat) = ChatIdBlocked::lookup_by_contact(context, to_id).await? {
-                    chat_id = Some(chat.id);
-                    chat_id_blocked = chat.blocked;
-                }
+            if chat_id.is_none()
+                && mime_parser.has_chat_version()
+                && let Some(chat) = ChatIdBlocked::lookup_by_contact(context, to_id).await?
+            {
+                chat_id = Some(chat.id);
+                chat_id_blocked = chat.blocked;
             }
         }
 
@@ -1598,11 +1576,11 @@ async fn do_chat_assignment(
         }
 
         // automatically unblock chat when the user sends a message
-        if chat_id_blocked != Blocked::Not {
-            if let Some(chat_id) = chat_id {
-                chat_id.unblock_ex(context, Nosync).await?;
-                chat_id_blocked = Blocked::Not;
-            }
+        if chat_id_blocked != Blocked::Not
+            && let Some(chat_id) = chat_id
+        {
+            chat_id.unblock_ex(context, Nosync).await?;
+            chat_id_blocked = Blocked::Not;
         }
     }
     let chat_id = chat_id.unwrap_or_else(|| {
@@ -1640,11 +1618,9 @@ async fn add_parts(
 
     // if contact renaming is prevented (for mailinglists and bots),
     // we use name from From:-header as override name
-    if prevent_rename {
-        if let Some(name) = &mime_parser.from.display_name {
-            for part in &mut mime_parser.parts {
-                part.param.set(Param::OverrideSenderDisplayname, name);
-            }
+    if prevent_rename && let Some(name) = &mime_parser.from.display_name {
+        for part in &mut mime_parser.parts {
+            part.param.set(Param::OverrideSenderDisplayname, name);
         }
     }
 
@@ -2270,36 +2246,36 @@ async fn handle_edit_delete(
                 "Edit message: rfc724_mid {rfc724_mid:?} not found."
             );
         }
-    } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete) {
-        if let Some(part) = mime_parser.parts.first() {
-            // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
-            // deletion requests, so there's no need to support them.
-            if part.param.get_bool(Param::GuaranteeE2ee).unwrap_or(false) {
-                let mut modified_chat_ids = HashSet::new();
-                let mut msg_ids = Vec::new();
+    } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete)
+        && let Some(part) = mime_parser.parts.first()
+    {
+        // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
+        // deletion requests, so there's no need to support them.
+        if part.param.get_bool(Param::GuaranteeE2ee).unwrap_or(false) {
+            let mut modified_chat_ids = HashSet::new();
+            let mut msg_ids = Vec::new();
 
-                let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
-                for rfc724_mid in rfc724_mid_vec {
-                    if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-                        if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
-                            if msg.from_id == from_id {
-                                message::delete_msg_locally(context, &msg).await?;
-                                msg_ids.push(msg.id);
-                                modified_chat_ids.insert(msg.chat_id);
-                            } else {
-                                warn!(context, "Delete message: Bad sender.");
-                            }
+            let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
+            for rfc724_mid in rfc724_mid_vec {
+                if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+                    if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
+                        if msg.from_id == from_id {
+                            message::delete_msg_locally(context, &msg).await?;
+                            msg_ids.push(msg.id);
+                            modified_chat_ids.insert(msg.chat_id);
                         } else {
-                            warn!(context, "Delete message: Database entry does not exist.");
+                            warn!(context, "Delete message: Bad sender.");
                         }
                     } else {
-                        warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                        warn!(context, "Delete message: Database entry does not exist.");
                     }
+                } else {
+                    warn!(context, "Delete message: {rfc724_mid:?} not found.");
                 }
-                message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
-            } else {
-                warn!(context, "Delete message: Not encrypted.");
             }
+            message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
+        } else {
+            warn!(context, "Delete message: Not encrypted.");
         }
     }
     Ok(())
@@ -2356,33 +2332,32 @@ async fn save_locations(
 
     let mut send_event = false;
 
-    if let Some(message_kml) = &mime_parser.message_kml {
-        if let Some(newest_location_id) =
+    if let Some(message_kml) = &mime_parser.message_kml
+        && let Some(newest_location_id) =
             location::save(context, chat_id, from_id, &message_kml.locations, true).await?
-        {
-            location::set_msg_location_id(context, msg_id, newest_location_id).await?;
-            send_event = true;
-        }
+    {
+        location::set_msg_location_id(context, msg_id, newest_location_id).await?;
+        send_event = true;
     }
 
-    if let Some(location_kml) = &mime_parser.location_kml {
-        if let Some(addr) = &location_kml.addr {
-            let contact = Contact::get_by_id(context, from_id).await?;
-            if contact.get_addr().to_lowercase() == addr.to_lowercase() {
-                if location::save(context, chat_id, from_id, &location_kml.locations, false)
-                    .await?
-                    .is_some()
-                {
-                    send_event = true;
-                }
-            } else {
-                warn!(
-                    context,
-                    "Address in location.kml {:?} is not the same as the sender address {:?}.",
-                    addr,
-                    contact.get_addr()
-                );
+    if let Some(location_kml) = &mime_parser.location_kml
+        && let Some(addr) = &location_kml.addr
+    {
+        let contact = Contact::get_by_id(context, from_id).await?;
+        if contact.get_addr().to_lowercase() == addr.to_lowercase() {
+            if location::save(context, chat_id, from_id, &location_kml.locations, false)
+                .await?
+                .is_some()
+            {
+                send_event = true;
             }
+        } else {
+            warn!(
+                context,
+                "Address in location.kml {:?} is not the same as the sender address {:?}.",
+                addr,
+                contact.get_addr()
+            );
         }
     }
     if send_event {
@@ -2734,13 +2709,13 @@ async fn update_chats_contacts_timestamps(
                 to_ids.iter(),
                 chat_group_member_timestamps.iter().take(to_ids.len()),
             ) {
-                if let Some(contact_id) = contact_id {
-                    if Some(*contact_id) != ignored_id {
-                        // It could be that member was already added,
-                        // but updated addition timestamp
-                        // is also a modification worth notifying about.
-                        modified |= add_statement.execute((chat_id, contact_id, ts))? > 0;
-                    }
+                if let Some(contact_id) = contact_id
+                    && Some(*contact_id) != ignored_id
+                {
+                    // It could be that member was already added,
+                    // but updated addition timestamp
+                    // is also a modification worth notifying about.
+                    modified |= add_statement.execute((chat_id, contact_id, ts))? > 0;
                 }
             }
 
@@ -3003,13 +2978,14 @@ async fn apply_group_changes(
         .copied()
         .collect();
 
-    if let Some(added_id) = added_id {
-        if !added_ids.remove(&added_id) && added_id != ContactId::SELF {
-            // No-op "Member added" message. An exception is self-addition messages because they at
-            // least must be shown when a chat is created on our side.
-            info!(context, "No-op 'Member added' message (TRASH)");
-            better_msg = Some(String::new());
-        }
+    if let Some(added_id) = added_id
+        && !added_ids.remove(&added_id)
+        && added_id != ContactId::SELF
+    {
+        // No-op "Member added" message. An exception is self-addition messages because they at
+        // least must be shown when a chat is created on our side.
+        info!(context, "No-op 'Member added' message (TRASH)");
+        better_msg = Some(String::new());
     }
     if let Some(removed_id) = removed_id {
         removed_ids.remove(&removed_id);
@@ -3064,59 +3040,52 @@ async fn apply_chat_name_and_avatar_changes(
             Some(_) => Some(chat.name.as_str()),
             None => None,
         })
-    {
-        if let Some(grpname) = mime_parser
+        && let Some(grpname) = mime_parser
             .get_header(HeaderDef::ChatGroupName)
             .map(|grpname| grpname.trim())
             .filter(|grpname| grpname.len() < 200)
-        {
-            let grpname = &sanitize_single_line(grpname);
+    {
+        let grpname = &sanitize_single_line(grpname);
 
-            let chat_group_name_timestamp =
-                chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
-            let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
-            // To provide group name consistency, compare names if timestamps are equal.
-            if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
-                && chat
-                    .id
-                    .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
-                    .await?
-                && grpname != &chat.name
-            {
-                info!(context, "Updating grpname for chat {}.", chat.id);
-                context
-                    .sql
-                    .execute("UPDATE chats SET name=? WHERE id=?;", (grpname, chat.id))
-                    .await?;
-                *send_event_chat_modified = true;
-            }
-            if mime_parser
-                .get_header(HeaderDef::ChatGroupNameChanged)
-                .is_some()
-            {
-                let old_name = &sanitize_single_line(old_name);
-                better_msg.get_or_insert(
-                    stock_str::msg_grp_name(context, old_name, grpname, from_id).await,
-                );
-            }
+        let chat_group_name_timestamp = chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
+        let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
+        // To provide group name consistency, compare names if timestamps are equal.
+        if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
+            && chat
+                .id
+                .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
+                .await?
+            && grpname != &chat.name
+        {
+            info!(context, "Updating grpname for chat {}.", chat.id);
+            context
+                .sql
+                .execute("UPDATE chats SET name=? WHERE id=?;", (grpname, chat.id))
+                .await?;
+            *send_event_chat_modified = true;
+        }
+        if mime_parser
+            .get_header(HeaderDef::ChatGroupNameChanged)
+            .is_some()
+        {
+            let old_name = &sanitize_single_line(old_name);
+            better_msg
+                .get_or_insert(stock_str::msg_grp_name(context, old_name, grpname, from_id).await);
         }
     }
 
     // ========== Apply chat avatar changes ==========
 
-    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg) {
-        if value == "group-avatar-changed" {
-            if let Some(avatar_action) = &mime_parser.group_avatar {
-                // this is just an explicit message containing the group-avatar,
-                // apart from that, the group-avatar is send along with various other messages
-                better_msg.get_or_insert(match avatar_action {
-                    AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
-                    AvatarAction::Change(_) => {
-                        stock_str::msg_grp_img_changed(context, from_id).await
-                    }
-                });
-            }
-        }
+    if let (Some(value), None) = (mime_parser.get_header(HeaderDef::ChatContent), &better_msg)
+        && value == "group-avatar-changed"
+        && let Some(avatar_action) = &mime_parser.group_avatar
+    {
+        // this is just an explicit message containing the group-avatar,
+        // apart from that, the group-avatar is send along with various other messages
+        better_msg.get_or_insert(match avatar_action {
+            AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
+            AvatarAction::Change(_) => stock_str::msg_grp_img_changed(context, from_id).await,
+        });
     }
 
     if let Some(avatar_action) = &mime_parser.group_avatar {
@@ -3297,10 +3266,10 @@ fn compute_mailinglist_name(
     // for mailchimp lists, the name in `ListId` is just a long number.
     // a usable name for these lists is in the `From` header
     // and we can detect these lists by a unique `ListId`-suffix.
-    if listid.ends_with(".list-id.mcsv.net") {
-        if let Some(display_name) = &mime_parser.from.display_name {
-            name.clone_from(display_name);
-        }
+    if listid.ends_with(".list-id.mcsv.net")
+        && let Some(display_name) = &mime_parser.from.display_name
+    {
+        name.clone_from(display_name);
     }
 
     // additional names in square brackets in the subject are preferred
@@ -3325,10 +3294,9 @@ fn compute_mailinglist_name(
             || mime_parser.from.addr.starts_with("notifications@")
             || mime_parser.from.addr.starts_with("newsletter@")
             || listid.ends_with(".xt.local"))
+        && let Some(display_name) = &mime_parser.from.display_name
     {
-        if let Some(display_name) = &mime_parser.from.display_name {
-            name.clone_from(display_name);
-        }
+        name.clone_from(display_name);
     }
 
     // as a last resort, use the ListId as the name
@@ -3476,15 +3444,15 @@ async fn apply_out_broadcast_changes(
             chat::remove_from_chat_contacts_table_without_trace(context, chat.id, from_id).await?;
             info!(context, "Broadcast leave message (TRASH)");
             better_msg = Some("".to_string());
-        } else if from_id == ContactId::SELF {
-            if let Some(removed_id) = removed_id {
-                chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
-                    .await?;
+        } else if from_id == ContactId::SELF
+            && let Some(removed_id) = removed_id
+        {
+            chat::remove_from_chat_contacts_table_without_trace(context, chat.id, removed_id)
+                .await?;
 
-                better_msg.get_or_insert(
-                    stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
-                );
-            }
+            better_msg.get_or_insert(
+                stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
+            );
         }
     }
 
@@ -3508,14 +3476,14 @@ async fn apply_in_broadcast_changes(
 ) -> Result<GroupChangesInfo> {
     ensure!(chat.typ == Chattype::InBroadcast);
 
-    if let Some(part) = mime_parser.parts.first() {
-        if let Some(error) = &part.error {
-            warn!(
-                context,
-                "Not applying broadcast changes from message with error: {error}"
-            );
-            return Ok(GroupChangesInfo::default());
-        }
+    if let Some(part) = mime_parser.parts.first()
+        && let Some(error) = &part.error
+    {
+        warn!(
+            context,
+            "Not applying broadcast changes from message with error: {error}"
+        );
+        return Ok(GroupChangesInfo::default());
     }
 
     let mut send_event_chat_modified = false;
@@ -3531,21 +3499,21 @@ async fn apply_in_broadcast_changes(
     )
     .await?;
 
-    if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded) {
-        if context.is_self_addr(added_addr).await? {
-            let msg = if chat.is_self_in_chat(context).await? {
-                // Self is already in the chat.
-                // Probably Alice has two devices and her second device added us again;
-                // just hide the message.
-                info!(context, "No-op broadcast 'Member added' message (TRASH)");
-                "".to_string()
-            } else {
-                stock_str::msg_you_joined_broadcast(context).await
-            };
+    if let Some(added_addr) = mime_parser.get_header(HeaderDef::ChatGroupMemberAdded)
+        && context.is_self_addr(added_addr).await?
+    {
+        let msg = if chat.is_self_in_chat(context).await? {
+            // Self is already in the chat.
+            // Probably Alice has two devices and her second device added us again;
+            // just hide the message.
+            info!(context, "No-op broadcast 'Member added' message (TRASH)");
+            "".to_string()
+        } else {
+            stock_str::msg_you_joined_broadcast(context).await
+        };
 
-            better_msg.get_or_insert(msg);
-            send_event_chat_modified = true;
-        }
+        better_msg.get_or_insert(msg);
+        send_event_chat_modified = true;
     }
 
     if let Some(removed_fpr) = mime_parser.get_header(HeaderDef::ChatGroupMemberRemovedFpr) {
@@ -3756,12 +3724,11 @@ async fn get_previous_message(
     context: &Context,
     mime_parser: &MimeMessage,
 ) -> Result<Option<Message>> {
-    if let Some(field) = mime_parser.get_header(HeaderDef::References) {
-        if let Some(rfc724mid) = parse_message_ids(field).last() {
-            if let Some(msg_id) = rfc724_mid_exists(context, rfc724mid).await? {
-                return Message::load_from_db_optional(context, msg_id).await;
-            }
-        }
+    if let Some(field) = mime_parser.get_header(HeaderDef::References)
+        && let Some(rfc724mid) = parse_message_ids(field).last()
+        && let Some(msg_id) = rfc724_mid_exists(context, rfc724mid).await?
+    {
+        return Message::load_from_db_optional(context, msg_id).await;
     }
     Ok(None)
 }

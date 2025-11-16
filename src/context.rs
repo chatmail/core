@@ -608,10 +608,9 @@ impl Context {
             if self
                 .quota_needs_update(DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT)
                 .await
+                && let Err(err) = self.update_recent_quota(&mut session).await
             {
-                if let Err(err) = self.update_recent_quota(&mut session).await {
-                    warn!(self, "Failed to update quota: {err:#}.");
-                }
+                warn!(self, "Failed to update quota: {err:#}.");
             }
         }
 

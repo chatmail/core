@@ -309,13 +309,11 @@ impl Context {
                 },
             )
             .await?
+            && last_from_id == from_id
+            && last_param.get_cmd() == SystemMessage::WebxdcInfoMessage
+            && last_in_repl_to == instance.rfc724_mid
         {
-            if last_from_id == from_id
-                && last_param.get_cmd() == SystemMessage::WebxdcInfoMessage
-                && last_in_repl_to == instance.rfc724_mid
-            {
-                return Ok(Some(last_msg_id));
-            }
+            return Ok(Some(last_msg_id));
         }
         Ok(None)
     }
@@ -341,63 +339,59 @@ impl Context {
         let mut param_changed = false;
 
         let mut instance = instance.clone();
-        if let Some(ref document) = status_update_item.document {
-            if instance
+        if let Some(ref document) = status_update_item.document
+            && instance
                 .param
                 .update_timestamp(Param::WebxdcDocumentTimestamp, timestamp)?
-            {
-                instance.param.set(Param::WebxdcDocument, document);
-                param_changed = true;
-            }
+        {
+            instance.param.set(Param::WebxdcDocument, document);
+            param_changed = true;
         }
 
-        if let Some(ref summary) = status_update_item.summary {
-            if instance
+        if let Some(ref summary) = status_update_item.summary
+            && instance
                 .param
                 .update_timestamp(Param::WebxdcSummaryTimestamp, timestamp)?
-            {
-                let summary = sanitize_bidi_characters(summary);
-                instance.param.set(Param::WebxdcSummary, summary.clone());
-                param_changed = true;
-            }
+        {
+            let summary = sanitize_bidi_characters(summary);
+            instance.param.set(Param::WebxdcSummary, summary.clone());
+            param_changed = true;
         }
 
-        if can_info_msg {
-            if let Some(ref info) = status_update_item.info {
-                let info_msg_id = self
-                    .get_overwritable_info_msg_id(&instance, from_id)
-                    .await?;
+        if can_info_msg && let Some(ref info) = status_update_item.info {
+            let info_msg_id = self
+                .get_overwritable_info_msg_id(&instance, from_id)
+                .await?;
 
-                if let (Some(info_msg_id), None) = (info_msg_id, &status_update_item.href) {
-                    chat::update_msg_text_and_timestamp(
-                        self,
-                        instance.chat_id,
-                        info_msg_id,
-                        info.as_str(),
-                        timestamp,
-                    )
-                    .await?;
-                    notify_msg_id = info_msg_id;
-                } else {
-                    notify_msg_id = chat::add_info_msg_with_cmd(
-                        self,
-                        instance.chat_id,
-                        info.as_str(),
-                        SystemMessage::WebxdcInfoMessage,
-                        timestamp,
-                        None,
-                        Some(&instance),
-                        Some(from_id),
-                        None,
-                    )
-                    .await?;
-                }
+            if let (Some(info_msg_id), None) = (info_msg_id, &status_update_item.href) {
+                chat::update_msg_text_and_timestamp(
+                    self,
+                    instance.chat_id,
+                    info_msg_id,
+                    info.as_str(),
+                    timestamp,
+                )
+                .await?;
+                notify_msg_id = info_msg_id;
+            } else {
+                notify_msg_id = chat::add_info_msg_with_cmd(
+                    self,
+                    instance.chat_id,
+                    info.as_str(),
+                    SystemMessage::WebxdcInfoMessage,
+                    timestamp,
+                    None,
+                    Some(&instance),
+                    Some(from_id),
+                    None,
+                )
+                .await?;
+            }
 
-                if let Some(ref href) = status_update_item.href {
-                    let mut notify_msg = Message::load_from_db(self, notify_msg_id).await?;
-                    notify_msg.param.set(Param::Arg, href);
-                    notify_msg.update_param(self).await?;
-                }
+            if let Some(ref href) = status_update_item.href {
+                let mut notify_msg = Message::load_from_db(self, notify_msg_id).await?;
+                notify_msg.param.set(Param::Arg, href);
+                notify_msg.update_param(self).await?;
             }
         }
 
@@ -413,20 +407,19 @@ impl Context {
             });
         }
 
-        if from_id != ContactId::SELF {
-            if let Some(notify_list) = status_update_item.notify {
-                let self_addr = instance.get_webxdc_self_addr(self).await?;
-                if let Some(notify_text) =
-                    notify_list.get(&self_addr).or_else(|| notify_list.get("*"))
-                {
-                    self.emit_event(EventType::IncomingWebxdcNotify {
-                        chat_id: instance.chat_id,
-                        contact_id: from_id,
-                        msg_id: notify_msg_id,
-                        text: notify_text.clone(),
-                        href: status_update_item.href,
-                    });
-                }
+        if from_id != ContactId::SELF
+            && let Some(notify_list) = status_update_item.notify
+        {
+            let self_addr = instance.get_webxdc_self_addr(self).await?;
+            if let Some(notify_text) = notify_list.get(&self_addr).or_else(|| notify_list.get("*"))
+            {
+                self.emit_event(EventType::IncomingWebxdcNotify {
+                    chat_id: instance.chat_id,
+                    contact_id: from_id,
+                    msg_id: notify_msg_id,
+                    text: notify_text.clone(),
+                    href: status_update_item.href,
+                });
             }
         }
 
@@ -882,18 +875,15 @@ impl Message {
 
         let mut archive = self.get_webxdc_archive(context).await?;
 
-        if name == "index.html" {
-            if let Ok(bytes) = get_blob(&mut archive, "manifest.toml").await {
-                if let Ok(manifest) = parse_webxdc_manifest(&bytes) {
-                    if let Some(min_api) = manifest.min_api {
-                        if min_api > WEBXDC_API_VERSION {
-                            return Ok(Vec::from(
-                                "<!DOCTYPE html>This Webxdc requires a newer Delta Chat version.",
-                            ));
-                        }
-                    }
-                }
-            }
+        if name == "index.html"
+            && let Ok(bytes) = get_blob(&mut archive, "manifest.toml").await
+            && let Ok(manifest) = parse_webxdc_manifest(&bytes)
+            && let Some(min_api) = manifest.min_api
+            && min_api > WEBXDC_API_VERSION
+        {
+            return Ok(Vec::from(
+                "<!DOCTYPE html>This Webxdc requires a newer Delta Chat version.",
+            ));
         }
 
         get_blob(&mut archive, name).await

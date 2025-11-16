@@ -310,13 +310,14 @@ impl MimeMessage {
                 // Currently we do not sign unencrypted messages by default.
                 (&mail, mimetype)
             };
-        if mimetype.type_() == mime::MULTIPART && mimetype.subtype().as_str() == "mixed" {
-            if let Some(part) = part.subparts.first() {
-                for field in &part.headers {
-                    let key = field.get_key().to_lowercase();
-                    if !headers.contains_key(&key) && is_hidden(&key) || key == "message-id" {
-                        headers.insert(key.to_string(), field.get_value());
-                    }
+        if mimetype.type_() == mime::MULTIPART
+            && mimetype.subtype().as_str() == "mixed"
+            && let Some(part) = part.subparts.first()
+        {
+            for field in &part.headers {
+                let key = field.get_key().to_lowercase();
+                if !headers.contains_key(&key) && is_hidden(&key) || key == "message-id" {
+                    headers.insert(key.to_string(), field.get_value());
                 }
             }
         }
@@ -805,22 +806,20 @@ impl MimeMessage {
             {
                 part.typ = Viewtype::Voice;
             }
-            if part.typ == Viewtype::Image || part.typ == Viewtype::Gif {
-                if let Some(value) = self.get_header(HeaderDef::ChatContent) {
-                    if value == "sticker" {
-                        part.typ = Viewtype::Sticker;
-                    }
-                }
-            }
-            if part.typ == Viewtype::Audio
-                || part.typ == Viewtype::Voice
-                || part.typ == Viewtype::Video
+            if (part.typ == Viewtype::Image || part.typ == Viewtype::Gif)
+                && let Some(value) = self.get_header(HeaderDef::ChatContent)
+                && value == "sticker"
             {
-                if let Some(field_0) = self.get_header(HeaderDef::ChatDuration) {
-                    let duration_ms = field_0.parse().unwrap_or_default();
-                    if duration_ms > 0 && duration_ms < 24 * 60 * 60 * 1000 {
-                        part.param.set_int(Param::Duration, duration_ms);
-                    }
+                part.typ = Viewtype::Sticker;
+            }
+            if (part.typ == Viewtype::Audio
+                || part.typ == Viewtype::Voice
+                || part.typ == Viewtype::Video)
+                && let Some(field_0) = self.get_header(HeaderDef::ChatDuration)
+            {
+                let duration_ms = field_0.parse().unwrap_or_default();
+                if duration_ms > 0 && duration_ms < 24 * 60 * 60 * 1000 {
+                    part.param.set_int(Param::Duration, duration_ms);
                 }
             }
 
@@ -836,38 +835,38 @@ impl MimeMessage {
             self.squash_attachment_parts();
         }
 
-        if !context.get_config_bool(Config::Bot).await? {
-            if let Some(ref subject) = self.get_subject() {
-                let mut prepend_subject = true;
-                if !self.decrypting_failed {
-                    let colon = subject.find(':');
-                    if colon == Some(2)
-                        || colon == Some(3)
-                        || self.has_chat_version()
-                        || subject.contains("Chat:")
-                    {
-                        prepend_subject = false
-                    }
+        if !context.get_config_bool(Config::Bot).await?
+            && let Some(ref subject) = self.get_subject()
+        {
+            let mut prepend_subject = true;
+            if !self.decrypting_failed {
+                let colon = subject.find(':');
+                if colon == Some(2)
+                    || colon == Some(3)
+                    || self.has_chat_version()
+                    || subject.contains("Chat:")
+                {
+                    prepend_subject = false
                 }
+            }
 
-                // For mailing lists, always add the subject because sometimes there are different topics
-                // and otherwise it might be hard to keep track:
-                if self.is_mailinglist_message() && !self.has_chat_version() {
-                    prepend_subject = true;
-                }
+            // For mailing lists, always add the subject because sometimes there are different topics
+            // and otherwise it might be hard to keep track:
+            if self.is_mailinglist_message() && !self.has_chat_version() {
+                prepend_subject = true;
+            }
 
-                if prepend_subject && !subject.is_empty() {
-                    let part_with_text = self
-                        .parts
-                        .iter_mut()
-                        .find(|part| !part.msg.is_empty() && !part.is_reaction);
-                    if let Some(part) = part_with_text {
-                        // Message bubbles are small, so we use en dash to save space. In some
-                        // languages there may be em dashes in the message text added by the author,
-                        // they may look stronger than Subject separation, this is a known thing.
-                        // Anyway, classic email support isn't a priority as of 2025.
-                        part.msg = format!("{} – {}", subject, part.msg);
-                    }
+            if prepend_subject && !subject.is_empty() {
+                let part_with_text = self
+                    .parts
+                    .iter_mut()
+                    .find(|part| !part.msg.is_empty() && !part.is_reaction);
+                if let Some(part) = part_with_text {
+                    // Message bubbles are small, so we use en dash to save space. In some
+                    // languages there may be em dashes in the message text added by the author,
+                    // they may look stronger than Subject separation, this is a known thing.
+                    // Anyway, classic email support isn't a priority as of 2025.
+                    part.msg = format!("{} – {}", subject, part.msg);
                 }
             }
         }
@@ -881,21 +880,22 @@ impl MimeMessage {
         self.parse_attachments();
 
         // See if an MDN is requested from the other side
-        if !self.decrypting_failed && !self.parts.is_empty() {
-            if let Some(ref dn_to) = self.chat_disposition_notification_to {
-                // Check that the message is not outgoing.
-                let from = &self.from.addr;
-                if !context.is_self_addr(from).await? {
-                    if from.to_lowercase() == dn_to.addr.to_lowercase() {
-                        if let Some(part) = self.parts.last_mut() {
-                            part.param.set_int(Param::WantsMdn, 1);
-                        }
-                    } else {
-                        warn!(
-                            context,
-                            "{} requested a read receipt to {}, ignoring", from, dn_to.addr
-                        );
+        if !self.decrypting_failed
+            && !self.parts.is_empty()
+            && let Some(ref dn_to) = self.chat_disposition_notification_to
+        {
+            // Check that the message is not outgoing.
+            let from = &self.from.addr;
+            if !context.is_self_addr(from).await? {
+                if from.to_lowercase() == dn_to.addr.to_lowercase() {
+                    if let Some(part) = self.parts.last_mut() {
+                        part.param.set_int(Param::WantsMdn, 1);
                     }
+                } else {
+                    warn!(
+                        context,
+                        "{} requested a read receipt to {}, ignoring", from, dn_to.addr
+                    );
                 }
             }
         }
@@ -910,10 +910,11 @@ impl MimeMessage {
                 ..Default::default()
             };
 
-            if let Some(ref subject) = self.get_subject() {
-                if !self.has_chat_version() && self.webxdc_status_update.is_none() {
-                    part.msg = subject.to_string();
-                }
+            if let Some(ref subject) = self.get_subject()
+                && !self.has_chat_version()
+                && self.webxdc_status_update.is_none()
+            {
+                part.msg = subject.to_string();
             }
 
             self.do_add_single_part(part);
@@ -952,15 +953,15 @@ impl MimeMessage {
 
             let mut i = 0;
             while let Some(part) = self.parts.get_mut(i) {
-                if let Some(part_filename) = &part.org_filename {
-                    if part_filename == &header_value {
-                        if let Some(blob) = part.param.get(Param::File) {
-                            let res = Some(AvatarAction::Change(blob.to_string()));
-                            self.parts.remove(i);
-                            return Ok(res);
-                        }
-                        break;
+                if let Some(part_filename) = &part.org_filename
+                    && part_filename == &header_value
+                {
+                    if let Some(blob) = part.param.get(Param::File) {
+                        let res = Some(AvatarAction::Change(blob.to_string()));
+                        self.parts.remove(i);
+                        return Ok(res);
                     }
+                    break;
                 }
                 i += 1;
             }
@@ -1604,13 +1605,13 @@ impl MimeMessage {
         } else if let Some(sender) = self.get_header(HeaderDef::Sender) {
             // the `Sender:`-header alone is no indicator for mailing list
             // as also used for bot-impersonation via `set_override_sender_name()`
-            if let Some(precedence) = self.get_header(HeaderDef::Precedence) {
-                if precedence == "list" || precedence == "bulk" {
-                    // The message belongs to a mailing list, but there is no `ListId:`-header;
-                    // `Sender:`-header is be used to get a unique id.
-                    // This method is used by implementations as Majordomo.
-                    return Some(sender);
-                }
+            if let Some(precedence) = self.get_header(HeaderDef::Precedence)
+                && (precedence == "list" || precedence == "bulk")
+            {
+                // The message belongs to a mailing list, but there is no `ListId:`-header;
+                // `Sender:`-header is be used to get a unique id.
+                // This method is used by implementations as Majordomo.
+                return Some(sender);
             }
         }
         None
@@ -1651,10 +1652,10 @@ impl MimeMessage {
         remove_header(headers, "autocrypt-gossip", removed);
 
         // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
-        if let Some(secure_join) = remove_header(headers, "secure-join", removed) {
-            if secure_join == "vc-request" || secure_join == "vg-request" {
-                headers.insert("secure-join".to_string(), secure_join);
-            }
+        if let Some(secure_join) = remove_header(headers, "secure-join", removed)
+            && (secure_join == "vc-request" || secure_join == "vg-request")
+        {
+            headers.insert("secure-join".to_string(), secure_join);
         }
     }
 
@@ -1889,12 +1890,11 @@ impl MimeMessage {
                 .iter()
                 .filter(|p| p.typ == Viewtype::Text)
                 .count();
-            if text_part_cnt == 2 {
-                if let Some(last_part) = self.parts.last() {
-                    if last_part.typ == Viewtype::Text {
-                        self.parts.pop();
-                    }
-                }
+            if text_part_cnt == 2
+                && let Some(last_part) = self.parts.last()
+                && last_part.typ == Viewtype::Text
+            {
+                self.parts.pop();
             }
         }
     }
@@ -1947,15 +1947,15 @@ impl MimeMessage {
             }
         }
 
-        if let Some(delivery_report) = &self.delivery_report {
-            if delivery_report.failure {
-                let error = parts
-                    .iter()
-                    .find(|p| p.typ == Viewtype::Text)
-                    .map(|p| p.msg.clone());
-                if let Err(err) = handle_ndn(context, delivery_report, error).await {
-                    warn!(context, "Could not handle NDN: {err:#}.");
-                }
+        if let Some(delivery_report) = &self.delivery_report
+            && delivery_report.failure
+        {
+            let error = parts
+                .iter()
+                .find(|p| p.typ == Viewtype::Text)
+                .map(|p| p.msg.clone());
+            if let Err(err) = handle_ndn(context, delivery_report, error).await {
+                warn!(context, "Could not handle NDN: {err:#}.");
             }
         }
     }
@@ -2303,14 +2303,14 @@ fn get_attachment_filename(
     // `Content-Disposition: ... filename=...`
     let mut desired_filename = ct.params.get("filename").map(|s| s.to_string());
 
-    if desired_filename.is_none() {
-        if let Some(name) = ct.params.get("filename*").map(|s| s.to_string()) {
-            // be graceful and just use the original name.
-            // some MUA, including Delta Chat up to core1.50,
-            // use `filename*` mistakenly for simple encoded-words without following rfc2231
-            warn!(context, "apostrophed encoding invalid: {}", name);
-            desired_filename = Some(name);
-        }
+    if desired_filename.is_none()
+        && let Some(name) = ct.params.get("filename*").map(|s| s.to_string())
+    {
+        // be graceful and just use the original name.
+        // some MUA, including Delta Chat up to core1.50,
+        // use `filename*` mistakenly for simple encoded-words without following rfc2231
+        warn!(context, "apostrophed encoding invalid: {}", name);
+        desired_filename = Some(name);
     }
 
     // if no filename is set, try `Content-Disposition: ... name=...`
@@ -2383,23 +2383,22 @@ fn get_all_addresses_from_header(headers: &[MailHeader], header: &str) -> Vec<Si
         .iter()
         .rev()
         .find(|h| h.get_key().to_lowercase() == header)
+        && let Ok(addrs) = mailparse::addrparse_header(header)
     {
-        if let Ok(addrs) = mailparse::addrparse_header(header) {
-            for addr in addrs.iter() {
-                match addr {
-                    mailparse::MailAddr::Single(info) => {
+        for addr in addrs.iter() {
+            match addr {
+                mailparse::MailAddr::Single(info) => {
+                    result.push(SingleInfo {
+                        addr: addr_normalize(&info.addr).to_lowercase(),
+                        display_name: info.display_name.clone(),
+                    });
+                }
+                mailparse::MailAddr::Group(infos) => {
+                    for info in &infos.addrs {
                         result.push(SingleInfo {
                             addr: addr_normalize(&info.addr).to_lowercase(),
                             display_name: info.display_name.clone(),
                         });
-                    }
-                    mailparse::MailAddr::Group(infos) => {
-                        for info in &infos.addrs {
-                            result.push(SingleInfo {
-                                addr: addr_normalize(&info.addr).to_lowercase(),
-                                display_name: info.display_name.clone(),
-                            });
-                        }
                     }
                 }
             }

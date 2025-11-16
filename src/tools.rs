@@ -727,10 +727,10 @@ pub(crate) fn parse_receive_headers(headers: &Headers) -> String {
 /// Otherwise, return None.
 pub(crate) fn single_value<T>(collection: impl IntoIterator<Item = T>) -> Option<T> {
     let mut iter = collection.into_iter();
-    if let Some(value) = iter.next() {
-        if iter.next().is_none() {
-            return Some(value);
-        }
+    if let Some(value) = iter.next()
+        && iter.next().is_none()
+    {
+        return Some(value);
     }
     None
 }

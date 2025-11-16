@@ -169,27 +169,28 @@ impl HtmlMsgParser {
             MimeMultipartType::Single => {
                 let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
                 if mimetype == mime::TEXT_HTML {
-                    if self.html.is_empty() {
-                        if let Ok(decoded_data) = mail.get_body() {
-                            self.html = decoded_data;
-                        }
+                    if self.html.is_empty()
+                        && let Ok(decoded_data) = mail.get_body()
+                    {
+                        self.html = decoded_data;
                     }
-                } else if mimetype == mime::TEXT_PLAIN && self.plain.is_none() {
-                    if let Ok(decoded_data) = mail.get_body() {
-                        self.plain = Some(PlainText {
-                            text: decoded_data,
-                            flowed: if let Some(format) = mail.ctype.params.get("format") {
-                                format.as_str().eq_ignore_ascii_case("flowed")
-                            } else {
-                                false
-                            },
-                            delsp: if let Some(delsp) = mail.ctype.params.get("delsp") {
-                                delsp.as_str().eq_ignore_ascii_case("yes")
-                            } else {
-                                false
-                            },
-                        });
-                    }
+                } else if mimetype == mime::TEXT_PLAIN
+                    && self.plain.is_none()
+                    && let Ok(decoded_data) = mail.get_body()
+                {
+                    self.plain = Some(PlainText {
+                        text: decoded_data,
+                        flowed: if let Some(format) = mail.ctype.params.get("format") {
+                            format.as_str().eq_ignore_ascii_case("flowed")
+                        } else {
+                            false
+                        },
+                        delsp: if let Some(delsp) = mail.ctype.params.get("delsp") {
+                            delsp.as_str().eq_ignore_ascii_case("yes")
+                        } else {
+                            false
+                        },
+                    });
                 }
                 Ok(())
             }
@@ -213,31 +214,29 @@ impl HtmlMsgParser {
             MimeMultipartType::Message => Ok(()),
             MimeMultipartType::Single => {
                 let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
-                if mimetype.type_() == mime::IMAGE {
-                    if let Some(cid) = mail.headers.get_header_value(HeaderDef::ContentId) {
-                        if let Ok(cid) = parse_message_id(&cid) {
-                            if let Ok(replacement) = mimepart_to_data_url(mail) {
-                                let re_string = format!(
-                                    "(<img[^>]*src[^>]*=[^>]*)(cid:{})([^>]*>)",
-                                    regex::escape(&cid)
-                                );
-                                match regex::Regex::new(&re_string) {
-                                    Ok(re) => {
-                                        self.html = re
-                                            .replace_all(
-                                                &self.html,
-                                                format!("${{1}}{replacement}${{3}}").as_str(),
-                                            )
-                                            .as_ref()
-                                            .to_string()
-                                    }
-                                    Err(e) => warn!(
-                                        context,
-                                        "Cannot create regex for cid: {} throws {}", re_string, e
-                                    ),
-                                }
-                            }
+                if mimetype.type_() == mime::IMAGE
+                    && let Some(cid) = mail.headers.get_header_value(HeaderDef::ContentId)
+                    && let Ok(cid) = parse_message_id(&cid)
+                    && let Ok(replacement) = mimepart_to_data_url(mail)
+                {
+                    let re_string = format!(
+                        "(<img[^>]*src[^>]*=[^>]*)(cid:{})([^>]*>)",
+                        regex::escape(&cid)
+                    );
+                    match regex::Regex::new(&re_string) {
+                        Ok(re) => {
+                            self.html = re
+                                .replace_all(
+                                    &self.html,
+                                    format!("${{1}}{replacement}${{3}}").as_str(),
+                                )
+                                .as_ref()
+                                .to_string()
                         }
+                        Err(e) => warn!(
+                            context,
+                            "Cannot create regex for cid: {} throws {}", re_string, e
+                        ),
                     }
                 }
                 Ok(())

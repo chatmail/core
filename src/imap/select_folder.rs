@@ -34,16 +34,16 @@ impl ImapSession {
     /// because no EXPUNGE responses are sent, see
     /// <https://tools.ietf.org/html/rfc3501#section-6.4.2>
     pub(super) async fn maybe_close_folder(&mut self, context: &Context) -> anyhow::Result<()> {
-        if let Some(folder) = &self.selected_folder {
-            if self.selected_folder_needs_expunge {
-                info!(context, "Expunge messages in {folder:?}.");
+        if let Some(folder) = &self.selected_folder
+            && self.selected_folder_needs_expunge
+        {
+            info!(context, "Expunge messages in {folder:?}.");
 
-                self.close().await.context("IMAP close/expunge failed")?;
-                info!(context, "Close/expunge succeeded.");
-                self.selected_folder = None;
-                self.selected_folder_needs_expunge = false;
-                self.new_mail = false;
-            }
+            self.close().await.context("IMAP close/expunge failed")?;
+            info!(context, "Close/expunge succeeded.");
+            self.selected_folder = None;
+            self.selected_folder_needs_expunge = false;
+            self.new_mail = false;
         }
         Ok(())
     }
@@ -54,10 +54,10 @@ impl ImapSession {
     async fn select_folder(&mut self, context: &Context, folder: &str) -> Result<NewlySelected> {
         // if there is a new folder and the new folder is equal to the selected one, there's nothing to do.
         // if there is _no_ new folder, we continue as we might want to expunge below.
-        if let Some(selected_folder) = &self.selected_folder {
-            if folder == selected_folder {
-                return Ok(NewlySelected::No);
-            }
+        if let Some(selected_folder) = &self.selected_folder
+            && folder == selected_folder
+        {
+            return Ok(NewlySelected::No);
         }
 
         // deselect existing folder, if needed (it's also done implicitly by SELECT, however, without EXPUNGE then)

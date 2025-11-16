@@ -199,19 +199,17 @@ fn remove_bottom_quote<'a>(lines: &'a [&str]) -> (&'a [&'a str], Option<String>)
             })
             .collect::<Vec<&str>>()
             .join("\n");
-        if l_last > 1 {
-            if let Some(line) = lines.get(l_last - 1) {
-                if is_empty_line(line) {
-                    l_last -= 1
-                }
-            }
+        if l_last > 1
+            && let Some(line) = lines.get(l_last - 1)
+            && is_empty_line(line)
+        {
+            l_last -= 1
         }
-        if l_last > 1 {
-            if let Some(line) = lines.get(l_last - 1) {
-                if is_quoted_headline(line) {
-                    l_last -= 1
-                }
-            }
+        if l_last > 1
+            && let Some(line) = lines.get(l_last - 1)
+            && is_quoted_headline(line)
+        {
+            l_last -= 1
         }
         (lines.get(..l_last).unwrap_or(lines), Some(quoted_text))
     } else {
