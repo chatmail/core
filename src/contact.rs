@@ -130,13 +130,15 @@ impl ContactId {
                             Ok((addr, fingerprint))
                         },
                     )?;
-                    context.emit_event(EventType::ContactsChanged(Some(self)));
                     Ok(Some((addr, fingerprint)))
                 } else {
                     Ok(None)
                 }
             })
             .await?;
+        if row.is_some() {
+            context.emit_event(EventType::ContactsChanged(Some(self)));
+        }
 
         if sync.into()
             && let Some((addr, fingerprint)) = row
