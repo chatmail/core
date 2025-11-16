@@ -152,7 +152,7 @@ pub(crate) struct MimeMessage {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum PreMessageMode {
+pub(crate) enum PreMessageMode {
     /// This is full messages
     /// it replaces it's pre-message attachment if it exists already,
     /// and if the pre-message does not exist it is treated as normal message
@@ -160,7 +160,10 @@ pub enum PreMessageMode {
     /// This is a pre-message,
     /// it adds a message preview for a full message
     /// and it is ignored if the full message was downloaded already
-    PreMessage { full_msg_rfc724_mid: String },
+    PreMessage {
+        full_msg_rfc724_mid: String,
+        attachment_size: u64,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -366,8 +369,15 @@ impl MimeMessage {
         let pre_message = if let Some(full_msg_rfc724_mid) =
             mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
         {
+            let attachment_size: u64 = mail
+                .headers
+                .get_header_value(HeaderDef::ChatFullMessageSize)
+                .unwrap_or_default()
+                .parse()
+                .unwrap_or_default();
             Some(PreMessageMode::PreMessage {
                 full_msg_rfc724_mid,
+                attachment_size,
             })
         } else if mail
             .headers

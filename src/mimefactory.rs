@@ -1875,6 +1875,15 @@ impl MimeFactory {
         // add attachment part
         if msg.viewtype.has_file() {
             if let Some(PreMessageMode::PreMessage { .. }) = self.pre_message_mode {
+                let attachment_size = msg
+                    .get_filebytes(context)
+                    .await?
+                    .context("attachment exists, but get_filebytes returned nothing")?
+                    .to_string();
+                headers.push((
+                    HeaderDef::ChatFullMessageSize.get_headername(),
+                    mail_builder::headers::raw::Raw::new(attachment_size).into(),
+                ));
                 // TODO: generate thumbnail and attach it instead (if it makes sense)
             } else {
                 let file_part = build_body_file(context, &msg).await?;

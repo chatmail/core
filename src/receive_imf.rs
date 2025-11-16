@@ -1106,6 +1106,7 @@ async fn decide_chat_assignment(
             }
             PreMessage {
                 full_msg_rfc724_mid,
+                ..
             } => {
                 // if full message already exists, then trash/ignore
                 let full_msg_exists =
@@ -2065,7 +2066,11 @@ RETURNING id
                     sort_timestamp,
                     if trash { 0 } else { mime_parser.timestamp_sent },
                     if trash { 0 } else { mime_parser.timestamp_rcvd },
-                    if trash { Viewtype::Unknown } else { typ },
+                    if trash {
+                        Viewtype::Unknown
+                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                        Viewtype::Text
+                    } else { typ },
                     if trash { MessageState::Undefined } else { state },
                     if trash { MessengerMessage::No } else { is_dc_message },
                     if trash || hidden { "" } else { msg },
@@ -2077,7 +2082,16 @@ RETURNING id
                         param.to_string()
                     },
                     !trash && hidden,
-                    if trash { 0 } else { part.bytes as isize },
+                    if trash {
+                        0
+                    } else if let Some(mimeparser::PreMessageMode::PreMessage {
+                            attachment_size,
+                            ..
+                        }) = mime_parser.pre_message {
+                            attachment_size as isize
+                    } else {
+                            part.bytes as isize
+                    },
                     if save_mime_modified && !(trash || hidden) {
                         mime_headers.clone()
                     } else {
