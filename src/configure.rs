@@ -258,19 +258,18 @@ async fn on_configure_completed(
         }
     }
 
-    if let Some(new_addr) = context.get_config(Config::ConfiguredAddr).await? {
-        if let Some(old_addr) = old_addr {
-            if !addr_cmp(&new_addr, &old_addr) {
-                let mut msg = Message::new_text(
-                    stock_str::aeap_explanation_and_link(context, &old_addr, &new_addr).await,
-                );
-                chat::add_device_msg(context, None, Some(&mut msg))
-                    .await
-                    .context("Cannot add AEAP explanation")
-                    .log_err(context)
-                    .ok();
-            }
-        }
+    if let Some(new_addr) = context.get_config(Config::ConfiguredAddr).await?
+        && let Some(old_addr) = old_addr
+        && !addr_cmp(&new_addr, &old_addr)
+    {
+        let mut msg = Message::new_text(
+            stock_str::aeap_explanation_and_link(context, &old_addr, &new_addr).await,
+        );
+        chat::add_device_msg(context, None, Some(&mut msg))
+            .await
+            .context("Cannot add AEAP explanation")
+            .log_err(context)
+            .ok();
     }
 
     Ok(())

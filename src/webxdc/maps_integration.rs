@@ -122,12 +122,11 @@ pub(crate) async fn intercept_get_updates(
             if location.independent != 0 {
                 if let Some(marker) = &location.marker {
                     label = marker.to_string() // marker contains one-char labels only
-                } else if location.msg_id != 0 {
-                    if let Some(msg) =
+                } else if location.msg_id != 0
+                    && let Some(msg) =
                         Message::load_from_db_optional(context, MsgId::new(location.msg_id)).await?
-                    {
-                        label = msg.get_text()
-                    }
+                {
+                    label = msg.get_text()
                 }
             }
 

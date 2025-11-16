@@ -39,17 +39,16 @@ async fn test_get_width_height() {
     let mut has_image = false;
     let chatitems = chat::get_chat_msgs(&t, device_chat_id).await.unwrap();
     for chatitem in chatitems {
-        if let ChatItem::Message { msg_id } = chatitem {
-            if let Ok(msg) = Message::load_from_db(&t, msg_id).await {
-                if msg.get_viewtype() == Viewtype::Image {
-                    has_image = true;
-                    // just check that width/height are inside some reasonable ranges
-                    assert!(msg.get_width() > 100);
-                    assert!(msg.get_height() > 100);
-                    assert!(msg.get_width() < 4000);
-                    assert!(msg.get_height() < 4000);
-                }
-            }
+        if let ChatItem::Message { msg_id } = chatitem
+            && let Ok(msg) = Message::load_from_db(&t, msg_id).await
+            && msg.get_viewtype() == Viewtype::Image
+        {
+            has_image = true;
+            // just check that width/height are inside some reasonable ranges
+            assert!(msg.get_width() > 100);
+            assert!(msg.get_height() > 100);
+            assert!(msg.get_width() < 4000);
+            assert!(msg.get_height() < 4000);
         }
     }
     assert!(has_image);

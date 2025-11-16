@@ -449,12 +449,11 @@ CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, 
             disable_server_delete = true;
 
             // Don't disable server delete if it was on by default (Nauta):
-            if let Some(provider) = context.get_configured_provider().await? {
-                if let Some(defaults) = &provider.config_defaults {
-                    if defaults.iter().any(|d| d.key == Config::DeleteServerAfter) {
-                        disable_server_delete = false;
-                    }
-                }
+            if let Some(provider) = context.get_configured_provider().await?
+                && let Some(defaults) = &provider.config_defaults
+                && defaults.iter().any(|d| d.key == Config::DeleteServerAfter)
+            {
+                disable_server_delete = false;
             }
         }
         sql.set_db_version(73).await?;

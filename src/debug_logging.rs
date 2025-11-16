@@ -115,15 +115,13 @@ pub async fn maybe_set_logging_xdc_inner(
     filename: Option<&str>,
     msg_id: MsgId,
 ) -> anyhow::Result<()> {
-    if viewtype == Viewtype::Webxdc {
-        if let Some(filename) = filename {
-            if filename.starts_with("debug_logging")
-                && filename.ends_with(".xdc")
-                && chat_id.is_self_talk(context).await?
-            {
-                set_debug_logging_xdc(context, Some(msg_id)).await?;
-            }
-        }
+    if viewtype == Viewtype::Webxdc
+        && let Some(filename) = filename
+        && filename.starts_with("debug_logging")
+        && filename.ends_with(".xdc")
+        && chat_id.is_self_talk(context).await?
+    {
+        set_debug_logging_xdc(context, Some(msg_id)).await?;
     }
     Ok(())
 }

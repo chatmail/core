@@ -154,10 +154,10 @@ fn parse_xml_reader<B: BufRead>(
                     if let Some(incoming_server) = parse_server(reader, event)? {
                         incoming_servers.push(incoming_server);
                     }
-                } else if tag == "outgoingserver" {
-                    if let Some(outgoing_server) = parse_server(reader, event)? {
-                        outgoing_servers.push(outgoing_server);
-                    }
+                } else if tag == "outgoingserver"
+                    && let Some(outgoing_server) = parse_server(reader, event)?
+                {
+                    outgoing_servers.push(outgoing_server);
                 }
             }
             Event::Eof => break,

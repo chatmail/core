@@ -138,27 +138,27 @@ impl ContactId {
             })
             .await?;
 
-        if sync.into() {
-            if let Some((addr, fingerprint)) = row {
-                if fingerprint.is_empty() {
-                    chat::sync(
-                        context,
-                        chat::SyncId::ContactAddr(addr),
-                        chat::SyncAction::Rename(name.to_string()),
-                    )
-                    .await
-                    .log_err(context)
-                    .ok();
-                } else {
-                    chat::sync(
-                        context,
-                        chat::SyncId::ContactFingerprint(fingerprint),
-                        chat::SyncAction::Rename(name.to_string()),
-                    )
-                    .await
-                    .log_err(context)
-                    .ok();
-                }
+        if sync.into()
+            && let Some((addr, fingerprint)) = row
+        {
+            if fingerprint.is_empty() {
+                chat::sync(
+                    context,
+                    chat::SyncId::ContactAddr(addr),
+                    chat::SyncAction::Rename(name.to_string()),
+                )
+                .await
+                .log_err(context)
+                .ok();
+            } else {
+                chat::sync(
+                    context,
+                    chat::SyncId::ContactFingerprint(fingerprint),
+                    chat::SyncAction::Rename(name.to_string()),
+                )
+                .await
+                .log_err(context)
+                .ok();
             }
         }
         Ok(())
@@ -393,13 +393,13 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             );
         }
     }
-    if let Some(biography) = &contact.biography {
-        if let Err(e) = set_status(context, id, biography.to_owned(), false, false).await {
-            warn!(
-                context,
-                "import_vcard_contact: Could not set biography for {}: {e:#}.", contact.addr
-            );
-        }
+    if let Some(biography) = &contact.biography
+        && let Err(e) = set_status(context, id, biography.to_owned(), false, false).await
+    {
+        warn!(
+            context,
+            "import_vcard_contact: Could not set biography for {}: {e:#}.", contact.addr
+        );
     }
     Ok(id)
 }
@@ -1564,10 +1564,10 @@ impl Contact {
         if show_fallback_icon && !self.id.is_special() && !self.is_key_contact() {
             return Ok(Some(chat::get_unencrypted_icon(context).await?));
         }
-        if let Some(image_rel) = self.param.get(Param::ProfileImage) {
-            if !image_rel.is_empty() {
-                return Ok(Some(get_abs_path(context, Path::new(image_rel))));
-            }
+        if let Some(image_rel) = self.param.get(Param::ProfileImage)
+            && !image_rel.is_empty()
+        {
+            return Ok(Some(get_abs_path(context, Path::new(image_rel))));
         }
         Ok(None)
     }
@@ -1800,10 +1800,11 @@ WHERE type=? AND id IN (
 
         // also unblock mailinglist
         // if the contact is a mailinglist address explicitly created to allow unblocking
-        if !new_blocking && contact.origin == Origin::MailinglistAddress {
-            if let Some((chat_id, ..)) = chat::get_chat_id_by_grpid(context, &contact.addr).await? {
-                chat_id.unblock_ex(context, Nosync).await?;
-            }
+        if !new_blocking
+            && contact.origin == Origin::MailinglistAddress
+            && let Some((chat_id, ..)) = chat::get_chat_id_by_grpid(context, &contact.addr).await?
+        {
+            chat_id.unblock_ex(context, Nosync).await?;
         }
 
         if sync.into() {

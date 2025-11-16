@@ -740,16 +740,15 @@ impl ChatId {
                 }
             }
             _ => {
-                if msg.viewtype == Viewtype::File {
-                    if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg)
+                if msg.viewtype == Viewtype::File
+                    && let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg)
                         // We do not do an automatic conversion to other viewtypes here so that
                         // users can send images as "files" to preserve the original quality
                         // (usually we compress images). The remaining conversions are done by
                         // `prepare_msg_blob()` later.
                         .filter(|&(vt, _)| vt == Viewtype::Webxdc || vt == Viewtype::Vcard)
-                    {
-                        msg.viewtype = better_type;
-                    }
+                {
+                    msg.viewtype = better_type;
                 }
                 if msg.viewtype == Viewtype::Vcard {
                     let blob = msg
@@ -767,13 +766,13 @@ impl ChatId {
         msg.chat_id = self;
 
         // if possible, replace existing draft and keep id
-        if !msg.id.is_special() {
-            if let Some(old_draft) = self.get_draft(context).await? {
-                if old_draft.id == msg.id
-                    && old_draft.chat_id == self
-                    && old_draft.state == MessageState::OutDraft
-                {
-                    let affected_rows = context
+        if !msg.id.is_special()
+            && let Some(old_draft) = self.get_draft(context).await?
+            && old_draft.id == msg.id
+            && old_draft.chat_id == self
+            && old_draft.state == MessageState::OutDraft
+        {
+            let affected_rows = context
                         .sql.execute(
                                 "UPDATE msgs
                                 SET timestamp=?1,type=?2,txt=?3,txt_normalized=?4,param=?5,mime_in_reply_to=?6
@@ -793,9 +792,7 @@ impl ChatId {
                                     msg.id,
                                 ),
                             ).await?;
-                    return Ok(affected_rows > 0);
-                }
-            }
+            return Ok(affected_rows > 0);
         }
 
         let row_id = context
@@ -993,11 +990,11 @@ impl ChatId {
         let mut res = Vec::new();
         let now = time();
         for (chat_id, metric) in chats_with_metrics {
-            if let Some(chat_timestamp) = chat_id.get_timestamp(context).await? {
-                if now > chat_timestamp + 42 * 24 * 3600 {
-                    // Chat was inactive for 42 days, skip.
-                    continue;
-                }
+            if let Some(chat_timestamp) = chat_id.get_timestamp(context).await?
+                && now > chat_timestamp + 42 * 24 * 3600
+            {
+                // Chat was inactive for 42 days, skip.
+                continue;
             }
 
             if metric < 0.1 {
@@ -1252,10 +1249,10 @@ impl ChatId {
             None
         };
 
-        if let Some(last_msg_time) = last_msg_time {
-            if last_msg_time > sort_timestamp {
-                sort_timestamp = last_msg_time;
-            }
+        if let Some(last_msg_time) = last_msg_time
+            && last_msg_time > sort_timestamp
+        {
+            sort_timestamp = last_msg_time;
         }
 
         Ok(sort_timestamp)
@@ -1376,10 +1373,10 @@ impl Chat {
                 let mut chat_name = "Err [Name not found]".to_owned();
                 match get_chat_contacts(context, chat.id).await {
                     Ok(contacts) => {
-                        if let Some(contact_id) = contacts.first() {
-                            if let Ok(contact) = Contact::get_by_id(context, *contact_id).await {
-                                contact.get_display_name().clone_into(&mut chat_name);
-                            }
+                        if let Some(contact_id) = contacts.first()
+                            && let Ok(contact) = Contact::get_by_id(context, *contact_id).await
+                        {
+                            contact.get_display_name().clone_into(&mut chat_name);
                         }
                     }
                     Err(err) => {
@@ -1576,10 +1573,10 @@ impl Chat {
 
         if self.typ == Chattype::Single {
             let contacts = get_chat_contacts(context, self.id).await?;
-            if let Some(contact_id) = contacts.first() {
-                if let Ok(contact) = Contact::get_by_id(context, *contact_id).await {
-                    color = contact.get_color();
-                }
+            if let Some(contact_id) = contacts.first()
+                && let Ok(contact) = Contact::get_by_id(context, *contact_id).await
+            {
+                color = contact.get_color();
             }
         } else if !self.grpid.is_empty() {
             color = str_to_color(&self.grpid);
@@ -1841,8 +1838,8 @@ impl Chat {
         }
 
         // add independent location to database
-        if msg.param.exists(Param::SetLatitude) {
-            if let Ok(row_id) = context
+        if msg.param.exists(Param::SetLatitude)
+            && let Ok(row_id) = context
                 .sql
                 .insert(
                     "INSERT INTO locations \
@@ -1857,9 +1854,8 @@ impl Chat {
                     ),
                 )
                 .await
-            {
-                location_id = row_id;
-            }
+        {
+            location_id = row_id;
         }
 
         let ephemeral_timer = if msg.param.get_cmd() == SystemMessage::EphemeralTimerChanged {
@@ -2497,18 +2493,18 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
             msg.param.set(Param::File, blob.as_name());
         }
 
-        if !msg.param.exists(Param::MimeType) {
-            if let Some((viewtype, mime)) = message::guess_msgtype_from_suffix(msg) {
-                // If we unexpectedly didn't recognize the file as image, don't send it as such,
-                // either the format is unsupported or the image is corrupted.
-                let mime = match viewtype != Viewtype::Image
-                    || matches!(msg.viewtype, Viewtype::Image | Viewtype::Sticker)
-                {
-                    true => mime,
-                    false => "application/octet-stream",
-                };
-                msg.param.set(Param::MimeType, mime);
-            }
+        if !msg.param.exists(Param::MimeType)
+            && let Some((viewtype, mime)) = message::guess_msgtype_from_suffix(msg)
+        {
+            // If we unexpectedly didn't recognize the file as image, don't send it as such,
+            // either the format is unsupported or the image is corrupted.
+            let mime = match viewtype != Viewtype::Image
+                || matches!(msg.viewtype, Viewtype::Image | Viewtype::Sticker)
+            {
+                true => mime,
+                false => "application/octet-stream",
+            };
+            msg.param.set(Param::MimeType, mime);
         }
 
         msg.try_calc_and_set_dimensions(context).await?;
@@ -2692,15 +2688,15 @@ async fn prepare_send_msg(
     // This is meant as a last line of defence, the UI should check that before as well.
     // (We allow Chattype::Single in general for "Reply Privately";
     // checking for exact contact_id will produce false positives when ppl just left the group)
-    if chat.typ != Chattype::Single && !context.get_config_bool(Config::Bot).await? {
-        if let Some(quoted_message) = msg.quoted_message(context).await? {
-            if quoted_message.chat_id != chat_id {
-                bail!(
-                    "Quote of message from {} cannot be sent to {chat_id}",
-                    quoted_message.chat_id
-                );
-            }
-        }
+    if chat.typ != Chattype::Single
+        && !context.get_config_bool(Config::Bot).await?
+        && let Some(quoted_message) = msg.quoted_message(context).await?
+        && quoted_message.chat_id != chat_id
+    {
+        bail!(
+            "Quote of message from {} cannot be sent to {chat_id}",
+            quoted_message.chat_id
+        );
     }
 
     // check current MessageState for drafts (to keep msg_id) ...
@@ -2830,16 +2826,15 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
 
     let now = smeared_time(context);
 
-    if rendered_msg.last_added_location_id.is_some() {
-        if let Err(err) = location::set_kml_sent_timestamp(context, msg.chat_id, now).await {
-            error!(context, "Failed to set kml sent_timestamp: {err:#}.");
-        }
+    if rendered_msg.last_added_location_id.is_some()
+        && let Err(err) = location::set_kml_sent_timestamp(context, msg.chat_id, now).await
+    {
+        error!(context, "Failed to set kml sent_timestamp: {err:#}.");
     }
 
-    if attach_selfavatar {
-        if let Err(err) = msg.chat_id.set_selfavatar_timestamp(context, now).await {
-            error!(context, "Failed to set selfavatar timestamp: {err:#}.");
-        }
+    if attach_selfavatar && let Err(err) = msg.chat_id.set_selfavatar_timestamp(context, now).await
+    {
+        error!(context, "Failed to set selfavatar timestamp: {err:#}.");
     }
 
     if rendered_msg.is_encrypted {
@@ -4483,11 +4478,11 @@ pub async fn add_device_msg_with_importance(
     let mut chat_id = ChatId::new(0);
     let mut msg_id = MsgId::new_unset();
 
-    if let Some(label) = label {
-        if was_device_msg_ever_added(context, label).await? {
-            info!(context, "Device-message {label} already added.");
-            return Ok(msg_id);
-        }
+    if let Some(label) = label
+        && was_device_msg_ever_added(context, label).await?
+    {
+        info!(context, "Device-message {label} already added.");
+        return Ok(msg_id);
     }
 
     if let Some(msg) = msg {
@@ -4499,10 +4494,10 @@ pub async fn add_device_msg_with_importance(
         // makes sure, the added message is the last one,
         // even if the date is wrong (useful esp. when warning about bad dates)
         msg.timestamp_sort = timestamp_sent;
-        if let Some(last_msg_time) = chat_id.get_timestamp(context).await? {
-            if msg.timestamp_sort <= last_msg_time {
-                msg.timestamp_sort = last_msg_time + 1;
-            }
+        if let Some(last_msg_time) = chat_id.get_timestamp(context).await?
+            && msg.timestamp_sort <= last_msg_time
+        {
+            msg.timestamp_sort = last_msg_time + 1;
         }
         prepare_msg_blob(context, msg).await?;
         let state = MessageState::InFresh;

@@ -151,10 +151,10 @@ pub struct PooledConnection {
 impl Drop for PooledConnection {
     fn drop(&mut self) {
         // Put the connection back unless the pool is already dropped.
-        if let Some(pool) = self.pool.upgrade() {
-            if let Some(conn) = self.conn.take() {
-                pool.put(conn);
-            }
+        if let Some(pool) = self.pool.upgrade()
+            && let Some(conn) = self.conn.take()
+        {
+            pool.put(conn);
         }
     }
 }

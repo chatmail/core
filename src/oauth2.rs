@@ -139,10 +139,10 @@ pub(crate) async fn get_oauth2_access_token(
                 value = &redirect_uri;
             } else if value == "$CODE" {
                 value = code;
-            } else if value == "$REFRESH_TOKEN" {
-                if let Some(refresh_token) = refresh_token.as_ref() {
-                    value = refresh_token;
-                }
+            } else if value == "$REFRESH_TOKEN"
+                && let Some(refresh_token) = refresh_token.as_ref()
+            {
+                value = refresh_token;
             }
 
             post_param.insert(key, value);
@@ -261,14 +261,12 @@ impl Oauth2 {
         if let Some(domain) = addr_normalized
             .find('@')
             .map(|index| addr_normalized.split_at(index + 1).1)
-        {
-            if let Some(oauth2_authorizer) = provider::get_provider_info(domain)
+            && let Some(oauth2_authorizer) = provider::get_provider_info(domain)
                 .and_then(|provider| provider.oauth2_authorizer.as_ref())
-            {
-                return Some(match oauth2_authorizer {
-                    Oauth2Authorizer::Yandex => OAUTH2_YANDEX,
-                });
-            }
+        {
+            return Some(match oauth2_authorizer {
+                Oauth2Authorizer::Yandex => OAUTH2_YANDEX,
+            });
         }
         None
     }

@@ -235,25 +235,23 @@ impl Sql {
             }
         }
 
-        if recode_avatar {
-            if let Some(avatar) = context.get_config(Config::Selfavatar).await? {
-                let mut blob = BlobObject::from_path(context, Path::new(&avatar))?;
-                match blob.recode_to_avatar_size(context).await {
-                    Ok(()) => {
-                        if let Some(path) = blob.to_abs_path().to_str() {
-                            context
-                                .set_config_internal(Config::Selfavatar, Some(path))
-                                .await?;
-                        } else {
-                            warn!(context, "Setting selfavatar failed: non-UTF-8 filename");
-                        }
-                    }
-                    Err(e) => {
-                        warn!(context, "Migrations can't recode avatar, removing. {:#}", e);
+        if recode_avatar && let Some(avatar) = context.get_config(Config::Selfavatar).await? {
+            let mut blob = BlobObject::from_path(context, Path::new(&avatar))?;
+            match blob.recode_to_avatar_size(context).await {
+                Ok(()) => {
+                    if let Some(path) = blob.to_abs_path().to_str() {
                         context
-                            .set_config_internal(Config::Selfavatar, None)
-                            .await?
+                            .set_config_internal(Config::Selfavatar, Some(path))
+                            .await?;
+                    } else {
+                        warn!(context, "Setting selfavatar failed: non-UTF-8 filename");
                     }
+                }
+                Err(e) => {
+                    warn!(context, "Migrations can't recode avatar, removing. {:#}", e);
+                    context
+                        .set_config_internal(Config::Selfavatar, None)
+                        .await?
                 }
             }
         }

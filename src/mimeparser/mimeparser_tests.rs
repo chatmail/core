@@ -1774,10 +1774,10 @@ async fn test_hp_legacy_display() -> Result<()> {
     alice.set_config_bool(Config::TestHooks, true).await?;
     *alice.pre_encrypt_mime_hook.lock() = Some(|_, mut mime| {
         for (h, v) in &mut mime.headers {
-            if h == "Content-Type" {
-                if let mail_builder::headers::HeaderType::ContentType(ct) = v {
-                    *ct = ct.clone().attribute("hp-legacy-display", "1");
-                }
+            if h == "Content-Type"
+                && let mail_builder::headers::HeaderType::ContentType(ct) = v
+            {
+                *ct = ct.clone().attribute("hp-legacy-display", "1");
             }
         }
         mime
