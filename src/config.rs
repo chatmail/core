@@ -148,6 +148,7 @@ pub enum Config {
     ///
     /// This is automatically enabled when importing/exporting a backup,
     /// setting up a second device, or receiving a sync message.
+    #[strum(props(default = "0"))]
     BccSelf,
 
     /// True if Message Delivery Notifications (read receipts) should
