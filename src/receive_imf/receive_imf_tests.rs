@@ -1964,28 +1964,43 @@ Message content",
     assert_ne!(msg.chat_id, t.get_self_chat().await.id);
 }
 
-/// Tests that message with hidden recipients is assigned to Saved Messages chat.
+/// Tests that an outgoing self-sent unencrypted message doesn't go to the self-chat, but to a
+/// proper unencrypted chat instead.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_hidden_recipients_self_chat() {
-    let t = TestContext::new_alice().await;
+async fn test_unencrypted_doesnt_goto_self_chat() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
 
-    receive_imf(
-        &t,
-        b"Subject: s
+    for to in [
+        "<alice@example.org>",
+        "alice@example.org, alice@example.org",
+        "hidden-recipients:;",
+    ] {
+        receive_imf(
+            t,
+            format!(
+                "Subject: s
 Chat-Version: 1.0
 Message-ID: <foobar@localhost>
-To: hidden-recipients:;
+To: {to}
 From: <alice@example.org>
 
-Message content",
-        false,
-    )
-    .await
-    .unwrap();
+Your server is hacked. Have a nice day!"
+            )
+            .as_bytes(),
+            false,
+        )
+        .await?;
 
-    let msg = t.get_last_msg().await;
-    assert_eq!(msg.chat_id, t.get_self_chat().await.id);
-    assert_eq!(msg.to_id, ContactId::SELF);
+        let msg = t.get_last_msg().await;
+        assert_ne!(msg.chat_id, t.get_self_chat().await.id);
+        assert_eq!(msg.from_id, ContactId::SELF);
+        assert_eq!(msg.to_id, ContactId::SELF);
+        let chat = Chat::load_from_db(t, msg.chat_id).await?;
+        assert_eq!(chat.typ, Chattype::Group);
+        assert!(!chat.is_encrypted(t).await?);
+    }
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -4986,7 +5001,7 @@ async fn test_make_n_send_vcard() -> Result<()> {
     Ok(())
 }
 
-/// Tests that group is not created if the message
+/// Tests that an ad-hoc group is created if the message
 /// has no recipients even if it has unencrypted Chat-Group-ID.
 ///
 /// Chat-Group-ID in unencrypted messages should be ignored.
@@ -5005,8 +5020,12 @@ Hello!"
         .as_bytes();
     let received = receive_imf(t, raw, false).await?.unwrap();
     let msg = Message::load_from_db(t, *received.msg_ids.last().unwrap()).await?;
+    assert_eq!(msg.from_id, ContactId::SELF);
+    assert_eq!(msg.to_id, ContactId::SELF);
     let chat = Chat::load_from_db(t, msg.chat_id).await?;
-    assert_eq!(chat.typ, Chattype::Single);
+    assert_eq!(chat.typ, Chattype::Group);
+    assert!(!chat.is_encrypted(t).await?);
+    assert!(chat.grpid.is_empty());
 
     // Check that the weird group name is sanitzied correctly:
     let mail = mailparse::parse_mail(raw).unwrap();
@@ -5017,7 +5036,7 @@ Hello!"
             .get_value_raw(),
         "Group\n name\u{202B}".as_bytes()
     );
-    assert_eq!(chat.name, "Saved messages");
+    assert_eq!(chat.name, "Group name");
 
     Ok(())
 }
