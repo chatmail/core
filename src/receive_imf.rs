@@ -29,7 +29,6 @@ use crate::key::{DcKey, Fingerprint};
 use crate::key::{self_fingerprint, self_fingerprint_opt};
 use crate::log::LogExt;
 use crate::log::{info, warn};
-use crate::logged_debug_assert;
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
@@ -45,6 +44,7 @@ use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_secret};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
+use crate::{logged_debug_assert, mimeparser};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
 ///
@@ -1931,6 +1931,7 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
+    handle_full_message(context, mime_parser, from_id).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
@@ -2284,13 +2285,74 @@ async fn handle_edit_delete(
     Ok(())
 }
 
-async fn handle_full_message_replace(
+async fn handle_full_message(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
 ) -> Result<()> {
-    // rfc724_mid_exists
-    todo!();
+    if let Some(mimeparser::PreMessageMode::FullMessage) = &mime_parser.pre_message {
+        // if pre message exist, replace attachment
+        // only replacing attachment ensures that doesn't overwrite the text if it was edited before.
+        let rfc724_mid = mime_parser
+            .get_rfc724_mid()
+            .context("expected full message to have a message id")?;
+
+        let Some(msg_id) = message::rfc724_mid_exists(context, &rfc724_mid).await? else {
+            warn!(
+                context,
+                "Download Full-Message: Database entry does not exist."
+            );
+            return Ok(());
+        };
+        let Some(original_msg) = Message::load_from_db_optional(context, msg_id).await? else {
+            // else: message is processed like a normal message
+            warn!(
+                context,
+                "Download Full-Message: pre message was not downloaded, yet so treat as normal message"
+            );
+            return Ok(());
+        };
+
+        if original_msg.from_id != from_id {
+            warn!(context, "Download Full-Message: Bad sender.");
+            return Ok(());
+        }
+        if let Some(part) = mime_parser.parts.first() {
+            if !part.typ.has_file() {
+                warn!(
+                    context,
+                    "Download Full-Message: First mime part's message-viewtype has no file"
+                );
+                return Ok(());
+            }
+
+            let edit_msg_showpadlock = part
+                .param
+                .get_bool(Param::GuaranteeE2ee)
+                .unwrap_or_default();
+            if edit_msg_showpadlock || !original_msg.get_showpadlock() {
+                context
+                        .sql
+                        .execute(
+                            "UPDATE msgs SET param=?, type=?, bytes=?, error=?, download_state=? WHERE id=?",
+                            (
+                                part.param.to_string(),
+                                part.typ,
+                                part.bytes as isize,
+                                part.error.as_deref().unwrap_or_default(),
+                                DownloadState::Done as u32,
+                                original_msg.id,
+                            ),
+                        )
+                        .await?;
+                context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
+            } else {
+                warn!(context, "Download Full-Message: Not encrypted.");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 async fn tweak_sort_timestamp(
