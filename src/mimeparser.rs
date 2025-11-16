@@ -253,6 +253,9 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 
 impl MimeMessage {
     /// Parse a mime message.
+    ///
+    /// This method has some side-effects,
+    /// such as saving blobs and saving found public keys to the database.
     pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
