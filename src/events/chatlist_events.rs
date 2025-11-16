@@ -30,9 +30,10 @@ pub(crate) async fn emit_chatlist_item_changed_for_contact_chat(
     match ChatId::lookup_by_contact(context, contact_id).await {
         Ok(Some(chat_id)) => self::emit_chatlist_item_changed(context, chat_id),
         Ok(None) => {}
-        Err(error) => context.emit_event(EventType::Error(format!(
+        Err(error) => error!(
+            context,
             "failed to find chat id for contact for chatlist event: {error:?}"
-        ))),
+        ),
     }
 }
 
