@@ -1363,6 +1363,46 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 139)?;
+    if dbversion < migration_version {
+        sql.execute_migration_transaction(
+            |transaction| {
+                if exists_before_update {
+                    let is_chatmail = transaction
+                        .query_row(
+                            "SELECT value FROM config WHERE keyname='is_chatmail'",
+                            (),
+                            |row| {
+                                let value: String = row.get(0)?;
+                                Ok(value)
+                            },
+                        )
+                        .optional()?
+                        .as_deref()
+                        == Some("1");
+
+                    // For non-chatmail accounts
+                    // default "bcc_self" was "1".
+                    // If it is not in the database,
+                    // save the old default explicity
+                    // as the new default is "0"
+                    // for all accounts.
+                    if !is_chatmail {
+                        transaction.execute(
+                            "INSERT OR IGNORE
+                             INTO config (keyname, value)
+                             VALUES (?, ?)",
+                            ("bcc_self", "1"),
+                        )?;
+                    }
+                }
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

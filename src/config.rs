@@ -144,11 +144,11 @@ pub enum Config {
 
     /// Send BCC copy to self.
     ///
-    /// Should be enabled for multidevice setups.
-    /// Default is 0 for chatmail accounts, 1 otherwise.
+    /// Should be enabled for multi-device setups.
     ///
     /// This is automatically enabled when importing/exporting a backup,
     /// setting up a second device, or receiving a sync message.
+    #[strum(props(default = "0"))]
     BccSelf,
 
     /// True if Message Delivery Notifications (read receipts) should
@@ -523,10 +523,6 @@ impl Context {
 
         // Default values
         let val = match key {
-            Config::BccSelf => match Box::pin(self.is_chatmail()).await? {
-                false => Some("1".to_string()),
-                true => Some("0".to_string()),
-            },
             Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
             Config::DeleteServerAfter => {
                 match !Box::pin(self.get_config_bool(Config::BccSelf)).await?
