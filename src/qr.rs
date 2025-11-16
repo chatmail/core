@@ -16,7 +16,6 @@ use serde::Deserialize;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
-use crate::events::EventType;
 use crate::key::Fingerprint;
 use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
 use crate::net::http::post_empty;
