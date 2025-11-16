@@ -360,6 +360,11 @@ impl Accounts {
                 "Starting background fetch for {n_accounts} accounts."
             )),
         });
+        ::tracing::event!(
+            ::tracing::Level::INFO,
+            account_id = 0,
+            "Starting background fetch for {n_accounts} accounts."
+        );
         let mut set = JoinSet::new();
         for account in accounts {
             set.spawn(async move {
@@ -375,6 +380,11 @@ impl Accounts {
                 "Finished background fetch for {n_accounts} accounts."
             )),
         });
+        ::tracing::event!(
+            ::tracing::Level::INFO,
+            account_id = 0,
+            "Finished background fetch for {n_accounts} accounts."
+        );
     }
 
     /// Auxiliary function for [Accounts::background_fetch].
@@ -393,6 +403,11 @@ impl Accounts {
                 id: 0,
                 typ: EventType::Warning("Background fetch timed out.".to_string()),
             });
+            ::tracing::event!(
+                ::tracing::Level::WARN,
+                account_id = 0,
+                "Background fetch timed out."
+            );
         }
         events.emit(Event {
             id: 0,
