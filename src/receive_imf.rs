@@ -1187,19 +1187,19 @@ async fn decide_chat_assignment(
     let mut num_recipients = 0;
     let mut has_self_addr = false;
     for recipient in &mime_parser.recipients {
+        has_self_addr |= context.is_self_addr(&recipient.addr).await?;
         if addr_cmp(&recipient.addr, &mime_parser.from.addr) {
             continue;
         }
-
-        if context.is_self_addr(&recipient.addr).await? {
-            has_self_addr = true;
-        }
-
         num_recipients += 1;
     }
     if from_id != ContactId::SELF && !has_self_addr {
         num_recipients += 1;
     }
+    let can_be_11_chat = num_recipients <= 1
+        && (from_id != ContactId::SELF
+            || !(mime_parser.recipients.is_empty() || has_self_addr)
+            || mime_parser.was_encrypted());
 
     let chat_assignment = if should_trash {
         ChatAssignment::Trash
@@ -1243,14 +1243,14 @@ async fn decide_chat_assignment(
             }
         } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
             ChatAssignment::AdHocGroup
-        } else if num_recipients <= 1 {
+        } else if can_be_11_chat {
             ChatAssignment::OneOneChat
         } else {
             ChatAssignment::AdHocGroup
         }
     } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
         ChatAssignment::AdHocGroup
-    } else if num_recipients <= 1 {
+    } else if can_be_11_chat {
         ChatAssignment::OneOneChat
     } else {
         ChatAssignment::AdHocGroup
@@ -3600,13 +3600,6 @@ async fn create_adhoc_group(
             "Message removes member from unknown ad-hoc group (TRASH)."
         );
         return Ok(Some((DC_CHAT_ID_TRASH, Blocked::Not)));
-    }
-    if member_ids.len() < 2 {
-        info!(
-            context,
-            "Not creating ad hoc group with less than 2 members."
-        );
-        return Ok(None);
     }
 
     let new_chat_id: ChatId = ChatId::create_multiuser_record(
