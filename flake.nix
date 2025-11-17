@@ -122,10 +122,10 @@
             src = pkgs.lib.cleanSource ./.;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
+              pkgsWin64.windows.pthreads
             ];
             depsBuildBuild = [
               pkgsWin64.stdenv.cc
-              pkgsWin64.windows.pthreads
             ];
             auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
@@ -185,10 +185,10 @@
             src = pkgs.lib.cleanSource ./.;
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
+              pkgsWin32.windows.pthreads
             ];
             depsBuildBuild = [
               winCC
-              pkgsWin32.windows.pthreads
             ];
             auditable = false; # Avoid cargo-auditable failures.
             doCheck = false; # Disable test as it requires network access.
