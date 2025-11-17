@@ -1,12 +1,15 @@
 {
   description = "Delta Chat core";
   inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     fenix.url = "github:nix-community/fenix";
+    fenix.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
     naersk.url = "github:nix-community/naersk";
+    naersk.inputs.nixpkgs.follows = "nixpkgs";
     nix-filter.url = "github:numtide/nix-filter";
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     android.url = "github:tadfisher/android-nixpkgs";
+    android.inputs.nixpkgs.follows = "nixpkgs";
   };
   outputs = { self, nixpkgs, flake-utils, nix-filter, naersk, fenix, android }:
     flake-utils.lib.eachDefaultSystem (system:
