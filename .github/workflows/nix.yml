@@ -25,6 +25,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
       - run: nix fmt flake.nix -- --check
 
@@ -84,6 +85,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
       - run: nix build .#${{ matrix.installable }}
 
@@ -105,5 +107,6 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
       - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
       - run: nix build .#${{ matrix.installable }}
