@@ -1036,7 +1036,15 @@ impl MimeFactory {
                 //
                 // and the explanation page says
                 // "The time information deviates too much from the actual time".
-                let timestamp_offset = rand::random_range(0..1000000);
+                //
+                // We also limit the range to 6 days (518400 seconds)
+                // because with a larger range we got
+                // error "500 Date header far in the past/future"
+                // which apparently originates from Symantec Messaging Gateway
+                // and means the message has a Date that is more
+                // than 7 days in the past:
+                // <https://github.com/chatmail/core/issues/7466>
+                let timestamp_offset = rand::random_range(0..518400);
                 let protected_timestamp = self.timestamp.saturating_sub(timestamp_offset);
                 let unprotected_date =
                     chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)
