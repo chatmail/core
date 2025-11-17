@@ -120,9 +120,11 @@
             version = manifest.version;
             strictDeps = true;
             src = pkgs.lib.cleanSource ./.;
+            buildInputs = [
+              pkgsWin64.windows.pthreads
+            ];
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
-              pkgsWin64.windows.pthreads
             ];
             depsBuildBuild = [
               pkgsWin64.stdenv.cc
@@ -183,9 +185,11 @@
             version = manifest.version;
             strictDeps = true;
             src = pkgs.lib.cleanSource ./.;
+            buildInputs = [
+              pkgsWin32.windows.pthreads
+            ];
             nativeBuildInputs = [
               pkgs.perl # Needed to build vendored OpenSSL.
-              pkgsWin32.windows.pthreads
             ];
             depsBuildBuild = [
               winCC
