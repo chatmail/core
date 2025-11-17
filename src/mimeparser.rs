@@ -273,12 +273,11 @@ impl MimeMessage {
             &mut chat_disposition_notification_to,
             &mail,
         );
-        headers.retain(|k, _| {
-            !is_hidden(k) || {
-                headers_removed.insert(k.to_string());
-                false
-            }
-        });
+        headers_removed.extend(
+            headers
+                .extract_if(|k, _v| is_hidden(k))
+                .map(|(k, _v)| k.to_string()),
+        );
 
         // Parse hidden headers.
         let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
@@ -1680,12 +1679,11 @@ impl MimeMessage {
         // See <https://www.rfc-editor.org/rfc/rfc9788.html>.
         let has_header_protection = part.ctype.params.contains_key("hp");
 
-        headers.retain(|k, _| {
-            !(has_header_protection || is_protected(k)) || {
-                headers_removed.insert(k.to_string());
-                false
-            }
-        });
+        headers_removed.extend(
+            headers
+                .extract_if(|k, _v| has_header_protection || is_protected(k))
+                .map(|(k, _v)| k.to_string()),
+        );
         for field in fields {
             // lowercasing all headers is technically not correct, but makes things work better
             let key = field.get_key().to_lowercase();
