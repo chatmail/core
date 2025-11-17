@@ -14,7 +14,15 @@
         pkgs = nixpkgs.legacyPackages.${system};
         inherit (pkgs.stdenv) isDarwin;
         fenixPkgs = fenix.packages.${system};
-        naersk' = pkgs.callPackage naersk { };
+        fenixToolchain = fenixPkgs.combine [
+          fenixPkgs.stable.rustc
+          fenixPkgs.stable.cargo
+          fenixPkgs.stable.rust-std
+        ];
+        naersk' = pkgs.callPackage naersk {
+          cargo = fenixToolchain;
+          rustc = fenixToolchain;
+        };
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
         androidSdk = android.sdk.${system} (sdkPkgs:
           builtins.attrValues {
@@ -470,6 +478,12 @@
               };
 
             libdeltachat =
+              let
+                rustPlatform = (pkgs.makeRustPlatform {
+                  cargo = fenixToolchain;
+                  rustc = fenixToolchain;
+                });
+              in
               pkgs.stdenv.mkDerivation {
                 pname = "libdeltachat";
                 version = manifest.version;
@@ -479,8 +493,9 @@
                 nativeBuildInputs = [
                   pkgs.perl # Needed to build vendored OpenSSL.
                   pkgs.cmake
-                  pkgs.rustPlatform.cargoSetupHook
-                  pkgs.cargo
+                  rustPlatform.cargoSetupHook
+                  fenixPkgs.stable.rustc
+                  fenixPkgs.stable.cargo
                 ];
 
                 postInstall = ''
