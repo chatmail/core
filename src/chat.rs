@@ -301,7 +301,7 @@ impl ChatId {
         let chat = Chat::load_from_db(context, chat_id).await?;
 
         if chat.is_encrypted(context).await? {
-            chat_id.add_encrypted_msg(context, timestamp).await?;
+            chat_id.add_e2ee_notice(context, timestamp).await?;
         }
 
         info!(
@@ -462,7 +462,7 @@ impl ChatId {
     }
 
     /// Adds message "Messages are end-to-end encrypted".
-    pub(crate) async fn add_encrypted_msg(self, context: &Context, timestamp: i64) -> Result<()> {
+    pub(crate) async fn add_e2ee_notice(self, context: &Context, timestamp: i64) -> Result<()> {
         let text = stock_str::messages_e2e_encrypted(context).await;
         add_info_msg_with_cmd(
             context,
@@ -2421,7 +2421,7 @@ impl ChatIdBlocked {
             && !chat.param.exists(Param::Devicetalk)
             && !chat.param.exists(Param::Selftalk)
         {
-            chat_id.add_encrypted_msg(context, smeared_time).await?;
+            chat_id.add_e2ee_notice(context, smeared_time).await?;
         }
 
         Ok(Self {
@@ -3448,7 +3448,7 @@ pub(crate) async fn create_group_ex(
 
     if !grpid.is_empty() {
         // Add "Messages are end-to-end encrypted." message.
-        chat_id.add_encrypted_msg(context, timestamp).await?;
+        chat_id.add_e2ee_notice(context, timestamp).await?;
     }
 
     if !context.get_config_bool(Config::Bot).await?
@@ -3529,7 +3529,7 @@ pub(crate) async fn create_out_broadcast_ex(
         Ok(chat_id)
     };
     let chat_id = context.sql.transaction(trans_fn).await?;
-    chat_id.add_encrypted_msg(context, timestamp).await?;
+    chat_id.add_e2ee_notice(context, timestamp).await?;
 
     context.emit_msgs_changed_without_ids();
     chatlist_events::emit_chatlist_changed(context);
