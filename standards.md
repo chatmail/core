@@ -1,6 +1,6 @@
-# Standards used in Delta Chat
+# Standards used in chatmail core
 
-Some of the standards Delta Chat is based on:
+Some of the standards chatmail is based on:
 
 Tasks                            | Standards
 -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

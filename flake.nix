@@ -1,5 +1,5 @@
 {
-  description = "Delta Chat core";
+  description = "Chatmail core";
   inputs = {
     fenix.url = "github:nix-community/fenix";
     flake-utils.url = "github:numtide/flake-utils";
