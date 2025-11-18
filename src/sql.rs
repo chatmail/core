@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail, ensure};
 use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
@@ -760,7 +761,6 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
     conn.execute_batch(
         "PRAGMA cipher_memory_security = OFF; -- Too slow on Android
          PRAGMA secure_delete=on;
-         PRAGMA busy_timeout = 0; -- fail immediately
          PRAGMA soft_heap_limit = 8388608; -- 8 MiB limit, same as set in Android SQLiteDatabase.
          PRAGMA foreign_keys=on;
          ",
@@ -771,6 +771,22 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
     // Therefore, on systems known to have working default (using files), stay with that.
     if cfg!(not(target_os = "ios")) {
         conn.pragma_update(None, "temp_store", "memory")?;
+    }
+
+    // Fail immediately when the database is busy,
+    // except for iOS. On iOS we don't have
+    // `accounts.lock` lockfile and the database
+    // is used by two processes:
+    // main process and the notification extension.
+    // Due to a bug they both may run at the same time
+    // and try to write to the database.
+    // As a workaround, we wait up to 1 minute and retry
+    // instead of failing immediately and
+    // possibly missing a message.
+    if cfg!(target_os = "ios") {
+        conn.busy_timeout(Duration::new(60, 0))?;
+    } else {
+        conn.busy_timeout(Duration::ZERO)?;
     }
 
     if !passphrase.is_empty() {
