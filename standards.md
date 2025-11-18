@@ -26,7 +26,7 @@ Detect mailing list              | List-Id ([RFC 2919][]) and Precedence ([RFC 3
 User and chat colors             | [XEP-0392][]: Consistent Color Generation
 Send and receive system messages | Multipart/Report Media Type ([RFC 6522][])
 Send and receive contact files   | vCard ([RFC 6350][])
-Return receipts                  | Message Disposition Notification (MDN, [RFC 8098][], [RFC 3503][]) using the Chat-Disposition-Notification-To header
+Return receipts                  | Message Disposition Notification (MDN, [RFC 8098][]) using the Chat-Disposition-Notification-To header
 Locations                        | KML ([Open Geospatial Consortium](http://www.opengeospatial.org/standards/kml/), [Google Dev](https://developers.google.com/kml/))
 
 [Autocrypt Level 1]: https://autocrypt.org/level1.html
@@ -47,7 +47,6 @@ Locations                        | KML ([Open Geospatial Consortium](http://www.
 [RFC 2919]: https://tools.ietf.org/html/rfc2919
 [RFC 2971]: https://tools.ietf.org/html/rfc2971
 [RFC 3501]: https://tools.ietf.org/html/rfc3501
-[RFC 3503]: https://tools.ietf.org/html/rfc3503
 [RFC 3676]: https://tools.ietf.org/html/rfc3676
 [RFC 3834]: https://tools.ietf.org/html/rfc3834
 [RFC 4880]: https://tools.ietf.org/html/rfc4880
