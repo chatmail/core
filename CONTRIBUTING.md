@@ -1,4 +1,4 @@
-# Contributing to Delta Chat
+# Contributing to chatmail core
 
 ## Bug reports
 
