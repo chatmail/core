@@ -230,70 +230,27 @@ pub(crate) async fn update_connect_timestamp(
 static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new(|| {
     HashMap::from([
         (
-            "mail.sangham.net",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(159, 69, 186, 85)),
-                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0xc17, 0x798c, 0, 0, 0, 1)),
-            ],
-        ),
-        (
-            "nine.testrun.org",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(116, 202, 233, 236)),
-                IpAddr::V4(Ipv4Addr::new(128, 140, 126, 197)),
-                IpAddr::V4(Ipv4Addr::new(49, 12, 116, 128)),
-                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0x241, 0x4ce8, 0, 0, 0, 2)),
-            ],
-        ),
-        (
-            "disroot.org",
-            vec![IpAddr::V4(Ipv4Addr::new(178, 21, 23, 139))],
-        ),
-        (
-            "imap.gmail.com",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 108)),
-                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 109)),
-                IpAddr::V4(Ipv4Addr::new(66, 102, 1, 108)),
-                IpAddr::V4(Ipv4Addr::new(66, 102, 1, 109)),
-                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x400c, 0xc1f, 0, 0, 0, 0x6c)),
-                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x400c, 0xc1f, 0, 0, 0, 0x6d)),
-            ],
-        ),
-        (
-            "smtp.gmail.com",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 109)),
-                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x4013, 0xc04, 0, 0, 0, 0x6c)),
-            ],
-        ),
-        (
-            "mail.autistici.org",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(198, 167, 222, 108)),
-                IpAddr::V4(Ipv4Addr::new(82, 94, 249, 234)),
-                IpAddr::V4(Ipv4Addr::new(93, 190, 126, 19)),
-            ],
-        ),
-        (
-            "smtp.autistici.org",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(198, 167, 222, 108)),
-                IpAddr::V4(Ipv4Addr::new(82, 94, 249, 234)),
-                IpAddr::V4(Ipv4Addr::new(93, 190, 126, 19)),
-            ],
-        ),
-        (
-            "daleth.cafe",
-            vec![IpAddr::V4(Ipv4Addr::new(37, 27, 6, 204))],
-        ),
-        (
             "imap.163.com",
             vec![IpAddr::V4(Ipv4Addr::new(111, 124, 203, 45))],
         ),
         (
             "smtp.163.com",
             vec![IpAddr::V4(Ipv4Addr::new(103, 129, 252, 45))],
+        ),
+        (
+            "newyear.aktivix.org",
+            vec![IpAddr::V4(Ipv4Addr::new(209, 51, 180, 245))],
+        ),
+        (
+            "smtp.aliyun.com",
+            vec![IpAddr::V4(Ipv4Addr::new(47, 246, 136, 232))],
+        ),
+        (
+            "imap.aliyun.com",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(59, 82, 43, 123)),
+                IpAddr::V4(Ipv4Addr::new(59, 82, 9, 176)),
+            ],
         ),
         (
             "imap.aol.com",
@@ -303,16 +260,66 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             ],
         ),
         (
+            "imap.arcor.de",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(178, 15, 69, 210)),
+                IpAddr::V4(Ipv4Addr::new(151, 189, 176, 206)),
+            ],
+        ),
+        (
             "smtp.aol.com",
             vec![IpAddr::V4(Ipv4Addr::new(87, 248, 97, 31))],
         ),
         (
             "mail.arcor.de",
-            vec![IpAddr::V4(Ipv4Addr::new(2, 207, 150, 234))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(151, 189, 176, 206)),
+                IpAddr::V4(Ipv4Addr::new(178, 15, 69, 206)),
+            ],
         ),
         (
-            "imap.arcor.de",
-            vec![IpAddr::V4(Ipv4Addr::new(2, 207, 150, 230))],
+            "mail.autistici.org",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(93, 190, 126, 19)),
+                IpAddr::V4(Ipv4Addr::new(185, 218, 207, 228)),
+                IpAddr::V4(Ipv4Addr::new(198, 167, 222, 108)),
+            ],
+        ),
+        (
+            "smtp.autistici.org",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(82, 94, 249, 234)),
+                IpAddr::V4(Ipv4Addr::new(93, 190, 126, 19)),
+                IpAddr::V4(Ipv4Addr::new(198, 167, 222, 108)),
+            ],
+        ),
+        (
+            "imaps.bluewin.ch",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(16, 62, 253, 42)),
+                IpAddr::V4(Ipv4Addr::new(16, 63, 141, 244)),
+                IpAddr::V4(Ipv4Addr::new(16, 63, 146, 183)),
+            ],
+        ),
+        (
+            "smtpauths.bluewin.ch",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(16, 62, 176, 232)),
+                IpAddr::V4(Ipv4Addr::new(16, 62, 15, 25)),
+                IpAddr::V4(Ipv4Addr::new(16, 63, 183, 216)),
+            ],
+        ),
+        (
+            "mail.buzon.uy",
+            vec![IpAddr::V4(Ipv4Addr::new(200, 40, 115, 74))],
+        ),
+        (
+            "daleth.cafe",
+            vec![IpAddr::V4(Ipv4Addr::new(37, 27, 6, 204))],
+        ),
+        (
+            "disroot.org",
+            vec![IpAddr::V4(Ipv4Addr::new(178, 21, 23, 139))],
         ),
         (
             "imap.fastmail.com",
@@ -329,10 +336,50 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             ],
         ),
         (
+            "imap.gmail.com",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 108)),
+                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 109)),
+                IpAddr::V4(Ipv4Addr::new(66, 102, 1, 108)),
+                IpAddr::V4(Ipv4Addr::new(66, 102, 1, 109)),
+                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x400c, 0xc1f, 0, 0, 0, 0x6c)),
+                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x400c, 0xc1f, 0, 0, 0, 0x6d)),
+            ],
+        ),
+        (
+            "mail.ecloud.global",
+            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 246, 96))],
+        ),
+        (
+            "mail.ende.in.net",
+            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 5, 72))],
+        ),
+        (
+            "smtp.gmail.com",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(142, 250, 110, 109)),
+                IpAddr::V6(Ipv6Addr::new(0x2a00, 0x1450, 0x4013, 0xc04, 0, 0, 0, 0x6c)),
+            ],
+        ),
+        (
+            "mail.gmx.net",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(212, 227, 17, 190)),
+                IpAddr::V4(Ipv4Addr::new(212, 227, 17, 168)),
+            ],
+        ),
+        (
             "imap.gmx.net",
             vec![
                 IpAddr::V4(Ipv4Addr::new(212, 227, 17, 170)),
                 IpAddr::V4(Ipv4Addr::new(212, 227, 17, 186)),
+            ],
+        ),
+        (
+            "mail.sangham.net",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(159, 69, 186, 85)),
+                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0xc17, 0x798c, 0, 0, 0, 1)),
             ],
         ),
         (
@@ -349,7 +396,7 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "imap.naver.com",
-            vec![IpAddr::V4(Ipv4Addr::new(125, 209, 238, 153))],
+            vec![IpAddr::V4(Ipv4Addr::new(125, 209, 233, 34))],
         ),
         (
             "imap.ouvaton.coop",
@@ -360,12 +407,71 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(18, 204, 123, 63))],
         ),
         (
+            "mail.systemausfall.org",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(51, 75, 71, 249)),
+                IpAddr::V4(Ipv4Addr::new(80, 153, 252, 42)),
+            ],
+        ),
+        (
+            "mail.systemli.org",
+            vec![IpAddr::V4(Ipv4Addr::new(93, 190, 126, 36))],
+        ),
+        ("testrun.org", vec![IpAddr::V4(Ipv4Addr::new(5, 1, 76, 52))]),
+        (
+            "nine.testrun.org",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(128, 140, 126, 197)),
+                IpAddr::V4(Ipv4Addr::new(116, 202, 233, 236)),
+                IpAddr::V4(Ipv4Addr::new(216, 144, 228, 100)),
+                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0x241, 0x4ce8, 0, 0, 0, 2)),
+                IpAddr::V6(Ipv6Addr::new(
+                    0x2001, 0x41d0, 0x701, 0x1100, 0, 0, 0, 0x8ab1,
+                )),
+            ],
+        ),
+        (
+            "secureimap.t-online.de",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 114)),
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 115)),
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 50)),
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 51)),
+            ],
+        ),
+        (
+            "securesmtp.t-online.de",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 46)),
+                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 110)),
+            ],
+        ),
+        (
+            "mail.riseup.net",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(198, 252, 153, 171)),
+                IpAddr::V4(Ipv4Addr::new(198, 252, 153, 170)),
+            ],
+        ),
+        (
+            "pimap.schulon.org",
+            vec![IpAddr::V4(Ipv4Addr::new(194, 77, 246, 20))],
+        ),
+        (
             "imap.tiscali.it",
             vec![IpAddr::V4(Ipv4Addr::new(213, 205, 33, 10))],
         ),
         (
             "smtp.tiscali.it",
             vec![IpAddr::V4(Ipv4Addr::new(213, 205, 33, 13))],
+        ),
+        (
+            "imap.ukr.net",
+            vec![IpAddr::V4(Ipv4Addr::new(212, 42, 75, 240))],
+        ),
+        (
+            "smtp.ukr.net",
+            vec![IpAddr::V4(Ipv4Addr::new(212, 42, 75, 250))],
         ),
         (
             "imap.web.de",
@@ -380,33 +486,9 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "imap.zoho.eu",
-            vec![IpAddr::V4(Ipv4Addr::new(185, 230, 214, 25))],
-        ),
-        (
-            "imaps.bluewin.ch",
             vec![
-                IpAddr::V4(Ipv4Addr::new(16, 62, 253, 42)),
-                IpAddr::V4(Ipv4Addr::new(16, 63, 141, 244)),
-                IpAddr::V4(Ipv4Addr::new(16, 63, 146, 183)),
-            ],
-        ),
-        (
-            "mail.buzon.uy",
-            vec![IpAddr::V4(Ipv4Addr::new(185, 101, 93, 79))],
-        ),
-        (
-            "mail.ecloud.global",
-            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 246, 96))],
-        ),
-        (
-            "mail.ende.in.net",
-            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 5, 72))],
-        ),
-        (
-            "mail.gmx.net",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(212, 227, 17, 168)),
-                IpAddr::V4(Ipv4Addr::new(212, 227, 17, 190)),
+                IpAddr::V4(Ipv4Addr::new(185, 230, 214, 25)),
+                IpAddr::V4(Ipv4Addr::new(185, 230, 214, 206)),
             ],
         ),
         (
@@ -425,43 +507,19 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(79, 99, 201, 10))],
         ),
         (
-            "mail.riseup.net",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(198, 252, 153, 70)),
-                IpAddr::V4(Ipv4Addr::new(198, 252, 153, 71)),
-            ],
-        ),
-        (
-            "mail.systemausfall.org",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(51, 75, 71, 249)),
-                IpAddr::V4(Ipv4Addr::new(80, 153, 252, 42)),
-            ],
-        ),
-        (
-            "mail.systemli.org",
-            vec![IpAddr::V4(Ipv4Addr::new(93, 190, 126, 36))],
-        ),
-        (
             "mehl.cloud",
             vec![IpAddr::V4(Ipv4Addr::new(95, 217, 223, 172))],
         ),
         (
             "mx.freenet.de",
             vec![
-                IpAddr::V4(Ipv4Addr::new(195, 4, 92, 210)),
-                IpAddr::V4(Ipv4Addr::new(195, 4, 92, 211)),
-                IpAddr::V4(Ipv4Addr::new(195, 4, 92, 212)),
-                IpAddr::V4(Ipv4Addr::new(195, 4, 92, 213)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 36)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 34)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 35)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 39)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 37)),
+                IpAddr::V4(Ipv4Addr::new(194, 97, 208, 38)),
             ],
-        ),
-        (
-            "newyear.aktivix.org",
-            vec![IpAddr::V4(Ipv4Addr::new(162, 247, 75, 192))],
-        ),
-        (
-            "pimap.schulon.org",
-            vec![IpAddr::V4(Ipv4Addr::new(194, 77, 246, 20))],
         ),
         (
             "posteo.de",
@@ -475,34 +533,14 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(194, 77, 246, 20))],
         ),
         (
-            "secureimap.t-online.de",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 114)),
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 115)),
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 50)),
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 51)),
-            ],
-        ),
-        (
-            "securesmtp.t-online.de",
-            vec![
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 110)),
-                IpAddr::V4(Ipv4Addr::new(194, 25, 134, 46)),
-            ],
-        ),
-        (
-            "smtp.aliyun.com",
-            vec![IpAddr::V4(Ipv4Addr::new(47, 246, 136, 232))],
-        ),
-        (
             "smtp.mail.de",
             vec![IpAddr::V4(Ipv4Addr::new(62, 201, 172, 21))],
         ),
         (
             "smtp.mail.ru",
             vec![
-                IpAddr::V4(Ipv4Addr::new(217, 69, 139, 160)),
                 IpAddr::V4(Ipv4Addr::new(94, 100, 180, 160)),
+                IpAddr::V4(Ipv4Addr::new(217, 69, 139, 160)),
             ],
         ),
         (
@@ -519,6 +557,20 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         (
             "imap.mailo.com",
             vec![IpAddr::V4(Ipv4Addr::new(213, 182, 54, 20))],
+        ),
+        (
+            "imap.migadu.com",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(51, 210, 3, 23)),
+                IpAddr::V4(Ipv4Addr::new(51, 210, 3, 20)),
+            ],
+        ),
+        (
+            "smtp.migadu.com",
+            vec![
+                IpAddr::V4(Ipv4Addr::new(37, 59, 57, 117)),
+                IpAddr::V4(Ipv4Addr::new(51, 255, 82, 75)),
+            ],
         ),
         (
             "smtp.mailo.com",
@@ -538,29 +590,47 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "imap.qq.com",
-            vec![IpAddr::V4(Ipv4Addr::new(43, 129, 255, 54))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(43, 163, 178, 76)),
+                IpAddr::V4(Ipv4Addr::new(43, 129, 255, 54)),
+            ],
         ),
         (
             "smtp.qq.com",
-            vec![IpAddr::V4(Ipv4Addr::new(43, 129, 255, 54))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(43, 129, 255, 54)),
+                IpAddr::V4(Ipv4Addr::new(43, 163, 178, 76)),
+            ],
         ),
         (
             "imap.rambler.ru",
             vec![
-                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 169)),
-                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 171)),
                 IpAddr::V4(Ipv4Addr::new(81, 19, 77, 168)),
+                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 169)),
                 IpAddr::V4(Ipv4Addr::new(81, 19, 77, 170)),
+                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 171)),
             ],
         ),
         (
             "smtp.rambler.ru",
             vec![
-                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 165)),
-                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 167)),
-                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 166)),
                 IpAddr::V4(Ipv4Addr::new(81, 19, 77, 164)),
+                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 165)),
+                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 166)),
+                IpAddr::V4(Ipv4Addr::new(81, 19, 77, 167)),
             ],
+        ),
+        (
+            "stinpriza.net",
+            vec![IpAddr::V4(Ipv4Addr::new(5, 9, 122, 184))],
+        ),
+        (
+            "webbox222.server-home.org",
+            vec![IpAddr::V4(Ipv4Addr::new(91, 203, 111, 88))],
+        ),
+        (
+            "undernet.uy",
+            vec![IpAddr::V4(Ipv4Addr::new(200, 40, 115, 74))],
         ),
         (
             "imap.vivaldi.net",
@@ -572,17 +642,23 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "imap.vodafonemail.de",
-            vec![IpAddr::V4(Ipv4Addr::new(2, 207, 150, 230))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(178, 15, 69, 210)),
+                IpAddr::V4(Ipv4Addr::new(151, 189, 176, 206)),
+            ],
         ),
         (
             "smtp.vodafonemail.de",
-            vec![IpAddr::V4(Ipv4Addr::new(2, 207, 150, 234))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(151, 189, 176, 206)),
+                IpAddr::V4(Ipv4Addr::new(178, 15, 69, 206)),
+            ],
         ),
         (
             "smtp.web.de",
             vec![
-                IpAddr::V4(Ipv4Addr::new(213, 165, 67, 108)),
                 IpAddr::V4(Ipv4Addr::new(213, 165, 67, 124)),
+                IpAddr::V4(Ipv4Addr::new(213, 165, 67, 108)),
             ],
         ),
         (
@@ -599,23 +675,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         ),
         (
             "smtp.zoho.eu",
-            vec![IpAddr::V4(Ipv4Addr::new(185, 230, 212, 164))],
-        ),
-        (
-            "smtpauths.bluewin.ch",
-            vec![IpAddr::V4(Ipv4Addr::new(195, 186, 120, 54))],
-        ),
-        (
-            "stinpriza.net",
-            vec![IpAddr::V4(Ipv4Addr::new(5, 9, 122, 184))],
-        ),
-        (
-            "undernet.uy",
-            vec![IpAddr::V4(Ipv4Addr::new(167, 62, 254, 153))],
-        ),
-        (
-            "webbox222.server-home.org",
-            vec![IpAddr::V4(Ipv4Addr::new(91, 203, 111, 88))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(185, 230, 212, 164)),
+                IpAddr::V4(Ipv4Addr::new(185, 230, 214, 164)),
+            ],
         ),
     ])
 });
