@@ -525,7 +525,7 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     progress!(ctx, 850);
 
     // Wait for SMTP configuration
-    smtp_config_task.await.unwrap()?;
+    smtp_config_task.await??;
 
     progress!(ctx, 900);
 

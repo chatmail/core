@@ -145,14 +145,14 @@ impl SchedulerState {
                 InnerSchedulerState::Started(_) => {
                     let new_state = InnerSchedulerState::Paused {
                         started: true,
-                        pause_guards_count: NonZeroUsize::new(1).unwrap(),
+                        pause_guards_count: NonZeroUsize::MIN,
                     };
                     Self::do_stop(&mut inner, context, new_state).await;
                 }
                 InnerSchedulerState::Stopped => {
                     *inner = InnerSchedulerState::Paused {
                         started: false,
-                        pause_guards_count: NonZeroUsize::new(1).unwrap(),
+                        pause_guards_count: NonZeroUsize::MIN,
                     };
                 }
                 InnerSchedulerState::Paused {
@@ -183,7 +183,7 @@ impl SchedulerState {
                     ref started,
                     ref mut pause_guards_count,
                 } => {
-                    if *pause_guards_count == NonZeroUsize::new(1).unwrap() {
+                    if *pause_guards_count == NonZeroUsize::MIN {
                         match *started {
                             true => SchedulerState::do_start(&mut inner, &context).await,
                             false => *inner = InnerSchedulerState::Stopped,
