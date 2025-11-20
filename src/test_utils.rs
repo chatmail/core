@@ -701,10 +701,7 @@ impl TestContext {
         self.ctx
             .sql
             .query_map_vec(
-                r#"
-                SELECT id, msg_id, mime, recipients
-                FROM smtp
-                WHERE msg_id=?"#,
+                "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
                 (msg_id,),
                 |row| {
                     let rowid: i64 = row.get(0)?;
