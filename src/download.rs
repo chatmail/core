@@ -21,6 +21,7 @@ pub(crate) const MIN_DELETE_SERVER_AFTER: i64 = 48 * 60 * 60;
 /// From this point onward outgoing messages are considered large
 /// and get a pre-message, which announces the full message.
 // this is only about sending so we can modify it any time.
+// current value is a bit less than the minimum auto download setting from the UIs (which is 160 KiB)
 pub(crate) const PRE_MSG_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 
 /// Max message size to be fetched in the background.
