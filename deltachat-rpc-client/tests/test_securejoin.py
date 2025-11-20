@@ -164,7 +164,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
         if please_wait_info_msg:
             first_msg = chat_msgs.pop(0).get_snapshot()
-            assert first_msg.text == "Establishing connection, please wait…"
+            assert "invited you to join this channel" in first_msg.text
             assert first_msg.is_info
 
         member_added_msg = chat_msgs.pop(0).get_snapshot()

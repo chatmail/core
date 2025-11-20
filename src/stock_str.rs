@@ -429,6 +429,10 @@ https://delta.chat/donate"))]
     #[strum(props(fallback = "You joined the channel."))]
     MsgYouJoinedBroadcast = 202,
 
+    #[strum(props(fallback = "%1$s invited you to join this channel.\n\n\
+                             Waiting for the device of %2$s to reply…"))]
+    SecureJoinBroadcastStarted = 203,
+
     #[strum(props(
         fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
     ))]
@@ -735,6 +739,21 @@ pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
 /// Stock string: `You joined the channel.`
 pub(crate) async fn msg_you_joined_broadcast(context: &Context) -> String {
     translated(context, StockMessage::MsgYouJoinedBroadcast).await
+}
+
+/// Stock string: `%1$s invited you to join this channel. Waiting for the device of %2$s to reply…`.
+pub(crate) async fn secure_join_broadcast_started(
+    context: &Context,
+    inviter_contact_id: ContactId,
+) -> String {
+    if let Ok(contact) = Contact::get_by_id(context, inviter_contact_id).await {
+        translated(context, StockMessage::SecureJoinBroadcastStarted)
+            .await
+            .replace1(contact.get_display_name())
+            .replace2(contact.get_display_name())
+    } else {
+        format!("secure_join_started: unknown contact {inviter_contact_id}")
+    }
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.
