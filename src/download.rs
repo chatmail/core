@@ -383,16 +383,16 @@ mod tests {
                 .is_none()
         );
 
-        // full message should have the rfc message id
         assert_eq!(
             full_message.headers.get_header_value(HeaderDef::MessageId),
-            Some(format!("<{}>", msg.rfc724_mid))
+            Some(format!("<{}>", msg.rfc724_mid)),
+            "full message should have the rfc message id of the database message"
         );
 
-        //  test that message ids are different
         assert_ne!(
             pre_message.headers.get_header_value(HeaderDef::MessageId),
-            full_message.headers.get_header_value(HeaderDef::MessageId)
+            full_message.headers.get_header_value(HeaderDef::MessageId),
+            "message ids of pre message and full message should be different"
         );
 
         // also test that Autocrypt-gossip and selfavatar should never go into full-messages
@@ -417,8 +417,7 @@ mod tests {
         let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
-        //   only one message and no "is full message" header should be present
-        assert_eq!(smtp_rows.len(), 1);
+        assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
 
         let mime = smtp_rows.first().expect("first element exists").2.clone();
         let mail = mailparse::parse_mail(mime.as_bytes())?;
@@ -426,12 +425,14 @@ mod tests {
         assert!(
             mail.get_headers()
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
-                .is_none()
+                .is_none(),
+            "no 'Chat-Is-Full-Message'-header should be present"
         );
         assert!(
             mail.get_headers()
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
-                .is_none()
+                .is_none(),
+            "no 'Chat-Full-Message-ID'-header should be present"
         );
         Ok(())
     }
