@@ -1144,29 +1144,33 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            let should_do_gossip = cmd == SystemMessage::MemberAddedToGroup
-                                || cmd == SystemMessage::SecurejoinMessage
-                                || multiple_recipients && {
-                                    let gossiped_timestamp: Option<i64> = context
-                                        .sql
-                                        .query_get_value(
-                                            "SELECT timestamp
+                            let is_full_msg =
+                                self.pre_message_mode == Some(PreMessageMode::FullMessage);
+                            let should_do_gossip = !is_full_msg
+                                && (cmd == SystemMessage::MemberAddedToGroup
+                                    || cmd == SystemMessage::SecurejoinMessage
+                                    || multiple_recipients && {
+                                        let gossiped_timestamp: Option<i64> = context
+                                            .sql
+                                            .query_get_value(
+                                                "SELECT timestamp
                                          FROM gossip_timestamp
                                          WHERE chat_id=? AND fingerprint=?",
-                                            (chat.id, &fingerprint),
-                                        )
-                                        .await?;
+                                                (chat.id, &fingerprint),
+                                            )
+                                            .await?;
 
-                                    // `gossip_period == 0` is a special case for testing,
-                                    // enabling gossip in every message.
-                                    //
-                                    // If current time is in the past compared to
-                                    // `gossiped_timestamp`, we also gossip because
-                                    // either the `gossiped_timestamp` or clock is wrong.
-                                    gossip_period == 0
-                                        || gossiped_timestamp
-                                            .is_none_or(|ts| now >= ts + gossip_period || now < ts)
-                                };
+                                        // `gossip_period == 0` is a special case for testing,
+                                        // enabling gossip in every message.
+                                        //
+                                        // If current time is in the past compared to
+                                        // `gossiped_timestamp`, we also gossip because
+                                        // either the `gossiped_timestamp` or clock is wrong.
+                                        gossip_period == 0
+                                            || gossiped_timestamp.is_none_or(|ts| {
+                                                now >= ts + gossip_period || now < ts
+                                            })
+                                    });
 
                             let verifier_id: Option<u32> = context
                                 .sql
@@ -1179,10 +1183,7 @@ impl MimeFactory {
                             let is_verified =
                                 verifier_id.is_some_and(|verifier_id| verifier_id != 0);
 
-                            let is_full_msg =
-                                self.pre_message_mode == Some(PreMessageMode::FullMessage);
-
-                            if !should_do_gossip || is_full_msg {
+                            if !should_do_gossip {
                                 continue;
                             }
 
