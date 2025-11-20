@@ -1,6 +1,6 @@
 //! Internet Message Format reception pipeline.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -2471,11 +2471,8 @@ async fn lookup_or_create_adhoc_group(
                 .unwrap_or_else(|| "👥📧".to_string())
         });
     let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
-    let mut contact_ids = Vec::with_capacity(to_ids.len() + 1);
-    contact_ids.extend(&to_ids);
-    if !contact_ids.contains(&from_id) {
-        contact_ids.push(from_id);
-    }
+    let mut contact_ids = BTreeSet::<ContactId>::from_iter(to_ids.iter().copied());
+    contact_ids.insert(from_id);
     let trans_fn = |t: &mut rusqlite::Transaction| {
         t.pragma_update(None, "query_only", "0")?;
         t.execute(

@@ -1970,18 +1970,23 @@ Message content",
 async fn test_unencrypted_doesnt_goto_self_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
+    let mut chat_id = None;
 
-    for to in [
+    for (i, to) in [
+        "<alice@example.org>",
         "<alice@example.org>",
         "alice@example.org, alice@example.org",
         "hidden-recipients:;",
-    ] {
+    ]
+    .iter()
+    .enumerate()
+    {
         receive_imf(
             t,
             format!(
                 "Subject: s
 Chat-Version: 1.0
-Message-ID: <foobar@localhost>
+Message-ID: <foobar{i}@localhost>
 To: {to}
 From: <alice@example.org>
 
@@ -1996,9 +2001,14 @@ Your server is hacked. Have a nice day!"
         assert_ne!(msg.chat_id, t.get_self_chat().await.id);
         assert_eq!(msg.from_id, ContactId::SELF);
         assert_eq!(msg.to_id, ContactId::SELF);
-        let chat = Chat::load_from_db(t, msg.chat_id).await?;
-        assert_eq!(chat.typ, Chattype::Group);
-        assert!(!chat.is_encrypted(t).await?);
+        if let Some(chat_id) = chat_id {
+            assert_eq!(msg.chat_id, chat_id);
+        } else {
+            chat_id = Some(msg.chat_id);
+            let chat = Chat::load_from_db(t, msg.chat_id).await?;
+            assert_eq!(chat.typ, Chattype::Group);
+            assert!(!chat.is_encrypted(t).await?);
+        }
     }
     Ok(())
 }
