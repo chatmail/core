@@ -56,7 +56,7 @@ def send_notification(message: str, accounts_dir: str = ACCOUNTS_DIR) -> None:
     # Validate accounts directory exists
     if not Path(accounts_dir).exists():
         print(f"❌ Accounts directory not found: {accounts_dir}")
-        print(f"   Set ACCOUNTS_DIR environment variable or create directory")
+        print("   Set ACCOUNTS_DIR environment variable or create directory")
         sys.exit(1)
 
     # Start RPC connection
@@ -72,7 +72,7 @@ def send_notification(message: str, accounts_dir: str = ACCOUNTS_DIR) -> None:
 
         if not accounts:
             print(f"❌ No accounts found in {accounts_dir}")
-            print(f"   Configure an account first using Delta Chat app or Bot.configure()")
+            print("   Configure an account first using Delta Chat app or Bot.configure()")
             rpc.close()
             sys.exit(1)
 
@@ -98,8 +98,8 @@ def send_notification(message: str, accounts_dir: str = ACCOUNTS_DIR) -> None:
 
         if not chats:
             print(f"❌ No chats found for {account_email}")
-            print(f"   Create a chat first using Delta Chat app")
-            print(f"   Tip: Send a message to someone to create a chat")
+            print("   Create a chat first using Delta Chat app")
+            print("   Tip: Send a message to someone to create a chat")
             account.stop_io()
             rpc.close()
             sys.exit(1)
@@ -115,7 +115,7 @@ def send_notification(message: str, accounts_dir: str = ACCOUNTS_DIR) -> None:
             print(f"✓ Sending to chat: {chat_name}")
         except Exception:
             chat_name = "unknown"
-            print(f"✓ Sending to first chat")
+            print("✓ Sending to first chat")
 
         # Send message
         msg = chat.send_text(message)
@@ -139,10 +139,7 @@ def main():
         message = " ".join(sys.argv[1:])
     else:
         # Try to read from stdin (for piping)
-        if not sys.stdin.isatty():
-            message = sys.stdin.read().strip()
-        else:
-            message = ""
+        message = sys.stdin.read().strip() if not sys.stdin.isatty() else ""
 
     # Validate message
     if not message:
