@@ -63,7 +63,7 @@ pub enum PreMessageMode {
     /// adds the Chat-Is-Full-Message header in unprotected part
     FullMessage,
     /// adds the Chat-Full-Message-ID header to protected part
-    /// also adds metadata and hashes and explicitly excludes attachment
+    /// also adds metadata and explicitly excludes attachment
     PreMessage { full_msg_rfc724_mid: String },
 }
 
