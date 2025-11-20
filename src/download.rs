@@ -25,7 +25,7 @@ pub(crate) const PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 
 /// Max message size to be fetched in the background.
 /// This limit defines what messages are fully fetched in the background.
-/// This is for all messages that don't have the full message header.
+/// This is for all messages that don't have the Chat-Is-Full-Message header.
 #[allow(unused)]
 pub(crate) const MAX_FETCH_MSG_SIZE: usize = 1_000_000;
 

@@ -2808,7 +2808,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
 
     // render message and pre message.
     // pre message is a small message with metadata
-    // which announces a larger message. Large messages are not downloaded in the background.
+    // which announces a larger full message. Full messages are not downloaded in the background.
 
     let needs_pre_message = msg.viewtype.has_file()
         && msg
@@ -2833,7 +2833,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             if rendered_pre_msg.message.len() > PRE_MESSAGE_SIZE_WARNING_THRESHOLD {
                 warn!(
                     context,
-                    "pre message for message (MsgId={}) is larger than expected: {}",
+                    "Pre-message for message (MsgId={}) is larger than expected: {}.",
                     msg.id,
                     rendered_pre_msg.message.len()
                 );

@@ -60,9 +60,9 @@ pub enum Loaded {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreMessageMode {
-    /// adds a is full message header in unprotected part
+    /// adds the Chat-Is-Full-Message header in unprotected part
     FullMessage,
-    /// adds reference to full message to protected part
+    /// adds the Chat-Full-Message-ID header to protected part
     /// also adds metadata and hashes and explicitly excludes attachment
     PreMessage { full_msg_rfc724_mid: String },
 }
