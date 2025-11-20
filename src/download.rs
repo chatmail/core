@@ -32,7 +32,7 @@ pub(crate) const MAX_FETCH_MSG_SIZE: usize = 1_000_000;
 
 /// Max size for pre messages. A warning is emitted when this is exceeded.
 /// Should be well below `MAX_FETCH_MSG_SIZE`
-pub(crate) const PRE_MESSAGE_SIZE_WARNING_THRESHOLD: usize = 150_000;
+pub(crate) const PRE_MSG_SIZE_WARNING_THRESHOLD: usize = 150_000;
 
 /// Download state of the message.
 #[derive(

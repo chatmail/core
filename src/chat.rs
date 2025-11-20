@@ -28,7 +28,7 @@ use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::{
-    DownloadState, PRE_MESSAGE_SIZE_WARNING_THRESHOLD, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD,
+    DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PRE_MSG_SIZE_WARNING_THRESHOLD,
 };
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
@@ -2830,7 +2830,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 .await
                 .context("pre-message failed to render")?;
 
-            if rendered_pre_msg.message.len() > PRE_MESSAGE_SIZE_WARNING_THRESHOLD {
+            if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
                 warn!(
                     context,
                     "Pre-message for message (MsgId={}) is larger than expected: {}.",
