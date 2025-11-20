@@ -21,7 +21,7 @@ pub(crate) const MIN_DELETE_SERVER_AFTER: i64 = 48 * 60 * 60;
 /// From this point onward outgoing messages are considered large
 /// and get a pre-message, which announces the full message.
 // this is only about sending so we can modify it any time.
-pub(crate) const PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
+pub(crate) const PRE_MSG_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 
 /// Max message size to be fetched in the background.
 /// This limit defines what messages are fully fetched in the background.
@@ -314,7 +314,7 @@ mod tests {
 
         Ok(())
     }
-    /// Tests that pre message is sent for attachment larger than `PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD`
+    /// Tests that pre message is sent for attachment larger than `PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`
     /// Also test that pre message is sent first, before the full message
     /// And that Autocrypt-gossip and selfavatar never go into full-messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -331,9 +331,7 @@ mod tests {
         msg.set_text("test".to_owned());
 
         // assert that test attachment is bigger than limit
-        assert!(
-            msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD
-        );
+        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
         let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg)
             .await
@@ -435,7 +433,7 @@ mod tests {
         Ok(())
     }
 
-    /// Tests that no pre message is sent for attachment smaller than `PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD`
+    /// Tests that no pre message is sent for attachment smaller than `PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_for_small_attachment() -> Result<()> {
         let alice = TestContext::new_alice().await;
@@ -447,9 +445,7 @@ mod tests {
         msg.set_text("test".to_owned());
 
         // assert that test attachment is smaller than limit
-        assert!(
-            msg.get_filebytes(&alice.ctx).await?.unwrap() < PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD
-        );
+        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() < PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
         let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
@@ -498,7 +494,7 @@ mod tests {
         assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 0);
 
         let long_text = String::from_utf8(vec![b'a'; 300_000])?;
-        assert!(long_text.len() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
+        assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
         t.send_webxdc_status_update(instance.id, &format!("{{\"payload\": \"{long_text}\"}}"))
             .await?;
         t.flush_status_updates().await?;
@@ -517,7 +513,7 @@ mod tests {
         // send normal text message
         let mut msg = Message::new(Viewtype::Text);
         let long_text = String::from_utf8(vec![b'a'; 300_000])?;
-        assert!(long_text.len() > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
+        assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
         msg.set_text(long_text);
         let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;

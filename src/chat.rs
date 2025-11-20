@@ -28,7 +28,7 @@ use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc;
 use crate::download::{
-    DownloadState, PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD, PRE_MESSAGE_SIZE_WARNING_THRESHOLD,
+    DownloadState, PRE_MESSAGE_SIZE_WARNING_THRESHOLD, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD,
 };
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
@@ -2815,7 +2815,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             .get_filebytes(context)
             .await?
             .context("filebytes not available, even though message has attachment")?
-            > PRE_MESSAGE_ATTACHMENT_SIZE_THRESHOLD;
+            > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
 
     let render_result: Result<(RenderedEmail, Option<RenderedEmail>)> = async {
         if needs_pre_message {
