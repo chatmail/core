@@ -218,7 +218,7 @@ mod tests {
     use crate::message::Viewtype;
     use crate::mimeparser::MimeMessage;
     use crate::receive_imf::receive_imf_from_inbox;
-    use crate::test_utils::TestContext;
+    use crate::test_utils::{TestContext, TestContextManager};
 
     #[test]
     fn test_downloadstate_values() {
@@ -320,9 +320,10 @@ mod tests {
     /// And that Autocrypt-gossip and selfavatar never go into full-messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_sending_pre_message() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
-        let fiona = TestContext::new_fiona().await;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let fiona = tcm.fiona().await;
         let group_id = alice
             .create_group_with_members("test group", &[&bob, &fiona])
             .await;
@@ -405,8 +406,9 @@ mod tests {
     /// Tests that no pre message is sent for normal message
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_no_attachment() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
         let chat = alice.create_chat(&bob).await;
 
         // send normal text message
@@ -437,8 +439,9 @@ mod tests {
     /// Tests that no pre message is sent for attachment smaller than `PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_for_small_attachment() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
         let chat = alice.create_chat(&bob).await;
 
         let mut msg = Message::new(Viewtype::File);
@@ -507,8 +510,9 @@ mod tests {
     // test that pre message is not send for large large text
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_for_large_text() -> Result<()> {
-        let alice = TestContext::new_alice().await;
-        let bob = TestContext::new_bob().await;
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
         let chat = alice.create_chat(&bob).await;
 
         // send normal text message
