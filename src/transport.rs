@@ -18,10 +18,12 @@ use crate::config::Config;
 use crate::configure::server_params::{ServerParams, expand_param_vector};
 use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
+use crate::events::EventType;
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
 use crate::provider::{Protocol, Provider, Socket, UsernamePattern, get_provider_by_id};
 use crate::sql::Sql;
+use crate::sync::{RemovedTransportData, SyncData, TransportData};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum ConnectionSecurity {
@@ -190,10 +192,10 @@ pub(crate) struct ConfiguredLoginParam {
     pub oauth2: bool,
 }
 
-/// The representation of ConfiguredLoginParam in the database,
-/// saved as Json.
+/// JSON representation of ConfiguredLoginParam
+/// for the database and sync messages.
 #[derive(Debug, Serialize, Deserialize)]
-struct ConfiguredLoginParamJson {
+pub(crate) struct ConfiguredLoginParamJson {
     pub addr: String,
     pub imap: Vec<ConfiguredServerLoginParam>,
     pub imap_user: String,
@@ -557,35 +559,9 @@ impl ConfiguredLoginParam {
         self,
         context: &Context,
         entered_param: &EnteredLoginParam,
+        timestamp: i64,
     ) -> Result<()> {
-        let addr = addr_normalize(&self.addr);
-        let provider_id = self.provider.map(|provider| provider.id);
-        let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-        context
-            .sql
-            .execute(
-                "INSERT INTO transports (addr, entered_param, configured_param)
-                VALUES (?, ?, ?)
-                ON CONFLICT (addr)
-                DO UPDATE SET entered_param=excluded.entered_param, configured_param=excluded.configured_param",
-                (
-                    self.addr.clone(),
-                    serde_json::to_string(entered_param)?,
-                    self.into_json()?,
-                ),
-            )
-            .await?;
-        if configured_addr.is_none() {
-            // If there is no transport yet, set the new transport as the primary one
-            context
-                .sql
-                .set_raw_config(Config::ConfiguredProvider.as_ref(), provider_id)
-                .await?;
-            context
-                .sql
-                .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
-                .await?;
-        }
+        save_transport(context, entered_param, &self.into(), timestamp).await?;
         Ok(())
     }
 
@@ -609,18 +585,7 @@ impl ConfiguredLoginParam {
     }
 
     pub(crate) fn into_json(self) -> Result<String> {
-        let json = ConfiguredLoginParamJson {
-            addr: self.addr,
-            imap: self.imap,
-            imap_user: self.imap_user,
-            imap_password: self.imap_password,
-            smtp: self.smtp,
-            smtp_user: self.smtp_user,
-            smtp_password: self.smtp_password,
-            provider_id: self.provider.map(|p| p.id.to_string()),
-            certificate_checks: self.certificate_checks,
-            oauth2: self.oauth2,
-        };
+        let json: ConfiguredLoginParamJson = self.into();
         Ok(serde_json::to_string(&json)?)
     }
 
@@ -638,12 +603,166 @@ impl ConfiguredLoginParam {
     }
 }
 
+impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
+    fn from(configured_login_param: ConfiguredLoginParam) -> Self {
+        Self {
+            addr: configured_login_param.addr,
+            imap: configured_login_param.imap,
+            imap_user: configured_login_param.imap_user,
+            imap_password: configured_login_param.imap_password,
+            smtp: configured_login_param.smtp,
+            smtp_user: configured_login_param.smtp_user,
+            smtp_password: configured_login_param.smtp_password,
+            provider_id: configured_login_param.provider.map(|p| p.id.to_string()),
+            certificate_checks: configured_login_param.certificate_checks,
+            oauth2: configured_login_param.oauth2,
+        }
+    }
+}
+
+/// Saves transport to the database.
+pub(crate) async fn save_transport(
+    context: &Context,
+    entered_param: &EnteredLoginParam,
+    configured: &ConfiguredLoginParamJson,
+    add_timestamp: i64,
+) -> Result<()> {
+    let addr = addr_normalize(&configured.addr);
+    let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
+
+    context
+        .sql
+        .execute(
+            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (addr)
+             DO UPDATE SET entered_param=excluded.entered_param,
+                           configured_param=excluded.configured_param,
+                           add_timestamp=excluded.add_timestamp",
+            (
+                &addr,
+                serde_json::to_string(entered_param)?,
+                serde_json::to_string(configured)?,
+                add_timestamp,
+            ),
+        )
+        .await?;
+
+    if configured_addr.is_none() {
+        // If there is no transport yet, set the new transport as the primary one
+        context
+            .sql
+            .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
+            .await?;
+    }
+    Ok(())
+}
+
+/// Sends a sync message to synchronize transports across devices.
+pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
+    info!(context, "Sending transport synchronization message.");
+
+    // Synchronize all transport configurations.
+    //
+    // Transport with ID 1 is never synchronized
+    // because it can only be created during initial configuration.
+    // This also guarantees that credentials for the first
+    // transport are never sent in sync messages,
+    // so this is not worse than when not using multi-transport.
+    // If transport ID 1 is reconfigured,
+    // likely because the password has changed,
+    // user has to reconfigure it manually on all devices.
+    let transports = context
+        .sql
+        .query_map_vec(
+            "SELECT entered_param, configured_param, add_timestamp
+             FROM transports WHERE id>1",
+            (),
+            |row| {
+                let entered_json: String = row.get(0)?;
+                let entered: EnteredLoginParam = serde_json::from_str(&entered_json)?;
+                let configured_json: String = row.get(1)?;
+                let configured: ConfiguredLoginParamJson = serde_json::from_str(&configured_json)?;
+                let timestamp: i64 = row.get(2)?;
+                Ok(TransportData {
+                    configured,
+                    entered,
+                    timestamp,
+                })
+            },
+        )
+        .await?;
+    let removed_transports = context
+        .sql
+        .query_map_vec(
+            "SELECT addr, remove_timestamp FROM removed_transports",
+            (),
+            |row| {
+                let addr: String = row.get(0)?;
+                let timestamp: i64 = row.get(1)?;
+                Ok(RemovedTransportData { addr, timestamp })
+            },
+        )
+        .await?;
+    context
+        .add_sync_item(SyncData::Transports {
+            transports,
+            removed_transports,
+        })
+        .await?;
+    context.scheduler.interrupt_inbox().await;
+
+    Ok(())
+}
+
+/// Process received data for transport synchronization.
+pub(crate) async fn sync_transports(
+    context: &Context,
+    transports: &[TransportData],
+    removed_transports: &[RemovedTransportData],
+) -> Result<()> {
+    for TransportData {
+        configured,
+        entered,
+        timestamp,
+    } in transports
+    {
+        save_transport(context, entered, configured, *timestamp).await?;
+    }
+
+    context
+        .sql
+        .transaction(|transaction| {
+            for RemovedTransportData { addr, timestamp } in removed_transports {
+                transaction.execute(
+                    "DELETE FROM transports
+                     WHERE addr=? AND add_timestamp<=?",
+                    (addr, timestamp),
+                )?;
+                transaction.execute(
+                    "INSERT INTO removed_transports (addr, remove_timestamp)
+                     VALUES (?, ?)
+                     ON CONFLICT (addr) DO
+                     UPDATE SET remove_timestamp = excluded.remove_timestamp
+                     WHERE excluded.remove_timestamp > remove_timestamp",
+                    (addr, timestamp),
+                )?;
+            }
+            Ok(())
+        })
+        .await?;
+
+    context.emit_event(EventType::TransportsModified);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::log::LogExt as _;
     use crate::provider::get_provider_by_id;
     use crate::test_utils::TestContext;
+    use crate::tools::time;
 
     #[test]
     fn test_configured_certificate_checks_display() {
@@ -688,7 +807,7 @@ mod tests {
 
         param
             .clone()
-            .save_to_transports_table(&t, &EnteredLoginParam::default())
+            .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
             .await?;
         let expected_param = r#"{"addr":"alice@example.org","imap":[{"connection":{"host":"imap.example.com","port":123,"security":"Starttls"},"user":"alice"}],"imap_user":"","imap_password":"foo","smtp":[{"connection":{"host":"smtp.example.com","port":456,"security":"Tls"},"user":"alice@example.org"}],"smtp_user":"","smtp_password":"bar","provider_id":null,"certificate_checks":"Strict","oauth2":false}"#;
         assert_eq!(
@@ -906,7 +1025,7 @@ mod tests {
             certificate_checks: ConfiguredCertificateChecks::Automatic,
             oauth2: false,
         }
-        .save_to_transports_table(&t, &EnteredLoginParam::default())
+        .save_to_transports_table(&t, &EnteredLoginParam::default(), time())
         .await?;
 
         let (_transport_id, loaded) = ConfiguredLoginParam::load(&t).await?.unwrap();

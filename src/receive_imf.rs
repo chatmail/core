@@ -827,6 +827,41 @@ pub(crate) async fn receive_imf_inner(
     if let Some(ref sync_items) = mime_parser.sync_items {
         if from_id == ContactId::SELF {
             if mime_parser.was_encrypted() {
+                // Receiving encrypted message from self updates primary transport.
+                let from_addr = &mime_parser.from.addr;
+
+                let transport_changed = context
+                    .sql
+                    .transaction(|transaction| {
+                        let transport_exists = transaction.query_row(
+                            "SELECT COUNT(*) FROM transports WHERE addr=?",
+                            (from_addr,),
+                            |row| {
+                                let count: i64 = row.get(0)?;
+                                Ok(count > 0)
+                            },
+                        )?;
+
+                        let transport_changed = if transport_exists {
+                            transaction.execute(
+                                "UPDATE config SET value=? WHERE keyname='configured_addr'",
+                                (from_addr,),
+                            )? > 0
+                        } else {
+                            warn!(
+                                context,
+                                "Received sync message from unknown address {from_addr:?}."
+                            );
+                            false
+                        };
+                        Ok(transport_changed)
+                    })
+                    .await?;
+                if transport_changed {
+                    info!(context, "Primary transport changed to {from_addr:?}.");
+                    context.sql.uncache_raw_config("configured_addr").await;
+                }
+
                 context
                     .execute_sync_items(sync_items, mime_parser.timestamp_sent)
                     .await;

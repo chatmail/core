@@ -600,7 +600,7 @@ impl TestContext {
         self.ctx
             .set_config(Config::ConfiguredAddr, Some(addr))
             .await
-            .unwrap();
+            .expect("Failed to configure address");
 
         if let Some(name) = addr.split('@').next() {
             self.set_name(name);
