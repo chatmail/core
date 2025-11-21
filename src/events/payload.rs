@@ -417,6 +417,15 @@ pub enum EventType {
         chat_id: ChatId,
     },
 
+    /// One or more transports has changed.
+    ///
+    /// This event is used for tests to detect when transport
+    /// synchronization messages arrives.
+    /// UIs don't need to use it, it is unlikely
+    /// that user modifies transports on multiple
+    /// devices simultaneously.
+    TransportsModified,
+
     /// Event for using in tests, e.g. as a fence between normally generated events.
     #[cfg(test)]
     Test,
