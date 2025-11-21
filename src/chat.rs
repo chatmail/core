@@ -2867,7 +2867,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             msg.id,
             needs_encryption
         );
-    };
+    }
 
     let now = smeared_time(context);
 
