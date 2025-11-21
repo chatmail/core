@@ -460,6 +460,15 @@ pub enum EventType {
         /// ID of the chat which the message belongs to.
         chat_id: u32,
     },
+
+    /// One or more transports has changed.
+    ///
+    /// This event is used for tests to detect when transport
+    /// synchronization messages arrives.
+    /// UIs don't need to use it, it is unlikely
+    /// that user modifies transports on multiple
+    /// devices simultaneously.
+    TransportsModified,
 }
 
 impl From<CoreEventType> for EventType {
@@ -642,6 +651,8 @@ impl From<CoreEventType> for EventType {
                 msg_id: msg_id.to_u32(),
                 chat_id: chat_id.to_u32(),
             },
+            CoreEventType::TransportsModified => TransportsModified,
+
             #[allow(unreachable_patterns)]
             #[cfg(test)]
             _ => unreachable!("This is just to silence a rust_analyzer false-positive"),
