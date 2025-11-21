@@ -819,11 +819,19 @@ impl Context {
                         self,
                         "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
                     );
-                    ConfiguredLoginParam::from_json(&format!(
-                        r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#
-                    ))?
-                    .save_to_transports_table(self, &EnteredLoginParam::default())
-                    .await?;
+                    self.sql
+                        .execute(
+                            "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
+                            (
+                                addr,
+                                serde_json::to_string(&EnteredLoginParam::default())?,
+                                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
+                            ),
+                        )
+                        .await?;
+                    self.sql
+                        .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(addr))
+                        .await?;
                 }
                 self.sql
                     .transaction(|transaction| {
