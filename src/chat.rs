@@ -2916,7 +2916,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 if let Some(pre_msg) = &rendered_pre_msg {
                     let row_id = t.execute(
                         "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
-                    VALUES            (?1,         ?2,         ?3,   ?4)",
+                        VALUES            (?1,         ?2,         ?3,   ?4)",
                         (
                             &pre_msg.rfc724_mid,
                             &recipients_chunk,
