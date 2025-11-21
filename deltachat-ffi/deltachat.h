@@ -7712,6 +7712,11 @@ void dc_event_unref(dc_event_t* event);
 /// Used in summaries.
 #define DC_STR_REACTED_BY 177
 
+/// "Member %1$s removed."
+///
+/// `%1$s` will be replaced by name of the removed contact.
+#define DC_STR_REMOVE_MEMBER 178
+
 /// "Establishing connection, please wait…"
 ///
 /// Used as info message.
@@ -7767,6 +7772,11 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// `%1$s` and `%2$s` will both be replaced by the name of the inviter.
 #define DC_STR_SECURE_JOIN_CHANNEL_STARTED 203
+
+/// "The attachment contains anonymous usage statistics, which help us improve Delta Chat. Thank you!"
+///
+/// Used as the message body for statistics sent out.
+#define DC_STR_STATS_MSG_BODY 210
 
 /// "Proxy Enabled"
 ///
