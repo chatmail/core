@@ -912,7 +912,7 @@ impl MimeFactory {
             ));
         }
 
-        let is_encrypted = self.encryption_pubkeys.is_some();
+        let is_encrypted = self.will_be_encrypted();
 
         // Add ephemeral timer for non-MDN messages.
         // For MDNs it does not matter because they are not visible
@@ -1996,6 +1996,10 @@ impl MimeFactory {
         ));
 
         Ok(message)
+    }
+
+    pub fn will_be_encrypted(&self) -> bool {
+        self.encryption_pubkeys.is_some()
     }
 
     pub fn set_as_full_message(&mut self) {
