@@ -366,6 +366,13 @@ impl CommandApi {
         ctx.get_info().await
     }
 
+    /// Get space usage report as formatted string
+    async fn get_space_usage_report_string(&self, account_id: u32) -> Result<String> {
+        let ctx = self.get_context(account_id).await?;
+        let space_usage = ctx.get_space_usage().await?;
+        Ok(space_usage.to_string())
+    }
+
     /// Get the blob dir.
     async fn get_blob_dir(&self, account_id: u32) -> Result<Option<String>> {
         let ctx = self.get_context(account_id).await?;

@@ -1085,6 +1085,11 @@ impl Context {
                 .unwrap_or_default(),
         );
 
+        res.insert(
+            "storage_usage",
+            format!("{:#?}", self.get_space_usage().await),
+        );
+
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
 
