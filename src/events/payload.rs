@@ -417,6 +417,11 @@ pub enum EventType {
         chat_id: ChatId,
     },
 
+    /// One or more transports has changed.
+    ///
+    /// Transport list should be refreshed.
+    TransportsModified,
+
     /// Event for using in tests, e.g. as a fence between normally generated events.
     #[cfg(test)]
     Test,

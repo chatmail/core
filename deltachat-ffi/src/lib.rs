@@ -559,6 +559,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::IncomingCallAccepted { .. } => 2560,
         EventType::OutgoingCallAccepted { .. } => 2570,
         EventType::CallEnded { .. } => 2580,
+        EventType::TransportsModified => 2600,
         #[allow(unreachable_patterns)]
         #[cfg(test)]
         _ => unreachable!("This is just to silence a rust_analyzer false-positive"),
@@ -593,7 +594,8 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::AccountsBackgroundFetchDone
         | EventType::ChatlistChanged
         | EventType::AccountsChanged
-        | EventType::AccountsItemChanged => 0,
+        | EventType::AccountsItemChanged
+        | EventType::TransportsModified => 0,
         EventType::IncomingReaction { contact_id, .. }
         | EventType::IncomingWebxdcNotify { contact_id, .. } => contact_id.to_u32() as libc::c_int,
         EventType::MsgsChanged { chat_id, .. }
@@ -681,7 +683,8 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::IncomingCallAccepted { .. }
         | EventType::OutgoingCallAccepted { .. }
         | EventType::CallEnded { .. }
-        | EventType::EventChannelOverflow { .. } => 0,
+        | EventType::EventChannelOverflow { .. }
+        | EventType::TransportsModified => 0,
         EventType::MsgsChanged { msg_id, .. }
         | EventType::ReactionsChanged { msg_id, .. }
         | EventType::IncomingReaction { msg_id, .. }
@@ -780,7 +783,8 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
         | EventType::AccountsChanged
         | EventType::AccountsItemChanged
         | EventType::IncomingCallAccepted { .. }
-        | EventType::WebxdcRealtimeAdvertisementReceived { .. } => ptr::null_mut(),
+        | EventType::WebxdcRealtimeAdvertisementReceived { .. }
+        | EventType::TransportsModified => ptr::null_mut(),
         EventType::IncomingCall {
             place_call_info, ..
         } => {
