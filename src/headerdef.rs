@@ -103,13 +103,11 @@ pub enum HeaderDef {
     /// This secret is sent to a new member in the member-addition message.
     ChatBroadcastSecret,
     /// This message announces a bigger message with attachment that is refereced by rfc724_mid.
-    #[strum(serialize = "Chat-Full-Message-ID")] // correct casing
     ChatFullMessageId,
 
     /// This message has a pre-message
     /// and thus this message can be skipped while fetching messages.
     /// This is a cleartext / unproteced header.
-    #[strum(serialize = "Chat-Is-Full-Message")] // correct casing
     ChatIsFullMessage,
 
     /// [Autocrypt](https://autocrypt.org/) header.
@@ -153,6 +151,9 @@ pub enum HeaderDef {
 
 impl HeaderDef {
     /// Returns the corresponding header string.
+    ///
+    /// Format is lower-kebab-case for easy comparisons.
+    /// This method is used in message receiving and testing.
     pub fn get_headername(&self) -> &'static str {
         self.into()
     }
@@ -207,19 +208,6 @@ mod tests {
         assert_eq!(
             headers.get_header_value(HeaderDef::ChatIsFullMessage),
             Some("1".to_string())
-        );
-    }
-
-    #[test]
-    /// Tests that headers have correct casing for sending.
-    fn header_name_correct_casing_for_sending() {
-        assert_eq!(
-            HeaderDef::ChatFullMessageId.get_headername(),
-            "Chat-Full-Message-ID"
-        );
-        assert_eq!(
-            HeaderDef::ChatIsFullMessage.get_headername(),
-            "Chat-Is-Full-Message"
         );
     }
 }

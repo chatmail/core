@@ -1000,7 +1000,7 @@ impl MimeFactory {
 
         if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
             unprotected_headers.push((
-                HeaderDef::ChatIsFullMessage.get_headername(),
+                "Chat-Is-Full-Message",
                 mail_builder::headers::raw::Raw::new("1").into(),
             ));
         } else if let Some(PreMessageMode::PreMessage {
@@ -1008,7 +1008,7 @@ impl MimeFactory {
         }) = self.pre_message_mode.clone()
         {
             unprotected_headers.push((
-                HeaderDef::ChatFullMessageId.get_headername(),
+                "Chat-Full-Message-ID",
                 mail_builder::headers::message_id::MessageId::new(full_msg_rfc724_mid).into(),
             ));
         }
