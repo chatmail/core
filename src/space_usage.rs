@@ -13,7 +13,7 @@ pub struct SpaceUsage {
     pub largest_tables: Vec<(String, usize, Option<usize>)>,
     /// count and total size of status updates
     /// for the 10 webxdc apps with the most size usage in status updates
-    pub largest_webxdc_data: Vec<(String, usize, usize)>,
+    pub largest_webxdc_data: Vec<(usize, usize, usize)>,
 }
 
 impl std::fmt::Display for SpaceUsage {
@@ -97,9 +97,8 @@ impl Context {
             error!(self, "used sqlite version does not support dbstat");
         }
 
-        let largest_webxdc_data = Default::default();
-
-        self.sql
+        let largest_webxdc_data = self
+            .sql
             .query_map_vec(
                 "SELECT msg_id, SUM(length(update_item)) as size, COUNT(*) as update_count
                  FROM msgs_status_updates
