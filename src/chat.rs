@@ -2735,6 +2735,51 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
+/// Renders the message or Full-Message and Pre-Message.
+///
+/// Pre-Message is a small message with metadata which announces a larger Full-Message.
+/// Full messages are not downloaded in the background.
+///
+/// If pre-message is not nessesary this returns a normal message instead.
+async fn render_mime_message_and_pre_message(
+    context: &Context,
+    msg: &mut Message,
+    mimefactory: MimeFactory,
+) -> Result<(RenderedEmail, Option<RenderedEmail>)> {
+    let needs_pre_message = msg.viewtype.has_file()
+        && msg
+            .get_filebytes(context)
+            .await?
+            .context("filebytes not available, even though message has attachment")?
+            > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
+
+    if needs_pre_message {
+        let mut mimefactory_full_msg = mimefactory.clone();
+        mimefactory_full_msg.set_as_full_message();
+        let rendered_msg = mimefactory_full_msg.render(context).await?;
+
+        let mut mimefactory_pre_msg = mimefactory;
+        mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
+        let rendered_pre_msg = mimefactory_pre_msg
+            .render(context)
+            .await
+            .context("pre-message failed to render")?;
+
+        if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
+            warn!(
+                context,
+                "Pre-message for message (MsgId={}) is larger than expected: {}.",
+                msg.id,
+                rendered_pre_msg.message.len()
+            );
+        }
+
+        Ok((rendered_msg, Some(rendered_pre_msg)))
+    } else {
+        Ok((mimefactory.render(context).await?, None))
+    }
+}
+
 /// Constructs jobs for sending a message and inserts them into the appropriate table.
 ///
 /// Updates the message `GuaranteeE2ee` parameter and persists it
@@ -2806,53 +2851,14 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         return Ok(Vec::new());
     }
 
-    // render message and pre message.
-    // pre message is a small message with metadata
-    // which announces a larger full message. Full messages are not downloaded in the background.
-
-    let needs_pre_message = msg.viewtype.has_file()
-        && msg
-            .get_filebytes(context)
-            .await?
-            .context("filebytes not available, even though message has attachment")?
-            > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
-
-    let render_result: Result<(RenderedEmail, Option<RenderedEmail>)> = async {
-        if needs_pre_message {
-            let mut mimefactory_full_msg = mimefactory.clone();
-            mimefactory_full_msg.set_as_full_message();
-            let rendered_msg = mimefactory_full_msg.render(context).await?;
-
-            let mut mimefactory_pre_msg = mimefactory;
-            mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
-            let rendered_pre_msg = mimefactory_pre_msg
-                .render(context)
-                .await
-                .context("pre-message failed to render")?;
-
-            if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
-                warn!(
-                    context,
-                    "Pre-message for message (MsgId={}) is larger than expected: {}.",
-                    msg.id,
-                    rendered_pre_msg.message.len()
-                );
+    let (rendered_msg, rendered_pre_msg) =
+        match render_mime_message_and_pre_message(context, msg, mimefactory).await {
+            Ok(res) => Ok(res),
+            Err(err) => {
+                message::set_msg_failed(context, msg, &err.to_string()).await?;
+                Err(err)
             }
-
-            Ok((rendered_msg, Some(rendered_pre_msg)))
-        } else {
-            Ok((mimefactory.render(context).await?, None))
-        }
-    }
-    .await;
-
-    let (rendered_msg, rendered_pre_msg) = match render_result {
-        Ok(res) => Ok(res),
-        Err(err) => {
-            message::set_msg_failed(context, msg, &err.to_string()).await?;
-            Err(err)
-        }
-    }?;
+        }?;
 
     if needs_encryption && !rendered_msg.is_encrypted {
         /* unrecoverable */
