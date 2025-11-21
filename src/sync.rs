@@ -9,14 +9,15 @@ use crate::config::Config;
 use crate::constants::Blocked;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::log::LogExt;
-use crate::log::warn;
+use crate::log::{LogExt as _, warn};
+use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::sync::SyncData::{AddQrToken, AlterChat, DeleteQrToken};
 use crate::token::Namespace;
 use crate::tools::time;
+use crate::transport::{ConfiguredLoginParamJson, sync_transports};
 use crate::{message, stock_str, token};
 use std::collections::HashSet;
 
@@ -53,6 +54,29 @@ pub(crate) struct QrTokenData {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct TransportData {
+    /// Configured login parameters.
+    pub(crate) configured: ConfiguredLoginParamJson,
+
+    /// Login parameters entered by the user.
+    ///
+    /// They can be used to reconfigure the transport.
+    pub(crate) entered: EnteredLoginParam,
+
+    /// Timestamp of when the transport was last time (re)configured.
+    pub(crate) timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub(crate) struct RemovedTransportData {
+    /// Address of the removed transport.
+    pub(crate) addr: String,
+
+    /// Timestamp of when the transport was removed.
+    pub(crate) timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum SyncData {
     AddQrToken(QrTokenData),
     DeleteQrToken(QrTokenData),
@@ -70,6 +94,28 @@ pub(crate) enum SyncData {
     },
     DeleteMessages {
         msgs: Vec<String>, // RFC724 id (i.e. "Message-Id" header)
+    },
+
+    /// Update transport configuration.
+    ///
+    /// This message contains a list of all added transports
+    /// together with their addition timestamp,
+    /// and all removed transports together with
+    /// the removal timestamp.
+    ///
+    /// In case of a tie, addition and removal timestamps
+    /// being the same, removal wins.
+    /// It is more likely that transport is added
+    /// and then removed within a second,
+    /// but unlikely the other way round
+    /// as adding new transport takes time
+    /// to run configuration.
+    Transports {
+        /// Active transports.
+        transports: Vec<TransportData>,
+
+        /// Removed transports with the timestamp of removal.
+        removed_transports: Vec<RemovedTransportData>,
     },
 }
 
@@ -274,6 +320,10 @@ impl Context {
                     SyncData::Config { key, val } => self.sync_config(key, val).await,
                     SyncData::SaveMessage { src, dest } => self.save_message(src, dest).await,
                     SyncData::DeleteMessages { msgs } => self.sync_message_deletion(msgs).await,
+                    SyncData::Transports {
+                        transports,
+                        removed_transports,
+                    } => sync_transports(self, transports, removed_transports).await,
                 },
                 SyncDataOrUnknown::Unknown(data) => {
                     warn!(self, "Ignored unknown sync item: {data}.");

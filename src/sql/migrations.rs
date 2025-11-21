@@ -1439,6 +1439,21 @@ CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 142)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "ALTER TABLE transports
+             ADD COLUMN add_timestamp INTEGER NOT NULL DEFAULT 0;
+             CREATE TABLE removed_transports (
+                 addr TEXT NOT NULL,
+                 remove_timestamp INTEGER NOT NULL,
+                 UNIQUE(addr)
+             ) STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

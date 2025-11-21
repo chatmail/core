@@ -40,7 +40,7 @@ use crate::sync::Sync::*;
 use crate::tools::time;
 use crate::transport::{
     ConfiguredCertificateChecks, ConfiguredLoginParam, ConfiguredServerLoginParam,
-    ConnectionCandidate,
+    ConnectionCandidate, send_sync_transports,
 };
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
@@ -205,6 +205,7 @@ impl Context {
     /// Removes the transport with the specified email address
     /// (i.e. [EnteredLoginParam::addr]).
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
+        let now = time();
         self.sql
             .transaction(|transaction| {
                 let primary_addr = transaction.query_row(
@@ -219,12 +220,13 @@ impl Context {
                 if primary_addr == addr {
                     bail!("Cannot delete primary transport");
                 }
-                let transport_id = transaction.query_row(
-                    "DELETE FROM transports WHERE addr=? RETURNING id",
+                let (transport_id, add_timestamp) = transaction.query_row(
+                    "DELETE FROM transports WHERE addr=? RETURNING id, add_timestamp",
                     (addr,),
                     |row| {
                         let id: u32 = row.get(0)?;
-                        Ok(id)
+                        let add_timestamp: i64 = row.get(1)?;
+                        Ok((id, add_timestamp))
                     },
                 )?;
                 transaction.execute("DELETE FROM imap WHERE transport_id=?", (transport_id,))?;
@@ -233,9 +235,23 @@ impl Context {
                     (transport_id,),
                 )?;
 
+                // Removal timestamp should not be lower than addition timestamp
+                // to be accepted by other devices when synced.
+                let remove_timestamp = std::cmp::max(now, add_timestamp);
+
+                transaction.execute(
+                    "INSERT INTO removed_transports (addr, remove_timestamp)
+                     VALUES (?, ?)
+                     ON CONFLICT (addr)
+                     DO UPDATE SET remove_timestamp = excluded.remove_timestamp",
+                    (addr, remove_timestamp),
+                )?;
+
                 Ok(())
             })
             .await?;
+        send_sync_transports(self).await?;
+
         Ok(())
     }
 
@@ -552,7 +568,8 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     progress!(ctx, 900);
 
-    if !ctx.is_configured().await? {
+    let is_configured = ctx.is_configured().await?;
+    if !is_configured {
         ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
         ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
     }
@@ -563,8 +580,10 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     let provider = configured_param.provider;
     configured_param
-        .save_to_transports_table(ctx, param)
+        .clone()
+        .save_to_transports_table(ctx, param, time())
         .await?;
+    send_sync_transports(ctx).await?;
 
     ctx.set_config_internal(Config::ConfiguredTimestamp, Some(&time().to_string()))
         .await?;

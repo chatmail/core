@@ -1,5 +1,6 @@
 import pytest
 
+from deltachat_rpc_client import EventType
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -156,3 +157,47 @@ def test_reconfigure_transport(acfactory) -> None:
     # Reconfiguring the transport should not reset
     # the settings as if when configuring the first transport.
     assert account.get_config("mvbox_move") == "1"
+
+
+def test_transport_synchronization(acfactory, log) -> None:
+    """Test synchronization of transports between devices."""
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1_clone = ac1.clone()
+    ac1_clone.bring_online()
+
+    qr = acfactory.get_account_qr()
+
+    ac1.add_transport_from_qr(qr)
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    assert len(ac1.list_transports()) == 2
+    assert len(ac1_clone.list_transports()) == 2
+
+    ac1_clone.add_transport_from_qr(qr)
+    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    assert len(ac1.list_transports()) == 3
+    assert len(ac1_clone.list_transports()) == 3
+
+    log.section("ac1 clone removes second transport")
+    [transport1, transport2, transport3] = ac1_clone.list_transports()
+    addr3 = transport3["addr"]
+    ac1_clone.delete_transport(transport2["addr"])
+
+    ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    [transport1, transport3] = ac1.list_transports()
+
+    log.section("ac1 changes the primary transport")
+    ac1.set_config("configured_addr", transport3["addr"])
+
+    log.section("ac1 removes the first transport")
+    ac1.delete_transport(transport1["addr"])
+
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    [transport3] = ac1_clone.list_transports()
+    assert transport3["addr"] == addr3
+    assert ac1_clone.get_config("configured_addr") == addr3
+
+    ac2_chat = ac2.create_chat(ac1)
+    ac2_chat.send_text("Hello!")
+
+    assert ac1.wait_for_incoming_msg().get_snapshot().text == "Hello!"
+    assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "Hello!"
