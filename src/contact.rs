@@ -1658,8 +1658,7 @@ WHERE addr=?
     ///
     /// If this returns Some(_),
     /// display green checkmark in the profile and "Introduced by ..." line
-    /// with the name and address of the contact
-    /// formatted by [Self::get_name_n_addr].
+    /// with the name of the contact.
     ///
     /// If this returns `Some(None)`, then the contact is verified,
     /// but it's unclear by whom.
