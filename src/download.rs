@@ -211,14 +211,16 @@ impl Session {
 mod tests {
     use mailparse::MailHeaderMap;
     use num_traits::FromPrimitive;
+    use tokio::fs;
 
     use super::*;
     use crate::chat::{self, create_group, send_msg};
+    use crate::config::Config;
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
     use crate::mimeparser::MimeMessage;
     use crate::receive_imf::receive_imf_from_inbox;
-    use crate::test_utils::{TestContext, TestContextManager};
+    use crate::test_utils::{self, TestContext, TestContextManager};
 
     #[test]
     fn test_downloadstate_values() {
@@ -403,6 +405,74 @@ mod tests {
             "no Chat-Full-Message-ID header in unprotected headers of Pre-Message"
         );
 
+        Ok(())
+    }
+
+    /// Tests that pre message has autocrypt gossip headers and self avatar
+    /// and full message doesn't have these headers
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_pre_message_contains_selfavatar_and_gossip_and_full_message_does_not()
+    -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+        let fiona = tcm.fiona().await;
+        let group_id = alice
+            .create_group_with_members("test group", &[&bob, &fiona])
+            .await;
+
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_text("test".to_owned());
+
+        // assert that test attachment is bigger than limit
+        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+
+        // simulate conditions for sending self avatar
+        let avatar_src = alice.get_blobdir().join("avatar.png");
+        fs::write(&avatar_src, test_utils::AVATAR_900x900_BYTES).await?;
+        alice
+            .set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
+            .await?;
+
+        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg)
+            .await
+            .unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        assert_eq!(smtp_rows.len(), 2);
+        let pre_message_bytes = smtp_rows
+            .first()
+            .expect("first element exists")
+            .2
+            .as_bytes();
+        let full_message_bytes = smtp_rows
+            .get(1)
+            .expect("second element exists")
+            .2
+            .as_bytes();
+        let full_message = mailparse::parse_mail(full_message_bytes)?;
+
+        let decrypted_pre_message = MimeMessage::from_bytes(&bob.ctx, pre_message_bytes).await?;
+        assert!(
+            decrypted_pre_message
+                .get_header(HeaderDef::ChatFullMessageId)
+                .is_some(),
+            "tested message is not a pre-message, sending order may be broken"
+        );
+        assert_ne!(decrypted_pre_message.gossiped_keys.len(), 0);
+        assert_ne!(decrypted_pre_message.user_avatar, None);
+
+        let decrypted_full_message = MimeMessage::from_bytes(&bob.ctx, full_message_bytes).await?;
+        assert!(
+            full_message
+                .get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_some(),
+            "tested message is not a full-message, sending order may be broken"
+        );
+        assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
+        assert_eq!(decrypted_full_message.user_avatar, None);
         Ok(())
     }
 
