@@ -34,7 +34,7 @@ impl std::fmt::Display for SpaceUsage {
         for (msg_id, size, update_count) in &self.largest_webxdc_data {
             let human_size = format_size(*size, BINARY);
             report += &format!(
-                "   {msg_id:<5} {human_size} across {update_count} updates\n",
+                "   {msg_id:<8} {human_size:>10} across {update_count:>5} updates\n",
                 msg_id = format!("{msg_id}:")
             );
         }
