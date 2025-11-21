@@ -214,8 +214,9 @@ mod tests {
     use tokio::fs;
 
     use super::*;
-    use crate::chat::{self, create_group, send_msg};
+    use crate::chat::{self, ChatId, create_group, send_msg};
     use crate::config::Config;
+    use crate::contact::Contact;
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
     use crate::mimeparser::MimeMessage;
@@ -337,9 +338,7 @@ mod tests {
         // assert that test attachment is bigger than limit
         assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
-        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg)
-            .await
-            .unwrap();
+        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         //   pre-message and full message should be present
@@ -435,9 +434,7 @@ mod tests {
             .set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
             .await?;
 
-        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg)
-            .await
-            .unwrap();
+        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 2);
@@ -473,6 +470,37 @@ mod tests {
         );
         assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
         assert_eq!(decrypted_full_message.user_avatar, None);
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_unecrypted_gets_no_pre_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+
+        let contact_id = Contact::create(&alice.ctx, "example", "email@example.org").await?;
+        let chat_id = ChatId::create_for_contact(&alice.ctx, contact_id).await?;
+
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_text("test".to_owned());
+
+        let msg_id = chat::send_msg(&alice.ctx, chat_id, &mut msg).await?;
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        assert_eq!(smtp_rows.len(), 1);
+        let message_bytes = smtp_rows
+            .first()
+            .expect("first element exists")
+            .2
+            .as_bytes();
+        let message = mailparse::parse_mail(message_bytes)?;
+        assert!(
+            message
+                .get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none(),
+        );
         Ok(())
     }
 
