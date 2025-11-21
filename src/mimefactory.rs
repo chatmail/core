@@ -1007,7 +1007,7 @@ impl MimeFactory {
             full_msg_rfc724_mid,
         }) = self.pre_message_mode.clone()
         {
-            unprotected_headers.push((
+            protected_headers.push((
                 "Chat-Full-Message-ID",
                 mail_builder::headers::message_id::MessageId::new(full_msg_rfc724_mid).into(),
             ));

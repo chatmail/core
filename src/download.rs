@@ -343,13 +343,12 @@ mod tests {
         //   pre-message and full message should be present
         //   and test that correct headers are present on both messages
         assert_eq!(smtp_rows.len(), 2);
-        let pre_message = mailparse::parse_mail(
-            smtp_rows
-                .first()
-                .expect("first element exists")
-                .2
-                .as_bytes(),
-        )?;
+        let pre_message_bytes = smtp_rows
+            .first()
+            .expect("first element exists")
+            .2
+            .as_bytes();
+        let pre_message = mailparse::parse_mail(pre_message_bytes)?;
         let full_message_bytes = smtp_rows
             .get(1)
             .expect("second element exists")
@@ -371,19 +370,6 @@ mod tests {
         );
 
         assert_eq!(
-            pre_message
-                .headers
-                .get_header_value(HeaderDef::ChatFullMessageId),
-            full_message.headers.get_header_value(HeaderDef::MessageId)
-        );
-        assert!(
-            full_message
-                .headers
-                .get_header_value(HeaderDef::ChatFullMessageId)
-                .is_none()
-        );
-
-        assert_eq!(
             full_message.headers.get_header_value(HeaderDef::MessageId),
             Some(format!("<{}>", msg.rfc724_mid)),
             "full message should have the rfc message id of the database message"
@@ -400,6 +386,23 @@ mod tests {
         assert!(!decrypted_full_message.decrypting_failed);
         assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
         assert_eq!(decrypted_full_message.user_avatar, None);
+        assert!(!decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId));
+
+        let decrypted_pre_message = MimeMessage::from_bytes(&bob.ctx, pre_message_bytes).await?;
+        assert_eq!(
+            decrypted_pre_message
+                .get_header(HeaderDef::ChatFullMessageId)
+                .map(String::from),
+            full_message.headers.get_header_value(HeaderDef::MessageId)
+        );
+        assert!(
+            pre_message
+                .headers
+                .get_header_value(HeaderDef::ChatFullMessageId)
+                .is_none(),
+            "no Chat-Full-Message-ID header in unprotected headers of Pre-Message"
+        );
+
         Ok(())
     }
 
@@ -432,6 +435,11 @@ mod tests {
             mail.get_headers()
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
                 .is_none(),
+            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+        );
+        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        assert!(
+            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
         );
         Ok(())
@@ -469,7 +477,13 @@ mod tests {
         assert!(
             mail.get_headers()
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
-                .is_none()
+                .is_none(),
+            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+        );
+        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        assert!(
+            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
+            "no 'Chat-Full-Message-ID'-header should be present"
         );
 
         Ok(())
@@ -538,7 +552,13 @@ mod tests {
         assert!(
             mail.get_headers()
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
-                .is_none()
+                .is_none(),
+            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+        );
+        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        assert!(
+            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
+            "no 'Chat-Full-Message-ID'-header should be present"
         );
         Ok(())
     }
