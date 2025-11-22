@@ -247,7 +247,7 @@ typedef struct _dc_event_emitter dc_accounts_event_emitter_t;
 // create/open/config/information
 
 /**
- * Create a new context object and try to open it without passphrase. If
+ * Create a new context object and try to open it. If
  * database is encrypted, the result is the same as using
  * dc_context_new_closed() and the database should be opened with
  * dc_context_open() before using.
@@ -283,8 +283,13 @@ dc_context_t*   dc_context_new_closed        (const char* dbfile);
 
 
 /**
- * Opens the database with the given passphrase. This can only be used on
- * closed context, such as created by dc_context_new_closed(). If the database
+ * Opens the database with the given passphrase.
+ * NB: Nonempty passphrase (db encryption) is deprecated 2025-11:
+ * - Db encryption does nothing with blobs, so fs/disk encryption is recommended.
+ * - Isolation from other apps is needed anyway.
+ *
+ * This can only be used on closed context, such as
+ * created by dc_context_new_closed(). If the database
  * is new, this operation sets the database passphrase. For existing databases
  * the passphrase should be the one used to encrypt the database the first
  * time.
@@ -301,6 +306,8 @@ int             dc_context_open              (dc_context_t *context, const char*
 
 /**
  * Changes the passphrase on the open database.
+ * Deprecated 2025-11, see `dc_context_open()` for reasoning.
+ *
  * Existing database must already be encrypted and the passphrase cannot be NULL or empty.
  * It is impossible to encrypt unencrypted database with this method and vice versa.
  *

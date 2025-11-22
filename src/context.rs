@@ -46,7 +46,7 @@ use crate::{chatlist_events, stats};
 ///
 /// # Examples
 ///
-/// Creating a new unencrypted database:
+/// Creating a new database:
 ///
 /// ```
 /// # let rt = tokio::runtime::Runtime::new().unwrap();
@@ -55,24 +55,6 @@ use crate::{chatlist_events, stats};
 ///
 /// let dir = tempfile::tempdir().unwrap();
 /// let context = ContextBuilder::new(dir.path().join("db"))
-///      .open()
-///      .await
-///      .unwrap();
-/// drop(context);
-/// # });
-/// ```
-///
-/// To use an encrypted database provide a password.  If the database does not yet exist it
-/// will be created:
-///
-/// ```
-/// # let rt = tokio::runtime::Runtime::new().unwrap();
-/// # rt.block_on(async move {
-/// use deltachat::context::ContextBuilder;
-///
-/// let dir = tempfile::tempdir().unwrap();
-/// let context = ContextBuilder::new(dir.path().join("db"))
-///      .with_password("secret".into())
 ///      .open()
 ///      .await
 ///      .unwrap();
@@ -150,9 +132,13 @@ impl ContextBuilder {
     }
 
     /// Sets the password to unlock the database.
+    /// Deprecated 2025-11:
+    /// - Db encryption does nothing with blobs, so fs/disk encryption is recommended.
+    /// - Isolation from other apps is needed anyway.
     ///
     /// If an encrypted database is used it must be opened with a password.  Setting a
     /// password on a new database will enable encryption.
+    #[deprecated(since = "TBD")]
     pub fn with_password(mut self, password: String) -> Self {
         self.password = Some(password);
         self
@@ -180,7 +166,7 @@ impl ContextBuilder {
 
     /// Builds the [`Context`] and opens it.
     ///
-    /// Returns error if context cannot be opened with the given passphrase.
+    /// Returns error if context cannot be opened.
     pub async fn open(self) -> Result<Context> {
         let password = self.password.clone().unwrap_or_default();
         let context = self.build().await?;
@@ -400,9 +386,12 @@ impl Context {
     }
 
     /// Opens the database with the given passphrase.
+    /// NB: Db encryption is deprecated, so `passphrase` should be empty normally. See
+    /// [`ContextBuilder::with_password()`] for reasoning.
     ///
     /// Returns true if passphrase is correct, false is passphrase is not correct. Fails on other
     /// errors.
+    #[deprecated(since = "TBD")]
     pub async fn open(&self, passphrase: String) -> Result<bool> {
         if self.sql.check_passphrase(passphrase.clone()).await? {
             self.sql.open(self, passphrase).await?;
@@ -413,6 +402,7 @@ impl Context {
     }
 
     /// Changes encrypted database passphrase.
+    /// Deprecated 2025-11, see [`ContextBuilder::with_password()`] for reasoning.
     pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
         self.sql.change_passphrase(passphrase).await?;
         Ok(())
