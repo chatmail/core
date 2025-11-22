@@ -48,82 +48,79 @@ impl std::fmt::Display for SpaceUsage {
     }
 }
 
-impl Context {
-    /// Get space usage information for the Context's database
-    /// used in Context.get_info()
-    pub async fn get_space_usage(&self) -> Result<SpaceUsage> {
-        // currently this is shown in system info, so needs to be fast,
-        // that's why we donot count size of all blobs for now
-        let page_size: usize = self
-            .sql
-            .query_get_value("PRAGMA page_size", ())
-            .await?
-            .unwrap_or_default();
-        let page_count: usize = self
-            .sql
-            .query_get_value("PRAGMA page_count", ())
-            .await?
-            .unwrap_or_default();
+/// Get space usage information for the Context's database
+pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
+    // currently this is shown in system info, so needs to be fast,
+    // that's why we donot count size of all blobs for now
+    let page_size: usize = ctx
+        .sql
+        .query_get_value("PRAGMA page_size", ())
+        .await?
+        .unwrap_or_default();
+    let page_count: usize = ctx
+        .sql
+        .query_get_value("PRAGMA page_count", ())
+        .await?
+        .unwrap_or_default();
 
-        let mut largest_tables = Vec::new();
+    let mut largest_tables = Vec::new();
 
-        // check if https://sqlite.org/dbstat.html is enabled
-        if self
+    // check if https://sqlite.org/dbstat.html is enabled
+    if ctx
+        .sql
+        .query_map("SELECT * FROM dbstat LIMIT 1", (), |_| Ok(()), |_| Ok(()))
+        .await
+        .is_ok()
+    {
+        let biggest_tables = ctx
             .sql
-            .query_map("SELECT * FROM dbstat LIMIT 1", (), |_| Ok(()), |_| Ok(()))
-            .await
-            .is_ok()
-        {
-            let biggest_tables = self
-                .sql
-                .query_map_vec(
-                    "SELECT name,
+            .query_map_vec(
+                "SELECT name,
                 SUM(pgsize) AS size
                 FROM dbstat
                 WHERE name IN (SELECT name FROM sqlite_master WHERE type='table')
                 GROUP BY name ORDER BY size DESC LIMIT 10",
-                    (),
-                    |row| {
-                        let name: String = row.get(0)?;
-                        let size: usize = row.get(1)?;
-                        Ok((name, size))
-                    },
-                )
-                .await?;
-
-            for (name, size) in biggest_tables {
-                let row_count: Result<Option<usize>> = self
-                    .sql
-                    // SAFETY: the table name comes from the db, not from the user
-                    .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
-                    .await;
-                largest_tables.push((name, size, row_count.unwrap_or_default()));
-            }
-        } else {
-            error!(self, "used sqlite version does not support dbstat");
-        }
-
-        let largest_webxdc_data = self
-            .sql
-            .query_map_vec(
-                "SELECT msg_id, SUM(length(update_item)) as size, COUNT(*) as update_count
-                 FROM msgs_status_updates
-                 GROUP BY msg_id ORDER BY size DESC LIMIT 10",
                 (),
                 |row| {
-                    let msg_id: usize = row.get(0)?;
+                    let name: String = row.get(0)?;
                     let size: usize = row.get(1)?;
-                    let count: usize = row.get(2)?;
-
-                    Ok((msg_id, size, count))
+                    Ok((name, size))
                 },
             )
             .await?;
 
-        Ok(SpaceUsage {
-            db_size: page_size * page_count,
-            largest_tables,
-            largest_webxdc_data,
-        })
+        for (name, size) in biggest_tables {
+            let row_count: Result<Option<usize>> = ctx
+                .sql
+                // SAFETY: the table name comes from the db, not from the user
+                .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
+                .await;
+            largest_tables.push((name, size, row_count.unwrap_or_default()));
+        }
+    } else {
+        error!(ctx, "used sqlite version does not support dbstat");
     }
+
+    let largest_webxdc_data = ctx
+        .sql
+        .query_map_vec(
+            "SELECT msg_id, SUM(length(update_item)) as size, COUNT(*) as update_count
+                 FROM msgs_status_updates
+                 GROUP BY msg_id ORDER BY size DESC LIMIT 10",
+            (),
+            |row| {
+                let msg_id: usize = row.get(0)?;
+                let size: usize = row.get(1)?;
+                let count: usize = row.get(2)?;
+
+                Ok((msg_id, size, count))
+            },
+        )
+        .await?;
+
+    Ok(SpaceUsage {
+        db_size: page_size * page_count,
+        largest_tables,
+        largest_webxdc_data,
+    })
 }
