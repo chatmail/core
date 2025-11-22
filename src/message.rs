@@ -1868,6 +1868,33 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
     Ok(())
 }
 
+/// Checks if the messages with given IDs exist.
+///
+/// Returns IDs of existing messages.
+pub async fn get_existing_msg_ids(context: &Context, ids: &[MsgId]) -> Result<Vec<MsgId>> {
+    let query_only = true;
+    let res = context
+        .sql
+        .transaction_ex(query_only, |transaction| {
+            let mut res: Vec<MsgId> = Vec::new();
+            for id in ids {
+                if transaction.query_one(
+                    "SELECT COUNT(*) > 0 FROM msgs WHERE id=? AND chat_id!=3",
+                    (id,),
+                    |row| {
+                        let exists: bool = row.get(0)?;
+                        Ok(exists)
+                    },
+                )? {
+                    res.push(*id);
+                }
+            }
+            Ok(res)
+        })
+        .await?;
+    Ok(res)
+}
+
 pub(crate) async fn update_msg_state(
     context: &Context,
     msg_id: MsgId,

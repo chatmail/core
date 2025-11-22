@@ -21,9 +21,9 @@ use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
-use deltachat::message::get_msg_read_receipts;
 use deltachat::message::{
-    self, delete_msgs_ex, markseen_msgs, Message, MessageState, MsgId, Viewtype,
+    self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipts, markseen_msgs, Message,
+    MessageState, MsgId, Viewtype,
 };
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
@@ -1292,6 +1292,19 @@ impl CommandApi {
                     deltachat::chat::ChatItem::DayMarker { .. } => DC_MSG_ID_DAYMARKER,
                 }
             })
+            .collect())
+    }
+
+    /// Checks if the messages with given IDs exist.
+    ///
+    /// Returns IDs of existing messages.
+    async fn get_existing_msg_ids(&self, account_id: u32, msg_ids: Vec<u32>) -> Result<Vec<u32>> {
+        let context = self.get_context(account_id).await?;
+        let msg_ids: Vec<MsgId> = msg_ids.into_iter().map(MsgId::new).collect();
+        let existing_msg_ids = get_existing_msg_ids(&context, &msg_ids).await?;
+        Ok(existing_msg_ids
+            .into_iter()
+            .map(|msg_id| msg_id.to_u32())
             .collect())
     }
 
