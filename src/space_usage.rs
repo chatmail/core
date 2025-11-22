@@ -5,10 +5,6 @@ use humansize::{BINARY, format_size};
 
 /// Space Usage Report
 /// Useful for debugging space usage problems in the deltachat database.
-///
-/// Warning: Attention Rust-API users: This API is Experimental!
-/// - The contents of this struct may change in future core versions.
-/// - For now it is better to just show the to_string() output to users.
 #[derive(Debug)]
 pub struct SpaceUsage {
     /// Total database size, subtract this from the backup size to estimate size of all blobs
