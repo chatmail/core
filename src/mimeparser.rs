@@ -23,6 +23,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
+use crate::download::pre_msg_metadata::PreMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
@@ -162,7 +163,7 @@ pub(crate) enum PreMessageMode {
     /// and it is ignored if the full message was downloaded already
     PreMessage {
         full_msg_rfc724_mid: String,
-        attachment_size: u64,
+        metadata: Option<PreMsgMetadata>,
     },
 }
 
@@ -369,15 +370,28 @@ impl MimeMessage {
         let pre_message = if let Some(full_msg_rfc724_mid) =
             mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
         {
-            let attachment_size: u64 = mail
+            let metadata = if let Some(value) = mail
                 .headers
-                .get_header_value(HeaderDef::ChatFullMessageSize)
-                .unwrap_or_default()
-                .parse()
-                .unwrap_or_default();
+                .get_header_value(HeaderDef::ChatFullMessageMetadata)
+            {
+                match PreMsgMetadata::try_from_header_value(&value) {
+                    Ok(metadata) => Some(metadata),
+                    Err(error) => {
+                        error!(
+                            context,
+                            "failed to parse metadata header in pre-message: {error:#?}"
+                        );
+                        None
+                    }
+                }
+            } else {
+                warn!(context, "expected pre-message to have metadata header");
+                None
+            };
+
             Some(PreMessageMode::PreMessage {
                 full_msg_rfc724_mid,
-                attachment_size,
+                metadata,
             })
         } else if mail
             .headers

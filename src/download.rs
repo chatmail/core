@@ -12,6 +12,8 @@ use crate::log::{info, warn};
 use crate::message::{self, Message, MsgId, rfc724_mid_exists};
 use crate::{EventType, chatlist_events};
 
+pub(crate) mod pre_msg_metadata;
+
 /// If a message is downloaded only partially
 /// and `delete_server_after` is set to small timeouts (eg. "at once"),
 /// the user might have no chance to actually download that message.

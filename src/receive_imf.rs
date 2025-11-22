@@ -2016,6 +2016,14 @@ async fn add_parts(
             }
         };
 
+        if let Some(mimeparser::PreMessageMode::PreMessage {
+            metadata: Some(metadata),
+            ..
+        }) = &mime_parser.pre_message
+        {
+            param.apply_from_pre_msg_metadata(metadata);
+        };
+
         // If you change which information is skipped if the message is trashed,
         // also change `MsgId::trash()` and `delete_expired_messages()`
         let trash = chat_id.is_trash() || (is_location_kml && part_is_empty && !save_mime_modified);
@@ -2084,13 +2092,8 @@ RETURNING id
                     !trash && hidden,
                     if trash {
                         0
-                    } else if let Some(mimeparser::PreMessageMode::PreMessage {
-                            attachment_size,
-                            ..
-                        }) = mime_parser.pre_message {
-                            attachment_size as isize
                     } else {
-                            part.bytes as isize
+                        part.bytes as isize
                     },
                     if save_mime_modified && !(trash || hidden) {
                         mime_headers.clone()

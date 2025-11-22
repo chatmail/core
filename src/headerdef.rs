@@ -109,9 +109,9 @@ pub enum HeaderDef {
     /// referencing the full-message's rfc724_mid.
     ChatFullMessageId,
 
-    /// Announce full message attachment size inside of a pre-message.
-    #[strum(serialize = "Chat-Full-Message-Size")] // correct casing
-    ChatFullMessageSize,
+    /// Announce full message metadata in a pre-message.
+    /// contains serialized PreMsgMetadata struct
+    ChatFullMessageMetadata,
 
     /// This message is preceded by a pre-message
     /// and thus this message can be skipped while fetching messages.

@@ -8,6 +8,7 @@ use std::str;
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
 use deltachat_derive::{FromSql, ToSql};
+use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -786,7 +787,19 @@ impl Message {
     }
 
     /// Returns the size of the file in bytes, if applicable.
+    /// If message is a pre-message, then this returns size of the to be downloaded file.
     pub async fn get_filebytes(&self, context: &Context) -> Result<Option<u64>> {
+        // if download state is not downloaded then return value from from params metadata
+        if self.download_state != DownloadState::Done {
+            if let Some(file_size) = self
+                .param
+                .get(Param::FullMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+            {
+                return Ok(Some(file_size));
+            }
+        }
+        // TODO: also modify update docs in all places that use this (cffi and jsonrpc, possibly also in python)
         if let Some(path) = self.param.get_file_path(context)? {
             Ok(Some(get_filebytes(context, &path).await.with_context(
                 || format!("failed to get {} size in bytes", path.display()),
@@ -794,6 +807,21 @@ impl Message {
         } else {
             Ok(None)
         }
+    }
+
+    /// If message is a pre-message,
+    /// then this returns the viewtype it will have when it is downloaded.
+    pub fn get_full_message_viewtype(&self) -> Option<Viewtype> {
+        if self.download_state != DownloadState::Done {
+            if let Some(viewtype) = self
+                .param
+                .get_i64(Param::FullMessageViewtype)
+                .and_then(|v| Viewtype::from_i64(v))
+            {
+                return Some(viewtype);
+            }
+        }
+        None
     }
 
     /// Returns width of associated image or video file.
