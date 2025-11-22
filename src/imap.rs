@@ -123,7 +123,7 @@ struct OAuth2 {
     access_token: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct ServerMetadata {
     /// IMAP METADATA `/shared/comment` as defined in
     /// <https://www.rfc-editor.org/rfc/rfc5464#section-6.2.1>.
@@ -1546,17 +1546,17 @@ impl Session {
         Ok(())
     }
 
-    /// Retrieves server metadata if it is supported.
+    /// Retrieves server metadata if it is supported, otherwise uses fallback one.
     ///
     /// We get [`/shared/comment`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.1)
     /// and [`/shared/admin`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.2)
     /// metadata.
-    pub(crate) async fn fetch_metadata(&mut self, context: &Context) -> Result<()> {
-        if !self.can_metadata() {
-            return Ok(());
-        }
-
+    pub(crate) async fn update_metadata(&mut self, context: &Context) -> Result<()> {
         let mut lock = context.metadata.write().await;
+
+        if !self.can_metadata() {
+            *lock = Some(Default::default());
+        }
         if let Some(ref mut old_metadata) = *lock {
             let now = time();
 
@@ -1565,31 +1565,33 @@ impl Session {
                 return Ok(());
             }
 
-            info!(context, "ICE servers expired, requesting new credentials.");
-            let mailbox = "";
-            let options = "";
-            let metadata = self
-                .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
-                .await?;
             let mut got_turn_server = false;
-            for m in metadata {
-                if m.entry == "/shared/vendor/deltachat/turn"
-                    && let Some(value) = m.value
-                {
-                    match create_ice_servers_from_metadata(context, &value).await {
-                        Ok((parsed_timestamp, parsed_ice_servers)) => {
-                            old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
-                            old_metadata.ice_servers = parsed_ice_servers;
-                            got_turn_server = true;
-                        }
-                        Err(err) => {
-                            warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+            if self.can_metadata() {
+                info!(context, "ICE servers expired, requesting new credentials.");
+                let mailbox = "";
+                let options = "";
+                let metadata = self
+                    .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
+                    .await?;
+                for m in metadata {
+                    if m.entry == "/shared/vendor/deltachat/turn"
+                        && let Some(value) = m.value
+                    {
+                        match create_ice_servers_from_metadata(context, &value).await {
+                            Ok((parsed_timestamp, parsed_ice_servers)) => {
+                                old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
+                                old_metadata.ice_servers = parsed_ice_servers;
+                                got_turn_server = true;
+                            }
+                            Err(err) => {
+                                warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+                            }
                         }
                     }
                 }
             }
-
             if !got_turn_server {
+                info!(context, "Will use fallback ICE servers.");
                 // Set expiration timestamp 7 days in the future so we don't request it again.
                 old_metadata.ice_servers_expiration_timestamp = time() + 3600 * 24 * 7;
                 old_metadata.ice_servers = create_fallback_ice_servers(context).await?;
