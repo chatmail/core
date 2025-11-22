@@ -816,7 +816,7 @@ impl Message {
             if let Some(viewtype) = self
                 .param
                 .get_i64(Param::FullMessageViewtype)
-                .and_then(|v| Viewtype::from_i64(v))
+                .and_then(Viewtype::from_i64)
             {
                 return Some(viewtype);
             }
