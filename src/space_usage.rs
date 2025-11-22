@@ -18,27 +18,29 @@ pub struct SpaceUsage {
 
 impl std::fmt::Display for SpaceUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut report = String::from("SpaceUsage:\n");
+        writeln!(f, "SpaceUsage:")?;
         let human_db_size = format_size(self.db_size, BINARY);
-        report += &format!("[Database Size]: {human_db_size}\n");
-        report += "[Largest Tables]:\n";
+        writeln!(f, "[Database Size]: {human_db_size}")?;
+        writeln!(f, "[Largest Tables]:")?;
         for (name, size, row_count) in &self.largest_tables {
             let human_table_size = format_size(*size, BINARY);
-            report += &format!(
-                "   {name:<20} {human_table_size:>10}, {row_count:>6} rows\n",
+            writeln!(
+                f,
+                "   {name:<20} {human_table_size:>10}, {row_count:>6} rows",
                 name = format!("{name}:"),
                 row_count = row_count.map(|c| c.to_string()).unwrap_or("?".to_owned())
-            );
+            )?;
         }
-        report += "[Webxdc With Biggest Status Update Space Usage]:\n";
+        writeln!(f, "[Webxdc With Biggest Status Update Space Usage]:")?;
         for (msg_id, size, update_count) in &self.largest_webxdc_data {
             let human_size = format_size(*size, BINARY);
-            report += &format!(
-                "   {msg_id:<8} {human_size:>10} across {update_count:>5} updates\n",
+            writeln!(
+                f,
+                "   {msg_id:<8} {human_size:>10} across {update_count:>5} updates",
                 msg_id = format!("{msg_id}:")
-            );
+            )?;
         }
-        write!(f, "{report}")
+        Ok(())
     }
 }
 
