@@ -33,6 +33,7 @@ use deltachat::qr::{self, Qr};
 use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
+use deltachat::space_usage::get_space_usage;
 use deltachat::stock_str::StockMessage;
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::EventEmitter;
@@ -369,7 +370,7 @@ impl CommandApi {
     /// Get space usage report as formatted string
     async fn get_space_usage_report_string(&self, account_id: u32) -> Result<String> {
         let ctx = self.get_context(account_id).await?;
-        let space_usage = ctx.get_space_usage().await?;
+        let space_usage = get_space_usage(&ctx).await?;
         Ok(space_usage.to_string())
     }
 
