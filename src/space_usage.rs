@@ -63,40 +63,30 @@ pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
 
     let mut largest_tables = Vec::new();
 
-    // check if https://sqlite.org/dbstat.html is enabled
-    if ctx
+    let biggest_tables = ctx
         .sql
-        .query_map("SELECT * FROM dbstat LIMIT 1", (), |_| Ok(()), |_| Ok(()))
-        .await
-        .is_ok()
-    {
-        let biggest_tables = ctx
-            .sql
-            .query_map_vec(
-                "SELECT name,
+        .query_map_vec(
+            "SELECT name,
                 SUM(pgsize) AS size
                 FROM dbstat
                 WHERE name IN (SELECT name FROM sqlite_master WHERE type='table')
                 GROUP BY name ORDER BY size DESC LIMIT 10",
-                (),
-                |row| {
-                    let name: String = row.get(0)?;
-                    let size: usize = row.get(1)?;
-                    Ok((name, size))
-                },
-            )
-            .await?;
+            (),
+            |row| {
+                let name: String = row.get(0)?;
+                let size: usize = row.get(1)?;
+                Ok((name, size))
+            },
+        )
+        .await?;
 
-        for (name, size) in biggest_tables {
-            let row_count: Result<Option<usize>> = ctx
-                .sql
-                // SAFETY: the table name comes from the db, not from the user
-                .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
-                .await;
-            largest_tables.push((name, size, row_count.unwrap_or_default()));
-        }
-    } else {
-        error!(ctx, "used sqlite version does not support dbstat");
+    for (name, size) in biggest_tables {
+        let row_count: Result<Option<usize>> = ctx
+            .sql
+            // SAFETY: the table name comes from the db, not from the user
+            .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
+            .await;
+        largest_tables.push((name, size, row_count.unwrap_or_default()));
     }
 
     let largest_webxdc_data = ctx
