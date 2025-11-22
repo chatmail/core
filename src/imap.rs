@@ -1580,7 +1580,7 @@ impl Session {
                         Ok((parsed_timestamp, parsed_ice_servers)) => {
                             old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
                             old_metadata.ice_servers = parsed_ice_servers;
-                            got_turn_server = false;
+                            got_turn_server = true;
                         }
                         Err(err) => {
                             warn!(context, "Failed to parse TURN server metadata: {err:#}.");
