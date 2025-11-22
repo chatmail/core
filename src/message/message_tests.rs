@@ -764,3 +764,27 @@ async fn test_load_unknown_viewtype() -> Result<()> {
     assert_eq!(bob_msg.get_viewtype(), Viewtype::Unknown);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_existing_msg_ids() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let msg1_id = tcm.send_recv(alice, bob, "Hello 1!").await.id;
+    let msg2_id = tcm.send_recv(alice, bob, "Hello 2!").await.id;
+    let msg3_id = tcm.send_recv(alice, bob, "Hello 3!").await.id;
+    let msg4_id = tcm.send_recv(alice, bob, "Hello 4!").await.id;
+
+    assert_eq!(
+        get_existing_msg_ids(bob, &[msg1_id, msg2_id, msg3_id, msg4_id]).await?,
+        vec![msg1_id, msg2_id, msg3_id, msg4_id]
+    );
+    delete_msgs(bob, &[msg1_id, msg3_id]).await?;
+    assert_eq!(
+        get_existing_msg_ids(bob, &[msg1_id, msg2_id, msg3_id, msg4_id]).await?,
+        vec![msg2_id, msg4_id]
+    );
+
+    Ok(())
+}
