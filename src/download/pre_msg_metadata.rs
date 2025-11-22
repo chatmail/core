@@ -63,7 +63,7 @@ impl PreMsgMetadata {
         }))
     }
 
-    pub(crate) fn to_header_value(self) -> Result<String> {
+    pub(crate) fn to_header_value(&self) -> Result<String> {
         Ok(serde_json::to_string(&self)?)
     }
 
