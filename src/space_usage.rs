@@ -83,7 +83,7 @@ pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
     for (name, size) in biggest_tables {
         let row_count: Result<Option<usize>> = ctx
             .sql
-            // SAFETY: the table name comes from the db, not from the user
+            // SECURITY: the table name comes from the db, not from the user
             .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
             .await;
         largest_tables.push((name, size, row_count.unwrap_or_default()));
