@@ -50,8 +50,6 @@ impl std::fmt::Display for SpaceUsage {
 
 /// Get space usage information for the Context's database
 pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
-    // currently this is shown in system info, so needs to be fast,
-    // that's why we donot count size of all blobs for now
     let page_size: usize = ctx
         .sql
         .query_get_value("PRAGMA page_size", ())
