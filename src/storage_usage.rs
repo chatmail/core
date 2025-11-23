@@ -1,5 +1,5 @@
 //! Module to collect and display Disk Space Usage of a Profile.
-use crate::context::Context;
+use crate::{context::Context, message::MsgId};
 use anyhow::Result;
 use humansize::{BINARY, format_size};
 
@@ -13,7 +13,7 @@ pub struct StorageUsage {
     pub largest_tables: Vec<(String, usize, Option<usize>)>,
     /// count and total size of status updates
     /// for the 10 webxdc apps with the most size usage in status updates
-    pub largest_webxdc_data: Vec<(usize, usize, usize)>,
+    pub largest_webxdc_data: Vec<(MsgId, usize, usize)>,
 }
 
 impl std::fmt::Display for StorageUsage {
@@ -92,7 +92,7 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
                  GROUP BY msg_id ORDER BY size DESC LIMIT 10",
             (),
             |row| {
-                let msg_id: usize = row.get(0)?;
+                let msg_id: MsgId = row.get(0)?;
                 let size: usize = row.get(1)?;
                 let count: usize = row.get(2)?;
 
