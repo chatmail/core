@@ -2347,13 +2347,19 @@ async fn handle_full_message(
                 .param
                 .get_bool(Param::GuaranteeE2ee)
                 .unwrap_or_default();
+
             if edit_msg_showpadlock || !original_msg.get_showpadlock() {
+                let mut new_params = original_msg.param.clone();
+                new_params
+                    .merge_in_from_params(part.param.clone())
+                    .remove(Param::FullMessageFileBytes)
+                    .remove(Param::FullMessageViewtype);
                 context
                         .sql
                         .execute(
                             "UPDATE msgs SET param=?, type=?, bytes=?, error=?, download_state=? WHERE id=?",
                             (
-                                part.param.to_string(),
+                                new_params.to_string(),
                                 part.typ,
                                 part.bytes as isize,
                                 part.error.as_deref().unwrap_or_default(),
