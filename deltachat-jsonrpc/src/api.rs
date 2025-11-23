@@ -33,8 +33,8 @@ use deltachat::qr::{self, Qr};
 use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
-use deltachat::space_usage::get_storage_usage;
 use deltachat::stock_str::StockMessage;
+use deltachat::storage_usage::get_storage_usage;
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::EventEmitter;
 use sanitize_filename::is_sanitized;
@@ -367,11 +367,11 @@ impl CommandApi {
         ctx.get_info().await
     }
 
-    /// Get space usage report as formatted string
+    /// Get storage usage report as formatted string
     async fn get_storage_usage_report_string(&self, account_id: u32) -> Result<String> {
         let ctx = self.get_context(account_id).await?;
-        let space_usage = get_storage_usage(&ctx).await?;
-        Ok(space_usage.to_string())
+        let storage_usage = get_storage_usage(&ctx).await?;
+        Ok(storage_usage.to_string())
     }
 
     /// Get the blob dir.
