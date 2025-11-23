@@ -89,6 +89,7 @@ pub mod securejoin;
 mod simplify;
 mod smtp;
 pub mod stock_str;
+pub mod storage_usage;
 mod sync;
 mod timesmearing;
 mod token;

@@ -34,6 +34,7 @@ use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
+use deltachat::storage_usage::get_storage_usage;
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::EventEmitter;
 use sanitize_filename::is_sanitized;
@@ -364,6 +365,13 @@ impl CommandApi {
     async fn get_info(&self, account_id: u32) -> Result<BTreeMap<&'static str, String>> {
         let ctx = self.get_context(account_id).await?;
         ctx.get_info().await
+    }
+
+    /// Get storage usage report as formatted string
+    async fn get_storage_usage_report_string(&self, account_id: u32) -> Result<String> {
+        let ctx = self.get_context(account_id).await?;
+        let storage_usage = get_storage_usage(&ctx).await?;
+        Ok(storage_usage.to_string())
     }
 
     /// Get the blob dir.
