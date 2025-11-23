@@ -79,24 +79,16 @@ class Rpc:
 
     def start(self) -> None:
         """Start RPC server subprocess."""
+        popen_kwargs = {"stdin": subprocess.PIPE, "stdout": subprocess.PIPE}
         if sys.version_info >= (3, 11):
-            self.process = subprocess.Popen(
-                "deltachat-rpc-server",
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                # Prevent subprocess from capturing SIGINT.
-                process_group=0,
-                **self._kwargs,
-            )
+            # Prevent subprocess from capturing SIGINT.
+            popen_kwargs["process_group"] = 0
         else:
-            self.process = subprocess.Popen(
-                "deltachat-rpc-server",
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                # `process_group` is not supported before Python 3.11.
-                preexec_fn=os.setpgrp,  # noqa: PLW1509
-                **self._kwargs,
-            )
+            # `process_group` is not supported before Python 3.11.
+            popen_kwargs["preexec_fn"] = os.setpgrp  # noqa: PLW1509
+
+        popen_kwargs.update(self._kwargs)
+        self.process = subprocess.Popen("deltachat-rpc-server", **popen_kwargs)
         self.id_iterator = itertools.count(start=1)
         self.event_queues = {}
         self.request_results = {}
