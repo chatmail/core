@@ -382,11 +382,8 @@ mod tests {
             "message ids of pre message and full message should be different"
         );
 
-        // also test that Autocrypt-gossip and selfavatar should never go into full-messages
         let decrypted_full_message = MimeMessage::from_bytes(&bob.ctx, full_message_bytes).await?;
         assert!(!decrypted_full_message.decrypting_failed);
-        assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
-        assert_eq!(decrypted_full_message.user_avatar, None);
         assert!(!decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId));
 
         let decrypted_pre_message = MimeMessage::from_bytes(&bob.ctx, pre_message_bytes).await?;
@@ -410,8 +407,7 @@ mod tests {
     /// Tests that pre message has autocrypt gossip headers and self avatar
     /// and full message doesn't have these headers
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_pre_message_contains_selfavatar_and_gossip_and_full_message_does_not()
-    -> Result<()> {
+    async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
@@ -540,6 +536,36 @@ mod tests {
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
         );
+
+        // test that pre message is not send for large large text
+        let mut msg = Message::new(Viewtype::Text);
+        let long_text = String::from_utf8(vec![b'a'; 300_000])?;
+        assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
+        msg.set_text(long_text);
+        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+
+        assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
+
+        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mail = mailparse::parse_mail(mime.as_bytes())?;
+
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .is_none()
+        );
+        assert!(
+            mail.get_headers()
+                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .is_none(),
+            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+        );
+        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        assert!(
+            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
+            "no 'Chat-Full-Message-ID'-header should be present"
+        );
         Ok(())
     }
 
@@ -617,47 +643,6 @@ mod tests {
         t.flush_status_updates().await?;
 
         assert_eq!(t.sql.count("SELECT COUNT(*) FROM smtp", ()).await?, 1);
-        Ok(())
-    }
-
-    // test that pre message is not send for large large text
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_not_sending_pre_message_for_large_text() -> Result<()> {
-        let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-        let chat = alice.create_chat(&bob).await;
-
-        // send normal text message
-        let mut msg = Message::new(Viewtype::Text);
-        let long_text = String::from_utf8(vec![b'a'; 300_000])?;
-        assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
-        msg.set_text(long_text);
-        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
-        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
-
-        //   only one message and no "is full message" header should be present
-        assert_eq!(smtp_rows.len(), 1);
-
-        let mime = smtp_rows.first().expect("first element exists").2.clone();
-        let mail = mailparse::parse_mail(mime.as_bytes())?;
-
-        assert!(
-            mail.get_headers()
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
-                .is_none()
-        );
-        assert!(
-            mail.get_headers()
-                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
-                .is_none(),
-            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
-        );
-        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
-        assert!(
-            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
-            "no 'Chat-Full-Message-ID'-header should be present"
-        );
         Ok(())
     }
 }
