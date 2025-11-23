@@ -57,9 +57,7 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
         .await?
         .unwrap_or_default();
 
-    let mut largest_tables = Vec::new();
-
-    let biggest_tables = ctx
+    let mut largest_tables = ctx
         .sql
         .query_map_vec(
             "SELECT name,
@@ -71,18 +69,19 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
             |row| {
                 let name: String = row.get(0)?;
                 let size: usize = row.get(1)?;
-                Ok((name, size))
+                Ok((name, size, None))
             },
         )
         .await?;
 
-    for (name, size) in biggest_tables {
+    for row in &mut largest_tables {
+        let name = &row.0;
         let row_count: Result<Option<usize>> = ctx
             .sql
             // SECURITY: the table name comes from the db, not from the user
             .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
             .await;
-        largest_tables.push((name, size, row_count.unwrap_or_default()));
+        row.2 = row_count.unwrap_or_default();
     }
 
     let largest_webxdc_data = ctx
