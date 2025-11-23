@@ -1,5 +1,55 @@
 # Changelog
 
+## [2.28.0] - 2025-11-23
+
+### API-Changes
+
+- New API `get_existing_msg_ids()` to check if the messages with given IDs exist.
+- Add API to get storage usage information. (JSON-RPC method: `get_storage_usage_report_string`) ([#7486](https://github.com/chatmail/core/pull/7486)).
+
+### Features / Changes
+
+- Experimentaly allow adding second transport.
+  There is no synchronization yet, so UIs should not allow the user to change the address manually and only expose the ability to add transports if `bcc_self` is disabled.
+- Default `bcc_self` to 0 for all new accounts.
+- Rephrase "Establishing end-to-end encryption" -> "Establishing connection".
+- Stock string for joining a channel ([#7480](https://github.com/chatmail/core/pull/7480)).
+
+### Fixes
+
+- Limit the range of `Date` to up to 6 days in the past.
+- `ContactId::set_name_ex()`: Emit ContactsChanged when transaction is completed.
+- Set SQLite busy timeout to 1 minute on iOS.
+- Sort system messages to the bottom of the chat.
+- Assign outgoing self-sent unencrypted messages to ad-hoc groups with only SELF ([#7409](https://github.com/chatmail/core/pull/7409)).
+- Add missing stock strings.
+- Look up or create ad-hoc group if there are duplicate addresses in "To".
+
+### Documentation
+
+- Add missing RFC 9788, link 'Header Protection for Cryptographically Protected Email' as other RFC.
+- Remove unsupported RFC 3503 (`$MDNSent` flag) from the list of standards.
+- Mark database encryption support as deprecated ([#7403](https://github.com/chatmail/core/pull/7403)).
+
+### Build system
+
+- Increase Minimum Supported Rust Version to 1.88.0.
+- Update rPGP from 0.17.0 to 0.18.0.
+- nix: Update `fenix` and use it for all Rust builds.
+
+### CI
+
+- Do not use --encoding option for rst-lint.
+
+### Refactor
+
+- Use `HashMap::extract_if()` stabilized in Rust 1.88.0.
+- Remove some easy to remove unwrap() calls.
+
+### Tests
+
+- Contact shalln't be verified by another having unknown verifier.
+
 ## [2.27.0] - 2025-11-16
 
 ### API-Changes
@@ -7185,3 +7235,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.25.0]: https://github.com/chatmail/core/compare/v2.24.0..v2.25.0
 [2.26.0]: https://github.com/chatmail/core/compare/v2.25.0..v2.26.0
 [2.27.0]: https://github.com/chatmail/core/compare/v2.26.0..v2.27.0
+[2.28.0]: https://github.com/chatmail/core/compare/v2.27.0..v2.28.0
