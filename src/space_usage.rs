@@ -3,10 +3,10 @@ use crate::context::Context;
 use anyhow::Result;
 use humansize::{BINARY, format_size};
 
-/// Space Usage Report
+/// Storage Usage Report
 /// Useful for debugging space usage problems in the deltachat database.
 #[derive(Debug)]
-pub struct SpaceUsage {
+pub struct StorageUsage {
     /// Total database size, subtract this from the backup size to estimate size of all blobs
     pub db_size: usize,
     /// size and row count of the 10 biggest tables
@@ -16,9 +16,9 @@ pub struct SpaceUsage {
     pub largest_webxdc_data: Vec<(usize, usize, usize)>,
 }
 
-impl std::fmt::Display for SpaceUsage {
+impl std::fmt::Display for StorageUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "SpaceUsage:")?;
+        writeln!(f, "Storage Usage:")?;
         let human_db_size = format_size(self.db_size, BINARY);
         writeln!(f, "[Database Size]: {human_db_size}")?;
         writeln!(f, "[Largest Tables]:")?;
@@ -44,8 +44,8 @@ impl std::fmt::Display for SpaceUsage {
     }
 }
 
-/// Get space usage information for the Context's database
-pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
+/// Get storage usage information for the Context's database
+pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
     let page_size: usize = ctx
         .sql
         .query_get_value("PRAGMA page_size", ())
@@ -102,7 +102,7 @@ pub async fn get_space_usage(ctx: &Context) -> Result<SpaceUsage> {
         )
         .await?;
 
-    Ok(SpaceUsage {
+    Ok(StorageUsage {
         db_size: page_size * page_count,
         largest_tables,
         largest_webxdc_data,
