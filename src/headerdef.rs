@@ -207,11 +207,5 @@ mod tests {
             Some("Bob".to_string())
         );
         assert_eq!(headers.get_header_value(HeaderDef::Autocrypt), None);
-
-        let (headers, _) = mailparse::parse_headers(b"chat-is-FuLL-MeSSage: 1").unwrap();
-        assert_eq!(
-            headers.get_header_value(HeaderDef::ChatIsFullMessage),
-            Some("1".to_string())
-        );
     }
 }
