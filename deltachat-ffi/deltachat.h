@@ -7416,19 +7416,6 @@ void dc_event_unref(dc_event_t* event);
 /// @deprecated 2025-06-05
 #define DC_STR_AEAP_ADDR_CHANGED          122
 
-/// "You changed your email address from %1$s to %2$s.
-/// If you now send a message to a group, contacts there will automatically
-/// replace the old with your new address.\n\n It's highly advised to set up 
-/// your old email provider to forward all emails to your new email address. 
-/// Otherwise you might miss messages of contacts who did not get your new 
-/// address yet." + the link to the AEAP blog post
-/// 
-/// As soon as there is a post about AEAP, the UIs should add it:
-/// set_stock_translation(123, getString(aeap_explanation) + "\n\n" + AEAP_BLOG_LINK)
-///
-/// Used in a device message that explains AEAP.
-#define DC_STR_AEAP_EXPLANATION_AND_LINK  123
-
 /// "You changed group name from \"%1$s\" to \"%2$s\"."
 ///
 /// `%1$s` will be replaced by the old group name.
@@ -7676,12 +7663,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used in info messages.
 #define DC_STR_CHAT_PROTECTION_ENABLED 170
-
-/// "%1$s sent a message from another device."
-///
-/// Used in info messages.
-/// @deprecated 2025-07
-#define DC_STR_CHAT_PROTECTION_DISABLED 171
 
 /// "Others will only see this group after you sent a first message."
 ///

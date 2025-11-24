@@ -13,7 +13,7 @@ use crate::accounts::Accounts;
 use crate::blob::BlobObject;
 use crate::chat::{self, Chat, ChatId};
 use crate::config::Config;
-use crate::contact::{Contact, ContactId, Origin};
+use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
@@ -241,11 +241,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Not connected"))]
     NotConnected = 121,
 
-    #[strum(props(
-        fallback = "You changed your email address from %1$s to %2$s.\n\nIf you now send a message to a verified group, contacts there will automatically replace the old with your new address.\n\nIt's highly advised to set up your old email provider to forward all emails to your new email address. Otherwise you might miss messages of contacts who did not get your new address yet."
-    ))]
-    AeapExplanationAndLink = 123,
-
     #[strum(props(fallback = "You changed group name from \"%1$s\" to \"%2$s\"."))]
     MsgYouChangedGrpName = 124,
 
@@ -356,21 +351,8 @@ pub enum StockMessage {
     #[strum(props(fallback = "ℹ️ Account transferred to your second device."))]
     BackupTransferMsgBody = 163,
 
-    #[strum(props(fallback = "I added member %1$s."))]
-    MsgIAddMember = 164,
-
-    #[strum(props(fallback = "I removed member %1$s."))]
-    MsgIDelMember = 165,
-
-    #[strum(props(fallback = "I left the group."))]
-    MsgILeftGroup = 166,
-
     #[strum(props(fallback = "Messages are end-to-end encrypted."))]
     ChatProtectionEnabled = 170,
-
-    // deprecated 2025-07
-    #[strum(props(fallback = "%1$s sent a message from another device."))]
-    ChatProtectionDisabled = 171,
 
     #[strum(props(fallback = "Others will only see this group after you sent a first message."))]
     NewGroupSendFirstMessage = 172,
@@ -626,25 +608,6 @@ pub(crate) async fn msg_grp_img_changed(context: &Context, by_contact: ContactId
     }
 }
 
-/// Stock string: `I added member %1$s.`.
-/// This one is for sending in group chats.
-///
-/// The `added_member_addr` parameter should be an email address and is looked up in the
-/// contacts to combine with the authorized display name.
-pub(crate) async fn msg_add_member_remote(context: &Context, added_member_addr: &str) -> String {
-    let addr = added_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_authname_or_addr())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
-    translated(context, StockMessage::MsgIAddMember)
-        .await
-        .replace1(whom)
-}
-
 /// Stock string: `You added member %1$s.` or `Member %1$s added by %2$s.`.
 ///
 /// The `added_member_addr` parameter should be an email address and is looked up in the
@@ -671,24 +634,6 @@ pub(crate) async fn msg_add_member_local(
     }
 }
 
-/// Stock string: `I removed member %1$s.`.
-///
-/// The `removed_member_addr` parameter should be an email address and is looked up in
-/// the contacts to combine with the display name.
-pub(crate) async fn msg_del_member_remote(context: &Context, removed_member_addr: &str) -> String {
-    let addr = removed_member_addr;
-    let whom = &match Contact::lookup_id_by_addr(context, addr, Origin::Unknown).await {
-        Ok(Some(contact_id)) => Contact::get_by_id(context, contact_id)
-            .await
-            .map(|contact| contact.get_authname_or_addr())
-            .unwrap_or_else(|_| addr.to_string()),
-        _ => addr.to_string(),
-    };
-    translated(context, StockMessage::MsgIDelMember)
-        .await
-        .replace1(whom)
-}
-
 /// Stock string: `I added member %1$s.` or `Member %1$s removed by %2$s.`.
 ///
 /// The `removed_member_addr` parameter should be an email address and is looked up in
@@ -713,11 +658,6 @@ pub(crate) async fn msg_del_member_local(
             .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
-}
-
-/// Stock string: `I left the group.`.
-pub(crate) async fn msg_group_left_remote(context: &Context) -> String {
-    translated(context, StockMessage::MsgILeftGroup).await
 }
 
 /// Stock string: `You left the group.` or `Group left by %1$s.`.
@@ -1291,17 +1231,6 @@ pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> Stri
 /// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`
 pub(crate) async fn stats_msg_body(context: &Context) -> String {
     translated(context, StockMessage::StatsMsgBody).await
-}
-
-pub(crate) async fn aeap_explanation_and_link(
-    context: &Context,
-    old_addr: &str,
-    new_addr: &str,
-) -> String {
-    translated(context, StockMessage::AeapExplanationAndLink)
-        .await
-        .replace1(old_addr)
-        .replace2(new_addr)
 }
 
 /// Stock string: `Others will only see this group after you sent a first message.`.

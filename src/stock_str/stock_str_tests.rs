@@ -76,10 +76,6 @@ async fn test_stock_system_msg_add_member_by_me() {
         .await
         .expect("failed to create contact");
     assert_eq!(
-        msg_add_member_remote(&t, "alice@example.org").await,
-        "I added member alice@example.org."
-    );
-    assert_eq!(
         msg_add_member_local(&t, alice_contact_id, ContactId::SELF).await,
         "You added member Alice."
     )
@@ -91,10 +87,6 @@ async fn test_stock_system_msg_add_member_by_me_with_displayname() {
     let alice_contact_id = Contact::create(&t, "Alice", "alice@example.org")
         .await
         .expect("failed to create contact");
-    assert_eq!(
-        msg_add_member_remote(&t, "alice@example.org").await,
-        "I added member alice@example.org."
-    );
     assert_eq!(
         msg_add_member_local(&t, alice_contact_id, ContactId::SELF).await,
         "You added member Alice."

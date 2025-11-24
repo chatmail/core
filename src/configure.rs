@@ -27,7 +27,7 @@ use crate::config::{self, Config};
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
-use crate::log::{LogExt, warn};
+use crate::log::warn;
 use crate::login_param::EnteredCertificateChecks;
 pub use crate::login_param::EnteredLoginParam;
 use crate::message::Message;
@@ -44,7 +44,6 @@ use crate::transport::{
 };
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
-use deltachat_contact_tools::addr_cmp;
 
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
@@ -267,7 +266,7 @@ impl Context {
         let provider = configure(self, param).await?;
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
-        on_configure_completed(self, provider, old_addr).await?;
+        on_configure_completed(self, provider).await?;
         Ok(())
     }
 }
@@ -275,7 +274,6 @@ impl Context {
 async fn on_configure_completed(
     context: &Context,
     provider: Option<&'static Provider>,
-    old_addr: Option<String>,
 ) -> Result<()> {
     if let Some(provider) = provider {
         if let Some(config_defaults) = provider.config_defaults {
@@ -303,20 +301,6 @@ async fn on_configure_completed(
                 warn!(context, "cannot add after_login_hint as core-provider-info");
             }
         }
-    }
-
-    if let Some(new_addr) = context.get_config(Config::ConfiguredAddr).await?
-        && let Some(old_addr) = old_addr
-        && !addr_cmp(&new_addr, &old_addr)
-    {
-        let mut msg = Message::new_text(
-            stock_str::aeap_explanation_and_link(context, &old_addr, &new_addr).await,
-        );
-        chat::add_device_msg(context, None, Some(&mut msg))
-            .await
-            .context("Cannot add AEAP explanation")
-            .log_err(context)
-            .ok();
     }
 
     Ok(())

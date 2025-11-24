@@ -1509,18 +1509,6 @@ impl Contact {
         &self.addr
     }
 
-    /// Get authorized name or address.
-    ///
-    /// This string is suitable for sending over email
-    /// as it does not leak the locally set name.
-    pub(crate) fn get_authname_or_addr(&self) -> String {
-        if !self.authname.is_empty() {
-            (&self.authname).into()
-        } else {
-            (&self.addr).into()
-        }
-    }
-
     /// Get a summary of name and address.
     ///
     /// The returned string is either "Name (email@domain.com)" or just
