@@ -197,3 +197,85 @@ def log():
             print("  " + msg)
 
     return Printer()
+
+
+#
+# support for testing against different deltachat-rpc-server/clients
+# installed into a temporary virtualenv and connected via 'execnet' channels
+#
+
+
+@pytest.fixture
+def alice_and_remote_bob(tmp_path, acfactory):
+    """return local Alice account, and a remote 'eval' function.
+
+    The 'eval' function allows to remote-execute arbitrary expressions
+    that can use the `bob` online account, and the `alice_contact`.
+    """
+    import subprocess
+    import sys
+
+    import execnet
+
+    def factory(v):
+        alice = acfactory.get_online_account()
+
+        venv = tmp_path.joinpath("venv1")
+        python = sys.executable
+        subprocess.check_call([python, "-m", "venv", venv])
+        pip = venv.joinpath("bin", "pip")
+        subprocess.check_call([pip, "install", "pytest", f"deltachat-rpc-server=={v}", f"deltachat-rpc-client=={v}"])
+
+        python = venv.joinpath("bin", "python")
+        gw = execnet.makegateway(f"popen//python={python}")
+
+        accounts_dir = str(tmp_path.joinpath("account1_venv1"))
+        channel = gw.remote_exec(v220_loop)
+        cm = os.environ.get("CHATMAIL_DOMAIN")
+        channel.send((accounts_dir, str(venv.joinpath("bin", "deltachat-rpc-server")), cm))
+        sysinfo = channel.receive()
+        assert sysinfo == f"v{v}"
+        channel.send(alice.self_contact.make_vcard())
+        bob_vcard = channel.receive()
+        [alice_contact_bob] = alice.import_vcard(bob_vcard)
+
+        def eval(eval_str):
+            channel.send(eval_str)
+            return channel.receive()
+
+        return alice, alice_contact_bob, eval
+
+    return factory
+
+
+def v220_loop(channel):
+    import os
+    import pathlib
+
+    from deltachat_rpc_client import DeltaChat, Rpc
+    from deltachat_rpc_client.pytestplugin import ACFactory
+
+    accounts_dir, rpc_server_path, chatmail_domain = channel.receive()
+    os.environ["CHATMAIL_DOMAIN"] = chatmail_domain
+    bin_path = str(pathlib.Path(rpc_server_path).parent)
+    os.environ["PATH"] = bin_path + ":" + os.environ["PATH"]
+
+    rpc = Rpc(accounts_dir=accounts_dir)
+    with rpc:
+        dc = DeltaChat(rpc)
+        channel.send(dc.rpc.get_system_info()["deltachat_core_version"])
+        acfactory = ACFactory(dc)
+        bob = acfactory.get_online_account()
+        alice_vcard = channel.receive()
+        [alice_contact] = bob.import_vcard(alice_vcard)
+        ns = {"bob": bob, "bob_contact_alice": alice_contact}
+        channel.send(bob.self_contact.make_vcard())
+
+        while 1:
+            eval_str = channel.receive()
+            res = eval(eval_str, ns)
+            try:
+                channel.send(res)
+            except Exception:
+                # some unserializable result
+                channel.send(None)
