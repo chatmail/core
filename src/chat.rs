@@ -2922,7 +2922,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 // send pre-message before actual message
                 if let Some(pre_msg) = &rendered_pre_msg {
                     let row_id = t.execute(
-                        "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
+                        "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
                         VALUES            (?1,         ?2,         ?3,   ?4)",
                         (
                             &pre_msg.rfc724_mid,
@@ -2934,7 +2934,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                     row_ids.push(row_id.try_into()?);
                 }
                 let row_id = t.execute(
-                    "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
+                    "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
                     VALUES            (?1,         ?2,         ?3,   ?4)",
                     (
                         &rendered_msg.rfc724_mid,
