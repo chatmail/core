@@ -214,9 +214,8 @@ mod tests {
     use tokio::fs;
 
     use super::*;
-    use crate::chat::{self, ChatId, create_group, send_msg};
+    use crate::chat::{self, create_group, send_msg};
     use crate::config::Config;
-    use crate::contact::Contact;
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
     use crate::mimeparser::MimeMessage;
