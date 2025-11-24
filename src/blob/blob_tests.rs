@@ -173,11 +173,8 @@ async fn test_selfavatar_outside_blobdir() {
         .unwrap();
     let avatar_blob = t.get_config(Config::Selfavatar).await.unwrap().unwrap();
     let avatar_path = Path::new(&avatar_blob);
-    assert!(
-        avatar_blob.ends_with("7dde69e06b5ae6c27520a436bbfd65b.jpg"),
-        "The avatar filename should be its hash, put instead it's {avatar_blob}"
-    );
     let scaled_avatar_size = file_size(avatar_path).await;
+    info!(&t, "Scaled avatar size: {scaled_avatar_size}.");
     assert!(scaled_avatar_size < avatar_bytes.len() as u64);
 
     check_image_size(avatar_src, 1000, 1000);
@@ -185,6 +182,11 @@ async fn test_selfavatar_outside_blobdir() {
         &avatar_blob,
         constants::BALANCED_AVATAR_SIZE,
         constants::BALANCED_AVATAR_SIZE,
+    );
+
+    assert!(
+        avatar_blob.ends_with("2a048b6fcd86448032b854ea1ad7608.jpg"),
+        "The avatar filename should be its hash, but instead it's {avatar_blob}"
     );
 
     let mut blob = BlobObject::create_and_deduplicate(&t, avatar_path, avatar_path).unwrap();
