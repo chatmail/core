@@ -1521,10 +1521,9 @@ impl MimeFactory {
                             .await?
                             .unwrap_or_default()
                     {
-                        placeholdertext = Some(stock_str::msg_group_left_remote(context).await);
+                        placeholdertext = Some("I left the group.".to_string());
                     } else {
-                        placeholdertext =
-                            Some(stock_str::msg_del_member_remote(context, email_to_remove).await);
+                        placeholdertext = Some(format!("I removed member {email_to_remove}."));
                     };
 
                     if !email_to_remove.is_empty() {
@@ -1547,8 +1546,7 @@ impl MimeFactory {
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     let fingerprint_to_add = msg.param.get(Param::Arg4).unwrap_or_default();
 
-                    placeholdertext =
-                        Some(stock_str::msg_add_member_remote(context, email_to_add).await);
+                    placeholdertext = Some(format!("I added member {email_to_add}."));
 
                     if !email_to_add.is_empty() {
                         headers.push((
