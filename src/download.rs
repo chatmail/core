@@ -383,8 +383,11 @@ mod tests {
         );
 
         let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
-        assert!(!decrypted_full_message.decrypting_failed);
-        assert!(!decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId));
+        assert_eq!(decrypted_full_message.decrypting_failed, false);
+        assert_eq!(
+            decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId),
+            false
+        );
 
         let decrypted_pre_message = MimeMessage::from_bytes(bob, pre_message_bytes).await?;
         assert_eq!(
