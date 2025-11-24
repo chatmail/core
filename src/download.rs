@@ -324,21 +324,21 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_sending_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-        let fiona = tcm.fiona().await;
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let fiona = &tcm.fiona().await;
         let group_id = alice
-            .create_group_with_members("test group", &[&bob, &fiona])
+            .create_group_with_members("test group", &[bob, fiona])
             .await;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is bigger than limit
-        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+        assert!(msg.get_filebytes(alice).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
-        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg).await?;
+        let msg_id = chat::send_msg(alice, group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         //   pre-message and full message should be present
@@ -382,11 +382,11 @@ mod tests {
             "message ids of pre message and full message should be different"
         );
 
-        let decrypted_full_message = MimeMessage::from_bytes(&bob.ctx, full_message_bytes).await?;
+        let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
         assert!(!decrypted_full_message.decrypting_failed);
         assert!(!decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId));
 
-        let decrypted_pre_message = MimeMessage::from_bytes(&bob.ctx, pre_message_bytes).await?;
+        let decrypted_pre_message = MimeMessage::from_bytes(bob, pre_message_bytes).await?;
         assert_eq!(
             decrypted_pre_message
                 .get_header(HeaderDef::ChatFullMessageId)
@@ -409,19 +409,19 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-        let fiona = tcm.fiona().await;
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let fiona = &tcm.fiona().await;
         let group_id = alice
-            .create_group_with_members("test group", &[&bob, &fiona])
+            .create_group_with_members("test group", &[bob, fiona])
             .await;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is bigger than limit
-        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+        assert!(msg.get_filebytes(alice).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
         // simulate conditions for sending self avatar
         let avatar_src = alice.get_blobdir().join("avatar.png");
@@ -430,7 +430,7 @@ mod tests {
             .set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
             .await?;
 
-        let msg_id = chat::send_msg(&alice.ctx, group_id, &mut msg).await?;
+        let msg_id = chat::send_msg(alice, group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 2);
@@ -446,7 +446,7 @@ mod tests {
             .as_bytes();
         let full_message = mailparse::parse_mail(full_message_bytes)?;
 
-        let decrypted_pre_message = MimeMessage::from_bytes(&bob.ctx, pre_message_bytes).await?;
+        let decrypted_pre_message = MimeMessage::from_bytes(bob, pre_message_bytes).await?;
         assert!(
             decrypted_pre_message
                 .get_header(HeaderDef::ChatFullMessageId)
@@ -456,7 +456,7 @@ mod tests {
         assert_ne!(decrypted_pre_message.gossiped_keys.len(), 0);
         assert_ne!(decrypted_pre_message.user_avatar, None);
 
-        let decrypted_full_message = MimeMessage::from_bytes(&bob.ctx, full_message_bytes).await?;
+        let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
         assert!(
             full_message
                 .get_headers()
@@ -472,16 +472,16 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_unecrypted_gets_no_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
+        let alice = &tcm.alice().await;
 
-        let contact_id = Contact::create(&alice.ctx, "example", "email@example.org").await?;
-        let chat_id = ChatId::create_for_contact(&alice.ctx, contact_id).await?;
+        let contact_id = Contact::create(alice, "example", "email@example.org").await?;
+        let chat_id = ChatId::create_for_contact(alice, contact_id).await?;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
         msg.set_text("test".to_owned());
 
-        let msg_id = chat::send_msg(&alice.ctx, chat_id, &mut msg).await?;
+        let msg_id = chat::send_msg(alice, chat_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 1);
@@ -504,14 +504,14 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_no_attachment() -> Result<()> {
         let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
-        let chat = alice.create_chat(&bob).await;
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let chat = alice.create_chat(bob).await;
 
         // send normal text message
         let mut msg = Message::new(Viewtype::Text);
         msg.set_text("test".to_owned());
-        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let msg_id = chat::send_msg(alice, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
@@ -531,7 +531,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
@@ -542,7 +542,7 @@ mod tests {
         let long_text = String::from_utf8(vec![b'a'; 300_000])?;
         assert!(long_text.len() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD.try_into().unwrap());
         msg.set_text(long_text);
-        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let msg_id = chat::send_msg(alice, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
@@ -561,7 +561,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
@@ -573,18 +573,18 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_not_sending_pre_message_for_small_attachment() -> Result<()> {
         let mut tcm = TestContextManager::new();
-        let alice = tcm.alice().await;
-        let bob = tcm.bob().await;
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
         let chat = alice.create_chat(&bob).await;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(&alice.ctx, "test.bin", &[0u8; 100_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 100_000], None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is smaller than limit
-        assert!(msg.get_filebytes(&alice.ctx).await?.unwrap() < PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+        assert!(msg.get_filebytes(alice).await?.unwrap() < PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
 
-        let msg_id = chat::send_msg(&alice.ctx, chat.id, &mut msg).await.unwrap();
+        let msg_id = chat::send_msg(alice, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         //   only one message and no "is full message" header should be present
@@ -604,7 +604,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(&bob.ctx, mime.as_bytes()).await?;
+        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
