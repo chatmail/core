@@ -25,7 +25,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
       - run: nix fmt flake.nix -- --check
 
   build:
@@ -84,7 +84,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
       - run: nix build .#${{ matrix.installable }}
 
   build-macos:
@@ -105,5 +105,5 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: cachix/install-nix-action@fd24c48048070c1be9acd18c9d369a83f0fe94d7 # v31
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
       - run: nix build .#${{ matrix.installable }}
