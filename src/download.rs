@@ -477,14 +477,15 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
 
-        let contact_id = Contact::create(alice, "example", "email@example.org").await?;
-        let chat_id = ChatId::create_for_contact(alice, contact_id).await?;
+        let chat = alice
+            .create_chat_with_contact("example", "email@example.org")
+            .await;
 
         let mut msg = Message::new(Viewtype::File);
         msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
         msg.set_text("test".to_owned());
 
-        let msg_id = chat::send_msg(alice, chat_id, &mut msg).await?;
+        let msg_id = chat::send_msg(alice, chat.id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 1);
