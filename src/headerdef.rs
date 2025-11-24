@@ -102,10 +102,14 @@ pub enum HeaderDef {
     /// used to encrypt and decrypt messages.
     /// This secret is sent to a new member in the member-addition message.
     ChatBroadcastSecret,
-    /// This message announces a bigger message with attachment that is refereced by rfc724_mid.
+    /// A message with a large attachment is split into two MIME messages:
+    /// A pre-message, which contains everything but the attachment,
+    /// and a full-message.
+    /// The pre-message gets a `Chat-Full-Message-Id` header
+    /// referencing the full-message's rfc724_mid.
     ChatFullMessageId,
 
-    /// This message has a pre-message
+    /// This message is preceded by a pre-message
     /// and thus this message can be skipped while fetching messages.
     /// This is a cleartext / unproteced header.
     ChatIsFullMessage,
