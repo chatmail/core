@@ -54,6 +54,7 @@ lint.select = [
   "PIE", # flake8-pie
   "PT", # flake8-pytest-style
   "RET", # flake8-return
+  "SIM", # flake8-simplify
   "TCH", # flake8-type-checking
   "TID", # flake8-tidy-imports
   "YTT", # flake8-2020
