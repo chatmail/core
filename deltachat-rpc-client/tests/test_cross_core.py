@@ -1,5 +1,9 @@
-def test_qr_setup_contact(alice_and_remote_bob) -> None:
-    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.20.0")
+import pytest
+
+
+@pytest.mark.parametrize("version", ["2.20.0", "2.10.0"])
+def test_qr_setup_contact(alice_and_remote_bob, version) -> None:
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob(version)
 
     qr_code = alice.get_qr_code()
     remote_eval(f"bob.secure_join({qr_code!r})")

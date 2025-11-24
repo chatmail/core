@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import os
 import random
+import subprocess
+import sys
 from typing import AsyncGenerator, Optional
 
+import execnet
 import py
 import pytest
 
@@ -205,37 +208,54 @@ def log():
 #
 
 
-@pytest.fixture
-def alice_and_remote_bob(tmp_path, acfactory):
-    """return local Alice account, and a remote 'eval' function.
+@pytest.fixture(scope="session")
+def get_core_python_env(tmp_path_factory):
+    envs = {}
 
-    The 'eval' function allows to remote-execute arbitrary expressions
-    that can use the `bob` online account, and the `alice_contact`.
-    """
-    import subprocess
-    import sys
-
-    import execnet
-
-    def factory(v):
-        alice = acfactory.get_online_account()
-
-        venv = tmp_path.joinpath("venv1")
+    def get_core_python(core_version):
+        venv = envs.get(core_version)
+        if venv:
+            return venv
+        venv = tmp_path_factory.mktemp(f"temp-{core_version}")
         python = sys.executable
         subprocess.check_call([python, "-m", "venv", venv])
         pip = venv.joinpath("bin", "pip")
-        subprocess.check_call([pip, "install", "pytest", f"deltachat-rpc-server=={v}", f"deltachat-rpc-client=={v}"])
+        pkgs = [f"deltachat-rpc-server=={core_version}", f"deltachat-rpc-client=={core_version}"]
+        subprocess.check_call([pip, "install", "pytest"] + pkgs)
 
+        envs[core_version] = venv
+        return venv
+
+    return get_core_python
+
+
+@pytest.fixture
+def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
+    """return local Alice account, a contact to bob, and a remote 'eval' function for bob.
+
+    The 'eval' function allows to remote-execute arbitrary expressions
+    that can use the `bob` online account, and the `bob_contact_alice`.
+    """
+
+    def factory(core_version):
+        venv = get_core_python_env(core_version)
         python = venv.joinpath("bin", "python")
         gw = execnet.makegateway(f"popen//python={python}")
 
         accounts_dir = str(tmp_path.joinpath("account1_venv1"))
-        channel = gw.remote_exec(v220_loop)
+        channel = gw.remote_exec(remote_bob_loop)
         cm = os.environ.get("CHATMAIL_DOMAIN")
+
+        # trigger getting an online account on bob's side
         channel.send((accounts_dir, str(venv.joinpath("bin", "deltachat-rpc-server")), cm))
-        sysinfo = channel.receive()
-        assert sysinfo == f"v{v}"
+
+        # meanwhile get a local alice account
+        alice = acfactory.get_online_account()
         channel.send(alice.self_contact.make_vcard())
+
+        # wait for bob to have started
+        sysinfo = channel.receive()
+        assert sysinfo == f"v{core_version}"
         bob_vcard = channel.receive()
         [alice_contact_bob] = alice.import_vcard(bob_vcard)
 
@@ -248,7 +268,7 @@ def alice_and_remote_bob(tmp_path, acfactory):
     return factory
 
 
-def v220_loop(channel):
+def remote_bob_loop(channel):
     import os
     import pathlib
 
