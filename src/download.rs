@@ -358,13 +358,13 @@ mod tests {
 
         assert!(
             pre_message
-                .get_headers()
+                .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none()
         );
         assert!(
             full_message
-                .get_headers()
+                .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_some()
         );
@@ -461,7 +461,7 @@ mod tests {
         let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
         assert!(
             full_message
-                .get_headers()
+                .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_some(),
             "tested message is not a full-message, sending order may be broken"
@@ -496,7 +496,7 @@ mod tests {
         let message = mailparse::parse_mail(message_bytes)?;
         assert!(
             message
-                .get_headers()
+                .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none(),
         );
@@ -523,13 +523,13 @@ mod tests {
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none(),
             "no 'Chat-Is-Full-Message'-header should be present"
         );
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
@@ -554,12 +554,12 @@ mod tests {
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none()
         );
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
@@ -597,12 +597,12 @@ mod tests {
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none()
         );
         assert!(
-            mail.get_headers()
+            mail.headers
                 .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
