@@ -453,7 +453,7 @@ impl Context {
             translated_stockstrings: stockstrings,
             events,
             scheduler: SchedulerState::new(),
-            ratelimit: RwLock::new(Ratelimit::new(Duration::new(60, 0), 6.0)), // Allow at least 1 message every 10 seconds + a burst of 6.
+            ratelimit: RwLock::new(Ratelimit::new(Duration::new(3, 0), 3.0)), // Allow at least 1 message every second + a burst of 3.
             quota: RwLock::new(None),
             new_msgs_notify,
             server_id: RwLock::new(None),
@@ -483,12 +483,6 @@ impl Context {
         if !self.is_configured().await.unwrap_or_default() {
             warn!(self, "can not start io on a context that is not configured");
             return;
-        }
-
-        if self.is_chatmail().await.unwrap_or_default() {
-            let mut lock = self.ratelimit.write().await;
-            // Allow at least 1 message every second + a burst of 3.
-            *lock = Ratelimit::new(Duration::new(3, 0), 3.0);
         }
 
         // The next line is mainly for iOS:
