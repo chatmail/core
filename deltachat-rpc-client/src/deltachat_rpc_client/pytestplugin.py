@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import platform
 import random
 import subprocess
@@ -22,6 +23,18 @@ E2EE_INFO_MSGS = 1
 The number of info messages added to new e2ee chats.
 Currently this is "End-to-end encryption available".
 """
+
+
+def pytest_report_header():
+    for base in os.get_exec_path():
+        fn = pathlib.Path(base).joinpath(base, "deltachat-rpc-server")
+        if fn.exists():
+            proc = subprocess.Popen([str(fn), "--version"], stderr=subprocess.PIPE)
+            proc.wait()
+            version = proc.stderr.read().decode().strip()
+            return f"deltachat-rpc-server: {fn} [{version}]"
+
+    return None
 
 
 class ACFactory:
