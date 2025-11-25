@@ -26,10 +26,10 @@ and an own build machine.
    i.e. `deltachat-rpc-client` and `deltachat-rpc-server`.
 
 - `remote_tests_python.sh` rsyncs to a build machine and runs
-  `run-python-test.sh` remotely on the build machine. 
+  JSON-RPC Python tests remotely on the build machine. 
 
 - `remote_tests_rust.sh` rsyncs to the build machine and runs
-  `run-rust-test.sh` remotely on the build machine. 
+  Rust tests remotely on the build machine. 
 
 - `run-doxygen.sh` generates C-docs which are then uploaded to https://c.delta.chat/
 
