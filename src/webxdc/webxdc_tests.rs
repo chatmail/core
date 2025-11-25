@@ -1289,7 +1289,7 @@ async fn test_get_webxdc_info() -> Result<()> {
     let info = instance.get_webxdc_info(&t).await?;
     assert_eq!(info.name, "minimal.xdc");
     assert_eq!(info.icon, WEBXDC_DEFAULT_ICON.to_string());
-    assert_eq!(info.send_update_interval, 10000);
+    assert_eq!(info.send_update_interval, 1000);
     assert_eq!(info.send_update_max_size, RECOMMENDED_FILE_SIZE as usize);
 
     let mut instance = create_webxdc_instance(
