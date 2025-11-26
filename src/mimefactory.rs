@@ -1144,10 +1144,7 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            let is_full_msg =
-                                self.pre_message_mode == Some(PreMessageMode::FullMessage);
-
-                            if is_full_msg {
+                            if self.pre_message_mode == Some(PreMessageMode::FullMessage) {
                                 continue;
                             }
 
