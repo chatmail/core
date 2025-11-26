@@ -79,7 +79,7 @@ pub(crate) struct Imap {
     pub(crate) idle_interrupt_receiver: Receiver<()>,
 
     /// Email address.
-    addr: String,
+    pub(crate) addr: String,
 
     /// Login parameters.
     lp: Vec<ConfiguredServerLoginParam>,
