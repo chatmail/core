@@ -346,13 +346,13 @@ mod tests {
         let pre_message_bytes = smtp_rows
             .first()
             .expect("first element exists")
-            .2
+            .payload
             .as_bytes();
         let pre_message = mailparse::parse_mail(pre_message_bytes)?;
         let full_message_bytes = smtp_rows
             .get(1)
             .expect("second element exists")
-            .2
+            .payload
             .as_bytes();
         let full_message = mailparse::parse_mail(full_message_bytes)?;
 
@@ -439,12 +439,12 @@ mod tests {
         let pre_message_bytes = smtp_rows
             .first()
             .expect("first element exists")
-            .2
+            .payload
             .as_bytes();
         let full_message_bytes = smtp_rows
             .get(1)
             .expect("second element exists")
-            .2
+            .payload
             .as_bytes();
         let full_message = mailparse::parse_mail(full_message_bytes)?;
 
@@ -491,7 +491,7 @@ mod tests {
         let message_bytes = smtp_rows
             .first()
             .expect("first element exists")
-            .2
+            .payload
             .as_bytes();
         let message = mailparse::parse_mail(message_bytes)?;
         assert!(
@@ -519,7 +519,11 @@ mod tests {
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
 
-        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mime = smtp_rows
+            .first()
+            .expect("first element exists")
+            .payload
+            .clone();
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
@@ -550,7 +554,11 @@ mod tests {
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
 
-        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mime = smtp_rows
+            .first()
+            .expect("first element exists")
+            .payload
+            .clone();
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
@@ -593,7 +601,11 @@ mod tests {
         //   only one message and no "is full message" header should be present
         assert_eq!(smtp_rows.len(), 1);
 
-        let mime = smtp_rows.first().expect("first element exists").2.clone();
+        let mime = smtp_rows
+            .first()
+            .expect("first element exists")
+            .payload
+            .clone();
         let mail = mailparse::parse_mail(mime.as_bytes())?;
 
         assert!(
