@@ -578,12 +578,19 @@ async fn fetch_idle(
                 mvbox.as_deref().unwrap_or(&watch_folder)
             }
         };
-        session
-            .send_sync_msgs(ctx, syncbox)
-            .await
-            .context("fetch_idle: send_sync_msgs")
-            .log_err(ctx)
-            .ok();
+        if ctx
+            .get_config(Config::ConfiguredAddr)
+            .await?
+            .unwrap_or_default()
+            == connection.addr
+        {
+            session
+                .send_sync_msgs(ctx, syncbox)
+                .await
+                .context("fetch_idle: send_sync_msgs")
+                .log_err(ctx)
+                .ok();
+        }
 
         session
             .store_seen_flags_on_imap(ctx)
