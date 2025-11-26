@@ -222,28 +222,49 @@ def log():
 #
 
 
+def find_path(venv, name):
+    is_windows = platform.system() == "Windows"
+    bin = venv / ("bin" if not is_windows else "Scripts")
+
+    tryadd = [""]
+    if is_windows:
+        tryadd += os.environ["PATHEXT"].split(os.pathsep)
+    for ext in tryadd:
+        p = bin.joinpath(name + ext)
+        if p.exists():
+            return str(p)
+
+    return None
+
+
 @pytest.fixture(scope="session")
 def get_core_python_env(tmp_path_factory):
-    if platform.system() == "Windows":
-        pytest.skip("cross-core-version testing not available on Windows")
+    """Return a factory to create virtualenv environments with rpc server/client packages
+    installed.
+
+    The factory takes a version and returns a (python_path, rpc_server_path) tuple
+    of the respective binaries in the virtualenv.
+    """
 
     envs = {}
 
-    def get_core_python(core_version):
+    def get_versioned_venv(core_version):
         venv = envs.get(core_version)
-        if venv:
-            return venv
-        venv = tmp_path_factory.mktemp(f"temp-{core_version}")
-        python = sys.executable
-        subprocess.check_call([python, "-m", "venv", venv])
-        pip = venv.joinpath("bin", "pip")
-        pkgs = [f"deltachat-rpc-server=={core_version}", f"deltachat-rpc-client=={core_version}"]
-        subprocess.check_call([pip, "install", "pytest"] + pkgs)
+        if not venv:
+            venv = tmp_path_factory.mktemp(f"temp-{core_version}")
+            subprocess.check_call([sys.executable, "-m", "venv", venv])
 
-        envs[core_version] = venv
-        return venv
+            python = find_path(venv, "python")
+            pkgs = [f"deltachat-rpc-server=={core_version}", f"deltachat-rpc-client=={core_version}", "pytest"]
+            subprocess.check_call([python, "-m", "pip", "install"] + pkgs)
 
-    return get_core_python
+            envs[core_version] = venv
+        python = find_path(venv, "python")
+        rpc_server_path = find_path(venv, "deltachat-rpc-server")
+        print(f"python={python}\nrpc_server={rpc_server_path}")
+        return python, rpc_server_path
+
+    return get_versioned_venv
 
 
 @pytest.fixture
@@ -255,8 +276,7 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
     """
 
     def factory(core_version):
-        venv = get_core_python_env(core_version)
-        python = venv.joinpath("bin", "python")
+        python, rpc_server_path = get_core_python_env(core_version)
         gw = execnet.makegateway(f"popen//python={python}")
 
         accounts_dir = str(tmp_path.joinpath("account1_venv1"))
@@ -264,7 +284,7 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
         cm = os.environ.get("CHATMAIL_DOMAIN")
 
         # trigger getting an online account on bob's side
-        channel.send((accounts_dir, str(venv.joinpath("bin", "deltachat-rpc-server")), cm))
+        channel.send((accounts_dir, str(rpc_server_path), cm))
 
         # meanwhile get a local alice account
         alice = acfactory.get_online_account()
@@ -286,18 +306,27 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
 
 
 def remote_bob_loop(channel):
+    # This function executes with versioned
+    # deltachat-rpc-client/server packages
+    # installed into the virtualenv.
+    #
+    # The "channel" argument is a send/receive pipe
+    # to the process that runs the corresponding remote_exec(remote_bob_loop)
+
     import os
-    import pathlib
 
     from deltachat_rpc_client import DeltaChat, Rpc
     from deltachat_rpc_client.pytestplugin import ACFactory
 
     accounts_dir, rpc_server_path, chatmail_domain = channel.receive()
     os.environ["CHATMAIL_DOMAIN"] = chatmail_domain
-    bin_path = str(pathlib.Path(rpc_server_path).parent)
-    os.environ["PATH"] = bin_path + ":" + os.environ["PATH"]
 
+    # older core versions don't support specifying rpc_server_path
+    # so we can't just pass `rpc_server_path` argument to Rpc constructor
+    basepath = os.path.dirname(rpc_server_path)
+    os.environ["PATH"] = os.pathsep.join([basepath, os.environ["PATH"]])
     rpc = Rpc(accounts_dir=accounts_dir)
+
     with rpc:
         dc = DeltaChat(rpc)
         channel.send(dc.rpc.get_system_info()["deltachat_core_version"])

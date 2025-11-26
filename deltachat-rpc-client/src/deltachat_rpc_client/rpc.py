@@ -57,7 +57,7 @@ class Rpc:
     def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path="deltachat-rpc-server", **kwargs):
         """Initialize RPC client.
 
-        The given arguments will be passed to subprocess.Popen().
+        The 'kwargs' arguments will be passed to subprocess.Popen().
         """
         if accounts_dir:
             kwargs["env"] = {
