@@ -218,7 +218,6 @@ mod tests {
     use crate::config::Config;
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::Viewtype;
-    use crate::mimeparser::MimeMessage;
     use crate::receive_imf::receive_imf_from_inbox;
     use crate::test_utils::{self, TestContext, TestContextManager};
 
@@ -343,60 +342,60 @@ mod tests {
         //   pre-message and full message should be present
         //   and test that correct headers are present on both messages
         assert_eq!(smtp_rows.len(), 2);
-        let pre_message_bytes = smtp_rows
-            .first()
-            .expect("first element exists")
-            .payload
-            .as_bytes();
-        let pre_message = mailparse::parse_mail(pre_message_bytes)?;
-        let full_message_bytes = smtp_rows
-            .get(1)
-            .expect("second element exists")
-            .payload
-            .as_bytes();
-        let full_message = mailparse::parse_mail(full_message_bytes)?;
+        let pre_message = smtp_rows.first().expect("first element exists");
+        let pre_message_parsed = mailparse::parse_mail(pre_message.payload.as_bytes())?;
+        let full_message = smtp_rows.get(1).expect("second element exists");
+        let full_message_parsed = mailparse::parse_mail(full_message.payload.as_bytes())?;
 
         assert!(
-            pre_message
+            pre_message_parsed
                 .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_none()
         );
         assert!(
-            full_message
+            full_message_parsed
                 .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_some()
         );
 
         assert_eq!(
-            full_message.headers.get_header_value(HeaderDef::MessageId),
+            full_message_parsed
+                .headers
+                .get_header_value(HeaderDef::MessageId),
             Some(format!("<{}>", msg.rfc724_mid)),
             "full message should have the rfc message id of the database message"
         );
 
         assert_ne!(
-            pre_message.headers.get_header_value(HeaderDef::MessageId),
-            full_message.headers.get_header_value(HeaderDef::MessageId),
+            pre_message_parsed
+                .headers
+                .get_header_value(HeaderDef::MessageId),
+            full_message_parsed
+                .headers
+                .get_header_value(HeaderDef::MessageId),
             "message ids of pre message and full message should be different"
         );
 
-        let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
+        let decrypted_full_message = bob.parse_msg(full_message).await;
         assert_eq!(decrypted_full_message.decrypting_failed, false);
         assert_eq!(
             decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId),
             false
         );
 
-        let decrypted_pre_message = MimeMessage::from_bytes(bob, pre_message_bytes).await?;
+        let decrypted_pre_message = bob.parse_msg(pre_message).await;
         assert_eq!(
             decrypted_pre_message
                 .get_header(HeaderDef::ChatFullMessageId)
                 .map(String::from),
-            full_message.headers.get_header_value(HeaderDef::MessageId)
+            full_message_parsed
+                .headers
+                .get_header_value(HeaderDef::MessageId)
         );
         assert!(
-            pre_message
+            pre_message_parsed
                 .headers
                 .get_header_value(HeaderDef::ChatFullMessageId)
                 .is_none(),
@@ -436,19 +435,11 @@ mod tests {
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 2);
-        let pre_message_bytes = smtp_rows
-            .first()
-            .expect("first element exists")
-            .payload
-            .as_bytes();
-        let full_message_bytes = smtp_rows
-            .get(1)
-            .expect("second element exists")
-            .payload
-            .as_bytes();
-        let full_message = mailparse::parse_mail(full_message_bytes)?;
+        let pre_message = smtp_rows.first().expect("first element exists");
+        let full_message = smtp_rows.get(1).expect("second element exists");
+        let full_message_parsed = mailparse::parse_mail(full_message.payload.as_bytes())?;
 
-        let decrypted_pre_message = MimeMessage::from_bytes(bob, pre_message_bytes).await?;
+        let decrypted_pre_message = bob.parse_msg(pre_message).await;
         assert!(
             decrypted_pre_message
                 .get_header(HeaderDef::ChatFullMessageId)
@@ -458,9 +449,9 @@ mod tests {
         assert_ne!(decrypted_pre_message.gossiped_keys.len(), 0);
         assert_ne!(decrypted_pre_message.user_avatar, None);
 
-        let decrypted_full_message = MimeMessage::from_bytes(bob, full_message_bytes).await?;
+        let decrypted_full_message = bob.parse_msg(full_message).await;
         assert!(
-            full_message
+            full_message_parsed
                 .headers
                 .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
                 .is_some(),
@@ -519,12 +510,8 @@ mod tests {
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
 
-        let mime = smtp_rows
-            .first()
-            .expect("first element exists")
-            .payload
-            .clone();
-        let mail = mailparse::parse_mail(mime.as_bytes())?;
+        let msg = smtp_rows.first().expect("first element exists");
+        let mail = mailparse::parse_mail(msg.payload.as_bytes())?;
 
         assert!(
             mail.headers
@@ -538,7 +525,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
+        let decrypted_message = bob.parse_msg(msg).await;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
@@ -554,12 +541,8 @@ mod tests {
 
         assert_eq!(smtp_rows.len(), 1, "only one message should be sent");
 
-        let mime = smtp_rows
-            .first()
-            .expect("first element exists")
-            .payload
-            .clone();
-        let mail = mailparse::parse_mail(mime.as_bytes())?;
+        let msg = smtp_rows.first().expect("first element exists");
+        let mail = mailparse::parse_mail(msg.payload.as_bytes())?;
 
         assert!(
             mail.headers
@@ -572,7 +555,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
+        let decrypted_message = bob.parse_msg(msg).await;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
@@ -586,7 +569,7 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
-        let chat = alice.create_chat(&bob).await;
+        let chat = alice.create_chat(bob).await;
 
         let mut msg = Message::new(Viewtype::File);
         msg.set_file_from_bytes(alice, "test.bin", &[0u8; 100_000], None)?;
@@ -601,12 +584,8 @@ mod tests {
         //   only one message and no "is full message" header should be present
         assert_eq!(smtp_rows.len(), 1);
 
-        let mime = smtp_rows
-            .first()
-            .expect("first element exists")
-            .payload
-            .clone();
-        let mail = mailparse::parse_mail(mime.as_bytes())?;
+        let msg = smtp_rows.first().expect("first element exists");
+        let mail = mailparse::parse_mail(msg.payload.as_bytes())?;
 
         assert!(
             mail.headers
@@ -619,7 +598,7 @@ mod tests {
                 .is_none(),
             "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
         );
-        let decrypted_message = MimeMessage::from_bytes(bob, mime.as_bytes()).await?;
+        let decrypted_message = bob.parse_msg(msg).await;
         assert!(
             !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
             "no 'Chat-Full-Message-ID'-header should be present"
