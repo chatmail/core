@@ -18,7 +18,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
-use crate::provider::{Provider, get_provider_by_id};
+use crate::provider::Provider;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
 use crate::transport::ConfiguredLoginParam;
@@ -646,15 +646,14 @@ impl Context {
         Ok(val)
     }
 
-    /// Gets the configured provider, as saved in the `configured_provider` value.
+    /// Gets the configured provider.
     ///
-    /// The provider is determined by `get_provider_info()` during configuration and then saved
-    /// to the db in `param.save_to_database()`, together with all the other `configured_*` values.
+    /// The provider is determined by the current primary transport.
     pub async fn get_configured_provider(&self) -> Result<Option<&'static Provider>> {
-        if let Some(cfg) = self.get_config(Config::ConfiguredProvider).await? {
-            return Ok(get_provider_by_id(&cfg));
-        }
-        Ok(None)
+        let provider = ConfiguredLoginParam::load(self)
+            .await?
+            .and_then(|(_transport_id, param)| param.provider);
+        Ok(provider)
     }
 
     /// Gets configured "delete_device_after" value.
