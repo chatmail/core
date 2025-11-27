@@ -33,6 +33,7 @@ use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::key::{self, DcKey, DcSecretKey, self_fingerprint};
 use crate::log::warn;
+use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MessageState, MsgId, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::pgp::KeyPair;
@@ -200,6 +201,18 @@ impl TestContextManager {
             "{} changes her self address and reconfigures",
             test_context.name()
         ));
+
+        // Insert a transport for the new address.
+        test_context.sql
+          .execute(
+            "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
+               (
+                   new_addr,
+                   serde_json::to_string(&EnteredLoginParam::default()).unwrap(),
+                   format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
+              ),
+          ).await.unwrap();
+
         test_context.set_primary_self_addr(new_addr).await.unwrap();
         // ensure_secret_key_exists() is called during configure
         crate::e2ee::ensure_secret_key_exists(test_context)
