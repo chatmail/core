@@ -35,8 +35,8 @@ Additional arguments to `tox` are passed to pytest, e.g. `tox -- -s` does not ca
 
 Go to root repository directory and run: 
 ```
-    scripts/make-rpc-testenv.sh 
-    source venv/bin/activate 
+$ scripts/make-rpc-testenv.sh 
+$ source venv/bin/activate 
 ```
 
 ## Using in REPL
