@@ -121,14 +121,14 @@ impl CommandApi {
         }
     }
 
+    async fn get_context_opt(&self, id: u32) -> Option<deltachat::context::Context> {
+        self.accounts.read().await.get_account(id)
+    }
+
     async fn get_context(&self, id: u32) -> Result<deltachat::context::Context> {
-        let sc = self
-            .accounts
-            .read()
+        self.get_context_opt(id)
             .await
-            .get_account(id)
-            .ok_or_else(|| anyhow!("account with id {id} not found"))?;
-        Ok(sc)
+            .ok_or_else(|| anyhow!("account with id {id} not found"))
     }
 
     async fn with_state<F, T>(&self, id: u32, with_state: F) -> T
@@ -1307,13 +1307,18 @@ impl CommandApi {
     ///
     /// Returns IDs of existing messages.
     async fn get_existing_msg_ids(&self, account_id: u32, msg_ids: Vec<u32>) -> Result<Vec<u32>> {
-        let context = self.get_context(account_id).await?;
-        let msg_ids: Vec<MsgId> = msg_ids.into_iter().map(MsgId::new).collect();
-        let existing_msg_ids = get_existing_msg_ids(&context, &msg_ids).await?;
-        Ok(existing_msg_ids
-            .into_iter()
-            .map(|msg_id| msg_id.to_u32())
-            .collect())
+        if let Some(context) = self.get_context_opt(account_id).await {
+            let msg_ids: Vec<MsgId> = msg_ids.into_iter().map(MsgId::new).collect();
+            let existing_msg_ids = get_existing_msg_ids(&context, &msg_ids).await?;
+            Ok(existing_msg_ids
+                .into_iter()
+                .map(|msg_id| msg_id.to_u32())
+                .collect())
+        } else {
+            // Account does not exist, so messages do not exist either,
+            // but this is not an error.
+            Ok(Vec::new())
+        }
     }
 
     async fn get_message_list_items(
