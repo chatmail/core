@@ -1,5 +1,6 @@
 use super::*;
 use crate::{EventType, test_utils::TestContext};
+use crate::message::Message;
 
 #[test]
 fn test_maybe_add_file() {
@@ -179,9 +180,7 @@ async fn test_migration_flags() -> Result<()> {
     // as migrations::run() was already executed on context creation,
     // another call should not result in any action needed.
     // this test catches some bugs where dbversion was forgotten to be persisted.
-    let (update_icons, disable_server_delete, recode_avatar) = migrations::run(&t, &t.sql).await?;
-    assert!(!update_icons);
-    assert!(!disable_server_delete);
+    let recode_avatar = migrations::run(&t, &t.sql).await?;
     assert!(!recode_avatar);
 
     info!(&t, "test_migration_flags: XXX END MARKER");
