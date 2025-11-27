@@ -31,7 +31,7 @@ tokio::task_local! {
     static STOP_MIGRATIONS_AT: i32;
 }
 
-pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool, bool)> {
+pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
 
@@ -68,8 +68,6 @@ pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool, bool)> {
     }
 
     let dbversion = dbversion_before_update;
-    let mut update_icons = !exists_before_update;
-    let mut disable_server_delete = false;
     let mut recode_avatar = false;
 
     if dbversion < 1 {
@@ -299,7 +297,6 @@ CREATE INDEX devmsglabels_index1 ON devmsglabels (label);"#, 59)
             61,
         )
         .await?;
-        update_icons = true;
     }
     if dbversion < 62 {
         sql.execute_migration(
@@ -327,7 +324,6 @@ ALTER TABLE msgs ADD COLUMN ephemeral_timestamp INTEGER DEFAULT 0;"#,
         .await?;
     }
     if dbversion < 66 {
-        update_icons = true;
         sql.set_db_version(66).await?;
     }
     if dbversion < 67 {
@@ -443,17 +439,6 @@ CREATE TABLE imap_sync (folder TEXT PRIMARY KEY, uidvalidity INTEGER DEFAULT 0, 
                         )
                         .await?;
                 }
-            }
-        }
-        if exists_before_update {
-            disable_server_delete = true;
-
-            // Don't disable server delete if it was on by default (Nauta):
-            if let Some(provider) = context.get_configured_provider().await?
-                && let Some(defaults) = &provider.config_defaults
-                && defaults.iter().any(|d| d.key == Config::DeleteServerAfter)
-            {
-                disable_server_delete = false;
             }
         }
         sql.set_db_version(73).await?;
@@ -1468,7 +1453,7 @@ CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok((update_icons, disable_server_delete, recode_avatar))
+    Ok(recode_avatar)
 }
 
 fn migrate_key_contacts(

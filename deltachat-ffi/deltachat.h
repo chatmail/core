@@ -7215,11 +7215,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used as device message text.
 #define DC_STR_SELF_DELETED_MSG_BODY      91
 
-/// "'Delete messages from server' turned off as now all folders are affected."
-///
-/// Used as device message text.
-#define DC_STR_SERVER_TURNED_OFF          92
-
 /// "Message deletion timer is set to %1$s minutes."
 ///
 /// Used in status messages.
