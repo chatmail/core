@@ -323,7 +323,10 @@ impl ConfiguredLoginParam {
             .unwrap_or_default();
         let oauth2 = matches!(server_flags & DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2);
 
-        let provider = context.get_configured_provider().await?;
+        let provider = context
+            .get_config(Config::ConfiguredProvider)
+            .await?
+            .and_then(|cfg| get_provider_by_id(&cfg));
 
         let imap;
         let smtp;
