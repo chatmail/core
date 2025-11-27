@@ -9,7 +9,6 @@ use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
-use crate::chat::add_device_msg;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -18,12 +17,11 @@ use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::BLOBS_BACKUP_NAME;
 use crate::location::delete_orphaned_poi_locations;
 use crate::log::{LogExt, warn};
-use crate::message::{Message, MsgId};
+use crate::message::MsgId;
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
 use crate::param::{Param, Params};
-use crate::stock_str;
 use crate::tools::{SystemTime, Time, delete_file, time, time_elapsed};
 
 /// Extension to [`rusqlite::ToSql`] trait
@@ -216,25 +214,12 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        // `update_icons` is not used anymore, since it's not necessary anymore to "update" icons:
-        let (_update_icons, disable_server_delete, recode_avatar) = migrations::run(context, self)
+        let recode_avatar = migrations::run(context, self)
             .await
             .context("failed to run migrations")?;
 
         // (2) updates that require high-level objects
         // the structure is complete now and all objects are usable
-
-        if disable_server_delete {
-            // We now always watch all folders and delete messages there if delete_server is enabled.
-            // So, for people who have delete_server enabled, disable it and add a hint to the devicechat:
-            if context.get_config_delete_server_after().await?.is_some() {
-                let mut msg = Message::new_text(stock_str::delete_server_turned_off(context).await);
-                add_device_msg(context, None, Some(&mut msg)).await?;
-                context
-                    .set_config_internal(Config::DeleteServerAfter, Some("0"))
-                    .await?;
-            }
-        }
 
         if recode_avatar && let Some(avatar) = context.get_config(Config::Selfavatar).await? {
             let mut blob = BlobObject::from_path(context, Path::new(&avatar))?;
