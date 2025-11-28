@@ -1,10 +1,11 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "cffi>=1.0.0", "pkgconfig"]
+requires = ["setuptools>=77", "wheel", "cffi>=1.0.0", "pkgconfig"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltachat"
 version = "2.28.0"
+license = "MPL-2.0"
 description = "Python bindings for the Delta Chat Core library using CFFI against the Rust-implemented libdeltachat"
 readme = "README.rst"
 requires-python = ">=3.10"
@@ -14,7 +15,6 @@ authors = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
     "Programming Language :: Python :: 3",
     "Topic :: Communications :: Chat",
     "Topic :: Communications :: Email",
