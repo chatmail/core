@@ -47,8 +47,7 @@ pub struct ContactObject {
     ///
     /// - If `verifierId` != 0,
     ///   display text "Introduced by ..."
-    ///   with the name and address of the contact
-    ///   formatted by `name_and_addr`/`nameAndAddr`.
+    ///   with the name of the contact.
     ///   Prefix the text by a green checkmark.
     ///
     /// - If `verifierId` == 0 and `isVerified` != 0,
