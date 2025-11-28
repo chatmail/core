@@ -31,6 +31,6 @@ unset CHATMAIL_DOMAIN
 
 # Try to build wheels for a range of interpreters, but don't fail if they are not available.
 # E.g. musllinux_1_1 does not have PyPy interpreters as of 2022-07-10
-tox --workdir "$TOXWORKDIR" -e py38,py39,py310,py311,py312,py313,pypy38,pypy39,pypy310 --skip-missing-interpreters true
+tox --workdir "$TOXWORKDIR" -e py310,py311,py312,py313,pypy310 --skip-missing-interpreters true
 
 auditwheel repair "$TOXWORKDIR"/wheelhouse/deltachat* -w "$TOXWORKDIR/wheelhouse"

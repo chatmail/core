@@ -246,11 +246,11 @@ jobs:
           - os: macos-latest
             python: pypy3.10
 
-          # Minimum Supported Python Version = 3.8
+          # Minimum Supported Python Version = 3.10
           # This is the minimum version for which manylinux Python wheels are
           # built. Test it with minimum supported Rust version.
           - os: ubuntu-latest
-            python: 3.8
+            python: "3.10"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
@@ -302,9 +302,9 @@ jobs:
           - os: macos-latest
             python: pypy3.10
 
-          # Minimum Supported Python Version = 3.8
+          # Minimum Supported Python Version = 3.10
           - os: ubuntu-latest
-            python: 3.8
+            python: "3.10"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
