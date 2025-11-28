@@ -54,18 +54,13 @@ class RpcMethod:
 class Rpc:
     """RPC client."""
 
-    def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path="deltachat-rpc-server", **kwargs):
+    def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path="deltachat-rpc-server"):
         """Initialize RPC client.
 
         The given arguments will be passed to subprocess.Popen().
         """
-        if accounts_dir:
-            kwargs["env"] = {
-                **kwargs.get("env", os.environ),
-                "DC_ACCOUNTS_PATH": str(accounts_dir),
-            }
+        self._accounts_dir = accounts_dir
 
-        self._kwargs = kwargs
         self.rpc_server_path = rpc_server_path
         self.process: subprocess.Popen
         self.id_iterator: Iterator[int]
@@ -102,7 +97,10 @@ class Rpc:
             # `process_group` is not supported before Python 3.11.
             popen_kwargs["preexec_fn"] = os.setpgrp  # noqa: PLW1509
 
-        popen_kwargs.update(self._kwargs)
+        if self._accounts_dir:
+            popen_kwargs["env"] = os.environ.copy()
+            popen_kwargs["env"]["DC_ACCOUNTS_PATH"] = str(self._accounts_dir)
+
         process = subprocess.Popen(self.rpc_server_path, **popen_kwargs)
         return process.stdout, process.stdin
 
