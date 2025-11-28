@@ -227,6 +227,38 @@ jobs:
         working-directory: deltachat-rpc-client
         run: tox -e lint
 
+  # mypy does not work with PyPy since mypy 1.19
+  # as it introduced native `librt` dependency
+  # that uses CPython internals.
+  # We only run mypy with CPython because of this.
+  cffi_python_mypy:
+    name: CFFI Python mypy
+    needs: ["c_library", "python_lint"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          show-progress: false
+          persist-credentials: false
+
+      - name: Download libdeltachat.a
+        uses: actions/download-artifact@v6
+        with:
+          name: ubuntu-latest-libdeltachat.a
+          path: target/debug
+
+      - name: Install tox
+        run: pip install tox
+
+      - name: Run mypy
+        env:
+          DCC_RS_TARGET: debug
+          DCC_RS_DEV: ${{ github.workspace }}
+        working-directory: python
+        run: tox -e mypy
+
+
   cffi_python_tests:
     name: CFFI Python tests
     needs: ["c_library", "python_lint"]
@@ -280,7 +312,7 @@ jobs:
           DCC_RS_TARGET: debug
           DCC_RS_DEV: ${{ github.workspace }}
         working-directory: python
-        run: tox -e mypy,doc,py
+        run: tox -e doc,py
 
   rpc_python_tests:
     name: JSON-RPC Python tests
