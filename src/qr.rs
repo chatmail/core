@@ -42,7 +42,7 @@ pub(crate) const DCBACKUP_SCHEME_PREFIX: &str = "DCBACKUP";
 
 /// Version written to Backups and Backup-QR-Codes.
 /// Imports will fail when they have a larger version.
-pub(crate) const DCBACKUP_VERSION: i32 = 3;
+pub(crate) const DCBACKUP_VERSION: i32 = 4;
 
 /// Scanned QR code.
 #[derive(Debug, Clone, PartialEq, Eq)]
