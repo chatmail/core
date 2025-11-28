@@ -538,12 +538,11 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     let (_s, r) = async_channel::bounded(1);
     let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
     let configuring = true;
-    let mut imap_session = match imap.connect(ctx, configuring).await {
-        Ok(session) => session,
-        Err(err) => bail!(
+    if let Err(err) = imap.connect(ctx, configuring).await {
+        bail!(
             "{}",
             nicer_configuration_error(ctx, format!("{err:#}")).await
-        ),
+        );
     };
 
     progress!(ctx, 850);
@@ -557,10 +556,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
         ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
         ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
     }
-
-    let create_mvbox = false;
-    imap.configure_folders(ctx, &mut imap_session, create_mvbox)
-        .await?;
 
     drop(imap);
 
