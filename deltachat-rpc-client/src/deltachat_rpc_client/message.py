@@ -60,6 +60,10 @@ class Message:
         """Mark the message as seen."""
         self._rpc.markseen_msgs(self.account.id, [self.id])
 
+    def exists(self) -> bool:
+        """Return True if the message exists."""
+        return bool(self._rpc.get_existing_msg_ids(self.account.id, [self.id]))
+
     def continue_autocrypt_key_transfer(self, setup_code: str) -> None:
         """Continue the Autocrypt Setup Message key transfer.
 
