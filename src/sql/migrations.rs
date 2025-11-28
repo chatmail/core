@@ -1445,6 +1445,15 @@ CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 141)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE INDEX imap_only_rfc724_mid ON imap(rfc724_mid)",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
