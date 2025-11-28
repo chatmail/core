@@ -7,7 +7,7 @@ name = "deltachat"
 version = "2.28.0"
 description = "Python bindings for the Delta Chat Core library using CFFI against the Rust-implemented libdeltachat"
 readme = "README.rst"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 authors = [
     { name = "holger krekel, Floris Bruynooghe, Bjoern Petersen and contributors" },
 ]
@@ -23,7 +23,6 @@ classifiers = [
 dependencies = [
     "cffi>=1.0.0",
     "imap-tools",
-    "importlib_metadata;python_version<'3.8'",
     "pluggy",
     "requests",
 ]
