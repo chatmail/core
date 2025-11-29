@@ -199,7 +199,7 @@ impl Context {
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
-        let context = self.downgrade();
+        let context = self.get_weak_context();
         task::spawn(Context::emit_end_call_if_unaccepted(
             context,
             wait.try_into()?,
@@ -370,7 +370,7 @@ impl Context {
                         }
                     }
                     let wait = call.remaining_ring_seconds();
-                    let context = self.downgrade();
+                    let context = self.get_weak_context();
                     task::spawn(Context::emit_end_call_if_unaccepted(
                         context,
                         wait.try_into()?,
