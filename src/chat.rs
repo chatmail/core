@@ -3730,10 +3730,16 @@ pub(crate) async fn add_contact_to_chat_ex(
         chat.typ != Chattype::OutBroadcast || contact_id != ContactId::SELF,
         "Cannot add SELF to broadcast channel."
     );
-    ensure!(
-        chat.is_encrypted(context).await? == contact.is_key_contact(),
-        "Only key-contacts can be added to encrypted chats"
-    );
+    match chat.is_encrypted(context).await? {
+        true => ensure!(
+            contact.is_key_contact(),
+            "Only key-contacts can be added to encrypted chats"
+        ),
+        false => ensure!(
+            !contact.is_key_contact(),
+            "Only address-contacts can be added to unencrypted chats"
+        ),
+    }
 
     if !chat.is_self_in_chat(context).await? {
         context.emit_event(EventType::ErrorSelfNotInGroup(
