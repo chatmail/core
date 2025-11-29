@@ -222,12 +222,6 @@ jobs:
       - name: List binaries
         run: ls -l bin/
 
-      # Python 3.11 is needed for tomllib used in scripts/wheel-rpc-server.py
-      - name: Install python 3.12
-        uses: actions/setup-python@v6
-        with:
-          python-version: 3.12
-
       - name: Install wheel
         run: pip install wheel
 
