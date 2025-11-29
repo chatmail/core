@@ -296,8 +296,8 @@ impl Context {
         wait: u64,
         call_id: MsgId,
     ) -> Result<()> {
-        let context = context.upgrade()?;
         sleep(Duration::from_secs(wait)).await;
+        let context = context.upgrade()?;
         let Some(mut call) = context.load_call_by_id(call_id).await? else {
             warn!(
                 context,
