@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use super::*;
 use crate::chat::{
-    self, ChatId, add_contact_to_chat, create_group, remove_contact_from_chat, send_text_msg,
+    self, ChatId, add_contact_to_chat, create_group, create_group_unencrypted,
+    remove_contact_from_chat, send_text_msg,
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
@@ -351,7 +352,7 @@ async fn test_subject_in_group() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let t = tcm.alice().await;
     let bob = tcm.bob().await;
-    let group_id = chat::create_group(&t, "groupname").await.unwrap();
+    let group_id = create_group(&t, "groupname").await.unwrap();
     let bob_contact_id = t.add_or_lookup_contact_id(&bob).await;
     chat::add_contact_to_chat(&t, group_id, bob_contact_id).await?;
 
@@ -671,15 +672,20 @@ async fn test_selfavatar_unencrypted_signed() {
 async fn test_remove_member_bcc() -> Result<()> {
     let mut tcm = TestContextManager::new();
 
-    // Alice creates a group with Bob and Claire and then removes Bob.
+    // Alice creates a group with Bob and Charlie and then removes Charlie.
+
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
 
-    let bob_id = alice.add_or_lookup_contact_id(bob).await;
-    let charlie_id = alice.add_or_lookup_contact_id(charlie).await;
+    let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
+    let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
+    let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
-    let alice_chat_id = create_group(alice, "foo").await?;
+    let bob_id = alice.add_or_lookup_address_contact_id(bob).await;
+    let charlie_id = alice.add_or_lookup_address_contact_id(charlie).await;
+
+    let alice_chat_id = create_group_unencrypted(alice, "foo").await?;
     add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
     add_contact_to_chat(alice, alice_chat_id, charlie_id).await?;
     send_text_msg(alice, alice_chat_id, "Creating a group".to_string()).await?;
@@ -696,11 +702,12 @@ async fn test_remove_member_bcc() -> Result<()> {
     for to_addr in to.iter() {
         match to_addr {
             mailparse::MailAddr::Single(info) => {
-                panic!("Single addresses are not expected here: {info:?}");
+                // Addresses should be of existing members and not Charlie.
+                assert_ne!(info.addr, charlie_addr);
+                assert!(info.addr == alice_addr || info.addr == bob_addr);
             }
-            mailparse::MailAddr::Group(info) => {
-                assert_eq!(info.group_name, "hidden-recipients");
-                assert_eq!(info.addrs, []);
+            mailparse::MailAddr::Group(_) => {
+                panic!("Group addresses are not expected here");
             }
         }
     }
