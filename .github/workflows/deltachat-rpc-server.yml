@@ -46,6 +46,30 @@ jobs:
           path: result/bin/deltachat-rpc-server
           if-no-files-found: error
 
+  build_linux_wheel:
+    name: Linux wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, armv7l, armv6l, i686, x86_64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          show-progress: false
+          persist-credentials: false
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+
+      - name: Build deltachat-rpc-server wheels
+        run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-linux-wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v5
+        with:
+          name: deltachat-rpc-server-${{ matrix.arch }}-linux-wheel
+          path: result/*.whl
+          if-no-files-found: error
+
   build_windows:
     name: Windows
     strategy:
@@ -68,6 +92,30 @@ jobs:
         with:
           name: deltachat-rpc-server-${{ matrix.arch }}
           path: result/bin/deltachat-rpc-server.exe
+          if-no-files-found: error
+
+  build_windows_wheel:
+    name: Windows wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [win32, win64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          show-progress: false
+          persist-credentials: false
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+
+      - name: Build deltachat-rpc-server wheels
+        run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v5
+        with:
+          name: deltachat-rpc-server-${{ matrix.arch }}-wheel
+          path: result/*.whl
           if-no-files-found: error
 
   build_macos:
@@ -121,9 +169,33 @@ jobs:
           path: result/bin/deltachat-rpc-server
           if-no-files-found: error
 
+  build_android_wheel:
+    name: Android wheel
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64-v8a, armeabi-v7a]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          show-progress: false
+          persist-credentials: false
+      - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
+
+      - name: Build deltachat-rpc-server wheels
+        run: nix build .#deltachat-rpc-server-${{ matrix.arch }}-android-wheel
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v5
+        with:
+          name: deltachat-rpc-server-${{ matrix.arch }}-android-wheel
+          path: result/*.whl
+          if-no-files-found: error
+
   publish:
     name: Build wheels and upload binaries to the release
-    needs: ["build_linux", "build_windows", "build_macos"]
+    needs: ["build_linux", "build_linux_wheel", "build_windows", "build_windows_wheel", "build_macos", "build_android", "build_android_wheel"]
     environment:
       name: pypi
       url: https://pypi.org/p/deltachat-rpc-server
@@ -144,11 +216,23 @@ jobs:
           name: deltachat-rpc-server-aarch64-linux
           path: deltachat-rpc-server-aarch64-linux.d
 
+      - name: Download Linux aarch64 wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-aarch64-linux-wheel
+          path: deltachat-rpc-server-aarch64-linux-wheel.d
+
       - name: Download Linux armv7l binary
         uses: actions/download-artifact@v6
         with:
           name: deltachat-rpc-server-armv7l-linux
           path: deltachat-rpc-server-armv7l-linux.d
+
+      - name: Download Linux armv7l wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-armv7l-linux-wheel
+          path: deltachat-rpc-server-armv7l-linux-wheel.d
 
       - name: Download Linux armv6l binary
         uses: actions/download-artifact@v6
@@ -156,11 +240,23 @@ jobs:
           name: deltachat-rpc-server-armv6l-linux
           path: deltachat-rpc-server-armv6l-linux.d
 
+      - name: Download Linux armv6l wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-armv6l-linux-wheel
+          path: deltachat-rpc-server-armv6l-linux-wheel.d
+
       - name: Download Linux i686 binary
         uses: actions/download-artifact@v6
         with:
           name: deltachat-rpc-server-i686-linux
           path: deltachat-rpc-server-i686-linux.d
+
+      - name: Download Linux i686 wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-i686-linux-wheel
+          path: deltachat-rpc-server-i686-linux-wheel.d
 
       - name: Download Linux x86_64 binary
         uses: actions/download-artifact@v6
@@ -168,17 +264,35 @@ jobs:
           name: deltachat-rpc-server-x86_64-linux
           path: deltachat-rpc-server-x86_64-linux.d
 
+      - name: Download Linux x86_64 wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-x86_64-linux-wheel
+          path: deltachat-rpc-server-x86_64-linux-wheel.d
+
       - name: Download Win32 binary
         uses: actions/download-artifact@v6
         with:
           name: deltachat-rpc-server-win32
           path: deltachat-rpc-server-win32.d
 
+      - name: Download Win32 wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-win32-wheel
+          path: deltachat-rpc-server-win32-wheel.d
+
       - name: Download Win64 binary
         uses: actions/download-artifact@v6
         with:
           name: deltachat-rpc-server-win64
           path: deltachat-rpc-server-win64.d
+
+      - name: Download Win64 wheel
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-win64-wheel
+          path: deltachat-rpc-server-win64-wheel.d
 
       - name: Download macOS binary for x86_64
         uses: actions/download-artifact@v6
@@ -198,11 +312,23 @@ jobs:
           name: deltachat-rpc-server-arm64-v8a-android
           path: deltachat-rpc-server-arm64-v8a-android.d
 
+      - name: Download Android wheel for arm64-v8a
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-arm64-v8a-android-wheel
+          path: deltachat-rpc-server-arm64-v8a-android-wheel.d
+
       - name: Download Android binary for armeabi-v7a
         uses: actions/download-artifact@v6
         with:
           name: deltachat-rpc-server-armeabi-v7a-android
           path: deltachat-rpc-server-armeabi-v7a-android.d
+
+      - name: Download Android wheel for armeabi-v7a
+        uses: actions/download-artifact@v6
+        with:
+          name: deltachat-rpc-server-armeabi-v7a-android-wheel
+          path: deltachat-rpc-server-armeabi-v7a-android-wheel.d
 
       - name: Create bin/ directory
         run: |
@@ -228,24 +354,15 @@ jobs:
       - name: Build deltachat-rpc-server Python wheels
         run: |
           mkdir -p dist
-          nix build .#deltachat-rpc-server-x86_64-linux-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-armv7l-linux-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-armv6l-linux-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-aarch64-linux-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-i686-linux-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-win64-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-win32-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-arm64-v8a-android-wheel
-          cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-armeabi-v7a-android-wheel
-          cp result/*.whl dist/
+          mv deltachat-rpc-server-aarch64-linux-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-armv7l-linux-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-armv6l-linux-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-i686-linux-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-x86_64-linux-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-win64-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-win32-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-arm64-v8a-android-wheel.d/*.whl dist/
+          mv deltachat-rpc-server-armeabi-v7a-android-wheel.d/*.whl dist/
           python3 scripts/wheel-rpc-server.py x86_64-darwin bin/deltachat-rpc-server-x86_64-macos
           python3 scripts/wheel-rpc-server.py aarch64-darwin bin/deltachat-rpc-server-aarch64-macos
           mv *.whl dist/
