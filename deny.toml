@@ -62,7 +62,6 @@ skip = [
      { name = "windows_x86_64_gnu" },
      { name = "windows_x86_64_gnullvm" },
      { name = "windows_x86_64_msvc" },
-     { name = "zerocopy", version = "0.7.32" },
 ]
 
 
