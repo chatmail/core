@@ -225,7 +225,7 @@ jobs:
       - name: Install wheel
         run: pip install wheel
 
-      - name: Build deltachat-rpc-server Python wheels and source package
+      - name: Build deltachat-rpc-server Python wheels
         run: |
           mkdir -p dist
           nix build .#deltachat-rpc-server-x86_64-linux-wheel
@@ -246,8 +246,6 @@ jobs:
           cp result/*.whl dist/
           nix build .#deltachat-rpc-server-armeabi-v7a-android-wheel
           cp result/*.whl dist/
-          nix build .#deltachat-rpc-server-source
-          cp result/*.tar.gz dist/
           python3 scripts/wheel-rpc-server.py x86_64-darwin bin/deltachat-rpc-server-x86_64-macos
           python3 scripts/wheel-rpc-server.py aarch64-darwin bin/deltachat-rpc-server-aarch64-macos
           mv *.whl dist/
