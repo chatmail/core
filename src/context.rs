@@ -405,7 +405,7 @@ impl Context {
     }
 
     /// Returns a weak reference to this [`Context`].
-    pub(crate) fn downgrade(&self) -> WeakContext {
+    pub(crate) fn get_weak_context(&self) -> WeakContext {
         WeakContext {
             inner: Arc::downgrade(&self.inner),
         }
