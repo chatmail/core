@@ -203,7 +203,7 @@ impl Deref for Context {
 
 /// A weak reference to a [`Context`]
 ///
-/// Can be used to obtain a [`Context`]. An existing weak reference does not prevent the corresponding [`Context`] from beeing dealocated.
+/// Can be used to obtain a [`Context`]. An existing weak reference does not prevent the corresponding [`Context`] from being dropped.
 #[derive(Clone, Debug)]
 pub(crate) struct WeakContext {
     inner: Weak<InnerContext>,
