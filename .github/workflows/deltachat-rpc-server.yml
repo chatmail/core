@@ -271,7 +271,7 @@ jobs:
             --repo ${{ github.repository }} \
             bin/* dist/*
 
-      - name: Publish deltachat-rpc-client to PyPI
+      - name: Publish deltachat-rpc-server to PyPI
         if: github.event_name == 'release'
         uses: pypa/gh-action-pypi-publish@release/v1
 
