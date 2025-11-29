@@ -38,6 +38,7 @@ skip = [
      { name = "rand", version = "0.8.5" },
      { name = "rustix", version = "0.38.44" },
      { name = "serdect", version = "0.2.0" },
+     { name = "socket2", version = "0.5.9" },
      { name = "spin", version = "0.9.8" },
      { name = "strum_macros", version = "0.26.2" },
      { name = "strum", version = "0.26.2" },
