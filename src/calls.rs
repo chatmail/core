@@ -6,7 +6,7 @@ use crate::chat::ChatIdBlocked;
 use crate::chat::{Chat, ChatId, send_msg};
 use crate::constants::{Blocked, Chattype};
 use crate::contact::ContactId;
-use crate::context::Context;
+use crate::context::{Context, WeakContext};
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::log::warn;
@@ -199,8 +199,9 @@ impl Context {
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
+        let context = self.downgrade();
         task::spawn(Context::emit_end_call_if_unaccepted(
-            self.clone(),
+            context,
             wait.try_into()?,
             call.id,
         ));
@@ -291,10 +292,11 @@ impl Context {
     }
 
     async fn emit_end_call_if_unaccepted(
-        context: Context,
+        context: WeakContext,
         wait: u64,
         call_id: MsgId,
     ) -> Result<()> {
+        let context = context.upgrade()?;
         sleep(Duration::from_secs(wait)).await;
         let Some(mut call) = context.load_call_by_id(call_id).await? else {
             warn!(
@@ -368,8 +370,9 @@ impl Context {
                         }
                     }
                     let wait = call.remaining_ring_seconds();
+                    let context = self.downgrade();
                     task::spawn(Context::emit_end_call_if_unaccepted(
-                        self.clone(),
+                        context,
                         wait.try_into()?,
                         call.msg.id,
                     ));
