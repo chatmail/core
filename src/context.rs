@@ -210,7 +210,7 @@ pub(crate) struct WeakContext {
 }
 
 impl WeakContext {
-    /// Returns the [`Context`].if it is still available
+    /// Returns the [`Context`] if it is still available.
     pub(crate) fn upgrade(&self) -> Result<Context> {
         let inner = self
             .inner
