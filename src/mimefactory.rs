@@ -32,6 +32,7 @@ use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
 use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
+use crate::pgp::SeipdVersion;
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{
@@ -1258,6 +1259,17 @@ impl MimeFactory {
             } else {
                 // Asymmetric encryption
 
+                let seipd_version = if encryption_pubkeys.is_empty() {
+                    // If message is sent only to self,
+                    // use v2 SEIPD.
+                    SeipdVersion::V2
+                } else {
+                    // If message is sent to others,
+                    // they may not support v2 SEIPD yet,
+                    // so use v1 SEIPD.
+                    SeipdVersion::V1
+                };
+
                 // Encrypt to self unconditionally,
                 // even for a single-device setup.
                 let mut encryption_keyring = vec![encrypt_helper.public_key.clone()];
@@ -1271,6 +1283,7 @@ impl MimeFactory {
                         message,
                         compress,
                         anonymous_recipients,
+                        seipd_version,
                     )
                     .await?
             };

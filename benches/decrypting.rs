@@ -38,7 +38,7 @@ use deltachat::{
     internals_for_benches::key_from_asc,
     internals_for_benches::parse_and_get_text,
     internals_for_benches::store_self_keypair,
-    pgp::{KeyPair, decrypt, pk_encrypt, symm_encrypt_message},
+    pgp::{KeyPair, SeipdVersion, decrypt, pk_encrypt, symm_encrypt_message},
     stock_str::StockStrings,
 };
 use rand::{Rng, rng};
@@ -111,6 +111,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 key_pair.secret.clone(),
                 true,
                 true,
+                SeipdVersion::V2,
             )
             .await
             .unwrap()
