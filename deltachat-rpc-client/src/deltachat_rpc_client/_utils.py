@@ -47,7 +47,6 @@ class AttrDict(dict):
 def run_client_cli(
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     """Run a simple command line app, using the given hooks.
 
@@ -55,13 +54,12 @@ def run_client_cli(
     """
     from .client import Client
 
-    _run_cli(Client, hooks, argv, **kwargs)
+    _run_cli(Client, hooks, argv)
 
 
 def run_bot_cli(
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     """Run a simple bot command line using the given hooks.
 
@@ -69,14 +67,13 @@ def run_bot_cli(
     """
     from .client import Bot
 
-    _run_cli(Bot, hooks, argv, **kwargs)
+    _run_cli(Bot, hooks, argv)
 
 
 def _run_cli(
     client_type: Type["Client"],
     hooks: Optional[Iterable[Tuple[Callable, Union[type, "EventFilter"]]]] = None,
     argv: Optional[list] = None,
-    **kwargs,
 ) -> None:
     from .deltachat import DeltaChat
     from .rpc import Rpc
@@ -94,7 +91,7 @@ def _run_cli(
     parser.add_argument("--password", action="store", help="password", default=os.getenv("DELTACHAT_PASSWORD"))
     args = parser.parse_args(argv[1:])
 
-    with Rpc(accounts_dir=args.accounts_dir, **kwargs) as rpc:
+    with Rpc(accounts_dir=args.accounts_dir) as rpc:
         deltachat = DeltaChat(rpc)
         core_version = (deltachat.get_system_info()).deltachat_core_version
         accounts = deltachat.get_all_accounts()
