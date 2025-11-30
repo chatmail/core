@@ -549,5 +549,31 @@ mod receiving {
         Ok(())
     }
 
-    // TODO: process normal message (neither full nor pre message)
+    /// Process normal message with file attachment (neither full nor pre message)
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_receive_normal_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(
+            alice,
+            "test.bin",
+            &vec![0u8; (PRE_MSG_ATTACHMENT_SIZE_THRESHOLD - 10_000) as usize],
+            None,
+        )?;
+        msg.set_text("test".to_owned());
+        let msg_id = chat::send_msg(alice, alice_group_id, &mut msg).await?;
+
+        let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+        assert_eq!(smtp_rows.len(), 1);
+        let message = smtp_rows.first().expect("message exists");
+
+        let msg = bob.recv_msg(message).await;
+        assert_eq!(msg.download_state(), DownloadState::Done);
+        assert_eq!(msg.viewtype, Viewtype::File);
+        Ok(())
+    }
 }
