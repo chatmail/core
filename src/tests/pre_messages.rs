@@ -738,14 +738,8 @@ mod receiving {
         let mut writer = ZipFileWriter::with_tokio(&mut buffer);
         writer
             .write_entry_whole(
-                ZipEntryBuilder::new("padding.bin".into(), Compression::Stored),
-                &[0u8; 1_000_000],
-            )
-            .await?;
-        writer
-            .write_entry_whole(
                 ZipEntryBuilder::new("index.html".into(), Compression::Stored),
-                &[0u8; 100],
+                &[0u8; 1_000_000],
             )
             .await?;
         writer.close().await?;
