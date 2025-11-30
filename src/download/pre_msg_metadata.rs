@@ -100,7 +100,7 @@ impl Params {
 
 #[cfg(test)]
 mod tests {
-    // todo build from message
+    // todo build from message (different types: file, image, audio)
     // todo create artifically and serialize to header
     // todo deserialize from header
 }

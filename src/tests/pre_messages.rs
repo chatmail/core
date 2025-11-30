@@ -403,4 +403,129 @@ mod sending {
 }
 
 /// Tests about receiving pre-messages and full messages
-mod receiving {}
+mod receiving {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    use crate::chat::{self, ChatId};
+    use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
+    use crate::download::pre_msg_metadata::PreMsgMetadata;
+    use crate::message::{Message, Viewtype};
+    use crate::mimeparser::MimeMessage;
+    use crate::param::Param;
+    use crate::test_utils::SentMessage;
+
+    async fn send_large_file_message<'a>(
+        sender: &'a TestContext,
+        target_chat: ChatId,
+        attachment_size: u64,
+    ) -> Result<(SentMessage<'a>, SentMessage<'a>)> {
+        let mut msg = Message::new(Viewtype::File);
+        msg.set_file_from_bytes(
+            sender,
+            "test.bin",
+            &vec![0u8; attachment_size as usize],
+            None,
+        )?;
+        msg.set_text("test".to_owned());
+
+        // assert that test attachment is bigger than limit
+        assert!(msg.get_filebytes(sender).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
+
+        let msg_id = chat::send_msg(sender, target_chat, &mut msg).await?;
+        let smtp_rows = sender.get_smtp_rows_for_msg(msg_id).await;
+
+        assert_eq!(smtp_rows.len(), 2);
+        let pre_message = smtp_rows.first().expect("pre-message exists");
+        let full_message = smtp_rows.get(1).expect("full message exists");
+        Ok((pre_message.to_owned(), full_message.to_owned()))
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_mimeparser_pre_message_and_full_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (pre_message, full_message) =
+            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+
+        let parsed_pre_message =
+            MimeMessage::from_bytes(bob, pre_message.payload.as_bytes()).await?;
+        let parsed_full_message =
+            MimeMessage::from_bytes(bob, full_message.payload.as_bytes()).await?;
+
+        assert_eq!(
+            parsed_full_message.pre_message,
+            Some(crate::mimeparser::PreMessageMode::FullMessage)
+        );
+
+        assert_eq!(
+            parsed_pre_message.pre_message,
+            Some(crate::mimeparser::PreMessageMode::PreMessage {
+                full_msg_rfc724_mid: parsed_full_message.get_rfc724_mid().unwrap(),
+                metadata: Some(PreMsgMetadata {
+                    size: 1_000_000,
+                    viewtype: Viewtype::File,
+                    filename: "test.bin".to_string(),
+                    dimensions: None,
+                    duration: None
+                })
+            })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_receive_pre_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (pre_message, _full_message) =
+            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+
+        let msg = bob.recv_msg(&pre_message).await;
+
+        assert_eq!(msg.download_state(), DownloadState::Available);
+        assert_eq!(msg.viewtype, Viewtype::Text);
+
+        // test that metadata is correctly returned by methods
+        assert_eq!(msg.get_filebytes(bob).await?, Some(1_000_000));
+        assert_eq!(msg.get_full_message_viewtype(), Some(Viewtype::File));
+        assert_eq!(msg.get_filename(), Some("test.bin".to_owned()));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_recive_pre_message_and_dl_full_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (pre_message, full_message) =
+            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+
+        let msg = bob.recv_msg(&pre_message).await;
+        assert_eq!(msg.download_state(), DownloadState::Available);
+        assert_eq!(msg.viewtype, Viewtype::Text);
+        assert!(msg.param.exists(Param::FullMessageViewtype));
+        assert!(msg.param.exists(Param::FullMessageFileBytes));
+        let _ = bob.recv_msg_trash(&full_message).await;
+        let msg = Message::load_from_db(bob, msg.id).await?;
+        assert_eq!(msg.download_state(), DownloadState::Done);
+        assert_eq!(msg.viewtype, Viewtype::File);
+        assert_eq!(msg.param.exists(Param::FullMessageViewtype), false);
+        assert_eq!(msg.param.exists(Param::FullMessageFileBytes), false);
+        Ok(())
+    }
+
+    // TODO: dl full message before pre message
+
+    // TODO: dl normal message
+}
