@@ -2110,6 +2110,8 @@ RETURNING id
                         DownloadState::Done
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
+                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                        DownloadState::Available
                     } else {
                         DownloadState::Done
                     },
