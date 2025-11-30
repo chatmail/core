@@ -414,7 +414,7 @@ mod receiving {
     use crate::chat::{self, ChatId};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
     use crate::download::pre_msg_metadata::PreMsgMetadata;
-    use crate::message::{Message, MsgId, Viewtype, delete_msgs};
+    use crate::message::{Message, MessageState, MsgId, Viewtype, delete_msgs, markseen_msgs};
     use crate::mimeparser::MimeMessage;
     use crate::param::Param;
     use crate::reaction::{get_msg_reactions, send_reaction};
@@ -777,6 +777,51 @@ mod receiving {
         let info = bob_instance.get_webxdc_info(bob).await?;
         assert_eq!(info.document, "doc");
         assert_eq!(info.summary, "sum");
+
+        Ok(())
+    }
+
+    /// Test mark seen pre-message
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_markseen_pre_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let bob_chat_id = bob.create_chat(alice).await.id;
+        alice.create_chat(bob).await; // Make sure the chat is accepted.
+
+        tcm.section("Bob sends a large message to Alice");
+        let (pre_message, full_message, _bob_msg_id) =
+            send_large_file_message(bob, bob_chat_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
+
+        tcm.section("Alice receives a pre-message message from Bob");
+        let msg = alice.recv_msg(&pre_message).await;
+        assert_eq!(msg.download_state, DownloadState::Available);
+        assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
+        assert_eq!(msg.state, MessageState::InFresh);
+
+        tcm.section("Alice marks the pre-message as read and sends a MDN");
+        markseen_msgs(alice, vec![msg.id]).await?;
+        assert_eq!(msg.id.get_state(alice).await?, MessageState::InSeen);
+        assert_eq!(
+            alice
+                .sql
+                .count("SELECT COUNT(*) FROM smtp_mdns", ())
+                .await?,
+            1
+        );
+
+        tcm.section("Alice downloads message");
+        alice.recv_msg_trash(&full_message).await;
+        let msg = Message::load_from_db(alice, msg.id).await?;
+        assert_eq!(msg.download_state, DownloadState::Done);
+        assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
+        assert_eq!(
+            msg.state,
+            MessageState::InSeen,
+            "The message state mustn't be downgraded to `InFresh`"
+        );
 
         Ok(())
     }
