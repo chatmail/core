@@ -20,6 +20,10 @@ class JsonRpcError(Exception):
     """JSON-RPC error."""
 
 
+class RpcShutdownError(JsonRpcError):
+    """Raised in RPC methods if the connection to server is closing."""
+
+
 class RpcMethod:
     """RPC method."""
 
@@ -47,17 +51,13 @@ class RpcMethod:
         def rpc_future():
             """Wait for the request to receive a result."""
             response = queue.get()
-            if response is RpcShutdownError:
-                raise RpcShutdownError(f"no response for {request_id}/{self.name} but rpc is shutting down")
+            if response is None:
+                raise RpcShutdownError(f"no response for {request_id}/{self.name} while rpc is shutting down")
             if "error" in response:
                 raise JsonRpcError(response["error"])
             return response.get("result", None)
 
         return rpc_future
-
-
-class RpcShutdownError(Exception):
-    """Raised in RPC methods if the connection to server is closing."""
 
 
 class BaseRpc:
@@ -124,7 +124,7 @@ class BaseRpc:
 
         # terminate pending rpc requests because no responses can arrive anymore
         for queue in self.request_results.values():
-            queue.put(RpcShutdownError)
+            queue.put(None)
 
     def writer_loop(self) -> None:
         """Writer loop ensuring only a single thread writes requests."""
