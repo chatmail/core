@@ -413,6 +413,7 @@ mod receiving {
     use crate::message::{Message, MsgId, Viewtype};
     use crate::mimeparser::MimeMessage;
     use crate::param::Param;
+    use crate::reaction::{get_msg_reactions, send_reaction};
     use crate::test_utils::{SentMessage, create_test_image};
 
     async fn send_large_file_message<'a>(
@@ -639,6 +640,44 @@ mod receiving {
         assert_eq!(msg.get_filebytes(bob).await?, Some(149632));
         assert_eq!(msg.get_height(), 1280);
         assert_eq!(msg.get_width(), 720);
+
+        Ok(())
+    }
+
+    /// Test receiving reaction on pre-message
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_reaction_on_pre_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (pre_message, full_message, alice_msg_id) =
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
+
+        // Bob receives pre-message
+        let bob_msg = bob.recv_msg(&pre_message).await;
+        assert_eq!(bob_msg.download_state(), DownloadState::Available);
+
+        // Alice sends reaction to her own message
+        send_reaction(alice, alice_msg_id, "👍").await?;
+
+        // Bob receives the reaction
+        bob.recv_msg_hidden(&alice.pop_sent_msg().await).await;
+
+        // Test if Bob sees reaction
+        let reactions = get_msg_reactions(bob, bob_msg.id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
+
+        // Bob downloads full message
+        bob.recv_msg_trash(&full_message).await;
+        let msg = Message::load_from_db(bob, bob_msg.id).await?;
+        assert_eq!(msg.download_state(), DownloadState::Done);
+
+        // Test if Bob still sees reaction
+        let reactions = get_msg_reactions(bob, bob_msg.id).await?;
+        assert_eq!(reactions.to_string(), "👍1");
 
         Ok(())
     }
