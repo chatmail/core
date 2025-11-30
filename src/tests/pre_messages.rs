@@ -413,20 +413,16 @@ mod receiving {
     use crate::message::{Message, Viewtype};
     use crate::mimeparser::MimeMessage;
     use crate::param::Param;
-    use crate::test_utils::SentMessage;
+    use crate::test_utils::{SentMessage, create_test_image};
 
     async fn send_large_file_message<'a>(
         sender: &'a TestContext,
         target_chat: ChatId,
-        attachment_size: u64,
+        view_type: Viewtype,
+        content: &[u8],
     ) -> Result<(SentMessage<'a>, SentMessage<'a>)> {
-        let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(
-            sender,
-            "test.bin",
-            &vec![0u8; attachment_size as usize],
-            None,
-        )?;
+        let mut msg = Message::new(view_type);
+        msg.set_file_from_bytes(sender, "test.bin", content, None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is bigger than limit
@@ -450,7 +446,8 @@ mod receiving {
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
         let (pre_message, full_message) =
-            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
 
         let parsed_pre_message =
             MimeMessage::from_bytes(bob, pre_message.payload.as_bytes()).await?;
@@ -489,7 +486,8 @@ mod receiving {
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
         let (pre_message, _full_message) =
-            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
 
         let msg = bob.recv_msg(&pre_message).await;
 
@@ -515,7 +513,8 @@ mod receiving {
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
         let (pre_message, full_message) =
-            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
 
         let msg = bob.recv_msg(&pre_message).await;
         assert_eq!(msg.download_state(), DownloadState::Available);
@@ -543,7 +542,8 @@ mod receiving {
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
         let (pre_message, full_message) =
-            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
 
         let msg = bob.recv_msg(&full_message).await;
         assert_eq!(msg.download_state(), DownloadState::Done);
@@ -578,6 +578,37 @@ mod receiving {
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
         assert_eq!(msg.text, "test".to_owned());
+        Ok(())
+    }
+
+    /// Test receiving pre-messages and creation of the placeholder message with the metadata
+    /// for image attachment
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_receive_pre_message_image() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (width, height) = (1080, 1920);
+        let test_img = create_test_image(width, height)?;
+
+        let (pre_message, _full_message) =
+            send_large_file_message(alice, alice_group_id, Viewtype::Image, &test_img).await?;
+
+        let msg = bob.recv_msg(&pre_message).await;
+
+        assert_eq!(msg.download_state(), DownloadState::Available);
+        assert_eq!(msg.viewtype, Viewtype::Text);
+        assert_eq!(msg.text, "test".to_owned());
+
+        // test that metadata is correctly returned by methods
+        assert_eq!(msg.get_full_message_viewtype(), Some(Viewtype::Image));
+        // recoded image dimensions
+        assert_eq!(msg.get_filebytes(bob).await?, Some(149632));
+        assert_eq!(msg.get_height(), 1280);
+        assert_eq!(msg.get_width(), 720);
+
         Ok(())
     }
 }
