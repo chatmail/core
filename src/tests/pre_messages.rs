@@ -495,6 +495,7 @@ mod receiving {
 
         assert_eq!(msg.download_state(), DownloadState::Available);
         assert_eq!(msg.viewtype, Viewtype::Text);
+        assert_eq!(msg.text, "test".to_owned());
 
         // test that metadata is correctly returned by methods
         assert_eq!(msg.get_filebytes(bob).await?, Some(1_000_000));
@@ -521,12 +522,14 @@ mod receiving {
         assert_eq!(msg.viewtype, Viewtype::Text);
         assert!(msg.param.exists(Param::FullMessageViewtype));
         assert!(msg.param.exists(Param::FullMessageFileBytes));
+        assert_eq!(msg.text, "test".to_owned());
         let _ = bob.recv_msg_trash(&full_message).await;
         let msg = Message::load_from_db(bob, msg.id).await?;
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
         assert_eq!(msg.param.exists(Param::FullMessageViewtype), false);
         assert_eq!(msg.param.exists(Param::FullMessageFileBytes), false);
+        assert_eq!(msg.text, "test".to_owned());
         Ok(())
     }
 
@@ -574,6 +577,7 @@ mod receiving {
         let msg = bob.recv_msg(message).await;
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
+        assert_eq!(msg.text, "test".to_owned());
         Ok(())
     }
 }
