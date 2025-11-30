@@ -441,6 +441,7 @@ mod receiving {
         Ok((pre_message.to_owned(), full_message.to_owned()))
     }
 
+    /// Test that mimeparser can correctly detect and parse pre-messages and full-messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_mimeparser_pre_message_and_full_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -478,6 +479,8 @@ mod receiving {
         Ok(())
     }
 
+    /// Test receiving pre-messages and creation of the placeholder message with the metadata
+    /// for file attachment
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_receive_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -501,8 +504,10 @@ mod receiving {
         Ok(())
     }
 
+    /// Test receiving the full message after receiving the pre-message
+    /// for file attachment
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_recive_pre_message_and_dl_full_message() -> Result<()> {
+    async fn test_receive_pre_message_and_dl_full_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
@@ -525,7 +530,24 @@ mod receiving {
         Ok(())
     }
 
-    // TODO: dl full message before pre message
+    /// Test out of order receiving. Full message is received & downloaded before pre-message.
+    /// In that case pre-message shall be trashed.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_out_of_order_receiving() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-    // TODO: dl normal message
+        let (pre_message, full_message) =
+            send_large_file_message(alice, alice_group_id, 1_000_000).await?;
+
+        let msg = bob.recv_msg(&full_message).await;
+        assert_eq!(msg.download_state(), DownloadState::Done);
+        assert_eq!(msg.viewtype, Viewtype::File);
+        let _ = bob.recv_msg_trash(&pre_message).await;
+        Ok(())
+    }
+
+    // TODO: process normal message (neither full nor pre message)
 }
