@@ -18,8 +18,10 @@ pub struct PreMsgMetadata {
     /// the original file name
     pub(crate) filename: String,
     /// Dimensions: width and height of image or video
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) dimensions: Option<(i32, i32)>,
     /// Duration of audio file or video in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) duration: Option<i32>,
 }
 
@@ -100,7 +102,96 @@ impl Params {
 
 #[cfg(test)]
 mod tests {
-    // todo build from message (different types: file, image, audio)
-    // todo create artifically and serialize to header
-    // todo deserialize from header
+    use anyhow::Result;
+    use pretty_assertions::assert_eq;
+
+    use crate::message::Viewtype;
+
+    use super::PreMsgMetadata;
+
+    // TODO build from message (different types: file, image, audio)
+
+    /// Test that serialisation results in expected format
+    #[test]
+    fn serialize_to_header() -> Result<()> {
+        assert_eq!(
+            PreMsgMetadata {
+                size: 1_000_000,
+                viewtype: Viewtype::File,
+                filename: "test.bin".to_string(),
+                dimensions: None,
+                duration: None,
+            }
+            .to_header_value()?,
+            "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\"}"
+        );
+        assert_eq!(
+            PreMsgMetadata {
+                size: 5_342_765,
+                viewtype: Viewtype::Image,
+                filename: "vacation.png".to_string(),
+                dimensions: Some((1080, 1920)),
+                duration: None,
+            }
+            .to_header_value()?,
+            "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"dimensions\":[1080,1920]}"
+        );
+        assert_eq!(
+            PreMsgMetadata {
+                size: 5_000,
+                viewtype: Viewtype::Audio,
+                filename: "audio-DD-MM-YY.ogg".to_string(),
+                dimensions: None,
+                duration: Some(152_310),
+            }
+            .to_header_value()?,
+            "{\"size\":5000,\"viewtype\":\"Audio\",\"filename\":\"audio-DD-MM-YY.ogg\",\"duration\":152310}"
+        );
+
+        Ok(())
+    }
+
+    /// Test that deserialisation from expected format works
+    /// This test will become important for compatibility between versions in the future
+    #[test]
+    fn deserialize_from_header() -> Result<()> {
+        assert_eq!(
+            serde_json::from_str::<PreMsgMetadata>(
+                "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\",\"dimensions\":null,\"duration\":null}"
+            )?,
+            PreMsgMetadata {
+                size: 1_000_000,
+                viewtype: Viewtype::File,
+                filename: "test.bin".to_string(),
+                dimensions: None,
+                duration: None,
+            }
+        );
+        assert_eq!(
+            serde_json::from_str::<PreMsgMetadata>(
+                "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"dimensions\":[1080,1920]}"
+            )?,
+            PreMsgMetadata {
+                size: 5_342_765,
+                viewtype: Viewtype::Image,
+                filename: "vacation.png".to_string(),
+                dimensions: Some((1080, 1920)),
+                duration: None,
+            }
+        );
+        assert_eq!(
+            serde_json::from_str::<PreMsgMetadata>(
+                "{\"size\":5000,\"viewtype\":\"Audio\",\"filename\":\"audio-DD-MM-YY.ogg\",\"duration\":152310}"
+            )?,
+            PreMsgMetadata {
+                size: 5_000,
+                viewtype: Viewtype::Audio,
+                filename: "audio-DD-MM-YY.ogg".to_string(),
+                dimensions: None,
+                duration: Some(152_310),
+            }
+        );
+
+        Ok(())
+    }
 }
