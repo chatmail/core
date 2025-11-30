@@ -412,6 +412,7 @@ mod receiving {
     use tokio_util::compat::FuturesAsyncWriteCompatExt;
 
     use crate::chat::{self, ChatId};
+    use crate::contact::{self};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
     use crate::download::pre_msg_metadata::PreMsgMetadata;
     use crate::message::{Message, MessageState, MsgId, Viewtype, delete_msgs, markseen_msgs};
@@ -822,6 +823,68 @@ mod receiving {
             MessageState::InSeen,
             "The message state mustn't be downgraded to `InFresh`"
         );
+
+        Ok(())
+    }
+
+    /// Test that pre-message can start a chat
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_pre_msg_can_start_chat() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        tcm.section("establishing a DM chat between alice and bob");
+        let bob_alice_dm_chat_id = bob.create_chat(alice).await.id;
+        alice.create_chat(bob).await; // Make sure the chat is accepted.
+
+        tcm.section("Alice prepares chat");
+        let chat_id = chat::create_group(alice, "my group").await?;
+        let contacts = contact::Contact::get_all(alice, 0, None).await?;
+        let alice_bob_id = contacts.first().expect("contact exists");
+        chat::add_contact_to_chat(alice, chat_id, *alice_bob_id).await?;
+
+        tcm.section("Alice sends large message to promote/start chat");
+        let (pre_message, _full_message, _alice_msg_id) =
+            send_large_file_message(alice, chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
+
+        tcm.section("Bob receives the pre-message message from Alice");
+        let msg = bob.recv_msg(&pre_message).await;
+        assert_eq!(msg.download_state, DownloadState::Available);
+        assert_ne!(msg.chat_id, bob_alice_dm_chat_id);
+        let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
+        assert_eq!(chat.name, "my group");
+
+        Ok(())
+    }
+
+    /// Test that full-message can start a chat
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_full_msg_can_start_chat() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        tcm.section("establishing a DM chat between alice and bob");
+        let bob_alice_dm_chat_id = bob.create_chat(alice).await.id;
+        alice.create_chat(bob).await; // Make sure the chat is accepted.
+
+        tcm.section("Alice prepares chat");
+        let chat_id = chat::create_group(alice, "my group").await?;
+        let contacts = contact::Contact::get_all(alice, 0, None).await?;
+        let alice_bob_id = contacts.first().expect("contact exists");
+        chat::add_contact_to_chat(alice, chat_id, *alice_bob_id).await?;
+
+        tcm.section("Alice sends large message to promote/start chat");
+        let (_pre_message, full_message, _bob_msg_id) =
+            send_large_file_message(alice, chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
+
+        tcm.section("Bob receives the pre-message message from Alice");
+        let msg = bob.recv_msg(&full_message).await;
+        assert_eq!(msg.download_state, DownloadState::Done);
+        assert_ne!(msg.chat_id, bob_alice_dm_chat_id);
+        let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
+        assert_eq!(chat.name, "my group");
 
         Ok(())
     }
