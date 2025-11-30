@@ -160,6 +160,20 @@ fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey
         .find(|subkey| subkey.is_encryption_key())
 }
 
+/// Version of SEIPD packet to use.
+///
+/// See
+/// <https://www.rfc-editor.org/rfc/rfc9580#name-avoiding-ciphertext-malleab>
+/// for the discussion on when v2 SEIPD should be used.
+#[derive(Debug)]
+pub enum SeipdVersion {
+    /// Use v1 SEIPD, for compatibility.
+    V1,
+
+    /// Use v2 SEIPD when we know that v2 SEIPD is supported.
+    V2,
+}
+
 /// Encrypts `plain` text using `public_keys_for_encryption`
 /// and signs it using `private_key_for_signing`.
 pub async fn pk_encrypt(
@@ -168,6 +182,7 @@ pub async fn pk_encrypt(
     private_key_for_signing: SignedSecretKey,
     compress: bool,
     anonymous_recipients: bool,
+    seipd_version: SeipdVersion,
 ) -> Result<String> {
     Handle::current()
         .spawn_blocking(move || {
@@ -178,21 +193,49 @@ pub async fn pk_encrypt(
                 .filter_map(select_pk_for_encryption);
 
             let msg = MessageBuilder::from_bytes("", plain);
-            let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
-            for pkey in pkeys {
-                if anonymous_recipients {
-                    msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
-                } else {
-                    msg.encrypt_to_key(&mut rng, &pkey)?;
+            let encoded_msg = match seipd_version {
+                SeipdVersion::V1 => {
+                    let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
+
+                    for pkey in pkeys {
+                        if anonymous_recipients {
+                            msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
+                        } else {
+                            msg.encrypt_to_key(&mut rng, &pkey)?;
+                        }
+                    }
+
+                    msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+                    if compress {
+                        msg.compression(CompressionAlgorithm::ZLIB);
+                    }
+
+                    msg.to_armored_string(&mut rng, Default::default())?
                 }
-            }
+                SeipdVersion::V2 => {
+                    let mut msg = msg.seipd_v2(
+                        &mut rng,
+                        SYMMETRIC_KEY_ALGORITHM,
+                        AeadAlgorithm::Ocb,
+                        ChunkSize::C8KiB,
+                    );
 
-            msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
-            if compress {
-                msg.compression(CompressionAlgorithm::ZLIB);
-            }
+                    for pkey in pkeys {
+                        if anonymous_recipients {
+                            msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
+                        } else {
+                            msg.encrypt_to_key(&mut rng, &pkey)?;
+                        }
+                    }
 
-            let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
+                    msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+                    if compress {
+                        msg.compression(CompressionAlgorithm::ZLIB);
+                    }
+
+                    msg.to_armored_string(&mut rng, Default::default())?
+                }
+            };
 
             Ok(encoded_msg)
         })
@@ -547,6 +590,7 @@ mod tests {
                     KEYS.alice_secret.clone(),
                     compress,
                     anonymous_recipients,
+                    SeipdVersion::V2,
                 )
                 .await
                 .unwrap()
@@ -716,6 +760,7 @@ mod tests {
             KEYS.alice_secret.clone(),
             true,
             true,
+            SeipdVersion::V2,
         )
         .await?;
 

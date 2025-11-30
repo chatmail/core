@@ -8,7 +8,7 @@ use mail_builder::mime::MimePart;
 use crate::aheader::{Aheader, EncryptPreference};
 use crate::context::Context;
 use crate::key::{SignedPublicKey, load_self_public_key, load_self_secret_key};
-use crate::pgp;
+use crate::pgp::{self, SeipdVersion};
 
 #[derive(Debug)]
 pub struct EncryptHelper {
@@ -47,6 +47,7 @@ impl EncryptHelper {
         mail_to_encrypt: MimePart<'static>,
         compress: bool,
         anonymous_recipients: bool,
+        seipd_version: SeipdVersion,
     ) -> Result<String> {
         let sign_key = load_self_secret_key(context).await?;
 
@@ -60,6 +61,7 @@ impl EncryptHelper {
             sign_key,
             compress,
             anonymous_recipients,
+            seipd_version,
         )
         .await?;
 
