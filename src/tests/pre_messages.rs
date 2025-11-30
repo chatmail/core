@@ -410,7 +410,7 @@ mod receiving {
     use crate::chat::{self, ChatId};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
     use crate::download::pre_msg_metadata::PreMsgMetadata;
-    use crate::message::{Message, Viewtype};
+    use crate::message::{Message, MsgId, Viewtype};
     use crate::mimeparser::MimeMessage;
     use crate::param::Param;
     use crate::test_utils::{SentMessage, create_test_image};
@@ -420,7 +420,7 @@ mod receiving {
         target_chat: ChatId,
         view_type: Viewtype,
         content: &[u8],
-    ) -> Result<(SentMessage<'a>, SentMessage<'a>)> {
+    ) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
         let mut msg = Message::new(view_type);
         msg.set_file_from_bytes(sender, "test.bin", content, None)?;
         msg.set_text("test".to_owned());
@@ -434,7 +434,7 @@ mod receiving {
         assert_eq!(smtp_rows.len(), 2);
         let pre_message = smtp_rows.first().expect("pre-message exists");
         let full_message = smtp_rows.get(1).expect("full message exists");
-        Ok((pre_message.to_owned(), full_message.to_owned()))
+        Ok((pre_message.to_owned(), full_message.to_owned(), msg_id))
     }
 
     /// Test that mimeparser can correctly detect and parse pre-messages and full-messages
@@ -445,7 +445,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message) =
+        let (pre_message, full_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -485,7 +485,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, _full_message) =
+        let (pre_message, _full_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -512,7 +512,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message) =
+        let (pre_message, full_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -541,7 +541,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message) =
+        let (pre_message, full_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -549,6 +549,37 @@ mod receiving {
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
         let _ = bob.recv_msg_trash(&pre_message).await;
+        Ok(())
+    }
+
+    /// Test receiving the full message after receiving an edit after receiving the pre-message
+    /// for file attachment
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_receive_pre_message_then_edit_and_then_dl_full_message() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let (pre_message, full_message, alice_msg_id) =
+            send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
+
+        chat::send_edit_request(alice, alice_msg_id, "new_text".to_owned()).await?;
+        let edit_request = alice.pop_sent_msg().await;
+
+        let msg = bob.recv_msg(&pre_message).await;
+        assert_eq!(msg.download_state(), DownloadState::Available);
+        assert_eq!(msg.text, "test".to_owned());
+        let _ = bob.recv_msg_trash(&edit_request).await;
+        let msg = Message::load_from_db(bob, msg.id).await?;
+        assert_eq!(msg.download_state(), DownloadState::Available);
+        assert_eq!(msg.text, "new_text".to_owned());
+        let _ = bob.recv_msg_trash(&full_message).await;
+        let msg = Message::load_from_db(bob, msg.id).await?;
+        assert_eq!(msg.download_state(), DownloadState::Done);
+        assert_eq!(msg.viewtype, Viewtype::File);
+        assert_eq!(msg.text, "new_text".to_owned());
         Ok(())
     }
 
@@ -593,7 +624,7 @@ mod receiving {
         let (width, height) = (1080, 1920);
         let test_img = create_test_image(width, height)?;
 
-        let (pre_message, _full_message) =
+        let (pre_message, _full_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::Image, &test_img).await?;
 
         let msg = bob.recv_msg(&pre_message).await;
