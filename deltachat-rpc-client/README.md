@@ -30,6 +30,15 @@ $ pip install .
 
 Additional arguments to `tox` are passed to pytest, e.g. `tox -- -s` does not capture test output.
 
+
+## Activating current checkout of deltachat-rpc-client and -server for development 
+
+Go to root repository directory and run: 
+```
+$ scripts/make-rpc-testenv.sh 
+$ source venv/bin/activate 
+```
+
 ## Using in REPL
 
 Setup a development environment:

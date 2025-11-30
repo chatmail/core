@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import os
+import pathlib
+import platform
 import random
+import subprocess
+import sys
 from typing import AsyncGenerator, Optional
 
+import execnet
 import py
 import pytest
 
@@ -18,6 +23,18 @@ E2EE_INFO_MSGS = 1
 The number of info messages added to new e2ee chats.
 Currently this is "End-to-end encryption available".
 """
+
+
+def pytest_report_header():
+    for base in os.get_exec_path():
+        fn = pathlib.Path(base).joinpath(base, "deltachat-rpc-server")
+        if fn.exists():
+            proc = subprocess.Popen([str(fn), "--version"], stderr=subprocess.PIPE)
+            proc.wait()
+            version = proc.stderr.read().decode().strip()
+            return f"deltachat-rpc-server: {fn} [{version}]"
+
+    return None
 
 
 class ACFactory:
@@ -197,3 +214,134 @@ def log():
             print("  " + msg)
 
     return Printer()
+
+
+#
+# support for testing against different deltachat-rpc-server/clients
+# installed into a temporary virtualenv and connected via 'execnet' channels
+#
+
+
+def find_path(venv, name):
+    is_windows = platform.system() == "Windows"
+    bin = venv / ("bin" if not is_windows else "Scripts")
+
+    tryadd = [""]
+    if is_windows:
+        tryadd += os.environ["PATHEXT"].split(os.pathsep)
+    for ext in tryadd:
+        p = bin.joinpath(name + ext)
+        if p.exists():
+            return str(p)
+
+    return None
+
+
+@pytest.fixture(scope="session")
+def get_core_python_env(tmp_path_factory):
+    """Return a factory to create virtualenv environments with rpc server/client packages
+    installed.
+
+    The factory takes a version and returns a (python_path, rpc_server_path) tuple
+    of the respective binaries in the virtualenv.
+    """
+
+    envs = {}
+
+    def get_versioned_venv(core_version):
+        venv = envs.get(core_version)
+        if not venv:
+            venv = tmp_path_factory.mktemp(f"temp-{core_version}")
+            subprocess.check_call([sys.executable, "-m", "venv", venv])
+
+            python = find_path(venv, "python")
+            pkgs = [f"deltachat-rpc-server=={core_version}", f"deltachat-rpc-client=={core_version}", "pytest"]
+            subprocess.check_call([python, "-m", "pip", "install"] + pkgs)
+
+            envs[core_version] = venv
+        python = find_path(venv, "python")
+        rpc_server_path = find_path(venv, "deltachat-rpc-server")
+        print(f"python={python}\nrpc_server={rpc_server_path}")
+        return python, rpc_server_path
+
+    return get_versioned_venv
+
+
+@pytest.fixture
+def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
+    """return local Alice account, a contact to bob, and a remote 'eval' function for bob.
+
+    The 'eval' function allows to remote-execute arbitrary expressions
+    that can use the `bob` online account, and the `bob_contact_alice`.
+    """
+
+    def factory(core_version):
+        python, rpc_server_path = get_core_python_env(core_version)
+        gw = execnet.makegateway(f"popen//python={python}")
+
+        accounts_dir = str(tmp_path.joinpath("account1_venv1"))
+        channel = gw.remote_exec(remote_bob_loop)
+        cm = os.environ.get("CHATMAIL_DOMAIN")
+
+        # trigger getting an online account on bob's side
+        channel.send((accounts_dir, str(rpc_server_path), cm))
+
+        # meanwhile get a local alice account
+        alice = acfactory.get_online_account()
+        channel.send(alice.self_contact.make_vcard())
+
+        # wait for bob to have started
+        sysinfo = channel.receive()
+        assert sysinfo == f"v{core_version}"
+        bob_vcard = channel.receive()
+        [alice_contact_bob] = alice.import_vcard(bob_vcard)
+
+        def eval(eval_str):
+            channel.send(eval_str)
+            return channel.receive()
+
+        return alice, alice_contact_bob, eval
+
+    return factory
+
+
+def remote_bob_loop(channel):
+    # This function executes with versioned
+    # deltachat-rpc-client/server packages
+    # installed into the virtualenv.
+    #
+    # The "channel" argument is a send/receive pipe
+    # to the process that runs the corresponding remote_exec(remote_bob_loop)
+
+    import os
+
+    from deltachat_rpc_client import DeltaChat, Rpc
+    from deltachat_rpc_client.pytestplugin import ACFactory
+
+    accounts_dir, rpc_server_path, chatmail_domain = channel.receive()
+    os.environ["CHATMAIL_DOMAIN"] = chatmail_domain
+
+    # older core versions don't support specifying rpc_server_path
+    # so we can't just pass `rpc_server_path` argument to Rpc constructor
+    basepath = os.path.dirname(rpc_server_path)
+    os.environ["PATH"] = os.pathsep.join([basepath, os.environ["PATH"]])
+    rpc = Rpc(accounts_dir=accounts_dir)
+
+    with rpc:
+        dc = DeltaChat(rpc)
+        channel.send(dc.rpc.get_system_info()["deltachat_core_version"])
+        acfactory = ACFactory(dc)
+        bob = acfactory.get_online_account()
+        alice_vcard = channel.receive()
+        [alice_contact] = bob.import_vcard(alice_vcard)
+        ns = {"bob": bob, "bob_contact_alice": alice_contact}
+        channel.send(bob.self_contact.make_vcard())
+
+        while 1:
+            eval_str = channel.receive()
+            res = eval(eval_str, ns)
+            try:
+                channel.send(res)
+            except Exception:
+                # some unserializable result
+                channel.send(None)
