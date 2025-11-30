@@ -367,33 +367,7 @@ impl MimeMessage {
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
 
-        let pre_message = if let Some(full_msg_rfc724_mid) =
-            mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
-        {
-            let metadata = if let Some(value) = mail
-                .headers
-                .get_header_value(HeaderDef::ChatFullMessageMetadata)
-            {
-                match PreMsgMetadata::try_from_header_value(&value) {
-                    Ok(metadata) => Some(metadata),
-                    Err(error) => {
-                        error!(
-                            context,
-                            "failed to parse metadata header in pre-message: {error:#?}"
-                        );
-                        None
-                    }
-                }
-            } else {
-                warn!(context, "expected pre-message to have metadata header");
-                None
-            };
-
-            Some(PreMessageMode::PreMessage {
-                full_msg_rfc724_mid,
-                metadata,
-            })
-        } else if mail
+        let mut pre_message = if mail
             .headers
             .get_header_value(HeaderDef::ChatIsFullMessage)
             .is_some()
@@ -629,6 +603,38 @@ impl MimeMessage {
         }
         if !is_encrypted {
             signatures.clear();
+        }
+
+        if let (Ok(mail), true) = (mail, is_encrypted) {
+            if let Some(full_msg_rfc724_mid) =
+                mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
+            {
+                // TODO: is there a better method for this task? (removing `<>` delimiters of RFC message ID)
+                let full_msg_rfc724_mid = full_msg_rfc724_mid.replace("<", "").replace(">", "");
+                let metadata = if let Some(value) = mail
+                    .headers
+                    .get_header_value(HeaderDef::ChatFullMessageMetadata)
+                {
+                    match PreMsgMetadata::try_from_header_value(&value) {
+                        Ok(metadata) => Some(metadata),
+                        Err(error) => {
+                            error!(
+                                context,
+                                "failed to parse metadata header in pre-message: {error:#?}"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    warn!(context, "expected pre-message to have metadata header");
+                    None
+                };
+
+                pre_message = Some(PreMessageMode::PreMessage {
+                    full_msg_rfc724_mid,
+                    metadata,
+                });
+            }
         }
 
         let mut parser = MimeMessage {
