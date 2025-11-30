@@ -105,15 +105,66 @@ mod tests {
     use anyhow::Result;
     use pretty_assertions::assert_eq;
 
-    use crate::message::Viewtype;
+    use crate::{
+        message::{Message, Viewtype},
+        test_utils::{TestContextManager, create_test_image},
+    };
 
     use super::PreMsgMetadata;
 
-    // TODO build from message (different types: file, image, audio)
+    /// Build from message with file attachment
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_build_from_file_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+
+        let mut file_msg = Message::new(Viewtype::File);
+        file_msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000], None)?;
+        let pre_mesage_metadata = PreMsgMetadata::from_msg(alice, &file_msg).await?;
+        assert_eq!(
+            pre_mesage_metadata,
+            Some(PreMsgMetadata {
+                size: 1_000_000,
+                viewtype: Viewtype::File,
+                filename: "test.bin".to_string(),
+                dimensions: None,
+                duration: None,
+            })
+        );
+        Ok(())
+    }
+
+    /// Build from message with image attachment
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_build_from_image_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let mut image_msg = Message::new(Viewtype::Image);
+
+        let (width, height) = (1080, 1920);
+        let test_img = create_test_image(width, height)?;
+        image_msg.set_file_from_bytes(alice, "vacation.png", &test_img, None)?;
+        // this is usually done while sending,
+        // but we don't send it here, so we need to call it ourself
+        image_msg.try_calc_and_set_dimensions(alice).await?;
+        let pre_mesage_metadata = PreMsgMetadata::from_msg(alice, &image_msg).await?;
+        assert_eq!(
+            pre_mesage_metadata,
+            Some(PreMsgMetadata {
+                size: 1816098,
+                viewtype: Viewtype::Image,
+                filename: "vacation.png".to_string(),
+                dimensions: Some((width as i32, height as i32)),
+                duration: None,
+            })
+        );
+
+        Ok(())
+    }
 
     /// Test that serialisation results in expected format
     #[test]
-    fn serialize_to_header() -> Result<()> {
+    fn test_serialize_to_header() -> Result<()> {
         assert_eq!(
             PreMsgMetadata {
                 size: 1_000_000,
@@ -154,7 +205,7 @@ mod tests {
     /// Test that deserialisation from expected format works
     /// This test will become important for compatibility between versions in the future
     #[test]
-    fn deserialize_from_header() -> Result<()> {
+    fn test_deserialize_from_header() -> Result<()> {
         assert_eq!(
             serde_json::from_str::<PreMsgMetadata>(
                 "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\",\"dimensions\":null,\"duration\":null}"

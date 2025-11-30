@@ -1705,6 +1705,21 @@ Until the false-positive is fixed:
     }
 }
 
+/// Method to create a test image file
+pub(crate) fn create_test_image(width: u32, height: u32) -> anyhow::Result<Vec<u8>> {
+    use image::{ImageBuffer, Rgb, RgbImage};
+    use std::io::Cursor;
+
+    let mut img: RgbImage = ImageBuffer::new(width, height);
+    // fill with some pattern so it stays large after compression
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        *pixel = Rgb([(x % 255) as u8, (x + y % 255) as u8, (y % 255) as u8]);
+    }
+    let mut bytes: Vec<u8> = Vec::new();
+    img.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)?;
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
