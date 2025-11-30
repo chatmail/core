@@ -410,7 +410,7 @@ mod receiving {
     use crate::chat::{self, ChatId};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
     use crate::download::pre_msg_metadata::PreMsgMetadata;
-    use crate::message::{Message, MsgId, Viewtype};
+    use crate::message::{Message, MsgId, Viewtype, delete_msgs};
     use crate::mimeparser::MimeMessage;
     use crate::param::Param;
     use crate::reaction::{get_msg_reactions, send_reaction};
@@ -678,6 +678,38 @@ mod receiving {
         // Test if Bob still sees reaction
         let reactions = get_msg_reactions(bob, bob_msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
+
+        Ok(())
+    }
+
+    /// Tests that fully downloading the message
+    /// works but does not reappear when it was already deleted
+    /// (as in the Message-ID already exists in the database
+    /// and is assigned to the trash chat).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_full_download_after_trashed() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let bob_group_id = bob.create_group_with_members("test group", &[alice]).await;
+
+        let (pre_message, full_message, _bob_msg_id) =
+            send_large_file_message(bob, bob_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+                .await?;
+
+        // Download message from Bob partially.
+        let alice_msg = alice.recv_msg(&pre_message).await;
+
+        // Delete the received message.
+        // Note that it remains in the database in the trash chat.
+        delete_msgs(alice, &[alice_msg.id]).await?;
+
+        // Fully download message after deletion.
+        alice.recv_msg_trash(&full_message).await;
+
+        // The message does not reappear.
+        let msg = Message::load_from_db_optional(bob, alice_msg.id).await?;
+        assert!(msg.is_none());
 
         Ok(())
     }
