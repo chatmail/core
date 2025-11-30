@@ -57,7 +57,7 @@ impl EncryptHelper {
         let ctext = pgp::pk_encrypt(
             raw_message,
             keyring,
-            Some(sign_key),
+            sign_key,
             compress,
             anonymous_recipients,
         )

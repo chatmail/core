@@ -165,7 +165,7 @@ fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey
 pub async fn pk_encrypt(
     plain: Vec<u8>,
     public_keys_for_encryption: Vec<SignedPublicKey>,
-    private_key_for_signing: Option<SignedSecretKey>,
+    private_key_for_signing: SignedSecretKey,
     compress: bool,
     anonymous_recipients: bool,
 ) -> Result<String> {
@@ -187,11 +187,9 @@ pub async fn pk_encrypt(
                 }
             }
 
-            if let Some(ref skey) = private_key_for_signing {
-                msg.sign(&**skey, Password::empty(), HASH_ALGORITHM);
-                if compress {
-                    msg.compression(CompressionAlgorithm::ZLIB);
-                }
+            msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+            if compress {
+                msg.compression(CompressionAlgorithm::ZLIB);
             }
 
             let encoded_msg = msg.to_armored_string(&mut rng, Default::default())?;
@@ -406,7 +404,7 @@ pub async fn symm_encrypt_message(
         };
         let mut msg = msg.seipd_v2(
             &mut rng,
-            SymmetricKeyAlgorithm::AES128,
+            SYMMETRIC_KEY_ALGORITHM,
             AeadAlgorithm::Ocb,
             ChunkSize::C8KiB,
         );
@@ -534,7 +532,6 @@ mod tests {
     static KEYS: LazyLock<TestKeys> = LazyLock::new(TestKeys::new);
 
     static CTEXT_SIGNED: OnceCell<String> = OnceCell::const_new();
-    static CTEXT_UNSIGNED: OnceCell<String> = OnceCell::const_new();
 
     /// A ciphertext encrypted to Alice & Bob, signed by Alice.
     async fn ctext_signed() -> &'static String {
@@ -547,28 +544,7 @@ mod tests {
                 pk_encrypt(
                     CLEARTEXT.to_vec(),
                     keyring,
-                    Some(KEYS.alice_secret.clone()),
-                    compress,
-                    anonymous_recipients,
-                )
-                .await
-                .unwrap()
-            })
-            .await
-    }
-
-    /// A ciphertext encrypted to Alice & Bob, not signed.
-    async fn ctext_unsigned() -> &'static String {
-        let anonymous_recipients = true;
-        CTEXT_UNSIGNED
-            .get_or_init(|| async {
-                let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
-                let compress = true;
-
-                pk_encrypt(
-                    CLEARTEXT.to_vec(),
-                    keyring,
-                    None,
+                    KEYS.alice_secret.clone(),
                     compress,
                     anonymous_recipients,
                 )
@@ -583,16 +559,6 @@ mod tests {
         assert!(!ctext_signed().await.is_empty());
         assert!(
             ctext_signed()
-                .await
-                .starts_with("-----BEGIN PGP MESSAGE-----")
-        );
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_encrypt_unsigned() {
-        assert!(!ctext_unsigned().await.is_empty());
-        assert!(
-            ctext_unsigned()
                 .await
                 .starts_with("-----BEGIN PGP MESSAGE-----")
         );
@@ -652,9 +618,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_decrypt_unsigned() {
         let decrypt_keyring = vec![KEYS.bob_secret.clone()];
+        let ctext_unsigned = include_bytes!("../test-data/message/ctext_unsigned.asc");
         let (_msg, valid_signatures, content) =
-            pk_decrypt_and_validate(ctext_unsigned().await.as_bytes(), &decrypt_keyring, &[])
-                .unwrap();
+            pk_decrypt_and_validate(ctext_unsigned, &decrypt_keyring, &[]).unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
     }
@@ -744,7 +710,14 @@ mod tests {
         let pk_for_encryption = load_self_public_key(alice).await?;
 
         // Encrypt a message, but only to self, not to Bob:
-        let ctext = pk_encrypt(plain, vec![pk_for_encryption], None, true, true).await?;
+        let ctext = pk_encrypt(
+            plain,
+            vec![pk_for_encryption],
+            KEYS.alice_secret.clone(),
+            true,
+            true,
+        )
+        .await?;
 
         // Trying to decrypt it should fail with an OK error message:
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;

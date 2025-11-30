@@ -108,7 +108,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             pk_encrypt(
                 plain.clone(),
                 vec![black_box(key_pair.public.clone())],
-                Some(key_pair.secret.clone()),
+                key_pair.secret.clone(),
                 true,
                 true,
             )
