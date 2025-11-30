@@ -406,7 +406,7 @@ pub async fn symm_encrypt_message(
         };
         let mut msg = msg.seipd_v2(
             &mut rng,
-            SymmetricKeyAlgorithm::AES128,
+            SYMMETRIC_KEY_ALGORITHM,
             AeadAlgorithm::Ocb,
             ChunkSize::C8KiB,
         );
