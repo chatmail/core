@@ -411,6 +411,7 @@ mod receiving {
     use pretty_assertions::assert_eq;
     use tokio_util::compat::FuturesAsyncWriteCompatExt;
 
+    use crate::EventType;
     use crate::chat::{self, ChatId};
     use crate::contact::{self};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
@@ -925,6 +926,49 @@ mod receiving {
         assert_eq!(msg.download_state, DownloadState::Done);
         assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, hi_msg.id);
         assert!(msg.timestamp_sort <= hi_msg.timestamp_sort);
+
+        Ok(())
+    }
+
+    /// Test that ChatlistItemChanged event is emitted when downloading full-message
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_chatlist_event_on_full_msg_download() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        tcm.section(
+            "establishing a DM chat between alice and bob and bob sends large message to alice",
+        );
+        let bob_alice_dm_chat = bob.create_chat(alice).await.id;
+        alice.create_chat(bob).await; // Make sure the chat is accepted.
+        let (pre_message, full_message, _bob_msg_id) = send_large_file_message(
+            bob,
+            bob_alice_dm_chat,
+            Viewtype::File,
+            &vec![0u8; 1_000_000],
+        )
+        .await?;
+
+        tcm.section("Alice downloads pre-message");
+        let msg = alice.recv_msg(&pre_message).await;
+        assert_eq!(msg.download_state, DownloadState::Available);
+        assert_eq!(msg.state, MessageState::InFresh);
+        assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, msg.id);
+
+        tcm.section("Alice downloads full-message and waits for ChatlistItemChanged event ");
+        alice.evtracker.clear_events();
+        alice.recv_msg_trash(&full_message).await;
+        let msg = Message::load_from_db(alice, msg.id).await?;
+        assert_eq!(msg.download_state, DownloadState::Done);
+        alice
+            .evtracker
+            .get_matching(|e| {
+                e == &EventType::ChatlistItemChanged {
+                    chat_id: Some(msg.chat_id),
+                }
+            })
+            .await;
 
         Ok(())
     }
