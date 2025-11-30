@@ -5,7 +5,7 @@ use std::ffi::OsString;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, OnceLock, Weak};
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, bail, ensure};
@@ -201,6 +201,25 @@ impl Deref for Context {
     }
 }
 
+/// A weak reference to a [`Context`]
+///
+/// Can be used to obtain a [`Context`]. An existing weak reference does not prevent the corresponding [`Context`] from being dropped.
+#[derive(Clone, Debug)]
+pub(crate) struct WeakContext {
+    inner: Weak<InnerContext>,
+}
+
+impl WeakContext {
+    /// Returns the [`Context`] if it is still available.
+    pub(crate) fn upgrade(&self) -> Result<Context> {
+        let inner = self
+            .inner
+            .upgrade()
+            .ok_or_else(|| anyhow::anyhow!("Inner struct has been dropped"))?;
+        Ok(Context { inner })
+    }
+}
+
 /// Actual context, expensive to clone.
 #[derive(Debug)]
 pub struct InnerContext {
@@ -383,6 +402,13 @@ impl Context {
             push_subscriber,
         )?;
         Ok(context)
+    }
+
+    /// Returns a weak reference to this [`Context`].
+    pub(crate) fn get_weak_context(&self) -> WeakContext {
+        WeakContext {
+            inner: Arc::downgrade(&self.inner),
+        }
     }
 
     /// Opens the database with the given passphrase.
