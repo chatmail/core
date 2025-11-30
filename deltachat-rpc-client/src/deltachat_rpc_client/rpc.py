@@ -27,7 +27,7 @@ class RpcShutdownError(JsonRpcError):
 class RpcMethod:
     """RPC method."""
 
-    def __init__(self, rpc: "Rpc", name: str):
+    def __init__(self, rpc: "BaseRpc", name: str):
         self.rpc = rpc
         self.name = name
 
@@ -181,7 +181,7 @@ class BaseRpc:
         return RpcMethod(self, attr)
 
 
-class Rpc(BaseRpc):
+class RpcSubprocess(BaseRpc):
     """RPC client that runs and connects to a deltachat-rpc-server in a subprocess."""
 
     def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path: Optional[str] = "deltachat-rpc-server"):
@@ -189,7 +189,7 @@ class Rpc(BaseRpc):
 
         The given arguments will be passed to subprocess.Popen().
         """
-        super(Rpc, self).__init__()
+        super(RpcSubprocess, self).__init__()
         self._accounts_dir = accounts_dir
         self.rpc_server_path: str = rpc_server_path
 
@@ -212,6 +212,10 @@ class Rpc(BaseRpc):
     def disconnect_from_server(self):
         self.stop_io_for_all_accounts()
         self.server_stdin.close()
+
+
+# backward compatibility
+Rpc = RpcSubprocess
 
 
 class RpcFIFO(BaseRpc):
