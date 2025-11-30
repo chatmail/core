@@ -233,7 +233,7 @@ mod sending {
             .await;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 300_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 300_000], None)?;
         msg.set_text("test".to_owned());
 
         let msg_id = chat::send_msg(alice, chat.id, &mut msg).await?;
@@ -333,7 +333,7 @@ mod sending {
         let chat = alice.create_chat(bob).await;
 
         let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(alice, "test.bin", &[0u8; 100_000], None)?;
+        msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 100_000], None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is smaller than limit
