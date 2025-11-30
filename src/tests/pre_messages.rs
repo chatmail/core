@@ -405,7 +405,11 @@ mod sending {
 /// Tests about receiving pre-messages and full messages
 mod receiving {
     use super::*;
+    use async_zip::tokio::write::ZipFileWriter;
+    use async_zip::{Compression, ZipEntryBuilder};
+    use futures::io::Cursor as FuturesCursor;
     use pretty_assertions::assert_eq;
+    use tokio_util::compat::FuturesAsyncWriteCompatExt;
 
     use crate::chat::{self, ChatId};
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
@@ -415,6 +419,7 @@ mod receiving {
     use crate::param::Param;
     use crate::reaction::{get_msg_reactions, send_reaction};
     use crate::test_utils::{SentMessage, create_test_image};
+    use crate::webxdc::StatusUpdateSerial;
 
     async fn send_large_file_message<'a>(
         sender: &'a TestContext,
@@ -423,7 +428,12 @@ mod receiving {
         content: &[u8],
     ) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
         let mut msg = Message::new(view_type);
-        msg.set_file_from_bytes(sender, "test.bin", content, None)?;
+        let file_name = if view_type == Viewtype::Webxdc {
+            "test.xdc"
+        } else {
+            "test.bin"
+        };
+        msg.set_file_from_bytes(sender, file_name, content, None)?;
         msg.set_text("test".to_owned());
 
         // assert that test attachment is bigger than limit
@@ -710,6 +720,69 @@ mod receiving {
         // The message does not reappear.
         let msg = Message::load_from_db_optional(bob, alice_msg.id).await?;
         assert!(msg.is_none());
+
+        Ok(())
+    }
+
+    /// Test that webxdc updates are received for pre-messages
+    /// and available when the full-message is downloaded
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+        let futures_cursor = FuturesCursor::new(Vec::new());
+        let mut buffer = futures_cursor.compat_write();
+        let mut writer = ZipFileWriter::with_tokio(&mut buffer);
+        writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("padding.bin".into(), Compression::Stored),
+                &[0u8; 1_000_000],
+            )
+            .await?;
+        writer
+            .write_entry_whole(
+                ZipEntryBuilder::new("index.html".into(), Compression::Stored),
+                &[0u8; 100],
+            )
+            .await?;
+        writer.close().await?;
+        let big_webxdc_app = buffer.into_inner().into_inner();
+
+        // Alice sends a larger instance and an update
+        let (pre_message, full_message, alice_sent_instance_msg_id) =
+            send_large_file_message(alice, alice_group_id, Viewtype::Webxdc, &big_webxdc_app)
+                .await?;
+        alice
+            .send_webxdc_status_update(
+                alice_sent_instance_msg_id,
+                r#"{"payload": 7, "summary":"sum", "document":"doc"}"#,
+            )
+            .await?;
+        alice.flush_status_updates().await?;
+        let webxdc_update = alice.pop_sent_msg().await;
+
+        // Bob does not download instance but already receives update
+        let bob_instance = bob.recv_msg(&pre_message).await;
+        assert_eq!(bob_instance.download_state, DownloadState::Available);
+        bob.recv_msg_trash(&webxdc_update).await;
+
+        // Bob downloads instance, updates should be assigned correctly
+        bob.recv_msg_trash(&full_message).await;
+
+        let bob_instance = bob.get_last_msg().await;
+        assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
+        assert_eq!(bob_instance.download_state, DownloadState::Done);
+        assert_eq!(
+            bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial::new(0))
+                .await?,
+            r#"[{"payload":7,"document":"doc","summary":"sum","serial":1,"max_serial":1}]"#
+        );
+        let info = bob_instance.get_webxdc_info(bob).await?;
+        assert_eq!(info.document, "doc");
+        assert_eq!(info.summary, "sum");
 
         Ok(())
     }
