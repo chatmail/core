@@ -515,7 +515,15 @@ pub(crate) async fn receive_imf_inner(
     // check, if the mail is already in our database.
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
-    if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+    if mime_parser.pre_message == Some(mimeparser::PreMessageMode::FullMessage) {
+        // Full Message just replace the attachment and mofified Params, not the whole message
+        // This is done in the `handle_full_message` method.
+        replace_msg_id = None;
+        replace_chat_id = None;
+    } else if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
+        // This code handles the download of old partial download stub messages
+        // It will be removed after a transitioning period,
+        // after we have released a few versions with pre-messages
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
             .await?
@@ -524,8 +532,6 @@ pub(crate) async fn receive_imf_inner(
             // the message was partially downloaded before and is fully downloaded now.
             info!(context, "Message already partly in DB, replacing.");
             Some(msg.chat_id)
-
-            // TODO: look at this place
         } else {
             // The message was already fully downloaded
             // or cannot be loaded because it is deleted.
@@ -2067,7 +2073,9 @@ RETURNING id
 "#)?;
                 let row_id: MsgId = stmt.query_row(params![
                     replace_msg_id,
-                    rfc724_mid_orig,
+                    if let Some(mimeparser::PreMessageMode::PreMessage {full_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
+                        full_msg_rfc724_mid
+                    } else { rfc724_mid_orig },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },
