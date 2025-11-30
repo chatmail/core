@@ -109,6 +109,10 @@ pub enum HeaderDef {
     /// referencing the full-message's rfc724_mid.
     ChatFullMessageId,
 
+    /// Announce full message metadata in a pre-message.
+    /// contains serialized PreMsgMetadata struct
+    ChatFullMessageMetadata,
+
     /// This message is preceded by a pre-message
     /// and thus this message can be skipped while fetching messages.
     /// This is a cleartext / unproteced header.

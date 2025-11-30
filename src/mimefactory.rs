@@ -21,6 +21,7 @@ use crate::constants::{ASM_SUBJECT, BROADCAST_INCOMPATIBILITY_MSG};
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
+use crate::download::pre_msg_metadata::PreMsgMetadata;
 use crate::e2ee::EncryptHelper;
 use crate::ensure_and_debug_assert;
 use crate::ephemeral::Timer as EphemeralTimer;
@@ -1875,6 +1876,14 @@ impl MimeFactory {
         // add attachment part
         if msg.viewtype.has_file() {
             if let Some(PreMessageMode::PreMessage { .. }) = self.pre_message_mode {
+                let Some(metadata) = PreMsgMetadata::from_msg(context, &msg).await? else {
+                    bail!("failed to generate metadata for pre-message")
+                };
+
+                headers.push((
+                    HeaderDef::ChatFullMessageMetadata.into(),
+                    mail_builder::headers::raw::Raw::new(metadata.to_header_value()?).into(),
+                ));
                 // TODO: generate thumbnail and attach it instead (if it makes sense)
             } else {
                 let file_part = build_body_file(context, &msg).await?;
