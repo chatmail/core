@@ -827,6 +827,11 @@ pub(crate) async fn receive_imf_inner(
     if let Some(ref sync_items) = mime_parser.sync_items {
         if from_id == ContactId::SELF {
             if mime_parser.was_encrypted() {
+                // Receiving encrypted message from self updates primary transport.
+                context
+                    .sql
+                    .set_raw_config("configured_addr", Some(&mime_parser.from.addr))
+                    .await?;
                 context
                     .execute_sync_items(sync_items, mime_parser.timestamp_sent)
                     .await;
