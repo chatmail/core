@@ -69,7 +69,7 @@ pub struct FullChat {
     // but that would be an extra DB query.
     self_in_group: bool,
     is_muted: bool,
-    ephemeral_timer: u32, //TODO look if there are more important properties in newer core versions
+    ephemeral_timer: u32,
     can_send: bool,
     was_seen_recently: bool,
     mailing_list_address: Option<String>,
