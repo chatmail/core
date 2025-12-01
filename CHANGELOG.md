@@ -1,5 +1,78 @@
 # Changelog
 
+## [2.29.0] - 2025-12-01
+
+### API-Changes
+
+- deltachat-rpc-client: Add Message.exists().
+
+### Features / Changes
+
+- [**breaking**] Increase backup version from 3 to 4.
+- Hide `To` header in encrypted messages.
+- `deltachat_rpc_client.Rpc` accepts `rpc_server_path` for using a particular deltachat-rpc-server ([#7493](https://github.com/chatmail/core/pull/7493)).
+- Don't send `Chat-Group-Avatar` header in unencrypted groups.
+- Don't update `self-{avatar,status}` from received messages ([#7002](https://github.com/chatmail/core/pull/7002)).
+
+### Fixes
+
+- `CREATE INDEX imap_only_rfc724_mid ON imap(rfc724_mid)` ([#7490](https://github.com/chatmail/core/pull/7490)).
+- Use the same webxdc ratelimit for all email servers.
+- Handle the case when account does not exist in `get_existing_msg_ids()`.
+- Don't send self-avatar in unencrypted messages ([#7136](https://github.com/chatmail/core/pull/7136)).
+- Do not configure folders during transport configuration.
+- Upload sync messages only with the primary transport.
+- Do not use deprecated ConfiguredProvider in get_configured_provider.
+
+### Build system
+
+- Make scripts for remote testing usable.
+- Increase minimum supported Python version to 3.10.
+- Use SPDX license expression in Python package metadata.
+
+### CI
+
+- Set timeout-minutes for all jobs in ci.yaml workflow.
+- Do not install Python manually to bulid RPC server wheels.
+- Do not build fake RPC server source packages.
+- Build Python wheels in separate jobs.
+
+### Refactor
+
+- [**breaking**] Remove some unneeded stock strings ([#7496](https://github.com/chatmail/core/pull/7496)).
+- Strike events in rpc-client request handling, get result from queue.
+- Use ConfiguredProvider config directly when loading legacy settings.
+- Remove update_icons and disable_server_delete migrations.
+- Use `SYMMETRIC_KEY_ALGORITHM` constant in `symm_encrypt_message()`.
+- Make signing key non-optional for `pk_encrypt`.
+
+### Tests
+
+- `test_remove_member_bcc`: Test unencrypted group as it was initially.
+
+### Miscellaneous Tasks
+
+- deps: Bump cachix/install-nix-action from 31.8.1 to 31.8.4.
+- cargo: Bump hyper from 1.7.0 to 1.8.1.
+- cargo: Bump human-panic from 2.0.3 to 2.0.4.
+- cargo: Bump hyper-util from 0.1.17 to 0.1.18.
+- cargo: Bump rusqlite from 0.36.0 to 0.37.0.
+- cargo: Bump tokio-util from 0.7.16 to 0.7.17.
+- cargo: Bump toml from 0.9.7 to 0.9.8.
+- cargo: Bump proptest from 1.8.0 to 1.9.0.
+- cargo: Bump parking_lot from 0.12.4 to 0.12.5.
+- cargo: Bump syn from 2.0.106 to 2.0.110.
+- cargo: Bump quick-xml from 0.38.3 to 0.38.4.
+- cargo: Bump rustls-pki-types from 1.12.0 to 1.13.0.
+- cargo: Bump nu-ansi-term from 0.50.1 to 0.50.3.
+- cargo: Bump sanitize-filename from 0.5.0 to 0.6.0.
+- cargo: Bump quote from 1.0.41 to 1.0.42.
+- cargo: Bump libc from 0.2.176 to 0.2.177.
+- cargo: Bump bytes from 1.10.1 to 1.11.0.
+- cargo: Bump image from 0.25.8 to 0.25.9.
+- cargo: Bump rand from 0.9.0 to 0.9.2 ([#7501](https://github.com/chatmail/core/pull/7501)).
+- cargo: Bump tokio from 1.45.1 to 1.48.0.
+
 ## [2.28.0] - 2025-11-23
 
 ### API-Changes
@@ -7236,3 +7309,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.26.0]: https://github.com/chatmail/core/compare/v2.25.0..v2.26.0
 [2.27.0]: https://github.com/chatmail/core/compare/v2.26.0..v2.27.0
 [2.28.0]: https://github.com/chatmail/core/compare/v2.27.0..v2.28.0
+[2.29.0]: https://github.com/chatmail/core/compare/v2.28.0..v2.29.0
