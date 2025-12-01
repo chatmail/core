@@ -45,7 +45,7 @@ use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
     IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_secret, create_id,
     create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
-    gm2local_offset, smeared_time, time, truncate_msg_text,
+    gm2local_offset, normalize_text, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 use crate::{chatlist_events, imap};
@@ -286,10 +286,11 @@ impl ChatId {
         let timestamp = cmp::min(timestamp, smeared_time(context));
         let row_id =
             context.sql.insert(
-                "INSERT INTO chats (type, name, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, 0, ?);",
+                "INSERT INTO chats (type, name, name_normalized, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, ?, 0, ?)",
                 (
                     chattype,
                     &grpname,
+                    normalize_text(&grpname),
                     grpid,
                     create_blocked,
                     timestamp,
@@ -782,7 +783,7 @@ impl ChatId {
                                     time(),
                                     msg.viewtype,
                                     &msg.text,
-                                    message::normalize_text(&msg.text),
+                                    normalize_text(&msg.text),
                                     msg.param.to_string(),
                                     msg.in_reply_to.as_deref().unwrap_or_default(),
                                     msg.id,
@@ -823,7 +824,7 @@ impl ChatId {
                         msg.viewtype,
                         MessageState::OutDraft,
                         &msg.text,
-                        message::normalize_text(&msg.text),
+                        normalize_text(&msg.text),
                         msg.param.to_string(),
                         1,
                         msg.in_reply_to.as_deref().unwrap_or_default(),
@@ -1919,7 +1920,7 @@ impl Chat {
                         msg.viewtype,
                         msg.state,
                         msg_text,
-                        message::normalize_text(&msg_text),
+                        normalize_text(&msg_text),
                         &msg.subject,
                         msg.param.to_string(),
                         msg.hidden,
@@ -1970,7 +1971,7 @@ impl Chat {
                         msg.viewtype,
                         msg.state,
                         msg_text,
-                        message::normalize_text(&msg_text),
+                        normalize_text(&msg_text),
                         &msg.subject,
                         msg.param.to_string(),
                         msg.hidden,
@@ -2274,8 +2275,8 @@ async fn update_special_chat_name(
         context
             .sql
             .execute(
-                "UPDATE chats SET name=? WHERE id=? AND name!=?",
-                (&name, chat_id, &name),
+                "UPDATE chats SET name=?, name_normalized=? WHERE id=? AND name!=?",
+                (&name, normalize_text(&name), chat_id, &name),
             )
             .await?;
     }
@@ -2388,11 +2389,12 @@ impl ChatIdBlocked {
             .transaction(move |transaction| {
                 transaction.execute(
                     "INSERT INTO chats
-                     (type, name, param, blocked, created_timestamp)
-                     VALUES(?, ?, ?, ?, ?)",
+                     (type, name, name_normalized, param, blocked, created_timestamp)
+                     VALUES(?, ?, ?, ?, ?, ?)",
                     (
                         Chattype::Single,
-                        chat_name,
+                        &chat_name,
+                        normalize_text(&chat_name),
                         params.to_string(),
                         create_blocked as u8,
                         smeared_time,
@@ -2944,7 +2946,7 @@ pub(crate) async fn save_text_edit_to_db(
             "UPDATE msgs SET txt=?, txt_normalized=?, param=? WHERE id=?",
             (
                 new_text,
-                message::normalize_text(new_text),
+                normalize_text(new_text),
                 original_msg.param.to_string(),
                 original_msg.id,
             ),
@@ -3433,9 +3435,15 @@ pub(crate) async fn create_group_ex(
         .sql
         .insert(
             "INSERT INTO chats
-        (type, name, grpid, param, created_timestamp)
-        VALUES(?, ?, ?, \'U=1\', ?);",
-            (Chattype::Group, &chat_name, &grpid, timestamp),
+        (type, name, name_normalized, grpid, param, created_timestamp)
+        VALUES(?, ?, ?, ?, \'U=1\', ?)",
+            (
+                Chattype::Group,
+                &chat_name,
+                normalize_text(&chat_name),
+                &grpid,
+                timestamp,
+            ),
         )
         .await?;
 
@@ -3519,9 +3527,15 @@ pub(crate) async fn create_out_broadcast_ex(
 
         t.execute(
             "INSERT INTO chats
-            (type, name, grpid, created_timestamp)
-            VALUES(?, ?, ?, ?);",
-            (Chattype::OutBroadcast, &chat_name, &grpid, timestamp),
+            (type, name, name_normalized, grpid, created_timestamp)
+            VALUES(?, ?, ?, ?, ?)",
+            (
+                Chattype::OutBroadcast,
+                &chat_name,
+                normalize_text(&chat_name),
+                &grpid,
+                timestamp,
+            ),
         )?;
         let chat_id = ChatId::new(t.last_insert_rowid().try_into()?);
 
@@ -4094,8 +4108,8 @@ async fn rename_ex(
             context
                 .sql
                 .execute(
-                    "UPDATE chats SET name=? WHERE id=?;",
-                    (new_name.to_string(), chat_id),
+                    "UPDATE chats SET name=?, name_normalized=? WHERE id=?",
+                    (&new_name, normalize_text(&new_name), chat_id),
                 )
                 .await?;
             if chat.is_promoted()
@@ -4529,7 +4543,7 @@ pub async fn add_device_msg_with_importance(
                     msg.viewtype,
                     state,
                     &msg.text,
-                    message::normalize_text(&msg.text),
+                    normalize_text(&msg.text),
                     msg.param.to_string(),
                     rfc724_mid,
                 ),
@@ -4668,7 +4682,7 @@ pub(crate) async fn add_info_msg_with_cmd(
             Viewtype::Text,
             MessageState::InNoticed,
             text,
-            message::normalize_text(text),
+            normalize_text(text),
             rfc724_mid,
             ephemeral_timer,
             param.to_string(),
@@ -4710,7 +4724,7 @@ pub(crate) async fn update_msg_text_and_timestamp(
         .sql
         .execute(
             "UPDATE msgs SET txt=?, txt_normalized=?, timestamp=? WHERE id=?;",
-            (text, message::normalize_text(text), timestamp, msg_id),
+            (text, normalize_text(text), timestamp, msg_id),
         )
         .await?;
     context.emit_msgs_changed(chat_id, msg_id);

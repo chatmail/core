@@ -779,6 +779,15 @@ pub(crate) fn to_lowercase(s: &str) -> Cow<'_, str> {
     }
 }
 
+/// Returns text for storing in special db columns to make case-insensitive search possible for
+/// non-ASCII messages, chat and contact names.
+pub(crate) fn normalize_text(text: &str) -> Option<String> {
+    if text.is_ascii() {
+        return None;
+    };
+    Some(text.to_lowercase()).filter(|t| t != text)
+}
+
 /// Increments `*t` and checks that it equals to `expected` after that.
 pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
     t: &mut T,

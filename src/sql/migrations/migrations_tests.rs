@@ -160,9 +160,7 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
     "#,
     )?)).await?;
 
-    STOP_MIGRATIONS_AT
-        .scope(133, t.sql.run_migrations(&t))
-        .await?;
+    t.sql.run_migrations(&t).await?;
 
     // Hidden address-contact can't be looked up.
     assert!(

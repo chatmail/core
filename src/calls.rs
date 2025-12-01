@@ -10,11 +10,11 @@ use crate::context::{Context, WeakContext};
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::log::warn;
-use crate::message::{self, Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
-use crate::tools::time;
+use crate::tools::{normalize_text, time};
 use anyhow::{Context as _, Result, ensure};
 use sdp::SessionDescription;
 use serde::Serialize;
@@ -86,7 +86,7 @@ impl CallInfo {
             .sql
             .execute(
                 "UPDATE msgs SET txt=?, txt_normalized=? WHERE id=?",
-                (text, message::normalize_text(text), self.msg.id),
+                (text, normalize_text(text), self.msg.id),
             )
             .await?;
         Ok(())

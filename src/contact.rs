@@ -36,7 +36,7 @@ use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
 use crate::sync::{self, Sync::*};
-use crate::tools::{SystemTime, duration_to_str, get_abs_path, time, to_lowercase};
+use crate::tools::{SystemTime, duration_to_str, get_abs_path, normalize_text, time, to_lowercase};
 use crate::{chat, chatlist_events, ensure_and_debug_assert_ne, stock_str};
 
 /// Time during which a contact is considered as seen recently.
@@ -115,9 +115,23 @@ impl ContactId {
         let row = context
             .sql
             .transaction(|transaction| {
+                let authname;
+                let name_or_authname = if !name.is_empty() {
+                    name
+                } else {
+                    authname = transaction.query_row(
+                        "SELECT authname FROM contacts WHERE id=?",
+                        (self,),
+                        |row| {
+                            let authname: String = row.get(0)?;
+                            Ok(authname)
+                        },
+                    )?;
+                    &authname
+                };
                 let is_changed = transaction.execute(
-                    "UPDATE contacts SET name=?1 WHERE id=?2 AND name!=?1",
-                    (name, self),
+                    "UPDATE contacts SET name=?1, name_normalized=?2 WHERE id=?3 AND name!=?1",
+                    (name, normalize_text(name_or_authname), self),
                 )? > 0;
                 if is_changed {
                     update_chat_names(context, transaction, self)?;
@@ -967,11 +981,22 @@ impl Contact {
                         } else {
                             row_name
                         };
+                        let new_authname = if update_authname {
+                            name.to_string()
+                        } else {
+                            row_authname
+                        };
 
                         transaction.execute(
-                            "UPDATE contacts SET name=?, addr=?, origin=?, authname=? WHERE id=?;",
+                            "UPDATE contacts SET name=?, name_normalized=?, addr=?, origin=?, authname=? WHERE id=?",
                             (
-                                new_name,
+                                &new_name,
+                                normalize_text(
+                                    if !new_name.is_empty() {
+                                        &new_name
+                                    } else {
+                                        &new_authname
+                                    }),
                                 if update_addr {
                                     addr.to_string()
                                 } else {
@@ -982,11 +1007,7 @@ impl Contact {
                                 } else {
                                     row_origin
                                 },
-                                if update_authname {
-                                    name.to_string()
-                                } else {
-                                    row_authname
-                                },
+                                &new_authname,
                                 row_id,
                             ),
                         )?;
@@ -998,18 +1019,18 @@ impl Contact {
                         sth_modified = Modifier::Modified;
                     }
                 } else {
-                    let update_name = manual;
-                    let update_authname = !manual;
-
                     transaction.execute(
-                        "INSERT INTO contacts (name, addr, fingerprint, origin, authname)
-                         VALUES (?, ?, ?, ?, ?);",
+                        "
+INSERT INTO contacts (name, name_normalized, addr, fingerprint, origin, authname)
+VALUES (?, ?, ?, ?, ?, ?)
+                        ",
                         (
-                            if update_name { &name } else { "" },
+                            if manual { &name } else { "" },
+                            normalize_text(&name),
                             &addr,
                             fingerprint,
                             origin,
-                            if update_authname { &name } else { "" },
+                            if manual { "" } else { &name },
                         ),
                     )?;
 
@@ -1112,17 +1133,19 @@ impl Contact {
             Origin::IncomingReplyTo
         };
         if query.is_some() {
-            let s3str_like_cmd = format!("%{}%", query.unwrap_or(""));
+            let s3str_like_cmd = format!("%{}%", query.unwrap_or("").to_lowercase());
             context
                 .sql
                 .query_map(
-                    "SELECT c.id, c.addr FROM contacts c
-                 WHERE c.id>?
-                 AND (c.fingerprint='')=?
-                 AND c.origin>=? \
-                 AND c.blocked=0 \
-                 AND (iif(c.name='',c.authname,c.name) LIKE ? OR c.addr LIKE ?) \
-                 ORDER BY c.last_seen DESC, c.id DESC;",
+                    "
+SELECT c.id, c.addr FROM contacts c
+WHERE c.id>?
+    AND (c.fingerprint='')=?
+    AND c.origin>=?
+    AND c.blocked=0
+    AND (IFNULL(c.name_normalized,IIF(c.name='',c.authname,c.name)) LIKE ? OR c.addr LIKE ?)
+ORDER BY c.last_seen DESC, c.id DESC
+                    ",
                     (
                         ContactId::LAST_SPECIAL,
                         flag_address,
@@ -1249,8 +1272,18 @@ impl Contact {
                     };
                     // Always do an update in case the blocking is reset or name is changed.
                     transaction.execute(
-                        "UPDATE contacts SET name=?, origin=?, blocked=1, fingerprint=? WHERE addr=?",
-                        (&name, Origin::MailinglistAddress, fingerprint, &grpid),
+                        "
+UPDATE contacts
+SET name=?, name_normalized=IIF(?1='',name_normalized,?), origin=?, blocked=1, fingerprint=?
+WHERE addr=?
+                        ",
+                        (
+                            &name,
+                            normalize_text(&name),
+                            Origin::MailinglistAddress,
+                            fingerprint,
+                            &grpid,
+                        ),
                     )?;
                 }
                 Ok(())
@@ -1725,8 +1758,8 @@ fn update_chat_names(
         };
 
         let count = transaction.execute(
-            "UPDATE chats SET name=?1 WHERE id=?2 AND name!=?1",
-            (chat_name, chat_id),
+            "UPDATE chats SET name=?1, name_normalized=?2 WHERE id=?3 AND name!=?1",
+            (&chat_name, normalize_text(&chat_name), chat_id),
         )?;
 
         if count > 0 {

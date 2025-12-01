@@ -2248,14 +2248,5 @@ impl Viewtype {
     }
 }
 
-/// Returns text for storing in the `msgs.txt_normalized` column (to make case-insensitive search
-/// possible for non-ASCII messages).
-pub(crate) fn normalize_text(text: &str) -> Option<String> {
-    if text.is_ascii() {
-        return None;
-    };
-    Some(text.to_lowercase()).filter(|t| t != text)
-}
-
 #[cfg(test)]
 mod message_tests;

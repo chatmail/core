@@ -60,16 +60,16 @@ async fn test_get_contacts() -> Result<()> {
     let context = tcm.bob().await;
     let alice = tcm.alice().await;
     alice
-        .set_config(Config::Displayname, Some("MyName"))
+        .set_config(Config::Displayname, Some("MyNameIsΔ"))
         .await?;
 
     // Alice is not in the contacts yet.
     let contacts = Contact::get_all(&context.ctx, 0, Some("Alice")).await?;
     assert_eq!(contacts.len(), 0);
-    let contacts = Contact::get_all(&context.ctx, 0, Some("MyName")).await?;
+    let contacts = Contact::get_all(&context.ctx, 0, Some("MyNameIsΔ")).await?;
     assert_eq!(contacts.len(), 0);
 
-    let claire_id = Contact::create(&context, "someone", "claire@example.org").await?;
+    let claire_id = Contact::create(&context, "Δ-someone", "claire@example.org").await?;
     let dave_id = Contact::create(&context, "", "dave@example.org").await?;
 
     let id = context.add_or_lookup_contact_id(&alice).await;
@@ -77,8 +77,8 @@ async fn test_get_contacts() -> Result<()> {
 
     let contact = Contact::get_by_id(&context, id).await.unwrap();
     assert_eq!(contact.get_name(), "");
-    assert_eq!(contact.get_authname(), "MyName");
-    assert_eq!(contact.get_display_name(), "MyName");
+    assert_eq!(contact.get_authname(), "MyNameIsΔ");
+    assert_eq!(contact.get_display_name(), "MyNameIsΔ");
 
     // Search by name.
     let contacts = Contact::get_all(&context, 0, Some("myname")).await?;
@@ -93,12 +93,12 @@ async fn test_get_contacts() -> Result<()> {
     let contacts = Contact::get_all(&context, 0, Some("Foobar")).await?;
     assert_eq!(contacts.len(), 0);
 
-    // Set Alice name to "someone" manually.
-    id.set_name(&context, "someone").await?;
+    // Set Alice name manually.
+    id.set_name(&context, "Δ-someone").await?;
     let contact = Contact::get_by_id(&context.ctx, id).await.unwrap();
-    assert_eq!(contact.get_name(), "someone");
-    assert_eq!(contact.get_authname(), "MyName");
-    assert_eq!(contact.get_display_name(), "someone");
+    assert_eq!(contact.get_name(), "Δ-someone");
+    assert_eq!(contact.get_authname(), "MyNameIsΔ");
+    assert_eq!(contact.get_display_name(), "Δ-someone");
 
     // Not searchable by authname, because it is not displayed.
     let contacts = Contact::get_all(&context, 0, Some("MyName")).await?;
@@ -108,7 +108,9 @@ async fn test_get_contacts() -> Result<()> {
         info!(&context, "add_self={add_self}");
 
         // Search key-contacts by display name (same as manually set name).
-        let contacts = Contact::get_all(&context.ctx, add_self, Some("someone")).await?;
+        let contacts = Contact::get_all(&context.ctx, add_self, Some("Δ-someone")).await?;
+        assert_eq!(contacts, vec![id]);
+        let contacts = Contact::get_all(&context.ctx, add_self, Some("δ-someon")).await?;
         assert_eq!(contacts, vec![id]);
 
         // Get all key-contacts.
@@ -120,7 +122,7 @@ async fn test_get_contacts() -> Result<()> {
     }
 
     // Search address-contacts by display name.
-    let contacts = Contact::get_all(&context, constants::DC_GCL_ADDRESS, Some("someone")).await?;
+    let contacts = Contact::get_all(&context, constants::DC_GCL_ADDRESS, Some("Δ-someone")).await?;
     assert_eq!(contacts, vec![claire_id]);
 
     // Get all address-contacts. Newer contacts go first.
@@ -134,6 +136,16 @@ async fn test_get_contacts() -> Result<()> {
     .await?;
     assert_eq!(contacts, vec![dave_id, claire_id, ContactId::SELF]);
 
+    // Reset the user-provided name for Alice.
+    id.set_name(&context, "").await?;
+    let contact = Contact::get_by_id(&context.ctx, id).await.unwrap();
+    assert_eq!(contact.get_name(), "");
+    assert_eq!(contact.get_authname(), "MyNameIsΔ");
+    assert_eq!(contact.get_display_name(), "MyNameIsΔ");
+    let contacts = Contact::get_all(&context, 0, Some("MyName")).await?;
+    assert_eq!(contacts.len(), 1);
+    let contacts = Contact::get_all(&context, 0, Some("δ")).await?;
+    assert_eq!(contacts.len(), 1);
     Ok(())
 }
 
