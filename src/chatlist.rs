@@ -185,7 +185,7 @@ impl Chatlist {
                 warn!(context, "Cannot update special chat names: {err:#}.")
             }
 
-            let str_like_cmd = format!("%{query}%");
+            let str_like_cmd = format!("%{}%", query.to_lowercase());
             context
                 .sql
                 .query_map_vec(
@@ -201,7 +201,7 @@ impl Chatlist {
                                   ORDER BY timestamp DESC, id DESC LIMIT 1)
                  WHERE c.id>9 AND c.id!=?2
                    AND c.blocked!=1
-                   AND c.name LIKE ?3
+                   AND IFNULL(c.name_normalized,c.name) LIKE ?3
                    AND (NOT ?4 OR EXISTS (SELECT 1 FROM msgs m WHERE m.chat_id = c.id AND m.state == ?5 AND hidden=0))
                  GROUP BY c.id
                  ORDER BY IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
@@ -472,7 +472,7 @@ mod tests {
     use crate::chat::save_msgs;
     use crate::chat::{
         add_contact_to_chat, create_group, get_chat_contacts, remove_contact_from_chat,
-        send_text_msg,
+        send_text_msg, set_chat_name,
     };
     use crate::receive_imf::receive_imf;
     use crate::stock_str::StockMessage;
@@ -482,7 +482,7 @@ mod tests {
     use std::time::Duration;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_try_load() {
+    async fn test_try_load() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let bob = &tcm.bob().await;
         let chat_id1 = create_group(bob, "a chat").await.unwrap();
@@ -552,6 +552,15 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(chats.len(), 1);
+
+        let chat_id = create_group(bob, "Δ-chat").await.unwrap();
+        let chats = Chatlist::try_load(bob, 0, Some("δ"), None).await?;
+        assert_eq!(chats.len(), 1);
+        assert_eq!(chats.ids[0].0, chat_id);
+        set_chat_name(bob, chat_id, "abcδe").await?;
+        let chats = Chatlist::try_load(bob, 0, Some("Δ"), None).await?;
+        assert_eq!(chats.len(), 1);
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

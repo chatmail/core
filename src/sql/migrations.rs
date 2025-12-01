@@ -19,7 +19,7 @@ use crate::log::warn;
 use crate::message::MsgId;
 use crate::provider::get_provider_info;
 use crate::sql::Sql;
-use crate::tools::{Time, inc_and_check, time_elapsed};
+use crate::tools::{Time, inc_and_check, normalize_text, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
 const DBVERSION: i32 = 68;
@@ -1452,6 +1452,56 @@ CREATE INDEX imap_sync_index ON imap_sync(transport_id, folder);
             migration_version,
         )
         .await?;
+    }
+
+    inc_and_check(&mut migration_version, 143)?;
+    if dbversion < migration_version {
+        let trans_fn = |t: &mut rusqlite::Transaction| {
+            t.execute_batch(
+                "
+ALTER TABLE chats ADD COLUMN name_normalized TEXT;
+ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
+                ",
+            )?;
+
+            let mut stmt = t.prepare("UPDATE chats SET name_normalized=? WHERE id=?")?;
+            for res in t
+                .prepare("SELECT id, name FROM chats LIMIT 10000")?
+                .query_map((), |row| {
+                    let id: u32 = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    Ok((id, name))
+                })?
+            {
+                let (id, name) = res?;
+                if let Some(name_normalized) = normalize_text(&name) {
+                    stmt.execute((name_normalized, id))?;
+                }
+            }
+
+            let mut stmt = t.prepare("UPDATE contacts SET name_normalized=? WHERE id=?")?;
+            for res in t
+                .prepare(
+                    "
+SELECT id, IIF(name='', authname, name) FROM contacts
+ORDER BY last_seen DESC LIMIT 10000
+                ",
+                )?
+                .query_map((), |row| {
+                    let id: u32 = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    Ok((id, name))
+                })?
+            {
+                let (id, name) = res?;
+                if let Some(name_normalized) = normalize_text(&name) {
+                    stmt.execute((name_normalized, id))?;
+                }
+            }
+            Ok(())
+        };
+        sql.execute_migration_transaction(trans_fn, migration_version)
+            .await?;
     }
 
     let new_version = sql

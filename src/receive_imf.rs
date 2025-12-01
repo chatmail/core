@@ -43,7 +43,9 @@ use crate::simplify;
 use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{self, buf_compress, remove_subject_prefix, validate_broadcast_secret};
+use crate::tools::{
+    self, buf_compress, normalize_text, remove_subject_prefix, validate_broadcast_secret,
+};
 use crate::{chatlist_events, ensure_and_debug_assert, ensure_and_debug_assert_eq, location};
 
 /// This is the struct that is returned after receiving one email (aka MIME message).
@@ -2094,7 +2096,7 @@ RETURNING id
                     if trash { MessageState::Undefined } else { state },
                     if trash { MessengerMessage::No } else { is_dc_message },
                     if trash || hidden { "" } else { msg },
-                    if trash || hidden { None } else { message::normalize_text(msg) },
+                    if trash || hidden { None } else { normalize_text(msg) },
                     if trash || hidden { "" } else { &subject },
                     if trash {
                         "".to_string()
@@ -3091,7 +3093,10 @@ async fn apply_chat_name_and_avatar_changes(
             info!(context, "Updating grpname for chat {}.", chat.id);
             context
                 .sql
-                .execute("UPDATE chats SET name=? WHERE id=?;", (grpname, chat.id))
+                .execute(
+                    "UPDATE chats SET name=?, name_normalized=? WHERE id=?",
+                    (grpname, normalize_text(grpname), chat.id),
+                )
                 .await?;
             *send_event_chat_modified = true;
         }
@@ -3380,7 +3385,10 @@ async fn apply_mailinglist_changes(
         info!(context, "Updating listname for chat {chat_id}.");
         context
             .sql
-            .execute("UPDATE chats SET name=? WHERE id=?;", (new_name, chat_id))
+            .execute(
+                "UPDATE chats SET name=?, name_normalized=? WHERE id=?",
+                (&new_name, normalize_text(&new_name), chat_id),
+            )
             .await?;
         context.emit_event(EventType::ChatModified(chat_id));
     }
