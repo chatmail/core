@@ -88,7 +88,7 @@ impl MsgId {
                 context
                     .sql
                     .execute(
-                        "INSERT INTO download (msg_id) VALUES (?)",
+                        "INSERT INTO download (rfc724_mid) VALUES (?)",
                         (msg.rfc724_mid(),),
                     )
                     .await?;
