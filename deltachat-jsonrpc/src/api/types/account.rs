@@ -15,7 +15,7 @@ pub enum Account {
         display_name: Option<String>,
         addr: Option<String>,
         // size: u32,
-        profile_image: Option<String>, // TODO: This needs to be converted to work with blob http server.
+        profile_image: Option<String>,
         color: String,
         /// Optional tag as "Work", "Family".
         /// Meant to help profile owner to differ between profiles with similar names.
