@@ -228,6 +228,7 @@ async fn connect_secure_proxy(
     strict_tls: bool,
     proxy_config: ProxyConfig,
 ) -> Result<Box<dyn SessionBufStream>> {
+    let use_sni = true;
     let proxy_stream = proxy_config
         .connect(context, hostname, port, strict_tls)
         .await?;
@@ -235,6 +236,7 @@ async fn connect_secure_proxy(
         strict_tls,
         hostname,
         port,
+        use_sni,
         alpn(port),
         proxy_stream,
         &context.tls_session_store,
@@ -253,6 +255,7 @@ async fn connect_starttls_proxy(
     strict_tls: bool,
     proxy_config: ProxyConfig,
 ) -> Result<Box<dyn SessionBufStream>> {
+    let use_sni = false;
     let proxy_stream = proxy_config
         .connect(context, hostname, port, strict_tls)
         .await?;
@@ -266,6 +269,7 @@ async fn connect_starttls_proxy(
         strict_tls,
         hostname,
         port,
+        use_sni,
         "",
         tcp_stream,
         &context.tls_session_store,
@@ -316,6 +320,7 @@ async fn connect_starttls(
     strict_tls: bool,
     tls_session_store: &TlsSessionStore,
 ) -> Result<Box<dyn SessionBufStream>> {
+    let use_sni = false;
     let tcp_stream = connect_tcp_inner(addr).await?;
 
     // Run STARTTLS command and convert the client back into a stream.
@@ -327,6 +332,7 @@ async fn connect_starttls(
         strict_tls,
         host,
         addr.port(),
+        use_sni,
         "",
         tcp_stream,
         tls_session_store,
