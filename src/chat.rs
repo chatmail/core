@@ -2755,6 +2755,11 @@ async fn render_mime_message_and_pre_message(
             > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
 
     if needs_pre_message {
+        info!(
+            context,
+            "Message is large and will be split into a pre- and a post-message.",
+        );
+
         let mut mimefactory_full_msg = mimefactory.clone();
         mimefactory_full_msg.set_as_full_message();
         let rendered_msg = mimefactory_full_msg.render(context).await?;
@@ -2777,6 +2782,10 @@ async fn render_mime_message_and_pre_message(
 
         Ok((rendered_msg, Some(rendered_pre_msg)))
     } else {
+        info!(
+            context,
+            "Message will be sent as normal message (no pre- and post message)",
+        );
         Ok((mimefactory.render(context).await?, None))
     }
 }
