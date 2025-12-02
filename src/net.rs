@@ -131,11 +131,13 @@ pub(crate) async fn connect_tls_inner(
     alpn: &str,
     tls_session_store: &TlsSessionStore,
 ) -> Result<impl SessionStream + 'static> {
+    let use_sni = true;
     let tcp_stream = connect_tcp_inner(addr).await?;
     let tls_stream = wrap_tls(
         strict_tls,
         host,
         addr.port(),
+        use_sni,
         alpn,
         tcp_stream,
         tls_session_store,

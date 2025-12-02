@@ -13,12 +13,14 @@ pub async fn wrap_tls<'a>(
     strict_tls: bool,
     hostname: &str,
     port: u16,
+    use_sni: bool,
     alpn: &str,
     stream: impl SessionStream + 'static,
     tls_session_store: &TlsSessionStore,
 ) -> Result<impl SessionStream + 'a> {
     if strict_tls {
-        let tls_stream = wrap_rustls(hostname, port, alpn, stream, tls_session_store).await?;
+        let tls_stream =
+            wrap_rustls(hostname, port, use_sni, alpn, stream, tls_session_store).await?;
         let boxed_stream: Box<dyn SessionStream> = Box::new(tls_stream);
         Ok(boxed_stream)
     } else {
@@ -32,6 +34,7 @@ pub async fn wrap_tls<'a>(
         };
         let tls = async_native_tls::TlsConnector::new()
             .min_protocol_version(Some(async_native_tls::Protocol::Tlsv12))
+            .use_sni(use_sni)
             .request_alpns(&alpns)
             .danger_accept_invalid_hostnames(true)
             .danger_accept_invalid_certs(true);
@@ -90,6 +93,7 @@ impl TlsSessionStore {
 pub async fn wrap_rustls<'a>(
     hostname: &str,
     port: u16,
+    use_sni: bool,
     alpn: &str,
     stream: impl SessionStream + 'a,
     tls_session_store: &TlsSessionStore,
@@ -117,6 +121,7 @@ pub async fn wrap_rustls<'a>(
     let resumption = tokio_rustls::rustls::client::Resumption::store(resumption_store)
         .tls12_resumption(tokio_rustls::rustls::client::Tls12Resumption::Disabled);
     config.resumption = resumption;
+    config.enable_sni = use_sni;
 
     let tls = tokio_rustls::TlsConnector::from(Arc::new(config));
     let name = rustls_pki_types::ServerName::try_from(hostname)?.to_owned();

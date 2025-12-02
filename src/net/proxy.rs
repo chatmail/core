@@ -429,9 +429,11 @@ impl ProxyConfig {
                     load_cache,
                 )
                 .await?;
+                let use_sni = true;
                 let tls_stream = wrap_rustls(
                     &https_config.host,
                     https_config.port,
+                    use_sni,
                     "",
                     tcp_stream,
                     &context.tls_session_store,

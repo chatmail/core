@@ -207,6 +207,7 @@ impl Client {
         hostname: &str,
         strict_tls: bool,
     ) -> Result<Self> {
+        let use_sni = true;
         let tcp_stream = connect_tcp_inner(addr).await?;
         let account_id = context.get_id();
         let events = context.events.clone();
@@ -215,6 +216,7 @@ impl Client {
             strict_tls,
             hostname,
             addr.port(),
+            use_sni,
             alpn(addr.port()),
             logging_stream,
             &context.tls_session_store,
@@ -251,6 +253,7 @@ impl Client {
         host: &str,
         strict_tls: bool,
     ) -> Result<Self> {
+        let use_sni = false;
         let tcp_stream = connect_tcp_inner(addr).await?;
 
         let account_id = context.get_id();
@@ -275,6 +278,7 @@ impl Client {
             strict_tls,
             host,
             addr.port(),
+            use_sni,
             "",
             tcp_stream,
             &context.tls_session_store,
@@ -294,6 +298,7 @@ impl Client {
         strict_tls: bool,
         proxy_config: ProxyConfig,
     ) -> Result<Self> {
+        let use_sni = true;
         let proxy_stream = proxy_config
             .connect(context, domain, port, strict_tls)
             .await?;
@@ -301,6 +306,7 @@ impl Client {
             strict_tls,
             domain,
             port,
+            use_sni,
             alpn(port),
             proxy_stream,
             &context.tls_session_store,
@@ -340,6 +346,7 @@ impl Client {
         proxy_config: ProxyConfig,
         strict_tls: bool,
     ) -> Result<Self> {
+        let use_sni = false;
         let proxy_stream = proxy_config
             .connect(context, hostname, port, strict_tls)
             .await?;
@@ -362,6 +369,7 @@ impl Client {
             strict_tls,
             hostname,
             port,
+            use_sni,
             "",
             proxy_stream,
             &context.tls_session_store,

@@ -74,19 +74,33 @@ where
         }
         "https" => {
             let port = parsed_url.port_u16().unwrap_or(443);
-            let load_cache = true;
+            let (use_sni, load_cache) = (true, true);
 
             if let Some(proxy_config) = proxy_config_opt {
                 let proxy_stream = proxy_config
                     .connect(context, host, port, load_cache)
                     .await?;
-                let tls_stream =
-                    wrap_rustls(host, port, "", proxy_stream, &context.tls_session_store).await?;
+                let tls_stream = wrap_rustls(
+                    host,
+                    port,
+                    use_sni,
+                    "",
+                    proxy_stream,
+                    &context.tls_session_store,
+                )
+                .await?;
                 Box::new(tls_stream)
             } else {
                 let tcp_stream = crate::net::connect_tcp(context, host, port, load_cache).await?;
-                let tls_stream =
-                    wrap_rustls(host, port, "", tcp_stream, &context.tls_session_store).await?;
+                let tls_stream = wrap_rustls(
+                    host,
+                    port,
+                    use_sni,
+                    "",
+                    tcp_stream,
+                    &context.tls_session_store,
+                )
+                .await?;
                 Box::new(tls_stream)
             }
         }
