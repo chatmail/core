@@ -305,7 +305,6 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
 
 /// Download known post messages without pre_message
 /// in order to guard against lost pre-messages:
-// TODO better fn name
 pub(crate) async fn download_known_post_messages_without_pre_message(
     context: &Context,
     session: &mut Session,
