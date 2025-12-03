@@ -388,6 +388,9 @@ jobs:
     name: Build & Publish npm prebuilds and deltachat-rpc-server
     needs: ["build_linux", "build_windows", "build_macos"]
     runs-on: "ubuntu-latest"
+    environment:
+      name: npm-stdio-rpc-server
+      url: https://www.npmjs.com/package/@deltachat/stdio-rpc-server
     permissions:
       id-token: write
 
@@ -521,5 +524,3 @@ jobs:
         run: |
           ls -lah platform_package
           for platform in *.tgz; do npm publish --provenance "$platform" --access public; done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

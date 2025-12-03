@@ -10,6 +10,9 @@ jobs:
   pack-module:
     name: "Publish @deltachat/jsonrpc-client"
     runs-on: ubuntu-latest
+    environment:
+      name: npm-jsonrpc-client
+      url: https://www.npmjs.com/package/@deltachat/jsonrpc-client
     permissions:
       id-token: write
       contents: read
@@ -37,5 +40,3 @@ jobs:
       - name: Publish
         working-directory: deltachat-jsonrpc/typescript
         run: npm publish --provenance deltachat-jsonrpc-client-* --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
