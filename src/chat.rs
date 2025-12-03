@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
+use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -2782,10 +2783,6 @@ async fn render_mime_message_and_pre_message(
 
         Ok((rendered_msg, Some(rendered_pre_msg)))
     } else {
-        info!(
-            context,
-            "Message will be sent as normal message (no pre- and post message)",
-        );
         Ok((mimefactory.render(context).await?, None))
     }
 }
@@ -2869,6 +2866,21 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 Err(err)
             }
         }?;
+
+    if let (post_msg, Some(pre_msg)) = (&rendered_msg, &rendered_pre_msg) {
+        info!(
+            context,
+            "Message Sizes: Pre-Message {}; Post-Message: {}",
+            format_size(pre_msg.message.len(), BINARY),
+            format_size(post_msg.message.len(), BINARY)
+        );
+    } else {
+        info!(
+            context,
+            "Message will be sent as normal message (no pre- and post message). Size: {}",
+            format_size(rendered_msg.message.len(), BINARY)
+        );
+    }
 
     if needs_encryption && !rendered_msg.is_encrypted {
         /* unrecoverable */
