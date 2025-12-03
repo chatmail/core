@@ -1752,7 +1752,6 @@ pub async fn delete_msgs_ex(
                 "DELETE FROM download WHERE rfc724_mid=?",
                 (&msg.rfc724_mid,),
             )?;
-            // TODO: is the following nessesary?
             trans.execute(
                 "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
                 (&msg.rfc724_mid,),
