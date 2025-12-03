@@ -48,9 +48,6 @@ pub struct MessageObject {
     has_location: bool,
     has_html: bool,
     view_type: MessageViewtype,
-    /// If message is a Pre-Message,
-    /// then this returns the viewtype it will have when it is downloaded.
-    post_message_view_type: Option<MessageViewtype>,
     state: u32,
 
     /// An error text, if there is one.
@@ -215,7 +212,6 @@ impl MessageObject {
             has_location: message.has_location(),
             has_html: message.has_html(),
             view_type: message.get_viewtype().into(),
-            post_message_view_type: message.get_post_message_viewtype().map(Into::into),
             state: message
                 .get_state()
                 .to_u32()
@@ -687,9 +683,6 @@ pub struct MessageInfo {
     rfc724_mid: String,
     server_urls: Vec<String>,
     hop_info: String,
-    /// If message is a Pre-Message,
-    /// then this returns the viewtype it will have when it is downloaded.
-    post_message_view_type: Option<MessageViewtype>,
 }
 
 impl MessageInfo {
@@ -713,7 +706,6 @@ impl MessageInfo {
             rfc724_mid: message.rfc724_mid().to_owned(),
             server_urls,
             hop_info,
-            post_message_view_type: message.get_post_message_viewtype().map(Into::into),
         })
     }
 }
