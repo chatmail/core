@@ -481,11 +481,11 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    0=use IMAP IDLE if the server supports it.
  *                    This is a developer option used for testing polling used as an IDLE fallback.
  * - `download_limit` = Messages up to this number of bytes are downloaded automatically.
- *                    For larger messages, only the header is downloaded and a placeholder is shown.
+ *                    For messages with large attachements, two messages are sent:
+ *                    a Pre-Message containing metadata and a Post-Message containing the attachment.
+ *                    Pre-Messages are always downloaded and show a placeholder message 
  *                    These messages can be downloaded fully using dc_download_full_msg() later.
- *                    The limit is compared against raw message sizes, including headers.
- *                    The actually used limit may be corrected
- *                    to not mess up with non-delivery-reports or read-receipts.
+ *                    Post-Messages are automatically downloaded if they are smaller than the download_limit.
  *                    0=no limit (default).
  *                    Changes affect future messages only.
  * - `hide_pre_message_metadata_text` = Pre-Messages get information added to their text field.
