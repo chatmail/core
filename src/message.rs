@@ -861,8 +861,7 @@ impl Message {
 
     /// If message is a Pre-Message,
     /// then this returns the viewtype it will have when it is downloaded.
-    #[cfg(test)]
-    pub(crate) fn get_post_message_viewtype(&self) -> Option<Viewtype> {
+    pub fn get_post_message_viewtype(&self) -> Option<Viewtype> {
         if self.download_state != DownloadState::Done {
             if let Some(viewtype) = self
                 .param
