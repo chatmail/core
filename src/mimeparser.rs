@@ -609,8 +609,7 @@ impl MimeMessage {
             if let Some(post_msg_rfc724_mid) =
                 mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
             {
-                // TODO: is there a better method for this task? (removing `<>` delimiters of RFC message ID)
-                let post_msg_rfc724_mid = post_msg_rfc724_mid.replace("<", "").replace(">", "");
+                let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
                 let metadata = if let Some(value) = mail
                     .headers
                     .get_header_value(HeaderDef::ChatPostMessageMetadata)
