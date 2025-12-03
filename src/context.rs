@@ -1093,6 +1093,13 @@ impl Context {
                 .await?
                 .unwrap_or_default(),
         );
+        res.insert(
+            "hide_pre_message_metadata_text",
+            self.sql
+                .get_raw_config("hide_pre_message_metadata_text")
+                .await?
+                .unwrap_or_default(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
