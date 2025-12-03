@@ -1,50 +1,22 @@
 //! Tests about receiving Pre-Messages and Post-Message
 use anyhow::Result;
-use async_zip::tokio::write::ZipFileWriter;
-use async_zip::{Compression, ZipEntryBuilder};
-use futures::io::Cursor as FuturesCursor;
 use pretty_assertions::assert_eq;
-use tokio_util::compat::FuturesAsyncWriteCompatExt;
 
 use crate::EventType;
-use crate::chat::{self, ChatId};
-use crate::contact::{self};
+use crate::chat;
+use crate::contact;
 use crate::download::{
     DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, pre_msg_metadata::PreMsgMetadata,
 };
-use crate::message::{Message, MessageState, MsgId, Viewtype, delete_msgs, markseen_msgs};
+use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
-use crate::test_utils::{SentMessage, TestContext, TestContextManager, create_test_image};
+use crate::test_utils::TestContextManager;
+use crate::tests::pre_messages::util::{
+    send_large_file_message, send_large_image_message, send_large_webxdc_message,
+};
 use crate::webxdc::StatusUpdateSerial;
-
-pub async fn send_large_file_message<'a>(
-    sender: &'a TestContext,
-    target_chat: ChatId,
-    view_type: Viewtype,
-    content: &[u8],
-) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
-    let mut msg = Message::new(view_type);
-    let file_name = if view_type == Viewtype::Webxdc {
-        "test.xdc"
-    } else {
-        "test.bin"
-    };
-    msg.set_file_from_bytes(sender, file_name, content, None)?;
-    msg.set_text("test".to_owned());
-
-    // assert that test attachment is bigger than limit
-    assert!(msg.get_filebytes(sender).await?.unwrap() > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD);
-
-    let msg_id = chat::send_msg(sender, target_chat, &mut msg).await?;
-    let smtp_rows = sender.get_smtp_rows_for_msg(msg_id).await;
-
-    assert_eq!(smtp_rows.len(), 2);
-    let pre_message = smtp_rows.first().expect("Pre-Message exists");
-    let post_message = smtp_rows.get(1).expect("Post-Message exists");
-    Ok((pre_message.to_owned(), post_message.to_owned(), msg_id))
-}
 
 /// Test that mimeparser can correctly detect and parse pre-messages and Post-Messages
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -228,11 +200,8 @@ async fn test_receive_pre_message_image() -> Result<()> {
     let bob = &tcm.bob().await;
     let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-    let (width, height) = (1080, 1920);
-    let test_img = create_test_image(width, height)?;
-
     let (pre_message, _post_message, _alice_msg_id) =
-        send_large_file_message(alice, alice_group_id, Viewtype::Image, &test_img).await?;
+        send_large_image_message(alice, alice_group_id).await?;
 
     let msg = bob.recv_msg(&pre_message).await;
 
@@ -328,21 +297,9 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
     let bob = &tcm.bob().await;
     let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-    let futures_cursor = FuturesCursor::new(Vec::new());
-    let mut buffer = futures_cursor.compat_write();
-    let mut writer = ZipFileWriter::with_tokio(&mut buffer);
-    writer
-        .write_entry_whole(
-            ZipEntryBuilder::new("index.html".into(), Compression::Stored),
-            &[0u8; 1_000_000],
-        )
-        .await?;
-    writer.close().await?;
-    let big_webxdc_app = buffer.into_inner().into_inner();
-
     // Alice sends a larger instance and an update
     let (pre_message, post_message, alice_sent_instance_msg_id) =
-        send_large_file_message(alice, alice_group_id, Viewtype::Webxdc, &big_webxdc_app).await?;
+        send_large_webxdc_message(alice, alice_group_id).await?;
     alice
         .send_webxdc_status_update(
             alice_sent_instance_msg_id,
