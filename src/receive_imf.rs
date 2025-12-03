@@ -515,9 +515,9 @@ pub(crate) async fn receive_imf_inner(
     // check, if the mail is already in our database.
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
-    if mime_parser.pre_message == Some(mimeparser::PreMessageMode::FullMessage) {
-        // Full Message just replace the attachment and mofified Params, not the whole message
-        // This is done in the `handle_full_message` method.
+    if mime_parser.pre_message == Some(mimeparser::PreMessageMode::PostMessage) {
+        // Post-Message just replace the attachment and mofified Params, not the whole message
+        // This is done in the `handle_post_message` method.
         replace_msg_id = None;
         replace_chat_id = None;
     } else if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
@@ -1096,12 +1096,12 @@ async fn decide_chat_assignment(
     } else if let Some(pre_message) = &mime_parser.pre_message {
         use crate::mimeparser::PreMessageMode::*;
         match pre_message {
-            FullMessage => {
+            PostMessage => {
                 // if pre message exist, then trash after replacing, otherwise treat as normal message
                 let pre_message_exists = premessage_is_downloaded_for(context, rfc724_mid).await?;
                 info!(
                     context,
-                    "Message is a Full Message ({}).",
+                    "Message is a Post-Message ({}).",
                     if pre_message_exists {
                         "pre-message exists already, so trash after replacing attachment"
                     } else {
@@ -1111,17 +1111,17 @@ async fn decide_chat_assignment(
                 pre_message_exists
             }
             PreMessage {
-                full_msg_rfc724_mid,
+                post_msg_rfc724_mid,
                 ..
             } => {
-                // if full message already exists, then trash/ignore
-                let full_msg_exists =
-                    premessage_is_downloaded_for(context, full_msg_rfc724_mid).await?;
+                // if post message already exists, then trash/ignore
+                let post_msg_exists =
+                    premessage_is_downloaded_for(context, post_msg_rfc724_mid).await?;
                 info!(
                     context,
-                    "Message is a Pre-Message (full_msg_exists:{full_msg_exists})."
+                    "Message is a Pre-Message (post_msg_exists:{post_msg_exists})."
                 );
-                full_msg_exists
+                post_msg_exists
                 // TODO find out if trashing affects multi device usage?
             }
         }
@@ -1938,7 +1938,7 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
-    handle_full_message(context, mime_parser, from_id).await?;
+    handle_post_message(context, mime_parser, from_id).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
@@ -2073,8 +2073,8 @@ RETURNING id
 "#)?;
                 let row_id: MsgId = stmt.query_row(params![
                     replace_msg_id,
-                    if let Some(mimeparser::PreMessageMode::PreMessage {full_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
-                        full_msg_rfc724_mid
+                    if let Some(mimeparser::PreMessageMode::PreMessage {post_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
+                        post_msg_rfc724_mid
                     } else { rfc724_mid_orig },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
@@ -2312,22 +2312,22 @@ async fn handle_edit_delete(
     Ok(())
 }
 
-async fn handle_full_message(
+async fn handle_post_message(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
 ) -> Result<()> {
-    if let Some(mimeparser::PreMessageMode::FullMessage) = &mime_parser.pre_message {
-        // if pre message exist, replace attachment
+    if let Some(mimeparser::PreMessageMode::PostMessage) = &mime_parser.pre_message {
+        // if Pre-Message exist, replace attachment
         // only replacing attachment ensures that doesn't overwrite the text if it was edited before.
         let rfc724_mid = mime_parser
             .get_rfc724_mid()
-            .context("expected full message to have a message id")?;
+            .context("expected Post-Message to have a message id")?;
 
         let Some(msg_id) = message::rfc724_mid_exists(context, &rfc724_mid).await? else {
             warn!(
                 context,
-                "Download Full-Message: Database entry does not exist."
+                "Download Post-Message: Database entry does not exist."
             );
             return Ok(());
         };
@@ -2335,20 +2335,20 @@ async fn handle_full_message(
             // else: message is processed like a normal message
             warn!(
                 context,
-                "Download Full-Message: pre message was not downloaded, yet so treat as normal message"
+                "Download Post-Message: pre message was not downloaded, yet so treat as normal message"
             );
             return Ok(());
         };
 
         if original_msg.from_id != from_id {
-            warn!(context, "Download Full-Message: Bad sender.");
+            warn!(context, "Download Post-Message: Bad sender.");
             return Ok(());
         }
         if let Some(part) = mime_parser.parts.first() {
             if !part.typ.has_file() {
                 warn!(
                     context,
-                    "Download Full-Message: First mime part's message-viewtype has no file"
+                    "Download Post-Message: First mime part's message-viewtype has no file"
                 );
                 return Ok(());
             }
@@ -2362,8 +2362,8 @@ async fn handle_full_message(
                 let mut new_params = original_msg.param.clone();
                 new_params
                     .merge_in_from_params(part.param.clone())
-                    .remove(Param::FullMessageFileBytes)
-                    .remove(Param::FullMessageViewtype);
+                    .remove(Param::PostMessageFileBytes)
+                    .remove(Param::PostMessageViewtype);
                 context
                         .sql
                         .execute(
@@ -2380,7 +2380,7 @@ async fn handle_full_message(
                         .await?;
                 context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
             } else {
-                warn!(context, "Download Full-Message: Not encrypted.");
+                warn!(context, "Download Post-Message: Not encrypted.");
             }
         }
     }

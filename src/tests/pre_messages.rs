@@ -64,8 +64,8 @@ mod legacy {
 }
 
 /// Tests about sending pre-messages
-/// - When to send a pre-message and full-message instead of a normal message
-/// - Test that sent pre- and full-message contain the right Headers
+/// - When to send a pre-message and post-message instead of a normal message
+/// - Test that sent pre- and post-message contain the right Headers
 ///   and that they are send in the correct order (pre-message is sent first.)
 mod sending {
     use super::*;
@@ -77,9 +77,9 @@ mod sending {
     use crate::download::PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
     use crate::headerdef::{HeaderDef, HeaderDefMap};
     use crate::message::{Message, Viewtype};
-    /// Tests that pre message is sent for attachment larger than `PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`
-    /// Also test that pre message is sent first, before the full message
-    /// And that Autocrypt-gossip and selfavatar never go into full-messages
+    /// Tests that Pre-Message is sent for attachment larger than `PRE_MSG_ATTACHMENT_SIZE_THRESHOLD`
+    /// Also test that Pre-Message is sent first, before the Post-Message
+    /// And that Autocrypt-gossip and selfavatar never go into Post-Messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_sending_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -100,74 +100,74 @@ mod sending {
         let msg_id = chat::send_msg(alice, group_id, &mut msg).await?;
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
-        //   pre-message and full message should be present
+        //   Pre-Message and Post-Message should be present
         //   and test that correct headers are present on both messages
         assert_eq!(smtp_rows.len(), 2);
         let pre_message = smtp_rows.first().expect("first element exists");
         let pre_message_parsed = mailparse::parse_mail(pre_message.payload.as_bytes())?;
-        let full_message = smtp_rows.get(1).expect("second element exists");
-        let full_message_parsed = mailparse::parse_mail(full_message.payload.as_bytes())?;
+        let post_message = smtp_rows.get(1).expect("second element exists");
+        let post_message_parsed = mailparse::parse_mail(post_message.payload.as_bytes())?;
 
         assert!(
             pre_message_parsed
                 .headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_none()
         );
         assert!(
-            full_message_parsed
+            post_message_parsed
                 .headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_some()
         );
 
         assert_eq!(
-            full_message_parsed
+            post_message_parsed
                 .headers
                 .get_header_value(HeaderDef::MessageId),
             Some(format!("<{}>", msg.rfc724_mid)),
-            "full message should have the rfc message id of the database message"
+            "Post-Message should have the rfc message id of the database message"
         );
 
         assert_ne!(
             pre_message_parsed
                 .headers
                 .get_header_value(HeaderDef::MessageId),
-            full_message_parsed
+            post_message_parsed
                 .headers
                 .get_header_value(HeaderDef::MessageId),
-            "message ids of pre message and full message should be different"
+            "message ids of Pre-Message and Post-Message should be different"
         );
 
-        let decrypted_full_message = bob.parse_msg(full_message).await;
-        assert_eq!(decrypted_full_message.decrypting_failed, false);
+        let decrypted_post_message = bob.parse_msg(post_message).await;
+        assert_eq!(decrypted_post_message.decrypting_failed, false);
         assert_eq!(
-            decrypted_full_message.header_exists(HeaderDef::ChatFullMessageId),
+            decrypted_post_message.header_exists(HeaderDef::ChatPostMessageId),
             false
         );
 
         let decrypted_pre_message = bob.parse_msg(pre_message).await;
         assert_eq!(
             decrypted_pre_message
-                .get_header(HeaderDef::ChatFullMessageId)
+                .get_header(HeaderDef::ChatPostMessageId)
                 .map(String::from),
-            full_message_parsed
+            post_message_parsed
                 .headers
                 .get_header_value(HeaderDef::MessageId)
         );
         assert!(
             pre_message_parsed
                 .headers
-                .get_header_value(HeaderDef::ChatFullMessageId)
+                .get_header_value(HeaderDef::ChatPostMessageId)
                 .is_none(),
-            "no Chat-Full-Message-ID header in unprotected headers of Pre-Message"
+            "no Chat-Post-Message-ID header in unprotected headers of Pre-Message"
         );
 
         Ok(())
     }
 
-    /// Tests that pre message has autocrypt gossip headers and self avatar
-    /// and full message doesn't have these headers
+    /// Tests that Pre-Message has autocrypt gossip headers and self avatar
+    /// and Post-Message doesn't have these headers
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -197,29 +197,29 @@ mod sending {
 
         assert_eq!(smtp_rows.len(), 2);
         let pre_message = smtp_rows.first().expect("first element exists");
-        let full_message = smtp_rows.get(1).expect("second element exists");
-        let full_message_parsed = mailparse::parse_mail(full_message.payload.as_bytes())?;
+        let post_message = smtp_rows.get(1).expect("second element exists");
+        let post_message_parsed = mailparse::parse_mail(post_message.payload.as_bytes())?;
 
         let decrypted_pre_message = bob.parse_msg(pre_message).await;
         assert!(
             decrypted_pre_message
-                .get_header(HeaderDef::ChatFullMessageId)
+                .get_header(HeaderDef::ChatPostMessageId)
                 .is_some(),
             "tested message is not a pre-message, sending order may be broken"
         );
         assert_ne!(decrypted_pre_message.gossiped_keys.len(), 0);
         assert_ne!(decrypted_pre_message.user_avatar, None);
 
-        let decrypted_full_message = bob.parse_msg(full_message).await;
+        let decrypted_post_message = bob.parse_msg(post_message).await;
         assert!(
-            full_message_parsed
+            post_message_parsed
                 .headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_some(),
-            "tested message is not a full-message, sending order may be broken"
+            "tested message is not a Post-Message, sending order may be broken"
         );
-        assert_eq!(decrypted_full_message.gossiped_keys.len(), 0);
-        assert_eq!(decrypted_full_message.user_avatar, None);
+        assert_eq!(decrypted_post_message.gossiped_keys.len(), 0);
+        assert_eq!(decrypted_post_message.user_avatar, None);
         Ok(())
     }
 
@@ -249,7 +249,7 @@ mod sending {
         assert!(
             message
                 .headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_none(),
         );
         Ok(())
@@ -276,20 +276,20 @@ mod sending {
 
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_none(),
-            "no 'Chat-Is-Full-Message'-header should be present"
+            "no 'Chat-Is-Post-Message'-header should be present"
         );
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .get_first_header(HeaderDef::ChatPostMessageId.get_headername())
                 .is_none(),
-            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+            "no 'Chat-Post-Message-ID'-header should be present in clear text headers"
         );
         let decrypted_message = bob.parse_msg(msg).await;
         assert!(
-            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
-            "no 'Chat-Full-Message-ID'-header should be present"
+            !decrypted_message.header_exists(HeaderDef::ChatPostMessageId),
+            "no 'Chat-Post-Message-ID'-header should be present"
         );
 
         // test that pre message is not send for large large text
@@ -307,19 +307,19 @@ mod sending {
 
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_none()
         );
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .get_first_header(HeaderDef::ChatPostMessageId.get_headername())
                 .is_none(),
-            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+            "no 'Chat-Post-Message-ID'-header should be present in clear text headers"
         );
         let decrypted_message = bob.parse_msg(msg).await;
         assert!(
-            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
-            "no 'Chat-Full-Message-ID'-header should be present"
+            !decrypted_message.header_exists(HeaderDef::ChatPostMessageId),
+            "no 'Chat-Post-Message-ID'-header should be present"
         );
         Ok(())
     }
@@ -342,7 +342,7 @@ mod sending {
         let msg_id = chat::send_msg(alice, chat.id, &mut msg).await.unwrap();
         let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
 
-        //   only one message and no "is full message" header should be present
+        //   only one message and no "is Post-Message" header should be present
         assert_eq!(smtp_rows.len(), 1);
 
         let msg = smtp_rows.first().expect("first element exists");
@@ -350,19 +350,19 @@ mod sending {
 
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatIsFullMessage.get_headername())
+                .get_first_header(HeaderDef::ChatIsPostMessage.get_headername())
                 .is_none()
         );
         assert!(
             mail.headers
-                .get_first_header(HeaderDef::ChatFullMessageId.get_headername())
+                .get_first_header(HeaderDef::ChatPostMessageId.get_headername())
                 .is_none(),
-            "no 'Chat-Full-Message-ID'-header should be present in clear text headers"
+            "no 'Chat-Post-Message-ID'-header should be present in clear text headers"
         );
         let decrypted_message = bob.parse_msg(msg).await;
         assert!(
-            !decrypted_message.header_exists(HeaderDef::ChatFullMessageId),
-            "no 'Chat-Full-Message-ID'-header should be present"
+            !decrypted_message.header_exists(HeaderDef::ChatPostMessageId),
+            "no 'Chat-Post-Message-ID'-header should be present"
         );
 
         Ok(())
@@ -402,7 +402,7 @@ mod sending {
     }
 }
 
-/// Tests about receiving pre-messages and full messages
+/// Tests about receiving Pre-Messages and Post-Message
 mod receiving {
     use super::*;
     use async_zip::tokio::write::ZipFileWriter;
@@ -445,37 +445,37 @@ mod receiving {
         let smtp_rows = sender.get_smtp_rows_for_msg(msg_id).await;
 
         assert_eq!(smtp_rows.len(), 2);
-        let pre_message = smtp_rows.first().expect("pre-message exists");
-        let full_message = smtp_rows.get(1).expect("full message exists");
-        Ok((pre_message.to_owned(), full_message.to_owned(), msg_id))
+        let pre_message = smtp_rows.first().expect("Pre-Message exists");
+        let post_message = smtp_rows.get(1).expect("Post-Message exists");
+        Ok((pre_message.to_owned(), post_message.to_owned(), msg_id))
     }
 
-    /// Test that mimeparser can correctly detect and parse pre-messages and full-messages
+    /// Test that mimeparser can correctly detect and parse pre-messages and Post-Messages
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_mimeparser_pre_message_and_full_message() -> Result<()> {
+    async fn test_mimeparser_pre_message_and_post_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message, _alice_msg_id) =
+        let (pre_message, post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
         let parsed_pre_message =
             MimeMessage::from_bytes(bob, pre_message.payload.as_bytes()).await?;
-        let parsed_full_message =
-            MimeMessage::from_bytes(bob, full_message.payload.as_bytes()).await?;
+        let parsed_post_message =
+            MimeMessage::from_bytes(bob, post_message.payload.as_bytes()).await?;
 
         assert_eq!(
-            parsed_full_message.pre_message,
-            Some(crate::mimeparser::PreMessageMode::FullMessage)
+            parsed_post_message.pre_message,
+            Some(crate::mimeparser::PreMessageMode::PostMessage)
         );
 
         assert_eq!(
             parsed_pre_message.pre_message,
             Some(crate::mimeparser::PreMessageMode::PreMessage {
-                full_msg_rfc724_mid: parsed_full_message.get_rfc724_mid().unwrap(),
+                post_msg_rfc724_mid: parsed_post_message.get_rfc724_mid().unwrap(),
                 metadata: Some(PreMsgMetadata {
                     size: 1_000_000,
                     viewtype: Viewtype::File,
@@ -498,7 +498,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, _full_message, _alice_msg_id) =
+        let (pre_message, _post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -510,42 +510,42 @@ mod receiving {
 
         // test that metadata is correctly returned by methods
         assert_eq!(msg.get_filebytes(bob).await?, Some(1_000_000));
-        assert_eq!(msg.get_full_message_viewtype(), Some(Viewtype::File));
+        assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::File));
         assert_eq!(msg.get_filename(), Some("test.bin".to_owned()));
 
         Ok(())
     }
 
-    /// Test receiving the full message after receiving the pre-message
+    /// Test receiving the Post-Message after receiving the pre-message
     /// for file attachment
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_receive_pre_message_and_dl_full_message() -> Result<()> {
+    async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message, _alice_msg_id) =
+        let (pre_message, post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
         let msg = bob.recv_msg(&pre_message).await;
         assert_eq!(msg.download_state(), DownloadState::Available);
         assert_eq!(msg.viewtype, Viewtype::Text);
-        assert!(msg.param.exists(Param::FullMessageViewtype));
-        assert!(msg.param.exists(Param::FullMessageFileBytes));
+        assert!(msg.param.exists(Param::PostMessageViewtype));
+        assert!(msg.param.exists(Param::PostMessageFileBytes));
         assert_eq!(msg.text, "test".to_owned());
-        let _ = bob.recv_msg_trash(&full_message).await;
+        let _ = bob.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(bob, msg.id).await?;
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
-        assert_eq!(msg.param.exists(Param::FullMessageViewtype), false);
-        assert_eq!(msg.param.exists(Param::FullMessageFileBytes), false);
+        assert_eq!(msg.param.exists(Param::PostMessageViewtype), false);
+        assert_eq!(msg.param.exists(Param::PostMessageFileBytes), false);
         assert_eq!(msg.text, "test".to_owned());
         Ok(())
     }
 
-    /// Test out of order receiving. Full message is received & downloaded before pre-message.
+    /// Test out of order receiving. Post-Message is received & downloaded before pre-message.
     /// In that case pre-message shall be trashed.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_out_of_order_receiving() -> Result<()> {
@@ -554,27 +554,27 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message, _alice_msg_id) =
+        let (pre_message, post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
-        let msg = bob.recv_msg(&full_message).await;
+        let msg = bob.recv_msg(&post_message).await;
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
         let _ = bob.recv_msg_trash(&pre_message).await;
         Ok(())
     }
 
-    /// Test receiving the full message after receiving an edit after receiving the pre-message
+    /// Test receiving the Post-Message after receiving an edit after receiving the pre-message
     /// for file attachment
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_receive_pre_message_then_edit_and_then_dl_full_message() -> Result<()> {
+    async fn test_receive_pre_message_then_edit_and_then_dl_post_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message, alice_msg_id) =
+        let (pre_message, post_message, alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -588,7 +588,7 @@ mod receiving {
         let msg = Message::load_from_db(bob, msg.id).await?;
         assert_eq!(msg.download_state(), DownloadState::Available);
         assert_eq!(msg.text, "new_text".to_owned());
-        let _ = bob.recv_msg_trash(&full_message).await;
+        let _ = bob.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(bob, msg.id).await?;
         assert_eq!(msg.download_state(), DownloadState::Done);
         assert_eq!(msg.viewtype, Viewtype::File);
@@ -596,7 +596,7 @@ mod receiving {
         Ok(())
     }
 
-    /// Process normal message with file attachment (neither full nor pre message)
+    /// Process normal message with file attachment (neither post nor pre message)
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_receive_normal_message() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -637,7 +637,7 @@ mod receiving {
         let (width, height) = (1080, 1920);
         let test_img = create_test_image(width, height)?;
 
-        let (pre_message, _full_message, _alice_msg_id) =
+        let (pre_message, _post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::Image, &test_img).await?;
 
         let msg = bob.recv_msg(&pre_message).await;
@@ -647,7 +647,7 @@ mod receiving {
         assert_eq!(msg.text, "test".to_owned());
 
         // test that metadata is correctly returned by methods
-        assert_eq!(msg.get_full_message_viewtype(), Some(Viewtype::Image));
+        assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::Image));
         // recoded image dimensions
         assert_eq!(msg.get_filebytes(bob).await?, Some(149632));
         assert_eq!(msg.get_height(), 1280);
@@ -664,7 +664,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, full_message, alice_msg_id) =
+        let (pre_message, post_message, alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -682,8 +682,8 @@ mod receiving {
         let reactions = get_msg_reactions(bob, bob_msg.id).await?;
         assert_eq!(reactions.to_string(), "👍1");
 
-        // Bob downloads full message
-        bob.recv_msg_trash(&full_message).await;
+        // Bob downloads Post-Message
+        bob.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(bob, bob_msg.id).await?;
         assert_eq!(msg.download_state(), DownloadState::Done);
 
@@ -705,7 +705,7 @@ mod receiving {
         let bob = &tcm.bob().await;
         let bob_group_id = bob.create_group_with_members("test group", &[alice]).await;
 
-        let (pre_message, full_message, _bob_msg_id) =
+        let (pre_message, post_message, _bob_msg_id) =
             send_large_file_message(bob, bob_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -717,7 +717,7 @@ mod receiving {
         delete_msgs(alice, &[alice_msg.id]).await?;
 
         // Fully download message after deletion.
-        alice.recv_msg_trash(&full_message).await;
+        alice.recv_msg_trash(&post_message).await;
 
         // The message does not reappear.
         let msg = Message::load_from_db_optional(bob, alice_msg.id).await?;
@@ -727,7 +727,7 @@ mod receiving {
     }
 
     /// Test that webxdc updates are received for pre-messages
-    /// and available when the full-message is downloaded
+    /// and available when the Post-Message is downloaded
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
         let mut tcm = TestContextManager::new();
@@ -748,7 +748,7 @@ mod receiving {
         let big_webxdc_app = buffer.into_inner().into_inner();
 
         // Alice sends a larger instance and an update
-        let (pre_message, full_message, alice_sent_instance_msg_id) =
+        let (pre_message, post_message, alice_sent_instance_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::Webxdc, &big_webxdc_app)
                 .await?;
         alice
@@ -766,7 +766,7 @@ mod receiving {
         bob.recv_msg_trash(&webxdc_update).await;
 
         // Bob downloads instance, updates should be assigned correctly
-        bob.recv_msg_trash(&full_message).await;
+        bob.recv_msg_trash(&post_message).await;
 
         let bob_instance = bob.get_last_msg().await;
         assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
@@ -793,7 +793,7 @@ mod receiving {
         alice.create_chat(bob).await; // Make sure the chat is accepted.
 
         tcm.section("Bob sends a large message to Alice");
-        let (pre_message, full_message, _bob_msg_id) =
+        let (pre_message, post_message, _bob_msg_id) =
             send_large_file_message(bob, bob_chat_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
 
@@ -815,7 +815,7 @@ mod receiving {
         );
 
         tcm.section("Alice downloads message");
-        alice.recv_msg_trash(&full_message).await;
+        alice.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(alice, msg.id).await?;
         assert_eq!(msg.download_state, DownloadState::Done);
         assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
@@ -846,7 +846,7 @@ mod receiving {
         chat::add_contact_to_chat(alice, chat_id, *alice_bob_id).await?;
 
         tcm.section("Alice sends large message to promote/start chat");
-        let (pre_message, _full_message, _alice_msg_id) =
+        let (pre_message, _post_message, _alice_msg_id) =
             send_large_file_message(alice, chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
 
         tcm.section("Bob receives the pre-message message from Alice");
@@ -859,9 +859,9 @@ mod receiving {
         Ok(())
     }
 
-    /// Test that full-message can start a chat
+    /// Test that Post-Message can start a chat
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_full_msg_can_start_chat() -> Result<()> {
+    async fn test_post_msg_can_start_chat() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
@@ -877,11 +877,11 @@ mod receiving {
         chat::add_contact_to_chat(alice, chat_id, *alice_bob_id).await?;
 
         tcm.section("Alice sends large message to promote/start chat");
-        let (_pre_message, full_message, _bob_msg_id) =
+        let (_pre_message, post_message, _bob_msg_id) =
             send_large_file_message(alice, chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
 
         tcm.section("Bob receives the pre-message message from Alice");
-        let msg = bob.recv_msg(&full_message).await;
+        let msg = bob.recv_msg(&post_message).await;
         assert_eq!(msg.download_state, DownloadState::Done);
         assert_ne!(msg.chat_id, bob_alice_dm_chat_id);
         let chat = chat::Chat::load_from_db(bob, msg.chat_id).await?;
@@ -902,7 +902,7 @@ mod receiving {
         );
         let bob_alice_dm_chat = bob.create_chat(alice).await.id;
         alice.create_chat(bob).await; // Make sure the chat is accepted.
-        let (pre_message, full_message, _bob_msg_id) = send_large_file_message(
+        let (pre_message, post_message, _bob_msg_id) = send_large_file_message(
             bob,
             bob_alice_dm_chat,
             Viewtype::File,
@@ -920,8 +920,8 @@ mod receiving {
         let hi_msg = tcm.send_recv(bob, alice, "hi").await;
         assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, hi_msg.id);
 
-        tcm.section("Alice downloads full-message");
-        alice.recv_msg_trash(&full_message).await;
+        tcm.section("Alice downloads Post-Message");
+        alice.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(alice, msg.id).await?;
         assert_eq!(msg.download_state, DownloadState::Done);
         assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, hi_msg.id);
@@ -930,9 +930,9 @@ mod receiving {
         Ok(())
     }
 
-    /// Test that ChatlistItemChanged event is emitted when downloading full-message
+    /// Test that ChatlistItemChanged event is emitted when downloading Post-Message
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_chatlist_event_on_full_msg_download() -> Result<()> {
+    async fn test_chatlist_event_on_post_msg_download() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
         let bob = &tcm.bob().await;
@@ -942,7 +942,7 @@ mod receiving {
         );
         let bob_alice_dm_chat = bob.create_chat(alice).await.id;
         alice.create_chat(bob).await; // Make sure the chat is accepted.
-        let (pre_message, full_message, _bob_msg_id) = send_large_file_message(
+        let (pre_message, post_message, _bob_msg_id) = send_large_file_message(
             bob,
             bob_alice_dm_chat,
             Viewtype::File,
@@ -956,9 +956,9 @@ mod receiving {
         assert_eq!(msg.state, MessageState::InFresh);
         assert_eq!(alice.get_last_msg_in(msg.chat_id).await.id, msg.id);
 
-        tcm.section("Alice downloads full-message and waits for ChatlistItemChanged event ");
+        tcm.section("Alice downloads Post-Message and waits for ChatlistItemChanged event ");
         alice.evtracker.clear_events();
-        alice.recv_msg_trash(&full_message).await;
+        alice.recv_msg_trash(&post_message).await;
         let msg = Message::load_from_db(alice, msg.id).await?;
         assert_eq!(msg.download_state, DownloadState::Done);
         alice
@@ -1023,7 +1023,7 @@ mod additional_text {
             send_large_file_message(alice, a_group_id, Viewtype::Webxdc, &big_webxdc_app).await?;
         let msg = bob.recv_msg(&pre_message).await;
         assert_eq!(msg.text, "test".to_owned());
-        assert_eq!(msg.get_full_message_viewtype(), Some(Viewtype::Webxdc));
+        assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::Webxdc));
         assert_eq!(msg.get_text(), "test [Mini App - 976.68 KiB]".to_owned());
 
         tcm.section("Test metadata preview text for Image");
@@ -1046,7 +1046,7 @@ mod additional_text {
         let bob = &tcm.bob().await;
         let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
 
-        let (pre_message, _full_message, _alice_msg_id) =
+        let (pre_message, _post_message, _alice_msg_id) =
             send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
                 .await?;
         let msg = bob.recv_msg(&pre_message).await;

@@ -16,7 +16,7 @@ pub(crate) use self::connectivity::ConnectivityStore;
 use crate::config::{self, Config};
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
-use crate::download::{download_known_full_messages_without_pre_message, download_msgs};
+use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
 use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
 use crate::imap::{FolderMeaning, Imap, session::Session};
@@ -578,7 +578,7 @@ async fn fetch_idle(
         //-------
         // TODO: verify that this is the correct position for this call
         // in order to guard against lost pre-messages:
-        download_known_full_messages_without_pre_message(ctx, &mut session).await?;
+        download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
     }

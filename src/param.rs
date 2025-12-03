@@ -252,12 +252,12 @@ pub enum Param {
     /// For info messages: Contact ID in added or removed to a group.
     ContactAddedRemoved = b'5',
 
-    /// For (pre-)Message: ViewType of the Full Message,
+    /// For (pre-)Message: ViewType of the Post-Message,
     /// because pre message is always `Viewtype::Text`.
-    FullMessageViewtype = b'8',
+    PostMessageViewtype = b'8',
 
-    /// For (pre-)Message: File byte size of Full Message attachment
-    FullMessageFileBytes = b'9',
+    /// For (pre-)Message: File byte size of Post-Message attachment
+    PostMessageFileBytes = b'9',
 }
 
 /// An object for handling key=value parameter lists.

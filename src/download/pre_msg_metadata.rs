@@ -8,7 +8,7 @@ use crate::message::Message;
 use crate::message::Viewtype;
 use crate::param::{Param, Params};
 
-/// Metadata contained in PreMessage that describes the Full Message.
+/// Metadata contained in Pre-Message that describes the Post-Message.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PreMsgMetadata {
     /// size of the attachment in bytes
@@ -80,12 +80,12 @@ impl Params {
         &mut self,
         pre_msg_metadata: &PreMsgMetadata,
     ) -> &mut Self {
-        self.set(Param::FullMessageFileBytes, pre_msg_metadata.size);
+        self.set(Param::PostMessageFileBytes, pre_msg_metadata.size);
         if !pre_msg_metadata.filename.is_empty() {
             self.set(Param::Filename, &pre_msg_metadata.filename);
         }
         self.set_i64(
-            Param::FullMessageViewtype,
+            Param::PostMessageViewtype,
             pre_msg_metadata.viewtype.to_i64().unwrap_or_default(),
         );
         if let Some((width, height)) = pre_msg_metadata.dimensions {

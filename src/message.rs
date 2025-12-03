@@ -609,12 +609,12 @@ impl Message {
                 .await?;
             if !hide_pre_message_metadata {
                 let file_size = param
-                    .get(Param::FullMessageFileBytes)
+                    .get(Param::PostMessageFileBytes)
                     .and_then(|s| s.parse().ok())
                     .map(|file_size: usize| format_size(file_size, BINARY))
                     .unwrap_or("?".to_owned());
                 let viewtype = param
-                    .get_i64(Param::FullMessageViewtype)
+                    .get_i64(Param::PostMessageViewtype)
                     .and_then(Viewtype::from_i64)
                     .unwrap_or(Viewtype::Unknown);
                 let file_name = param
@@ -844,7 +844,7 @@ impl Message {
         if self.download_state != DownloadState::Done {
             if let Some(file_size) = self
                 .param
-                .get(Param::FullMessageFileBytes)
+                .get(Param::PostMessageFileBytes)
                 .and_then(|s| s.parse().ok())
             {
                 return Ok(Some(file_size));
@@ -859,13 +859,13 @@ impl Message {
         }
     }
 
-    /// If message is a pre-message,
+    /// If message is a Pre-Message,
     /// then this returns the viewtype it will have when it is downloaded.
-    pub fn get_full_message_viewtype(&self) -> Option<Viewtype> {
+    pub fn get_post_message_viewtype(&self) -> Option<Viewtype> {
         if self.download_state != DownloadState::Done {
             if let Some(viewtype) = self
                 .param
-                .get_i64(Param::FullMessageViewtype)
+                .get_i64(Param::PostMessageViewtype)
                 .and_then(Viewtype::from_i64)
             {
                 return Some(viewtype);
@@ -1758,7 +1758,7 @@ pub async fn delete_msgs_ex(
             )?;
             // TODO: is the following nessesary?
             trans.execute(
-                "DELETE FROM available_full_msgs WHERE rfc724_mid=?",
+                "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
                 (&msg.rfc724_mid,),
             )?;
             Ok(())

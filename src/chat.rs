@@ -2736,10 +2736,10 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
-/// Renders the message or Full-Message and Pre-Message.
+/// Renders the Message or splits it into Post-Message and Pre-Message.
 ///
-/// Pre-Message is a small message with metadata which announces a larger Full-Message.
-/// Full messages are not downloaded in the background.
+/// Pre-Message is a small message with metadata which announces a larger Post-Message.
+/// Post-Messages are not downloaded in the background.
 ///
 /// If pre-message is not nessesary this returns a normal message instead.
 async fn render_mime_message_and_pre_message(
@@ -2761,9 +2761,9 @@ async fn render_mime_message_and_pre_message(
             "Message is large and will be split into a pre- and a post-message.",
         );
 
-        let mut mimefactory_full_msg = mimefactory.clone();
-        mimefactory_full_msg.set_as_full_message();
-        let rendered_msg = mimefactory_full_msg.render(context).await?;
+        let mut mimefactory_post_msg = mimefactory.clone();
+        mimefactory_post_msg.set_as_post_message();
+        let rendered_msg = mimefactory_post_msg.render(context).await?;
 
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);

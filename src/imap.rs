@@ -615,7 +615,7 @@ impl Imap {
         let read_cnt = msgs.len();
 
         let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
-        let mut available_full_msgs = Vec::<String>::with_capacity(msgs.len());
+        let mut available_post_msgs = Vec::<String>::with_capacity(msgs.len());
         let mut download_when_normal_starts = Vec::<String>::with_capacity(msgs.len());
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
@@ -713,11 +713,11 @@ impl Imap {
                 .await.context("prefetch_should_download")?
             {
                 let fetch_now: bool = if headers
-                    .get_header_value(HeaderDef::ChatIsFullMessage)
+                    .get_header_value(HeaderDef::ChatIsPostMessage)
                     .is_some()
                 {
-                    // This is a full-message
-                    available_full_msgs.push(message_id.clone());
+                    // This is a Post-Message
+                    available_post_msgs.push(message_id.clone());
 
                     // whether it fits download size limit
                     if download_limit.is_none_or(|download_limit| size < download_limit) {
@@ -731,13 +731,13 @@ impl Imap {
                         false
                     }
                 } else {
-                    // This is not a full message
+                    // This is not a Post-Message
                     if is_background_fetch {
                         if size < MAX_FETCH_MSG_SIZE {
-                            // may be a pre-message or a pure-text message, fetch now
+                            // may be a Pre-Message or a small normal message, fetch now
                             true
                         } else {
-                            // This is e.g. a classical email
+                            // This is e.g. a classical email or large webxdc status update
                             // Queue for full download, in order to prevent missing messages
                             download_when_normal_starts.push(message_id.clone());
                             false
@@ -824,10 +824,10 @@ impl Imap {
 
         // TODO: is there correct place for this?
         if fetch_res.is_ok() {
-            for rfc724_mid in available_full_msgs {
+            for rfc724_mid in available_post_msgs {
                 context
                     .sql
-                    .insert("INSERT INTO available_full_msgs VALUES (?)", (rfc724_mid,))
+                    .insert("INSERT INTO available_post_msgs VALUES (?)", (rfc724_mid,))
                     .await?;
             }
             for rfc724_mid in download_when_normal_starts {

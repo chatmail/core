@@ -154,15 +154,15 @@ pub(crate) struct MimeMessage {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum PreMessageMode {
-    /// This is full messages
-    /// it replaces it's pre-message attachment if it exists already,
-    /// and if the pre-message does not exist it is treated as normal message
-    FullMessage,
-    /// This is a pre-message,
-    /// it adds a message preview for a full message
-    /// and it is ignored if the full message was downloaded already
+    /// This is Post-Message
+    /// it replaces it's Pre-Message attachment if it exists already,
+    /// and if the Pre-Message does not exist it is treated as normal message
+    PostMessage,
+    /// This is a Pre-Message,
+    /// it adds a message preview for a Post-Message
+    /// and it is ignored if the Post-Message was downloaded already
     PreMessage {
-        full_msg_rfc724_mid: String,
+        post_msg_rfc724_mid: String,
         metadata: Option<PreMsgMetadata>,
     },
 }
@@ -369,10 +369,10 @@ impl MimeMessage {
 
         let mut pre_message = if mail
             .headers
-            .get_header_value(HeaderDef::ChatIsFullMessage)
+            .get_header_value(HeaderDef::ChatIsPostMessage)
             .is_some()
         {
-            Some(PreMessageMode::FullMessage)
+            Some(PreMessageMode::PostMessage)
         } else {
             None
         };
@@ -606,14 +606,14 @@ impl MimeMessage {
         }
 
         if let (Ok(mail), true) = (mail, is_encrypted) {
-            if let Some(full_msg_rfc724_mid) =
-                mail.headers.get_header_value(HeaderDef::ChatFullMessageId)
+            if let Some(post_msg_rfc724_mid) =
+                mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
             {
                 // TODO: is there a better method for this task? (removing `<>` delimiters of RFC message ID)
-                let full_msg_rfc724_mid = full_msg_rfc724_mid.replace("<", "").replace(">", "");
+                let post_msg_rfc724_mid = post_msg_rfc724_mid.replace("<", "").replace(">", "");
                 let metadata = if let Some(value) = mail
                     .headers
-                    .get_header_value(HeaderDef::ChatFullMessageMetadata)
+                    .get_header_value(HeaderDef::ChatPostMessageMetadata)
                 {
                     match PreMsgMetadata::try_from_header_value(&value) {
                         Ok(metadata) => Some(metadata),
@@ -631,7 +631,7 @@ impl MimeMessage {
                 };
 
                 pre_message = Some(PreMessageMode::PreMessage {
-                    full_msg_rfc724_mid,
+                    post_msg_rfc724_mid,
                     metadata,
                 });
             }

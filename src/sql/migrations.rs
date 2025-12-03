@@ -1351,7 +1351,7 @@ CREATE INDEX gossip_timestamp_index ON gossip_timestamp (chat_id, fingerprint);
              WHERE m.rfc724_mid IS NOT NULL AND m.rfc724_mid != '';
             DROP TABLE download;
             ALTER TABLE download_new RENAME TO download;
-            CREATE TABLE available_full_msgs (
+            CREATE TABLE available_post_msgs (
                 rfc724_mid TEXT NOT NULL
             );",
             migration_version,
