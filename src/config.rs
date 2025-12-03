@@ -440,6 +440,12 @@ pub enum Config {
 
     /// Return an error from `receive_imf_inner()`. For tests.
     SimulateReceiveImfError,
+
+    /// Disable the addition of the metadata to the text field of Pre-Messages.
+    ///
+    /// This is used by tests and can be used in the UI,
+    /// when the UI wants to displays that information in a prettier manner.
+    HidePreMessageMetadataText,
 }
 
 impl Config {

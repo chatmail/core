@@ -488,6 +488,8 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    to not mess up with non-delivery-reports or read-receipts.
  *                    0=no limit (default).
  *                    Changes affect future messages only.
+ * - `hide_pre_message_metadata_text` = Pre-Messages get information added to their text field.
+ *                    UI can set this to true when it already displays this information in a prettier manner.
  * - `protect_autocrypt` = Enable Header Protection for Autocrypt header.
  *                    This is an experimental option not compatible to other MUAs
  *                    and older Delta Chat versions.

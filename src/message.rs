@@ -8,6 +8,8 @@ use std::str;
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
 use deltachat_derive::{FromSql, ToSql};
+use humansize::BINARY;
+use humansize::format_size;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
@@ -426,6 +428,10 @@ pub struct Message {
     pub(crate) ephemeral_timer: EphemeralTimer,
     pub(crate) ephemeral_timestamp: i64,
     pub(crate) text: String,
+    /// Text that is added to the end of Message.text
+    ///
+    /// Currently used for adding the download information on pre-messages
+    pub(crate) additional_text: String,
 
     /// Message subject.
     ///
@@ -484,7 +490,7 @@ impl Message {
             !id.is_special(),
             "Can not load special message ID {id} from DB"
         );
-        let msg = context
+        let mut msg = context
             .sql
             .query_row_optional(
                 concat!(
@@ -566,6 +572,7 @@ impl Message {
                         original_msg_id: row.get("original_msg_id")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
+                        additional_text: String::new(),
                         subject: row.get("subject")?,
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
                         hidden: row.get("hidden")?,
@@ -580,7 +587,51 @@ impl Message {
             .await
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
+        if let Some(msg) = &mut msg {
+            msg.additional_text =
+                Self::get_additional_text(context, msg.download_state, &msg.param).await?;
+        }
+
         Ok(msg)
+    }
+
+    /// Returns additional text which is appended to the message's text field
+    /// when it is loaded from the database.
+    /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
+    async fn get_additional_text(
+        context: &Context,
+        download_state: DownloadState,
+        param: &Params,
+    ) -> Result<String> {
+        if download_state != DownloadState::Done {
+            let hide_pre_message_metadata = context
+                .get_config_bool(Config::HidePreMessageMetadataText)
+                .await?;
+            if !hide_pre_message_metadata {
+                let file_size = param
+                    .get(Param::FullMessageFileBytes)
+                    .and_then(|s| s.parse().ok())
+                    .map(|file_size: usize| format_size(file_size, BINARY))
+                    .unwrap_or("?".to_owned());
+                let viewtype = param
+                    .get_i64(Param::FullMessageViewtype)
+                    .and_then(Viewtype::from_i64)
+                    .unwrap_or(Viewtype::Unknown);
+                let file_name = param
+                    .get(Param::Filename)
+                    .map(sanitize_filename)
+                    .unwrap_or("?".to_owned());
+
+                return match viewtype {
+                    Viewtype::File => Ok(format!(" [{file_name} - {file_size}]")),
+                    _ => {
+                        let translated_viewtype = viewtype.to_locale_string(context).await;
+                        Ok(format!(" [{translated_viewtype} - {file_size}]"))
+                    }
+                };
+            }
+        }
+        Ok(String::new())
     }
 
     /// Returns the MIME type of an attached file if it exists.
@@ -765,7 +816,7 @@ impl Message {
 
     /// Returns the text of the message.
     pub fn get_text(&self) -> String {
-        self.text.clone()
+        self.text.clone() + &self.additional_text
     }
 
     /// Returns message subject.

@@ -1068,9 +1068,9 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "fail_on_receiving_full_msg",
+            "hide_pre_message_metadata_text",
             self.sql
-                .get_raw_config("fail_on_receiving_full_msg")
+                .get_raw_config("hide_pre_message_metadata_text")
                 .await?
                 .unwrap_or_default(),
         );

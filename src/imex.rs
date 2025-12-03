@@ -772,6 +772,13 @@ async fn export_database(
             let res = conn
                 .query_row("SELECT sqlcipher_export('backup')", [], |_row| Ok(()))
                 .context("failed to export to attached backup database");
+            // This option is device/client specific, so we reset it on backup.
+            // The test for this is tests::pre_messages::additional_text::test_disable_option_is_exluded_from_backup
+            conn.execute(
+                "UPDATE backup.config SET value='0' WHERE keyname=?;",
+                [Config::HidePreMessageMetadataText.to_string()],
+            )
+            .ok();
             conn.execute(
                 "UPDATE backup.config SET value='0' WHERE keyname='verified_one_on_one_chats';",
                 [],
