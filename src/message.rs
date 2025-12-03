@@ -604,32 +604,27 @@ impl Message {
         param: &Params,
     ) -> Result<String> {
         if download_state != DownloadState::Done {
-            let hide_pre_message_metadata = context
-                .get_config_bool(Config::HidePreMessageMetadataText)
-                .await?;
-            if !hide_pre_message_metadata {
-                let file_size = param
-                    .get(Param::PostMessageFileBytes)
-                    .and_then(|s| s.parse().ok())
-                    .map(|file_size: usize| format_size(file_size, BINARY))
-                    .unwrap_or("?".to_owned());
-                let viewtype = param
-                    .get_i64(Param::PostMessageViewtype)
-                    .and_then(Viewtype::from_i64)
-                    .unwrap_or(Viewtype::Unknown);
-                let file_name = param
-                    .get(Param::Filename)
-                    .map(sanitize_filename)
-                    .unwrap_or("?".to_owned());
+            let file_size = param
+                .get(Param::PostMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+                .map(|file_size: usize| format_size(file_size, BINARY))
+                .unwrap_or("?".to_owned());
+            let viewtype = param
+                .get_i64(Param::PostMessageViewtype)
+                .and_then(Viewtype::from_i64)
+                .unwrap_or(Viewtype::Unknown);
+            let file_name = param
+                .get(Param::Filename)
+                .map(sanitize_filename)
+                .unwrap_or("?".to_owned());
 
-                return match viewtype {
-                    Viewtype::File => Ok(format!(" [{file_name} - {file_size}]")),
-                    _ => {
-                        let translated_viewtype = viewtype.to_locale_string(context).await;
-                        Ok(format!(" [{translated_viewtype} - {file_size}]"))
-                    }
-                };
-            }
+            return match viewtype {
+                Viewtype::File => Ok(format!(" [{file_name} - {file_size}]")),
+                _ => {
+                    let translated_viewtype = viewtype.to_locale_string(context).await;
+                    Ok(format!(" [{translated_viewtype} - {file_size}]"))
+                }
+            };
         }
         Ok(String::new())
     }

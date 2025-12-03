@@ -488,8 +488,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    Post-Messages are automatically downloaded if they are smaller than the download_limit.
  *                    0=no limit (default).
  *                    Changes affect future messages only.
- * - `hide_pre_message_metadata_text` = Pre-Messages get information added to their text field.
- *                    UI can set this to true when it already displays this information in a prettier manner.
  * - `protect_autocrypt` = Enable Header Protection for Autocrypt header.
  *                    This is an experimental option not compatible to other MUAs
  *                    and older Delta Chat versions.
