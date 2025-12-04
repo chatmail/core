@@ -27,6 +27,11 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
 
+      # Ensure npm 11.5.1 or later is installed.
+      # It is needed for <https://docs.npmjs.com/trusted-publishers>
+      - name: Update npm
+        run: npm install -g npm@latest
+
       - name: Install dependencies without running scripts
         working-directory: deltachat-jsonrpc/typescript
         run: npm install --ignore-scripts
