@@ -716,6 +716,7 @@ impl Imap {
                     .get_header_value(HeaderDef::ChatIsPostMessage)
                     .is_some()
                 {
+                    info!(context, "{} is a post message", message_id.clone());
                     // This is a Post-Message
                     available_post_msgs.push(message_id.clone());
 
@@ -731,6 +732,7 @@ impl Imap {
                         false
                     }
                 } else {
+                    info!(context, "{} is not a post message", message_id.clone());
                     // This is not a Post-Message
                     if is_background_fetch {
                         if size < MAX_FETCH_MSG_SIZE {
@@ -824,6 +826,12 @@ impl Imap {
 
         // TODO: is there correct place for this?
         if fetch_res.is_ok() {
+            info!(
+                context,
+                "available_post_msgs: {}, download_when_normal_starts: {}",
+                available_post_msgs.len(),
+                download_when_normal_starts.len()
+            );
             for rfc724_mid in available_post_msgs {
                 context
                     .sql
