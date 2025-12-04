@@ -4392,6 +4392,16 @@ pub(crate) async fn save_copy_in_self_talk(
     msg.param.remove(Param::WebxdcDocumentTimestamp);
     msg.param.remove(Param::WebxdcSummary);
     msg.param.remove(Param::WebxdcSummaryTimestamp);
+    msg.param.remove(Param::PostMessageFileBytes);
+    msg.param.remove(Param::PostMessageViewtype);
+
+    if msg.download_state != DownloadState::Done {
+        // we don't use Message.get_text() here,
+        // because it may change in future,
+        // when UI shows this info itself,
+        // then the additional_text will not be added in get_text anymore.
+        msg.text += &msg.additional_text;
+    }
 
     if !msg.original_msg_id.is_unset() {
         bail!("message already saved.");
