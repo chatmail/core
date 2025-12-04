@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.32.0] - 2025-12-04
+
+Version bump to trigger publishing of npm prebuilds
+that failed to be published for 2.31.0 due to not configured "trusted publishers".
+
+### Features / Changes
+
+- Lookup_or_create_adhoc_group(): Add context to SQL errors ([#7554](https://github.com/chatmail/core/pull/7554)).
+
 ## [2.31.0] - 2025-12-04
 
 ### CI
@@ -7350,3 +7359,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.29.0]: https://github.com/chatmail/core/compare/v2.28.0..v2.29.0
 [2.30.0]: https://github.com/chatmail/core/compare/v2.29.0..v2.30.0
 [2.31.0]: https://github.com/chatmail/core/compare/v2.30.0..v2.31.0
+[2.32.0]: https://github.com/chatmail/core/compare/v2.31.0..v2.32.0
