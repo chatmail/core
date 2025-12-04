@@ -16,7 +16,8 @@ id INTEGER PRIMARY KEY AUTOINCREMENT,
 text TEXT DEFAULT '' NOT NULL -- message text
 ) STRICT",
     )
-    .await?;
+    .await
+    .context("CREATE TABLE messages")?;
 ```
 
 Do not use macros like [`concat!`](https://doc.rust-lang.org/std/macro.concat.html)
@@ -29,7 +30,8 @@ id INTEGER PRIMARY KEY AUTOINCREMENT, \
 text TEXT DEFAULT '' NOT NULL \
 ) STRICT",
     )
-    .await?;
+    .await
+    .context("CREATE TABLE messages")?;
 ```
 Escaping newlines
 is prone to errors like this if space before backslash is missing:
@@ -62,6 +64,9 @@ still used by older versions, so deleting them breaks downgrading the core or im
 an older version. Also don't change the column type, consider adding a new column with another name
 instead. Finally, never change column semantics, this is especially dangerous because the `STRICT`
 keyword doesn't help here.
+
+Consider adding context to `anyhow` errors for SQL statements using `.context()` so that it's
+possible to understand from logs which statement failed. See [Errors](#errors) for more info.
 
 ## Errors
 
