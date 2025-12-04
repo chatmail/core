@@ -2506,10 +2506,11 @@ async fn lookup_or_create_adhoc_group(
                 id INTEGER PRIMARY KEY
             ) STRICT",
             (),
-        )?;
+        )
+        .context("CREATE TEMP TABLE temp.contacts")?;
         let mut stmt = t.prepare("INSERT INTO temp.contacts(id) VALUES (?)")?;
         for &id in &contact_ids {
-            stmt.execute((id,))?;
+            stmt.execute((id,)).context("INSERT INTO temp.contacts")?;
         }
         let val = t
             .query_row(
@@ -2531,8 +2532,10 @@ async fn lookup_or_create_adhoc_group(
                     Ok((id, blocked))
                 },
             )
-            .optional()?;
-        t.execute("DROP TABLE temp.contacts", ())?;
+            .optional()
+            .context("Select chat with matching name and members")?;
+        t.execute("DROP TABLE temp.contacts", ())
+            .context("DROP TABLE temp.contacts")?;
         Ok(val)
     };
     let query_only = true;
