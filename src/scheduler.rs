@@ -664,6 +664,7 @@ async fn fetch_idle(
     Ok(session)
 }
 
+/// The simplified IMAP IDLE loop to watch non primary folders (non-inbox folders)
 async fn simple_imap_loop(
     ctx: Context,
     started: oneshot::Sender<()>,
