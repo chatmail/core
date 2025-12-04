@@ -12,6 +12,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
 use chrono::TimeZone;
 use deltachat_contact_tools::{ContactAddress, sanitize_bidi_characters, sanitize_single_line};
+use humansize::{BINARY, format_size};
 use mail_builder::mime::MimePart;
 use serde::{Deserialize, Serialize};
 use strum_macros::EnumIter;
@@ -2735,10 +2736,10 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
-/// Renders the message or Full-Message and Pre-Message.
+/// Renders the Message or splits it into Post-Message and Pre-Message.
 ///
-/// Pre-Message is a small message with metadata which announces a larger Full-Message.
-/// Full messages are not downloaded in the background.
+/// Pre-Message is a small message with metadata which announces a larger Post-Message.
+/// Post-Messages are not downloaded in the background.
 ///
 /// If pre-message is not nessesary this returns a normal message instead.
 async fn render_mime_message_and_pre_message(
@@ -2755,9 +2756,14 @@ async fn render_mime_message_and_pre_message(
             > PRE_MSG_ATTACHMENT_SIZE_THRESHOLD;
 
     if needs_pre_message {
-        let mut mimefactory_full_msg = mimefactory.clone();
-        mimefactory_full_msg.set_as_full_message();
-        let rendered_msg = mimefactory_full_msg.render(context).await?;
+        info!(
+            context,
+            "Message is large and will be split into a pre- and a post-message.",
+        );
+
+        let mut mimefactory_post_msg = mimefactory.clone();
+        mimefactory_post_msg.set_as_post_message();
+        let rendered_msg = mimefactory_post_msg.render(context).await?;
 
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
@@ -2860,6 +2866,21 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
                 Err(err)
             }
         }?;
+
+    if let (post_msg, Some(pre_msg)) = (&rendered_msg, &rendered_pre_msg) {
+        info!(
+            context,
+            "Message Sizes: Pre-Message {}; Post-Message: {}",
+            format_size(pre_msg.message.len(), BINARY),
+            format_size(post_msg.message.len(), BINARY)
+        );
+    } else {
+        info!(
+            context,
+            "Message will be sent as normal message (no pre- and post message). Size: {}",
+            format_size(rendered_msg.message.len(), BINARY)
+        );
+    }
 
     if needs_encryption && !rendered_msg.is_encrypted {
         /* unrecoverable */
