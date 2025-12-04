@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.30.0] - 2025-12-04
+
+### Features / Changes
+
+- Disable SNI for STARTTLS ([#7499](https://github.com/chatmail/core/pull/7499)).
+- Introduce cross-core testing along with improvements to test frameworking.
+- Synchronize transports via sync messages.
+
+### Fixes
+
+- Fix shutdown shortly after call.
+
+### API-Changes
+
+- Add `TransportsModified` event (for tests).
+
+### CI
+
+- Use "trusted publishing" for NPM packages.
+
+### Miscellaneous Tasks
+
+- deps: Bump actions/checkout from 5 to 6.
+- cargo: Bump syn from 2.0.110 to 2.0.111.
+- deps: Bump astral-sh/setup-uv from 7.1.3 to 7.1.4.
+- cargo: Bump sdp from 0.8.0 to 0.10.0.
+- Remove two outdated todo comments ([#7550](https://github.com/chatmail/core/pull/7550)).
+
 ## [2.29.0] - 2025-12-01
 
 ### API-Changes
@@ -7310,3 +7338,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.27.0]: https://github.com/chatmail/core/compare/v2.26.0..v2.27.0
 [2.28.0]: https://github.com/chatmail/core/compare/v2.27.0..v2.28.0
 [2.29.0]: https://github.com/chatmail/core/compare/v2.28.0..v2.29.0
+[2.30.0]: https://github.com/chatmail/core/compare/v2.29.0..v2.30.0
