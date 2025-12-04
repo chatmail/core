@@ -224,7 +224,7 @@ async fn available_post_msgs_contains_rfc724_mid(
 ) -> Result<bool> {
     Ok(context
         .sql
-        .query_get_value::<MsgId>(
+        .query_get_value::<String>(
             "SELECT rfc724_mid FROM available_post_msgs WHERE rfc724_mid=?",
             (&rfc724_mid,),
         )
