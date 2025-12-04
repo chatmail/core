@@ -42,3 +42,16 @@ def test_send_and_receive_message(alice_and_remote_bob) -> None:
 
     msg = alice.wait_for_incoming_msg()
     assert msg.get_snapshot().text == "hello"
+
+
+def test_second_device(acfactory, alice_and_remote_bob) -> None:
+    """Test setting up current version as a second device for old version."""
+    _alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.20.0")
+
+    remote_eval("locals().setdefault('future', bob._rpc.provide_backup.future(bob.id))")
+    qr = remote_eval("bob._rpc.get_backup_qr(bob.id)")
+    new_account = acfactory.get_unconfigured_account()
+    new_account._rpc.get_backup(new_account.id, qr)
+    remote_eval("locals()['future']()")
+
+    assert new_account.get_config("addr") == remote_eval("bob.get_config('addr')")
