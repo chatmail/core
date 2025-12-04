@@ -289,7 +289,11 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
                 );
                 remove_from_download_table(context, rfc724_mid).await?;
             } else if available_post_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
-                // set the message to DownloadState::Failure - probably it was deleted on the server in the meantime
+                warn!(
+                    context,
+                    "{rfc724_mid} is in available_post_msgs table but we failed to fetch it,
+                    so set the message to DownloadState::Failure - probably it was deleted on the server in the meantime"
+                );
                 set_msg_state_to_failed(context, rfc724_mid).await?;
                 remove_from_download_table(context, rfc724_mid).await?;
                 remove_from_available_post_msgs_table(context, rfc724_mid).await?;
