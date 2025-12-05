@@ -13,7 +13,6 @@ use strum_macros::{AsRefStr, Display, EnumIter, EnumString};
 use tokio::fs;
 
 use crate::blob::BlobObject;
-use crate::configure::EnteredLoginParam;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
@@ -21,7 +20,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::Provider;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
-use crate::transport::ConfiguredLoginParam;
+use crate::transport::{ConfiguredLoginParam, add_pseudo_transport};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -204,7 +203,7 @@ pub enum Config {
     /// `ProviderOptions::delete_to_trash`.
     DeleteToTrash,
 
-    /// The primary email address. Also see `SecondaryAddrs`.
+    /// The primary email address.
     ConfiguredAddr,
 
     /// List of configured IMAP servers as a JSON array.
@@ -305,10 +304,6 @@ pub enum Config {
     /// Optional tag as "Work", "Family".
     /// Meant to help profile owner to differ between profiles with similar names.
     PrivateTag,
-
-    /// All secondary self addresses separated by spaces
-    /// (`addr1@example.org addr2@example.org addr3@example.org`)
-    SecondaryAddrs,
 
     /// Read-only core version string.
     #[strum(serialize = "sys.version")]
@@ -819,16 +814,7 @@ impl Context {
                         self,
                         "Creating a pseudo configured account which will not be able to send or receive messages. Only meant for tests!"
                     );
-                    self.sql
-                        .execute(
-                            "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
-                            (
-                                addr,
-                                serde_json::to_string(&EnteredLoginParam::default())?,
-                                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
-                            ),
-                        )
-                        .await?;
+                    add_pseudo_transport(self, addr).await?;
                     self.sql
                         .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(addr))
                         .await?;
@@ -958,16 +944,6 @@ impl Context {
     pub(crate) async fn set_primary_self_addr(&self, primary_new: &str) -> Result<()> {
         self.quota.write().await.take();
 
-        // add old primary address (if exists) to secondary addresses
-        let mut secondary_addrs = self.get_all_self_addrs().await?;
-        // never store a primary address also as a secondary
-        secondary_addrs.retain(|a| !addr_cmp(a, primary_new));
-        self.set_config_internal(
-            Config::SecondaryAddrs,
-            Some(secondary_addrs.join(" ").as_str()),
-        )
-        .await?;
-
         self.sql
             .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(primary_new))
             .await?;
@@ -985,14 +961,10 @@ impl Context {
 
     /// Returns all secondary self addresses.
     pub(crate) async fn get_secondary_self_addrs(&self) -> Result<Vec<String>> {
-        let secondary_addrs = self
-            .get_config(Config::SecondaryAddrs)
-            .await?
-            .unwrap_or_default();
-        Ok(secondary_addrs
-            .split_ascii_whitespace()
-            .map(|s| s.to_string())
-            .collect())
+        self.sql.query_map_vec("SELECT addr FROM transports WHERE addr NOT IN (SELECT value FROM config WHERE keyname='configured_addr')", (), |row| {
+            let addr: String = row.get(0)?;
+            Ok(addr)
+        }).await
     }
 
     /// Returns the primary self address.

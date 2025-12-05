@@ -95,59 +95,6 @@ async fn test_set_config_bool() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_self_addrs() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-
-    assert!(alice.is_self_addr("alice@example.org").await?);
-    assert_eq!(alice.get_all_self_addrs().await?, vec!["alice@example.org"]);
-    assert!(!alice.is_self_addr("alice@alice.com").await?);
-
-    // Test adding the same primary address
-    alice.set_primary_self_addr("alice@example.org").await?;
-    alice.set_primary_self_addr("Alice@Example.Org").await?;
-    assert_eq!(alice.get_all_self_addrs().await?, vec!["Alice@Example.Org"]);
-
-    // Test adding a new (primary) self address
-    // The address is trimmed during configure by `LoginParam::from_database()`,
-    // so `set_primary_self_addr()` doesn't have to trim it.
-    alice.set_primary_self_addr("Alice@alice.com").await?;
-    assert!(alice.is_self_addr("aliCe@example.org").await?);
-    assert!(alice.is_self_addr("alice@alice.com").await?);
-    assert_eq!(
-        alice.get_all_self_addrs().await?,
-        vec!["Alice@alice.com", "Alice@Example.Org"]
-    );
-
-    // Check that the entry is not duplicated
-    alice.set_primary_self_addr("alice@alice.com").await?;
-    alice.set_primary_self_addr("alice@alice.com").await?;
-    assert_eq!(
-        alice.get_all_self_addrs().await?,
-        vec!["alice@alice.com", "Alice@Example.Org"]
-    );
-
-    // Test switching back
-    alice.set_primary_self_addr("alice@example.org").await?;
-    assert_eq!(
-        alice.get_all_self_addrs().await?,
-        vec!["alice@example.org", "alice@alice.com"]
-    );
-
-    // Test setting a new primary self address, the previous self address
-    // should be kept as a secondary self address
-    alice.set_primary_self_addr("alice@alice.xyz").await?;
-    assert_eq!(
-        alice.get_all_self_addrs().await?,
-        vec!["alice@alice.xyz", "alice@example.org", "alice@alice.com"]
-    );
-    assert!(alice.is_self_addr("alice@example.org").await?);
-    assert!(alice.is_self_addr("alice@alice.com").await?);
-    assert!(alice.is_self_addr("Alice@alice.xyz").await?);
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdns_default_behaviour() -> Result<()> {
     let t = &TestContext::new_alice().await;
     assert!(t.should_request_mdns().await?);
