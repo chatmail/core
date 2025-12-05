@@ -12,29 +12,23 @@ use crate::pgp::{self, SeipdVersion};
 
 #[derive(Debug)]
 pub struct EncryptHelper {
-    pub prefer_encrypt: EncryptPreference,
     pub addr: String,
     pub public_key: SignedPublicKey,
 }
 
 impl EncryptHelper {
     pub async fn new(context: &Context) -> Result<EncryptHelper> {
-        let prefer_encrypt = EncryptPreference::Mutual;
         let addr = context.get_primary_self_addr().await?;
         let public_key = load_self_public_key(context).await?;
 
-        Ok(EncryptHelper {
-            prefer_encrypt,
-            addr,
-            public_key,
-        })
+        Ok(EncryptHelper { addr, public_key })
     }
 
     pub fn get_aheader(&self) -> Aheader {
         Aheader {
             addr: self.addr.clone(),
             public_key: self.public_key.clone(),
-            prefer_encrypt: self.prefer_encrypt,
+            prefer_encrypt: EncryptPreference::Mutual,
             verified: false,
         }
     }
