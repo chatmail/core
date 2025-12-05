@@ -1012,3 +1012,47 @@ def test_message_exists(acfactory):
     ac1.remove()
     assert not message1.exists()
     assert not message2.exists()
+
+
+def test_synchronize_member_list_on_group_rejoin(acfactory, log):
+    """
+    Test that user recreates group member list when it joins the group again.
+    ac1 creates a group with two other accounts: ac2 and ac3
+    Then it removes ac2, removes ac3 and adds ac2 back.
+    ac2 did not see that ac3 is removed, so it should rebuild member list from scratch.
+    """
+    log.section("setting up accounts, accepted with each other")
+    ac1, ac2, ac3 = accounts = acfactory.get_online_accounts(3)
+
+    log.section("ac1: creating group chat with 2 other members")
+    chat = ac1.create_group("title1")
+    chat.add_contact(ac2)
+    chat.add_contact(ac3)
+
+    log.section("ac1: send message to new group chat")
+    msg = chat.send_text("hello")
+    assert chat.num_contacts() == 3
+
+    log.section("checking that the chat arrived correctly")
+    for ac in accounts[1:]:
+        msg = ac.wait_for_incoming_msg().get_snapshot()
+        assert msg.text == "hello"
+        assert msg.chat.num_contacts() == 3
+        msg.chat.accept()
+
+    log.section("ac1: removing ac2")
+    chat.remove_contact(ac2)
+
+    log.section("ac2: wait for a message about removal from the chat")
+    ac2.wait_for_incoming_msg()
+    log.section("ac1: removing ac3")
+    chat.remove_contact(ac3)
+
+    log.section("ac1: adding ac2 back")
+    chat.add_contact(ac2)
+
+    log.section("ac2: check that ac3 is removed")
+    msg = ac2.wait_for_incoming_msg()
+
+    assert chat.num_contacts() == 2
+    assert msg.get_snapshot().chat.num_contacts() == 2
