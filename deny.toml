@@ -12,6 +12,11 @@ ignore = [
 
     # Unmaintained paste
     "RUSTSEC-2024-0436",
+
+    # Unmaintained rustls-pemfile
+    # It is a transitive dependency of iroh 0.35.0,
+    # this should be fixed by upgrading to iroh 1.0 once it is released.
+    "RUSTSEC-2025-0134"
 ]
 
 [bans]
