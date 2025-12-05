@@ -35,6 +35,13 @@ export interface StartOptions {
  */
 export function startDeltaChat(directory: string, options?: Partial<SearchOptions & StartOptions> ): DeltaChatOverJsonRpcServer
 
+export class DeltaChatOverJsonRpc extends StdioDeltaChat {
+  constructor(
+    directory: string,
+    options?: Partial<SearchOptions & StartOptions>
+  );
+  readonly pathToServerBinary: string;
+}
 
 export namespace FnTypes {
     export type getRPCServerPath = typeof getRPCServerPath
