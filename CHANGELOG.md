@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.33.0] - 2025-12-05
+
+### Features / Changes
+
+- Case-insensitive search for non-ASCII chat and contact names ([#7477](https://github.com/chatmail/core/pull/7477)).
+
+### Fixes
+
+- Recognize all transport addresses as own addresses.
+
 ## [2.32.0] - 2025-12-04
 
 Version bump to trigger publishing of npm prebuilds
@@ -7360,3 +7370,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.30.0]: https://github.com/chatmail/core/compare/v2.29.0..v2.30.0
 [2.31.0]: https://github.com/chatmail/core/compare/v2.30.0..v2.31.0
 [2.32.0]: https://github.com/chatmail/core/compare/v2.31.0..v2.32.0
+[2.33.0]: https://github.com/chatmail/core/compare/v2.32.0..v2.33.0
