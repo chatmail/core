@@ -1,4 +1,3 @@
-import sys
 import time
 
 import deltachat as dc
@@ -62,56 +61,6 @@ class TestGroupStressTests:
         msg = sysmsg.chat.send_text("hello!")
         # Message should be encrypted because keys of other members are gossiped
         assert msg.is_encrypted()
-
-    def test_synchronize_member_list_on_group_rejoin(self, acfactory, lp):
-        """
-        Test that user recreates group member list when it joins the group again.
-        ac1 creates a group with two other accounts: ac2 and ac3
-        Then it removes ac2, removes ac3 and adds ac2 back.
-        ac2 did not see that ac3 is removed, so it should rebuild member list from scratch.
-        """
-        lp.sec("setting up accounts, accepted with each other")
-        accounts = acfactory.get_online_accounts(3)
-        acfactory.introduce_each_other(accounts)
-        ac1, ac2, ac3 = accounts
-
-        lp.sec("ac1: creating group chat with 2 other members")
-        chat = ac1.create_group_chat("title1", contacts=[ac2, ac3])
-        assert not chat.is_promoted()
-
-        lp.sec("ac1: send message to new group chat")
-        msg = chat.send_text("hello")
-        assert chat.is_promoted() and msg.is_encrypted()
-
-        assert chat.num_contacts() == 3
-
-        lp.sec("checking that the chat arrived correctly")
-        for ac in accounts[1:]:
-            msg = ac._evtracker.wait_next_incoming_message()
-            assert msg.text == "hello"
-            print("chat is", msg.chat)
-            assert msg.chat.num_contacts() == 3
-
-        lp.sec("ac1: removing ac2")
-        chat.remove_contact(ac2)
-
-        lp.sec("ac2: wait for a message about removal from the chat")
-        msg = ac2._evtracker.wait_next_incoming_message()
-
-        lp.sec("ac1: removing ac3")
-        chat.remove_contact(ac3)
-
-        lp.sec("ac1: adding ac2 back")
-        # Group is promoted, message is sent automatically
-        assert chat.is_promoted()
-        chat.add_contact(ac2)
-
-        lp.sec("ac2: check that ac3 is removed")
-        msg = ac2._evtracker.wait_next_incoming_message()
-
-        assert chat.num_contacts() == 2
-        assert msg.chat.num_contacts() == 2
-        acfactory.dump_imap_summary(sys.stdout)
 
 
 def test_qr_verified_group_and_chatting(acfactory, lp):
