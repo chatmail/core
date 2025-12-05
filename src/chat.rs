@@ -2904,6 +2904,10 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
         original_msg.from_id == ContactId::SELF,
         "Can edit only own messages"
     );
+    ensure!(
+        original_msg.get_showpadlock(),
+        "Cannot edit unencrypted messages"
+    );
     ensure!(!original_msg.is_info(), "Cannot edit info messages");
     ensure!(!original_msg.has_html(), "Cannot edit HTML messages");
     ensure!(original_msg.viewtype != Viewtype::Call, "Cannot edit calls");
@@ -2921,9 +2925,7 @@ pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: Strin
 
     let mut edit_msg = Message::new_text(EDITED_PREFIX.to_owned() + &new_text); // prefix only set for nicer display in Non-Delta-MUAs
     edit_msg.set_quote(context, Some(&original_msg)).await?; // quote only set for nicer display in Non-Delta-MUAs
-    if original_msg.get_showpadlock() {
-        edit_msg.param.set_int(Param::GuaranteeE2ee, 1);
-    }
+    edit_msg.param.set_int(Param::GuaranteeE2ee, 1);
     edit_msg
         .param
         .set(Param::TextEditFor, original_msg.rfc724_mid);

@@ -1,11 +1,10 @@
 use mailparse::ParsedMail;
-use std::mem;
 
 use super::*;
 use crate::{
     chat,
     chatlist::Chatlist,
-    constants::{self, Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
+    constants::{Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
     message::{MessageState, MessengerMessage},
     receive_imf::receive_imf,
     test_utils::{TestContext, TestContextManager},
@@ -1964,23 +1963,16 @@ async fn test_chat_edit_imf_header() -> Result<()> {
     let alice_msg = sent1.load_from_db().await;
     assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, 1);
 
-    chat::send_edit_request(alice, alice_msg.id, "bar".to_string()).await?;
-    let mut sent2 = alice.pop_sent_msg().await;
-    let mut s0 = String::new();
-    let mut s1 = String::new();
-    for l in sent2.payload.lines() {
-        if l.starts_with("Chat-Edit:") {
-            s1 += l;
-            s1 += "\n";
-            continue;
-        }
-        s0 += l;
-        s0 += "\n";
-        if l.starts_with("Message-ID:") && s1.is_empty() {
-            s1 = mem::take(&mut s0);
-        }
-    }
-    sent2.payload = s1 + &s0;
+    // Cannot edit unencrypted messages.
+    let res = chat::send_edit_request(alice, alice_msg.id, "bar".to_string()).await;
+    assert!(res.is_err());
+
+    let mut sent2 = alice.send_text(alice_chat.id, "bar").await;
+    sent2.payload = sent2.payload.replacen(
+        "Message-ID:",
+        &format!("Chat-Edit: <{}>\nMessage-ID:", alice_msg.rfc724_mid),
+        1,
+    );
 
     // Bob receives both messages, the edit request with "Chat-Edit" in IMF headers is
     // received as text message.
@@ -1988,7 +1980,7 @@ async fn test_chat_edit_imf_header() -> Result<()> {
     assert_eq!(bob_msg.text, "foo");
     assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, 1);
     let bob_msg = bob.recv_msg(&sent2).await;
-    assert_eq!(bob_msg.text, constants::EDITED_PREFIX.to_string() + "bar");
+    assert_eq!(bob_msg.text, "bar");
     assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, 2);
 
     Ok(())
