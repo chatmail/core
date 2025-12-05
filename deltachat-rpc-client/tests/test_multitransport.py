@@ -201,3 +201,19 @@ def test_transport_synchronization(acfactory, log) -> None:
 
     assert ac1.wait_for_incoming_msg().get_snapshot().text == "Hello!"
     assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "Hello!"
+
+
+def test_recognize_self_address(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+
+    bob_chat = bob.create_chat(alice)
+
+    qr = acfactory.get_account_qr()
+    alice.add_transport_from_qr(qr)
+
+    new_alice_addr = alice.list_transports()[1]["addr"]
+    alice.set_config("configured_addr", new_alice_addr)
+
+    bob_chat.send_text("Hello!")
+    msg = alice.wait_for_incoming_msg().get_snapshot()
+    assert msg.chat == alice.create_chat(bob)

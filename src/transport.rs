@@ -756,6 +756,21 @@ pub(crate) async fn sync_transports(
     Ok(())
 }
 
+/// Adds transport entry to the `transports` table with empty configuration.
+pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Result<()> {
+    context.sql
+        .execute(
+            "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
+            (
+                addr,
+                serde_json::to_string(&EnteredLoginParam::default())?,
+                format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
+            ),
+        )
+        .await?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
