@@ -219,10 +219,12 @@ class Chat:
         """Mark all messages in this chat as noticed."""
         self._rpc.marknoticed_chat(self.account.id, self.id)
 
-    def add_contact(self, *contact: Union[int, str, Contact]) -> None:
+    def add_contact(self, *contact: Union[int, str, Contact, "Account"]) -> None:
         """Add contacts to this group."""
+        from .account import Account
+
         for cnt in contact:
-            if isinstance(cnt, str):
+            if isinstance(cnt, (str, Account)):
                 contact_id = self.account.create_contact(cnt).id
             elif not isinstance(cnt, int):
                 contact_id = cnt.id
@@ -230,10 +232,12 @@ class Chat:
                 contact_id = cnt
             self._rpc.add_contact_to_chat(self.account.id, self.id, contact_id)
 
-    def remove_contact(self, *contact: Union[int, str, Contact]) -> None:
+    def remove_contact(self, *contact: Union[int, str, Contact, "Account"]) -> None:
         """Remove members from this group."""
+        from .account import Account
+
         for cnt in contact:
-            if isinstance(cnt, str):
+            if isinstance(cnt, (str, Account)):
                 contact_id = self.account.create_contact(cnt).id
             elif not isinstance(cnt, int):
                 contact_id = cnt.id
@@ -248,6 +252,10 @@ class Chat:
         """
         contacts = self._rpc.get_chat_contacts(self.account.id, self.id)
         return [Contact(self.account, contact_id) for contact_id in contacts]
+
+    def num_contacts(self) -> int:
+        """Return number of contacts in this chat."""
+        return len(self.get_contacts())
 
     def get_past_contacts(self) -> list[Contact]:
         """Get past contacts for this chat."""
