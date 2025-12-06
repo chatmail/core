@@ -253,6 +253,10 @@ class Chat:
         contacts = self._rpc.get_chat_contacts(self.account.id, self.id)
         return [Contact(self.account, contact_id) for contact_id in contacts]
 
+    def num_contacts(self) -> int:
+        """Return number of contacts in this chat."""
+        return len(self.get_contacts())
+
     def get_past_contacts(self) -> list[Contact]:
         """Get past contacts for this chat."""
         past_contacts = self._rpc.get_past_chat_contacts(self.account.id, self.id)
