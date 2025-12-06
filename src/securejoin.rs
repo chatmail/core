@@ -567,7 +567,7 @@ pub(crate) async fn handle_securejoin_handshake(
         "vc-contact-confirm" => {
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id,
-                progress: JoinerProgress::Succeeded.to_usize(),
+                progress: JoinerProgress::Succeeded.into_u16(),
             });
             Ok(HandshakeMessage::Ignore)
         }
@@ -590,7 +590,7 @@ pub(crate) async fn handle_securejoin_handshake(
 
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id,
-                progress: JoinerProgress::Succeeded.to_usize(),
+                progress: JoinerProgress::Succeeded.into_u16(),
             });
             Ok(HandshakeMessage::Propagate)
         }

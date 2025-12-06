@@ -94,7 +94,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             // Even if Alice is not verified, we don't send anything.
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id: invite.contact_id(),
-                progress: JoinerProgress::Succeeded.to_usize(),
+                progress: JoinerProgress::Succeeded.into_u16(),
             });
             return Ok(joining_chat_id);
         } else if has_key
@@ -113,7 +113,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id: invite.contact_id(),
-                progress: JoinerProgress::RequestWithAuthSent.to_usize(),
+                progress: JoinerProgress::RequestWithAuthSent.into_u16(),
             });
         } else {
             send_handshake_message(context, &invite, private_chat_id, BobHandshakeMsg::Request)
@@ -240,7 +240,7 @@ pub(super) async fn handle_auth_required(
 
         context.emit_event(EventType::SecurejoinJoinerProgress {
             contact_id: invite.contact_id(),
-            progress: JoinerProgress::RequestWithAuthSent.to_usize(),
+            progress: JoinerProgress::RequestWithAuthSent.into_u16(),
         });
 
         auth_sent = true;
@@ -406,8 +406,7 @@ pub(crate) enum JoinerProgress {
 }
 
 impl JoinerProgress {
-    #[expect(clippy::wrong_self_convention)]
-    pub(crate) fn to_usize(self) -> usize {
+    pub(crate) fn into_u16(self) -> u16 {
         match self {
             JoinerProgress::RequestWithAuthSent => 400,
             JoinerProgress::Succeeded => 1000,
