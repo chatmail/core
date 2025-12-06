@@ -798,6 +798,26 @@ pub(crate) fn inc_and_check<T: PrimInt + AddAssign + std::fmt::Debug>(
     Ok(())
 }
 
+/// Converts usize to u64 without using `as`.
+///
+/// This is needed for example to convert in-memory buffer sizes
+/// to u64 type used for counting all the bytes written.
+///
+/// On 32-bit systems it is possible to have files
+/// larger than 4 GiB or write more than 4 GiB to network connection,
+/// in which case we need a 64-bit total counter,
+/// but use 32-bit usize for buffer sizes.
+///
+/// This can only break if usize has more than 64 bits
+/// and this is not the case as of 2025 and is
+/// unlikely to change for general purpose computers.
+/// See <https://github.com/rust-lang/rust/issues/30495>
+/// and <https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243>
+/// and <https://github.com/rust-lang/rust/issues/106050>.
+pub(crate) fn usize_to_u64(v: usize) -> u64 {
+    u64::try_from(v).unwrap_or(u64::MAX)
+}
+
 /// Returns early with an error if a condition is not satisfied.
 /// In non-optimized builds, panics instead if so.
 #[macro_export]

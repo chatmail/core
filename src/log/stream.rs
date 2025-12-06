@@ -15,16 +15,17 @@ use pin_project::pin_project;
 
 use crate::events::{Event, EventType, Events};
 use crate::net::session::SessionStream;
+use crate::tools::usize_to_u64;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 #[derive(Debug)]
 struct Metrics {
     /// Total number of bytes read.
-    pub total_read: usize,
+    pub total_read: u64,
 
     /// Total number of bytes written.
-    pub total_written: usize,
+    pub total_written: u64,
 }
 
 impl Metrics {
@@ -98,7 +99,7 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
         }
 
         let n = old_remaining - buf.remaining();
-        this.metrics.total_read = this.metrics.total_read.saturating_add(n);
+        this.metrics.total_read = this.metrics.total_read.saturating_add(usize_to_u64(n));
 
         res
     }
@@ -113,7 +114,7 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         let this = self.project();
         let res = this.inner.poll_write(cx, buf);
         if let Poll::Ready(Ok(n)) = res {
-            this.metrics.total_written = this.metrics.total_written.saturating_add(n);
+            this.metrics.total_written = this.metrics.total_written.saturating_add(usize_to_u64(n));
         }
         res
     }
@@ -140,7 +141,7 @@ impl<S: SessionStream> AsyncWrite for LoggingStream<S> {
         let this = self.project();
         let res = this.inner.poll_write_vectored(cx, bufs);
         if let Poll::Ready(Ok(n)) = res {
-            this.metrics.total_written = this.metrics.total_written.saturating_add(n);
+            this.metrics.total_written = this.metrics.total_written.saturating_add(usize_to_u64(n));
         }
         res
     }

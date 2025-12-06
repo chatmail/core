@@ -271,7 +271,7 @@ pub enum EventType {
         /// Progress.
         ///
         /// 0=error, 1-999=progress in permille, 1000=success and done
-        progress: usize,
+        progress: u16,
 
         /// Progress comment or error, something to display to the user.
         comment: Option<String>,
@@ -282,7 +282,7 @@ pub enum EventType {
     #[serde(rename_all = "camelCase")]
     ImexProgress {
         /// 0=error, 1-999=progress in permille, 1000=success and done
-        progress: usize,
+        progress: u16,
     },
 
     /// A file has been exported. A file has been written by imex().
@@ -313,7 +313,7 @@ pub enum EventType {
         chat_id: u32,
 
         /// Progress, always 1000.
-        progress: usize,
+        progress: u16,
     },
 
     /// Progress information of a secure-join handshake from the view of the joiner
@@ -329,7 +329,7 @@ pub enum EventType {
         /// 400=vg-/vc-request-with-auth sent, typically shown as "alice@addr verified, introducing myself."
         /// (Bob has verified alice and waits until Alice does the same for him)
         /// 1000=vg-member-added/vc-contact-confirm received
-        progress: usize,
+        progress: u16,
     },
 
     /// The connectivity to the server changed.

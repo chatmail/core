@@ -25,7 +25,8 @@ use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
 use crate::tools::{
-    TempPathGuard, create_folder, delete_file, get_filesuffix_lc, read_file, time, write_file,
+    TempPathGuard, create_folder, delete_file, get_filesuffix_lc, read_file, time, usize_to_u64,
+    write_file,
 };
 
 mod key_transfer;
@@ -263,14 +264,14 @@ struct ProgressReader<R> {
     inner: R,
 
     /// Number of bytes successfully read from the internal reader.
-    read: usize,
+    read: u64,
 
     /// Total size of the backup .tar file expected to be read from the reader.
     /// Used to calculate the progress.
-    file_size: usize,
+    file_size: u64,
 
     /// Last progress emitted to avoid emitting the same progress value twice.
-    last_progress: usize,
+    last_progress: u16,
 
     /// Context for emitting progress events.
     context: Context,
@@ -281,7 +282,7 @@ impl<R> ProgressReader<R> {
         Self {
             inner: r,
             read: 0,
-            file_size: file_size as usize,
+            file_size,
             last_progress: 1,
             context,
         }
@@ -301,9 +302,11 @@ where
         let before = buf.filled().len();
         let res = this.inner.poll_read(cx, buf);
         if let std::task::Poll::Ready(Ok(())) = res {
-            *this.read = this.read.saturating_add(buf.filled().len() - before);
+            *this.read = this
+                .read
+                .saturating_add(usize_to_u64(buf.filled().len() - before));
 
-            let progress = std::cmp::min(1000 * *this.read / *this.file_size, 999);
+            let progress = std::cmp::min(1000 * *this.read / *this.file_size, 999) as u16;
             if progress > *this.last_progress {
                 this.context.emit_event(EventType::ImexProgress(progress));
                 *this.last_progress = progress;
@@ -490,14 +493,14 @@ struct ProgressWriter<W> {
     inner: W,
 
     /// Number of bytes successfully written into the internal writer.
-    written: usize,
+    written: u64,
 
     /// Total size of the backup .tar file expected to be written into the writer.
     /// Used to calculate the progress.
-    file_size: usize,
+    file_size: u64,
 
     /// Last progress emitted to avoid emitting the same progress value twice.
-    last_progress: usize,
+    last_progress: u16,
 
     /// Context for emitting progress events.
     context: Context,
@@ -508,7 +511,7 @@ impl<W> ProgressWriter<W> {
         Self {
             inner: w,
             written: 0,
-            file_size: file_size as usize,
+            file_size,
             last_progress: 1,
             context,
         }
@@ -527,9 +530,9 @@ where
         let this = self.project();
         let res = this.inner.poll_write(cx, buf);
         if let std::task::Poll::Ready(Ok(written)) = res {
-            *this.written = this.written.saturating_add(written);
+            *this.written = this.written.saturating_add(usize_to_u64(written));
 
-            let progress = std::cmp::min(1000 * *this.written / *this.file_size, 999);
+            let progress = std::cmp::min(1000 * *this.written / *this.file_size, 999) as u16;
             if progress > *this.last_progress {
                 this.context.emit_event(EventType::ImexProgress(progress));
                 *this.last_progress = progress;
