@@ -271,7 +271,7 @@ struct ProgressReader<R> {
     file_size: u64,
 
     /// Last progress emitted to avoid emitting the same progress value twice.
-    last_progress: usize,
+    last_progress: u16,
 
     /// Context for emitting progress events.
     context: Context,
@@ -306,7 +306,7 @@ where
                 .read
                 .saturating_add(usize_to_u64(buf.filled().len() - before));
 
-            let progress = std::cmp::min(1000 * *this.read / *this.file_size, 999) as usize;
+            let progress = std::cmp::min(1000 * *this.read / *this.file_size, 999) as u16;
             if progress > *this.last_progress {
                 this.context.emit_event(EventType::ImexProgress(progress));
                 *this.last_progress = progress;
@@ -500,7 +500,7 @@ struct ProgressWriter<W> {
     file_size: u64,
 
     /// Last progress emitted to avoid emitting the same progress value twice.
-    last_progress: usize,
+    last_progress: u16,
 
     /// Context for emitting progress events.
     context: Context,
@@ -532,7 +532,7 @@ where
         if let std::task::Poll::Ready(Ok(written)) = res {
             *this.written = this.written.saturating_add(usize_to_u64(written));
 
-            let progress = std::cmp::min(1000 * *this.written / *this.file_size, 999) as usize;
+            let progress = std::cmp::min(1000 * *this.written / *this.file_size, 999) as u16;
             if progress > *this.last_progress {
                 this.context.emit_event(EventType::ImexProgress(progress));
                 *this.last_progress = progress;
