@@ -8,12 +8,12 @@ use humansize::{BINARY, format_size};
 #[derive(Debug)]
 pub struct StorageUsage {
     /// Total database size, subtract this from the backup size to estimate size of all blobs
-    pub db_size: usize,
+    pub db_size: u64,
     /// size and row count of the 10 biggest tables
-    pub largest_tables: Vec<(String, usize, Option<usize>)>,
+    pub largest_tables: Vec<(String, u64, Option<u64>)>,
     /// count and total size of status updates
     /// for the 10 webxdc apps with the most size usage in status updates
-    pub largest_webxdc_data: Vec<(MsgId, usize, usize)>,
+    pub largest_webxdc_data: Vec<(MsgId, u64, u64)>,
 }
 
 impl std::fmt::Display for StorageUsage {
@@ -46,12 +46,12 @@ impl std::fmt::Display for StorageUsage {
 
 /// Get storage usage information for the Context's database
 pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
-    let page_size: usize = ctx
+    let page_size: u64 = ctx
         .sql
         .query_get_value("PRAGMA page_size", ())
         .await?
         .unwrap_or_default();
-    let page_count: usize = ctx
+    let page_count: u64 = ctx
         .sql
         .query_get_value("PRAGMA page_count", ())
         .await?
@@ -68,7 +68,7 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
             (),
             |row| {
                 let name: String = row.get(0)?;
-                let size: usize = row.get(1)?;
+                let size: u64 = row.get(1)?;
                 Ok((name, size, None))
             },
         )
@@ -76,7 +76,7 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
 
     for row in &mut largest_tables {
         let name = &row.0;
-        let row_count: Result<Option<usize>> = ctx
+        let row_count: Result<Option<u64>> = ctx
             .sql
             // SECURITY: the table name comes from the db, not from the user
             .query_get_value(&format!("SELECT COUNT(*) FROM {name}"), ())
@@ -93,8 +93,8 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
             (),
             |row| {
                 let msg_id: MsgId = row.get(0)?;
-                let size: usize = row.get(1)?;
-                let count: usize = row.get(2)?;
+                let size: u64 = row.get(1)?;
+                let count: u64 = row.get(2)?;
 
                 Ok((msg_id, size, count))
             },
