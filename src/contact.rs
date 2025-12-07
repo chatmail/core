@@ -1133,7 +1133,8 @@ VALUES (?, ?, ?, ?, ?, ?)
             Origin::IncomingReplyTo
         };
         if query.is_some() {
-            let s3str_like_cmd = format!("%{}%", query.unwrap_or("").to_lowercase());
+            let query_lowercased = query.unwrap_or("").to_lowercase();
+            let s3str_like_cmd = format!("%{}%", query_lowercased);
             context
                 .sql
                 .query_map(
@@ -1151,7 +1152,7 @@ ORDER BY c.origin>=? DESC, c.last_seen DESC, c.id DESC
                         flag_address,
                         minimal_origin,
                         &s3str_like_cmd,
-                        &s3str_like_cmd,
+                        &query_lowercased,
                         Origin::CreateChat,
                     ),
                     |row| {
