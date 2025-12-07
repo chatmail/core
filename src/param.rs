@@ -433,6 +433,14 @@ impl Params {
         self.set(key, format!("{value}"));
         self
     }
+
+    pub fn steal(&mut self, src: &mut Self, key: Param) -> &mut Self {
+        let val = src.inner.remove(&key);
+        if let Some(val) = val {
+            self.inner.insert(key, val);
+        }
+        self
+    }
 }
 
 #[cfg(test)]
