@@ -10,8 +10,9 @@ pub use deltachat::accounts::Accounts;
 use deltachat::blob::BlobObject;
 use deltachat::calls::ice_servers;
 use deltachat::chat::{
-    self, add_contact_to_chat, forward_msgs, get_chat_media, get_chat_msgs, get_chat_msgs_ex,
-    marknoticed_chat, remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
+    self, add_contact_to_chat, forward_msgs, forward_msgs_2ctx, get_chat_media, get_chat_msgs,
+    get_chat_msgs_ex, marknoticed_chat, remove_contact_from_chat, Chat, ChatId, ChatItem,
+    MessageListOptions,
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::Config;
@@ -2206,6 +2207,27 @@ impl CommandApi {
         let ctx = self.get_context(account_id).await?;
         let message_ids: Vec<MsgId> = message_ids.into_iter().map(MsgId::new).collect();
         forward_msgs(&ctx, &message_ids, ChatId::new(chat_id)).await
+    }
+
+    /// Forward messages to a chat in another account.
+    /// See [`Self::forward_messages`] for more info.
+    async fn forward_messages_to_account(
+        &self,
+        src_account_id: u32,
+        src_message_ids: Vec<u32>,
+        dst_account_id: u32,
+        dst_chat_id: u32,
+    ) -> Result<()> {
+        let src_ctx = self.get_context(src_account_id).await?;
+        let dst_ctx = self.get_context(dst_account_id).await?;
+        let src_message_ids: Vec<MsgId> = src_message_ids.into_iter().map(MsgId::new).collect();
+        forward_msgs_2ctx(
+            &src_ctx,
+            &src_message_ids,
+            &dst_ctx,
+            ChatId::new(dst_chat_id),
+        )
+        .await
     }
 
     /// Resend messages and make information available for newly added chat members.

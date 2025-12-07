@@ -5240,6 +5240,44 @@ async fn test_send_delete_request_no_encryption() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_msgs_2ctx() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob).await;
+    let alice_sent = alice.send_text(alice_chat.id, "hi").await;
+    let bob_alice_msg = bob.recv_msg(&alice_sent).await;
+    let bob_chat_id = bob_alice_msg.chat_id;
+    bob_chat_id.accept(bob).await?;
+
+    let bob_text = "Hi, did you know we're using the same device so i have access to your profile?";
+    let bob_sent = bob.send_text(bob_chat_id, bob_text).await;
+    alice.recv_msg(&bob_sent).await;
+    let alice_chat_len = alice_chat.id.get_msg_cnt(alice).await?;
+
+    forward_msgs_2ctx(
+        bob,
+        &[bob_alice_msg.id, bob_sent.sender_msg_id],
+        alice,
+        alice_chat.id,
+    )
+    .await?;
+    assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, alice_chat_len + 2);
+    let msg = alice.get_last_msg().await;
+    assert!(msg.is_forwarded());
+    assert_eq!(msg.text, bob_text);
+    assert_eq!(msg.from_id, ContactId::SELF);
+
+    let sent = alice.pop_sent_msg().await;
+    let msg = bob.recv_msg(&sent).await;
+    assert!(msg.is_forwarded());
+    assert_eq!(msg.text, bob_text);
+    assert_eq!(msg.from_id, bob_alice_msg.from_id);
+    Ok(())
+}
+
 /// Tests that in multi-device setup
 /// second device learns the key of a contact
 /// via Autocrypt-Gossip in 1:1 chats.

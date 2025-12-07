@@ -4203,6 +4203,16 @@ pub async fn set_chat_profile_image(
 
 /// Forwards multiple messages to a chat.
 pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId) -> Result<()> {
+    forward_msgs_2ctx(context, msg_ids, context, chat_id).await
+}
+
+/// Forwards multiple messages to a chat in another context.
+pub async fn forward_msgs_2ctx(
+    ctx_src: &Context,
+    msg_ids: &[MsgId],
+    ctx_dst: &Context,
+    chat_id: ChatId,
+) -> Result<()> {
     ensure!(!msg_ids.is_empty(), "empty msgs_ids: nothing to forward");
     ensure!(!chat_id.is_special(), "can not forward to special chat");
 
@@ -4210,16 +4220,16 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
     let mut curr_timestamp: i64;
 
     chat_id
-        .unarchive_if_not_muted(context, MessageState::Undefined)
+        .unarchive_if_not_muted(ctx_dst, MessageState::Undefined)
         .await?;
-    let mut chat = Chat::load_from_db(context, chat_id).await?;
-    if let Some(reason) = chat.why_cant_send(context).await? {
+    let mut chat = Chat::load_from_db(ctx_dst, chat_id).await?;
+    if let Some(reason) = chat.why_cant_send(ctx_dst).await? {
         bail!("cannot send to {chat_id}: {reason}");
     }
-    curr_timestamp = create_smeared_timestamps(context, msg_ids.len());
+    curr_timestamp = create_smeared_timestamps(ctx_dst, msg_ids.len());
     let mut msgs = Vec::with_capacity(msg_ids.len());
     for id in msg_ids {
-        let ts: i64 = context
+        let ts: i64 = ctx_src
             .sql
             .query_get_value("SELECT timestamp FROM msgs WHERE id=?", (id,))
             .await?
@@ -4229,7 +4239,7 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
     msgs.sort_unstable();
     for (_, id) in msgs {
         let src_msg_id: MsgId = id;
-        let mut msg = Message::load_from_db(context, src_msg_id).await?;
+        let mut msg = Message::load_from_db(ctx_src, src_msg_id).await?;
         if msg.state == MessageState::OutDraft {
             bail!("cannot forward drafts.");
         }
@@ -4264,16 +4274,16 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.timestamp_sort = curr_timestamp;
-        chat.prepare_msg_raw(context, &mut msg, None).await?;
+        chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
 
         curr_timestamp += 1;
-        if !create_send_msg_jobs(context, &mut msg).await?.is_empty() {
-            context.scheduler.interrupt_smtp().await;
+        if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
+            ctx_dst.scheduler.interrupt_smtp().await;
         }
         created_msgs.push(msg.id);
     }
     for msg_id in created_msgs {
-        context.emit_msgs_changed(chat_id, msg_id);
+        ctx_dst.emit_msgs_changed(chat_id, msg_id);
     }
     Ok(())
 }
