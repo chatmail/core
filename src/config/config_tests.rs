@@ -81,6 +81,37 @@ async fn test_ui_config() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_get_all_ui_config_keys() -> Result<()> {
+    let t = TestContext::new().await;
+
+    t.set_ui_config("ui.android.screen_security", Some("safe"))
+        .await?;
+    t.set_ui_config("ui.lastchatid", Some("231")).await?;
+    t.set_ui_config(
+        "ui.desktop.webxdcBounds.528490",
+        Some(r#"{"x":954,"y":356,"width":378,"height":671}"#),
+    )
+    .await?;
+    t.set_ui_config(
+        "ui.desktop.webxdcBounds.556543",
+        Some(r#"{"x":954,"y":356,"width":378,"height":671}"#),
+    )
+    .await?;
+
+    assert_eq!(
+        get_all_ui_config_keys(&t).await?,
+        vec![
+            "ui.android.screen_security",
+            "ui.lastchatid",
+            "ui.desktop.webxdcBounds.528490",
+            "ui.desktop.webxdcBounds.556543"
+        ]
+    );
+
+    Ok(())
+}
+
 /// Regression test for https://github.com/deltachat/deltachat-core-rust/issues/3012
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_set_config_bool() -> Result<()> {

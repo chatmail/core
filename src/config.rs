@@ -987,5 +987,18 @@ fn get_config_keys_string() -> String {
     format!(" {keys} ")
 }
 
+/// Returns all `ui.*` config keys that were set by the UI.
+pub async fn get_all_ui_config_keys(context: &Context) -> Result<Vec<String>> {
+    let ui_keys = context
+        .sql
+        .query_map_vec(
+            "SELECT keyname FROM config WHERE keyname LIKE 'ui.%' ORDER BY config.id ASC",
+            (),
+            |row| Ok(row.get::<_, String>(0)?),
+        )
+        .await?;
+    Ok(ui_keys)
+}
+
 #[cfg(test)]
 mod config_tests;
