@@ -4392,12 +4392,22 @@ pub(crate) async fn save_copy_in_self_talk(
     msg.param.remove(Param::WebxdcDocumentTimestamp);
     msg.param.remove(Param::WebxdcSummary);
     msg.param.remove(Param::WebxdcSummaryTimestamp);
+    msg.param.remove(Param::PostMessageFileBytes);
+    msg.param.remove(Param::PostMessageViewtype);
+
+    if msg.download_state != DownloadState::Done {
+        // we don't use Message.get_text() here,
+        // because it may change in future,
+        // when UI shows this info itself,
+        // then the additional_text will not be added in get_text anymore.
+        msg.text += &msg.additional_text;
+    }
 
     if !msg.original_msg_id.is_unset() {
         bail!("message already saved.");
     }
 
-    let copy_fields = "from_id, to_id, timestamp_rcvd, type, txt,
+    let copy_fields = "from_id, to_id, timestamp_rcvd, type,
                        mime_modified, mime_headers, mime_compressed, mime_in_reply_to, subject, msgrmsg";
     let row_id = context
         .sql
@@ -4405,7 +4415,7 @@ pub(crate) async fn save_copy_in_self_talk(
             &format!(
                 "INSERT INTO msgs ({copy_fields},
                                    timestamp_sent,
-                                   chat_id, rfc724_mid, state, timestamp, param, starred)
+                                   txt, chat_id, rfc724_mid, state, timestamp, param, starred)
                  SELECT            {copy_fields},
                                    -- Outgoing messages on originating device
                                    -- have timestamp_sent == 0.
@@ -4413,10 +4423,11 @@ pub(crate) async fn save_copy_in_self_talk(
                                    -- so UIs display the same timestamp
                                    -- for saved and original message.
                                    IIF(timestamp_sent == 0, timestamp, timestamp_sent),
-                                   ?, ?, ?, ?, ?, ?
+                                   ?, ?, ?, ?, ?, ?, ?
                  FROM msgs WHERE id=?;"
             ),
             (
+                msg.text,
                 dest_chat_id,
                 dest_rfc724_mid,
                 if msg.from_id == ContactId::SELF {
