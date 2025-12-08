@@ -2862,6 +2862,73 @@ async fn test_broadcast_multidev() -> Result<()> {
     Ok(())
 }
 
+/// Test that, if the broadcast channel owner has multiple devices
+/// and they have diverging views on the recipients,
+/// it is synced when sending a member-addition message.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_recipients_sync() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+    for a in &[alice1, alice2] {
+        a.set_config_bool(Config::SyncMsgs, true).await?;
+    }
+
+    // Alice1 creates a broadcast and adds Bob, but for some reason
+    // (e.g. because alice2 runs an older version of DC),
+    // Alice2 doesn't get to know about it
+    let a1_broadcast_id = create_broadcast(alice1, "Channel".to_string()).await?;
+    alice1.send_sync_msg().await.unwrap();
+    alice1.pop_sent_msg().await;
+
+    let qr = get_securejoin_qr(alice1, Some(a1_broadcast_id))
+        .await
+        .unwrap();
+    tcm.exec_securejoin_qr(bob, alice1, &qr).await;
+
+    // The first sync message got lost, so, alice2 doesn't know about the channel now
+    sync(alice1, alice2).await;
+    let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
+    assert!(a2_chatlist.is_empty());
+
+    // Alice1 adds Charlie to the broadcast channel,
+    // and now, Alice2 receives the messages
+    join_securejoin(charlie, &qr).await.unwrap();
+
+    let request = charlie.pop_sent_msg().await;
+    alice1.recv_msg_trash(&request).await;
+    alice2.recv_msg_trash(&request).await;
+
+    let auth_required = alice1.pop_sent_msg().await;
+    charlie.recv_msg_trash(&auth_required).await;
+    alice2.recv_msg_trash(&auth_required).await;
+
+    let request_with_auth = charlie.pop_sent_msg().await;
+    alice1.recv_msg_trash(&request_with_auth).await;
+    alice2.recv_msg_trash(&request_with_auth).await;
+
+    let member_added = alice1.pop_sent_msg().await;
+    let a2_member_added = alice2.recv_msg(&member_added).await;
+    let _c_member_added = charlie.recv_msg(&member_added).await;
+
+    // Alice1 will now sync the full member list to Alice2:
+    sync(alice1, alice2).await;
+    let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
+    assert_eq!(a2_chatlist.get_msg_id(0)?.unwrap(), a2_member_added.id);
+
+    let a2_bob_contact = alice2.add_or_lookup_contact_id(bob).await;
+    let a2_charlie_contact = alice2.add_or_lookup_contact_id(charlie).await;
+
+    let a2_chat_members = get_chat_contacts(alice2, a2_member_added.chat_id).await?;
+    assert!(a2_chat_members.contains(&a2_bob_contact));
+    assert!(a2_chat_members.contains(&a2_charlie_contact));
+    assert_eq!(a2_chat_members.len(), 2);
+
+    Ok(())
+}
+
 /// - Create a broadcast channel
 /// - Send a message into it in order to promote it
 /// - Add a contact
