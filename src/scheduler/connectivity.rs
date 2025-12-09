@@ -414,7 +414,7 @@ impl Context {
                     ret += &*detailed.to_icon();
                     ret += " <b>";
                     if folder == &FolderMeaning::Inbox {
-                        ret += &*escaper::encode_minimal(&host);
+                        ret += &*escaper::encode_minimal(host);
                     } else {
                         ret += &*escaper::encode_minimal(&foldername);
                     }
