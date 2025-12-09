@@ -817,10 +817,6 @@ impl Context {
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
         let l = EnteredLoginParam::load(self).await?;
-        let l2 = ConfiguredLoginParam::load(self).await?.map_or_else(
-            || "Not configured".to_string(),
-            |(_transport_id, param)| param.to_string(),
-        );
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
         let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
             .await?
@@ -911,7 +907,6 @@ impl Context {
         );
         res.insert("proxy_enabled", proxy_enabled.to_string());
         res.insert("entered_account_settings", l.to_string());
-        res.insert("used_account_settings", l2);
         res.insert("used_transport_settings", all_transports);
 
         if let Some(server_id) = &*self.server_id.read().await {
