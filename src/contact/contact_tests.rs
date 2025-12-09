@@ -85,10 +85,15 @@ async fn test_get_contacts() -> Result<()> {
     assert_eq!(contacts.len(), 1);
     assert_eq!(contacts.first(), Some(&id));
 
-    // Search by address.
+    // Search by address is case-insensitive, but only returns direct matches.
     let contacts = Contact::get_all(&context, 0, Some("alice@example.org")).await?;
     assert_eq!(contacts.len(), 1);
     assert_eq!(contacts.first(), Some(&id));
+    let contacts = Contact::get_all(&context, 0, Some("Alice@example.org")).await?;
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts.first(), Some(&id));
+    let contacts = Contact::get_all(&context, 0, Some("alice@")).await?;
+    assert_eq!(contacts.len(), 0);
 
     let contacts = Contact::get_all(&context, 0, Some("Foobar")).await?;
     assert_eq!(contacts.len(), 0);
