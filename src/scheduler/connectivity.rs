@@ -373,7 +373,13 @@ impl Context {
             InnerSchedulerState::Started(ref sched) => (
                 sched
                     .boxes()
-                    .map(|b| (b.meaning, b.conn_state.state.connectivity.clone()))
+                    .map(|b| {
+                        (
+                            b.host.clone(),
+                            b.meaning,
+                            b.conn_state.state.connectivity.clone(),
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 sched.smtp.state.connectivity.clone(),
             ),
@@ -396,7 +402,7 @@ impl Context {
         let watched_folders = get_watched_folder_configs(self).await?;
         let incoming_messages = stock_str::incoming_messages(self).await;
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
-        for (folder, state) in &folders_states {
+        for (host, folder, state) in &folders_states {
             let mut folder_added = false;
 
             if let Some(config) = folder.to_config().filter(|c| watched_folders.contains(c)) {
@@ -407,7 +413,11 @@ impl Context {
                     ret += "<li>";
                     ret += &*detailed.to_icon();
                     ret += " <b>";
-                    ret += &*escaper::encode_minimal(&foldername);
+                    if folder == &FolderMeaning::Inbox {
+                        ret += &*escaper::encode_minimal(host);
+                    } else {
+                        ret += &*escaper::encode_minimal(&foldername);
+                    }
                     ret += ":</b> ";
                     ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
                     ret += "</li>";
