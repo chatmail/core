@@ -20,7 +20,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::Provider;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::get_abs_path;
-use crate::transport::{ConfiguredLoginParam, add_pseudo_transport};
+use crate::transport::{ConfiguredLoginParam, add_pseudo_transport, send_sync_transports};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -818,37 +818,39 @@ impl Context {
                     self.sql
                         .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(addr))
                         .await?;
+                } else {
+                    self.sql
+                        .transaction(|transaction| {
+                            if transaction.query_row(
+                                "SELECT COUNT(*) FROM transports WHERE addr=?",
+                                (addr,),
+                                |row| {
+                                    let res: i64 = row.get(0)?;
+                                    Ok(res)
+                                },
+                            )? == 0
+                            {
+                                bail!("Address does not belong to any transport.");
+                            }
+                            transaction.execute(
+                                "UPDATE config SET value=? WHERE keyname='configured_addr'",
+                                (addr,),
+                            )?;
+
+                            // Clean up SMTP and IMAP APPEND queue.
+                            //
+                            // The messages in the queue have a different
+                            // From address so we cannot send them over
+                            // the new SMTP transport.
+                            transaction.execute("DELETE FROM smtp", ())?;
+                            transaction.execute("DELETE FROM imap_send", ())?;
+
+                            Ok(())
+                        })
+                        .await?;
+                    send_sync_transports(self).await?;
+                    self.sql.uncache_raw_config("configured_addr").await;
                 }
-                self.sql
-                    .transaction(|transaction| {
-                        if transaction.query_row(
-                            "SELECT COUNT(*) FROM transports WHERE addr=?",
-                            (addr,),
-                            |row| {
-                                let res: i64 = row.get(0)?;
-                                Ok(res)
-                            },
-                        )? == 0
-                        {
-                            bail!("Address does not belong to any transport.");
-                        }
-                        transaction.execute(
-                            "UPDATE config SET value=? WHERE keyname='configured_addr'",
-                            (addr,),
-                        )?;
-
-                        // Clean up SMTP and IMAP APPEND queue.
-                        //
-                        // The messages in the queue have a different
-                        // From address so we cannot send them over
-                        // the new SMTP transport.
-                        transaction.execute("DELETE FROM smtp", ())?;
-                        transaction.execute("DELETE FROM imap_send", ())?;
-
-                        Ok(())
-                    })
-                    .await?;
-                self.sql.uncache_raw_config("configured_addr").await;
             }
             _ => {
                 self.sql.set_raw_config(key.as_ref(), value).await?;

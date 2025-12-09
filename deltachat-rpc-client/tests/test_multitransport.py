@@ -188,6 +188,10 @@ def test_transport_synchronization(acfactory, log) -> None:
     log.section("ac1 changes the primary transport")
     ac1.set_config("configured_addr", transport3["addr"])
 
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    [transport1, transport3] = ac1_clone.list_transports()
+    assert ac1_clone.get_config("configured_addr") == addr3
+
     log.section("ac1 removes the first transport")
     ac1.delete_transport(transport1["addr"])
 
