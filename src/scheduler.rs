@@ -325,6 +325,8 @@ impl Drop for IoPausedGuard {
 
 #[derive(Debug)]
 struct SchedBox {
+    /// Hostname of used chatmail/email relay
+    host: String,
     meaning: FolderMeaning,
     conn_state: ImapConnectionState,
 
@@ -881,7 +883,14 @@ impl Scheduler {
                 let ctx = ctx.clone();
                 task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
             };
+            let host = configured_login_param
+                .addr
+                .split("@")
+                .last()
+                .context("address has no host")?
+                .to_owned();
             let inbox = SchedBox {
+                host: host.clone(),
                 meaning: FolderMeaning::Inbox,
                 conn_state,
                 handle,
@@ -897,6 +906,7 @@ impl Scheduler {
                 let meaning = FolderMeaning::Mvbox;
                 let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
                 oboxes.push(SchedBox {
+                    host,
                     meaning,
                     conn_state,
                     handle,
