@@ -822,6 +822,16 @@ impl Context {
             |(_transport_id, param)| param.to_string(),
         );
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
+        let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
+            .await?
+            .into_iter()
+            .map(|(transport_id, param)| format!("{transport_id}: {param}"))
+            .collect();
+        let all_transports = if all_transports.is_empty() {
+            "Not configured".to_string()
+        } else {
+            all_transports.join(",")
+        };
         let chats = get_chat_cnt(self).await?;
         let unblocked_msgs = message::get_unblocked_msg_cnt(self).await;
         let request_msgs = message::get_request_msg_cnt(self).await;
@@ -902,6 +912,7 @@ impl Context {
         res.insert("proxy_enabled", proxy_enabled.to_string());
         res.insert("entered_account_settings", l.to_string());
         res.insert("used_account_settings", l2);
+        res.insert("used_transport_settings", all_transports);
 
         if let Some(server_id) = &*self.server_id.read().await {
             res.insert("imap_server_id", format!("{server_id:?}"));
