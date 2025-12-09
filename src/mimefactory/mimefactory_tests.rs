@@ -781,7 +781,7 @@ async fn test_hp_outer_headers() -> Result<()> {
             .await?;
         chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
         let sent_msg = t.pop_sent_msg().await;
-        let msg = MimeMessage::from_bytes(t, sent_msg.payload.as_bytes(), None).await?;
+        let msg = MimeMessage::from_bytes(t, sent_msg.payload.as_bytes()).await?;
         assert_eq!(msg.header_exists(HeaderDef::HpOuter), std_hp_composing);
         for hdr in ["Date", "From", "Message-ID"] {
             assert_eq!(
