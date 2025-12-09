@@ -92,6 +92,11 @@ impl<S: SessionStream> AsyncRead for LoggingStream<S> {
                 "Read error on stream {peer_addr:?} after reading {} and writing {} bytes: {err}.",
                 this.metrics.total_read, this.metrics.total_written
             );
+            tracing::event!(
+                ::tracing::Level::WARN,
+                account_id = *this.account_id,
+                log_message
+            );
             this.events.emit(Event {
                 id: *this.account_id,
                 typ: EventType::Warning(log_message),

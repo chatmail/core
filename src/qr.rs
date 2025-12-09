@@ -16,7 +16,6 @@ use serde::Deserialize;
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
-use crate::events::EventType;
 use crate::key::Fingerprint;
 use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
 use crate::net::http::post_empty;
@@ -824,9 +823,10 @@ pub(crate) async fn login_param_from_account_qr(
         match serde_json::from_str::<CreateAccountErrorResponse>(&response_text) {
             Ok(error) => Err(anyhow!(error.reason)),
             Err(parse_error) => {
-                context.emit_event(EventType::Error(format!(
+                error!(
+                    context,
                     "Cannot create account, server response could not be parsed:\n{parse_error:#}\nraw response:\n{response_text}"
-                )));
+                );
                 bail!("Cannot create account, unexpected server response:\n{response_text:?}")
             }
         }
