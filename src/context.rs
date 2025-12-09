@@ -609,7 +609,7 @@ impl Context {
                     convert_folder_meaning(self, folder_meaning).await?
                 {
                     connection
-                        .fetch_move_delete(self, &mut session, true, &watch_folder, folder_meaning)
+                        .fetch_move_delete(self, &mut session, &watch_folder, folder_meaning)
                         .await?;
                 }
             }
