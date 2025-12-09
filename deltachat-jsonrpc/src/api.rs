@@ -363,7 +363,7 @@ impl CommandApi {
     }
 
     /// Get system info for an account.
-    async fn get_info(&self, account_id: u32) -> Result<BTreeMap<&'static str, String>> {
+    async fn get_info(&self, account_id: u32) -> Result<BTreeMap<String, String>> {
         let ctx = self.get_context(account_id).await?;
         ctx.get_info().await
     }

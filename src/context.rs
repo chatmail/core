@@ -815,23 +815,14 @@ impl Context {
      ******************************************************************************/
 
     /// Returns information about the context as key-value pairs.
-    pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
+    pub async fn get_info(&self) -> Result<BTreeMap<String, String>> {
         let l = EnteredLoginParam::load(self).await?;
         let l2 = ConfiguredLoginParam::load(self).await?.map_or_else(
             || "Not configured".to_string(),
             |(_transport_id, param)| param.to_string(),
         );
         let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
-        let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
-            .await?
-            .into_iter()
-            .map(|(transport_id, param)| format!("{transport_id}: {param}"))
-            .collect();
-        let all_transports = if all_transports.is_empty() {
-            "Not configured".to_string()
-        } else {
-            all_transports.join(",")
-        };
+        let all_transports = ConfiguredLoginParam::load_all(self).await?;
         let chats = get_chat_cnt(self).await?;
         let unblocked_msgs = message::get_unblocked_msg_cnt(self).await;
         let request_msgs = message::get_request_msg_cnt(self).await;
@@ -912,7 +903,6 @@ impl Context {
         res.insert("proxy_enabled", proxy_enabled.to_string());
         res.insert("entered_account_settings", l.to_string());
         res.insert("used_account_settings", l2);
-        res.insert("used_transport_settings", all_transports);
 
         if let Some(server_id) = &*self.server_id.read().await {
             res.insert("imap_server_id", format!("{server_id:?}"));
@@ -1108,6 +1098,15 @@ impl Context {
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
+
+        let mut res: BTreeMap<String, String> = res
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value))
+            .collect();
+
+        for (transport_id, param) in &all_transports {
+            res.insert(format!("transport{transport_id}"), param.to_string());
+        }
 
         Ok(res)
     }

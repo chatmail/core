@@ -356,9 +356,7 @@ pub unsafe extern "C" fn dc_get_info(context: *const dc_context_t) -> *mut libc:
     }
 }
 
-fn render_info(
-    info: BTreeMap<&'static str, String>,
-) -> std::result::Result<String, std::fmt::Error> {
+fn render_info(info: BTreeMap<String, String>) -> std::result::Result<String, std::fmt::Error> {
     let mut res = String::new();
     for (key, value) in &info {
         writeln!(&mut res, "{key}={value}")?;
