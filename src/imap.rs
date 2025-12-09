@@ -23,6 +23,7 @@ use num_traits::FromPrimitive;
 use ratelimit::Ratelimit;
 use url::Url;
 
+use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata};
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
@@ -46,10 +47,6 @@ use crate::stock_str;
 use crate::tools::{self, create_id, duration_to_str, time};
 use crate::transport::{
     ConfiguredLoginParam, ConfiguredServerLoginParam, prioritize_server_login_params,
-};
-use crate::{
-    calls::{create_fallback_ice_servers, create_ice_servers_from_metadata},
-    download::MAX_FETCH_MSG_SIZE,
 };
 
 pub(crate) mod capabilities;
@@ -523,7 +520,6 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
-        is_background_fetch: bool,
         watch_folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<()> {
@@ -533,13 +529,7 @@ impl Imap {
         }
 
         let msgs_fetched = self
-            .fetch_new_messages(
-                context,
-                session,
-                is_background_fetch,
-                watch_folder,
-                folder_meaning,
-            )
+            .fetch_new_messages(context, session, watch_folder, folder_meaning)
             .await
             .context("fetch_new_messages")?;
         if msgs_fetched && context.get_config_delete_device_after().await?.is_some() {
@@ -565,7 +555,6 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
-        is_background_fetch: bool,
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<bool> {
@@ -593,13 +582,7 @@ impl Imap {
         let mut read_cnt = 0;
         loop {
             let (n, fetch_more) = self
-                .fetch_new_msg_batch(
-                    context,
-                    session,
-                    is_background_fetch,
-                    folder,
-                    folder_meaning,
-                )
+                .fetch_new_msg_batch(context, session, folder, folder_meaning)
                 .await?;
             read_cnt += n;
             if !fetch_more {
@@ -613,7 +596,6 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
-        is_background_fetch: bool,
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<(usize, bool)> {
@@ -737,47 +719,23 @@ impl Imap {
                 )
                 .await.context("prefetch_should_download")?
             {
-                let fetch_now: bool = if headers
+                if headers
                     .get_header_value(HeaderDef::ChatIsPostMessage)
                     .is_some()
                 {
                     info!(context, "{} is a post message", message_id.clone());
-                    // This is a Post-Message
                     available_post_msgs.push(message_id.clone());
 
                     // whether it fits download size limit
                     if download_limit.is_none_or(|download_limit| size < download_limit) {
-                        if is_background_fetch {
-                            download_when_normal_starts.push(message_id.clone());
-                            false
-                        } else {
-                            true
-                        }
-                    } else {
-                        false
+                        download_when_normal_starts.push(message_id.clone());
                     }
                 } else {
                     info!(context, "{} is not a post message", message_id.clone());
-                    // This is not a Post-Message
-                    if is_background_fetch {
-                        if size < MAX_FETCH_MSG_SIZE {
-                            // may be a Pre-Message or a small normal message, fetch now
-                            true
-                        } else {
-                            // This is e.g. a classical email or large webxdc status update
-                            // Queue for full download, in order to prevent missing messages
-                            download_when_normal_starts.push(message_id.clone());
-                            false
-                        }
-                    } else {
-                        true
-                    }
-                };
 
-                if fetch_now {
                     uids_fetch.push(uid);
                     uid_message_ids.insert(uid, message_id);
-                }
+                };
             } else {
                 largest_uid_skipped = Some(uid);
             }

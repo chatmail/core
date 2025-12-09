@@ -573,7 +573,7 @@ async fn fetch_idle(
     {
         // Fetch the watched folder.
         connection
-            .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
+            .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
             .await
             .context("fetch_move_delete")?;
 
@@ -617,7 +617,7 @@ async fn fetch_idle(
                 // no new messages. We want to select the watched folder anyway before going IDLE
                 // there, so this does not take additional protocol round-trip.
                 connection
-                    .fetch_move_delete(ctx, &mut session, true, &watch_folder, folder_meaning)
+                    .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
                     .await
                     .context("fetch_move_delete after scan_folders")?;
             }
