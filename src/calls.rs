@@ -33,7 +33,7 @@ use tokio::time::sleep;
 ///
 /// For the caller, this means they should also not wait longer,
 /// as the callee won't start the call afterwards.
-const RINGING_SECONDS: i64 = 60;
+const RINGING_SECONDS: i64 = 120;
 
 // For persisting parameters in the call, we use Param::Arg*
 
