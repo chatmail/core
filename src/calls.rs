@@ -663,9 +663,7 @@ pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<Str
     // because of bandwidth costs:
     // <https://github.com/jselbie/stunserver/issues/50>
 
-    // We use nine.testrun.org for a default STUN server.
     let hostname = "nine.testrun.org";
-
     // Do not use cache because there is no TLS.
     let load_cache = false;
     let urls: Vec<String> = lookup_host_with_cache(context, hostname, STUN_PORT, "", load_cache)
@@ -673,14 +671,27 @@ pub(crate) async fn create_fallback_ice_servers(context: &Context) -> Result<Str
         .into_iter()
         .map(|addr| format!("stun:{addr}"))
         .collect();
-
-    let ice_server = IceServer {
+    let stun_server = IceServer {
         urls,
         username: None,
         credential: None,
     };
 
-    let json = serde_json::to_string(&[ice_server])?;
+    let hostname = "turn.delta.chat";
+    // Do not use cache because there is no TLS.
+    let load_cache = false;
+    let urls: Vec<String> = lookup_host_with_cache(context, hostname, STUN_PORT, "", load_cache)
+        .await?
+        .into_iter()
+        .map(|addr| format!("turn:{addr}"))
+        .collect();
+    let turn_server = IceServer {
+        urls,
+        username: Some("public".to_string()),
+        credential: Some("o4tR7yG4rG2slhXqRUf9zgmHz".to_string()),
+    };
+
+    let json = serde_json::to_string(&[stun_server, turn_server])?;
     Ok(json)
 }
 
