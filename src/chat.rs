@@ -3090,7 +3090,7 @@ pub async fn get_chat_msgs_ex(
               WHERE m.chat_id=?
                 AND m.hidden=0
                 AND (
-                    m.param GLOB \"*S=*\"
+                    m.param GLOB '*\nS=*' OR param GLOB 'S=*'
                     OR m.from_id == ?
                     OR m.to_id == ?
                 );",
