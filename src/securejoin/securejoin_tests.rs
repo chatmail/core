@@ -243,7 +243,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         .unwrap();
     match case {
         SetupContactCase::AliceHasName => assert_eq!(contact_alice.get_authname(), "Alice"),
-        _ => assert_eq!(contact_alice.get_authname(), "Alice Exampleorg"),
+        _ => assert_eq!(contact_alice.get_authname(), ""),
     };
 
     // Check Alice sent the right message to Bob.

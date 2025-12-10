@@ -3,8 +3,11 @@ use std::time::Duration;
 use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
+use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::sql;
-use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
+use crate::test_utils::{
+    self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -795,6 +798,36 @@ async fn test_create_and_deduplicate_from_bytes() -> Result<()> {
         let blob4_content = fs::read(blob4.to_abs_path()).await?;
         assert_eq!(blob4_content, b"blabla");
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_user_deletes_chat_before_securejoin_completes() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let qr = get_securejoin_qr(alice, None).await?;
+    let bob_chat_id = join_securejoin(bob, &qr).await?;
+
+    let bob_alice_chat = bob.get_chat(alice).await;
+    // It's not possible yet to send to the chat, because Bob doesn't have Alice's key:
+    assert_eq!(bob_alice_chat.can_send(bob).await?, false);
+    assert_eq!(bob_alice_chat.id, bob_chat_id);
+
+    let request = bob.pop_sent_msg().await;
+
+    bob_chat_id.delete(bob).await?;
+
+    alice.recv_msg_trash(&request).await;
+    let auth_required = alice.pop_sent_msg().await;
+
+    bob.recv_msg_trash(&auth_required).await;
+
+    // The chat with Alice should be recreated,
+    // and it should be sendable now:
+    assert!(bob.get_chat(alice).await.can_send(bob).await?);
 
     Ok(())
 }

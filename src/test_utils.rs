@@ -935,9 +935,9 @@ impl TestContext {
     /// so may create a key-contact with a fingerprint
     /// but without the key.
     pub async fn get_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_contact_id(other).await;
+        let contact = self.add_or_lookup_contact_no_key(other).await;
 
-        let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact)
+        let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact.id)
             .await
             .unwrap()
             .map(|chat_id_blocked| chat_id_blocked.id)
