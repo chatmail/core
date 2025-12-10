@@ -679,7 +679,7 @@ pub(crate) async fn receive_imf_inner(
                 .await
                 .with_context(|| {
                     format!(
-                        "error in Secure-Join '{}' message handling",
+                        "Error in Secure-Join '{}' message handling",
                         mime_parser.get_header(HeaderDef::SecureJoin).unwrap_or("")
                     )
                 })?
@@ -689,7 +689,7 @@ pub(crate) async fn receive_imf_inner(
                 .await
                 .with_context(|| {
                     format!(
-                        "error in Secure-Join '{}' watching",
+                        "Error in Secure-Join '{}' watching",
                         mime_parser.get_header(HeaderDef::SecureJoin).unwrap_or("")
                     )
                 })?
