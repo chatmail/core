@@ -100,6 +100,17 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         bob_chat.why_cant_send(&bob).await.unwrap(),
         Some(CantSendReason::MissingKey)
     );
+
+    // Check Bob's info messages.
+    let msg_cnt = 2;
+    let mut i = 0..msg_cnt;
+    let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
+    assert!(msg.is_info());
+    assert_eq!(msg.get_text(), messages_e2e_encrypted(&bob).await);
+    let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
+    assert!(msg.is_info());
+    assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
+
     let contact_alice_id = bob.add_or_lookup_contact_no_key(&alice).await.id;
     let sent = bob.pop_sent_msg().await;
     assert!(!sent.payload.contains("Bob Examplenet"));
@@ -272,15 +283,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(contact_alice.get_name().is_empty());
     assert_eq!(contact_alice.is_bot(), case == SetupContactCase::AliceIsBot);
 
-    // Check Bob got expected info messages in his 1:1 chat.
-    let msg_cnt = 2;
-    let mut i = 0..msg_cnt;
-    let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
+    // The `SecurejoinWait` info message has been removed, but the e2ee notice remains.
+    let msg = get_chat_msg(&bob, bob_chat.get_id(), 0, 1).await;
     assert!(msg.is_info());
     assert_eq!(msg.get_text(), messages_e2e_encrypted(&bob).await);
-    let msg = get_chat_msg(&bob, bob_chat.get_id(), i.next().unwrap(), msg_cnt).await;
-    assert!(msg.is_info());
-    assert_eq!(msg.get_text(), stock_str::securejoin_wait(&bob).await);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

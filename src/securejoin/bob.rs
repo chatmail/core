@@ -5,14 +5,16 @@ use anyhow::{Context as _, Result};
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
 use crate::chat::{self, ChatId, is_contact_in_chat};
+use crate::chatlist_events;
 use crate::constants::{Blocked, Chattype};
 use crate::contact::Origin;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
-use crate::message::{Message, Viewtype};
+use crate::log::LogExt;
+use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
-use crate::param::Param;
+use crate::param::{Param, Params};
 use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
 use crate::stock_str;
 use crate::sync::Sync::*;
@@ -48,16 +50,16 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
 
+    let has_key = context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM public_keys WHERE fingerprint=?",
+            (invite.fingerprint().hex(),),
+        )
+        .await?;
+
     // Now start the protocol and initialise the state.
     {
-        let has_key = context
-            .sql
-            .exists(
-                "SELECT COUNT(*) FROM public_keys WHERE fingerprint=?",
-                (invite.fingerprint().hex(),),
-            )
-            .await?;
-
         // `joining_chat_id` is `Some` if group chat
         // already exists and we are in the chat.
         let joining_chat_id = match invite {
@@ -142,20 +144,22 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
             Ok(joining_chat_id)
         }
         QrInvite::Contact { .. } => {
-            // For setup-contact the BobState already ensured the 1:1 chat exists because it
-            // uses it to send the handshake messages.
-            chat::add_info_msg_with_cmd(
-                context,
-                private_chat_id,
-                &stock_str::securejoin_wait(context).await,
-                SystemMessage::SecurejoinWait,
-                None,
-                time(),
-                None,
-                None,
-                None,
-            )
-            .await?;
+            // For setup-contact the BobState already ensured the 1:1 chat exists because it is
+            // used to send the handshake messages.
+            if !has_key {
+                chat::add_info_msg_with_cmd(
+                    context,
+                    private_chat_id,
+                    &stock_str::securejoin_wait(context).await,
+                    SystemMessage::SecurejoinWait,
+                    None,
+                    time(),
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            }
             Ok(private_chat_id)
         }
     }
@@ -175,6 +179,38 @@ async fn insert_new_db_entry(context: &Context, invite: QrInvite, chat_id: ChatI
             (invite, 0, chat_id),
         )
         .await
+}
+
+async fn delete_securejoin_wait_msg(context: &Context, chat_id: ChatId) -> Result<()> {
+    if let Some((msg_id, param)) = context
+        .sql
+        .query_row_optional(
+            "
+SELECT id, param FROM msgs
+WHERE timestamp=(SELECT MAX(timestamp) FROM msgs WHERE chat_id=? AND hidden=0)
+    AND chat_id=? AND hidden=0
+LIMIT 1
+            ",
+            (chat_id, chat_id),
+            |row| {
+                let id: MsgId = row.get(0)?;
+                let param: String = row.get(1)?;
+                let param: Params = param.parse().unwrap_or_default();
+                Ok((id, param))
+            },
+        )
+        .await?
+        && param.get_cmd() == SystemMessage::SecurejoinWait
+    {
+        let on_server = false;
+        msg_id.trash(context, on_server).await?;
+        context.emit_event(EventType::MsgDeleted { chat_id, msg_id });
+        context.emit_msgs_changed_without_msg_id(chat_id);
+        chatlist_events::emit_chatlist_item_changed(context, chat_id);
+        context.emit_msgs_changed_without_ids();
+        chatlist_events::emit_chatlist_changed(context);
+    }
+    Ok(())
 }
 
 /// Handles `vc-auth-required` and `vg-auth-required` handshake messages.
@@ -213,6 +249,11 @@ pub(super) async fn handle_auth_required(
 
         info!(context, "Fingerprint verified.",);
         let chat_id = private_chat_id(context, &invite).await?;
+        delete_securejoin_wait_msg(context, chat_id)
+            .await
+            .context("delete_securejoin_wait_msg")
+            .log_err(context)
+            .ok();
         send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth).await?;
         context
             .sql
