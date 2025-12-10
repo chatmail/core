@@ -677,12 +677,22 @@ pub(crate) async fn receive_imf_inner(
         let res = if mime_parser.incoming {
             handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
-                .context("error in Secure-Join message handling")?
+                .with_context(|| {
+                    format!(
+                        "Error in Secure-Join '{}' message handling",
+                        mime_parser.get_header(HeaderDef::SecureJoin).unwrap_or("")
+                    )
+                })?
         } else if let Some(to_id) = to_ids.first().copied().flatten() {
             // handshake may mark contacts as verified and must be processed before chats are created
             observe_securejoin_on_other_device(context, &mime_parser, to_id)
                 .await
-                .context("error in Secure-Join watching")?
+                .with_context(|| {
+                    format!(
+                        "Error in Secure-Join '{}' watching",
+                        mime_parser.get_header(HeaderDef::SecureJoin).unwrap_or("")
+                    )
+                })?
         } else {
             securejoin::HandshakeMessage::Propagate
         };
