@@ -825,7 +825,7 @@ impl Imap {
                 context
                     .sql
                     .insert(
-                        "INSERT INTO download (rfc724_mid) VALUES (?)",
+                        "INSERT INTO download (rfc724_mid, msg_id) VALUES (?,0)",
                         (rfc724_mid,),
                     )
                     .await?;
