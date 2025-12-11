@@ -43,17 +43,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     // A 1:1 chat is needed to send messages to Alice.  When joining a group this chat is
     // hidden, if a user starts sending messages in it it will be unhidden in
     // receive_imf.
-    let hidden = match invite {
-        QrInvite::Contact { .. } => Blocked::Not,
-        QrInvite::Group { .. } => Blocked::Yes,
-        QrInvite::Broadcast { .. } => Blocked::Yes,
-    };
-
-    // The 1:1 chat with the inviter
-    let private_chat_id =
-        ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
-            .await
-            .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))?;
+    let private_chat_id = private_chat_id(context, &invite).await?;
 
     ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
     context.emit_event(EventType::ContactsChanged(None));
@@ -175,6 +165,9 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
 ///
 /// Returns the ID of the newly inserted entry.
 async fn insert_new_db_entry(context: &Context, invite: QrInvite, chat_id: ChatId) -> Result<i64> {
+    // The `chat_id` isn't actually needed anymore,
+    // but we still save it;
+    // can be removed as a future improvement.
     context
         .sql
         .insert(
@@ -195,11 +188,10 @@ pub(super) async fn handle_auth_required(
     // Load all Bob states that expect `vc-auth-required` or `vg-auth-required`.
     let bob_states = context
         .sql
-        .query_map_vec("SELECT id, invite, chat_id FROM bobstate", (), |row| {
+        .query_map_vec("SELECT id, invite FROM bobstate", (), |row| {
             let row_id: i64 = row.get(0)?;
             let invite: QrInvite = row.get(1)?;
-            let chat_id: ChatId = row.get(2)?;
-            Ok((row_id, invite, chat_id))
+            Ok((row_id, invite))
         })
         .await?;
 
@@ -209,7 +201,7 @@ pub(super) async fn handle_auth_required(
     );
 
     let mut auth_sent = false;
-    for (bobstate_row_id, invite, chat_id) in bob_states {
+    for (bobstate_row_id, invite) in bob_states {
         if !encrypted_and_signed(context, message, invite.fingerprint()) {
             continue;
         }
@@ -220,6 +212,7 @@ pub(super) async fn handle_auth_required(
         }
 
         info!(context, "Fingerprint verified.",);
+        let chat_id = private_chat_id(context, &invite).await?;
         send_handshake_message(context, &invite, chat_id, BobHandshakeMsg::RequestWithAuth).await?;
         context
             .sql
@@ -346,6 +339,22 @@ impl BobHandshakeMsg {
             },
         }
     }
+}
+
+/// Returns the 1:1 chat with the inviter.
+///
+/// This is the chat in which securejoin messages are sent.
+/// The 1:1 chat will be created if it does not yet exist.
+async fn private_chat_id(context: &Context, invite: &QrInvite) -> Result<ChatId> {
+    let hidden = match invite {
+        QrInvite::Contact { .. } => Blocked::Not,
+        QrInvite::Group { .. } => Blocked::Yes,
+        QrInvite::Broadcast { .. } => Blocked::Yes,
+    };
+
+    ChatId::create_for_contact_with_blocked(context, invite.contact_id(), hidden)
+        .await
+        .with_context(|| format!("can't create chat for contact {}", invite.contact_id()))
 }
 
 /// Returns the [`ChatId`] of the chat being joined.

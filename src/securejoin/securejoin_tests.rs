@@ -243,7 +243,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
         .unwrap();
     match case {
         SetupContactCase::AliceHasName => assert_eq!(contact_alice.get_authname(), "Alice"),
-        _ => assert_eq!(contact_alice.get_authname(), "Alice Exampleorg"),
+        _ => assert_eq!(contact_alice.get_authname(), ""),
     };
 
     // Check Alice sent the right message to Bob.
@@ -1214,6 +1214,36 @@ async fn test_qr_no_implicit_inviter_addition() -> Result<()> {
     // Charlie has two contacts in the list: Alice and self.
     let charlie_chat_contacts = chat::get_chat_contacts(charlie, charlie_chat_id).await?;
     assert_eq!(charlie_chat_contacts.len(), 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_user_deletes_chat_before_securejoin_completes() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let qr = get_securejoin_qr(alice, None).await?;
+    let bob_chat_id = join_securejoin(bob, &qr).await?;
+
+    let bob_alice_chat = bob.get_chat(alice).await;
+    // It's not possible yet to send to the chat, because Bob doesn't have Alice's key:
+    assert_eq!(bob_alice_chat.can_send(bob).await?, false);
+    assert_eq!(bob_alice_chat.id, bob_chat_id);
+
+    let request = bob.pop_sent_msg().await;
+
+    bob_chat_id.delete(bob).await?;
+
+    alice.recv_msg_trash(&request).await;
+    let auth_required = alice.pop_sent_msg().await;
+
+    bob.recv_msg_trash(&auth_required).await;
+
+    // The chat with Alice should be recreated,
+    // and it should be sendable now:
+    assert!(bob.get_chat(alice).await.can_send(bob).await?);
 
     Ok(())
 }

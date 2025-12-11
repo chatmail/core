@@ -896,6 +896,15 @@ impl TestContext {
     /// If the contact does not exist yet, a new contact will be created
     /// with the correct fingerprint, but without the public key.
     pub async fn add_or_lookup_contact_no_key(&self, other: &TestContext) -> Contact {
+        let contact_id = self.add_or_lookup_contact_id_no_key(other).await;
+        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
+    }
+
+    /// Returns the [`ContactId`] for the other [`TestContext`], creating it if necessary.
+    ///
+    /// If the contact does not exist yet, a new contact will be created
+    /// with the correct fingerprint, but without the public key.
+    async fn add_or_lookup_contact_id_no_key(&self, other: &TestContext) -> ContactId {
         let primary_self_addr = other.ctx.get_primary_self_addr().await.unwrap();
         let addr = ContactAddress::new(&primary_self_addr).unwrap();
         let fingerprint = self_fingerprint(other).await.unwrap();
@@ -904,7 +913,7 @@ impl TestContext {
             Contact::add_or_lookup_ex(self, "", &addr, fingerprint, Origin::MailinglistAddress)
                 .await
                 .expect("add_or_lookup");
-        Contact::get_by_id(&self.ctx, contact_id).await.unwrap()
+        contact_id
     }
 
     /// Returns 1:1 [`Chat`] with another account address-contact.
@@ -935,7 +944,7 @@ impl TestContext {
     /// so may create a key-contact with a fingerprint
     /// but without the key.
     pub async fn get_chat(&self, other: &TestContext) -> Chat {
-        let contact = self.add_or_lookup_contact_id(other).await;
+        let contact = self.add_or_lookup_contact_id_no_key(other).await;
 
         let chat_id = ChatIdBlocked::lookup_by_contact(&self.ctx, contact)
             .await
