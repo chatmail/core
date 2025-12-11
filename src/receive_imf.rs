@@ -1141,7 +1141,6 @@ async fn decide_chat_assignment(
                     "Message is a Pre-Message (post_msg_exists:{post_msg_exists})."
                 );
                 post_msg_exists
-                // TODO find out if trashing affects multi device usage?
             }
         }
     } else if mime_parser.is_system_message == SystemMessage::CallAccepted
