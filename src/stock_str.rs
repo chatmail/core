@@ -165,9 +165,6 @@ pub enum StockMessage {
     ))]
     QuotaExceedingMsgBody = 98,
 
-    #[strum(props(fallback = "%1$s message"))]
-    PartialDownloadMsgBody = 99,
-
     #[strum(props(fallback = "Multi Device Synchronization"))]
     SyncMsgSubject = 101,
 
