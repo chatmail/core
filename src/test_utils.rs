@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
+use anyhow::Result;
 use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
@@ -1729,7 +1730,7 @@ Until the false-positive is fixed:
 }
 
 /// Method to create a test image file
-pub(crate) fn create_test_image(width: u32, height: u32) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn create_test_image(width: u32, height: u32) -> Result<Vec<u8>> {
     use image::{ImageBuffer, Rgb, RgbImage};
     use std::io::Cursor;
 
