@@ -501,9 +501,6 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     }
 
-    download_msgs(ctx, &mut session)
-        .await
-        .context("Failed to download messages")?;
     session
         .update_metadata(ctx)
         .await
@@ -612,6 +609,10 @@ async fn fetch_idle(
         .context("sync_seen_flags")
         .log_err(ctx)
         .ok();
+
+    download_msgs(ctx, &mut session)
+        .await
+        .context("Failed to download messages")?;
 
     connection.connectivity.set_idle(ctx);
 
