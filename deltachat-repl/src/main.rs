@@ -430,12 +430,12 @@ async fn handle_cmd(
         }
         "oauth2" => {
             if let Some(addr) = ctx.get_config(config::Config::Addr).await? {
-                let oauth2_url =
-                    get_oauth2_url(&ctx, &addr, "chat.delta:/com.b44t.messenger").await?;
-                if oauth2_url.is_none() {
-                    println!("OAuth2 not available for {}.", &addr);
+                if let Some(oauth2_url) =
+                    get_oauth2_url(&ctx, &addr, "chat.delta:/com.b44t.messenger").await?
+                {
+                    println!("Open the following url, set mail_pw to the generated token and server_flags to 2:\n{oauth2_url}");
                 } else {
-                    println!("Open the following url, set mail_pw to the generated token and server_flags to 2:\n{}", oauth2_url.unwrap());
+                    println!("OAuth2 not available for {}.", &addr);
                 }
             } else {
                 println!("oauth2: set addr first.");
