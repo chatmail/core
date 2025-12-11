@@ -490,7 +490,7 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `download_limit` = Messages up to this number of bytes are downloaded automatically.
  *                    For messages with large attachments, two messages are sent:
  *                    a Pre-Message containing metadata and a Post-Message containing the attachment.
- *                    Pre-Messages are always downloaded and show a placeholder message 
+ *                    Pre-Messages are always downloaded and show a placeholder message.
  *                    These messages can be downloaded fully using dc_download_full_msg() later.
  *                    Post-Messages are automatically downloaded if they are smaller than the download_limit.
  *                    0=no limit (default).
