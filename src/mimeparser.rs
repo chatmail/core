@@ -605,8 +605,8 @@ impl MimeMessage {
             signatures.clear();
         }
 
-        if let (Ok(mail), true) = (mail, is_encrypted) {
-            if let Some(post_msg_rfc724_mid) =
+        if let (Ok(mail), true) = (mail, is_encrypted)
+            && let Some(post_msg_rfc724_mid) =
                 mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
             {
                 let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
@@ -634,7 +634,6 @@ impl MimeMessage {
                     metadata,
                 });
             }
-        }
 
         let mut parser = MimeMessage {
             parts: Vec::new(),

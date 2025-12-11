@@ -836,15 +836,14 @@ impl Message {
     /// If message is a pre-message, then this returns size of the to be downloaded file.
     pub async fn get_filebytes(&self, context: &Context) -> Result<Option<u64>> {
         // if download state is not downloaded then return value from from params metadata
-        if self.download_state != DownloadState::Done {
-            if let Some(file_size) = self
+        if self.download_state != DownloadState::Done
+            && let Some(file_size) = self
                 .param
                 .get(Param::PostMessageFileBytes)
                 .and_then(|s| s.parse().ok())
             {
                 return Ok(Some(file_size));
             }
-        }
         if let Some(path) = self.param.get_file_path(context)? {
             Ok(Some(get_filebytes(context, &path).await.with_context(
                 || format!("failed to get {} size in bytes", path.display()),
@@ -858,15 +857,14 @@ impl Message {
     /// then this returns the viewtype it will have when it is downloaded.
     #[cfg(test)]
     pub(crate) fn get_post_message_viewtype(&self) -> Option<Viewtype> {
-        if self.download_state != DownloadState::Done {
-            if let Some(viewtype) = self
+        if self.download_state != DownloadState::Done
+            && let Some(viewtype) = self
                 .param
                 .get_i64(Param::PostMessageViewtype)
                 .and_then(Viewtype::from_i64)
             {
                 return Some(viewtype);
             }
-        }
         None
     }
 
