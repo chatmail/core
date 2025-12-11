@@ -82,8 +82,8 @@ impl MsgId {
                 context
                     .sql
                     .execute(
-                        "INSERT INTO download (rfc724_mid) VALUES (?)",
-                        (msg.rfc724_mid(),),
+                        "INSERT INTO download (rfc724_mid, msg_id) VALUES (?,?)",
+                        (msg.rfc724_mid(), msg.id),
                     )
                     .await?;
                 context.scheduler.interrupt_inbox().await;
