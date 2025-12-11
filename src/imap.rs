@@ -723,7 +723,7 @@ impl Imap {
                     .get_header_value(HeaderDef::ChatIsPostMessage)
                     .is_some()
                 {
-                    info!(context, "{} is a post message", message_id.clone());
+                    info!(context, "{message_id:?} is a post-message.");
                     available_post_msgs.push(message_id.clone());
 
                     // whether it fits download size limit
@@ -731,7 +731,7 @@ impl Imap {
                         download_when_normal_starts.push(message_id.clone());
                     }
                 } else {
-                    info!(context, "{} is not a post message", message_id.clone());
+                    info!(context, "{message_id:?} is not a post-message.");
 
                     uids_fetch.push(uid);
                     uid_message_ids.insert(uid, message_id);
