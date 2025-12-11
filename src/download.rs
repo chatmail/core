@@ -79,6 +79,7 @@ impl MsgId {
                 }
                 self.update_download_state(context, DownloadState::InProgress)
                     .await?;
+                info!(context, "Requesting full download of {:?}.", msg.rfc724_mid());
                 context
                     .sql
                     .execute(
