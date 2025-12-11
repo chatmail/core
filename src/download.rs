@@ -151,7 +151,7 @@ pub(crate) async fn download_msg(
 
     let Some((server_uid, server_folder)) = row else {
         // No IMAP record found, we don't know the UID and folder.
-        return Err(anyhow!("Call download_full() again to try over."));
+        return Err(anyhow!("IMAP location for {rfc724_mid:?} post-message is unknown"));
     };
 
     session
