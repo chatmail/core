@@ -415,6 +415,9 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Messages in this chat use classic email and are not encrypted."))]
     ChatUnencryptedExplanation = 230,
+
+    #[strum(props(fallback = "Contact"))]
+    Contact = 231,
 }
 
 impl StockMessage {
@@ -882,6 +885,11 @@ pub(crate) async fn sticker(context: &Context) -> String {
     translated(context, StockMessage::Sticker).await
 }
 
+/// Stock string: `Contact`.
+pub(crate) async fn contact(context: &Context) -> String {
+    translated(context, StockMessage::Contact).await
+}
+
 /// Stock string: `Device messages`.
 pub(crate) async fn device_messages(context: &Context) -> String {
     translated(context, StockMessage::DeviceMessages).await
@@ -1251,7 +1259,7 @@ impl Viewtype {
             Viewtype::Video => video(context).await,
             Viewtype::File => file(context).await,
             Viewtype::Webxdc => "Mini App".to_owned(), // TODO stock-string
-            Viewtype::Vcard => "Contact".to_owned(),   // TODO stock-string
+            Viewtype::Vcard => contact(context).await,
             // OPTIONAL TODO - would not be used right now,
             // because this method is only used for metadata on large attachments
             Viewtype::Unknown | Viewtype::Text | Viewtype::Call => self.to_string(),

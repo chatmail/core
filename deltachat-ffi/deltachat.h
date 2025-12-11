@@ -7764,6 +7764,11 @@ void dc_event_unref(dc_event_t* event);
 /// Used as the first info messages in newly created classic email threads.
 #define DC_STR_CHAT_UNENCRYPTED_EXPLANATON 230
 
+/// "Contact"
+///
+/// Used in summaries.
+#define DC_STR_CONTACT 231
+
 /**
  * @}
  */
