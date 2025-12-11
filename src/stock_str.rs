@@ -1258,10 +1258,8 @@ impl Viewtype {
             Viewtype::Voice => voice_message(context).await,
             Viewtype::Video => video(context).await,
             Viewtype::File => file(context).await,
-            Viewtype::Webxdc => "Mini App".to_owned(), // TODO stock-string
+            Viewtype::Webxdc => "Mini App".to_owned(),
             Viewtype::Vcard => contact(context).await,
-            // OPTIONAL TODO - would not be used right now,
-            // because this method is only used for metadata on large attachments
             Viewtype::Unknown | Viewtype::Text | Viewtype::Call => self.to_string(),
         }
     }
