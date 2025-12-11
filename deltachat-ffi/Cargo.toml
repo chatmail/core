@@ -1,6 +1,6 @@
 [package]
 name = "deltachat_ffi"
-version = "2.33.0"
+version = "2.34.0"
 description = "Deltachat FFI"
 edition = "2018"
 readme = "README.md"

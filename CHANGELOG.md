@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.34.0] - 2025-12-11
+
+### API-Changes
+
+- rpc-client: Accept `Account` for `Chat.{add,remove}_contact()`.
+- rpc-client: Add `Chat.num_contacts()`.
+- Forwarding messages to another profile ([#7491](https://github.com/chatmail/core/pull/7491)).
+
+### Features / Changes
+
+- Double ringing time to 120 seconds.
+- Better logging for failing securejoin messages ([#7593](https://github.com/chatmail/core/pull/7593)).
+- Add multi-transport information to `Context.get_info` ([#7583](https://github.com/chatmail/core/pull/7583))
+
+### Fixes
+
+- Multi-transport: all transports were shown as "inbox" in connectivity view, now they are shown by their hostname ([#7582](https://github.com/chatmail/core/pull/7582)).
+- Multi-transport: Synchronize primary transport immediately after changing it.
+- Use u64 instead of usize to calculate storage usage.
+- Use u64 to represent the number of bytes in backup files.
+- Use u64 to count the number of bytes sent/received over the network.
+- Use logging macros instead of emitting event directly, so that it is also logged by tracing ([#7459](https://github.com/chatmail/core/pull/7459)).
+- Let securejoin succeed even if the chat was deleted in the meantime ([#7594](https://github.com/chatmail/core/pull/7594)).
+
+### Miscellaneous Tasks
+
+- Add RUSTSEC-2025-0134 exception to deny.toml.
+
+### Refactor
+
+- Use u16 instead of usize to represent progress bar.
+- Remove EncryptHelper.prefer_encrypt.
+- Add params when forwarding message instead of removing unneeded ones.
+
+### Tests
+
+- Port test_synchronize_member_list_on_group_rejoin to JSON-RPC.
+- Test setting up second device between core versions.
+
 ## [2.33.0] - 2025-12-05
 
 ### Features / Changes
@@ -7371,3 +7410,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.31.0]: https://github.com/chatmail/core/compare/v2.30.0..v2.31.0
 [2.32.0]: https://github.com/chatmail/core/compare/v2.31.0..v2.32.0
 [2.33.0]: https://github.com/chatmail/core/compare/v2.32.0..v2.33.0
+[2.34.0]: https://github.com/chatmail/core/compare/v2.33.0..v2.34.0
