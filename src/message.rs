@@ -841,9 +841,9 @@ impl Message {
                 .param
                 .get(Param::PostMessageFileBytes)
                 .and_then(|s| s.parse().ok())
-            {
-                return Ok(Some(file_size));
-            }
+        {
+            return Ok(Some(file_size));
+        }
         if let Some(path) = self.param.get_file_path(context)? {
             Ok(Some(get_filebytes(context, &path).await.with_context(
                 || format!("failed to get {} size in bytes", path.display()),
@@ -862,9 +862,9 @@ impl Message {
                 .param
                 .get_i64(Param::PostMessageViewtype)
                 .and_then(Viewtype::from_i64)
-            {
-                return Some(viewtype);
-            }
+        {
+            return Some(viewtype);
+        }
         None
     }
 

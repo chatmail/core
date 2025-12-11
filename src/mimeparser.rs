@@ -608,32 +608,32 @@ impl MimeMessage {
         if let (Ok(mail), true) = (mail, is_encrypted)
             && let Some(post_msg_rfc724_mid) =
                 mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
+        {
+            let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
+            let metadata = if let Some(value) = mail
+                .headers
+                .get_header_value(HeaderDef::ChatPostMessageMetadata)
             {
-                let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
-                let metadata = if let Some(value) = mail
-                    .headers
-                    .get_header_value(HeaderDef::ChatPostMessageMetadata)
-                {
-                    match PreMsgMetadata::try_from_header_value(&value) {
-                        Ok(metadata) => Some(metadata),
-                        Err(error) => {
-                            error!(
-                                context,
-                                "failed to parse metadata header in pre-message: {error:#?}"
-                            );
-                            None
-                        }
+                match PreMsgMetadata::try_from_header_value(&value) {
+                    Ok(metadata) => Some(metadata),
+                    Err(error) => {
+                        error!(
+                            context,
+                            "failed to parse metadata header in pre-message: {error:#?}"
+                        );
+                        None
                     }
-                } else {
-                    warn!(context, "expected pre-message to have metadata header");
-                    None
-                };
+                }
+            } else {
+                warn!(context, "expected pre-message to have metadata header");
+                None
+            };
 
-                pre_message = Some(PreMessageMode::PreMessage {
-                    post_msg_rfc724_mid,
-                    metadata,
-                });
-            }
+            pre_message = Some(PreMessageMode::PreMessage {
+                post_msg_rfc724_mid,
+                metadata,
+            });
+        }
 
         let mut parser = MimeMessage {
             parts: Vec::new(),
