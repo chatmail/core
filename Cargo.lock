@@ -1388,6 +1388,7 @@ dependencies = [
  "tracing",
  "url",
  "uuid",
+ "walkdir",
  "webpki-roots",
 ]
 
@@ -1429,7 +1430,6 @@ dependencies = [
  "tempfile",
  "tokio",
  "typescript-type-def",
- "walkdir",
  "yerpc",
 ]
 

@@ -35,14 +35,13 @@ use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
-use deltachat::storage_usage::get_storage_usage;
+use deltachat::storage_usage::{get_blobdir_storage_usage, get_storage_usage};
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::EventEmitter;
 use sanitize_filename::is_sanitized;
 use tokio::fs;
 use tokio::sync::{watch, Mutex, RwLock};
 use types::login_param::EnteredLoginParam;
-use walkdir::WalkDir;
 use yerpc::rpc;
 
 pub mod types;
@@ -330,13 +329,7 @@ impl CommandApi {
     async fn get_account_file_size(&self, account_id: u32) -> Result<u64> {
         let ctx = self.get_context(account_id).await?;
         let dbfile = ctx.get_dbfile().metadata()?.len();
-        let total_size = WalkDir::new(ctx.get_blobdir())
-            .max_depth(2)
-            .into_iter()
-            .filter_map(|entry| entry.ok())
-            .filter_map(|entry| entry.metadata().ok())
-            .filter(|metadata| metadata.is_file())
-            .fold(0, |acc, m| acc + m.len());
+        let total_size = get_blobdir_storage_usage(&ctx);
 
         Ok(dbfile + total_size)
     }
