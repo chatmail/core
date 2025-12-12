@@ -1466,6 +1466,30 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 144)?;
+    if dbversion < migration_version {
+        // `msg_id` in `download` table is not needed anymore,
+        // but we still keep it so that it's possible to import a backup into an older DC version,
+        // because we don't always release at the same time on all platforms.
+        sql.execute_migration(
+            "CREATE TABLE download_new (
+                rfc724_mid TEXT NOT NULL DEFAULT '',
+                msg_id INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            INSERT OR IGNORE INTO download_new (rfc724_mid, msg_id)
+             SELECT m.rfc724_mid, d.msg_id FROM download d
+             JOIN msgs m ON d.msg_id = m.id
+             WHERE m.rfc724_mid IS NOT NULL AND m.rfc724_mid != '';
+            DROP TABLE download;
+            ALTER TABLE download_new RENAME TO download;
+            CREATE TABLE available_post_msgs (
+                rfc724_mid TEXT NOT NULL
+            );",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

@@ -21,7 +21,7 @@ pub async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<
 }
 
 pub async fn parse_and_get_text(context: &Context, imf_raw: &[u8]) -> Result<String> {
-    let mime_parser = MimeMessage::from_bytes(context, imf_raw, None).await?;
+    let mime_parser = MimeMessage::from_bytes(context, imf_raw).await?;
     Ok(mime_parser.parts.into_iter().next().unwrap().msg)
 }
 

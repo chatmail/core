@@ -119,14 +119,6 @@ async fn test_quota_exceeding_stock_str() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_partial_download_msg_body() -> Result<()> {
-    let t = TestContext::new().await;
-    let str = partial_download_msg_body(&t, 1024 * 1024).await;
-    assert_eq!(str, "1 MiB message");
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_update_device_chats() {
     let t = TestContext::new_alice().await;
     t.update_device_chats().await.ok();
