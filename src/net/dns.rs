@@ -738,6 +738,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             "danneskjold.de",
             vec![IpAddr::V4(Ipv4Addr::new(46, 62, 216, 132))],
         ),
+        (
+            "darkrun.dev",
+            vec![IpAddr::V4(Ipv4Addr::new(72, 11, 149, 146))],
+        ),
     ])
 });
 
