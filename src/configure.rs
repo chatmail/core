@@ -269,13 +269,19 @@ impl Context {
                 .await?
         {
             if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
-                bail!("Cannot use multi-transport with mvbox_move enabled.");
+                bail!(
+                    "To use additional relays, disable the legacy option \"Settings / Advanced / Move automatically to DeltaChat Folder\"."
+                );
             }
             if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
-                bail!("Cannot use multi-transport with only_fetch_mvbox enabled.");
+                bail!(
+                    "To use additional relays, disable the legacy option \"Settings / Advanced / Only Fetch from DeltaChat Folder\"."
+                );
             }
             if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
-                bail!("Cannot use multi-transport with disabled fetching of classic emails.");
+                bail!(
+                    "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
+                );
             }
         }
 
