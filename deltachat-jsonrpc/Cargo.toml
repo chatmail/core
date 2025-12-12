@@ -19,7 +19,6 @@ yerpc = { workspace = true, features = ["anyhow_expose", "openrpc"] }
 typescript-type-def = { version = "0.5.13", features = ["json_value"] }
 tokio = { workspace = true }
 sanitize-filename = { workspace = true }
-walkdir = "2.5.0"
 base64 = { workspace = true }
 
 [dev-dependencies]

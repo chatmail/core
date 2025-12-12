@@ -2,6 +2,7 @@
 use crate::{context::Context, message::MsgId};
 use anyhow::Result;
 use humansize::{BINARY, format_size};
+use walkdir::WalkDir;
 
 /// Storage Usage Report
 /// Useful for debugging space usage problems in the deltachat database.
@@ -14,11 +15,15 @@ pub struct StorageUsage {
     /// count and total size of status updates
     /// for the 10 webxdc apps with the most size usage in status updates
     pub largest_webxdc_data: Vec<(MsgId, u64, u64)>,
+    /// Total size of all files in the blobdir
+    pub blobdir_size: u64,
 }
 
 impl std::fmt::Display for StorageUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Storage Usage:")?;
+        let blobdir_size = format_size(self.blobdir_size, BINARY);
+        writeln!(f, "[Blob Directory Size]: {blobdir_size}")?;
         let human_db_size = format_size(self.db_size, BINARY);
         writeln!(f, "[Database Size]: {human_db_size}")?;
         writeln!(f, "[Largest Tables]:")?;
@@ -46,6 +51,10 @@ impl std::fmt::Display for StorageUsage {
 
 /// Get storage usage information for the Context's database
 pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
+    let context_clone = ctx.clone();
+    let blobdir_size =
+        tokio::task::spawn_blocking(move || get_blobdir_storage_usage(&context_clone));
+
     let page_size: u64 = ctx
         .sql
         .query_get_value("PRAGMA page_size", ())
@@ -101,9 +110,23 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
         )
         .await?;
 
+    let blobdir_size = blobdir_size.await?;
+
     Ok(StorageUsage {
         db_size: page_size * page_count,
         largest_tables,
         largest_webxdc_data,
+        blobdir_size,
     })
+}
+
+/// Returns storage usage of the blob directory
+pub fn get_blobdir_storage_usage(ctx: &Context) -> u64 {
+    WalkDir::new(ctx.get_blobdir())
+        .max_depth(2)
+        .into_iter()
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| entry.metadata().ok())
+        .filter(|metadata| metadata.is_file())
+        .fold(0, |acc, m| acc + m.len())
 }
