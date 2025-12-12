@@ -90,12 +90,9 @@ def test_lowercase_address(acfactory) -> None:
     assert account.get_config("configured_addr") == addr
     assert account.list_transports()[0]["addr"] == addr
 
-    for param in [
-        account.get_info()["used_account_settings"],
-        account.get_info()["entered_account_settings"],
-    ]:
-        assert addr in param
-        assert addr_upper not in param
+    param = account.get_info()["used_transport_settings"]
+    assert addr in param
+    assert addr_upper not in param
 
 
 def test_configure_ip(acfactory) -> None:
@@ -733,7 +730,7 @@ def test_configured_imap_certificate_checks(acfactory):
     alice = acfactory.new_configured_account()
 
     # Certificate checks should be configured (not None)
-    assert "cert_strict" in alice.get_info().used_account_settings
+    assert "cert_strict" in alice.get_info().used_transport_settings
 
     # "cert_old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)
@@ -746,7 +743,7 @@ def test_configured_imap_certificate_checks(acfactory):
     #
     # Core 1.142.4, 1.142.5 and 1.142.6 saved this value due to bug.
     # This test is a regression test to prevent this happening again.
-    assert "cert_old_automatic" not in alice.get_info().used_account_settings
+    assert "cert_old_automatic" not in alice.get_info().used_transport_settings
 
 
 def test_no_old_msg_is_fresh(acfactory):
