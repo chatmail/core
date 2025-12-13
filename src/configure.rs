@@ -24,7 +24,7 @@ use server_params::{ServerParams, expand_param_vector};
 use tokio::task;
 
 use crate::config::{self, Config};
-use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
+use crate::constants::{MAX_TRANSPORT_RELAYS, NON_ALPHANUMERIC_WITHOUT_DOT};
 use crate::context::Context;
 use crate::imap::Imap;
 use crate::log::warn;
@@ -282,6 +282,18 @@ impl Context {
                 bail!(
                     "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
                 );
+            }
+
+            if self
+                .sql
+                .count("SELECT COUNT(*) FROM transports", ())
+                .await?
+                > MAX_TRANSPORT_RELAYS
+            {
+                bail!(
+                    "You have reached the maximum number of relays ({}).",
+                    MAX_TRANSPORT_RELAYS
+                )
             }
         }
 

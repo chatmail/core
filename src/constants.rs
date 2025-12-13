@@ -265,6 +265,10 @@ Here is what to do:
 
 If you have any questions, please send an email to delta@merlinux.eu or ask at https://support.delta.chat/."#;
 
+/// Maximum number of relays
+/// see https://github.com/chatmail/core/issues/7608
+pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
+
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;
