@@ -992,7 +992,7 @@ pub async fn get_all_ui_config_keys(context: &Context) -> Result<Vec<String>> {
     let ui_keys = context
         .sql
         .query_map_vec(
-            "SELECT keyname FROM config WHERE keyname LIKE 'ui.%' ORDER BY config.id ASC",
+            "SELECT keyname FROM config WHERE keyname GLOB 'ui.*' ORDER BY config.id",
             (),
             |row| Ok(row.get::<_, String>(0)?),
         )
