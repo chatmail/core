@@ -15,7 +15,7 @@ use deltachat::chat::{
     MessageListOptions,
 };
 use deltachat::chatlist::Chatlist;
-use deltachat::config::Config;
+use deltachat::config::{get_all_ui_config_keys, Config};
 use deltachat::constants::DC_MSG_ID_DAYMARKER;
 use deltachat::contact::{may_be_valid_addr, Contact, ContactId, Origin};
 use deltachat::context::get_info;
@@ -450,6 +450,12 @@ impl CommandApi {
             result.insert(key.clone(), get_config(&ctx, &key).await?);
         }
         Ok(result)
+    }
+
+    /// Returns all `ui.*` config keys that were set by the UI.
+    async fn get_all_ui_config_keys(&self, account_id: u32) -> Result<Vec<String>> {
+        let ctx = self.get_context(account_id).await?;
+        get_all_ui_config_keys(&ctx).await
     }
 
     async fn set_stock_strings(&self, strings: HashMap<u32, String>) -> Result<()> {
