@@ -60,8 +60,18 @@ impl Accounts {
         if writable && !dir.exists() {
             Accounts::create(&dir).await?;
         }
+        let events = Events::new();
+        Accounts::open(events, dir, writable).await
+    }
 
-        Accounts::open(dir, writable).await
+    /// Loads or creates an accounts folder at the given `dir`.
+    /// Uses an existing events channel.
+    pub async fn new_with_events(dir: PathBuf, writable: bool, events: Events) -> Result<Self> {
+        if writable && !dir.exists() {
+            Accounts::create(&dir).await?;
+        }
+
+        Accounts::open(events, dir, writable).await
     }
 
     /// Get the ID used to log events.
@@ -85,14 +95,14 @@ impl Accounts {
 
     /// Opens an existing accounts structure. Will error if the folder doesn't exist,
     /// no account exists and no config exists.
-    async fn open(dir: PathBuf, writable: bool) -> Result<Self> {
+    async fn open(events: Events, dir: PathBuf, writable: bool) -> Result<Self> {
         ensure!(dir.exists(), "directory does not exist");
 
         let config_file = dir.join(CONFIG_NAME);
         ensure!(config_file.exists(), "{config_file:?} does not exist");
 
         let config = Config::from_file(config_file, writable).await?;
-        let events = Events::new();
+
         let stockstrings = StockStrings::new();
         let push_subscriber = PushSubscriber::new();
         let accounts = config
