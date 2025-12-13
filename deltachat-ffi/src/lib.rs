@@ -11,6 +11,7 @@
 #[macro_use]
 extern crate human_panic;
 
+use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
@@ -4756,6 +4757,91 @@ pub unsafe extern "C" fn dc_accounts_new(
 
     match accs {
         Ok(accs) => Arc::into_raw(Arc::new(RwLock::new(accs))),
+        Err(err) => {
+            // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
+            eprintln!("failed to create accounts: {err:#}");
+            ptr::null_mut()
+        }
+    }
+}
+
+pub type dc_event_channel_t = Cell<Option<Events>>;
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_event_channel_new() -> *mut dc_event_channel_t {
+    Box::into_raw(Box::new(Cell::new(Some(Events::new()))))
+}
+
+/// Release the events channel structure.
+///
+/// This function releases the memory of the `dc_event_channel_t` structure.
+///
+/// you can call it after calling dc_accounts_new_with_event_channel,
+/// which took the events channel out of it already, so this just frees the underlying option.
+#[no_mangle]
+pub unsafe extern "C" fn dc_event_channel_unref(event_channel: *mut dc_event_channel_t) {
+    if event_channel.is_null() {
+        eprintln!("ignoring careless call to dc_event_channel_unref()");
+        return;
+    }
+    let _ = Box::from_raw(event_channel);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_event_channel_get_event_emitter(
+    event_channel: *mut dc_event_channel_t,
+) -> *mut dc_event_emitter_t {
+    if event_channel.is_null() {
+        eprintln!("ignoring careless call to dc_event_channel_get_event_emitter()");
+        return ptr::null_mut();
+    }
+
+    let Some(event_channel) = &*(*event_channel).as_ptr() else {
+        eprintln!(
+            "ignoring careless call to dc_event_channel_get_event_emitter() 
+            -> channel was already consumed, make sure you call this before dc_accounts_new_with_event_channel"
+        );
+        return ptr::null_mut();
+    };
+
+    let emitter = event_channel.get_emitter();
+
+    Box::into_raw(Box::new(emitter))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
+    dir: *const libc::c_char,
+    writable: libc::c_int,
+    event_channel: *mut dc_event_channel_t,
+) -> *mut dc_accounts_t {
+    setup_panic!();
+
+    if dir.is_null() || event_channel.is_null() {
+        eprintln!("ignoring careless call to dc_accounts_new_with_event_channel()");
+        return ptr::null_mut();
+    }
+
+    // consuming channel enforce that you need to get the event emitter
+    // before initializing the account manager,
+    // so that you don't miss events/errors during initialisation.
+    // It also prevents you from using the same channel on multiple account managers.
+    let Some(event_channel) = (*event_channel).take() else {
+        eprintln!(
+            "ignoring careless call to dc_accounts_new_with_event_channel()
+            -> channel was already consumed"
+        );
+        return ptr::null_mut();
+    };
+
+    let accs = block_on(Accounts::new_with_events(
+        as_path(dir).into(),
+        writable != 0,
+        event_channel,
+    ));
+
+    match accs {
+        Ok(accs) => Box::into_raw(Box::new(AccountsWrapper::new(accs))),
         Err(err) => {
             // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
             eprintln!("failed to create accounts: {err:#}");
