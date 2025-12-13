@@ -22,6 +22,7 @@ typedef struct _dc_lot       dc_lot_t;
 typedef struct _dc_provider  dc_provider_t;
 typedef struct _dc_event     dc_event_t;
 typedef struct _dc_event_emitter dc_event_emitter_t;
+typedef struct _dc_event_channel dc_event_channel_t;
 typedef struct _dc_jsonrpc_instance dc_jsonrpc_instance_t;
 typedef struct _dc_backup_provider dc_backup_provider_t;
 
