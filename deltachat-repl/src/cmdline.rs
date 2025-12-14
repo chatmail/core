@@ -1231,7 +1231,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
         "setqr" => {
             ensure!(!arg1.is_empty(), "Argument <qr-content> missing.");
             match set_config_from_qr(&context, arg1).await {
-                Ok(()) => println!("Config set from QR code, you can now call 'configure'"),
+                Ok(()) => eprintln!("Config set from the QR code."),
                 Err(err) => eprintln!("Cannot set config from QR code: {err:?}"),
             }
         }

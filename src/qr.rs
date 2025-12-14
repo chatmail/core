@@ -834,6 +834,8 @@ pub(crate) async fn login_param_from_account_qr(
 }
 
 /// Sets configuration values from a QR code.
+/// "DCACCOUNT:" and "DCLOGIN:" QR codes configure `context`, but I/O mustn't be started for such QR
+/// codes, consider using [`Context::add_transport_from_qr`] which also restarts I/O.
 pub async fn set_config_from_qr(context: &Context, qr: &str) -> Result<()> {
     match check_qr(context, qr).await? {
         Qr::Account { .. } => {
