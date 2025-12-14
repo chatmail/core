@@ -616,7 +616,7 @@ impl Imap {
 
         let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
         let mut available_post_msgs = Vec::<String>::with_capacity(msgs.len());
-        let mut download_when_normal_starts = Vec::<String>::with_capacity(msgs.len());
+        let mut download_later = Vec::<String>::with_capacity(msgs.len());
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
@@ -728,7 +728,7 @@ impl Imap {
 
                     // whether it fits download size limit
                     if download_limit.is_none_or(|download_limit| size < download_limit) {
-                        download_when_normal_starts.push(message_id.clone());
+                        download_later.push(message_id.clone());
                     }
                 } else {
                     info!(context, "{message_id:?} is not a post-message.");
@@ -812,7 +812,7 @@ impl Imap {
                 context,
                 "available_post_msgs: {}, download_when_normal_starts: {}",
                 available_post_msgs.len(),
-                download_when_normal_starts.len()
+                download_later.len()
             );
             for rfc724_mid in available_post_msgs {
                 context
@@ -820,7 +820,7 @@ impl Imap {
                     .insert("INSERT INTO available_post_msgs VALUES (?)", (rfc724_mid,))
                     .await?;
             }
-            for rfc724_mid in download_when_normal_starts {
+            for rfc724_mid in download_later {
                 context
                     .sql
                     .insert(
