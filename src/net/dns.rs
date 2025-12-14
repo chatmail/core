@@ -40,7 +40,7 @@
 //! used for successful connection timestamp of
 //! retrieving them from in-memory cache is used.
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
@@ -850,7 +850,7 @@ pub(crate) async fn lookup_host_with_cache(
         }
     };
 
-    if load_cache {
+    let addrs = if load_cache {
         let mut cache = lookup_cache(context, hostname, port, alpn, now).await?;
         if let Some(ips) = DNS_PRELOAD.get(hostname) {
             for ip in ips {
@@ -861,10 +861,15 @@ pub(crate) async fn lookup_host_with_cache(
             }
         }
 
-        Ok(merge_with_cache(resolved_addrs, cache))
+        merge_with_cache(resolved_addrs, cache)
     } else {
-        Ok(resolved_addrs)
-    }
+        resolved_addrs
+    };
+    ensure!(
+        !addrs.is_empty(),
+        "Could not find DNS resolutions for {hostname}:{port}. Check server hostname and your network"
+    );
+    Ok(addrs)
 }
 
 /// Merges results received from DNS with cached results.
