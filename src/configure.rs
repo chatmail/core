@@ -24,7 +24,7 @@ use server_params::{ServerParams, expand_param_vector};
 use tokio::task;
 
 use crate::config::{self, Config};
-use crate::constants::{MAX_TRANSPORT_RELAYS, NON_ALPHANUMERIC_WITHOUT_DOT};
+use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
 use crate::log::warn;
@@ -44,6 +44,10 @@ use crate::transport::{
 };
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
+
+/// Maximum number of relays
+/// see https://github.com/chatmail/core/issues/7608
+pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
 
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
