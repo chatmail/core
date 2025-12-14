@@ -291,7 +291,7 @@ impl Context {
                 let configured_param = get_configured_param(self, param).await;
                 warn!(
                     self,
-                    "configure failed: entered params {}, used params {}",
+                    "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
                     param.to_string(),
                     configured_param
                         .map(|param| param.to_string())
