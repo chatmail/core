@@ -575,11 +575,10 @@ int             dc_set_stock_translation(dc_context_t* context, uint32_t stock_i
 
 /**
  * Set configuration values from a QR code.
- * Before this function is called, dc_check_qr() should confirm the type of the
- * QR code is DC_QR_ACCOUNT or DC_QR_LOGIN.
+ * Before this function is called, dc_check_qr() should be used to get the QR code type.
  *
- * Internally, the function will call dc_set_config() with the appropriate keys,
- * e.g. `addr` and `mail_pw` for DC_QR_ACCOUNT and DC_QR_LOGIN.
+ * DC_QR_ACCOUNT and DC_QR_LOGIN QR codes configure the context, but I/O mustn't be started for such
+ * QR codes.
  *
  * @memberof dc_context_t
  * @param context The context object.
