@@ -221,3 +221,18 @@ def test_recognize_self_address(acfactory) -> None:
     bob_chat.send_text("Hello!")
     msg = alice.wait_for_incoming_msg().get_snapshot()
     assert msg.chat == alice.create_chat(bob)
+
+def test_transport_limit(acfactory) -> None:
+    """Test transports limit."""
+    [account] = acfactory.get_online_accounts(1)
+    qr = acfactory.get_account_qr()
+    
+    limit = 5
+    
+    for _ in range(1, limit):    
+        account.add_transport_from_qr(qr)
+    
+    assert len(account.list_transports()) == limit
+        
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)

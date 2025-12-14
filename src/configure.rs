@@ -292,7 +292,7 @@ impl Context {
                 .sql
                 .count("SELECT COUNT(*) FROM transports", ())
                 .await?
-                > MAX_TRANSPORT_RELAYS
+                >= MAX_TRANSPORT_RELAYS
             {
                 bail!(
                     "You have reached the maximum number of relays ({}).",
