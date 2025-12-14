@@ -79,7 +79,11 @@ impl MsgId {
                 }
                 self.update_download_state(context, DownloadState::InProgress)
                     .await?;
-                info!(context, "Requesting full download of {:?}.", msg.rfc724_mid());
+                info!(
+                    context,
+                    "Requesting full download of {:?}.",
+                    msg.rfc724_mid()
+                );
                 context
                     .sql
                     .execute(
@@ -156,7 +160,9 @@ pub(crate) async fn download_msg(
 
     let Some((server_uid, server_folder)) = row else {
         // No IMAP record found, we don't know the UID and folder.
-        return Err(anyhow!("IMAP location for {rfc724_mid:?} post-message is unknown"));
+        return Err(anyhow!(
+            "IMAP location for {rfc724_mid:?} post-message is unknown"
+        ));
     };
 
     session
