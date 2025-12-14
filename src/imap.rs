@@ -2284,6 +2284,7 @@ pub(crate) async fn prefetch_should_download(
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
+    return Ok(true);
     if message::rfc724_mid_exists(context, message_id)
         .await?
         .is_some()

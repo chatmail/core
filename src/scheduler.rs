@@ -501,9 +501,6 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         }
     }
 
-    download_msgs(ctx, &mut session)
-        .await
-        .context("Failed to download messages")?;
     session
         .fetch_metadata(ctx)
         .await
@@ -587,9 +584,10 @@ async fn fetch_idle(
             .await
             .context("delete_expired_imap_messages")?;
 
-        //-------
-        // TODO: verify that this is the correct position for this call
-        // in order to guard against lost pre-messages:
+        download_msgs(ctx, &mut session)
+            .await
+            .context("Failed to download messages")?;
+
         download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
