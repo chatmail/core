@@ -1295,16 +1295,17 @@ def test_configure_error_msgs_invalid_server(acfactory):
         ev = ac2._evtracker.get_matching("DC_EVENT_CONFIGURE_PROGRESS")
         if ev.data1 == 0:
             break
+    err_lower = ev.data2.lower()
     # Can't connect so it probably should say something about "internet"
     # again, should not repeat itself
     # If this fails then probably `e.msg.to_lowercase().contains("could not resolve")`
     # in configure.rs returned false because the error message was changed
     # (i.e. did not contain "could not resolve" anymore)
-    assert (ev.data2.count("internet") + ev.data2.count("network")) == 1
+    assert (err_lower.count("internet") + err_lower.count("network")) == 1
     # Should mention that it can't connect:
-    assert ev.data2.count("connect") == 1
+    assert err_lower.count("connect") == 1
     # The users do not know what "configuration" is
-    assert "configuration" not in ev.data2.lower()
+    assert "configuration" not in err_lower
 
 
 def test_status(acfactory):
