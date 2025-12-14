@@ -262,7 +262,7 @@ impl Message {
             }
         };
 
-        let text = self.text.clone();
+        let text = self.text.clone() + &self.additional_text;
 
         let summary = if let Some(type_file) = type_file {
             if append_text && !text.is_empty() {
