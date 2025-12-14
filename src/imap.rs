@@ -614,9 +614,9 @@ impl Imap {
             .context("prefetch")?;
         let read_cnt = msgs.len();
 
-        let mut uids_fetch = Vec::<u32>::with_capacity(msgs.len() + 1);
-        let mut available_post_msgs = Vec::<String>::with_capacity(msgs.len());
-        let mut download_later = Vec::<String>::with_capacity(msgs.len());
+        let mut uids_fetch: Vec<u32> = Vec::new();
+        let mut available_post_msgs: Vec<String> = Vec::new();
+        let mut download_later: Vec<String> = Vec::new();
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
