@@ -243,3 +243,36 @@ def test_transport_limit(acfactory) -> None:
 
     # test that adding a transport after deleting one works again
     account.add_transport_from_qr(qr)
+
+
+def test_message_info_imap_urls(acfactory, log) -> None:
+    """Test that message info contains IMAP URLs of where the message was received."""
+    alice, bob = acfactory.get_online_accounts(2)
+
+    log.section("Alice adds ac1 clone removes second transport")
+    qr = acfactory.get_account_qr()
+    for i in range(3):
+        alice.add_transport_from_qr(qr)
+        # Wait for all transports to go IDLE after adding each one.
+        for _ in range(i + 1):
+            alice.bring_online()
+
+    new_alice_addr = alice.list_transports()[2]["addr"]
+    alice.set_config("configured_addr", new_alice_addr)
+
+    # Enable multi-device mode so messages are not deleted immediately.
+    alice.set_config("bcc_self", "1")
+
+    # Bob creates chat, learning about Alice's currently selected transport.
+    # This is where he will send the message.
+    bob_chat = bob.create_chat(alice)
+
+    # Alice changes the transport again.
+    alice.set_config("configured_addr", alice.list_transports()[3]["addr"])
+
+    bob_chat.send_text("Hello!")
+
+    msg = alice.wait_for_incoming_msg()
+    for alice_transport in alice.list_transports():
+        addr = alice_transport["addr"]
+        assert (addr == new_alice_addr) == (addr in msg.get_info())
