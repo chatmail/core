@@ -221,3 +221,25 @@ def test_recognize_self_address(acfactory) -> None:
     bob_chat.send_text("Hello!")
     msg = alice.wait_for_incoming_msg().get_snapshot()
     assert msg.chat == alice.create_chat(bob)
+
+
+def test_transport_limit(acfactory) -> None:
+    """Test transports limit."""
+    account = acfactory.get_online_account()
+    qr = acfactory.get_account_qr()
+
+    limit = 5
+
+    for _ in range(1, limit):
+        account.add_transport_from_qr(qr)
+
+    assert len(account.list_transports()) == limit
+
+    with pytest.raises(JsonRpcError):
+        account.add_transport_from_qr(qr)
+
+    second_addr = account.list_transports()[1]["addr"]
+    account.delete_transport(second_addr)
+
+    # test that adding a transport after deleting one works again
+    account.add_transport_from_qr(qr)

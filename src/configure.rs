@@ -45,6 +45,10 @@ use crate::transport::{
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
+/// Maximum number of relays
+/// see <https://github.com/chatmail/core/issues/7608>
+pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
+
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
         assert!(
@@ -282,6 +286,18 @@ impl Context {
                 bail!(
                     "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
                 );
+            }
+
+            if self
+                .sql
+                .count("SELECT COUNT(*) FROM transports", ())
+                .await?
+                >= MAX_TRANSPORT_RELAYS
+            {
+                bail!(
+                    "You have reached the maximum number of relays ({}).",
+                    MAX_TRANSPORT_RELAYS
+                )
             }
         }
 
