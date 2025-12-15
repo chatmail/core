@@ -916,7 +916,7 @@ impl Session {
         context
             .sql
             .transaction(move |transaction| {
-                transaction.execute("DELETE FROM imap WHERE folder=?", (folder,))?;
+                transaction.execute("DELETE FROM imap WHERE transport_id=? AND folder=?", (transport_id, folder,))?;
                 for (uid, (rfc724_mid, target)) in &msgs {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
@@ -1054,14 +1054,16 @@ impl Session {
     ///
     /// This is the only place where messages are moved or deleted on the IMAP server.
     async fn move_delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
+        let transport_id = self.transport_id();
         let rows = context
             .sql
             .query_map_vec(
                 "SELECT id, uid, target FROM imap
-        WHERE folder = ?
-        AND target != folder
-        ORDER BY target, uid",
-                (folder,),
+                 WHERE folder = ?
+                 AND transport_id = ?
+                 AND target != folder
+                 ORDER BY target, uid",
+                (folder, transport_id),
                 |row| {
                     let rowid: i64 = row.get(0)?;
                     let uid: u32 = row.get(1)?;
@@ -1277,10 +1279,10 @@ impl Session {
             };
             let is_seen = fetch.flags().any(|flag| flag == Flag::Seen);
             if is_seen
-                && let Some(chat_id) = mark_seen_by_uid(context, folder, uid_validity, uid)
+                && let Some(chat_id) = mark_seen_by_uid(context, transport_id, folder, uid_validity, uid)
                     .await
                     .with_context(|| {
-                        format!("failed to update seen status for msg {folder}/{uid}")
+                        format!("Transport {transport_id}: Failed to update seen status for msg {folder}/{uid}")
                     })?
             {
                 updated_chat_ids.insert(chat_id);
@@ -2359,6 +2361,7 @@ pub(crate) async fn prefetch_should_download(
 /// Returns updated chat ID if any message was marked as seen.
 async fn mark_seen_by_uid(
     context: &Context,
+    transport_id: u32,
     folder: &str,
     uid_validity: u32,
     uid: u32,
@@ -2369,12 +2372,13 @@ async fn mark_seen_by_uid(
             "SELECT id, chat_id FROM msgs
                  WHERE id > 9 AND rfc724_mid IN (
                    SELECT rfc724_mid FROM imap
-                   WHERE folder=?1
-                   AND uidvalidity=?2
-                   AND uid=?3
+                   WHERE transport_id=?
+                   AND folder=?
+                   AND uidvalidity=?
+                   AND uid=?
                    LIMIT 1
                  )",
-            (&folder, uid_validity, uid),
+            (transport_id, &folder, uid_validity, uid),
             |row| {
                 let msg_id: MsgId = row.get(0)?;
                 let chat_id: ChatId = row.get(1)?;
