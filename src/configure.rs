@@ -46,7 +46,7 @@ use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
 /// Maximum number of relays
-/// see https://github.com/chatmail/core/issues/7608
+/// see <https://github.com/chatmail/core/issues/7608>
 pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
 
 macro_rules! progress {
