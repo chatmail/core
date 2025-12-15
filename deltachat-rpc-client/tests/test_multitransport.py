@@ -224,7 +224,7 @@ def test_recognize_self_address(acfactory) -> None:
 
 def test_transport_limit(acfactory) -> None:
     """Test transports limit."""
-    [account] = acfactory.get_online_accounts(1)
+    account = acfactory.get_online_account()
     qr = acfactory.get_account_qr()
     
     limit = 5
