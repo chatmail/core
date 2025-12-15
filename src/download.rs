@@ -153,11 +153,15 @@ pub(crate) async fn download_msg(
         return Ok(());
     };
 
+    let transport_id = session.transport_id();
     let row = context
         .sql
         .query_row_optional(
-            "SELECT uid, folder FROM imap WHERE rfc724_mid=? AND target!=''",
-            (&msg.rfc724_mid,),
+            "SELECT uid, folder FROM imap
+             WHERE rfc724_mid=?
+             AND transport_id=?
+             AND target!=''",
+            (&msg.rfc724_mid, transport_id),
             |row| {
                 let server_uid: u32 = row.get(0)?;
                 let server_folder: String = row.get(1)?;
