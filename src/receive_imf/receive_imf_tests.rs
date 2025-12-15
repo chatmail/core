@@ -3852,6 +3852,37 @@ async fn test_sync_member_list_on_rejoin() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_group_contacts_goto_bottom() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let fiona_id = alice.add_or_lookup_contact_id(fiona).await;
+
+    let alice_chat_id = create_group(alice, "Testing contact list").await?;
+    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
+    add_contact_to_chat(alice, alice_chat_id, fiona_id).await?;
+
+    send_text_msg(alice, alice_chat_id, "hello".to_string()).await?;
+    bob.recv_msg(&alice.pop_sent_msg().await).await;
+    let bob_chat_id = bob.get_last_msg().await.chat_id;
+    assert_eq!(get_chat_contacts(bob, bob_chat_id).await?.len(), 3);
+    assert_eq!(Contact::get_all(bob, 0, None).await?.len(), 0);
+    bob_chat_id.accept(bob).await?;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    assert_eq!(contacts.len(), 2);
+    let bob_fiona_id = bob.add_or_lookup_contact_id(fiona).await;
+    assert_eq!(contacts[1], bob_fiona_id);
+
+    ChatId::create_for_contact(bob, bob_fiona_id).await?;
+    // Unfortunately, nothing has changed.
+    assert_eq!(Contact::get_all(bob, 0, None).await?, contacts);
+    Ok(())
+}
+
 /// Test for the bug when remote group membership changes from outdated messages overrode local
 /// ones. Especially that was a problem when a message is sent offline so that it doesn't
 /// incorporate recent group membership changes.
