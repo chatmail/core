@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import EventType, events
-from deltachat_rpc_client.const import MessageState
+from deltachat_rpc_client.const import MessageState, DownloadState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError
 
@@ -1062,3 +1062,21 @@ def test_synchronize_member_list_on_group_rejoin(acfactory, log):
 
     assert chat.num_contacts() == 2
     assert msg.get_snapshot().chat.num_contacts() == 2
+
+
+def test_large_message(acfactory) -> None:
+    """
+    Test sending large message without download limit set,
+    so it is sent with pre-message but downloaded without user interaction.
+    """
+    alice, bob = acfactory.get_online_accounts(2)
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.send_message(
+        "Hello World, this message is bigger than 5 bytes",
+        file="../test-data/image/screenshot.jpg",
+    )
+
+    msg = bob.wait_for_incoming_msg()
+    snapshot = msg.get_snapshot()
+    assert snapshot.text == "Hello World, this message is bigger than 5 bytes"
