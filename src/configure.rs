@@ -285,7 +285,22 @@ impl Context {
             }
         }
 
-        let provider = configure(self, param).await?;
+        let provider = match configure(self, param).await {
+            Err(error) => {
+                // Log entered and actual params
+                let configured_param = get_configured_param(self, param).await;
+                warn!(
+                    self,
+                    "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
+                    param.to_string(),
+                    configured_param
+                        .map(|param| param.to_string())
+                        .unwrap_or("error".to_owned())
+                );
+                return Err(error);
+            }
+            Ok(provider) => provider,
+        };
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
         on_configure_completed(self, provider).await?;
