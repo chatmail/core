@@ -236,3 +236,9 @@ def test_transport_limit(acfactory) -> None:
         
     with pytest.raises(JsonRpcError):
         account.add_transport_from_qr(qr)
+    
+    second_addr = account.list_transports()[1]["addr"]
+    account.delete_transport(second_addr)
+    
+    # test that adding a transport after deleting one works again
+    account.add_transport_from_qr(qr)
