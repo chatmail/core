@@ -3878,8 +3878,9 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     assert_eq!(contacts[1], bob_fiona_id);
 
     ChatId::create_for_contact(bob, bob_fiona_id).await?;
-    // Unfortunately, nothing has changed.
-    assert_eq!(Contact::get_all(bob, 0, None).await?, contacts);
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    assert_eq!(contacts.len(), 2);
+    assert_eq!(contacts[0], bob_fiona_id);
     Ok(())
 }
 

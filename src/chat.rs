@@ -432,14 +432,18 @@ impl ChatId {
 
         match chat.typ {
             Chattype::Single | Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast => {
-                // User has "created a chat" with all these contacts.
-                //
                 // Previously accepting a chat literally created a chat because unaccepted chats
                 // went to "contact requests" list rather than normal chatlist.
+                // But for groups we use lower origin because users don't always check all members
+                // before accepting a chat and may not want to have the group members mixed with
+                // existing contacts. `IncomingTo` fits here by its definition.
+                let origin = match chat.typ {
+                    Chattype::Group => Origin::IncomingTo,
+                    _ => Origin::CreateChat,
+                };
                 for contact_id in get_chat_contacts(context, self).await? {
                     if contact_id != ContactId::SELF {
-                        ContactId::scaleup_origin(context, &[contact_id], Origin::CreateChat)
-                            .await?;
+                        ContactId::scaleup_origin(context, &[contact_id], origin).await?;
                     }
                 }
             }
