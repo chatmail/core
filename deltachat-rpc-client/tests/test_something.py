@@ -505,6 +505,103 @@ def test_import_export_backup(acfactory, tmp_path) -> None:
     assert alice2.manager.get_system_info()
 
 
+def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
+    (ac1, some1) = acfactory.get_online_accounts(2)
+
+    log.section("create some chat content")
+    some1_addr = some1.get_config("addr")
+    chat1 = ac1.create_contact(some1).create_chat()
+    chat1.send_text("msg1")
+    assert len(ac1.get_contacts()) == 1
+
+    original_image_path = data.get_path("image/avatar64x64.png")
+    chat1.send_file(str(original_image_path))
+
+    # Add another 100KB file that ensures that the progress is smooth enough
+    path = tmp_path / "attachment.txt"
+    with path.open("w") as file:
+        file.truncate(100000)
+    chat1.send_file(str(path))
+
+    def assert_account_is_proper(ac):
+        contacts = ac.get_contacts()
+        assert len(contacts) == 1
+        contact2 = contacts[0]
+        assert contact2.get_snapshot().address == some1_addr
+        chat2 = contact2.create_chat()
+        messages = chat2.get_messages()
+        assert len(messages) == 3 + E2EE_INFO_MSGS
+        assert messages[0 + E2EE_INFO_MSGS].get_snapshot().text == "msg1"
+        snapshot = messages[1 + E2EE_INFO_MSGS].get_snapshot()
+        assert snapshot.file_mime == "image/png"
+        assert os.stat(snapshot.file).st_size == os.stat(original_image_path).st_size
+        ac.set_config("displayname", "new displayname")
+        assert ac.get_config("displayname") == "new displayname"
+
+    assert_account_is_proper(ac1)
+
+    backupdir = tmp_path / "backup"
+    backupdir.mkdir()
+
+    log.section(f"export all to {backupdir}")
+    ac1.stop_io()
+    ac1.export_backup(backupdir)
+    progress = 0
+    files_written = []
+    while True:
+        event = ac1.wait_for_event()
+        if event.kind == EventType.IMEX_PROGRESS:
+            assert event.progress > 0  # Progress 0 indicates error.
+            assert event.progress < progress + 250
+            progress = event.progress
+            if progress == 1000:
+                break
+        elif event.kind == EventType.IMEX_FILE_WRITTEN:
+            files_written.append(event.path)
+        else:
+            logging.info(event)
+    assert len(files_written) == 1
+    assert os.path.exists(files_written[0])
+    ac1.start_io()
+
+    log.section("get fresh empty account")
+    ac2 = acfactory.get_unconfigured_account()
+
+    log.section("import backup and check it's proper")
+    ac2.import_backup(files_written[0])
+    progress = 0
+    while True:
+        event = ac2.wait_for_event()
+        if event.kind == EventType.IMEX_PROGRESS:
+            assert event.progress > 0  # Progress 0 indicates error.
+            assert event.progress < progress + 250
+            progress = event.progress
+            if progress == 1000:
+                break
+        else:
+            logging.info(event)
+    assert_account_is_proper(ac1)
+    assert_account_is_proper(ac2)
+
+    log.section(f"Second-time export all to {backupdir}")
+    ac1.stop_io()
+    ac1.export_backup(backupdir)
+    while True:
+        event = ac1.wait_for_event()
+        if event.kind == EventType.IMEX_PROGRESS:
+            assert event.progress > 0
+            if event.progress == 1000:
+                break
+        elif event.kind == EventType.IMEX_FILE_WRITTEN:
+            files_written.append(event.path)
+        else:
+            logging.info(event)
+    assert len(files_written) == 2
+    assert os.path.exists(files_written[1])
+    assert files_written[1] != files_written[0]
+    assert len(list(backupdir.glob("*.tar"))) == 2
+
+
 def test_import_export_keys(acfactory, tmp_path) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
