@@ -351,7 +351,7 @@ pub fn get_info() -> BTreeMap<&'static str, String> {
     #[cfg(not(debug_assertions))]
     res.insert("debug_assertions", "Off".to_string());
 
-    res.insert("deltachat_core_version", format!("v{}", &*DC_VERSION_STR));
+    res.insert("deltachat_core_version", format!("v{DC_VERSION_STR}"));
     res.insert("sqlite_version", rusqlite::version().to_string());
     res.insert("arch", (std::mem::size_of::<usize>() * 8).to_string());
     res.insert("num_cpus", num_cpus::get().to_string());
@@ -1332,11 +1332,6 @@ impl Context {
         wal_fname.push("-wal");
         dbfile.with_file_name(wal_fname)
     }
-}
-
-/// Returns core version as a string.
-pub fn get_version_str() -> &'static str {
-    &DC_VERSION_STR
 }
 
 #[cfg(test)]

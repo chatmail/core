@@ -46,7 +46,7 @@ async fn test_maybe_send_stats() -> Result<()> {
         r.get("contact_stats").unwrap(),
         &serde_json::Value::Array(vec![])
     );
-    assert_eq!(r.get("core_version").unwrap(), get_version_str());
+    assert_eq!(r.get("core_version").unwrap(), DC_VERSION_STR);
 
     assert_eq!(maybe_send_stats(alice).await?, None);
 
