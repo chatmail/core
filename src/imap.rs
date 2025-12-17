@@ -27,7 +27,7 @@ use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, ShowEmails};
+use crate::constants::{self, Blocked, Chattype, DC_VERSION_STR, ShowEmails};
 use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
@@ -1502,7 +1502,7 @@ impl Session {
                         warn!(context, "receive_imf error: {err:#}.");
 
                         let text = format!(
-                            "❌ Failed to receive a message: {err:#}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
+                            "❌ Failed to receive a message: {err:#}. Core version v{DC_VERSION_STR}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/.",
                         );
                         let mut msg = Message::new_text(text);
                         add_device_msg(context, None, Some(&mut msg)).await?;

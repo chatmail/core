@@ -340,9 +340,11 @@ def test_receive_imf_failure(acfactory) -> None:
     msg_id = event.msg_id
     message = bob.get_message_by_id(msg_id)
     snapshot = message.get_snapshot()
+    version = bob.get_info()["deltachat_core_version"]
     assert (
         snapshot.text == "❌ Failed to receive a message:"
         " Condition failed: `!context.get_config_bool(Config::FailOnReceivingFullMsg).await?`."
+        f" Core version {version}."
         " Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
     )
 
