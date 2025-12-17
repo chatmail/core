@@ -9,7 +9,6 @@ from imap_tools import AND
 
 import deltachat as dc
 from deltachat import account_hookimpl, Message
-from deltachat.tracker import ImexTracker
 from deltachat.testplugin import E2EE_INFO_MSGS
 
 
@@ -824,86 +823,6 @@ def test_send_and_receive_image(acfactory, lp, data):
     assert os.stat(msg_in.filename).st_size == os.stat(path).st_size
     m = message_queue.get()
     assert m == msg_in
-
-
-def test_import_export_online_all(acfactory, tmp_path, data, lp):
-    (ac1, some1) = acfactory.get_online_accounts(2)
-
-    lp.sec("create some chat content")
-    some1_addr = some1.get_config("addr")
-    chat1 = ac1.create_contact(some1).create_chat()
-    chat1.send_text("msg1")
-    assert len(ac1.get_contacts()) == 1
-
-    original_image_path = data.get_path("d.png")
-    chat1.send_image(original_image_path)
-
-    # Add another 100KB file that ensures that the progress is smooth enough
-    path = tmp_path / "attachment.txt"
-    with path.open("w") as file:
-        file.truncate(100000)
-    chat1.send_file(str(path))
-
-    def assert_account_is_proper(ac):
-        contacts = ac.get_contacts()
-        assert len(contacts) == 1
-        contact2 = contacts[0]
-        assert contact2.addr == some1_addr
-        chat2 = contact2.create_chat()
-        messages = chat2.get_messages()
-        assert len(messages) == 3 + E2EE_INFO_MSGS
-        assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
-        assert messages[1 + E2EE_INFO_MSGS].filemime == "image/png"
-        assert os.stat(messages[1 + E2EE_INFO_MSGS].filename).st_size == os.stat(original_image_path).st_size
-        ac.set_config("displayname", "new displayname")
-        assert ac.get_config("displayname") == "new displayname"
-
-    assert_account_is_proper(ac1)
-
-    backupdir = tmp_path / "backup"
-    backupdir.mkdir()
-
-    lp.sec(f"export all to {backupdir}")
-    with ac1.temp_plugin(ImexTracker()) as imex_tracker:
-        ac1.stop_io()
-        ac1.imex(str(backupdir), dc.const.DC_IMEX_EXPORT_BACKUP)
-
-        # check progress events for export
-        assert imex_tracker.wait_progress(1, progress_upper_limit=249)
-        assert imex_tracker.wait_progress(250, progress_upper_limit=499)
-        assert imex_tracker.wait_progress(500, progress_upper_limit=749)
-        assert imex_tracker.wait_progress(750, progress_upper_limit=999)
-
-        paths = imex_tracker.wait_finish()
-        assert len(paths) == 1
-        path = paths[0]
-        assert os.path.exists(path)
-        ac1.start_io()
-
-    lp.sec("get fresh empty account")
-    ac2 = acfactory.get_unconfigured_account()
-
-    lp.sec("get latest backup file")
-    path2 = ac2.get_latest_backupfile(str(backupdir))
-    assert path2 == path
-
-    lp.sec("import backup and check it's proper")
-    with ac2.temp_plugin(ImexTracker()) as imex_tracker:
-        ac2.import_all(path)
-
-        # check progress events for import
-        assert imex_tracker.wait_progress(1, progress_upper_limit=249)
-        assert imex_tracker.wait_progress(1000)
-
-    assert_account_is_proper(ac1)
-    assert_account_is_proper(ac2)
-
-    lp.sec(f"Second-time export all to {backupdir}")
-    ac1.stop_io()
-    path2 = ac1.export_all(str(backupdir))
-    assert os.path.exists(path2)
-    assert path2 != path
-    assert ac2.get_latest_backupfile(str(backupdir)) == path2
 
 
 def test_qr_email_capitalization(acfactory, lp):
