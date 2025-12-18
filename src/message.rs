@@ -2176,6 +2176,36 @@ pub(crate) async fn rfc724_mid_exists_ex(
     Ok(res)
 }
 
+/// Returns [MsgId] of the most recent message with given `rfc724_mid`
+/// (Message-ID header) and bool `expr` result if such messages exists in the db.
+///
+/// * `expr`: SQL expression additionally passed into `SELECT`. Evaluated to `true` iff it is true
+///   for all messages with the given `rfc724_mid`.
+pub(crate) async fn downloaded_rfc724_mid_exists(
+    context: &Context,
+    rfc724_mid: &str,
+) -> Result<bool> {
+    let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
+    if rfc724_mid.is_empty() {
+        warn!(
+            context,
+            "Empty rfc724_mid passed to downloaded_rfc724_mid_exists"
+        );
+        return Ok(false);
+    }
+
+    let res = context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM msgs
+             WHERE rfc724_mid=? AND download_state<>?",
+            (rfc724_mid, DownloadState::Available),
+        )
+        .await?;
+
+    Ok(res)
+}
+
 /// Given a list of Message-IDs, returns the most relevant message found in the database.
 ///
 /// Relevance here is `(download_state == Done, index)`, where `index` is an index of Message-ID in
