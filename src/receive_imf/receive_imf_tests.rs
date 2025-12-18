@@ -16,7 +16,7 @@ use crate::imex::{ImexMode, imex};
 use crate::key;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
-    E2EE_INFO_MSGS, TestContext, TestContextManager, alice_keypair, get_chat_msg, mark_as_verified,
+    TestContext, TestContextManager, alice_keypair, get_chat_msg, mark_as_verified,
 };
 use crate::tools::{SystemTime, time};
 
@@ -78,9 +78,8 @@ static GRP_MAIL: &[u8] =
                     hello\n";
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_adhoc_group_show_chats_only() {
+async fn test_adhoc_group_is_shown() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("0")).await.unwrap();
 
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 0);
@@ -95,66 +94,12 @@ async fn test_adhoc_group_show_chats_only() {
 
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
-    assert_eq!(chats.len(), 1);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_adhoc_group_show_accepted_contact_unknown() {
-    let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
-    receive_imf(&t, GRP_MAIL, false).await.unwrap();
-
-    // adhoc-group with unknown contacts with show_emails=accepted is ignored for unknown contacts
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
-    assert_eq!(chats.len(), 0);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-    bob.set_config(
-        Config::ShowEmails,
-        Some(&ShowEmails::AcceptedContacts.to_string()),
-    )
-    .await?;
-    tcm.send_recv(alice, bob, "hi").await;
-    receive_imf(
-        bob,
-        b"From: bob@example.net\n\
-        To: alice@example.org, claire@example.com\n\
-        Message-ID: <3333@example.net>\n\
-        Date: Sun, 22 Mar 2020 22:37:57 +0000\n\
-        \n\
-        hello\n",
-        false,
-    )
-    .await?;
-    let chats = Chatlist::try_load(bob, 0, None, None).await?;
-    assert_eq!(chats.len(), 1);
-    let chat_id = chats.get_chat_id(0)?;
-    assert_eq!(chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_adhoc_group_show_accepted_contact_known() {
-    let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
-    Contact::create(&t, "Bob", "bob@example.com").await.unwrap();
-    receive_imf(&t, GRP_MAIL, false).await.unwrap();
-
-    // adhoc-group with known contacts with show_emails=accepted is still ignored for known contacts
-    // (and existent chat is required)
-    let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
-    assert_eq!(chats.len(), 0);
+    assert_eq!(chats.len(), 2);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_accepted() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
 
     // accept Bob by accepting a delta-message from Bob
     receive_imf(&t, MSGRMSG, false).await.unwrap();
@@ -190,7 +135,6 @@ async fn test_adhoc_group_show_accepted_contact_accepted() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_all() {
     let t = TestContext::new_alice().await;
-    assert_eq!(t.get_config_int(Config::ShowEmails).await.unwrap(), 2);
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
 
     // adhoc-group with unknown contacts with show_emails=all will show up in a single chat
@@ -816,10 +760,6 @@ async fn test_concat_multiple_ndns() -> Result<()> {
 }
 
 async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
-    context
-        .set_config(Config::ShowEmails, Some("2"))
-        .await
-        .unwrap();
     let received_msg = receive_imf(context, imf_raw, false)
         .await
         .expect("receive_imf failure")

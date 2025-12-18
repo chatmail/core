@@ -190,10 +190,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     MdnsEnabled,
 
-    /// Whether to show classic emails or only chat messages.
-    #[strum(props(default = "2"))] // also change ShowEmails.default() on changes
-    ShowEmails,
-
     /// Quality of the media files to send.
     #[strum(props(default = "0"))] // also change MediaQuality.default() on changes
     MediaQuality,
@@ -514,11 +510,7 @@ impl Config {
     pub(crate) fn is_synced(&self) -> bool {
         matches!(
             self,
-            Self::Displayname
-                | Self::MdnsEnabled
-                | Self::ShowEmails
-                | Self::Selfavatar
-                | Self::Selfstatus,
+            Self::Displayname | Self::MdnsEnabled | Self::Selfavatar | Self::Selfstatus,
         )
     }
 

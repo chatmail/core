@@ -9,8 +9,6 @@ def test_add_second_address(acfactory) -> None:
     account = acfactory.new_configured_account()
     assert len(account.list_transports()) == 1
 
-    assert account.get_config("show_emails") == "2"
-
     qr = acfactory.get_account_qr()
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 2
@@ -27,22 +25,6 @@ def test_add_second_address(acfactory) -> None:
 
     account.delete_transport(second_addr)
     assert len(account.list_transports()) == 2
-
-    # show_emails does not matter for multi-relay, can be set to anything
-    account.set_config("show_emails", "0")
-
-
-def test_second_transport_without_classic_emails(acfactory) -> None:
-    """Test that second transport can be configured if classic emails are not fetched."""
-    account = acfactory.new_configured_account()
-    assert len(account.list_transports()) == 1
-
-    assert account.get_config("show_emails") == "2"
-
-    qr = acfactory.get_account_qr()
-    account.set_config("show_emails", "0")
-
-    account.add_transport_from_qr(qr)
 
 
 def test_change_address(acfactory) -> None:

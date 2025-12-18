@@ -196,13 +196,6 @@ async fn test_sync() -> Result<()> {
     sync(&alice0, &alice1).await;
     assert_eq!(alice1.get_config_bool(Config::MdnsEnabled).await?, false);
 
-    {
-        let val = alice0.get_config_bool(Config::ShowEmails).await?;
-        alice0.set_config_bool(Config::ShowEmails, !val).await?;
-        sync(&alice0, &alice1).await;
-        assert_eq!(alice1.get_config_bool(Config::ShowEmails).await?, !val);
-    }
-
     // `Config::SyncMsgs` mustn't be synced.
     alice0.set_config_bool(Config::SyncMsgs, false).await?;
     alice0.set_config_bool(Config::SyncMsgs, true).await?;
