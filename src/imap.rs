@@ -19,7 +19,6 @@ use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
 use deltachat_contact_tools::ContactAddress;
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
-use num_traits::FromPrimitive;
 use ratelimit::Ratelimit;
 use url::Url;
 
@@ -27,7 +26,7 @@ use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, DC_VERSION_STR, ShowEmails};
+use crate::constants::{self, Blocked, Chattype, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
@@ -2317,7 +2316,7 @@ pub(crate) async fn prefetch_should_download(
         Some(f) => f,
         None => return Ok(false),
     };
-    let (_from_id, blocked_contact, origin) =
+    let (_from_id, blocked_contact, _origin) =
         match from_field_to_contact_id(context, &from, None, true, true).await? {
             Some(res) => res,
             None => return Ok(false),
@@ -2330,29 +2329,7 @@ pub(crate) async fn prefetch_should_download(
         return Ok(false);
     }
 
-    let is_chat_message = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    let accepted_contact = origin.is_known();
-    let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
-        .await?
-        .map(|parent| match parent.is_dc_message {
-            MessengerMessage::No => false,
-            MessengerMessage::Yes | MessengerMessage::Reply => true,
-        })
-        .unwrap_or_default();
-
-    let show_emails =
-        ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
-
-    let show = is_autocrypt_setup_message
-        || match show_emails {
-            ShowEmails::Off => is_chat_message || is_reply_to_chat_message,
-            ShowEmails::AcceptedContacts => {
-                is_chat_message || is_reply_to_chat_message || accepted_contact
-            }
-            ShowEmails::All => true,
-        };
-
-    let should_download = (show && !blocked_contact) || maybe_ndn;
+    let should_download = !blocked_contact || maybe_ndn;
     Ok(should_download)
 }
 

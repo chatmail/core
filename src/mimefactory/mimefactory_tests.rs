@@ -503,11 +503,6 @@ async fn msg_to_subject_str_inner(
 
 // Creates a `Message` that replies "Hi" to the incoming email in `imf_raw`.
 async fn incoming_msg_to_reply_msg(imf_raw: &[u8], context: &Context) -> Message {
-    context
-        .set_config(Config::ShowEmails, Some("2"))
-        .await
-        .unwrap();
-
     receive_imf(context, imf_raw, false).await.unwrap();
 
     let chats = Chatlist::try_load(context, 0, None, None).await.unwrap();

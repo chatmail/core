@@ -2018,7 +2018,6 @@ pub async fn get_request_msg_cnt(context: &Context) -> usize {
 /// Count messages older than the given number of `seconds`.
 ///
 /// Returns the number of messages that are older than the given number of seconds.
-/// This includes e-mails downloaded due to the `show_emails` option.
 /// Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
 pub async fn estimate_deletion_cnt(
     context: &Context,
