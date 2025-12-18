@@ -382,7 +382,7 @@ jobs:
 
       - name: Publish deltachat-rpc-server to PyPI
         if: github.event_name == 'release'
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
 
   publish_npm_package:
     name: Build & Publish npm prebuilds and deltachat-rpc-server

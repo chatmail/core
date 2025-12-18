@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 18.x
       - name: Add Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
       - name: npm install
         working-directory: deltachat-jsonrpc/typescript
         run: npm install
