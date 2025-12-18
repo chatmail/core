@@ -40,7 +40,7 @@ jobs:
       - run: rustup override set $RUST_VERSION
         shell: bash
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
       - name: Run rustfmt
         run: cargo fmt --all -- --check
       - name: Run clippy
@@ -59,7 +59,7 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: EmbarkStudios/cargo-deny-action@76cd80eb775d7bbbd2d80292136d74d39e1b4918
         with:
           arguments: --all-features --workspace
           command: check
@@ -91,7 +91,7 @@ jobs:
           show-progress: false
           persist-credentials: false
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
       - name: Rustdoc
         run: cargo doc --document-private-items --no-deps
 
@@ -134,10 +134,10 @@ jobs:
         shell: bash
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
       - name: Install nextest
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@69e777b377e4ec209ddad9426ae3e0c1008b0ef3
         with:
           tool: nextest
 
@@ -168,7 +168,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
       - name: Build C library
         run: cargo build -p deltachat_ffi
@@ -194,7 +194,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache rust cargo artifacts
-        uses: swatinem/rust-cache@v2
+        uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
       - name: Build deltachat-rpc-server
         run: cargo build -p deltachat-rpc-server
