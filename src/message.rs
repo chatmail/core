@@ -2176,11 +2176,10 @@ pub(crate) async fn rfc724_mid_exists_ex(
     Ok(res)
 }
 
-/// Returns [MsgId] of the most recent message with given `rfc724_mid`
-/// (Message-ID header) and bool `expr` result if such messages exists in the db.
-///
-/// * `expr`: SQL expression additionally passed into `SELECT`. Evaluated to `true` iff it is true
-///   for all messages with the given `rfc724_mid`.
+/// Returns `true` iff there is a message
+/// with the given `rfc724_mid`
+/// and a download state other than `DownloadState::Available`
+/// (i.e. a download state where it was already tried to download the message).
 pub(crate) async fn downloaded_rfc724_mid_exists(
     context: &Context,
     rfc724_mid: &str,
