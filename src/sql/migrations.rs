@@ -31,7 +31,7 @@ tokio::task_local! {
     static STOP_MIGRATIONS_AT: i32;
 }
 
-pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
+pub async fn run(context: &Context, sql: &Sql) -> Result<(bool, bool)> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
 
@@ -69,6 +69,7 @@ pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
 
     let dbversion = dbversion_before_update;
     let mut recode_avatar = false;
+    let mut update_email_configs = false;
 
     if dbversion < 1 {
         sql.execute_migration(
@@ -1466,6 +1467,12 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 144)?;
+    if dbversion < migration_version {
+        update_email_configs = true;
+        sql.set_db_version(migration_version).await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
@@ -1480,7 +1487,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
     }
     info!(context, "Database version: v{new_version}.");
 
-    Ok(recode_avatar)
+    Ok((recode_avatar, update_email_configs))
 }
 
 fn migrate_key_contacts(

@@ -214,7 +214,7 @@ impl Sql {
         // this should be done before updates that use high-level objects that
         // rely themselves on the low-level structure.
 
-        let recode_avatar = migrations::run(context, self)
+        let (recode_avatar, update_email_configs) = migrations::run(context, self)
             .await
             .context("failed to run migrations")?;
 
@@ -240,6 +240,22 @@ impl Sql {
                         .await?
                 }
             }
+        }
+
+        // Reset some options if IsChatmail is true,
+        // because there were reports from users who had these options set to something else,
+        // and then couldn't change them because they are hidden in the UI for chatmail profiles
+        if update_email_configs && context.get_config_bool(Config::IsChatmail).await? {
+            // The default for MvboxMove is actually "1", and it's usually set to "0" in `configure.rs`.
+            context
+                .set_config_internal(Config::MvboxMove, Some("0"))
+                .await?;
+            context
+                .set_config_internal(Config::OnlyFetchMvbox, None)
+                .await?;
+            context
+                .set_config_internal(Config::ShowEmails, None)
+                .await?;
         }
 
         Ok(())
