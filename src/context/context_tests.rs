@@ -602,10 +602,7 @@ async fn test_get_next_msgs() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_cache_is_cleared_when_io_is_started() -> Result<()> {
     let alice = TestContext::new_alice().await;
-    assert_eq!(
-        alice.get_config(Config::ShowEmails).await?,
-        Some("2".to_string())
-    );
+    assert_eq!(alice.get_config(Config::Displayname).await?, None);
 
     // Change the config circumventing the cache
     // This simulates what the notification plugin on iOS might do
@@ -613,24 +610,21 @@ async fn test_cache_is_cleared_when_io_is_started() -> Result<()> {
     alice
         .sql
         .execute(
-            "INSERT OR REPLACE INTO config (keyname, value) VALUES ('show_emails', '0')",
+            "INSERT OR REPLACE INTO config (keyname, value) VALUES ('displayname', 'Alice 2')",
             (),
         )
         .await?;
 
     // Alice's Delta Chat doesn't know about it yet:
-    assert_eq!(
-        alice.get_config(Config::ShowEmails).await?,
-        Some("2".to_string())
-    );
+    assert_eq!(alice.get_config(Config::Displayname).await?, None);
 
     // Starting IO will fail of course because no server settings are configured,
     // but it should invalidate the caches:
     alice.start_io().await;
 
     assert_eq!(
-        alice.get_config(Config::ShowEmails).await?,
-        Some("0".to_string())
+        alice.get_config(Config::Displayname).await?,
+        Some("Alice 2".to_string())
     );
 
     Ok(())
