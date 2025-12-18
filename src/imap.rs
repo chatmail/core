@@ -2024,7 +2024,7 @@ pub(crate) async fn prefetch_should_download(
         return Ok(false);
     }
 
-    let should_download = (!blocked_contact) || maybe_ndn;
+    let should_download = !blocked_contact || maybe_ndn;
     Ok(should_download)
 }
 

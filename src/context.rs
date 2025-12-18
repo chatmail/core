@@ -956,10 +956,6 @@ impl Context {
 
         res.insert("secondary_addrs", secondary_addrs);
         res.insert(
-            "show_emails",
-            self.get_config_int(Config::ShowEmails).await?.to_string(),
-        );
-        res.insert(
             "who_can_call_me",
             self.get_config_int(Config::WhoCanCallMe).await?.to_string(),
         );
