@@ -730,6 +730,7 @@ impl Imap {
                     if download_limit.is_none_or(|download_limit| size < download_limit) {
                         download_later.push(message_id.clone());
                     }
+                    largest_uid_skipped = Some(uid);
                 } else {
                     info!(context, "{message_id:?} is not a post-message.");
 
