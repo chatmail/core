@@ -2182,6 +2182,32 @@ pub(crate) async fn rfc724_mid_exists_ex(
     Ok(res)
 }
 
+/// Returns `true` iff there is a message
+/// with the given `rfc724_mid`
+/// and a download state other than `DownloadState::Available`
+/// (i.e. a download state where it was already tried to download the message).
+pub(crate) async fn rfc724_mid_download_tried(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
+    if rfc724_mid.is_empty() {
+        warn!(
+            context,
+            "Empty rfc724_mid passed to rfc724_mid_download_tried"
+        );
+        return Ok(false);
+    }
+
+    let res = context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM msgs
+             WHERE rfc724_mid=? AND download_state<>?",
+            (rfc724_mid, DownloadState::Available),
+        )
+        .await?;
+
+    Ok(res)
+}
+
 /// Given a list of Message-IDs, returns the most relevant message found in the database.
 ///
 /// Relevance here is `(download_state == Done, index)`, where `index` is an index of Message-ID in

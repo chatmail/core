@@ -1112,5 +1112,7 @@ def test_large_message(acfactory) -> None:
     )
 
     msg = bob.wait_for_incoming_msg()
+    msgs_changed_event = bob.wait_for_msgs_changed_event()
+    assert msg.id == msgs_changed_event.msg_id
     snapshot = msg.get_snapshot()
     assert snapshot.text == "Hello World, this message is bigger than 5 bytes"

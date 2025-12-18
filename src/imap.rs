@@ -2232,11 +2232,7 @@ pub(crate) async fn prefetch_should_download(
     message_id: &str,
     mut flags: impl Iterator<Item = Flag<'_>>,
 ) -> Result<bool> {
-    if message::rfc724_mid_exists(context, message_id)
-        .await?
-        .is_some()
-    {
-        markseen_on_imap_table(context, message_id).await?;
+    if message::rfc724_mid_download_tried(context, message_id).await? {
         return Ok(false);
     }
 
