@@ -479,7 +479,13 @@ impl Context {
         let quota = self.quota.read().await;
         for (transport_id, transport_addr) in transports {
             if let Some(quota) = quota.get(&transport_id) {
-                ret += &format!("<h4>{transport_addr}</h4><ul>");
+                ret += &format!(
+                    "<h4>{}</h4><ul>",
+                    transport_addr
+                        .split('@')
+                        .next_back()
+                        .unwrap_or(&transport_addr)
+                );
                 match &quota.recent {
                     Ok(quota) => {
                         if !quota.is_empty() {
