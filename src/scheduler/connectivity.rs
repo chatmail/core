@@ -477,10 +477,11 @@ impl Context {
             })
             .await?;
         let quota = self.quota.read().await;
+        ret += "<ul>";
         for (transport_id, transport_addr) in transports {
             if let Some(quota) = quota.get(&transport_id) {
                 ret += &format!(
-                    "<h4>{}</h4><ul>",
+                    "<li><h4>{}</h4><ul>",
                     transport_addr
                         .split('@')
                         .next_back()
@@ -571,8 +572,9 @@ impl Context {
                 let not_connected = stock_str::not_connected(self).await;
                 ret += &format!("<li>{not_connected}</li>");
             }
-            ret += "</ul>";
+            ret += "</ul></li>";
         }
+        ret += "</ul>";
 
         // =============================================================================================
 
