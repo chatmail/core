@@ -3878,6 +3878,29 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     let contacts = Contact::get_all(bob, 0, None).await?;
     assert_eq!(contacts.len(), 2);
     assert_eq!(contacts[0], bob_fiona_id);
+
+    send_text_msg(
+        bob,
+        bob_chat_id,
+        "Hi Alice, stay down in my contact list".to_string(),
+    )
+    .await?;
+    bob.pop_sent_msg().await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    assert_eq!(contacts[0], bob_fiona_id);
+
+    remove_contact_from_chat(bob, bob_chat_id, bob_fiona_id).await?;
+    bob.pop_sent_msg().await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    // Fiona is still the 0th contact. This makes sense, maybe Bob is going to remove Alice from the
+    // chat too, so no need to make Alice a more "important" contact yet.
+    assert_eq!(contacts[0], bob_fiona_id);
+
+    send_text_msg(bob, bob_chat_id, "Alice, jump up!".to_string()).await?;
+    bob.pop_sent_msg().await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    let bob_alice_id = bob.add_or_lookup_contact_id(alice).await;
+    assert_eq!(contacts[0], bob_alice_id);
     Ok(())
 }
 

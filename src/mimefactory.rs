@@ -426,8 +426,16 @@ impl MimeFactory {
                     },
                 )
                 .await?;
-            let recipient_ids: Vec<_> = recipient_ids.into_iter().collect();
-            ContactId::scaleup_origin(context, &recipient_ids, Origin::OutgoingTo).await?;
+            let recipient_ids: Vec<_> = recipient_ids
+                .into_iter()
+                .filter(|id| *id != ContactId::SELF)
+                .collect();
+            if recipient_ids.len() == 1
+                && msg.param.get_cmd() != SystemMessage::MemberRemovedFromGroup
+                && chat.typ != Chattype::OutBroadcast
+            {
+                ContactId::scaleup_origin(context, &recipient_ids, Origin::OutgoingTo).await?;
+            }
 
             if !msg.is_system_message()
                 && msg.param.get_int(Param::Reaction).unwrap_or_default() == 0
