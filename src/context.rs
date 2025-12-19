@@ -243,9 +243,9 @@ pub struct InnerContext {
     pub(crate) scheduler: SchedulerState,
     pub(crate) ratelimit: RwLock<Ratelimit>,
 
-    /// Recently loaded quota information, if any.
-    /// Set to `None` if quota was never tried to load.
-    pub(crate) quota: RwLock<Option<QuotaInfo>>,
+    /// Recently loaded quota information for each trasnport, if any.
+    /// If quota was never tried to load, then the transport doesn't have an entry in the BTreeMap.
+    pub(crate) quota: RwLock<BTreeMap<u32, QuotaInfo>>,
 
     /// Notify about new messages.
     ///
@@ -479,7 +479,7 @@ impl Context {
             events,
             scheduler: SchedulerState::new(),
             ratelimit: RwLock::new(Ratelimit::new(Duration::new(3, 0), 3.0)), // Allow at least 1 message every second + a burst of 3.
-            quota: RwLock::new(None),
+            quota: RwLock::new(BTreeMap::new()),
             new_msgs_notify,
             server_id: RwLock::new(None),
             metadata: RwLock::new(None),
@@ -614,8 +614,13 @@ impl Context {
             }
 
             // Update quota (to send warning if full) - but only check it once in a while.
+            // note: For now this only checks quota of primary transport,
+            // because background check only checks primary transport at the moment
             if self
-                .quota_needs_update(DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT)
+                .quota_needs_update(
+                    session.transport_id(),
+                    DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT,
+                )
                 .await
                 && let Err(err) = self.update_recent_quota(&mut session).await
             {

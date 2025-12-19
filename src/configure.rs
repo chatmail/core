@@ -210,7 +210,8 @@ impl Context {
     /// (i.e. [EnteredLoginParam::addr]).
     pub async fn delete_transport(&self, addr: &str) -> Result<()> {
         let now = time();
-        self.sql
+        let removed_transport_id = self
+            .sql
             .transaction(|transaction| {
                 let primary_addr = transaction.query_row(
                     "SELECT value FROM config WHERE keyname='configured_addr'",
@@ -251,10 +252,11 @@ impl Context {
                     (addr, remove_timestamp),
                 )?;
 
-                Ok(())
+                Ok(transport_id)
             })
             .await?;
         send_sync_transports(self).await?;
+        self.quota.write().await.remove(&removed_transport_id);
 
         Ok(())
     }
