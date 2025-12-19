@@ -462,12 +462,9 @@ impl Context {
         //                                [======67%=====       ]
         // =============================================================================================
 
-        let domain =
-            &deltachat_contact_tools::EmailAddress::new(&self.get_primary_self_addr().await?)?
-                .domain;
-        let storage_on_domain =
-            escaper::encode_minimal(&stock_str::storage_on_domain(self, domain).await);
-        ret += &format!("<h3>{storage_on_domain}</h3>"); // TODO: better string
+        // TODO: stock string - when we decided on a good term,
+        // see discussion on https://github.com/chatmail/core/issues/7580#issuecomment-3633803432
+        ret += "<h3>Relay Capacity</h3>";
         let transports = self
             .sql
             .query_map_vec("SELECT id, addr FROM transports", (), |row| {
@@ -480,13 +477,8 @@ impl Context {
         ret += "<ul>";
         for (transport_id, transport_addr) in transports {
             if let Some(quota) = quota.get(&transport_id) {
-                ret += &format!(
-                    "<li><h4>{}</h4><ul>",
-                    transport_addr
-                        .split('@')
-                        .next_back()
-                        .unwrap_or(&transport_addr)
-                );
+                let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)?.domain;
+                ret += &format!("<li><h4>{}</h4><ul>", domain);
                 match &quota.recent {
                     Ok(quota) => {
                         if !quota.is_empty() {
