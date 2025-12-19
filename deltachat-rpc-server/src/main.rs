@@ -43,7 +43,7 @@ async fn main_impl() -> Result<()> {
             if let Some(arg) = args.next() {
                 return Err(anyhow!("Unrecognized argument {arg:?}"));
             }
-            eprintln!("{}", &*DC_VERSION_STR);
+            eprintln!("{DC_VERSION_STR}");
             return Ok(());
         } else if first_arg.to_str() == Some("--openrpc") {
             if let Some(arg) = args.next() {

@@ -45,6 +45,10 @@ use crate::transport::{
 use crate::{EventType, stock_str};
 use crate::{chat, provider};
 
+/// Maximum number of relays
+/// see <https://github.com/chatmail/core/issues/7608>
+pub(crate) const MAX_TRANSPORT_RELAYS: usize = 5;
+
 macro_rules! progress {
     ($context:tt, $progress:expr, $comment:expr) => {
         assert!(
@@ -283,9 +287,36 @@ impl Context {
                     "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
                 );
             }
+
+            if self
+                .sql
+                .count("SELECT COUNT(*) FROM transports", ())
+                .await?
+                >= MAX_TRANSPORT_RELAYS
+            {
+                bail!(
+                    "You have reached the maximum number of relays ({}).",
+                    MAX_TRANSPORT_RELAYS
+                )
+            }
         }
 
-        let provider = configure(self, param).await?;
+        let provider = match configure(self, param).await {
+            Err(error) => {
+                // Log entered and actual params
+                let configured_param = get_configured_param(self, param).await;
+                warn!(
+                    self,
+                    "configure failed: Entered params: {}. Used params: {}. Error: {error}.",
+                    param.to_string(),
+                    configured_param
+                        .map(|param| param.to_string())
+                        .unwrap_or("error".to_owned())
+                );
+                return Err(error);
+            }
+            Ok(provider) => provider,
+        };
         self.set_config_internal(Config::NotifyAboutWrongPw, Some("1"))
             .await?;
         on_configure_completed(self, provider).await?;

@@ -504,7 +504,7 @@ impl Context {
                         .into_owned()
                 })
             }
-            Config::SysVersion => Some((*constants::DC_VERSION_STR).clone()),
+            Config::SysVersion => Some(constants::DC_VERSION_STR.to_string()),
             Config::SysMsgsizeMaxRecommended => Some(format!("{RECOMMENDED_FILE_SIZE}")),
             Config::SysConfigKeys => Some(get_config_keys_string()),
             _ => self.sql.get_raw_config(key.as_ref()).await?,

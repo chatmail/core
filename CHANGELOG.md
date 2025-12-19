@@ -1,5 +1,42 @@
 # Changelog
 
+## [2.35.0] - 2025-12-16
+
+### API-Changes
+
+- Add blob dir size to storage info ([#7605](https://github.com/chatmail/core/pull/7605)).
+
+### Features / Changes
+
+- Use `turn.delta.chat` as fallback TURN server ([#7382](https://github.com/chatmail/core/pull/7382)).
+- Add ip addresses of known public chatmail relays from https://chatmail.at/relays to DNS cache ([#7607](https://github.com/chatmail/core/pull/7607)).
+- Improve error messages on adding relays.
+- Add transport addresses to IMAP URLs in message info.
+- `lookup_host_with_cache()`: Don't return empty address list ([#7596](https://github.com/chatmail/core/pull/7596)).
+
+### Fixes
+
+- `get_chat_msgs_ex()`: Don't match on "S=" (Cmd) in param payload.
+- Remove `SecurejoinWait` info message when received Alice's key ([#7585](https://github.com/chatmail/core/pull/7585)).
+- Do not set normalized name for existing chats and contacts in a migration.
+- Remove now redundant "used_account_settings" and "entered_account_settings" from `Context.get_info()` ([#7587](https://github.com/chatmail/core/pull/7587)).
+- Don't use fallback servers if got TURN servers from IMAP METADATA.
+- Use fallback ICE servers if server can't IMAP METADATA ([#7382](https://github.com/chatmail/core/pull/7382)).
+- Add explicit limit for adding relays (5 at the moment) ([#7611](https://github.com/chatmail/core/pull/7611)).
+- Take `transport_id` into account when using `imap` table.
+
+### CI
+
+- Update Rust to 1.92.0.
+
+### Miscellaneous Tasks
+
+- Apply Rust 1.92.0 clippy suggestions.
+
+### Other
+
+- Log entered login params and actual used params on configuration failure ([#7610](https://github.com/chatmail/core/pull/7610)).
+
 ## [2.34.0] - 2025-12-11
 
 ### API-Changes
@@ -7411,3 +7448,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.32.0]: https://github.com/chatmail/core/compare/v2.31.0..v2.32.0
 [2.33.0]: https://github.com/chatmail/core/compare/v2.32.0..v2.33.0
 [2.34.0]: https://github.com/chatmail/core/compare/v2.33.0..v2.34.0
+[2.35.0]: https://github.com/chatmail/core/compare/v2.34.0..v2.35.0

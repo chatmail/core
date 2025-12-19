@@ -14,9 +14,9 @@ use serde::Serialize;
 
 use crate::chat::{self, ChatId, MuteDuration};
 use crate::config::Config;
-use crate::constants::Chattype;
+use crate::constants::{Chattype, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId, Origin, import_vcard, mark_contact_id_as_verified};
-use crate::context::{Context, get_version_str};
+use crate::context::Context;
 use crate::key::load_self_public_keyring;
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
@@ -356,7 +356,7 @@ async fn get_stats(context: &Context) -> Result<String> {
         get_timestamps(context, "stats_sending_disabled_events").await?;
 
     let stats = Statistics {
-        core_version: get_version_str().to_string(),
+        core_version: DC_VERSION_STR.to_string(),
         key_create_timestamps,
         stats_id: stats_id(context).await?,
         is_chatmail: context.is_chatmail().await?,

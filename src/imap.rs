@@ -27,7 +27,7 @@ use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, ShowEmails};
+use crate::constants::{self, Blocked, Chattype, DC_VERSION_STR, ShowEmails};
 use crate::contact::{Contact, ContactId, Modifier, Origin};
 use crate::context::Context;
 use crate::events::EventType;
@@ -122,7 +122,7 @@ struct OAuth2 {
     access_token: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct ServerMetadata {
     /// IMAP METADATA `/shared/comment` as defined in
     /// <https://www.rfc-editor.org/rfc/rfc5464#section-6.2.1>.
@@ -944,7 +944,7 @@ impl Session {
         context
             .sql
             .transaction(move |transaction| {
-                transaction.execute("DELETE FROM imap WHERE folder=?", (folder,))?;
+                transaction.execute("DELETE FROM imap WHERE transport_id=? AND folder=?", (transport_id, folder,))?;
                 for (uid, (rfc724_mid, target)) in &msgs {
                     // This may detect previously undetected moved
                     // messages, so we update server_folder too.
@@ -1082,14 +1082,16 @@ impl Session {
     ///
     /// This is the only place where messages are moved or deleted on the IMAP server.
     async fn move_delete_messages(&mut self, context: &Context, folder: &str) -> Result<()> {
+        let transport_id = self.transport_id();
         let rows = context
             .sql
             .query_map_vec(
                 "SELECT id, uid, target FROM imap
-        WHERE folder = ?
-        AND target != folder
-        ORDER BY target, uid",
-                (folder,),
+                 WHERE folder = ?
+                 AND transport_id = ?
+                 AND target != folder
+                 ORDER BY target, uid",
+                (folder, transport_id),
                 |row| {
                     let rowid: i64 = row.get(0)?;
                     let uid: u32 = row.get(1)?;
@@ -1305,10 +1307,10 @@ impl Session {
             };
             let is_seen = fetch.flags().any(|flag| flag == Flag::Seen);
             if is_seen
-                && let Some(chat_id) = mark_seen_by_uid(context, folder, uid_validity, uid)
+                && let Some(chat_id) = mark_seen_by_uid(context, transport_id, folder, uid_validity, uid)
                     .await
                     .with_context(|| {
-                        format!("failed to update seen status for msg {folder}/{uid}")
+                        format!("Transport {transport_id}: Failed to update seen status for msg {folder}/{uid}")
                     })?
             {
                 updated_chat_ids.insert(chat_id);
@@ -1508,7 +1510,7 @@ impl Session {
                         warn!(context, "receive_imf error: {err:#}.");
 
                         let text = format!(
-                            "❌ Failed to receive a message: {err:#}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/."
+                            "❌ Failed to receive a message: {err:#}. Core version v{DC_VERSION_STR}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/.",
                         );
                         let mut msg = Message::new_text(text);
                         add_device_msg(context, None, Some(&mut msg)).await?;
@@ -1554,17 +1556,17 @@ impl Session {
         Ok(())
     }
 
-    /// Retrieves server metadata if it is supported.
+    /// Retrieves server metadata if it is supported, otherwise uses fallback one.
     ///
     /// We get [`/shared/comment`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.1)
     /// and [`/shared/admin`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.2)
     /// metadata.
-    pub(crate) async fn fetch_metadata(&mut self, context: &Context) -> Result<()> {
-        if !self.can_metadata() {
-            return Ok(());
-        }
-
+    pub(crate) async fn update_metadata(&mut self, context: &Context) -> Result<()> {
         let mut lock = context.metadata.write().await;
+
+        if !self.can_metadata() {
+            *lock = Some(Default::default());
+        }
         if let Some(ref mut old_metadata) = *lock {
             let now = time();
 
@@ -1573,31 +1575,33 @@ impl Session {
                 return Ok(());
             }
 
-            info!(context, "ICE servers expired, requesting new credentials.");
-            let mailbox = "";
-            let options = "";
-            let metadata = self
-                .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
-                .await?;
             let mut got_turn_server = false;
-            for m in metadata {
-                if m.entry == "/shared/vendor/deltachat/turn"
-                    && let Some(value) = m.value
-                {
-                    match create_ice_servers_from_metadata(context, &value).await {
-                        Ok((parsed_timestamp, parsed_ice_servers)) => {
-                            old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
-                            old_metadata.ice_servers = parsed_ice_servers;
-                            got_turn_server = false;
-                        }
-                        Err(err) => {
-                            warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+            if self.can_metadata() {
+                info!(context, "ICE servers expired, requesting new credentials.");
+                let mailbox = "";
+                let options = "";
+                let metadata = self
+                    .get_metadata(mailbox, options, "(/shared/vendor/deltachat/turn)")
+                    .await?;
+                for m in metadata {
+                    if m.entry == "/shared/vendor/deltachat/turn"
+                        && let Some(value) = m.value
+                    {
+                        match create_ice_servers_from_metadata(context, &value).await {
+                            Ok((parsed_timestamp, parsed_ice_servers)) => {
+                                old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
+                                old_metadata.ice_servers = parsed_ice_servers;
+                                got_turn_server = true;
+                            }
+                            Err(err) => {
+                                warn!(context, "Failed to parse TURN server metadata: {err:#}.");
+                            }
                         }
                     }
                 }
             }
-
             if !got_turn_server {
+                info!(context, "Will use fallback ICE servers.");
                 // Set expiration timestamp 7 days in the future so we don't request it again.
                 old_metadata.ice_servers_expiration_timestamp = time() + 3600 * 24 * 7;
                 old_metadata.ice_servers = create_fallback_ice_servers(context).await?;
@@ -2365,6 +2369,7 @@ pub(crate) async fn prefetch_should_download(
 /// Returns updated chat ID if any message was marked as seen.
 async fn mark_seen_by_uid(
     context: &Context,
+    transport_id: u32,
     folder: &str,
     uid_validity: u32,
     uid: u32,
@@ -2375,12 +2380,13 @@ async fn mark_seen_by_uid(
             "SELECT id, chat_id FROM msgs
                  WHERE id > 9 AND rfc724_mid IN (
                    SELECT rfc724_mid FROM imap
-                   WHERE folder=?1
-                   AND uidvalidity=?2
-                   AND uid=?3
+                   WHERE transport_id=?
+                   AND folder=?
+                   AND uidvalidity=?
+                   AND uid=?
                    LIMIT 1
                  )",
-            (&folder, uid_validity, uid),
+            (transport_id, &folder, uid_validity, uid),
             |row| {
                 let msg_id: MsgId = row.get(0)?;
                 let chat_id: ChatId = row.get(1)?;

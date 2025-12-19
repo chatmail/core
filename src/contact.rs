@@ -1144,7 +1144,7 @@ WHERE c.id>?
     AND c.origin>=?
     AND c.blocked=0
     AND (IFNULL(c.name_normalized,IIF(c.name='',c.authname,c.name)) LIKE ? OR c.addr LIKE ?)
-ORDER BY c.last_seen DESC, c.id DESC
+ORDER BY c.origin>=? DESC, c.last_seen DESC, c.id DESC
                     ",
                     (
                         ContactId::LAST_SPECIAL,
@@ -1152,6 +1152,7 @@ ORDER BY c.last_seen DESC, c.id DESC
                         minimal_origin,
                         &s3str_like_cmd,
                         &s3str_like_cmd,
+                        Origin::CreateChat,
                     ),
                     |row| {
                         let id: ContactId = row.get(0)?;
@@ -1201,8 +1202,13 @@ ORDER BY c.last_seen DESC, c.id DESC
                  AND (fingerprint='')=?
                  AND origin>=?
                  AND blocked=0
-                 ORDER BY last_seen DESC, id DESC;",
-                    (ContactId::LAST_SPECIAL, flag_address, minimal_origin),
+                 ORDER BY origin>=? DESC, last_seen DESC, id DESC",
+                    (
+                        ContactId::LAST_SPECIAL,
+                        flag_address,
+                        minimal_origin,
+                        Origin::CreateChat,
+                    ),
                     |row| {
                         let id: ContactId = row.get(0)?;
                         let addr: String = row.get(1)?;

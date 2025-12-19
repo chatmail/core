@@ -40,7 +40,7 @@
 //! used for successful connection timestamp of
 //! retrieving them from in-memory cache is used.
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::str::FromStr;
@@ -507,10 +507,6 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(79, 99, 201, 10))],
         ),
         (
-            "mehl.cloud",
-            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 223, 172))],
-        ),
-        (
             "mx.freenet.de",
             vec![
                 IpAddr::V4(Ipv4Addr::new(194, 97, 208, 36)),
@@ -680,6 +676,72 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
                 IpAddr::V4(Ipv4Addr::new(185, 230, 214, 164)),
             ],
         ),
+        // Known public chatmail relays from https://chatmail.at/relays
+        (
+            "mehl.cloud",
+            vec![IpAddr::V4(Ipv4Addr::new(95, 217, 223, 172))],
+        ),
+        (
+            "mailchat.pl",
+            vec![IpAddr::V4(Ipv4Addr::new(46, 62, 144, 137))],
+        ),
+        (
+            "chatmail.woodpeckersnest.space",
+            vec![IpAddr::V4(Ipv4Addr::new(85, 215, 162, 146))],
+        ),
+        (
+            "chatmail.culturanerd.it",
+            vec![IpAddr::V4(Ipv4Addr::new(82, 165, 94, 165))],
+        ),
+        (
+            "chatmail.hackea.org",
+            vec![IpAddr::V4(Ipv4Addr::new(82, 165, 11, 85))],
+        ),
+        (
+            "chika.aangat.lahat.computer",
+            vec![IpAddr::V4(Ipv4Addr::new(71, 19, 150, 113))],
+        ),
+        (
+            "tarpit.fun",
+            vec![IpAddr::V4(Ipv4Addr::new(152, 53, 86, 246))],
+        ),
+        (
+            "d.gaufr.es",
+            vec![IpAddr::V4(Ipv4Addr::new(51, 77, 140, 91))],
+        ),
+        (
+            "chtml.ca",
+            vec![IpAddr::V4(Ipv4Addr::new(51, 222, 156, 177))],
+        ),
+        (
+            "chatmail.au",
+            vec![IpAddr::V4(Ipv4Addr::new(45, 124, 54, 79))],
+        ),
+        (
+            "sombras.chat",
+            vec![IpAddr::V4(Ipv4Addr::new(82, 25, 70, 154))],
+        ),
+        (
+            "e2ee.wang",
+            vec![IpAddr::V4(Ipv4Addr::new(139, 84, 233, 161))],
+        ),
+        (
+            "chat.privittytech.com",
+            vec![IpAddr::V4(Ipv4Addr::new(35, 154, 144, 0))],
+        ),
+        ("e2ee.im", vec![IpAddr::V4(Ipv4Addr::new(45, 137, 99, 57))]),
+        (
+            "chatmail.email",
+            vec![IpAddr::V4(Ipv4Addr::new(57, 128, 220, 120))],
+        ),
+        (
+            "danneskjold.de",
+            vec![IpAddr::V4(Ipv4Addr::new(46, 62, 216, 132))],
+        ),
+        (
+            "darkrun.dev",
+            vec![IpAddr::V4(Ipv4Addr::new(72, 11, 149, 146))],
+        ),
     ])
 });
 
@@ -788,7 +850,7 @@ pub(crate) async fn lookup_host_with_cache(
         }
     };
 
-    if load_cache {
+    let addrs = if load_cache {
         let mut cache = lookup_cache(context, hostname, port, alpn, now).await?;
         if let Some(ips) = DNS_PRELOAD.get(hostname) {
             for ip in ips {
@@ -799,10 +861,15 @@ pub(crate) async fn lookup_host_with_cache(
             }
         }
 
-        Ok(merge_with_cache(resolved_addrs, cache))
+        merge_with_cache(resolved_addrs, cache)
     } else {
-        Ok(resolved_addrs)
-    }
+        resolved_addrs
+    };
+    ensure!(
+        !addrs.is_empty(),
+        "Could not find DNS resolutions for {hostname}:{port}. Check server hostname and your network"
+    );
+    Ok(addrs)
 }
 
 /// Merges results received from DNS with cached results.

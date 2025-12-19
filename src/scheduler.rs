@@ -502,9 +502,9 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     }
 
     session
-        .fetch_metadata(ctx)
+        .update_metadata(ctx)
         .await
-        .context("Failed to fetch metadata")?;
+        .context("update_metadata")?;
     session
         .register_token(ctx)
         .await
