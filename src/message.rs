@@ -2180,7 +2180,7 @@ pub(crate) async fn rfc724_mid_exists_ex(
 /// with the given `rfc724_mid`
 /// and a download state other than `DownloadState::Available`
 /// (i.e. a download state where it was already tried to download the message).
-pub(crate) async fn downloaded_rfc724_mid_exists(
+pub(crate) async fn rfc724_mid_download_tried(
     context: &Context,
     rfc724_mid: &str,
 ) -> Result<bool> {
@@ -2188,7 +2188,7 @@ pub(crate) async fn downloaded_rfc724_mid_exists(
     if rfc724_mid.is_empty() {
         warn!(
             context,
-            "Empty rfc724_mid passed to downloaded_rfc724_mid_exists"
+            "Empty rfc724_mid passed to rfc724_mid_download_tried"
         );
         return Ok(false);
     }
