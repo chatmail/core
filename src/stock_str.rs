@@ -109,15 +109,15 @@ pub enum StockMessage {
     ))]
     DeviceMessagesHint = 70,
 
-    #[strum(props(fallback = "Welcome to Delta Chat! – \
-                    Delta Chat looks and feels like other popular messenger apps, \
-                    but does not involve centralized control, \
-                    tracking or selling you, friends, colleagues or family out to large organizations.\n\n\
-                    Technically, Delta Chat is an email application with a modern chat interface. \
-                    Email in a new dress if you will 👻\n\n\
-                    Use Delta Chat with anyone out of billions of people: just use their e-mail address. \
-                    Recipients don't need to install Delta Chat, visit websites or sign up anywhere - \
-                    however, of course, if they like, you may point them to 👉 https://get.delta.chat"))]
+    #[strum(props(fallback = "Get in contact!\n\n\
+                    🙌 Tap \"QR code\" on the main screen of both devices. \
+                    Choose \"Scan QR Code\" on one device, and point it at the other\n\n\
+                    🌍 If not in the same room, \
+                    scan via video call or share an invite link from \"Scan QR code\"\n\n\
+                    Then: Enjoy your decentralized messenger experience. \
+                    In contrast to other popular apps, \
+                    without central control or tracking or selling you, \
+                    friends, colleagues or family out to large organizations."))]
     WelcomeMessage = 71,
 
     #[strum(props(fallback = "Message from %1$s"))]
