@@ -753,6 +753,7 @@ pub(crate) async fn sync_transports(
         .await?;
 
     context.emit_event(EventType::TransportsModified);
+    // context.scheduler.restart(context).await;
     Ok(())
 }
 
