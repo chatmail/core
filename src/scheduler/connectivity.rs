@@ -462,9 +462,7 @@ impl Context {
         //                                [======67%=====       ]
         // =============================================================================================
 
-        // TODO: stock string - when we decided on a good term,
-        // see discussion on https://github.com/chatmail/core/issues/7580#issuecomment-3633803432
-        ret += "<h3>Relay Capacity</h3>";
+        ret += "<h3>Message Buffers</h3>";
         let transports = self
             .sql
             .query_map_vec("SELECT id, addr FROM transports", (), |row| {
