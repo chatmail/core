@@ -476,94 +476,95 @@ impl Context {
         let quota = self.quota.read().await;
         ret += "<ul>";
         for (transport_id, transport_addr) in transports {
-            if let Some(quota) = quota.get(&transport_id) {
-                let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)?.domain;
-                ret += &format!("<li><h4>{}</h4><ul>", domain);
-                match &quota.recent {
-                    Ok(quota) => {
-                        if !quota.is_empty() {
-                            for (root_name, resources) in quota {
-                                use async_imap::types::QuotaResourceName::*;
-                                for resource in resources {
-                                    ret += "<li>";
+            let Some(quota) = quota.get(&transport_id) else {
+                let not_connected = stock_str::not_connected(self).await;
+                ret += &format!("<li>{not_connected}</li></ul></li>");
+                continue;
+            };
+            let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)?.domain;
+            ret += &format!("<li><h4>{}</h4><ul>", domain);
+            match &quota.recent {
+                Ok(quota) => {
+                    if !quota.is_empty() {
+                        for (root_name, resources) in quota {
+                            use async_imap::types::QuotaResourceName::*;
+                            for resource in resources {
+                                ret += "<li>";
 
-                                    // root name is empty eg. for gmail and redundant eg. for riseup.
-                                    // therefore, use it only if there are really several roots.
-                                    if quota.len() > 1 && !root_name.is_empty() {
-                                        ret += &format!(
-                                            "<b>{}:</b> ",
-                                            &*escaper::encode_minimal(root_name)
-                                        );
-                                    } else {
-                                        info!(
-                                            self,
-                                            "connectivity: root name hidden: \"{}\"", root_name
-                                        );
-                                    }
-
-                                    let messages = stock_str::messages(self).await;
-                                    let part_of_total_used = stock_str::part_of_total_used(
-                                        self,
-                                        &resource.usage.to_string(),
-                                        &resource.limit.to_string(),
-                                    )
-                                    .await;
-                                    ret += &match &resource.name {
-                                        Atom(resource_name) => {
-                                            format!(
-                                                "<b>{}:</b> {}",
-                                                &*escaper::encode_minimal(resource_name),
-                                                part_of_total_used
-                                            )
-                                        }
-                                        Message => {
-                                            format!("<b>{part_of_total_used}:</b> {messages}")
-                                        }
-                                        Storage => {
-                                            // do not use a special title needed for "Storage":
-                                            // - it is usually shown directly under the "Storage" headline
-                                            // - by the units "1 MB of 10 MB used" there is some difference to eg. "Messages: 1 of 10 used"
-                                            // - the string is not longer than the other strings that way (minus title, plus units) -
-                                            //   additional linebreaks on small displays are unlikely therefore
-                                            // - most times, this is the only item anyway
-                                            let usage = &format_size(resource.usage * 1024, BINARY);
-                                            let limit = &format_size(resource.limit * 1024, BINARY);
-                                            stock_str::part_of_total_used(self, usage, limit).await
-                                        }
-                                    };
-
-                                    let percent = resource.get_usage_percentage();
-                                    let color = if percent >= QUOTA_ERROR_THRESHOLD_PERCENTAGE {
-                                        "red"
-                                    } else if percent >= QUOTA_WARN_THRESHOLD_PERCENTAGE {
-                                        "yellow"
-                                    } else {
-                                        "green"
-                                    };
-                                    let div_width_percent = min(100, percent);
+                                // root name is empty eg. for gmail and redundant eg. for riseup.
+                                // therefore, use it only if there are really several roots.
+                                if quota.len() > 1 && !root_name.is_empty() {
                                     ret += &format!(
-                                        "<div class=\"bar\"><div class=\"progress {color}\" style=\"width: {div_width_percent}%\">{percent}%</div></div>"
+                                        "<b>{}:</b> ",
+                                        &*escaper::encode_minimal(root_name)
                                     );
-
-                                    ret += "</li>";
+                                } else {
+                                    info!(
+                                        self,
+                                        "connectivity: root name hidden: \"{}\"", root_name
+                                    );
                                 }
+
+                                let messages = stock_str::messages(self).await;
+                                let part_of_total_used = stock_str::part_of_total_used(
+                                    self,
+                                    &resource.usage.to_string(),
+                                    &resource.limit.to_string(),
+                                )
+                                .await;
+                                ret += &match &resource.name {
+                                    Atom(resource_name) => {
+                                        format!(
+                                            "<b>{}:</b> {}",
+                                            &*escaper::encode_minimal(resource_name),
+                                            part_of_total_used
+                                        )
+                                    }
+                                    Message => {
+                                        format!("<b>{part_of_total_used}:</b> {messages}")
+                                    }
+                                    Storage => {
+                                        // do not use a special title needed for "Storage":
+                                        // - it is usually shown directly under the "Storage" headline
+                                        // - by the units "1 MB of 10 MB used" there is some difference to eg. "Messages: 1 of 10 used"
+                                        // - the string is not longer than the other strings that way (minus title, plus units) -
+                                        //   additional linebreaks on small displays are unlikely therefore
+                                        // - most times, this is the only item anyway
+                                        let usage = &format_size(resource.usage * 1024, BINARY);
+                                        let limit = &format_size(resource.limit * 1024, BINARY);
+                                        stock_str::part_of_total_used(self, usage, limit).await
+                                    }
+                                };
+
+                                let percent = resource.get_usage_percentage();
+                                let color = if percent >= QUOTA_ERROR_THRESHOLD_PERCENTAGE {
+                                    "red"
+                                } else if percent >= QUOTA_WARN_THRESHOLD_PERCENTAGE {
+                                    "yellow"
+                                } else {
+                                    "green"
+                                };
+                                let div_width_percent = min(100, percent);
+                                ret += &format!(
+                                    "<div class=\"bar\"><div class=\"progress {color}\" style=\"width: {div_width_percent}%\">{percent}%</div></div>"
+                                );
+
+                                ret += "</li>";
                             }
-                        } else {
-                            let domain_escaped = escaper::encode_minimal(domain);
-                            ret += &format!(
-                                "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
-                            );
                         }
-                    }
-                    Err(e) => {
-                        let error_escaped = escaper::encode_minimal(&e.to_string());
-                        ret += &format!("<li>{error_escaped}</li>");
+                    } else {
+                        let domain_escaped = escaper::encode_minimal(domain);
+                        ret += &format!(
+                            "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                        );
                     }
                 }
-            } else {
-                let not_connected = stock_str::not_connected(self).await;
-                ret += &format!("<li>{not_connected}</li>");
+                Err(e) => {
+                    let error_escaped = escaper::encode_minimal(&e.to_string());
+                    ret += &format!("<li>{error_escaped}</li>");
+                }
             }
+
             ret += "</ul></li>";
         }
         ret += "</ul>";
