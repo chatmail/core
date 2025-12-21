@@ -242,11 +242,6 @@ mod tests {
             .await;
         assert!(t.quota_needs_update(0, TIMEOUT).await);
 
-        // add entry and quota, check that it exists
-        //
-        // then remove the seccond transport
-        //
-        // check that only removed transport quota was removed from quota overview
         Ok(())
     }
 }
