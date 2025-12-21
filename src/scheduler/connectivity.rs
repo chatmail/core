@@ -476,20 +476,29 @@ impl Context {
         let quota = self.quota.read().await;
         ret += "<ul>";
         for (transport_id, transport_addr) in transports {
+            let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
+                .map_or(transport_addr, |email| email.domain);
+            let domain_escaped = escaper::encode_minimal(domain);
             let Some(quota) = quota.get(&transport_id) else {
                 let not_connected = stock_str::not_connected(self).await;
-                ret += &format!("<li>{not_connected}</li></ul></li>");
+                ret += &format!("<li>{domain_escaped} • {not_connected}</li>");
                 continue;
             };
-            let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)?.domain;
-            ret += &format!("<li><h4>{}</h4><ul>", domain);
             match &quota.recent {
+                Err(e) => {
+                    let error_escaped = escaper::encode_minimal(&e.to_string());
+                    ret += &format!("<li>{domain_escaped} • {error_escaped}</li>");
+                }
                 Ok(quota) => {
-                    if !quota.is_empty() {
+                    if quota.is_empty() {
+                        ret += &format!(
+                            "<li>{domain_escaped} • Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                        );
+                    } else {
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += "<li>";
+                                ret += "<li>{domain_escaped} • ";
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
@@ -552,20 +561,9 @@ impl Context {
                                 ret += "</li>";
                             }
                         }
-                    } else {
-                        let domain_escaped = escaper::encode_minimal(domain);
-                        ret += &format!(
-                            "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
-                        );
                     }
                 }
-                Err(e) => {
-                    let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("<li>{error_escaped}</li>");
-                }
             }
-
-            ret += "</ul></li>";
         }
         ret += "</ul>";
 
