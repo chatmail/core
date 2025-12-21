@@ -498,7 +498,7 @@ impl Context {
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += "<li>{domain_escaped} • ";
+                                ret += &format!("<li>{domain_escaped} • ");
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
