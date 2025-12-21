@@ -481,24 +481,24 @@ impl Context {
             let domain_escaped = escaper::encode_minimal(domain);
             let Some(quota) = quota.get(&transport_id) else {
                 let not_connected = stock_str::not_connected(self).await;
-                ret += &format!("<li>{domain_escaped} • {not_connected}</li>");
+                ret += &format!("<li>{domain_escaped} &middot; {not_connected}</li>");
                 continue;
             };
             match &quota.recent {
                 Err(e) => {
                     let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("<li>{domain_escaped} • {error_escaped}</li>");
+                    ret += &format!("<li>{domain_escaped} &middot; {error_escaped}</li>");
                 }
                 Ok(quota) => {
                     if quota.is_empty() {
                         ret += &format!(
-                            "<li>{domain_escaped} • Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                            "<li>{domain_escaped} &middot; Warning: {domain_escaped} claims to support quota but gives no information</li>"
                         );
                     } else {
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += &format!("<li>{domain_escaped} • ");
+                                ret += &format!("<li>{domain_escaped} &middot; ");
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
