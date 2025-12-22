@@ -946,10 +946,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "show_emails",
-            self.get_config_int(Config::ShowEmails).await?.to_string(),
-        );
-        res.insert(
             "download_limit",
             self.get_config_int(Config::DownloadLimit)
                 .await?

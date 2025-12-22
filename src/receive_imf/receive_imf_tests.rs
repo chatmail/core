@@ -81,7 +81,6 @@ static GRP_MAIL: &[u8] =
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_chats_only() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("0")).await.unwrap();
 
     let chats = Chatlist::try_load(&t, 0, None, None).await.unwrap();
     assert_eq!(chats.len(), 0);
@@ -102,7 +101,6 @@ async fn test_adhoc_group_show_chats_only() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_unknown() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
 
     // adhoc-group with unknown contacts with show_emails=accepted is ignored for unknown contacts
@@ -115,11 +113,6 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
-    bob.set_config(
-        Config::ShowEmails,
-        Some(&ShowEmails::AcceptedContacts.to_string()),
-    )
-    .await?;
     tcm.send_recv(alice, bob, "hi").await;
     receive_imf(
         bob,
@@ -142,7 +135,6 @@ async fn test_adhoc_group_outgoing_show_accepted_contact_unaccepted() -> Result<
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_known() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
     Contact::create(&t, "Bob", "bob@example.com").await.unwrap();
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
 
@@ -155,7 +147,6 @@ async fn test_adhoc_group_show_accepted_contact_known() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_accepted_contact_accepted() {
     let t = TestContext::new_alice().await;
-    t.set_config(Config::ShowEmails, Some("1")).await.unwrap();
 
     // accept Bob by accepting a delta-message from Bob
     receive_imf(&t, MSGRMSG, false).await.unwrap();
@@ -191,7 +182,6 @@ async fn test_adhoc_group_show_accepted_contact_accepted() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_show_all() {
     let t = TestContext::new_alice().await;
-    assert_eq!(t.get_config_int(Config::ShowEmails).await.unwrap(), 2);
     receive_imf(&t, GRP_MAIL, false).await.unwrap();
 
     // adhoc-group with unknown contacts with show_emails=all will show up in a single chat
@@ -817,10 +807,6 @@ async fn test_concat_multiple_ndns() -> Result<()> {
 }
 
 async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
-    context
-        .set_config(Config::ShowEmails, Some("2"))
-        .await
-        .unwrap();
     receive_imf(context, imf_raw, false).await.unwrap();
     let chats = Chatlist::try_load(context, 0, None, None).await.unwrap();
     let msg_id = chats.get_msg_id(0).unwrap().unwrap();

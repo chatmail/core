@@ -440,12 +440,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    spam folder and `sendbox_watch` will also still be respected
  *                    if enabled.
  *                    0=watch all folders normally (default)
- * - `show_emails`  = DC_SHOW_EMAILS_OFF (0)=
- *                    show direct replies to chats only,
- *                    DC_SHOW_EMAILS_ACCEPTED_CONTACTS (1)=
- *                    also show all mails of confirmed contacts,
- *                    DC_SHOW_EMAILS_ALL (2)=
- *                    also show mails of unconfirmed contacts (default).
  * - `delete_device_after` = 0=do not delete messages from device automatically (default),
  *                    >=1=seconds, after which messages are deleted automatically from the device.
  *                    Messages in the "saved messages" chat (see dc_chat_is_self_talk()) are skipped.
@@ -454,8 +448,7 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `delete_server_after` = 0=do not delete messages from server automatically (default),
  *                    1=delete messages directly after receiving from server, mvbox is skipped.
  *                    >1=seconds, after which messages are deleted automatically from the server, mvbox is used as defined.
- *                    "Saved messages" are deleted from the server as well as
- *                    e-mails matching the `show_emails` settings above, the UI should clearly point that out.
+ *                    "Saved messages" are deleted from the server as well as emails, the UI should clearly point that out.
  *                    See also dc_estimate_deletion_cnt().
  * - `media_quality` = DC_MEDIA_QUALITY_BALANCED (0) =
  *                    good outgoing images/videos/voice quality at reasonable sizes (default)
@@ -1478,7 +1471,6 @@ dc_chatlist_t*     dc_get_similar_chatlist   (dc_context_t* context, uint32_t ch
  * @param from_server 1=Estimate deletion count for server, 0=Estimate deletion count for device
  * @param seconds Count messages older than the given number of seconds.
  * @return Number of messages that are older than the given number of seconds.
- *     This includes e-mails downloaded due to the `show_emails` option.
  *     Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
  */
 int             dc_estimate_deletion_cnt    (dc_context_t* context, int from_server, int64_t seconds);
@@ -6710,14 +6702,6 @@ void dc_event_unref(dc_event_t* event);
 
 #define DC_EVENT_DATA1_IS_STRING(e)  0    // not used anymore 
 #define DC_EVENT_DATA2_IS_STRING(e)  ((e)==DC_EVENT_CONFIGURE_PROGRESS || (e)==DC_EVENT_IMEX_FILE_WRITTEN || ((e)>=100 && (e)<=499))
-
-
-/*
- * Values for dc_get|set_config("show_emails")
- */
-#define DC_SHOW_EMAILS_OFF               0
-#define DC_SHOW_EMAILS_ACCEPTED_CONTACTS 1
-#define DC_SHOW_EMAILS_ALL               2
 
 
 /*

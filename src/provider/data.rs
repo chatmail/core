@@ -638,16 +638,10 @@ static P_HERMES_RADIO: Provider = Provider {
         strict_tls: false,
         ..ProviderOptions::new()
     },
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::MdnsEnabled,
-            value: "0",
-        },
-        ConfigDefault {
-            key: Config::ShowEmails,
-            value: "2",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::MdnsEnabled,
+        value: "0",
+    }]),
     oauth2_authorizer: None,
 };
 

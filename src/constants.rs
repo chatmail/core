@@ -40,17 +40,6 @@ pub enum Blocked {
     Debug, Default, Display, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, FromSql, ToSql,
 )]
 #[repr(u8)]
-pub enum ShowEmails {
-    Off = 0,
-    AcceptedContacts = 1,
-    #[default] // also change Config.ShowEmails props(default) on changes
-    All = 2,
-}
-
-#[derive(
-    Debug, Default, Display, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, FromSql, ToSql,
-)]
-#[repr(u8)]
 pub enum MediaQuality {
     #[default] // also change Config.MediaQuality props(default) on changes
     Balanced = 0,
@@ -275,18 +264,6 @@ mod tests {
         assert_eq!(Chattype::Group, Chattype::from_i32(120).unwrap());
         assert_eq!(Chattype::Mailinglist, Chattype::from_i32(140).unwrap());
         assert_eq!(Chattype::OutBroadcast, Chattype::from_i32(160).unwrap());
-    }
-
-    #[test]
-    fn test_showemails_values() {
-        // values may be written to disk and must not change
-        assert_eq!(ShowEmails::All, ShowEmails::default());
-        assert_eq!(ShowEmails::Off, ShowEmails::from_i32(0).unwrap());
-        assert_eq!(
-            ShowEmails::AcceptedContacts,
-            ShowEmails::from_i32(1).unwrap()
-        );
-        assert_eq!(ShowEmails::All, ShowEmails::from_i32(2).unwrap());
     }
 
     #[test]

@@ -12,7 +12,6 @@ use rusqlite::OptionalExtension;
 
 use crate::config::Config;
 use crate::configure::EnteredLoginParam;
-use crate::constants::ShowEmails;
 use crate::context::Context;
 use crate::key::DcKey;
 use crate::log::warn;
@@ -226,8 +225,7 @@ ALTER TABLE msgs ADD COLUMN mime_references TEXT;"#,
         // keep this default and use DC_SHOW_EMAILS_NO
         // only for new installations
         if exists_before_update {
-            sql.set_raw_config_int("show_emails", ShowEmails::All as i32)
-                .await?;
+            sql.set_raw_config_int("show_emails", 2).await?;
         }
         sql.set_db_version(50).await?;
     }
@@ -708,8 +706,7 @@ CREATE INDEX smtp_messageid ON imap(rfc724_mid);
     }
     if dbversion < 98 {
         if exists_before_update && sql.get_raw_config_int("show_emails").await?.is_none() {
-            sql.set_raw_config_int("show_emails", ShowEmails::Off as i32)
-                .await?;
+            sql.set_raw_config_int("show_emails", 0).await?;
         }
         sql.set_db_version(98).await?;
     }

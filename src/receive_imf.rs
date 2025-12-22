@@ -11,12 +11,11 @@ use deltachat_contact_tools::{
 };
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
-use num_traits::FromPrimitive;
 use regex::Regex;
 
 use crate::chat::{self, Chat, ChatId, ChatIdBlocked, save_broadcast_secret};
 use crate::config::Config;
-use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
+use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
 use crate::context::Context;
 use crate::debug_logging::maybe_set_logging_xdc_inner;
@@ -739,21 +738,8 @@ pub(crate) async fn receive_imf_inner(
             MessengerMessage::No
         };
 
-        let show_emails = ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
-            .unwrap_or_default();
-
         let allow_creation = if mime_parser.decrypting_failed {
             false
-        } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-            && is_dc_message == MessengerMessage::No
-            && !context.get_config_bool(Config::IsChatmail).await?
-        {
-            // the message is a classic email in a classic profile
-            // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
-            match show_emails {
-                ShowEmails::Off | ShowEmails::AcceptedContacts => false,
-                ShowEmails::All => true,
-            }
         } else {
             !mime_parser.parts.iter().all(|part| part.is_reaction)
         };
@@ -1176,20 +1162,6 @@ async fn decide_chat_assignment(
                 .await?;
         }
         info!(context, "Outgoing undecryptable message (TRASH).");
-        true
-    } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-        && !mime_parser.has_chat_version()
-        && parent_message
-            .as_ref()
-            .is_none_or(|p| p.is_dc_message == MessengerMessage::No)
-        && !context.get_config_bool(Config::IsChatmail).await?
-        && ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
-            .unwrap_or_default()
-            == ShowEmails::Off
-    {
-        info!(context, "Classical email not shown (TRASH).");
-        // the message is a classic email in a classic profile
-        // (in chatmail profiles, we always show all messages, because shared dc-mua usage is not supported)
         true
     } else if mime_parser
         .get_header(HeaderDef::XMozillaDraftInfo)

@@ -281,7 +281,6 @@ mod tests {
     use super::*;
     use crate::chat;
     use crate::chat::{forward_msgs, save_msgs};
-    use crate::config::Config;
     use crate::contact::ContactId;
     use crate::message::{MessengerMessage, Viewtype};
     use crate::receive_imf::receive_imf;
@@ -522,13 +521,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_html_forwarding_encrypted() {
         let mut tcm = TestContextManager::new();
         // Alice receives a non-delta html-message
-        // (`ShowEmails=AcceptedContacts` lets Alice actually receive non-delta messages for known
-        // contacts, the contact is marked as known by creating a chat using `chat_with_contact()`)
         let alice = &tcm.alice().await;
-        alice
-            .set_config(Config::ShowEmails, Some("1"))
-            .await
-            .unwrap();
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
@@ -546,10 +539,6 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
         // receive the message on another device
         let alice = &tcm.alice().await;
-        alice
-            .set_config(Config::ShowEmails, Some("0"))
-            .await
-            .unwrap();
         let msg = alice.recv_msg(&msg).await;
         assert_eq!(msg.chat_id, alice.get_self_chat().await.id);
         assert_eq!(msg.get_from_id(), ContactId::SELF);

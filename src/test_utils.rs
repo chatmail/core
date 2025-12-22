@@ -779,8 +779,7 @@ impl TestContext {
         let chat_msgs = chat::get_chat_msgs(self, received.chat_id).await.unwrap();
         assert!(
             chat_msgs.contains(&ChatItem::Message { msg_id: msg.id }),
-            "received message is not shown in chat, maybe it's hidden (you may have \
-                to call set_config(Config::ShowEmails, Some(\"2\")).await)"
+            "received message is not shown in chat, maybe it's hidden"
         );
 
         msg

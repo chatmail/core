@@ -1895,12 +1895,6 @@ async fn test_classic_email_chat() -> Result<()> {
     let msgs = get_chat_msgs(&alice, chat_id).await?;
     assert_eq!(msgs.len(), 1);
 
-    // Alice disables receiving classic emails.
-    alice
-        .set_config(Config::ShowEmails, Some("0"))
-        .await
-        .unwrap();
-
     // Already received classic email should still be in the chat.
     assert_eq!(chat_id.get_fresh_msg_cnt(&alice).await?, 1);
 

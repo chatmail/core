@@ -167,10 +167,6 @@ pub enum Config {
     #[strum(props(default = "0"))]
     OnlyFetchMvbox,
 
-    /// Whether to show classic emails or only chat messages.
-    #[strum(props(default = "2"))] // also change ShowEmails.default() on changes
-    ShowEmails,
-
     /// Quality of the media files to send.
     #[strum(props(default = "0"))] // also change MediaQuality.default() on changes
     MediaQuality,
@@ -464,7 +460,6 @@ impl Config {
             Self::Displayname
                 | Self::MdnsEnabled
                 | Self::MvboxMove
-                | Self::ShowEmails
                 | Self::Selfavatar
                 | Self::Selfstatus,
         )
@@ -711,12 +706,7 @@ impl Context {
         Self::check_config(key, value)?;
 
         let n_transports = self.count_transports().await?;
-        if n_transports > 1
-            && matches!(
-                key,
-                Config::MvboxMove | Config::OnlyFetchMvbox | Config::ShowEmails
-            )
-        {
+        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
             bail!("Cannot reconfigure {key} when multiple transports are configured");
         }
 

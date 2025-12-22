@@ -282,11 +282,6 @@ impl Context {
                     "To use additional relays, disable the legacy option \"Settings / Advanced / Only Fetch from DeltaChat Folder\"."
                 );
             }
-            if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
-                bail!(
-                    "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
-                );
-            }
 
             if self
                 .sql
