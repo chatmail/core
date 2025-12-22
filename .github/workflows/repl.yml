@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: nix build .#deltachat-repl-win64
       - name: Upload binary
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: repl.exe
           path: "result/bin/deltachat-repl.exe"
