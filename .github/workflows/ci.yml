@@ -243,7 +243,7 @@ jobs:
           persist-credentials: false
 
       - name: Download libdeltachat.a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: ubuntu-latest-libdeltachat.a
           path: target/debug
@@ -293,7 +293,7 @@ jobs:
           persist-credentials: false
 
       - name: Download libdeltachat.a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: ${{ matrix.os }}-libdeltachat.a
           path: target/debug
@@ -355,7 +355,7 @@ jobs:
         run: pip install tox
 
       - name: Download deltachat-rpc-server
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: ${{ matrix.os }}-deltachat-rpc-server
           path: target/debug

@@ -211,121 +211,121 @@ jobs:
       - uses: cachix/install-nix-action@0b0e072294b088b73964f1d72dfdac0951439dbd # v31
 
       - name: Download Linux aarch64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-aarch64-linux
           path: deltachat-rpc-server-aarch64-linux.d
 
       - name: Download Linux aarch64 wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-aarch64-linux-wheel
           path: deltachat-rpc-server-aarch64-linux-wheel.d
 
       - name: Download Linux armv7l binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv7l-linux
           path: deltachat-rpc-server-armv7l-linux.d
 
       - name: Download Linux armv7l wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv7l-linux-wheel
           path: deltachat-rpc-server-armv7l-linux-wheel.d
 
       - name: Download Linux armv6l binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv6l-linux
           path: deltachat-rpc-server-armv6l-linux.d
 
       - name: Download Linux armv6l wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv6l-linux-wheel
           path: deltachat-rpc-server-armv6l-linux-wheel.d
 
       - name: Download Linux i686 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-i686-linux
           path: deltachat-rpc-server-i686-linux.d
 
       - name: Download Linux i686 wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-i686-linux-wheel
           path: deltachat-rpc-server-i686-linux-wheel.d
 
       - name: Download Linux x86_64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-x86_64-linux
           path: deltachat-rpc-server-x86_64-linux.d
 
       - name: Download Linux x86_64 wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-x86_64-linux-wheel
           path: deltachat-rpc-server-x86_64-linux-wheel.d
 
       - name: Download Win32 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win32
           path: deltachat-rpc-server-win32.d
 
       - name: Download Win32 wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win32-wheel
           path: deltachat-rpc-server-win32-wheel.d
 
       - name: Download Win64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win64
           path: deltachat-rpc-server-win64.d
 
       - name: Download Win64 wheel
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win64-wheel
           path: deltachat-rpc-server-win64-wheel.d
 
       - name: Download macOS binary for x86_64
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-x86_64-macos
           path: deltachat-rpc-server-x86_64-macos.d
 
       - name: Download macOS binary for aarch64
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-aarch64-macos
           path: deltachat-rpc-server-aarch64-macos.d
 
       - name: Download Android binary for arm64-v8a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-arm64-v8a-android
           path: deltachat-rpc-server-arm64-v8a-android.d
 
       - name: Download Android wheel for arm64-v8a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-arm64-v8a-android-wheel
           path: deltachat-rpc-server-arm64-v8a-android-wheel.d
 
       - name: Download Android binary for armeabi-v7a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armeabi-v7a-android
           path: deltachat-rpc-server-armeabi-v7a-android.d
 
       - name: Download Android wheel for armeabi-v7a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armeabi-v7a-android-wheel
           path: deltachat-rpc-server-armeabi-v7a-android-wheel.d
@@ -406,67 +406,67 @@ jobs:
           python-version: "3.11"
 
       - name: Download Linux aarch64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-aarch64-linux
           path: deltachat-rpc-server-aarch64-linux.d
 
       - name: Download Linux armv7l binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv7l-linux
           path: deltachat-rpc-server-armv7l-linux.d
 
       - name: Download Linux armv6l binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armv6l-linux
           path: deltachat-rpc-server-armv6l-linux.d
 
       - name: Download Linux i686 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-i686-linux
           path: deltachat-rpc-server-i686-linux.d
 
       - name: Download Linux x86_64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-x86_64-linux
           path: deltachat-rpc-server-x86_64-linux.d
 
       - name: Download Win32 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win32
           path: deltachat-rpc-server-win32.d
 
       - name: Download Win64 binary
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-win64
           path: deltachat-rpc-server-win64.d
 
       - name: Download macOS binary for x86_64
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-x86_64-macos
           path: deltachat-rpc-server-x86_64-macos.d
 
       - name: Download macOS binary for aarch64
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-aarch64-macos
           path: deltachat-rpc-server-aarch64-macos.d
 
       - name: Download Android binary for arm64-v8a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-arm64-v8a-android
           path: deltachat-rpc-server-arm64-v8a-android.d
 
       - name: Download Android binary for armeabi-v7a
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           name: deltachat-rpc-server-armeabi-v7a-android
           path: deltachat-rpc-server-armeabi-v7a-android.d
