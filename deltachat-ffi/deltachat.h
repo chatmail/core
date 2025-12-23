@@ -1611,10 +1611,10 @@ void            dc_set_chat_visibility       (dc_context_t* context, uint32_t ch
  *
  * Messages are deleted from the device and the chat database entry is deleted.
  * After that, the event #DC_EVENT_MSGS_CHANGED is posted.
+ * Messages are deleted from the server in background.
  *
  * Things that are _not_ done implicitly:
  *
- * - Messages are **not deleted from the server**.
  * - The chat or the contact is **not blocked**, so new messages from the user/the group may appear
  *   and the user may create the chat again.
  * - **Groups are not left** - this would

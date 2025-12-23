@@ -600,6 +600,10 @@ impl ChatId {
     }
 
     /// Deletes a chat.
+    ///
+    /// Messages are deleted from the device and the chat database entry is deleted.
+    /// After that, a `MsgsChanged` event is emitted.
+    /// Messages are deleted from the server in background.
     pub async fn delete(self, context: &Context) -> Result<()> {
         self.delete_ex(context, Sync).await
     }
