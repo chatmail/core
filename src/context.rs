@@ -1084,13 +1084,6 @@ impl Context {
                 .unwrap_or_default(),
         );
         res.insert(
-            "fail_on_receiving_full_msg",
-            self.sql
-                .get_raw_config("fail_on_receiving_full_msg")
-                .await?
-                .unwrap_or_default(),
-        );
-        res.insert(
             "std_header_protection_composing",
             self.sql
                 .get_raw_config("std_header_protection_composing")
