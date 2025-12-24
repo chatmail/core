@@ -1144,14 +1144,6 @@ pub(crate) async fn outgoing_messages(context: &Context) -> String {
     translated(context, StockMessage::OutgoingMessages).await
 }
 
-/// Stock string: `Storage on %1$s`.
-/// `%1$s` will be replaced by the domain of the configured email-address.
-pub(crate) async fn storage_on_domain(context: &Context, domain: &str) -> String {
-    translated(context, StockMessage::StorageOnDomain)
-        .await
-        .replace1(domain)
-}
-
 /// Stock string: `Not connected`.
 pub(crate) async fn not_connected(context: &Context) -> String {
     translated(context, StockMessage::NotConnected).await

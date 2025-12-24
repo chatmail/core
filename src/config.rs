@@ -944,7 +944,7 @@ impl Context {
     /// This should only be used by test code and during configure.
     #[cfg(test)] // AEAP is disabled, but there are still tests for it
     pub(crate) async fn set_primary_self_addr(&self, primary_new: &str) -> Result<()> {
-        self.quota.write().await.take();
+        self.quota.write().await.clear();
 
         self.sql
             .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(primary_new))

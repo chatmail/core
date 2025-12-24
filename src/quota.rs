@@ -107,10 +107,10 @@ pub fn needs_quota_warning(curr_percentage: u64, warned_at_percentage: u64) -> b
 impl Context {
     /// Returns whether the quota value needs an update. If so, `update_recent_quota()` should be
     /// called.
-    pub(crate) async fn quota_needs_update(&self, ratelimit_secs: u64) -> bool {
+    pub(crate) async fn quota_needs_update(&self, transport_id: u32, ratelimit_secs: u64) -> bool {
         let quota = self.quota.read().await;
         quota
-            .as_ref()
+            .get(&transport_id)
             .filter(|quota| time_elapsed(&quota.modified) < Duration::from_secs(ratelimit_secs))
             .is_none()
     }
@@ -155,10 +155,13 @@ impl Context {
             }
         }
 
-        *self.quota.write().await = Some(QuotaInfo {
-            recent: quota,
-            modified: tools::Time::now(),
-        });
+        self.quota.write().await.insert(
+            session.transport_id(),
+            QuotaInfo {
+                recent: quota,
+                modified: tools::Time::now(),
+            },
+        );
 
         self.emit_event(EventType::ConnectivityChanged);
         Ok(())
@@ -203,27 +206,42 @@ mod tests {
         let mut tcm = TestContextManager::new();
         let t = &tcm.unconfigured().await;
         const TIMEOUT: u64 = 60;
-        assert!(t.quota_needs_update(TIMEOUT).await);
+        assert!(t.quota_needs_update(0, TIMEOUT).await);
 
-        *t.quota.write().await = Some(QuotaInfo {
-            recent: Ok(Default::default()),
-            modified: tools::Time::now() - Duration::from_secs(TIMEOUT + 1),
-        });
-        assert!(t.quota_needs_update(TIMEOUT).await);
+        *t.quota.write().await = {
+            let mut map = BTreeMap::new();
+            map.insert(
+                0,
+                QuotaInfo {
+                    recent: Ok(Default::default()),
+                    modified: tools::Time::now() - Duration::from_secs(TIMEOUT + 1),
+                },
+            );
+            map
+        };
+        assert!(t.quota_needs_update(0, TIMEOUT).await);
 
-        *t.quota.write().await = Some(QuotaInfo {
-            recent: Ok(Default::default()),
-            modified: tools::Time::now(),
-        });
-        assert!(!t.quota_needs_update(TIMEOUT).await);
+        *t.quota.write().await = {
+            let mut map = BTreeMap::new();
+            map.insert(
+                0,
+                QuotaInfo {
+                    recent: Ok(Default::default()),
+                    modified: tools::Time::now(),
+                },
+            );
+            map
+        };
+        assert!(!t.quota_needs_update(0, TIMEOUT).await);
 
         t.evtracker.clear_events();
         t.set_primary_self_addr("new@addr").await?;
-        assert!(t.quota.read().await.is_none());
+        assert!(t.quota.read().await.is_empty());
         t.evtracker
             .get_matching(|evt| matches!(evt, EventType::ConnectivityChanged))
             .await;
-        assert!(t.quota_needs_update(TIMEOUT).await);
+        assert!(t.quota_needs_update(0, TIMEOUT).await);
+
         Ok(())
     }
 }

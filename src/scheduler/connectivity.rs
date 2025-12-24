@@ -462,21 +462,41 @@ impl Context {
         //                                [======67%=====       ]
         // =============================================================================================
 
-        let domain =
-            &deltachat_contact_tools::EmailAddress::new(&self.get_primary_self_addr().await?)?
-                .domain;
-        let storage_on_domain =
-            escaper::encode_minimal(&stock_str::storage_on_domain(self, domain).await);
-        ret += &format!("<h3>{storage_on_domain}</h3><ul>");
+        ret += "<h3>Message Buffers</h3>";
+        let transports = self
+            .sql
+            .query_map_vec("SELECT id, addr FROM transports", (), |row| {
+                let transport_id: u32 = row.get(0)?;
+                let addr: String = row.get(1)?;
+                Ok((transport_id, addr))
+            })
+            .await?;
         let quota = self.quota.read().await;
-        if let Some(quota) = &*quota {
+        ret += "<ul>";
+        for (transport_id, transport_addr) in transports {
+            let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
+                .map_or(transport_addr, |email| email.domain);
+            let domain_escaped = escaper::encode_minimal(domain);
+            let Some(quota) = quota.get(&transport_id) else {
+                let not_connected = stock_str::not_connected(self).await;
+                ret += &format!("<li>{domain_escaped} &middot; {not_connected}</li>");
+                continue;
+            };
             match &quota.recent {
+                Err(e) => {
+                    let error_escaped = escaper::encode_minimal(&e.to_string());
+                    ret += &format!("<li>{domain_escaped} &middot; {error_escaped}</li>");
+                }
                 Ok(quota) => {
-                    if !quota.is_empty() {
+                    if quota.is_empty() {
+                        ret += &format!(
+                            "<li>{domain_escaped} &middot; Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                        );
+                    } else {
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += "<li>";
+                                ret += &format!("<li>{domain_escaped} &middot; ");
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
@@ -539,21 +559,9 @@ impl Context {
                                 ret += "</li>";
                             }
                         }
-                    } else {
-                        let domain_escaped = escaper::encode_minimal(domain);
-                        ret += &format!(
-                            "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
-                        );
                     }
                 }
-                Err(e) => {
-                    let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("<li>{error_escaped}</li>");
-                }
             }
-        } else {
-            let not_connected = stock_str::not_connected(self).await;
-            ret += &format!("<li>{not_connected}</li>");
         }
         ret += "</ul>";
 

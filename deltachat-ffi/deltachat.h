@@ -7314,12 +7314,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used as a headline in the connectivity view.
 #define DC_STR_OUTGOING_MESSAGES          104
 
-/// "Storage on %1$s"
-///
-/// Used as a headline in the connectivity view.
-///
-/// `%1$s` will be replaced by the domain of the configured e-mail address.
-#define DC_STR_STORAGE_ON_DOMAIN          105
 
 /// @deprecated Deprecated 2022-04-16, this string is no longer needed.
 #define DC_STR_ONE_MOMENT                 106

@@ -481,7 +481,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     }
 
     // Update quota no more than once a minute.
-    if ctx.quota_needs_update(60).await
+    if ctx.quota_needs_update(session.transport_id(), 60).await
         && let Err(err) = ctx.update_recent_quota(&mut session).await
     {
         warn!(ctx, "Failed to update quota: {:#}.", err);
