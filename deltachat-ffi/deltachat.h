@@ -3094,7 +3094,7 @@ int dc_receive_backup (dc_context_t* context, const char* qr);
 
 /**
  * Create a new account manager.
- * The account manager takes an directory
+ * The account manager takes a directory
  * where all context-databases are placed in.
  * To add a context to the account manager,
  * use dc_accounts_add_account() or dc_accounts_migrate_account().
@@ -3118,9 +3118,9 @@ dc_accounts_t* dc_accounts_new                  (const char* dir, int writable);
 
 /**
  * Create a new account manager with an existing events channel,
- * which allows you see events emitted during startup.
+ * which allows you to see events emitted during startup.
  * 
- * The account manager takes an directory
+ * The account manager takes a directory
  * where all context-databases are placed in.
  * To add a context to the account manager,
  * use dc_accounts_add_account() or dc_accounts_migrate_account().
