@@ -3385,8 +3385,12 @@ void           dc_accounts_set_push_device_token (dc_accounts_t* accounts, const
  *     Must be freed using dc_event_emitter_unref() after usage.
  *
  * Note: Use only one event emitter per account manager.
- * Having more than one event emitter running at the same time on the same account manager
- * will result in events randomly delivered to the one or to the other.
+ * The result of having multiple event emitters is unspecified.
+ * Currently events are broadcasted to all existing event emitters,
+ * but previous versions delivered events to only one event emitter
+ * and this behavior may change again in the future.
+ * Events emitted before creation of event emitter
+ * are not available to event emitter.
  */
 dc_event_emitter_t* dc_accounts_get_event_emitter (dc_accounts_t* accounts);
 
@@ -6076,9 +6080,13 @@ void dc_event_channel_unref(dc_event_channel_t* event_channel);
  * @return Returns the event emitter, NULL on errors.
  *     Must be freed using dc_event_emitter_unref() after usage.
  * 
- * Note: Use only one event emitter per account manager.
- * Having more than one event emitter running at the same time on the same account manager
- * will result in events randomly delivered to the one or to the other.
+ * Note: Use only one event emitter per account manager / event channel.
+ * The result of having multiple event emitters is unspecified.
+ * Currently events are broadcasted to all existing event emitters,
+ * but previous versions delivered events to only one event emitter
+ * and this behavior may change again in the future.
+ * Events emitted before creation of event emitter
+ * are not available to event emitter.
  */
 dc_event_emitter_t* dc_event_channel_get_event_emitter(dc_event_channel_t* event_channel);
 
