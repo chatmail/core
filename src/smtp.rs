@@ -495,6 +495,7 @@ async fn send_mdns(context: &Context, connection: &mut Smtp) -> Result<()> {
 pub(crate) async fn send_smtp_messages(context: &Context, connection: &mut Smtp) -> Result<()> {
     let ratelimited = if context.ratelimit.read().await.can_send() {
         // add status updates and sync messages to end of sending queue
+        context.send_sync_msg().await?;
         context.flush_status_updates().await?;
         false
     } else {

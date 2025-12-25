@@ -710,7 +710,7 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
             removed_transports,
         })
         .await?;
-    context.scheduler.interrupt_inbox().await;
+    context.scheduler.interrupt_smtp().await;
 
     Ok(())
 }

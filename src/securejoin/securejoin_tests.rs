@@ -1019,7 +1019,7 @@ async fn test_expired_synced_auth_token() -> Result<()> {
     let qr = get_securejoin_qr(alice2, None).await?;
 
     alice2.send_sync_msg().await.unwrap();
-    let sync_msg = alice2.pop_sent_sync_msg().await;
+    let sync_msg = alice2.pop_sent_msg().await;
 
     // One week passes, QR code expires.
     SystemTime::shift(Duration::from_secs(7 * 24 * 3600));

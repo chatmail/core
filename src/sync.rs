@@ -175,7 +175,7 @@ impl Context {
     /// Adds most recent qr-code tokens for the given group or self-contact to the list of items to
     /// be synced. If device synchronization is disabled,
     /// no tokens exist or the chat is unpromoted, the function does nothing.
-    /// The caller should call `SchedulerState::interrupt_inbox()` on its own to trigger sending.
+    /// The caller should call `SchedulerState::interrupt_smtp()` on its own to trigger sending.
     pub(crate) async fn sync_qr_code_tokens(&self, grpid: Option<&str>) -> Result<()> {
         if !self.should_send_sync_msgs().await? {
             return Ok(());
@@ -208,7 +208,7 @@ impl Context {
             grpid: None,
         }))
         .await?;
-        self.scheduler.interrupt_inbox().await;
+        self.scheduler.interrupt_smtp().await;
         Ok(())
     }
 
@@ -675,7 +675,7 @@ mod tests {
 
         // let alice's other device receive and execute the sync message,
         // also here, self-talk should stay hidden
-        let sent_msg = alice.pop_sent_sync_msg().await;
+        let sent_msg = alice.pop_sent_msg().await;
         let alice2 = TestContext::new_alice().await;
         alice2.set_config_bool(Config::SyncMsgs, true).await?;
         alice2.recv_msg_trash(&sent_msg).await;
@@ -722,7 +722,7 @@ mod tests {
                     }))
                     .await?;
                 alice1.send_sync_msg().await?.unwrap();
-                alice1.pop_sent_sync_msg().await
+                alice1.pop_sent_msg().await
             } else {
                 let chat = alice1.get_self_chat().await;
                 alice1.send_text(chat.id, "Hi").await
@@ -760,7 +760,7 @@ mod tests {
             .set_config(Config::Displayname, Some("Alice Human"))
             .await?;
         alice.send_sync_msg().await?;
-        alice.pop_sent_sync_msg().await;
+        alice.pop_sent_msg().await;
         let msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
         assert_eq!(msg.text, "hi");
 
@@ -794,7 +794,7 @@ mod tests {
         // group is promoted for compatibility (because the group could be created by older Core).
         // TODO: assert!(msg_id.is_none());
         assert!(msg_id.is_some());
-        let sent = alice.pop_sent_sync_msg().await;
+        let sent = alice.pop_sent_msg().await;
         let msg = alice.parse_msg(&sent).await;
         let mut sync_items = msg.sync_items.unwrap().items;
         assert_eq!(sync_items.len(), 1);
