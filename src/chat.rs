@@ -662,7 +662,7 @@ impl ChatId {
         context
             .set_config_internal(Config::LastHousekeeping, None)
             .await?;
-        context.scheduler.interrupt_inbox().await;
+        context.scheduler.interrupt_smtp().await;
 
         Ok(())
     }
@@ -2115,7 +2115,7 @@ pub(crate) async fn sync(context: &Context, id: SyncId, action: SyncAction) -> R
     context
         .add_sync_item(SyncData::AlterChat { id, action })
         .await?;
-    context.scheduler.interrupt_inbox().await;
+    context.scheduler.interrupt_smtp().await;
     Ok(())
 }
 
@@ -2736,7 +2736,7 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
-/// Constructs jobs for sending a message and inserts them into the appropriate table.
+/// Constructs jobs for sending a message and inserts them into the `smtp` table.
 ///
 /// Updates the message `GuaranteeE2ee` parameter and persists it
 /// in the database depending on whether the message
@@ -2860,30 +2860,27 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     let chunk_size = context.get_max_smtp_rcpt_to().await?;
     let trans_fn = |t: &mut rusqlite::Transaction| {
         let mut row_ids = Vec::<i64>::new();
+
         if let Some(sync_ids) = rendered_msg.sync_ids_to_delete {
             t.execute(
                 &format!("DELETE FROM multi_device_sync WHERE id IN ({sync_ids})"),
                 (),
             )?;
-            t.execute(
-                "INSERT INTO imap_send (mime, msg_id) VALUES (?, ?)",
-                (&rendered_msg.message, msg.id),
+        }
+
+        for recipients_chunk in recipients.chunks(chunk_size) {
+            let recipients_chunk = recipients_chunk.join(" ");
+            let row_id = t.execute(
+                "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
+                VALUES            (?1,         ?2,         ?3,   ?4)",
+                (
+                    &rendered_msg.rfc724_mid,
+                    recipients_chunk,
+                    &rendered_msg.message,
+                    msg.id,
+                ),
             )?;
-        } else {
-            for recipients_chunk in recipients.chunks(chunk_size) {
-                let recipients_chunk = recipients_chunk.join(" ");
-                let row_id = t.execute(
-                    "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id) \
-                    VALUES            (?1,         ?2,         ?3,   ?4)",
-                    (
-                        &rendered_msg.rfc724_mid,
-                        recipients_chunk,
-                        &rendered_msg.message,
-                        msg.id,
-                    ),
-                )?;
-                row_ids.push(row_id.try_into()?);
-            }
+            row_ids.push(row_id.try_into()?);
         }
         Ok(row_ids)
     };
@@ -3845,7 +3842,7 @@ pub(crate) async fn add_contact_to_chat_ex(
                 .log_err(context)
                 .is_ok()
         {
-            context.scheduler.interrupt_inbox().await;
+            context.scheduler.interrupt_smtp().await;
         }
     }
     context.emit_event(EventType::ChatModified(chat_id));
@@ -4319,7 +4316,7 @@ pub async fn save_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
             })
             .await?;
     }
-    context.scheduler.interrupt_inbox().await;
+    context.scheduler.interrupt_smtp().await;
     Ok(())
 }
 

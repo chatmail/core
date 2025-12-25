@@ -1110,52 +1110,6 @@ impl Session {
         Ok(())
     }
 
-    /// Uploads sync messages from the `imap_send` table with `\Seen` flag set.
-    pub(crate) async fn send_sync_msgs(&mut self, context: &Context, folder: &str) -> Result<()> {
-        context.send_sync_msg().await?;
-        while let Some((id, mime, msg_id, attempts)) = context
-            .sql
-            .query_row_optional(
-                "SELECT id, mime, msg_id, attempts FROM imap_send ORDER BY id LIMIT 1",
-                (),
-                |row| {
-                    let id: i64 = row.get(0)?;
-                    let mime: String = row.get(1)?;
-                    let msg_id: MsgId = row.get(2)?;
-                    let attempts: i64 = row.get(3)?;
-                    Ok((id, mime, msg_id, attempts))
-                },
-            )
-            .await
-            .context("Failed to SELECT from imap_send")?
-        {
-            let res = self
-                .append(folder, Some("(\\Seen)"), None, mime)
-                .await
-                .with_context(|| format!("IMAP APPEND to {folder} failed for {msg_id}"))
-                .log_err(context);
-            if res.is_ok() {
-                msg_id.set_delivered(context).await?;
-            }
-            const MAX_ATTEMPTS: i64 = 2;
-            if res.is_ok() || attempts >= MAX_ATTEMPTS - 1 {
-                context
-                    .sql
-                    .execute("DELETE FROM imap_send WHERE id=?", (id,))
-                    .await
-                    .context("Failed to delete from imap_send")?;
-            } else {
-                context
-                    .sql
-                    .execute("UPDATE imap_send SET attempts=attempts+1 WHERE id=?", (id,))
-                    .await
-                    .context("Failed to update imap_send.attempts")?;
-                res?;
-            }
-        }
-        Ok(())
-    }
-
     /// Stores pending `\Seen` flags for messages in `imap_markseen` table.
     pub(crate) async fn store_seen_flags_on_imap(&mut self, context: &Context) -> Result<()> {
         let rows = context
@@ -2113,17 +2067,6 @@ async fn needs_move_to_mvbox(
     headers: &[mailparse::MailHeader<'_>],
 ) -> Result<bool> {
     let has_chat_version = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    if !context.get_config_bool(Config::IsChatmail).await?
-        && has_chat_version
-        && headers
-            .get_header_value(HeaderDef::AutoSubmitted)
-            .filter(|val| val.eq_ignore_ascii_case("auto-generated"))
-            .is_some()
-        && let Some(from) = mimeparser::get_from(headers)
-        && context.is_self_addr(&from.addr).await?
-    {
-        return Ok(true);
-    }
     if !context.get_config_bool(Config::MvboxMove).await? {
         return Ok(false);
     }

@@ -1011,6 +1011,8 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
 
     inc_and_check(&mut migration_version, 119)?;
     if dbversion < migration_version {
+        // This table is deprecated sinc 2025-12-25.
+        // Sync messages are again sent over SMTP.
         sql.execute_migration(
             "CREATE TABLE imap_send (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

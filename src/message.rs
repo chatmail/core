@@ -1717,6 +1717,7 @@ pub async fn delete_msgs_ex(
                 msgs: deleted_rfc724_mid,
             })
             .await?;
+        context.scheduler.interrupt_smtp().await;
     }
 
     for &msg_id in msg_ids {

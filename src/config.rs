@@ -605,12 +605,6 @@ impl Context {
             && !self.get_config_bool(Config::Bot).await?)
     }
 
-    /// Returns whether sync messages should be uploaded to the mvbox.
-    pub(crate) async fn should_move_sync_msgs(&self) -> Result<bool> {
-        Ok(self.get_config_bool(Config::MvboxMove).await?
-            || !self.get_config_bool(Config::IsChatmail).await?)
-    }
-
     /// Returns whether MDNs should be requested.
     pub(crate) async fn should_request_mdns(&self) -> Result<bool> {
         match self.get_config_bool_opt(Config::MdnsEnabled).await? {
@@ -880,7 +874,7 @@ impl Context {
         {
             return Ok(());
         }
-        self.scheduler.interrupt_inbox().await;
+        self.scheduler.interrupt_smtp().await;
         Ok(())
     }
 

@@ -160,7 +160,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             context
                 .sync_qr_code_tokens(Some(chat.grpid.as_str()))
                 .await?;
-            context.scheduler.interrupt_inbox().await;
+            context.scheduler.interrupt_smtp().await;
         }
 
         let chat_name = chat.get_name();
@@ -192,7 +192,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
             .replace("%20", "+");
         if sync_token {
             context.sync_qr_code_tokens(None).await?;
-            context.scheduler.interrupt_inbox().await;
+            context.scheduler.interrupt_smtp().await;
         }
         format!(
             "https://i.delta.chat/#{fingerprint}&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}",
