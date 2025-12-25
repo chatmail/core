@@ -4784,7 +4784,7 @@ pub unsafe extern "C" fn dc_event_channel_unref(event_channel: *mut dc_event_cha
         eprintln!("ignoring careless call to dc_event_channel_unref()");
         return;
     }
-    let _ = Box::from_raw(event_channel);
+    drop(Box::from_raw(event_channel))
 }
 
 #[no_mangle]
