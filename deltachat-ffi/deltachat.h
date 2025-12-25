@@ -6706,8 +6706,8 @@ void dc_event_unref(dc_event_t* event);
  * Transport relay added/deleted or default has changed.
  * UI should update the list.
  *
- * The event is emitted when the transports are modified on this or on another device
- * using the jsonrpc calls `add_or_update_transport`, `add_transport_from_qr`, `delete_transport`
+ * The event is emitted when the transports are modified on another device
+ * using the JSON-RPC calls `add_or_update_transport`, `add_transport_from_qr`, `delete_transport`
  * or `set_config(configured_addr)`.
  */
 #define DC_EVENT_TRANSPORTS_MODIFIED           2600
