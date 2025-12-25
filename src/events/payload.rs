@@ -419,11 +419,11 @@ pub enum EventType {
 
     /// One or more transports has changed.
     ///
-    /// This event is used for tests to detect when transport
-    /// synchronization messages arrives.
-    /// UIs don't need to use it, it is unlikely
-    /// that user modifies transports on multiple
-    /// devices simultaneously.
+    /// UI should update the list.
+    ///
+    /// This event is emitted when transport
+    /// synchronization messages arrives,
+    /// but not when the UI modifies the transport list by itself.
     TransportsModified,
 
     /// Event for using in tests, e.g. as a fence between normally generated events.
