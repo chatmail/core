@@ -416,11 +416,11 @@ impl CommandApi {
         Ok(())
     }
 
-    /// Set configuration values from a QR code. (technically from the URI that is stored in the qrcode)
-    /// Before this function is called, `checkQr()` should confirm the type of the
-    /// QR code is `account` or `webrtcInstance`.
+    /// Set configuration values from a QR code (technically from the URI stored in it).
+    /// Before this function is called, `check_qr()` should be used to get the QR code type.
     ///
-    /// Internally, the function will call dc_set_config() with the appropriate keys,
+    /// "DCACCOUNT:" and "DCLOGIN:" QR codes configure the account, but I/O mustn't be started for
+    /// such QR codes, consider using [`Self::add_transport_from_qr`] which also restarts I/O.
     async fn set_config_from_qr(&self, account_id: u32, qr_content: String) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         qr::set_config_from_qr(&ctx, &qr_content).await
