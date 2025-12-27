@@ -685,6 +685,40 @@ def test_mdn_doesnt_break_autocrypt(acfactory) -> None:
     assert snapshot.show_padlock
 
 
+@pytest.mark.parametrize("n_accounts", [3, 2])
+def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
+    download_limit = 300000
+
+    alice, *others = acfactory.get_online_accounts(n_accounts)
+    bob = others[0]
+
+    alice_group = alice.create_group("test group")
+    for account in others:
+        chat = account.create_chat(alice)
+        chat.send_text("Hello Alice!")
+        assert alice.wait_for_incoming_msg().get_snapshot().text == "Hello Alice!"
+
+        contact = alice.create_contact(account)
+        alice_group.add_contact(contact)
+
+    bob.set_config("download_limit", str(download_limit))
+
+    alice_group.send_text("hi")
+    snapshot = bob.wait_for_incoming_msg().get_snapshot()
+    assert snapshot.text == "hi"
+    bob_group = snapshot.chat
+
+    path = tmp_path / "large"
+    path.write_bytes(os.urandom(download_limit + 1))
+
+    for i in range(10):
+        logging.info("Sending message %s", i)
+        alice_group.send_file(str(path))
+        snapshot = bob.wait_for_incoming_msg().get_snapshot()
+        assert snapshot.download_state == DownloadState.AVAILABLE
+        assert snapshot.chat == bob_group
+
+
 def test_markseen_contact_request(acfactory):
     """
     Test that seen status is synchronized for contact request messages
