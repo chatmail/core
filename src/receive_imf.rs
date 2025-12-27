@@ -1957,7 +1957,7 @@ async fn add_parts(
     }
 
     handle_edit_delete(context, mime_parser, from_id).await?;
-    handle_post_message(context, mime_parser, from_id).await?;
+    handle_post_message(context, mime_parser, from_id, state).await?;
 
     if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
@@ -2335,6 +2335,7 @@ async fn handle_post_message(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
+    state: MessageState,
 ) -> Result<()> {
     if let Some(mimeparser::PreMessageMode::PostMessage) = &mime_parser.pre_message {
         // if Pre-Message exist, replace attachment
@@ -2384,19 +2385,23 @@ async fn handle_post_message(
                     .remove(Param::PostMessageFileBytes)
                     .remove(Param::PostMessageViewtype);
                 context
-                        .sql
-                        .execute(
-                            "UPDATE msgs SET param=?, type=?, bytes=?, error=?, download_state=? WHERE id=?",
-                            (
-                                new_params.to_string(),
-                                part.typ,
-                                part.bytes as isize,
-                                part.error.as_deref().unwrap_or_default(),
-                                DownloadState::Done as u32,
-                                original_msg.id,
-                            ),
-                        )
-                        .await?;
+                    .sql
+                    .execute(
+                        "
+UPDATE msgs SET param=?, type=?, bytes=?, error=?, state=max(state,?), download_state=?
+WHERE id=?
+                        ",
+                        (
+                            new_params.to_string(),
+                            part.typ,
+                            part.bytes as isize,
+                            part.error.as_deref().unwrap_or_default(),
+                            state,
+                            DownloadState::Done as u32,
+                            original_msg.id,
+                        ),
+                    )
+                    .await?;
                 context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
             } else {
                 warn!(context, "Download Post-Message: Not encrypted.");
