@@ -4449,6 +4449,54 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_msg_group_consistency() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    let alice_chat_id = create_group(alice, "foos").await?;
+    add_contact_to_chat(alice, alice_chat_id, bob_id).await?;
+
+    send_text_msg(alice, alice_chat_id, "populate".to_string()).await?;
+    let add = alice.pop_sent_msg().await;
+    bob.recv_msg(&add).await;
+    let bob_chat_id = bob.get_last_msg().await.chat_id;
+    bob_chat_id.accept(bob).await?;
+    let contacts = get_chat_contacts(bob, bob_chat_id).await?;
+    assert_eq!(contacts.len(), 2);
+
+    add_contact_to_chat(
+        alice,
+        alice_chat_id,
+        alice.add_or_lookup_contact_id(fiona).await,
+    )
+    .await?;
+    // This message is lost.
+    alice.pop_sent_msg().await;
+
+    // Pre-message adds the new member.
+    let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
+    let pre_msg = alice.pop_sent_msg().await;
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    let contacts = get_chat_contacts(bob, bob_chat_id).await?;
+    assert_eq!(contacts.len(), 3);
+
+    remove_contact_from_chat(bob, bob_chat_id, bob.add_or_lookup_contact_id(fiona).await).await?;
+    bob.pop_sent_msg().await;
+
+    // Full message doesn't readd the removed member.
+    bob.recv_msg_trash(&full_msg).await;
+    let contacts = get_chat_contacts(bob, bob_chat_id).await?;
+    assert_eq!(contacts.len(), 2);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_protected_group_add_remove_member_missing_key() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
