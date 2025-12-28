@@ -94,7 +94,7 @@ pub struct MessageObject {
     file_mime: Option<String>,
 
     /// The size of the file in bytes, if applicable.
-    /// If message is a pre-message, then this is the size of the to be downloaded file.
+    /// If message is a pre-message, then this is the size of the file to be downloaded.
     file_bytes: u64,
     file_name: Option<String>,
 

@@ -1004,11 +1004,12 @@ impl MimeFactory {
             ));
         } else if let Some(PreMessageMode::PreMessage {
             post_msg_rfc724_mid,
-        }) = self.pre_message_mode.clone()
+        }) = self.pre_message_mode.as_ref()
         {
             protected_headers.push((
                 "Chat-Post-Message-ID",
-                mail_builder::headers::message_id::MessageId::new(post_msg_rfc724_mid).into(),
+                mail_builder::headers::message_id::MessageId::new(post_msg_rfc724_mid.clone())
+                    .into(),
             ));
         }
 
@@ -1869,23 +1870,19 @@ impl MimeFactory {
 
         let footer = if is_reaction { "" } else { &self.selfstatus };
 
-        let message_text = if self.pre_message_mode == Some(PreMessageMode::PostMessage) {
-            "".to_string()
-        } else {
-            format!(
-                "{}{}{}{}{}{}",
-                fwdhint.unwrap_or_default(),
-                quoted_text.unwrap_or_default(),
-                escape_message_footer_marks(final_text),
-                if !final_text.is_empty() && !footer.is_empty() {
-                    "\r\n\r\n"
-                } else {
-                    ""
-                },
-                if !footer.is_empty() { "-- \r\n" } else { "" },
-                footer
-            )
-        };
+        let message_text = format!(
+            "{}{}{}{}{}{}",
+            fwdhint.unwrap_or_default(),
+            quoted_text.unwrap_or_default(),
+            escape_message_footer_marks(final_text),
+            if !final_text.is_empty() && !footer.is_empty() {
+                "\r\n\r\n"
+            } else {
+                ""
+            },
+            if !footer.is_empty() { "-- \r\n" } else { "" },
+            footer
+        );
 
         let mut main_part = MimePart::new("text/plain", message_text);
         if is_reaction {

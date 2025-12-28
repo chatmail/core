@@ -22,8 +22,9 @@ pub(crate) const MIN_DELETE_SERVER_AFTER: i64 = 48 * 60 * 60;
 
 /// From this point onward outgoing messages are considered large
 /// and get a Pre-Message, which announces the Post-Message.
-// this is only about sending so we can modify it any time.
-// current value is a bit less than the minimum auto download setting from the UIs (which is 160 KiB)
+/// This is only about sending so we can modify it any time.
+/// Current value is a bit less than the minimum auto-download setting from the UIs (which is 160
+/// KiB).
 pub(crate) const PRE_MSG_ATTACHMENT_SIZE_THRESHOLD: u64 = 140_000;
 
 /// Max size for pre messages. A warning is emitted when this is exceeded.
@@ -208,7 +209,7 @@ impl Session {
     }
 }
 
-async fn set_msg_state_to_failed(context: &Context, rfc724_mid: &str) -> Result<()> {
+async fn set_state_to_failure(context: &Context, rfc724_mid: &str) -> Result<()> {
     if let Some(msg_id) = rfc724_mid_exists(context, rfc724_mid).await? {
         // Update download state to failure
         // so it can be retried.
@@ -237,7 +238,7 @@ async fn available_post_msgs_contains_rfc724_mid(
         .is_some())
 }
 
-async fn remove_from_available_post_msgs_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+async fn delete_from_available_post_msgs(context: &Context, rfc724_mid: &str) -> Result<()> {
     context
         .sql
         .execute(
@@ -248,7 +249,7 @@ async fn remove_from_available_post_msgs_table(context: &Context, rfc724_mid: &s
     Ok(())
 }
 
-async fn remove_from_download_table(context: &Context, rfc724_mid: &str) -> Result<()> {
+async fn delete_from_downloads(context: &Context, rfc724_mid: &str) -> Result<()> {
     context
         .sql
         .execute("DELETE FROM download WHERE rfc724_mid=?", (&rfc724_mid,))
@@ -256,11 +257,7 @@ async fn remove_from_download_table(context: &Context, rfc724_mid: &str) -> Resu
     Ok(())
 }
 
-// this is a dedicated method because it is used in multiple places.
-pub(crate) async fn premessage_is_downloaded_for(
-    context: &Context,
-    rfc724_mid: &str,
-) -> Result<bool> {
+pub(crate) async fn msg_is_downloaded_for(context: &Context, rfc724_mid: &str) -> Result<bool> {
     Ok(message::rfc724_mid_exists(context, rfc724_mid)
         .await?
         .is_some())
@@ -278,30 +275,30 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
     for rfc724_mid in &rfc724_mids {
         let res = download_msg(context, rfc724_mid.clone(), session).await;
         if res.is_ok() {
-            remove_from_download_table(context, rfc724_mid).await?;
-            remove_from_available_post_msgs_table(context, rfc724_mid).await?;
+            delete_from_downloads(context, rfc724_mid).await?;
+            delete_from_available_post_msgs(context, rfc724_mid).await?;
         }
         if let Err(err) = res {
             warn!(
                 context,
                 "Failed to download message rfc724_mid={rfc724_mid}: {:#}.", err
             );
-            if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+            if !msg_is_downloaded_for(context, rfc724_mid).await? {
                 // This is probably a classical email that vanished before we could download it
                 warn!(
                     context,
-                    "{rfc724_mid} is probably a classical email that vanished before we could download it"
+                    "{rfc724_mid} download failed and there is no downloaded pre-message."
                 );
-                remove_from_download_table(context, rfc724_mid).await?;
+                delete_from_downloads(context, rfc724_mid).await?;
             } else if available_post_msgs_contains_rfc724_mid(context, rfc724_mid).await? {
                 warn!(
                     context,
                     "{rfc724_mid} is in available_post_msgs table but we failed to fetch it,
                     so set the message to DownloadState::Failure - probably it was deleted on the server in the meantime"
                 );
-                set_msg_state_to_failed(context, rfc724_mid).await?;
-                remove_from_download_table(context, rfc724_mid).await?;
-                remove_from_available_post_msgs_table(context, rfc724_mid).await?;
+                set_state_to_failure(context, rfc724_mid).await?;
+                delete_from_downloads(context, rfc724_mid).await?;
+                delete_from_available_post_msgs(context, rfc724_mid).await?;
             } else {
                 // leave the message in DownloadState::InProgress;
                 // it will be downloaded once it arrives.
@@ -312,8 +309,8 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
     Ok(())
 }
 
-/// Download known post messages without pre_message
-/// in order to guard against lost pre-messages:
+/// Downloads known post-messages without pre-messages
+/// in order to guard against lost pre-messages.
 pub(crate) async fn download_known_post_messages_without_pre_message(
     context: &Context,
     session: &mut Session,
@@ -326,14 +323,14 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         })
         .await?;
     for rfc724_mid in &rfc724_mids {
-        if !premessage_is_downloaded_for(context, rfc724_mid).await? {
+        if !msg_is_downloaded_for(context, rfc724_mid).await? {
             // Download the Post-Message unconditionally,
             // because the Pre-Message got lost.
             // The message may be in the wrong order,
             // but at least we have it at all.
             let res = download_msg(context, rfc724_mid.clone(), session).await;
             if res.is_ok() {
-                remove_from_available_post_msgs_table(context, rfc724_mid).await?;
+                delete_from_available_post_msgs(context, rfc724_mid).await?;
             }
             if let Err(err) = res {
                 warn!(

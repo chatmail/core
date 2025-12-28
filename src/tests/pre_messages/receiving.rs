@@ -46,7 +46,7 @@ async fn test_mimeparser_pre_message_and_post_message() -> Result<()> {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: None
             })
         })

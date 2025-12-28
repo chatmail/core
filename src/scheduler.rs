@@ -562,9 +562,6 @@ async fn fetch_idle(
             .await
             .context("delete_expired_imap_messages")?;
 
-        //-------
-        // TODO: verify that this is the correct position for this call
-        // in order to guard against lost pre-messages:
         download_known_post_messages_without_pre_message(ctx, &mut session).await?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
@@ -655,7 +652,7 @@ async fn fetch_idle(
     Ok(session)
 }
 
-/// The simplified IMAP IDLE loop to watch non primary folders (non-inbox folders)
+/// Simplified IMAP loop to watch non-inbox folders.
 async fn simple_imap_loop(
     ctx: Context,
     started: oneshot::Sender<()>,

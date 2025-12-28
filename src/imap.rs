@@ -621,15 +621,10 @@ impl Imap {
         let mut largest_uid_skipped = None;
         let delete_target = context.get_delete_msgs_target().await?;
 
-        let download_limit = {
-            let download_limit: Option<u32> =
-                context.get_config_parsed(Config::DownloadLimit).await?;
-            if download_limit == Some(0) {
-                None
-            } else {
-                download_limit
-            }
-        };
+        let download_limit: Option<u32> = context
+            .get_config_parsed(Config::DownloadLimit)
+            .await?
+            .filter(|&l| 0 < l);
 
         // Store the info about IMAP messages in the database.
         for (uid, ref fetch_response) in msgs {
@@ -726,8 +721,7 @@ impl Imap {
                     info!(context, "{message_id:?} is a post-message.");
                     available_post_msgs.push(message_id.clone());
 
-                    // whether it fits download size limit
-                    if download_limit.is_none_or(|download_limit| size < download_limit) {
+                    if download_limit.is_none_or(|download_limit| size <= download_limit) {
                         download_later.push(message_id.clone());
                     }
                     largest_uid_skipped = Some(uid);
@@ -811,25 +805,25 @@ impl Imap {
         if fetch_res.is_ok() {
             info!(
                 context,
-                "available_post_msgs: {}, download_when_normal_starts: {}",
+                "available_post_msgs: {}, download_later: {}.",
                 available_post_msgs.len(),
-                download_later.len()
+                download_later.len(),
             );
-            for rfc724_mid in available_post_msgs {
-                context
-                    .sql
-                    .insert("INSERT INTO available_post_msgs VALUES (?)", (rfc724_mid,))
-                    .await?;
-            }
-            for rfc724_mid in download_later {
-                context
-                    .sql
-                    .insert(
-                        "INSERT INTO download (rfc724_mid, msg_id) VALUES (?,0)",
-                        (rfc724_mid,),
-                    )
-                    .await?;
-            }
+            let trans_fn = |t: &mut rusqlite::Transaction| {
+                let mut stmt = t.prepare("INSERT INTO available_post_msgs VALUES (?)")?;
+                for rfc724_mid in available_post_msgs {
+                    stmt.execute((rfc724_mid,))
+                        .context("INSERT INTO available_post_msgs")?;
+                }
+                let mut stmt =
+                    t.prepare("INSERT INTO download (rfc724_mid, msg_id) VALUES (?,0)")?;
+                for rfc724_mid in download_later {
+                    stmt.execute((rfc724_mid,))
+                        .context("INSERT INTO download")?;
+                }
+                Ok(())
+            };
+            context.sql.transaction(trans_fn).await?;
         }
 
         // Now fail if fetching failed, so we will
@@ -1364,7 +1358,7 @@ impl Session {
         }
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
-            info!(context, "Starting a full FETCH of message set \"{}\".", set);
+            info!(context, "Starting UID FETCH of message set \"{}\".", set);
             let mut fetch_responses = self.uid_fetch(&set, BODY_FULL).await.with_context(|| {
                 format!("fetching messages {} from folder \"{}\"", &set, folder)
             })?;

@@ -1244,6 +1244,7 @@ impl Viewtype {
             Viewtype::File => file(context).await,
             Viewtype::Webxdc => "Mini App".to_owned(),
             Viewtype::Vcard => "👤".to_string(),
+            // The following shouldn't normally be shown to users, so translations aren't needed.
             Viewtype::Unknown | Viewtype::Text | Viewtype::Call => self.to_string(),
         }
     }

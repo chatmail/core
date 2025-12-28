@@ -815,6 +815,9 @@ impl Message {
     }
 
     /// Returns the text of the message.
+    ///
+    /// Currently this includes `additional_text`, but this may change in future, when the UIs show
+    /// the necessary info themselves.
     pub fn get_text(&self) -> String {
         self.text.clone() + &self.additional_text
     }
@@ -838,9 +841,8 @@ impl Message {
     }
 
     /// Returns the size of the file in bytes, if applicable.
-    /// If message is a pre-message, then this returns size of the to be downloaded file.
+    /// If message is a pre-message, then this returns the size of the file to be downloaded.
     pub async fn get_filebytes(&self, context: &Context) -> Result<Option<u64>> {
-        // if download state is not downloaded then return value from from params metadata
         if self.download_state != DownloadState::Done
             && let Some(file_size) = self
                 .param
@@ -862,13 +864,11 @@ impl Message {
     /// then this returns the viewtype it will have when it is downloaded.
     #[cfg(test)]
     pub(crate) fn get_post_message_viewtype(&self) -> Option<Viewtype> {
-        if self.download_state != DownloadState::Done
-            && let Some(viewtype) = self
+        if self.download_state != DownloadState::Done {
+            return self
                 .param
                 .get_i64(Param::PostMessageViewtype)
-                .and_then(Viewtype::from_i64)
-        {
-            return Some(viewtype);
+                .and_then(Viewtype::from_i64);
         }
         None
     }

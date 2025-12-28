@@ -452,7 +452,7 @@ impl Params {
     /// Merge in parameters from other Params struct,
     /// overwriting the keys that are in both
     /// with the values from the new Params struct.
-    pub fn merge_in_from_params(&mut self, new_params: Self) -> &mut Self {
+    pub fn merge_in_params(&mut self, new_params: Self) -> &mut Self {
         let mut new_params = new_params;
         self.inner.append(&mut new_params.inner);
         self
@@ -525,7 +525,7 @@ mod tests {
         let mut p = Params::from_str("w=12\na=5\nh=14")?;
         let p2 = Params::from_str("L=1\nh=17")?;
         assert_eq!(p.len(), 3);
-        p.merge_in_from_params(p2);
+        p.merge_in_params(p2);
         assert_eq!(p.len(), 4);
         assert_eq!(p.get(Param::Width), Some("12"));
         assert_eq!(p.get(Param::Height), Some("17"));

@@ -102,7 +102,7 @@ pub enum HeaderDef {
     /// used to encrypt and decrypt messages.
     /// This secret is sent to a new member in the member-addition message.
     ChatBroadcastSecret,
-    /// A message with a large attachment is split into two MIME messages:
+    /// A message with a large attachment is split into two messages:
     /// A pre-message, which contains everything but the attachment,
     /// and a Post-Message.
     /// The Pre-Message gets a `Chat-Post-Message-Id` header
@@ -115,7 +115,7 @@ pub enum HeaderDef {
 
     /// This message is preceded by a Pre-Message
     /// and thus this message can be skipped while fetching messages.
-    /// This is a cleartext / unproteced header.
+    /// This is an unprotected header.
     ChatIsPostMessage,
 
     /// [Autocrypt](https://autocrypt.org/) header.

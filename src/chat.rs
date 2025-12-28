@@ -2739,17 +2739,17 @@ async fn prepare_send_msg(
     Ok(row_ids)
 }
 
-/// Renders the Message or splits it into Post-Message and Pre-Message.
+/// Renders the Message or splits it into Pre- and Post-Message.
 ///
 /// Pre-Message is a small message with metadata which announces a larger Post-Message.
 /// Post-Messages are not downloaded in the background.
 ///
-/// If pre-message is not nessesary this returns a normal message instead.
+/// If pre-message is not nessesary, this returns `None` as the 0th value.
 async fn render_mime_message_and_pre_message(
     context: &Context,
     msg: &mut Message,
     mimefactory: MimeFactory,
-) -> Result<(RenderedEmail, Option<RenderedEmail>)> {
+) -> Result<(Option<RenderedEmail>, RenderedEmail)> {
     let needs_pre_message = msg.viewtype.has_file()
         && mimefactory.will_be_encrypted() // unencrypted is likely email, we don't want to spam by sending multiple messages
         && msg
@@ -2761,12 +2761,15 @@ async fn render_mime_message_and_pre_message(
     if needs_pre_message {
         info!(
             context,
-            "Message is large and will be split into a pre- and a post-message.",
+            "Message {} is large and will be split into pre- and post-messages.", msg.id,
         );
 
         let mut mimefactory_post_msg = mimefactory.clone();
         mimefactory_post_msg.set_as_post_message();
-        let rendered_msg = mimefactory_post_msg.render(context).await?;
+        let rendered_msg = mimefactory_post_msg
+            .render(context)
+            .await
+            .context("Failed to render post-message")?;
 
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
@@ -2778,15 +2781,15 @@ async fn render_mime_message_and_pre_message(
         if rendered_pre_msg.message.len() > PRE_MSG_SIZE_WARNING_THRESHOLD {
             warn!(
                 context,
-                "Pre-message for message (MsgId={}) is larger than expected: {}.",
+                "Pre-message for message {} is larger than expected: {}.",
                 msg.id,
                 rendered_pre_msg.message.len()
             );
         }
 
-        Ok((rendered_msg, Some(rendered_pre_msg)))
+        Ok((Some(rendered_pre_msg), rendered_msg))
     } else {
-        Ok((mimefactory.render(context).await?, None))
+        Ok((None, mimefactory.render(context).await?))
     }
 }
 
@@ -2861,7 +2864,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         return Ok(Vec::new());
     }
 
-    let (rendered_msg, rendered_pre_msg) =
+    let (rendered_pre_msg, rendered_msg) =
         match render_mime_message_and_pre_message(context, msg, mimefactory).await {
             Ok(res) => Ok(res),
             Err(err) => {
@@ -2873,15 +2876,17 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     if let (post_msg, Some(pre_msg)) = (&rendered_msg, &rendered_pre_msg) {
         info!(
             context,
-            "Message Sizes: Pre-Message {}; Post-Message: {}",
+            "Message {} sizes: pre-message: {}; post-message: {}.",
+            msg.id,
             format_size(pre_msg.message.len(), BINARY),
-            format_size(post_msg.message.len(), BINARY)
+            format_size(post_msg.message.len(), BINARY),
         );
     } else {
         info!(
             context,
-            "Message will be sent as normal message (no pre- and post message). Size: {}",
-            format_size(rendered_msg.message.len(), BINARY)
+            "Message {} will be sent in one shot (no pre- and post-message). Size: {}.",
+            msg.id,
+            format_size(rendered_msg.message.len(), BINARY),
         );
     }
 
@@ -2943,7 +2948,6 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         )?;
         for recipients_chunk in recipients.chunks(chunk_size) {
             let recipients_chunk = recipients_chunk.join(" ");
-            // send pre-message before actual message
             if let Some(pre_msg) = &rendered_pre_msg {
                 let row_id = stmt.execute((
                     &pre_msg.rfc724_mid,
@@ -4341,10 +4345,6 @@ pub async fn forward_msgs_2ctx(
         }
 
         if msg.download_state != DownloadState::Done {
-            // we don't use Message.get_text() here,
-            // because it may change in future,
-            // when UI shows this info itself,
-            // then the additional_text will not be added in get_text anymore.
             msg.text += &msg.additional_text;
         }
 
@@ -4428,10 +4428,6 @@ pub(crate) async fn save_copy_in_self_talk(
     msg.param.remove(Param::PostMessageViewtype);
 
     if msg.download_state != DownloadState::Done {
-        // we don't use Message.get_text() here,
-        // because it may change in future,
-        // when UI shows this info itself,
-        // then the additional_text will not be added in get_text anymore.
         msg.text += &msg.additional_text;
     }
 

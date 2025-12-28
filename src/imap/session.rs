@@ -17,7 +17,7 @@ use crate::tools;
 /// - Chat-Version to check if a message is a chat message
 /// - Autocrypt-Setup-Message to check if a message is an autocrypt setup message,
 ///   not necessarily sent by Delta Chat.
-/// - Chat-Is-Post-Message to skip it in background fetch or when it is too large
+/// - Chat-Is-Post-Message to skip it in background fetch or when it is > `DownloadLimit`.
 const PREFETCH_FLAGS: &str = "(UID INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (\
                               MESSAGE-ID \
                               DATE \

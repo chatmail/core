@@ -154,9 +154,9 @@ pub(crate) struct MimeMessage {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum PreMessageMode {
-    /// This is Post-Message
-    /// it replaces it's Pre-Message attachment if it exists already,
-    /// and if the Pre-Message does not exist it is treated as normal message
+    /// This is a post-message.
+    /// It replaces its pre-message attachment if it exists already,
+    /// and if the pre-message does not exist, it is treated as a normal message.
     PostMessage,
     /// This is a Pre-Message,
     /// it adds a message preview for a Post-Message
@@ -619,13 +619,16 @@ impl MimeMessage {
                     Err(error) => {
                         error!(
                             context,
-                            "failed to parse metadata header in pre-message: {error:#?}"
+                            "Failed to parse metadata header in pre-message for {post_msg_rfc724_mid}: {error:#}."
                         );
                         None
                     }
                 }
             } else {
-                warn!(context, "expected pre-message to have metadata header");
+                warn!(
+                    context,
+                    "Expected pre-message for {post_msg_rfc724_mid} to have metadata header."
+                );
                 None
             };
 

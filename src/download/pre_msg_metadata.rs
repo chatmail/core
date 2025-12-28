@@ -17,9 +17,9 @@ pub struct PreMsgMetadata {
     pub(crate) viewtype: Viewtype,
     /// the original file name
     pub(crate) filename: String,
-    /// Dimensions: width and height of image or video
+    /// Width and height of the image or video
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) dimensions: Option<(i32, i32)>,
+    pub(crate) wh: Option<(i32, i32)>,
     /// Duration of audio file or video in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) duration: Option<i32>,
@@ -41,15 +41,18 @@ impl PreMsgMetadata {
             .get(Param::Filename)
             .unwrap_or_default()
             .to_owned();
-        let dimensions = {
+        let wh = {
             match (
                 message.param.get_int(Param::Width),
                 message.param.get_int(Param::Height),
             ) {
                 (None, None) => None,
                 (Some(width), Some(height)) => Some((width, height)),
-                _ => {
-                    warn!(context, "Message misses either width or height.");
+                wh => {
+                    warn!(
+                        context,
+                        "Message {} misses width or height: {:?}.", message.id, wh
+                    );
                     None
                 }
             }
@@ -60,7 +63,7 @@ impl PreMsgMetadata {
             size,
             filename,
             viewtype: message.viewtype,
-            dimensions,
+            wh,
             duration,
         }))
     }
@@ -76,7 +79,7 @@ impl PreMsgMetadata {
 
 impl Params {
     /// Applies data from pre_msg_metadata to Params
-    pub(crate) fn apply_from_pre_msg_metadata(
+    pub(crate) fn apply_pre_msg_metadata(
         &mut self,
         pre_msg_metadata: &PreMsgMetadata,
     ) -> &mut Self {
@@ -88,7 +91,7 @@ impl Params {
             Param::PostMessageViewtype,
             pre_msg_metadata.viewtype.to_i64().unwrap_or_default(),
         );
-        if let Some((width, height)) = pre_msg_metadata.dimensions {
+        if let Some((width, height)) = pre_msg_metadata.wh {
             self.set(Param::Width, width);
             self.set(Param::Height, height);
         }
@@ -127,7 +130,7 @@ mod tests {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: None,
             })
         );
@@ -154,7 +157,7 @@ mod tests {
                 size: 1816098,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
-                dimensions: Some((width as i32, height as i32)),
+                wh: Some((width as i32, height as i32)),
                 duration: None,
             })
         );
@@ -170,7 +173,7 @@ mod tests {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: None,
             }
             .to_header_value()?,
@@ -181,18 +184,18 @@ mod tests {
                 size: 5_342_765,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
-                dimensions: Some((1080, 1920)),
+                wh: Some((1080, 1920)),
                 duration: None,
             }
             .to_header_value()?,
-            "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"dimensions\":[1080,1920]}"
+            "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"wh\":[1080,1920]}"
         );
         assert_eq!(
             PreMsgMetadata {
                 size: 5_000,
                 viewtype: Viewtype::Audio,
                 filename: "audio-DD-MM-YY.ogg".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: Some(152_310),
             }
             .to_header_value()?,
@@ -208,25 +211,25 @@ mod tests {
     fn test_deserialize_from_header() -> Result<()> {
         assert_eq!(
             serde_json::from_str::<PreMsgMetadata>(
-                "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\",\"dimensions\":null,\"duration\":null}"
+                "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\",\"wh\":null,\"duration\":null}"
             )?,
             PreMsgMetadata {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: None,
             }
         );
         assert_eq!(
             serde_json::from_str::<PreMsgMetadata>(
-                "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"dimensions\":[1080,1920]}"
+                "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"wh\":[1080,1920]}"
             )?,
             PreMsgMetadata {
                 size: 5_342_765,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
-                dimensions: Some((1080, 1920)),
+                wh: Some((1080, 1920)),
                 duration: None,
             }
         );
@@ -238,7 +241,7 @@ mod tests {
                 size: 5_000,
                 viewtype: Viewtype::Audio,
                 filename: "audio-DD-MM-YY.ogg".to_string(),
-                dimensions: None,
+                wh: None,
                 duration: Some(152_310),
             }
         );

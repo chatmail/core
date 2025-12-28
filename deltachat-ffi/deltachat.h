@@ -4311,8 +4311,8 @@ char*             dc_msg_get_webxdc_info      (const dc_msg_t* msg);
 
 /**
  * Get the size of the file. Returns the size of the file associated with a
- * message, if applicable. 
- * If message is a pre-message, then this returns size of the to be downloaded file.
+ * message, if applicable.
+ * If message is a pre-message, then this returns the size of the file to be downloaded.
  *
  * Typically, this is used to show the size of document files, e.g. a PDF.
  *
