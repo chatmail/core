@@ -413,7 +413,9 @@ impl Context {
             let self_addr = instance.get_webxdc_self_addr(self).await?;
             let notify_text = if let Some(notify_text) = notify_list.get(&self_addr) {
                 Some(notify_text)
-            } else if let Some(notify_text) = notify_list.get("*") && !Chat::load_from_db(self, instance.chat_id).await?.is_muted() {
+            } else if let Some(notify_text) = notify_list.get("*")
+                && !Chat::load_from_db(self, instance.chat_id).await?.is_muted()
+            {
                 Some(notify_text)
             } else {
                 None
