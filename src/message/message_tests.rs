@@ -358,6 +358,43 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+#[ignore = "bug: pre-messages aren't deleted currently"]
+async fn test_pre_and_post_msgs_deleted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+
+    let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
+    let pre_msg = alice.pop_sent_msg().await;
+
+    let rfc724_mid_pre = bob.parse_msg(&pre_msg).await.get_rfc724_mid().unwrap();
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_ne!(rfc724_mid_pre, msg.rfc724_mid);
+    bob.recv_msg_trash(&full_msg).await;
+    for (rfc724_mid, uid) in [(&rfc724_mid_pre, 1), (&msg.rfc724_mid, 2)] {
+        bob.sql
+            .execute(
+                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, target, uidvalidity) VALUES (1, ?, 'INBOX', ?, 'INBOX', 12345)",
+                (rfc724_mid, uid),
+            )
+            .await?;
+    }
+
+    delete_msgs(bob, &[msg.id]).await?;
+    assert_eq!(
+        bob.sql
+            .count("SELECT COUNT(*) FROM imap WHERE target!=''", ())
+            .await?,
+        0
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_state() -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
