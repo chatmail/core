@@ -1474,13 +1474,14 @@ impl EventTracker {
         event_matcher: F,
     ) -> Option<EventType> {
         ctx.emit_event(EventType::Test);
+        let mut found_event = None;
         loop {
             let event = self.recv().await.unwrap();
-            if event_matcher(&event.typ) {
-                return Some(event.typ);
-            }
             if let EventType::Test = event.typ {
-                return None;
+                return found_event;
+            }
+            if event_matcher(&event.typ) {
+                found_event = Some(event.typ);
             }
         }
     }
