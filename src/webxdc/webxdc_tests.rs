@@ -2103,7 +2103,7 @@ async fn test_webxdc_notify_muted() -> Result<()> {
     let sent2 = alice.pop_sent_msg().await;
     let info_msg = alice.get_last_msg().await;
     assert_eq!(info_msg.text, "all");
-    assert!(!has_incoming_webxdc_event(&alice, info_msg, "").await);
+    assert!(!has_incoming_webxdc_event(&alice, info_msg, "notify all").await);
 
     bob.recv_msg_trash(&sent2).await;
     let info_msg = bob.get_last_msg().await;
@@ -2119,7 +2119,7 @@ async fn test_webxdc_notify_muted() -> Result<()> {
         .send_webxdc_status_update(
             alice_instance.id,
             &format!(
-                "{{\"payload\":7,\"info\": \"reply\", \"notify\":{{\"{}\":\"reply, Bob\",\"{}\":\"reply, Fiona\"}} }}",
+                "{{\"payload\":8,\"info\": \"reply\", \"notify\":{{\"{}\":\"reply, Bob\",\"{}\":\"reply, Fiona\"}} }}",
                 bob_instance.get_webxdc_self_addr(&bob).await?,
                 fiona_instance.get_webxdc_self_addr(&fiona).await?
             ),
