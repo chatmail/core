@@ -411,8 +411,16 @@ impl Context {
             && let Some(notify_list) = status_update_item.notify
         {
             let self_addr = instance.get_webxdc_self_addr(self).await?;
-            if let Some(notify_text) = notify_list.get(&self_addr).or_else(|| notify_list.get("*"))
+            let notify_text = if let Some(notify_text) = notify_list.get(&self_addr) {
+                Some(notify_text)
+            } else if let Some(notify_text) = notify_list.get("*")
+                && !Chat::load_from_db(self, instance.chat_id).await?.is_muted()
             {
+                Some(notify_text)
+            } else {
+                None
+            };
+            if let Some(notify_text) = notify_text {
                 self.emit_event(EventType::IncomingWebxdcNotify {
                     chat_id: instance.chat_id,
                     contact_id: from_id,

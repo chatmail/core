@@ -5,8 +5,8 @@ use serde_json::json;
 
 use super::*;
 use crate::chat::{
-    ChatId, add_contact_to_chat, create_broadcast, create_group, forward_msgs,
-    remove_contact_from_chat, resend_msgs, send_msg, send_text_msg,
+    ChatId, MuteDuration, add_contact_to_chat, create_broadcast, create_group, forward_msgs,
+    remove_contact_from_chat, resend_msgs, send_msg, send_text_msg, set_muted,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
@@ -2069,6 +2069,74 @@ async fn test_webxdc_notify_all() -> Result<()> {
     let info_msg = fiona.get_last_msg().await;
     assert_eq!(info_msg.text, "go");
     assert!(has_incoming_webxdc_event(&fiona, info_msg, "notify all").await);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_notify_muted() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    let fiona = tcm.fiona().await;
+
+    let grp_id = alice
+        .create_group_with_members("grp", &[&bob, &fiona])
+        .await;
+    let alice_instance = send_webxdc_instance(&alice, grp_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    let bob_instance = bob.recv_msg(&sent1).await;
+    let fiona_instance = fiona.recv_msg(&sent1).await;
+
+    set_muted(&bob, bob_instance.chat_id, MuteDuration::Forever).await?;
+
+    alice
+        .send_webxdc_status_update(
+            alice_instance.id,
+            "{\"payload\":7,\"info\": \"all\", \"notify\":{\"*\":\"notify all\"} }",
+        )
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent2 = alice.pop_sent_msg().await;
+    let info_msg = alice.get_last_msg().await;
+    assert_eq!(info_msg.text, "all");
+    assert!(!has_incoming_webxdc_event(&alice, info_msg, "notify all").await);
+
+    bob.recv_msg_trash(&sent2).await;
+    let info_msg = bob.get_last_msg().await;
+    assert_eq!(info_msg.text, "all");
+    assert!(!has_incoming_webxdc_event(&bob, info_msg, "notify all").await);
+
+    fiona.recv_msg_trash(&sent2).await;
+    let info_msg = fiona.get_last_msg().await;
+    assert_eq!(info_msg.text, "all");
+    assert!(has_incoming_webxdc_event(&fiona, info_msg, "notify all").await);
+
+    alice
+        .send_webxdc_status_update(
+            alice_instance.id,
+            &format!(
+                "{{\"payload\":8,\"info\": \"reply\", \"notify\":{{\"{}\":\"reply, Bob\",\"{}\":\"reply, Fiona\"}} }}",
+                bob_instance.get_webxdc_self_addr(&bob).await?,
+                fiona_instance.get_webxdc_self_addr(&fiona).await?
+            ),
+        )
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent3 = alice.pop_sent_msg().await;
+    let info_msg = alice.get_last_msg().await;
+    assert_eq!(info_msg.text, "reply");
+    assert!(!has_incoming_webxdc_event(&alice, info_msg, "").await);
+
+    bob.recv_msg_trash(&sent3).await;
+    let info_msg = bob.get_last_msg().await;
+    assert_eq!(info_msg.text, "reply");
+    assert!(has_incoming_webxdc_event(&bob, info_msg, "reply, Bob").await);
+
+    fiona.recv_msg_trash(&sent3).await;
+    let info_msg = fiona.get_last_msg().await;
+    assert_eq!(info_msg.text, "reply");
+    assert!(has_incoming_webxdc_event(&fiona, info_msg, "reply, Fiona").await);
 
     Ok(())
 }
