@@ -5,9 +5,8 @@ use serde_json::json;
 
 use super::*;
 use crate::chat::{
-    ChatId, add_contact_to_chat, create_broadcast, create_group, forward_msgs,
+    ChatId, MuteDuration, add_contact_to_chat, create_broadcast, create_group, forward_msgs,
     remove_contact_from_chat, resend_msgs, send_msg, send_text_msg, set_muted,
-    MuteDuration,
 };
 use crate::chatlist::Chatlist;
 use crate::config::Config;
