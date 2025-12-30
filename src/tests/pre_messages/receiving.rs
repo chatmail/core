@@ -131,6 +131,25 @@ async fn test_out_of_order_receiving() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_msg_text_on_lost_pre_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("foos", &[bob]).await;
+
+    let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    msg.set_text("populate".to_string());
+    let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
+    let _pre_msg = alice.pop_sent_msg().await;
+    let msg = bob.recv_msg(&full_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Done);
+    assert_eq!(msg.text, "populate");
+    Ok(())
+}
+
 /// Test receiving the Post-Message after receiving an edit after receiving the pre-message
 /// for file attachment
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
