@@ -1895,9 +1895,7 @@ async fn has_incoming_webxdc_event(
 ) -> bool {
     t.evtracker
         .get_matching_opt(t, |evt| {
-            info!(&t, "hi {evt:?}");
             if let EventType::IncomingWebxdcNotify { msg_id, text, .. } = evt {
-                println!("{msg_id:?} {:?}, {text:?} {expected_text:?}", expected_msg.id);
                 *msg_id == expected_msg.id && text == expected_text
             } else {
                 false
