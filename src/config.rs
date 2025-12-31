@@ -598,8 +598,7 @@ impl Context {
     /// Returns true if movebox ("DeltaChat" folder) should be watched.
     pub(crate) async fn should_watch_mvbox(&self) -> Result<bool> {
         Ok(self.get_config_bool(Config::MvboxMove).await?
-            || self.get_config_bool(Config::OnlyFetchMvbox).await?
-            || !self.get_config_bool(Config::IsChatmail).await?)
+            || self.get_config_bool(Config::OnlyFetchMvbox).await?)
     }
 
     /// Returns true if sync messages should be sent.
