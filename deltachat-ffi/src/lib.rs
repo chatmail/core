@@ -11,7 +11,6 @@
 #[macro_use]
 extern crate human_panic;
 
-use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
@@ -40,7 +39,7 @@ use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
 use message::Viewtype;
 use num_traits::{FromPrimitive, ToPrimitive};
 use tokio::runtime::Runtime;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
 
 mod dc_array;
@@ -4765,11 +4764,12 @@ pub unsafe extern "C" fn dc_accounts_new(
     }
 }
 
-pub type dc_event_channel_t = Cell<Option<Events>>;
+pub type dc_event_channel_t = Arc<Mutex<Option<Events>>>;
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_channel_new() -> *mut dc_event_channel_t {
-    Box::into_raw(Box::new(Cell::new(Some(Events::new()))))
+    let events = Arc::new(Mutex::new(Some(Events::new())));
+    Box::into_raw(Box::new(events))
 }
 
 /// Release the events channel structure.
@@ -4796,7 +4796,7 @@ pub unsafe extern "C" fn dc_event_channel_get_event_emitter(
         return ptr::null_mut();
     }
 
-    let Some(event_channel) = &*(*event_channel).as_ptr() else {
+    let Some(event_channel) = &*(*event_channel).blocking_lock() else {
         eprintln!(
             "ignoring careless call to dc_event_channel_get_event_emitter() 
             -> channel was already consumed, make sure you call this before dc_accounts_new_with_event_channel"
@@ -4826,7 +4826,7 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     // before initializing the account manager,
     // so that you don't miss events/errors during initialisation.
     // It also prevents you from using the same channel on multiple account managers.
-    let Some(event_channel) = (*event_channel).take() else {
+    let Some(event_channel) = (*event_channel).clone().blocking_lock_owned().take() else {
         eprintln!(
             "ignoring careless call to dc_accounts_new_with_event_channel()
             -> channel was already consumed"
