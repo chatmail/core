@@ -15,7 +15,6 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::future::Future;
-use std::ops::Deref;
 use std::ptr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
@@ -4739,33 +4738,13 @@ pub unsafe extern "C" fn dc_provider_unref(provider: *mut dc_provider_t) {
 
 /// Reader-writer lock wrapper for accounts manager to guarantee thread safety when using
 /// `dc_accounts_t` in multiple threads at once.
-pub struct AccountsWrapper {
-    inner: Arc<RwLock<Accounts>>,
-}
-
-impl Deref for AccountsWrapper {
-    type Target = Arc<RwLock<Accounts>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl AccountsWrapper {
-    fn new(accounts: Accounts) -> Self {
-        let inner = Arc::new(RwLock::new(accounts));
-        Self { inner }
-    }
-}
-
-/// Struct representing a list of deltachat accounts.
-pub type dc_accounts_t = AccountsWrapper;
+pub type dc_accounts_t = RwLock<Accounts>;
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_new(
     dir: *const libc::c_char,
     writable: libc::c_int,
-) -> *mut dc_accounts_t {
+) -> *const dc_accounts_t {
     setup_panic!();
 
     if dir.is_null() {
@@ -4776,7 +4755,7 @@ pub unsafe extern "C" fn dc_accounts_new(
     let accs = block_on(Accounts::new(as_path(dir).into(), writable != 0));
 
     match accs {
-        Ok(accs) => Box::into_raw(Box::new(AccountsWrapper::new(accs))),
+        Ok(accs) => Arc::into_raw(Arc::new(RwLock::new(accs))),
         Err(err) => {
             // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
             eprintln!("failed to create accounts: {err:#}");
@@ -4789,17 +4768,17 @@ pub unsafe extern "C" fn dc_accounts_new(
 ///
 /// This function releases the memory of the `dc_accounts_t` structure.
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_unref(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_unref(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_unref()");
         return;
     }
-    let _ = Box::from_raw(accounts);
+    let _ = Arc::from_raw(accounts);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_get_account(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     id: u32,
 ) -> *mut dc_context_t {
     if accounts.is_null() {
@@ -4816,7 +4795,7 @@ pub unsafe extern "C" fn dc_accounts_get_account(
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_get_selected_account(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
 ) -> *mut dc_context_t {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_get_selected_account()");
@@ -4832,7 +4811,7 @@ pub unsafe extern "C" fn dc_accounts_get_selected_account(
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_select_account(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     id: u32,
 ) -> libc::c_int {
     if accounts.is_null() {
@@ -4856,13 +4835,13 @@ pub unsafe extern "C" fn dc_accounts_select_account(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_add_account(accounts: *mut dc_accounts_t) -> u32 {
+pub unsafe extern "C" fn dc_accounts_add_account(accounts: *const dc_accounts_t) -> u32 {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_add_account()");
         return 0;
     }
 
-    let accounts = &mut *accounts;
+    let accounts = &*accounts;
 
     block_on(async move {
         let mut accounts = accounts.write().await;
@@ -4877,13 +4856,13 @@ pub unsafe extern "C" fn dc_accounts_add_account(accounts: *mut dc_accounts_t) -
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_add_closed_account(accounts: *mut dc_accounts_t) -> u32 {
+pub unsafe extern "C" fn dc_accounts_add_closed_account(accounts: *const dc_accounts_t) -> u32 {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_add_closed_account()");
         return 0;
     }
 
-    let accounts = &mut *accounts;
+    let accounts = &*accounts;
 
     block_on(async move {
         let mut accounts = accounts.write().await;
@@ -4899,7 +4878,7 @@ pub unsafe extern "C" fn dc_accounts_add_closed_account(accounts: *mut dc_accoun
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_remove_account(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     id: u32,
 ) -> libc::c_int {
     if accounts.is_null() {
@@ -4907,7 +4886,7 @@ pub unsafe extern "C" fn dc_accounts_remove_account(
         return 0;
     }
 
-    let accounts = &mut *accounts;
+    let accounts = &*accounts;
 
     block_on(async move {
         let mut accounts = accounts.write().await;
@@ -4925,7 +4904,7 @@ pub unsafe extern "C" fn dc_accounts_remove_account(
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_migrate_account(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     dbfile: *const libc::c_char,
 ) -> u32 {
     if accounts.is_null() || dbfile.is_null() {
@@ -4933,7 +4912,7 @@ pub unsafe extern "C" fn dc_accounts_migrate_account(
         return 0;
     }
 
-    let accounts = &mut *accounts;
+    let accounts = &*accounts;
     let dbfile = to_string_lossy(dbfile);
 
     block_on(async move {
@@ -4954,7 +4933,7 @@ pub unsafe extern "C" fn dc_accounts_migrate_account(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_get_all(accounts: *mut dc_accounts_t) -> *mut dc_array_t {
+pub unsafe extern "C" fn dc_accounts_get_all(accounts: *const dc_accounts_t) -> *mut dc_array_t {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_get_all()");
         return ptr::null_mut();
@@ -4968,18 +4947,18 @@ pub unsafe extern "C" fn dc_accounts_get_all(accounts: *mut dc_accounts_t) -> *m
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_start_io(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_start_io(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_start_io()");
         return;
     }
 
-    let accounts = &mut *accounts;
+    let accounts = &*accounts;
     block_on(async move { accounts.write().await.start_io().await });
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_stop_io(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_stop_io(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_stop_io()");
         return;
@@ -4990,7 +4969,7 @@ pub unsafe extern "C" fn dc_accounts_stop_io(accounts: *mut dc_accounts_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_maybe_network(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_maybe_network(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_maybe_network()");
         return;
@@ -5001,7 +4980,7 @@ pub unsafe extern "C" fn dc_accounts_maybe_network(accounts: *mut dc_accounts_t)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_maybe_network_lost(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_maybe_network_lost(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_maybe_network_lost()");
         return;
@@ -5013,7 +4992,7 @@ pub unsafe extern "C" fn dc_accounts_maybe_network_lost(accounts: *mut dc_accoun
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_background_fetch(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     timeout_in_seconds: u64,
 ) -> libc::c_int {
     if accounts.is_null() || timeout_in_seconds <= 2 {
@@ -5032,7 +5011,7 @@ pub unsafe extern "C" fn dc_accounts_background_fetch(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_accounts_stop_background_fetch(accounts: *mut dc_accounts_t) {
+pub unsafe extern "C" fn dc_accounts_stop_background_fetch(accounts: *const dc_accounts_t) {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_stop_background_fetch()");
         return;
@@ -5044,7 +5023,7 @@ pub unsafe extern "C" fn dc_accounts_stop_background_fetch(accounts: *mut dc_acc
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_set_push_device_token(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
     token: *const libc::c_char,
 ) {
     if accounts.is_null() {
@@ -5067,7 +5046,7 @@ pub unsafe extern "C" fn dc_accounts_set_push_device_token(
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_accounts_get_event_emitter(
-    accounts: *mut dc_accounts_t,
+    accounts: *const dc_accounts_t,
 ) -> *mut dc_event_emitter_t {
     if accounts.is_null() {
         eprintln!("ignoring careless call to dc_accounts_get_event_emitter()");
@@ -5087,16 +5066,16 @@ pub struct dc_jsonrpc_instance_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_jsonrpc_init(
-    account_manager: *mut dc_accounts_t,
+    account_manager: *const dc_accounts_t,
 ) -> *mut dc_jsonrpc_instance_t {
     if account_manager.is_null() {
         eprintln!("ignoring careless call to dc_jsonrpc_init()");
         return ptr::null_mut();
     }
 
-    let account_manager = &*account_manager;
+    let account_manager = Arc::from_raw(account_manager);
     let cmd_api = block_on(deltachat_jsonrpc::api::CommandApi::from_arc(
-        account_manager.inner.clone(),
+        account_manager.clone(),
     ));
 
     let (request_handle, receiver) = RpcClient::new();
