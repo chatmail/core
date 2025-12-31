@@ -4764,12 +4764,11 @@ pub unsafe extern "C" fn dc_accounts_new(
     }
 }
 
-pub type dc_event_channel_t = Arc<Mutex<Option<Events>>>;
+pub type dc_event_channel_t = Mutex<Option<Events>>;
 
 #[no_mangle]
 pub unsafe extern "C" fn dc_event_channel_new() -> *mut dc_event_channel_t {
-    let events = Arc::new(Mutex::new(Some(Events::new())));
-    Box::into_raw(Box::new(events))
+    Box::into_raw(Box::new(Mutex::new(Some(Events::new()))))
 }
 
 /// Release the events channel structure.
@@ -4826,7 +4825,7 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     // before initializing the account manager,
     // so that you don't miss events/errors during initialisation.
     // It also prevents you from using the same channel on multiple account managers.
-    let Some(event_channel) = (*event_channel).clone().blocking_lock_owned().take() else {
+    let Some(event_channel) = (*event_channel).blocking_lock().take() else {
         eprintln!(
             "ignoring careless call to dc_accounts_new_with_event_channel()
             -> channel was already consumed"
