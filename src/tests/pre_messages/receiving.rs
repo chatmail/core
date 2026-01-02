@@ -165,6 +165,7 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     let pre_msg_alice = alice.pop_sent_msg().await;
     let msg_bob = bob.recv_msg(&pre_msg_alice).await;
     assert_eq!(msg_bob.download_state, DownloadState::Available);
+    let msg_cnt_bob = msg_bob.chat_id.get_msg_cnt(bob).await?;
 
     let chat_id_fiona = fiona.recv_msg(&pre_msg_alice).await.chat_id;
     chat_id_fiona.accept(fiona).await?;
@@ -176,10 +177,36 @@ async fn test_post_msg_bad_sender() -> Result<()> {
     bob.recv_msg_trash(&post_msg_fiona).await;
     let msg_bob = Message::load_from_db(bob, msg_bob.id).await?;
     assert_eq!(msg_bob.download_state, DownloadState::Available);
+    assert_eq!(msg_bob.chat_id.get_msg_cnt(bob).await?, msg_cnt_bob);
 
     bob.recv_msg_trash(&post_msg_alice).await;
     let msg_bob = Message::load_from_db(bob, msg_bob.id).await?;
     assert_eq!(msg_bob.download_state, DownloadState::Done);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_lost_pre_msg_vs_new_member() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+    let chat_id_alice = alice.create_group_with_members("", &[bob, fiona]).await;
+    let file_bytes = include_bytes!("../../../test-data/image/screenshot.gif");
+
+    let mut msg_alice = Message::new(Viewtype::Image);
+    msg_alice.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    let post_msg_alice = alice.send_msg(chat_id_alice, &mut msg_alice).await;
+    let _pre_msg = alice.pop_sent_msg().await;
+    let msg_bob = bob.recv_msg(&post_msg_alice).await;
+    assert_eq!(msg_bob.download_state, DownloadState::Done);
+    let chat_id_bob = msg_bob.chat_id;
+    assert_eq!(chat::get_chat_contacts(bob, chat_id_bob).await?.len(), 3);
+
+    chat_id_bob.accept(bob).await?;
+    let sent = bob.send_text(chat_id_bob, "Hi all").await;
+    alice.recv_msg(&sent).await;
+    fiona.recv_msg_trash(&sent).await; // Undecryptable message
     Ok(())
 }
 
