@@ -1102,7 +1102,7 @@ async fn decide_chat_assignment(
     rfc724_mid: &str,
     from_id: ContactId,
 ) -> Result<ChatAssignment> {
-    let should_trash = if !mime_parser.mdn_reports.is_empty() {
+    let mut should_trash = if !mime_parser.mdn_reports.is_empty() {
         info!(context, "Message is an MDN (TRASH).");
         true
     } else if mime_parser.delivery_report.is_some() {
@@ -1116,31 +1116,6 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
-    } else if mime_parser.pre_message == PreMessageMode::Post {
-        // if pre message exist, then trash after replacing, otherwise treat as normal message
-        let pre_message_exists = msg_is_downloaded_for(context, rfc724_mid).await?;
-        info!(
-            context,
-            "Message {rfc724_mid} is a post-message ({}).",
-            if pre_message_exists {
-                "pre-message exists already, so trash after replacing attachment"
-            } else {
-                "no pre-message -> Keep"
-            }
-        );
-        pre_message_exists
-    } else if let PreMessageMode::Pre {
-        post_msg_rfc724_mid,
-        ..
-    } = &mime_parser.pre_message
-    {
-        // if post message already exists, then trash/ignore
-        let post_msg_exists = msg_is_downloaded_for(context, post_msg_rfc724_mid).await?;
-        info!(
-            context,
-            "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."
-        );
-        post_msg_exists
     } else if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
     {
@@ -1207,6 +1182,35 @@ async fn decide_chat_assignment(
         } else {
             false
         }
+    } else {
+        false
+    };
+
+    should_trash |= if mime_parser.pre_message == PreMessageMode::Post {
+        // if pre message exist, then trash after replacing, otherwise treat as normal message
+        let pre_message_exists = msg_is_downloaded_for(context, rfc724_mid).await?;
+        info!(
+            context,
+            "Message {rfc724_mid} is a post-message ({}).",
+            if pre_message_exists {
+                "pre-message exists already, so trash after replacing attachment"
+            } else {
+                "no pre-message -> Keep"
+            }
+        );
+        pre_message_exists
+    } else if let PreMessageMode::Pre {
+        post_msg_rfc724_mid,
+        ..
+    } = &mime_parser.pre_message
+    {
+        // if post message already exists, then trash/ignore
+        let post_msg_exists = msg_is_downloaded_for(context, post_msg_rfc724_mid).await?;
+        info!(
+            context,
+            "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."
+        );
+        post_msg_exists
     } else {
         false
     };
