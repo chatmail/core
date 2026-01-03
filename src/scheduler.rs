@@ -563,6 +563,9 @@ async fn fetch_idle(
             .context("delete_expired_imap_messages")?;
 
         download_known_post_messages_without_pre_message(ctx, &mut session).await?;
+        download_msgs(ctx, &mut session)
+            .await
+            .context("download_msgs")?;
     } else if folder_config == Config::ConfiguredInboxFolder {
         session.last_full_folder_scan.lock().await.take();
     }
@@ -606,10 +609,6 @@ async fn fetch_idle(
         .context("sync_seen_flags")
         .log_err(ctx)
         .ok();
-
-    download_msgs(ctx, &mut session)
-        .await
-        .context("Failed to download messages")?;
 
     connection.connectivity.set_idle(ctx);
 
