@@ -810,16 +810,16 @@ impl Imap {
                 download_later.len(),
             );
             let trans_fn = |t: &mut rusqlite::Transaction| {
-                let mut stmt = t.prepare("INSERT INTO available_post_msgs VALUES (?)")?;
+                let mut stmt = t.prepare("INSERT OR IGNORE INTO available_post_msgs VALUES (?)")?;
                 for rfc724_mid in available_post_msgs {
                     stmt.execute((rfc724_mid,))
-                        .context("INSERT INTO available_post_msgs")?;
+                        .context("INSERT OR IGNORE INTO available_post_msgs")?;
                 }
                 let mut stmt =
-                    t.prepare("INSERT INTO download (rfc724_mid, msg_id) VALUES (?,0)")?;
+                    t.prepare("INSERT OR IGNORE INTO download (rfc724_mid, msg_id) VALUES (?,0)")?;
                 for rfc724_mid in download_later {
                     stmt.execute((rfc724_mid,))
-                        .context("INSERT INTO download")?;
+                        .context("INSERT OR IGNORE INTO download")?;
                 }
                 Ok(())
             };

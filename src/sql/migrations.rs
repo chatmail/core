@@ -1506,18 +1506,18 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         // because we don't always release at the same time on all platforms.
         sql.execute_migration(
             "CREATE TABLE download_new (
-                rfc724_mid TEXT NOT NULL DEFAULT '',
+                rfc724_mid TEXT PRIMARY KEY,
                 msg_id INTEGER NOT NULL DEFAULT 0
             ) STRICT;
             INSERT OR IGNORE INTO download_new (rfc724_mid, msg_id)
                 SELECT m.rfc724_mid, d.msg_id FROM download d
-                JOIN msgs m ON d.msg_id = m.id
+                LEFT JOIN msgs m ON d.msg_id = m.id
                 WHERE m.rfc724_mid IS NOT NULL AND m.rfc724_mid != '';
             DROP TABLE download;
             ALTER TABLE download_new RENAME TO download;
             CREATE TABLE available_post_msgs (
-                rfc724_mid TEXT NOT NULL
-            );
+                rfc724_mid TEXT PRIMARY KEY
+            ) STRICT;
             ALTER TABLE msgs ADD COLUMN pre_rfc724_mid TEXT DEFAULT '';",
             migration_version,
         )
