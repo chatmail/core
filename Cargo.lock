@@ -1315,7 +1315,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat"
-version = "2.35.0"
+version = "2.36.0"
 dependencies = [
  "anyhow",
  "astral-tokio-tar",
@@ -1425,7 +1425,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-jsonrpc"
-version = "2.35.0"
+version = "2.36.0"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1446,7 +1446,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-repl"
-version = "2.35.0"
+version = "2.36.0"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1462,7 +1462,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-rpc-server"
-version = "2.35.0"
+version = "2.36.0"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat_ffi"
-version = "2.35.0"
+version = "2.36.0"
 dependencies = [
  "anyhow",
  "deltachat",
