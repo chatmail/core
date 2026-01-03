@@ -630,10 +630,10 @@ impl Message {
                 .unwrap_or("?".to_owned());
 
             return match viewtype {
-                Viewtype::File => Ok(format!(" [{file_name} - {file_size}]")),
+                Viewtype::File => Ok(format!(" [{file_name} – {file_size}]")),
                 _ => {
                     let translated_viewtype = viewtype.to_locale_string(context).await;
-                    Ok(format!(" [{translated_viewtype} - {file_size}]"))
+                    Ok(format!(" [{translated_viewtype} – {file_size}]"))
                 }
             };
         }

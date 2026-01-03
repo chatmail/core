@@ -54,7 +54,7 @@ async fn test_forwarding_pre_message_empty_text() -> Result<()> {
     );
     assert_eq!(
         forwarded_msg.get_text(),
-        " [test.bin - 976.56 KiB]".to_owned()
+        " [test.bin – 976.56 KiB]".to_owned()
     );
     assert_eq!(forwarded_msg.get_viewtype(), Viewtype::Text);
     assert!(forwarded_msg.additional_text.is_empty());
@@ -80,7 +80,7 @@ async fn test_forwarding_pre_message_empty_text() -> Result<()> {
     );
     assert_eq!(
         alice_forwarded_msg.get_text(),
-        " [test.bin - 976.56 KiB]".to_owned()
+        " [test.bin – 976.56 KiB]".to_owned()
     );
 
     Ok(())
@@ -116,7 +116,7 @@ async fn test_saving_pre_message_empty_text() -> Result<()> {
     assert!(saved_msg.additional_text.is_empty());
     assert!(saved_msg.get_original_msg_id(bob).await?.is_some());
     assert_eq!(saved_msg.download_state(), DownloadState::Done);
-    assert_eq!(saved_msg.get_text(), " [test.bin - 976.56 KiB]".to_owned());
+    assert_eq!(saved_msg.get_text(), " [test.bin – 976.56 KiB]".to_owned());
 
     Ok(())
 }

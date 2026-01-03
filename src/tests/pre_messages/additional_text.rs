@@ -20,21 +20,21 @@ async fn test_additional_text_on_different_viewtypes() -> Result<()> {
         send_large_file_message(alice, a_group_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.text, "test".to_owned());
-    assert_eq!(msg.get_text(), "test [test.bin - 976.56 KiB]".to_owned());
+    assert_eq!(msg.get_text(), "test [test.bin – 976.56 KiB]".to_owned());
 
     tcm.section("Test metadata preview text for webxdc app");
     let (pre_message, _, _) = send_large_webxdc_message(alice, a_group_id).await?;
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.text, "test".to_owned());
     assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::Webxdc));
-    assert_eq!(msg.get_text(), "test [Mini App - 976.68 KiB]".to_owned());
+    assert_eq!(msg.get_text(), "test [Mini App – 976.68 KiB]".to_owned());
 
     tcm.section("Test metadata preview text for Image");
 
     let (pre_message, _, _) = send_large_image_message(alice, a_group_id).await?;
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.text, "test".to_owned());
-    assert_eq!(msg.get_text(), "test [Image - 146.12 KiB]".to_owned());
+    assert_eq!(msg.get_text(), "test [Image – 146.12 KiB]".to_owned());
 
     Ok(())
 }
