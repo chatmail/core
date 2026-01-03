@@ -63,10 +63,12 @@ pub enum Loaded {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PreMessageMode {
     /// adds the Chat-Is-Post-Message header in unprotected part
-    PostMessage,
+    Post,
     /// adds the Chat-Post-Message-ID header to protected part
     /// also adds metadata and explicitly excludes attachment
-    PreMessage { post_msg_rfc724_mid: String },
+    Pre { post_msg_rfc724_mid: String },
+    /// Atomic ("normal") message.
+    None,
 }
 
 /// Helper to construct mime messages.
@@ -157,8 +159,8 @@ pub struct MimeFactory {
     /// This field is used to sustain the topic id of webxdcs needed for peer channels.
     webxdc_topic: Option<TopicId>,
 
-    /// This field is used when this is either a pre-message or a Post-Message.
-    pre_message_mode: Option<PreMessageMode>,
+    /// Pre-message / post-message / atomic message.
+    pre_message_mode: PreMessageMode,
 }
 
 /// Result of rendering a message, ready to be submitted to a send job.
@@ -513,7 +515,7 @@ impl MimeFactory {
             sync_ids_to_delete: None,
             attach_selfavatar,
             webxdc_topic,
-            pre_message_mode: None,
+            pre_message_mode: PreMessageMode::None,
         };
         Ok(factory)
     }
@@ -562,7 +564,7 @@ impl MimeFactory {
             sync_ids_to_delete: None,
             attach_selfavatar: false,
             webxdc_topic: None,
-            pre_message_mode: None,
+            pre_message_mode: PreMessageMode::None,
         };
 
         Ok(res)
@@ -795,7 +797,7 @@ impl MimeFactory {
 
         let rfc724_mid = match &self.loaded {
             Loaded::Message { msg, .. } => match &self.pre_message_mode {
-                Some(PreMessageMode::PreMessage { .. }) => create_outgoing_rfc724_mid(),
+                PreMessageMode::Pre { .. } => create_outgoing_rfc724_mid(),
                 _ => msg.rfc724_mid.clone(),
             },
             Loaded::Mdn { .. } => create_outgoing_rfc724_mid(),
@@ -997,14 +999,14 @@ impl MimeFactory {
             mail_builder::headers::raw::Raw::new("1.0").into(),
         ));
 
-        if self.pre_message_mode == Some(PreMessageMode::PostMessage) {
+        if self.pre_message_mode == PreMessageMode::Post {
             unprotected_headers.push((
                 "Chat-Is-Post-Message",
                 mail_builder::headers::raw::Raw::new("1").into(),
             ));
-        } else if let Some(PreMessageMode::PreMessage {
+        } else if let PreMessageMode::Pre {
             post_msg_rfc724_mid,
-        }) = self.pre_message_mode.as_ref()
+        } = &self.pre_message_mode
         {
             protected_headers.push((
                 "Chat-Post-Message-ID",
@@ -1154,7 +1156,7 @@ impl MimeFactory {
                         for (addr, key) in &encryption_pubkeys {
                             let fingerprint = key.dc_fingerprint().hex();
                             let cmd = msg.param.get_cmd();
-                            if self.pre_message_mode == Some(PreMessageMode::PostMessage) {
+                            if self.pre_message_mode == PreMessageMode::Post {
                                 continue;
                             }
 
@@ -1914,7 +1916,7 @@ impl MimeFactory {
 
         // add attachment part
         if msg.viewtype.has_file() {
-            if let Some(PreMessageMode::PreMessage { .. }) = self.pre_message_mode {
+            if let PreMessageMode::Pre { .. } = self.pre_message_mode {
                 let Some(metadata) = PreMsgMetadata::from_msg(context, &msg).await? else {
                     bail!("Failed to generate metadata for pre-message")
                 };
@@ -1972,7 +1974,7 @@ impl MimeFactory {
         }
 
         self.attach_selfavatar =
-            self.attach_selfavatar && self.pre_message_mode != Some(PreMessageMode::PostMessage);
+            self.attach_selfavatar && self.pre_message_mode != PreMessageMode::Post;
         if self.attach_selfavatar {
             match context.get_config(Config::Selfavatar).await? {
                 Some(path) => match build_avatar_file(context, &path).await {
@@ -2048,13 +2050,13 @@ impl MimeFactory {
     }
 
     pub fn set_as_post_message(&mut self) {
-        self.pre_message_mode = Some(PreMessageMode::PostMessage);
+        self.pre_message_mode = PreMessageMode::Post;
     }
 
     pub fn set_as_pre_message_for(&mut self, post_message: &RenderedEmail) {
-        self.pre_message_mode = Some(PreMessageMode::PreMessage {
+        self.pre_message_mode = PreMessageMode::Pre {
             post_msg_rfc724_mid: post_message.rfc724_mid.clone(),
-        });
+        };
     }
 }
 

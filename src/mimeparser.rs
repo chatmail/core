@@ -149,7 +149,7 @@ pub(crate) struct MimeMessage {
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
 
-    pub(crate) pre_message: Option<PreMessageMode>,
+    pub(crate) pre_message: PreMessageMode,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -157,14 +157,16 @@ pub(crate) enum PreMessageMode {
     /// This is a post-message.
     /// It replaces its pre-message attachment if it exists already,
     /// and if the pre-message does not exist, it is treated as a normal message.
-    PostMessage,
+    Post,
     /// This is a Pre-Message,
     /// it adds a message preview for a Post-Message
     /// and it is ignored if the Post-Message was downloaded already
-    PreMessage {
+    Pre {
         post_msg_rfc724_mid: String,
         metadata: Option<PreMsgMetadata>,
     },
+    /// Atomic ("normal") message.
+    None,
 }
 
 #[derive(Debug, PartialEq)]
@@ -372,9 +374,9 @@ impl MimeMessage {
             .get_header_value(HeaderDef::ChatIsPostMessage)
             .is_some()
         {
-            Some(PreMessageMode::PostMessage)
+            PreMessageMode::Post
         } else {
-            None
+            PreMessageMode::None
         };
 
         let mail_raw; // Memory location for a possible decrypted message.
@@ -632,10 +634,10 @@ impl MimeMessage {
                 None
             };
 
-            pre_message = Some(PreMessageMode::PreMessage {
+            pre_message = PreMessageMode::Pre {
                 post_msg_rfc724_mid,
                 metadata,
-            });
+            };
         }
 
         let mut parser = MimeMessage {

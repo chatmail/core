@@ -35,12 +35,12 @@ async fn test_mimeparser_pre_message_and_post_message() -> Result<()> {
 
     assert_eq!(
         parsed_post_message.pre_message,
-        Some(crate::mimeparser::PreMessageMode::PostMessage)
+        crate::mimeparser::PreMessageMode::Post,
     );
 
     assert_eq!(
         parsed_pre_message.pre_message,
-        Some(crate::mimeparser::PreMessageMode::PreMessage {
+        crate::mimeparser::PreMessageMode::Pre {
             post_msg_rfc724_mid: parsed_post_message.get_rfc724_mid().unwrap(),
             metadata: Some(PreMsgMetadata {
                 size: 1_000_000,
@@ -49,7 +49,7 @@ async fn test_mimeparser_pre_message_and_post_message() -> Result<()> {
                 wh: None,
                 duration: None
             })
-        })
+        }
     );
 
     Ok(())

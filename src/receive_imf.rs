@@ -31,7 +31,9 @@ use crate::log::{LogExt as _, warn};
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
 };
-use crate::mimeparser::{AvatarAction, GossipedKey, MimeMessage, SystemMessage, parse_message_ids};
+use crate::mimeparser::{
+    AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
+};
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{Reaction, set_msg_reaction};
@@ -518,7 +520,7 @@ pub(crate) async fn receive_imf_inner(
     // check, if the mail is already in our database.
     // make sure, this check is done eg. before securejoin-processing.
     let (replace_msg_id, replace_chat_id);
-    if mime_parser.pre_message == Some(mimeparser::PreMessageMode::PostMessage) {
+    if mime_parser.pre_message == mimeparser::PreMessageMode::Post {
         // Post-Message just replaces the attachment and modifies Params, not the whole message.
         // This is done in the `handle_post_message` method.
         replace_msg_id = None;
@@ -1114,36 +1116,31 @@ async fn decide_chat_assignment(
     {
         info!(context, "Chat edit/delete/iroh/sync message (TRASH).");
         true
-    } else if let Some(pre_message) = &mime_parser.pre_message {
-        use crate::mimeparser::PreMessageMode::*;
-        match pre_message {
-            PostMessage => {
-                // if pre message exist, then trash after replacing, otherwise treat as normal message
-                let pre_message_exists = msg_is_downloaded_for(context, rfc724_mid).await?;
-                info!(
-                    context,
-                    "Message {rfc724_mid} is a post-message ({}).",
-                    if pre_message_exists {
-                        "pre-message exists already, so trash after replacing attachment"
-                    } else {
-                        "no pre-message -> Keep"
-                    }
-                );
-                pre_message_exists
+    } else if mime_parser.pre_message == PreMessageMode::Post {
+        // if pre message exist, then trash after replacing, otherwise treat as normal message
+        let pre_message_exists = msg_is_downloaded_for(context, rfc724_mid).await?;
+        info!(
+            context,
+            "Message {rfc724_mid} is a post-message ({}).",
+            if pre_message_exists {
+                "pre-message exists already, so trash after replacing attachment"
+            } else {
+                "no pre-message -> Keep"
             }
-            PreMessage {
-                post_msg_rfc724_mid,
-                ..
-            } => {
-                // if post message already exists, then trash/ignore
-                let post_msg_exists = msg_is_downloaded_for(context, post_msg_rfc724_mid).await?;
-                info!(
-                    context,
-                    "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."
-                );
-                post_msg_exists
-            }
-        }
+        );
+        pre_message_exists
+    } else if let PreMessageMode::Pre {
+        post_msg_rfc724_mid,
+        ..
+    } = &mime_parser.pre_message
+    {
+        // if post message already exists, then trash/ignore
+        let post_msg_exists = msg_is_downloaded_for(context, post_msg_rfc724_mid).await?;
+        info!(
+            context,
+            "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."
+        );
+        post_msg_exists
     } else if mime_parser.is_system_message == SystemMessage::CallAccepted
         || mime_parser.is_system_message == SystemMessage::CallEnded
     {
@@ -2040,10 +2037,10 @@ async fn add_parts(
             }
         };
 
-        if let Some(mimeparser::PreMessageMode::PreMessage {
+        if let PreMessageMode::Pre {
             metadata: Some(metadata),
             ..
-        }) = &mime_parser.pre_message
+        } = &mime_parser.pre_message
         {
             param.apply_pre_msg_metadata(metadata);
         };
@@ -2091,10 +2088,10 @@ RETURNING id
 "#)?;
                 let row_id: MsgId = stmt.query_row(params![
                     replace_msg_id,
-                    if let Some(mimeparser::PreMessageMode::PreMessage {post_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
+                    if let PreMessageMode::Pre {post_msg_rfc724_mid, ..} = &mime_parser.pre_message {
                         post_msg_rfc724_mid
                     } else { rfc724_mid_orig },
-                    if let Some(mimeparser::PreMessageMode::PreMessage { .. }) = &mime_parser.pre_message {
+                    if let PreMessageMode::Pre {..} = &mime_parser.pre_message {
                         rfc724_mid_orig
                     } else { "" },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
@@ -2105,7 +2102,7 @@ RETURNING id
                     if trash { 0 } else { mime_parser.timestamp_rcvd },
                     if trash {
                         Viewtype::Unknown
-                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                    } else if let PreMessageMode::Pre {..} = mime_parser.pre_message {
                         Viewtype::Text
                     } else { typ },
                     if trash { MessageState::Undefined } else { state },
@@ -2135,7 +2132,7 @@ RETURNING id
                         DownloadState::Done
                     } else if mime_parser.decrypting_failed {
                         DownloadState::Undecipherable
-                    } else if let Some(mimeparser::PreMessageMode::PreMessage {..}) = mime_parser.pre_message {
+                    } else if let PreMessageMode::Pre {..} = mime_parser.pre_message {
                         DownloadState::Available
                     } else {
                         DownloadState::Done
@@ -2335,7 +2332,7 @@ async fn handle_post_message(
     from_id: ContactId,
     state: MessageState,
 ) -> Result<()> {
-    let Some(mimeparser::PreMessageMode::PostMessage) = &mime_parser.pre_message else {
+    let PreMessageMode::Post = &mime_parser.pre_message else {
         return Ok(());
     };
     // if Pre-Message exist, replace attachment
