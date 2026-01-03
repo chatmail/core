@@ -628,8 +628,12 @@ impl ChatId {
             .sql
             .transaction(|transaction| {
                 transaction.execute(
-                    "UPDATE imap SET target=? WHERE rfc724_mid IN (SELECT rfc724_mid FROM msgs WHERE chat_id=?)",
-                    (delete_msgs_target, self,),
+                    "UPDATE imap SET target=? WHERE rfc724_mid IN (SELECT rfc724_mid FROM msgs WHERE chat_id=? AND rfc724_mid!='')",
+                    (&delete_msgs_target, self,),
+                )?;
+                transaction.execute(
+                    "UPDATE imap SET target=? WHERE rfc724_mid IN (SELECT pre_rfc724_mid FROM msgs WHERE chat_id=? AND pre_rfc724_mid!='')",
+                    (&delete_msgs_target, self,),
                 )?;
                 transaction.execute(
                     "DELETE FROM smtp WHERE msg_id IN (SELECT id FROM msgs WHERE chat_id=?)",
@@ -2881,6 +2885,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             format_size(pre_msg.message.len(), BINARY),
             format_size(post_msg.message.len(), BINARY),
         );
+        msg.pre_rfc724_mid = pre_msg.rfc724_mid.clone();
     } else {
         info!(
             context,
@@ -2927,8 +2932,13 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     context
         .sql
         .execute(
-            "UPDATE msgs SET subject=?, param=? WHERE id=?",
-            (&msg.subject, msg.param.to_string(), msg.id),
+            "UPDATE msgs SET pre_rfc724_mid=?, subject=?, param=? WHERE id=?",
+            (
+                &msg.pre_rfc724_mid,
+                &msg.subject,
+                msg.param.to_string(),
+                msg.id,
+            ),
         )
         .await?;
 

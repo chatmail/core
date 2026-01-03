@@ -133,8 +133,10 @@ impl MsgId {
                 // If you change which information is preserved here, also change
                 // `delete_expired_messages()` and which information `receive_imf::add_parts()`
                 // still adds to the db if chat_id is TRASH.
-                "INSERT OR REPLACE INTO msgs (id, rfc724_mid, timestamp, chat_id, deleted)
-                 SELECT ?1, rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1",
+                "
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
+SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
+                ",
                 (self, DC_CHAT_ID_TRASH, on_server),
             )
             .await?;
@@ -445,6 +447,8 @@ pub struct Message {
 
     /// `Message-ID` header value.
     pub(crate) rfc724_mid: String,
+    /// `Message-ID` header value of the pre-message, if any.
+    pub(crate) pre_rfc724_mid: String,
 
     /// `In-Reply-To` header value.
     pub(crate) in_reply_to: Option<String>,
@@ -502,6 +506,7 @@ impl Message {
                     "SELECT",
                     "    m.id AS id,",
                     "    rfc724_mid AS rfc724mid,",
+                    "    pre_rfc724_mid AS pre_rfc724mid,",
                     "    m.mime_in_reply_to AS mime_in_reply_to,",
                     "    m.chat_id AS chat_id,",
                     "    m.from_id AS from_id,",
@@ -557,6 +562,7 @@ impl Message {
                     let msg = Message {
                         id: row.get("id")?,
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
+                        pre_rfc724_mid: row.get::<_, String>("pre_rfc724mid")?,
                         in_reply_to: row
                             .get::<_, Option<String>>("mime_in_reply_to")?
                             .and_then(|in_reply_to| parse_message_id(&in_reply_to).ok()),
@@ -1751,10 +1757,11 @@ pub async fn delete_msgs_ex(
 
         let target = context.get_delete_msgs_target().await?;
         let update_db = |trans: &mut rusqlite::Transaction| {
-            trans.execute(
-                "UPDATE imap SET target=? WHERE rfc724_mid=?",
-                (target, &msg.rfc724_mid),
-            )?;
+            let mut stmt = trans.prepare("UPDATE imap SET target=? WHERE rfc724_mid=?")?;
+            stmt.execute((&target, &msg.rfc724_mid))?;
+            if !msg.pre_rfc724_mid.is_empty() {
+                stmt.execute((&target, &msg.pre_rfc724_mid))?;
+            }
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
             trans.execute(
                 "DELETE FROM download WHERE rfc724_mid=?",

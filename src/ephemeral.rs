@@ -474,8 +474,10 @@ pub(crate) async fn delete_expired_messages(context: &Context, now: i64) -> Resu
                 // If you change which information is preserved here, also change `MsgId::trash()`
                 // and other places it references.
                 let mut del_msg_stmt = transaction.prepare(
-                    "INSERT OR REPLACE INTO msgs (id, rfc724_mid, timestamp, chat_id)
-                     SELECT ?1, rfc724_mid, timestamp, ? FROM msgs WHERE id=?1",
+                    "
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id)
+SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ? FROM msgs WHERE id=?1
+                    ",
                 )?;
                 let mut del_location_stmt =
                     transaction.prepare("DELETE FROM locations WHERE independent=1 AND id=?")?;

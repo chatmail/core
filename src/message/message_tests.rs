@@ -358,7 +358,6 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-#[ignore = "bug: pre-messages aren't deleted currently"]
 async fn test_pre_and_post_msgs_deleted() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;

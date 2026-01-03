@@ -2060,7 +2060,7 @@ async fn add_parts(
 INSERT INTO msgs
   (
     id,
-    rfc724_mid, chat_id,
+    rfc724_mid, pre_rfc724_mid, chat_id,
     from_id, to_id, timestamp, timestamp_sent, 
     timestamp_rcvd, type, state, msgrmsg, 
     txt, txt_normalized, subject, param, hidden,
@@ -2070,7 +2070,7 @@ INSERT INTO msgs
   )
   VALUES (
     ?,
-    ?, ?, ?, ?,
+    ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?, ?, 1,
@@ -2094,6 +2094,9 @@ RETURNING id
                     if let Some(mimeparser::PreMessageMode::PreMessage {post_msg_rfc724_mid, .. }) = &mime_parser.pre_message {
                         post_msg_rfc724_mid
                     } else { rfc724_mid_orig },
+                    if let Some(mimeparser::PreMessageMode::PreMessage { .. }) = &mime_parser.pre_message {
+                        rfc724_mid_orig
+                    } else { "" },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },

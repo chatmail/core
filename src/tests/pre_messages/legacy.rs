@@ -38,7 +38,7 @@ async fn test_download_stub_message() -> Result<()> {
                 11001,'Mr.12345678901@example.com','',0,
                 11001,11001,1,1763151754,10,10,1,0,
                 '[97.66 KiB message]','','',0,1763151754,1763151754,0,X'',
-                '','',1,0,'',0,0,0,'foo',10,replace('Hop: From: userid; Date: Mon, 4 Dec 2006 13:51:39 +0000\n\nDKIM Results: Passed=true','\n',char(10)),1,NULL,0);
+                '','',1,0,'',0,0,0,'foo',10,replace('Hop: From: userid; Date: Mon, 4 Dec 2006 13:51:39 +0000\n\nDKIM Results: Passed=true','\n',char(10)),1,NULL,0,'');
         "#, ()).await?;
     let msg = t.get_last_msg().await;
     assert_eq!(msg.download_state(), DownloadState::Available);

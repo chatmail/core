@@ -1517,7 +1517,8 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
             ALTER TABLE download_new RENAME TO download;
             CREATE TABLE available_post_msgs (
                 rfc724_mid TEXT NOT NULL
-            );",
+            );
+            ALTER TABLE msgs ADD COLUMN pre_rfc724_mid TEXT DEFAULT '';",
             migration_version,
         )
         .await?;
