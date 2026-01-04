@@ -711,11 +711,17 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
     path = tmp_path / "large"
     path.write_bytes(os.urandom(download_limit + 1))
 
+    n_done = 0
     for i in range(10):
         logging.info("Sending message %s", i)
         alice_group.send_file(str(path))
         snapshot = bob.wait_for_incoming_msg().get_snapshot()
-        assert snapshot.download_state == DownloadState.AVAILABLE
+        if snapshot.download_state == DownloadState.DONE:
+            n_done += 1
+            # Work around lost and reordered pre-messages.
+            assert n_done <= 1
+        else:
+            assert snapshot.download_state == DownloadState.AVAILABLE
         assert snapshot.chat == bob_group
 
 
