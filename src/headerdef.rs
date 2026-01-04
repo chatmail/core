@@ -109,8 +109,8 @@ pub enum HeaderDef {
     /// referencing the Post-Message's rfc724_mid.
     ChatPostMessageId,
 
-    /// Announce Post-Message metadata in a Pre-Message.
-    /// contains serialized PreMsgMetadata struct
+    /// Announces Post-Message metadata in a Pre-Message.
+    /// Contains a serialized `PostMsgMetadata` struct.
     ChatPostMessageMetadata,
 
     /// This message is preceded by a Pre-Message

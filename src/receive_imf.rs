@@ -2046,7 +2046,7 @@ async fn add_parts(
             ..
         } = &mime_parser.pre_message
         {
-            param.apply_pre_msg_metadata(metadata);
+            param.apply_post_msg_metadata(metadata);
         };
 
         // If you change which information is skipped if the message is trashed,

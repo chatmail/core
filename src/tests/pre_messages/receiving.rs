@@ -5,9 +5,7 @@ use pretty_assertions::assert_eq;
 use crate::EventType;
 use crate::chat;
 use crate::contact;
-use crate::download::{
-    DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, pre_msg_metadata::PreMsgMetadata,
-};
+use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
 use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
@@ -42,7 +40,7 @@ async fn test_mimeparser_pre_message_and_post_message() -> Result<()> {
         parsed_pre_message.pre_message,
         crate::mimeparser::PreMessageMode::Pre {
             post_msg_rfc724_mid: parsed_post_message.get_rfc724_mid().unwrap(),
-            metadata: Some(PreMsgMetadata {
+            metadata: Some(PostMsgMetadata {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),

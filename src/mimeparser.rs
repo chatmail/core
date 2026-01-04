@@ -23,7 +23,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
-use crate::download::pre_msg_metadata::PreMsgMetadata;
+use crate::download::PostMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
@@ -163,7 +163,7 @@ pub(crate) enum PreMessageMode {
     /// and it is ignored if the Post-Message was downloaded already
     Pre {
         post_msg_rfc724_mid: String,
-        metadata: Option<PreMsgMetadata>,
+        metadata: Option<PostMsgMetadata>,
     },
     /// Atomic ("normal") message.
     None,
@@ -616,7 +616,7 @@ impl MimeMessage {
                 .headers
                 .get_header_value(HeaderDef::ChatPostMessageMetadata)
             {
-                match PreMsgMetadata::try_from_header_value(&value) {
+                match PostMsgMetadata::try_from_header_value(&value) {
                     Ok(metadata) => Some(metadata),
                     Err(error) => {
                         error!(

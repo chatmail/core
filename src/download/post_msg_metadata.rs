@@ -10,7 +10,7 @@ use crate::param::{Param, Params};
 
 /// Metadata contained in Pre-Message that describes the Post-Message.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PreMsgMetadata {
+pub struct PostMsgMetadata {
     /// size of the attachment in bytes
     pub(crate) size: u64,
     /// Real viewtype of message
@@ -25,8 +25,8 @@ pub struct PreMsgMetadata {
     pub(crate) duration: Option<i32>,
 }
 
-impl PreMsgMetadata {
-    // Returns PreMsgMetadata for messages with files and None for messages without file attachment
+impl PostMsgMetadata {
+    /// Returns `PostMsgMetadata` for messages with file attachment and `None` otherwise.
     pub(crate) async fn from_msg(context: &Context, message: &Message) -> Result<Option<Self>> {
         if !message.viewtype.has_file() {
             return Ok(None);
@@ -78,24 +78,24 @@ impl PreMsgMetadata {
 }
 
 impl Params {
-    /// Applies data from pre_msg_metadata to Params
-    pub(crate) fn apply_pre_msg_metadata(
+    /// Applies data from post_msg_metadata to Params
+    pub(crate) fn apply_post_msg_metadata(
         &mut self,
-        pre_msg_metadata: &PreMsgMetadata,
+        post_msg_metadata: &PostMsgMetadata,
     ) -> &mut Self {
-        self.set(Param::PostMessageFileBytes, pre_msg_metadata.size);
-        if !pre_msg_metadata.filename.is_empty() {
-            self.set(Param::Filename, &pre_msg_metadata.filename);
+        self.set(Param::PostMessageFileBytes, post_msg_metadata.size);
+        if !post_msg_metadata.filename.is_empty() {
+            self.set(Param::Filename, &post_msg_metadata.filename);
         }
         self.set_i64(
             Param::PostMessageViewtype,
-            pre_msg_metadata.viewtype.to_i64().unwrap_or_default(),
+            post_msg_metadata.viewtype.to_i64().unwrap_or_default(),
         );
-        if let Some((width, height)) = pre_msg_metadata.wh {
+        if let Some((width, height)) = post_msg_metadata.wh {
             self.set(Param::Width, width);
             self.set(Param::Height, height);
         }
-        if let Some(duration) = pre_msg_metadata.duration {
+        if let Some(duration) = post_msg_metadata.duration {
             self.set(Param::Duration, duration);
         }
 
@@ -113,7 +113,7 @@ mod tests {
         test_utils::{TestContextManager, create_test_image},
     };
 
-    use super::PreMsgMetadata;
+    use super::PostMsgMetadata;
 
     /// Build from message with file attachment
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -123,10 +123,10 @@ mod tests {
 
         let mut file_msg = Message::new(Viewtype::File);
         file_msg.set_file_from_bytes(alice, "test.bin", &vec![0u8; 1_000_000], None)?;
-        let pre_mesage_metadata = PreMsgMetadata::from_msg(alice, &file_msg).await?;
+        let post_msg_metadata = PostMsgMetadata::from_msg(alice, &file_msg).await?;
         assert_eq!(
-            pre_mesage_metadata,
-            Some(PreMsgMetadata {
+            post_msg_metadata,
+            Some(PostMsgMetadata {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
@@ -150,10 +150,10 @@ mod tests {
         // this is usually done while sending,
         // but we don't send it here, so we need to call it ourself
         image_msg.try_calc_and_set_dimensions(alice).await?;
-        let pre_mesage_metadata = PreMsgMetadata::from_msg(alice, &image_msg).await?;
+        let post_msg_metadata = PostMsgMetadata::from_msg(alice, &image_msg).await?;
         assert_eq!(
-            pre_mesage_metadata,
-            Some(PreMsgMetadata {
+            post_msg_metadata,
+            Some(PostMsgMetadata {
                 size: 1816098,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
@@ -169,7 +169,7 @@ mod tests {
     #[test]
     fn test_serialize_to_header() -> Result<()> {
         assert_eq!(
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
@@ -180,7 +180,7 @@ mod tests {
             "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\"}"
         );
         assert_eq!(
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 5_342_765,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
@@ -191,7 +191,7 @@ mod tests {
             "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"wh\":[1080,1920]}"
         );
         assert_eq!(
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 5_000,
                 viewtype: Viewtype::Audio,
                 filename: "audio-DD-MM-YY.ogg".to_string(),
@@ -210,10 +210,10 @@ mod tests {
     #[test]
     fn test_deserialize_from_header() -> Result<()> {
         assert_eq!(
-            serde_json::from_str::<PreMsgMetadata>(
+            serde_json::from_str::<PostMsgMetadata>(
                 "{\"size\":1000000,\"viewtype\":\"File\",\"filename\":\"test.bin\",\"wh\":null,\"duration\":null}"
             )?,
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 1_000_000,
                 viewtype: Viewtype::File,
                 filename: "test.bin".to_string(),
@@ -222,10 +222,10 @@ mod tests {
             }
         );
         assert_eq!(
-            serde_json::from_str::<PreMsgMetadata>(
+            serde_json::from_str::<PostMsgMetadata>(
                 "{\"size\":5342765,\"viewtype\":\"Image\",\"filename\":\"vacation.png\",\"wh\":[1080,1920]}"
             )?,
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 5_342_765,
                 viewtype: Viewtype::Image,
                 filename: "vacation.png".to_string(),
@@ -234,10 +234,10 @@ mod tests {
             }
         );
         assert_eq!(
-            serde_json::from_str::<PreMsgMetadata>(
+            serde_json::from_str::<PostMsgMetadata>(
                 "{\"size\":5000,\"viewtype\":\"Audio\",\"filename\":\"audio-DD-MM-YY.ogg\",\"duration\":152310}"
             )?,
-            PreMsgMetadata {
+            PostMsgMetadata {
                 size: 5_000,
                 viewtype: Viewtype::Audio,
                 filename: "audio-DD-MM-YY.ogg".to_string(),
