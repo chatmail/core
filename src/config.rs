@@ -354,7 +354,17 @@ pub enum Config {
     DonationRequestNextCheck,
 
     /// Defines the max. size (in bytes) of messages downloaded automatically.
+    ///
+    /// For messages with large attachments, two messages are sent:
+    /// a Pre-Message containing metadata and text and a Post-Message additionally
+    /// containing the attachment. NB: Some "extra" metadata like avatars and gossiped
+    /// encryption keys is stripped from post-messages to save traffic.
+    /// Pre-Messages are shown as placeholder messages. They can be downloaded fully using
+    /// `MsgId::download_full()` later. Post-Messages are automatically downloaded if they are
+    /// smaller than the download_limit. Other messages are always auto-downloaded.
+    ///
     /// 0 = no limit.
+    /// Changes only affect future messages.
     #[strum(props(default = "0"))]
     DownloadLimit,
 

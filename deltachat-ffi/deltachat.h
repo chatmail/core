@@ -486,11 +486,14 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    This is a developer option used for testing polling used as an IDLE fallback.
  * - `download_limit` = Messages up to this number of bytes are downloaded automatically.
  *                    For messages with large attachments, two messages are sent:
- *                    a Pre-Message containing metadata and a Post-Message containing the attachment.
- *                    Pre-Messages are always downloaded and show a placeholder message.
- *                    These messages can be downloaded fully using dc_download_full_msg() later.
- *                    Post-Messages are automatically downloaded if they are smaller than the download_limit.
- *                    0=no limit (default).
+ *                    a Pre-Message containing metadata and text and a Post-Message additionally
+ *                    containing the attachment. NB: Some "extra" metadata like avatars and gossiped
+ *                    encryption keys is stripped from post-messages to save traffic.
+ *                    Pre-Messages are shown as placeholder messages. They can be downloaded fully
+ *                    using dc_download_full_msg() later. Post-Messages are automatically
+ *                    downloaded if they are smaller than the download_limit. Other messages are
+ *                    always auto-downloaded.
+ *                    0 = no limit (default).
  *                    Changes affect future messages only.
  * - `protect_autocrypt` = Enable Header Protection for Autocrypt header.
  *                    This is an experimental option not compatible to other MUAs
