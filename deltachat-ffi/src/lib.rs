@@ -4773,7 +4773,7 @@ pub unsafe extern "C" fn dc_accounts_unref(accounts: *const dc_accounts_t) {
         eprintln!("ignoring careless call to dc_accounts_unref()");
         return;
     }
-    drop(Box::from_raw(accounts));
+    drop(Arc::from_raw(accounts));
 }
 
 #[no_mangle]
