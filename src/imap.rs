@@ -727,9 +727,13 @@ impl Imap {
                     largest_uid_skipped = Some(uid);
                 } else {
                     info!(context, "{message_id:?} is not a post-message.");
-
-                    uids_fetch.push(uid);
-                    uid_message_ids.insert(uid, message_id);
+                    if download_limit.is_none_or(|download_limit| size <= download_limit) {
+                        uids_fetch.push(uid);
+                        uid_message_ids.insert(uid, message_id);
+                    } else {
+                        download_later.push(message_id.clone());
+                        largest_uid_skipped = Some(uid);
+                    }
                 };
             } else {
                 largest_uid_skipped = Some(uid);

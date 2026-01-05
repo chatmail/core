@@ -2392,6 +2392,8 @@ async fn handle_post_message(
         .merge_in_params(part.param.clone())
         .remove(Param::PostMessageFileBytes)
         .remove(Param::PostMessageViewtype);
+    // Don't update `chat_id`: even if it differs from pre-message's one somehow so the result
+    // depends on message download order, we don't want messages jumping across chats.
     context
         .sql
         .execute(

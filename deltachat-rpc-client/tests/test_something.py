@@ -725,6 +725,29 @@ def test_download_limit_chat_assignment(acfactory, tmp_path, n_accounts):
         assert snapshot.chat == bob_group
 
 
+def test_download_small_msg_first(acfactory, tmp_path):
+    download_limit = 70000
+
+    alice, bob0 = acfactory.get_online_accounts(2)
+    bob1 = bob0.clone()
+    bob1.set_config("download_limit", str(download_limit))
+
+    chat = alice.create_chat(bob0)
+    path = tmp_path / "large_enough"
+    path.write_bytes(os.urandom(download_limit + 1))
+    # Less than 140K, so sent w/o a pre-message.
+    chat.send_file(str(path))
+    chat.send_text("hi")
+    bob0.create_chat(alice)
+    assert bob0.wait_for_incoming_msg().get_snapshot().text == ""
+    assert bob0.wait_for_incoming_msg().get_snapshot().text == "hi"
+
+    bob1.start_io()
+    bob1.create_chat(alice)
+    assert bob1.wait_for_incoming_msg().get_snapshot().text == "hi"
+    assert bob1.wait_for_incoming_msg().get_snapshot().text == ""
+
+
 def test_markseen_contact_request(acfactory):
     """
     Test that seen status is synchronized for contact request messages
