@@ -955,6 +955,10 @@ impl Context {
             self.get_config_int(Config::ShowEmails).await?.to_string(),
         );
         res.insert(
+            "who_can_call_me",
+            self.get_config_int(Config::WhoCanCallMe).await?.to_string(),
+        );
+        res.insert(
             "download_limit",
             self.get_config_int(Config::DownloadLimit)
                 .await?

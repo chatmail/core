@@ -446,6 +446,12 @@ pub enum Config {
     /// Protected Email".
     #[strum(props(default = "1"))]
     StdHeaderProtectionComposing,
+
+    /// Who can call me.
+    ///
+    /// The options are from the `WhoCanCallMe` enum.
+    #[strum(props(default = "1"))]
+    WhoCanCallMe,
 }
 
 impl Config {

@@ -4,6 +4,7 @@
 //! This means, the "Call ID" is a "Message ID" - similar to Webxdc IDs.
 use crate::chat::ChatIdBlocked;
 use crate::chat::{Chat, ChatId, send_msg};
+use crate::config::Config;
 use crate::constants::{Blocked, Chattype};
 use crate::contact::ContactId;
 use crate::context::{Context, WeakContext};
@@ -16,6 +17,8 @@ use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
 use crate::tools::{normalize_text, time};
 use anyhow::{Context as _, Result, ensure};
+use deltachat_derive::{FromSql, ToSql};
+use num_traits::FromPrimitive;
 use sdp::SessionDescription;
 use serde::Serialize;
 use std::io::Cursor;
@@ -348,26 +351,34 @@ impl Context {
                             false
                         }
                     };
-                    if let Some(chat_id_blocked) =
-                        ChatIdBlocked::lookup_by_contact(self, from_id).await?
-                    {
-                        match chat_id_blocked.blocked {
-                            Blocked::Not => {
-                                self.emit_event(EventType::IncomingCall {
-                                    msg_id: call.msg.id,
-                                    chat_id: call.msg.chat_id,
-                                    place_call_info: call.place_call_info.to_string(),
-                                    has_video,
-                                });
-                            }
-                            Blocked::Yes | Blocked::Request => {
-                                // Do not notify about incoming calls
-                                // from contact requests and blocked contacts.
-                                //
-                                // User can still access the call and accept it
-                                // via the chat in case of contact requests.
-                            }
-                        }
+                    let can_call_me = match who_can_call_me(self).await? {
+                        WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
+                            .await?
+                            .is_some_and(|chat_id_blocked| {
+                                match chat_id_blocked.blocked {
+                                    Blocked::Not => true,
+                                    Blocked::Yes | Blocked::Request => {
+                                        // Do not notify about incoming calls
+                                        // from contact requests and blocked contacts.
+                                        //
+                                        // User can still access the call and accept it
+                                        // via the chat in case of contact requests.
+                                        false
+                                    }
+                                }
+                            }),
+                        WhoCanCallMe::Everybody => ChatIdBlocked::lookup_by_contact(self, from_id)
+                            .await?
+                            .is_none_or(|chat_id_blocked| chat_id_blocked.blocked != Blocked::Yes),
+                        WhoCanCallMe::Nobody => false,
+                    };
+                    if can_call_me {
+                        self.emit_event(EventType::IncomingCall {
+                            msg_id: call.msg.id,
+                            chat_id: call.msg.chat_id,
+                            place_call_info: call.place_call_info.to_string(),
+                            has_video,
+                        });
                     }
                     let wait = call.remaining_ring_seconds();
                     let context = self.get_weak_context();
@@ -710,6 +721,33 @@ pub async fn ice_servers(context: &Context) -> Result<String> {
     } else {
         Ok("[]".to_string())
     }
+}
+
+/// "Who can call me" config options.
+#[derive(
+    Debug, Default, Display, Clone, Copy, PartialEq, Eq, FromPrimitive, ToPrimitive, FromSql, ToSql,
+)]
+#[repr(u8)]
+pub enum WhoCanCallMe {
+    /// Everybody can call me if they are not blocked.
+    ///
+    /// This includes contact requests.
+    Everybody = 0,
+
+    /// Every contact who is not blocked and not a contact request, can call.
+    #[default]
+    Contacts = 1,
+
+    /// Nobody can call me.
+    Nobody = 2,
+}
+
+/// Returns currently configuration of the "who can call me" option.
+async fn who_can_call_me(context: &Context) -> Result<WhoCanCallMe> {
+    let who_can_call_me =
+        WhoCanCallMe::from_i32(context.get_config_int(Config::WhoCanCallMe).await?)
+            .unwrap_or_default();
+    Ok(who_can_call_me)
 }
 
 #[cfg(test)]
