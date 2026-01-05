@@ -1204,8 +1204,17 @@ async fn decide_chat_assignment(
         ..
     } = &mime_parser.pre_message
     {
-        // if post message already exists, then trash/ignore
-        let post_msg_exists = msg_is_downloaded_for(context, post_msg_rfc724_mid).await?;
+        let msg_id = rfc724_mid_exists(context, post_msg_rfc724_mid).await?;
+        if let Some(msg_id) = msg_id {
+            context
+                .sql
+                .execute(
+                    "UPDATE msgs SET pre_rfc724_mid=? WHERE id=?",
+                    (rfc724_mid, msg_id),
+                )
+                .await?;
+        }
+        let post_msg_exists = msg_id.is_some();
         info!(
             context,
             "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."

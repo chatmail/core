@@ -359,6 +359,17 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pre_and_post_msgs_deleted() -> Result<()> {
+    let reorder = false;
+    test_pre_and_post_msgs_deleted_ex(reorder).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_reordered_pre_and_post_msgs_deleted() -> Result<()> {
+    let reorder = true;
+    test_pre_and_post_msgs_deleted_ex(reorder).await
+}
+
+async fn test_pre_and_post_msgs_deleted_ex(reorder: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -371,9 +382,16 @@ async fn test_pre_and_post_msgs_deleted() -> Result<()> {
     let pre_msg = alice.pop_sent_msg().await;
 
     let rfc724_mid_pre = bob.parse_msg(&pre_msg).await.get_rfc724_mid().unwrap();
-    let msg = bob.recv_msg(&pre_msg).await;
+    let msg = if reorder {
+        let msg = bob.recv_msg(&full_msg).await;
+        bob.recv_msg_trash(&pre_msg).await;
+        Message::load_from_db(bob, msg.id).await?
+    } else {
+        let msg = bob.recv_msg(&pre_msg).await;
+        bob.recv_msg_trash(&full_msg).await;
+        msg
+    };
     assert_ne!(rfc724_mid_pre, msg.rfc724_mid);
-    bob.recv_msg_trash(&full_msg).await;
     for (rfc724_mid, uid) in [(&rfc724_mid_pre, 1), (&msg.rfc724_mid, 2)] {
         bob.sql
             .execute(
