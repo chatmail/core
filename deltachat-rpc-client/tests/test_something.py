@@ -748,6 +748,31 @@ def test_download_small_msg_first(acfactory, tmp_path):
     assert bob1.wait_for_incoming_msg().get_snapshot().text == ""
 
 
+def test_delete_available_msg(acfactory, tmp_path, direct_imap):
+    # Min. UI setting as of v2.35
+    download_limit = 163840
+
+    alice, bob = acfactory.get_online_accounts(2)
+    bob.set_config("download_limit", str(download_limit))
+
+    chat = alice.create_chat(bob)
+    path = tmp_path / "large"
+    path.write_bytes(os.urandom(download_limit + 1))
+    chat.send_file(str(path))
+    bob_msg = bob.wait_for_incoming_msg()
+    assert bob_msg.get_snapshot().download_state == DownloadState.AVAILABLE
+
+    bob.delete_messages([bob_msg])
+    bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+    bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+    while True:
+        event = bob.wait_for_event()
+        if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+            break
+    bob_direct_imap = direct_imap(bob)
+    assert len(bob_direct_imap.get_all_messages()) == 0
+
+
 def test_markseen_contact_request(acfactory):
     """
     Test that seen status is synchronized for contact request messages
