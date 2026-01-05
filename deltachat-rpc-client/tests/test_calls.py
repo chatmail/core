@@ -107,3 +107,48 @@ def test_no_contact_request_call(acfactory) -> None:
             msg = bob.get_message_by_id(event.msg_id)
             if msg.get_snapshot().text == "Hello!":
                 break
+
+
+def test_who_can_call_me_nobody(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+
+    # Bob sets "who can call me" to "nobody" (2)
+    bob.set_config("who_can_call_me", "2")
+
+    # Bob even accepts Alice in advance so the chat does not appear as contact request.
+    bob.create_chat(alice)
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.send_text("Hello!")
+
+    # Notification for "Hello!" message should arrive
+    # without the call ringing.
+    while True:
+        event = bob.wait_for_event()
+
+        # There should be no incoming call notification.
+        assert event.kind != EventType.INCOMING_CALL
+
+        if event.kind == EventType.INCOMING_MSG:
+            msg = bob.get_message_by_id(event.msg_id)
+            if msg.get_snapshot().text == "Hello!":
+                break
+
+
+def test_who_can_call_me_everybody(acfactory) -> None:
+    """Test that if "who can call me" setting is set to "everybody", calls arrive even in contact request chats."""
+    alice, bob = acfactory.get_online_accounts(2)
+
+    # Bob sets "who can call me" to "nobody" (0)
+    bob.set_config("who_can_call_me", "0")
+
+    alice_chat_bob = alice.create_chat(bob)
+    alice_chat_bob.place_outgoing_call("offer")
+    incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
+
+    incoming_call_message = Message(bob, incoming_call_event.msg_id)
+
+    # Even with the call arriving, the chat is still in the contact request mode.
+    incoming_chat = incoming_call_message.get_snapshot().chat
+    assert incoming_chat.get_basic_snapshot().is_contact_request

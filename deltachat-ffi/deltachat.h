@@ -516,6 +516,10 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `webxdc_realtime_enabled` = Whether the realtime APIs should be enabled.
  *                               0 = WebXDC realtime API is disabled and behaves as noop.
  *                               1 = WebXDC realtime API is enabled (default).
+ * - `who_can_call_me` = Who can cause call notifications.
+ *                       0 = Everybody (except explicitly blocked contacts),
+ *                       1 = Contacts (default, does not include contact requests),
+ *                       2 = Nobody (calls never result in a notification).
  *
  * If you want to retrieve a value, use dc_get_config().
  *
