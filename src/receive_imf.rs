@@ -38,7 +38,9 @@ use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
 use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
-use crate::securejoin::{self, handle_securejoin_handshake, observe_securejoin_on_other_device};
+use crate::securejoin::{
+    self, get_secure_join_step, handle_securejoin_handshake, observe_securejoin_on_other_device,
+};
 use crate::simplify;
 use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
@@ -673,7 +675,7 @@ pub(crate) async fn receive_imf_inner(
     .await?;
 
     let received_msg;
-    if mime_parser.get_header(HeaderDef::SecureJoin).is_some() {
+    if let Some(_step) = get_secure_join_step(&mime_parser) {
         let res = if mime_parser.incoming {
             handle_securejoin_handshake(context, &mut mime_parser, from_id)
                 .await
