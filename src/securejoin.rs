@@ -343,6 +343,62 @@ pub(crate) enum HandshakeMessage {
     Propagate,
 }
 
+/// Step of Secure-Join protocol.
+#[derive(Debug, Display, PartialEq, Eq)]
+pub(crate) enum SecureJoinStep {
+    /// vc-request or vg-request
+    Request { invitenumber: String },
+
+    /// vc-auth-required or vg-auth-required
+    AuthRequired,
+
+    /// vc-request-with-auth or vg-request-with-auth
+    RequestWithAuth,
+
+    /// vc-contact-confirm
+    ContactConfirm,
+
+    /// vg-member-added
+    MemberAdded,
+
+    /// Deprecated step such as `vg-member-added-received` or `vc-contact-confirm-received`.
+    Deprecated,
+
+    /// Unknown step.
+    Unknown { step: String },
+}
+
+/// Parses message headers to find out which Secure-Join step the message represents.
+///
+/// Returns `None` if the message is not a Secure-Join message.
+pub(crate) fn get_secure_join_step(mime_message: &MimeMessage) -> Option<SecureJoinStep> {
+    if let Some(invitenumber) = mime_message.get_header(HeaderDef::SecureJoinInvitenumber) {
+        // We do not care about presence of `Secure-Join: vc-request` or `Secure-Join: vg-request` header.
+        // This allows us to always treat `Secure-Join` header as protected and ignore it
+        // in the unencrypted part even though it is sent there for backwards compatibility.
+        Some(SecureJoinStep::Request {
+            invitenumber: invitenumber.to_string(),
+        })
+    } else if let Some(step) = mime_message.get_header(HeaderDef::SecureJoin) {
+        match step {
+            "vg-auth-required" | "vc-auth-required" => Some(SecureJoinStep::AuthRequired),
+            "vg-request-with-auth" | "vc-request-with-auth" => {
+                Some(SecureJoinStep::RequestWithAuth)
+            }
+            "vc-contact-confirm" => Some(SecureJoinStep::ContactConfirm),
+            "vg-member-added" => Some(SecureJoinStep::MemberAdded),
+            "vg-member-added-received" | "vc-contact-confirm-received" => {
+                Some(SecureJoinStep::Deprecated)
+            }
+            step => Some(SecureJoinStep::Unknown {
+                step: step.to_string(),
+            }),
+        }
+    } else {
+        None
+    }
+}
+
 /// Handle incoming secure-join handshake.
 ///
 /// This function will update the securejoin state in the database as the protocol
@@ -362,9 +418,8 @@ pub(crate) async fn handle_securejoin_handshake(
     if contact_id.is_special() {
         return Err(Error::msg("Can not be called with special contact ID"));
     }
-    let step = mime_message
-        .get_header(HeaderDef::SecureJoin)
-        .context("Not a Secure-Join message")?;
+
+    let step = get_secure_join_step(mime_message).context("Not a Secure-Join message")?;
 
     info!(context, "Received secure-join message {step:?}.");
 
@@ -383,7 +438,7 @@ pub(crate) async fn handle_securejoin_handshake(
     // will improve security (completely unrelated to the securejoin protocol)
     // and is something we want to do in the future:
     // https://www.rfc-editor.org/rfc/rfc9580.html#name-surreptitious-forwarding
-    if !matches!(step, "vg-request" | "vc-request") {
+    if !matches!(step, SecureJoinStep::Request { .. }) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
@@ -403,7 +458,7 @@ pub(crate) async fn handle_securejoin_handshake(
     }
 
     match step {
-        "vg-request" | "vc-request" => {
+        SecureJoinStep::Request { ref invitenumber } => {
             /*=======================================================
             ====             Alice - the inviter side            ====
             ====   Step 3 in "Setup verified contact" protocol   ====
@@ -413,13 +468,6 @@ pub(crate) async fn handle_securejoin_handshake(
             // it just ensures, we have Bobs key now. If we do _not_ have the key because eg. MitM has removed it,
             // send_message() will fail with the error "End-to-end-encryption unavailable unexpectedly.", so, there is no additional check needed here.
             // verify that the `Secure-Join-Invitenumber:`-header matches invitenumber written to the QR code
-            let invitenumber = match mime_message.get_header(HeaderDef::SecureJoinInvitenumber) {
-                Some(n) => n,
-                None => {
-                    warn!(context, "Secure-join denied (invitenumber missing)");
-                    return Ok(HandshakeMessage::Ignore);
-                }
-            };
             if !token::exists(context, token::Namespace::InviteNumber, invitenumber).await? {
                 warn!(context, "Secure-join denied (bad invitenumber).");
                 return Ok(HandshakeMessage::Ignore);
@@ -436,24 +484,29 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
+            let prefix = mime_message
+                .get_header(HeaderDef::SecureJoin)
+                .and_then(|step| step.get(..2))
+                .unwrap_or("vc");
+
             // Alice -> Bob
             send_alice_handshake_msg(
                 context,
                 autocrypt_contact_id,
-                &format!("{}-auth-required", &step.get(..2).unwrap_or_default()),
+                &format!("{prefix}-auth-required"),
             )
             .await
             .context("failed sending auth-required handshake message")?;
             Ok(HandshakeMessage::Done)
         }
-        "vg-auth-required" | "vc-auth-required" => {
+        SecureJoinStep::AuthRequired => {
             /*========================================================
             ====             Bob - the joiner's side             =====
             ====   Step 4 in "Setup verified contact" protocol   =====
             ========================================================*/
             bob::handle_auth_required(context, mime_message).await
         }
-        "vg-request-with-auth" | "vc-request-with-auth" => {
+        SecureJoinStep::RequestWithAuth => {
             /*==========================================================
             ====              Alice - the inviter side              ====
             ====   Steps 5+6 in "Setup verified contact" protocol   ====
@@ -564,14 +617,14 @@ pub(crate) async fn handle_securejoin_handshake(
         ====             Bob - the joiner's side             ====
         ====   Step 7 in "Setup verified contact" protocol   ====
         =======================================================*/
-        "vc-contact-confirm" => {
+        SecureJoinStep::ContactConfirm => {
             context.emit_event(EventType::SecurejoinJoinerProgress {
                 contact_id,
                 progress: JoinerProgress::Succeeded.into_u16(),
             });
             Ok(HandshakeMessage::Ignore)
         }
-        "vg-member-added" => {
+        SecureJoinStep::MemberAdded => {
             let Some(member_added) = mime_message.get_header(HeaderDef::ChatGroupMemberAdded)
             else {
                 warn!(
@@ -594,13 +647,12 @@ pub(crate) async fn handle_securejoin_handshake(
             });
             Ok(HandshakeMessage::Propagate)
         }
-
-        "vg-member-added-received" | "vc-contact-confirm-received" => {
+        SecureJoinStep::Deprecated => {
             // Deprecated steps, delete them immediately.
             Ok(HandshakeMessage::Done)
         }
-        _ => {
-            warn!(context, "invalid step: {}", step);
+        SecureJoinStep::Unknown { ref step } => {
+            warn!(context, "Invalid SecureJoin step: {step:?}.");
             Ok(HandshakeMessage::Ignore)
         }
     }
@@ -631,17 +683,20 @@ pub(crate) async fn observe_securejoin_on_other_device(
     if contact_id.is_special() {
         return Err(Error::msg("Can not be called with special contact ID"));
     }
-    let step = mime_message
-        .get_header(HeaderDef::SecureJoin)
-        .context("Not a Secure-Join message")?;
+    let step = get_secure_join_step(mime_message).context("Not a Secure-Join message")?;
     info!(context, "Observing secure-join message {step:?}.");
 
-    if !matches!(
-        step,
-        "vg-request-with-auth" | "vc-request-with-auth" | "vg-member-added" | "vc-contact-confirm"
-    ) {
-        return Ok(HandshakeMessage::Ignore);
-    };
+    match step {
+        SecureJoinStep::Request { .. }
+        | SecureJoinStep::AuthRequired
+        | SecureJoinStep::Deprecated
+        | SecureJoinStep::Unknown { .. } => {
+            return Ok(HandshakeMessage::Ignore);
+        }
+        SecureJoinStep::RequestWithAuth
+        | SecureJoinStep::MemberAdded
+        | SecureJoinStep::ContactConfirm => {}
+    }
 
     if !encrypted_and_signed(context, mime_message, &get_self_fingerprint(context).await?) {
         warn!(
@@ -673,7 +728,10 @@ pub(crate) async fn observe_securejoin_on_other_device(
 
     mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
 
-    if step == "vg-member-added" || step == "vc-contact-confirm" {
+    if matches!(
+        step,
+        SecureJoinStep::MemberAdded | SecureJoinStep::ContactConfirm
+    ) {
         let chat_type = if mime_message
             .get_header(HeaderDef::ChatGroupMemberAdded)
             .is_none()
@@ -696,14 +754,14 @@ pub(crate) async fn observe_securejoin_on_other_device(
         inviter_progress(context, contact_id, chat_id, chat_type)?;
     }
 
-    if step == "vg-request-with-auth" || step == "vc-request-with-auth" {
+    if matches!(step, SecureJoinStep::RequestWithAuth) {
         // This actually reflects what happens on the first device (which does the secure
         // join) and causes a subsequent "vg-member-added" message to create an unblocked
         // verified group.
         ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Not).await?;
     }
 
-    if step == "vg-member-added" {
+    if matches!(step, SecureJoinStep::MemberAdded) {
         Ok(HandshakeMessage::Propagate)
     } else {
         Ok(HandshakeMessage::Ignore)

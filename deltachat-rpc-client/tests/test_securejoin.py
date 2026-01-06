@@ -696,6 +696,6 @@ def test_withdraw_securejoin_qr(acfactory):
         event = alice.wait_for_event()
         if (
             event.kind == EventType.WARNING
-            and "Ignoring vg-request-with-auth message because of invalid auth code." in event.msg
+            and "Ignoring RequestWithAuth message because of invalid auth code." in event.msg
         ):
             break
