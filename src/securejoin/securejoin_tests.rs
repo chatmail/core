@@ -6,8 +6,10 @@ use super::*;
 use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
+use crate::constants::DC_CHAT_ID_TRASH;
 use crate::key::self_fingerprint;
 use crate::mimeparser::{GossipedKey, SystemMessage};
+use crate::qr::Qr;
 use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
@@ -1250,6 +1252,121 @@ async fn test_user_deletes_chat_before_securejoin_completes() -> Result<()> {
     // The chat with Alice should be recreated,
     // and it should be sendable now:
     assert!(bob.get_chat(alice).await.can_send(bob).await?);
+
+    Ok(())
+}
+
+/// Tests that vc-request is processed even if the server
+/// encrypts incoming unencrypted messages with OpenPGP.
+///
+/// For an example of software that encrypts incoming messages
+/// with OpenPGP, see <https://lacre.io/>.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_vc_request_encrypted_at_rest() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let qr = get_securejoin_qr(alice, None).await?;
+
+    let Qr::AskVerifyContact { invitenumber, .. } = check_qr(bob, &qr).await? else {
+        panic!("Failed to parse QR code");
+    };
+
+    // Encrypted payload is this message encrypted to Alice's key:
+    /*
+    Content-Type: multipart/mixed;
+        boundary="1888168c99b6020b_ed9b3571859a92d7_eeabe50050fc923b"
+
+    --1888168c99b6020b_ed9b3571859a92d7_eeabe50050fc923b
+    Content-Type: text/plain; charset="utf-8"
+    Message-ID: <4f108a03-6c03-4f41-a6fb-fcd05b94c21f@localhost>
+    Content-Transfer-Encoding: 7bit
+
+    Secure-Join: vc-request
+    --1888168c99b6020b_ed9b3571859a92d7_eeabe50050fc923b--
+    */
+
+    let payload = format!("To: <alice@example.org>
+Subject: [...]
+Date: Tue, 6 Jan 2026 08:20:47 +0000
+References: <4f108a03-6c03-4f41-a6fb-fcd05b94c21f@localhost>
+Chat-Version: 1.0
+Autocrypt: addr=bob@example.net; prefer-encrypt=mutual; keydata=xsBNBF4wx1cBCADOwLS/xCd8iKDWUsyTfVzWby+ZGKPpamPTvdj0GFgnf0B1EBaA5//PjA
+	 zbK5iKio6QNEmZagzJPkXPByJcAIRUm0T16tqDtCvxm+H93YEXpHi/XWOeJw9kohATSqUtsRO0pFJe
+	 DvPiMTmQrEmHYoWDSQBfCrowZdvnMAlbJ9JjYOngcMeTxc0jxmPs5s17yFC+1OWu4fwWCyUM3wy1Jz
+	 dKTcDWryrSkvmgFdUqJ7pJDk1HFTt+x9tvQlK3un9BXiRwv0u0zDSuI8eDH/dRLA4UL9Pq6vmJmBam
+	 e1BPsE1PA7VzeTSJR2ooJXMT6o2AmH8PPUfRkv3OiWuh7LM5FSpHABEBAAHNETxib2JAZXhhbXBsZS
+	 5uZXQ+wsCOBBMBCAA4BQJpXW0wFiEEzMtaqfbhFByUMWXx2xixjLz3BIcCGwMCHgAECwkIBwYVCAkK
+	 CwIDFgIBAScCGQEACgkQ2xixjLz3BIcexwgAsOauz2xZ6QhVBQNX3Hg8OoYTn60w6b4XUOpI4UtqAT
+	 bAmPr5VPhCUa5vzI19QCSekLZIVxUSl6C+7YF/mU8yJldKPgq1Kpr8tbnISNbUDpvuGz7NQdK0TEwx
+	 RkPDw+ilqY7v2Rhhg0Sogi23Yrbyqvs72oorDjia6dBA7VLixpW1O9h/MfQ6WiXJcHSavoLqk2hFW1
+	 y/AsVmArGiuT+kzRJWhTzojZLjQLHTKQii/AOQ3MhkJycyayI/igSEDWWwCcuqL8SF+PUJWGyU5PxU
+	 2hTHDBsVItLLsqseM3WrwJRkBBdsdsR8+moHVyXJV9Gfl/4UFQCgltdEwWISgNTbAc7ATQReMMdXAQ
+	 gAogeBLbIjaeJII3W2pxsu+SEusQkJVykbGYDtqyXV+XBZisY4GE0kTawK5mqSh+rDqquCxDgYWBRT
+	 nGZwEKohnj2NG75pjfyVPhYMUdJt7+Ya1oiFvZlgrrOj1btjevq53yFtQolMN+X2oS8mlf9jSzIyPC
+	 eDxJk1N1gxaAATg3ByAyB1Td0wDdFPp48ni8qzfyGZeYicvJlx74YnOaja2lnI/y+I9LsmmqiOgI8H
+	 cbmH1od5qSnVjhcpBoTEA15YLIEkSE3C00Q5USlDS3EVg/IOu3FXnLl7v0hQ/jXyv88eycfpSfFcbM
+	 Hot9VtJ4TIPIoSX7DQ+uU2SXJKiZNkVQARAQABwsB2BBgBCAAgBQJpXW0wAhsMFiEEzMtaqfbhFByU
+	 MWXx2xixjLz3BIcACgkQ2xixjLz3BIcxvwf9G33yLtvekpNGeRbWkjRXSa083k/4CZpkF0Fb5led1O
+	 hjRjw9KQdZj68qn1vVrDxygnYdHwZWy8WbwEkK+l3gyJ2v2D/Wsj+sHjQ1YMtPnx+EsRFWjKsolYfN
+	 gJZ+IfMTasip8uJNxN5LIvI/svn43mzgeLUudddekmr/2eekhXfYz5covje3yf+u4rYDWQ78TLpJL5
+	 bxTwiiUyV1ZIO1G2F4RNjv8wZHsGD3DasQck+OCV7jQNuyojcmq6J22lXN0clisI51mHzwkLAnI+Yh
+	 jRj3nqwVSCxsmgfejap53JGHEL0CEy6KvepLqjFf8BiK4kwRBmI7/YWOyY2xBWdTew==
+Secure-Join: vc-request
+Secure-Join-Invitenumber: {invitenumber}
+MIME-Version: 1.0
+From: <bob@example.net>
+Message-ID: <4f108a03-6c03-4f41-a6fb-fcd05b94c21f@localhost>
+Content-Type: multipart/encrypted;
+	protocol=\"application/pgp-encrypted\";
+	boundary=\"1767687657/562150/131174/example.org\"
+
+This is a MIME-encapsulated message.
+
+--1767687657/562150/131174/example.org
+Content-Type: application/pgp-encrypted
+Content-Disposition: attachment
+
+Version: 1
+
+--1767687657/562150/131174/example.org
+Content-Type: application/octet-stream
+Content-Disposition: inline; filename=\"msg.asc\"
+
+-----BEGIN PGP MESSAGE-----
+
+wV4D5tq63hTeebASAQdAGKP3GqsznPOYBXOo8FYf5x8r0ZaJZUGkXIR+Oi32H1Mw
+LdVEu0jcXmZ1fGZ7LLPtvfwllB2W9Bhiy/lCZZs+c98VYzSWaT0DHmp23WvTsBZn
+0sDeAS0n2I6xPwYhUjqL8G1a9xdyvZRgHYUXhiARrXzx7G+aX8/KFjk6e2OZxiVy
+PSHKh61T9wPYzPMlToPsI0GjXAzOgI9I3XQ8xPqihiUpnU6BSg+Tj26m9ZqdJe8v
+aVAHxAu7aqz7eljp2H336Idgfvf1lXdA6gMA8HhHI729Ws/Mc8lcgefM9kzZWEIN
+FOBYmf4JCdTghESpEJ5i+pF28ChqZ3+8lGzNmT66c2SQRTclwxFa4SS19D4mxkHq
+iOMqj7LZ8R6IhnNVRD1V4mVapc7vFVZy8ViyZlmhJF0TBR/TEXlit6vtSkDKFiR9
+Tb5zuFQVAwhun3i1tG3/Ii1ReflZNnteVlL1J1XnptOJ70vVUeO3qRqkbkiH8Mdm
+Asvy24WKkz9jmEgdt0Hj8VUHtcOL5xmtsr0ZUCLUriylpzDh8E+0LTl2/DOgH+mI
+D/gFLCzFHjI0jfXyLTGCYOPYAnvqJukLBT/X7JbCAI/62aq0K28Lp6beJhFs+bIz
+gU6dGXsFMe/RpRHrIAkMAaM5xkxMDRuRJDxiUdS/X+Y8
+=QrdS
+-----END PGP MESSAGE-----
+
+--1767687657/562150/131174/example.org--
+");
+
+    // Alice receives vc-request, but it is encrypted
+    // by the server.
+    let received = receive_imf(alice, payload.as_bytes(), false)
+        .await?
+        .unwrap();
+    assert_eq!(received.chat_id, DC_CHAT_ID_TRASH);
+
+    // Test that Alice sends vc-auth-required after processing vc-request.
+    let sent = alice.pop_sent_msg().await;
+    let msg = bob.parse_msg(&sent).await;
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        "vc-auth-required"
+    );
 
     Ok(())
 }
