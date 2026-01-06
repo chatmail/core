@@ -1518,7 +1518,8 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
             CREATE TABLE available_post_msgs (
                 rfc724_mid TEXT PRIMARY KEY
             ) STRICT;
-            ALTER TABLE msgs ADD COLUMN pre_rfc724_mid TEXT DEFAULT '';",
+            ALTER TABLE msgs ADD COLUMN pre_rfc724_mid TEXT DEFAULT '';
+            CREATE INDEX msgs_index9 ON msgs (pre_rfc724_mid);",
             migration_version,
         )
         .await?;

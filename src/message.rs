@@ -2174,7 +2174,7 @@ pub(crate) async fn rfc724_mid_exists_ex(
         .query_row_optional(
             &("SELECT id, timestamp_sent, MIN(".to_string()
                 + expr
-                + ") FROM msgs WHERE rfc724_mid=?
+                + ") FROM msgs WHERE rfc724_mid=?1 OR pre_rfc724_mid=?1
               HAVING COUNT(*) > 0 -- Prevent MIN(expr) from returning NULL when there are no rows.
               ORDER BY timestamp_sent DESC"),
             (rfc724_mid,),
