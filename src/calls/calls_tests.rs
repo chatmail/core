@@ -52,7 +52,7 @@ async fn setup_call() -> Result<CallSetup> {
     bob2.create_chat(&alice).await;
 
     let test_msg_id = alice
-        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string())
+        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string(), true)
         .await?;
     let sent1 = alice.pop_sent_msg().await;
     assert_eq!(sent1.sender_msg_id, test_msg_id);
@@ -525,13 +525,6 @@ async fn test_update_call_text() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sdp_has_video() {
-    assert!(sdp_has_video("foobar").is_err());
-    assert_eq!(sdp_has_video(PLACE_INFO).unwrap(), false);
-    assert_eq!(sdp_has_video(PLACE_INFO_VIDEO).unwrap(), true);
-}
-
 /// Tests that calls are forwarded as text messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_call() -> Result<()> {
@@ -542,7 +535,7 @@ async fn test_forward_call() -> Result<()> {
 
     let alice_bob_chat = alice.create_chat(bob).await;
     let alice_msg_id = alice
-        .place_outgoing_call(alice_bob_chat.id, PLACE_INFO.to_string())
+        .place_outgoing_call(alice_bob_chat.id, PLACE_INFO.to_string(), true)
         .await
         .context("Failed to place a call")?;
     let alice_call = Message::load_from_db(alice, alice_msg_id).await?;
