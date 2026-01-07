@@ -850,11 +850,10 @@ impl Message {
 
         let contact = if self.from_id != ContactId::SELF {
             match chat.typ {
-                Chattype::Group
-                | Chattype::OutBroadcast
-                | Chattype::InBroadcast
-                | Chattype::Mailinglist => Some(Contact::get_by_id(context, self.from_id).await?),
-                Chattype::Single => None,
+                Chattype::Group | Chattype::Mailinglist => {
+                    Some(Contact::get_by_id(context, self.from_id).await?)
+                }
+                Chattype::Single | Chattype::OutBroadcast | Chattype::InBroadcast => None,
             }
         } else {
             None

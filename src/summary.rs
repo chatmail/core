@@ -98,14 +98,13 @@ impl Summary {
         let prefix = if msg.state == MessageState::OutDraft {
             Some(SummaryPrefix::Draft(stock_str::draft(context).await))
         } else if msg.from_id == ContactId::SELF {
-            if msg.is_info() || msg.viewtype == Viewtype::Call {
+            if msg.is_info() || msg.viewtype == Viewtype::Call || chat.typ == Chattype::OutBroadcast
+            {
                 None
             } else {
                 Some(SummaryPrefix::Me(stock_str::self_msg(context).await))
             }
         } else if chat.typ == Chattype::Group
-            || chat.typ == Chattype::OutBroadcast
-            || chat.typ == Chattype::InBroadcast
             || chat.typ == Chattype::Mailinglist
             || chat.is_self_talk()
         {
