@@ -469,10 +469,11 @@ mod tests {
     use super::*;
     use crate::chat::save_msgs;
     use crate::chat::{
-        add_contact_to_chat, create_group, get_chat_contacts, remove_contact_from_chat,
-        send_text_msg, set_chat_name,
+        add_contact_to_chat, create_broadcast, create_group, get_chat_contacts,
+        remove_contact_from_chat, send_text_msg, set_chat_name,
     };
     use crate::receive_imf::receive_imf;
+    use crate::securejoin::get_securejoin_qr;
     use crate::stock_str::StockMessage;
     use crate::test_utils::TestContext;
     use crate::test_utils::TestContextManager;
@@ -799,6 +800,32 @@ mod tests {
         let chatlist = Chatlist::try_load(&bob, 0, None, None).await?;
         let summary = chatlist.get_summary(&bob, 0, None).await?;
         assert_eq!(summary.prefix.unwrap().to_string(), "alice@example.org");
+        assert_eq!(summary.text, "hi");
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_no_summary_prefix_for_channel() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = tcm.alice().await;
+        let bob = tcm.bob().await;
+
+        let alice_chat_id = create_broadcast(&alice, "alice's channel".to_string()).await?;
+        let qr = get_securejoin_qr(&alice, Some(alice_chat_id)).await?;
+        tcm.exec_securejoin_qr(&bob, &alice, &qr).await;
+
+        send_text_msg(&alice, alice_chat_id, "hi".into()).await?;
+        let sent1 = alice.pop_sent_msg().await;
+        let chatlist = Chatlist::try_load(&alice, 0, None, None).await?;
+        let summary = chatlist.get_summary(&alice, 0, None).await?;
+        assert!(summary.prefix.is_none());
+        assert_eq!(summary.text, "hi");
+
+        bob.recv_msg(&sent1).await;
+        let chatlist = Chatlist::try_load(&bob, 0, None, None).await?;
+        let summary = chatlist.get_summary(&bob, 0, None).await?;
+        assert!(summary.prefix.is_none());
         assert_eq!(summary.text, "hi");
 
         Ok(())
