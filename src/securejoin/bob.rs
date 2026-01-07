@@ -27,7 +27,7 @@ use crate::tools::{smeared_time, time};
 /// If Bob already has Alice's key, he sends `AUTH` token
 /// and forgets about the invite.
 /// If Bob does not yet have Alice's key, he sends `vc-request`
-/// or `vg-request` message and stores a row in the `bobstate` table
+/// message and stores a row in the `bobstate` table
 /// so he can check Alice's key against the fingerprint
 /// and send `AUTH` token later.
 ///
@@ -301,14 +301,14 @@ pub(crate) async fn send_handshake_message(
 ) -> Result<()> {
     let mut msg = Message {
         viewtype: Viewtype::Text,
-        text: step.body_text(invite),
+        text: step.body_text(),
         hidden: true,
         ..Default::default()
     };
     msg.param.set_cmd(SystemMessage::SecurejoinMessage);
 
     // Sends the step in Secure-Join header.
-    msg.param.set(Param::Arg, step.securejoin_header(invite));
+    msg.param.set(Param::Arg, step.securejoin_header());
 
     match step {
         BobHandshakeMsg::Request => {
@@ -345,9 +345,9 @@ pub(crate) async fn send_handshake_message(
 
 /// Identifies the SecureJoin handshake messages Bob can send.
 pub(crate) enum BobHandshakeMsg {
-    /// vc-request or vg-request
+    /// vc-request
     Request,
-    /// vc-request-with-auth or vg-request-with-auth
+    /// vc-request-with-auth
     RequestWithAuth,
 }
 
@@ -357,8 +357,8 @@ impl BobHandshakeMsg {
     /// This text has no significance to the protocol, but would be visible if users see
     /// this email message directly, e.g. when accessing their email without using
     /// DeltaChat.
-    fn body_text(&self, invite: &QrInvite) -> String {
-        format!("Secure-Join: {}", self.securejoin_header(invite))
+    fn body_text(&self) -> String {
+        format!("Secure-Join: {}", self.securejoin_header())
     }
 
     /// Returns the `Secure-Join` header value.
@@ -366,18 +366,10 @@ impl BobHandshakeMsg {
     /// This identifies the step this message is sending information about.  Most protocol
     /// steps include additional information into other headers, see
     /// [`send_handshake_message`] for these.
-    fn securejoin_header(&self, invite: &QrInvite) -> &'static str {
+    fn securejoin_header(&self) -> &'static str {
         match self {
-            Self::Request => match invite {
-                QrInvite::Contact { .. } => "vc-request",
-                QrInvite::Group { .. } => "vg-request",
-                QrInvite::Broadcast { .. } => "vg-request",
-            },
-            Self::RequestWithAuth => match invite {
-                QrInvite::Contact { .. } => "vc-request-with-auth",
-                QrInvite::Group { .. } => "vg-request-with-auth",
-                QrInvite::Broadcast { .. } => "vg-request-with-auth",
-            },
+            Self::Request => "vc-request",
+            Self::RequestWithAuth => "vc-request-with-auth",
         }
     }
 }
@@ -447,7 +439,7 @@ async fn joining_chat_id(
 /// This has an `From<JoinerProgress> for usize` impl yielding numbers between 0 and a 1000
 /// which can be shown as a progress bar.
 pub(crate) enum JoinerProgress {
-    /// vg-vc-request-with-auth sent.
+    /// vc-request-with-auth sent.
     ///
     /// Typically shows as "alice@addr verified, introducing myself."
     RequestWithAuthSent,
