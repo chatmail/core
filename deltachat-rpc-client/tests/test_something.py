@@ -748,29 +748,46 @@ def test_download_small_msg_first(acfactory, tmp_path):
     assert bob1.wait_for_incoming_msg().get_snapshot().text == ""
 
 
-def test_delete_available_msg(acfactory, tmp_path, direct_imap):
+@pytest.mark.parametrize("delete_chat", [False, True])
+def test_delete_available_msg(acfactory, tmp_path, direct_imap, delete_chat):
+    """
+    Tests `DownloadState.AVAILABLE` message deletion on the receiver side.
+    Also tests pre- and post-message deletion on the sender side.
+    """
     # Min. UI setting as of v2.35
     download_limit = 163840
-
     alice, bob = acfactory.get_online_accounts(2)
-    alice.set_config("bcc_self", "1")
     bob.set_config("download_limit", str(download_limit))
+    # Avoid immediate deletion from the server
+    alice.set_config("bcc_self", "1")
+    bob.set_config("bcc_self", "1")
 
-    chat = alice.create_chat(bob)
+    chat_alice = alice.create_chat(bob)
     path = tmp_path / "large"
     path.write_bytes(os.urandom(download_limit + 1))
-    alice_msg = chat.send_file(str(path))
-    bob_msg = bob.wait_for_incoming_msg()
-    assert bob_msg.get_snapshot().download_state == DownloadState.AVAILABLE
+    msg_alice = chat_alice.send_file(str(path))
+    msg_bob = bob.wait_for_incoming_msg()
+    msg_bob_snapshot = msg_bob.get_snapshot()
+    assert msg_bob_snapshot.download_state == DownloadState.AVAILABLE
+    chat_bob = bob.get_chat_by_id(msg_bob_snapshot.chat_id)
 
-    bob.delete_messages([bob_msg])
-    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
-    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
     # Avoid DeleteMessages sync message
+    bob.set_config("bcc_self", "0")
+    if delete_chat:
+        chat_bob.delete()
+    else:
+        bob.delete_messages([msg_bob])
+    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
+    alice.wait_for_event(EventType.SMTP_MESSAGE_SENT)
     alice.set_config("bcc_self", "0")
-    alice.delete_messages([alice_msg])
+    if delete_chat:
+        chat_alice.delete()
+    else:
+        alice.delete_messages([msg_alice])
     for acc in [bob, alice]:
-        acc.wait_for_event(EventType.MSG_DELETED)
+        if not delete_chat:
+            acc.wait_for_event(EventType.MSG_DELETED)
+        acc_direct_imap = direct_imap(acc)
         # Messages may be deleted separately
         while True:
             acc.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
@@ -778,7 +795,7 @@ def test_delete_available_msg(acfactory, tmp_path, direct_imap):
                 event = acc.wait_for_event()
                 if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
                     break
-            if len(direct_imap(acc).get_all_messages()) == 0:
+            if len(acc_direct_imap.get_all_messages()) == 0:
                 break
 
 

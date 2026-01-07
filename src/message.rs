@@ -131,8 +131,8 @@ impl MsgId {
             .sql
             .execute(
                 // If you change which information is preserved here, also change
-                // `delete_expired_messages()` and which information `receive_imf::add_parts()`
-                // still adds to the db if chat_id is TRASH.
+                // `ChatId::delete_ex()`, `delete_expired_messages()` and which information
+                // `receive_imf::add_parts()` still adds to the db if chat_id is TRASH.
                 "
 INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
 SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1

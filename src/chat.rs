@@ -643,7 +643,15 @@ impl ChatId {
                     "DELETE FROM msgs_mdns WHERE msg_id IN (SELECT id FROM msgs WHERE chat_id=?)",
                     (self,),
                 )?;
-                transaction.execute("DELETE FROM msgs WHERE chat_id=?", (self,))?;
+                // If you change which information is preserved here, also change `MsgId::trash()`
+                // and other places it references.
+                transaction.execute(
+                    "
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
+SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
+                    ",
+                    (DC_CHAT_ID_TRASH, self),
+                )?;
                 transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (self,))?;
                 transaction.execute("DELETE FROM chats WHERE id=?", (self,))?;
                 Ok(())
