@@ -22,6 +22,7 @@ typedef struct _dc_lot       dc_lot_t;
 typedef struct _dc_provider  dc_provider_t;
 typedef struct _dc_event     dc_event_t;
 typedef struct _dc_event_emitter dc_event_emitter_t;
+typedef struct _dc_event_channel dc_event_channel_t;
 typedef struct _dc_jsonrpc_instance dc_jsonrpc_instance_t;
 typedef struct _dc_backup_provider dc_backup_provider_t;
 
@@ -3093,7 +3094,7 @@ int dc_receive_backup (dc_context_t* context, const char* qr);
 
 /**
  * Create a new account manager.
- * The account manager takes an directory
+ * The account manager takes a directory
  * where all context-databases are placed in.
  * To add a context to the account manager,
  * use dc_accounts_add_account() or dc_accounts_migrate_account().
@@ -3115,6 +3116,35 @@ int dc_receive_backup (dc_context_t* context, const char* qr);
  */
 dc_accounts_t* dc_accounts_new                  (const char* dir, int writable);
 
+/**
+ * Create a new account manager with an existing events channel,
+ * which allows you to see events emitted during startup.
+ * 
+ * The account manager takes a directory
+ * where all context-databases are placed in.
+ * To add a context to the account manager,
+ * use dc_accounts_add_account() or dc_accounts_migrate_account().
+ * All account information are persisted.
+ * To remove a context from the account manager,
+ * use dc_accounts_remove_account().
+ *
+ * @memberof dc_accounts_t
+ * @param dir The directory to create the context-databases in.
+ *     If the directory does not exist,
+ *     dc_accounts_new_with_event_channel() will try to create it.
+ * @param writable Whether the returned account manager is writable, i.e. calling these functions on
+ *     it is possible: dc_accounts_add_account(), dc_accounts_add_closed_account(),
+ *     dc_accounts_migrate_account(), dc_accounts_remove_account(), dc_accounts_select_account().
+ * @param dc_event_channel_t Events Channel to be used for this accounts manager, 
+ *      create one with dc_event_channel_new().
+ *      This channel is consumed by this method and can not be used again afterwards,
+ *      so be sure to call `dc_event_channel_get_event_emitter` before.
+ * @return An account manager object.
+ *     The object must be passed to the other account manager functions
+ *     and must be freed using dc_accounts_unref() after usage.
+ *     On errors, NULL is returned.
+ */
+dc_accounts_t* dc_accounts_new_with_event_channel(const char* dir, int writable, dc_event_channel_t* events_channel);
 
 /**
  * Free an account manager object.
@@ -3355,8 +3385,12 @@ void           dc_accounts_set_push_device_token (dc_accounts_t* accounts, const
  *     Must be freed using dc_event_emitter_unref() after usage.
  *
  * Note: Use only one event emitter per account manager.
- * Having more than one event emitter running at the same time on the same account manager
- * will result in events randomly delivered to the one or to the other.
+ * The result of having multiple event emitters is unspecified.
+ * Currently events are broadcasted to all existing event emitters,
+ * but previous versions delivered events to only one event emitter
+ * and this behavior may change again in the future.
+ * Events emitted before creation of event emitter
+ * are not available to event emitter.
  */
 dc_event_emitter_t* dc_accounts_get_event_emitter (dc_accounts_t* accounts);
 
@@ -5999,6 +6033,62 @@ char* dc_jsonrpc_next_response(dc_jsonrpc_instance_t* jsonrpc_instance);
  *     If there is no response, NULL is returned.
  */
 char* dc_jsonrpc_blocking_call(dc_jsonrpc_instance_t* jsonrpc_instance, const char *input);
+
+/**
+ * @class dc_event_channel_t
+ *
+ * Opaque object that is used to create an event emitter which can be used log events during startup of an accounts manger.
+ * Only used for dc_accounts_new_with_event_channel().
+ * To use it:
+ *   1. create an events channel with `dc_event_channel_new()`.
+ *   2. get an event emitter for it with `dc_event_channel_get_event_emitter()`.
+ *   3. use it to create your account manager with `dc_accounts_new_with_event_channel()`, which consumes the channel.
+ *   4. free the empty channel wrapper object with `dc_event_channel_unref()`.
+ */
+
+ /**
+  * Create a new event channel.
+  *
+  * @memberof dc_event_channel_t
+  * @return An event channel wrapper object (dc_event_channel_t).
+  */
+ dc_event_channel_t* dc_event_channel_new();
+ 
+ /**
+  * Release/free the events channel structure.
+  * This function releases the memory of the `dc_event_channel_t` structure.
+  *
+  * you can call it after calling dc_accounts_new_with_event_channel,
+  * which took the events channel out of it already, so this just frees the underlying option.
+  * 
+  * @memberof dc_event_channel_t
+  */
+void dc_event_channel_unref(dc_event_channel_t* event_channel);
+
+/**
+ * Create the event emitter that is used to receive events.
+ * 
+ * The library will emit various @ref DC_EVENT events, such as "new message", "message read" etc.
+ * To get these events, you have to create an event emitter using this function
+ * and call dc_get_next_event() on the emitter.
+ *
+ * This is similar to dc_get_event_emitter(), which, however,
+ * must not be called for accounts handled by the account manager.
+ * 
+ * @memberof dc_event_channel_t
+ * @param The event channel.
+ * @return Returns the event emitter, NULL on errors.
+ *     Must be freed using dc_event_emitter_unref() after usage.
+ * 
+ * Note: Use only one event emitter per account manager / event channel.
+ * The result of having multiple event emitters is unspecified.
+ * Currently events are broadcasted to all existing event emitters,
+ * but previous versions delivered events to only one event emitter
+ * and this behavior may change again in the future.
+ * Events emitted before creation of event emitter
+ * are not available to event emitter.
+ */
+dc_event_emitter_t* dc_event_channel_get_event_emitter(dc_event_channel_t* event_channel);
 
 /**
  * @class dc_event_emitter_t
