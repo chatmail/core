@@ -475,8 +475,7 @@ impl Context {
             };
             match &quota.recent {
                 Err(e) => {
-                    let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("{error_escaped}");
+                    ret += &escaper::encode_minimal(&e.to_string());
                 }
                 Ok(quota) => {
                     if quota.is_empty() {
