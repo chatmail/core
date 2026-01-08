@@ -4828,7 +4828,11 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     // before initializing the account manager,
     // so that you don't miss events/errors during initialisation.
     // It also prevents you from using the same channel on multiple account managers.
-    let Some(event_channel) = (*event_channel).blocking_lock().take() else {
+    let Some(event_channel) = (*event_channel)
+        .lock()
+        .expect("call to dc_event_channel_get_event_emitter() failed: mutex is poisoned")
+        .take()
+    else {
         eprintln!(
             "ignoring careless call to dc_accounts_new_with_event_channel()
             -> channel was already consumed"
