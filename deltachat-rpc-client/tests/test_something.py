@@ -799,6 +799,42 @@ def test_delete_available_msg(acfactory, tmp_path, direct_imap, delete_chat):
                 break
 
 
+def test_delete_fully_downloaded_msg(acfactory, tmp_path, direct_imap):
+    alice, bob = acfactory.get_online_accounts(2)
+    # Avoid immediate deletion from the server
+    bob.set_config("bcc_self", "1")
+
+    chat_alice = alice.create_chat(bob)
+    path = tmp_path / "large"
+    # Big enough to be sent with a pre-message
+    path.write_bytes(os.urandom(300000))
+    chat_alice.send_file(str(path))
+
+    msg = bob.wait_for_incoming_msg()
+    msg_snapshot = msg.get_snapshot()
+    assert msg_snapshot.download_state == DownloadState.AVAILABLE
+    msgs_changed_event = bob.wait_for_msgs_changed_event()
+    assert msgs_changed_event.msg_id == msg.id
+    msg_snapshot = msg.get_snapshot()
+    assert msg_snapshot.download_state == DownloadState.DONE
+
+    bob_direct_imap = direct_imap(bob)
+    assert len(bob_direct_imap.get_all_messages()) == 2
+    # Avoid DeleteMessages sync message
+    bob.set_config("bcc_self", "0")
+    bob.delete_messages([msg])
+    bob.wait_for_event(EventType.MSG_DELETED)
+    # Messages may be deleted separately
+    while True:
+        bob.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
+        while True:
+            event = bob.wait_for_event()
+            if event.kind == EventType.INFO and "Close/expunge succeeded." in event.msg:
+                break
+        if len(bob_direct_imap.get_all_messages()) == 0:
+            break
+
+
 def test_markseen_contact_request(acfactory):
     """
     Test that seen status is synchronized for contact request messages
