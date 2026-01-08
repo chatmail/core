@@ -950,6 +950,7 @@ pub(crate) async fn receive_imf_inner(
                     ),
                 )
                 .await?;
+            context.scheduler.interrupt_inbox().await;
         }
         if target.is_none() && !mime_parser.mdn_reports.is_empty() && mime_parser.has_chat_version()
         {
