@@ -1,5 +1,40 @@
 # Changelog
 
+## [2.37.0] - 2026-01-08
+
+### API-Changes
+
+- JSON-RPC API `get_all_ui_config_keys` to get all "ui.*" config keys ([#7579](https://github.com/chatmail/core/pull/7579)).
+- Add `who_can_call_me` config option.
+- cffi api to create account manager with existing events channel to see events emitted during startup. `dc_event_channel_new`, `dc_event_channel_unref`, `dc_event_channel_get_event_emitter` and `dc_accounts_new_with_event_channel` ([#7609](https://github.com/chatmail/core/pull/7609)).
+
+### Features / Changes
+
+- Config option to skip seen synchronization ([#7694](https://github.com/chatmail/core/pull/7694)).
+- More text instead of sender in channel summary.
+
+### Fixes
+
+- Do not rely on Secure-Join header to detect {vc,vg}-request.
+
+### Documentation
+
+- Update instructions to UI where to display the address.
+
+### Miscellaneous Tasks
+
+- cargo: bump rsa from 0.9.9 to 0.9.10.
+- Update lru 0.12.3 to 0.12.5 and add RUSTSEC-2026-0002 exception.
+
+### Refactor
+
+- ffi: Replace implicit drop in cffi with explicit `drop(Arc::from_raw(var))` ([#7664](https://github.com/chatmail/core/pull/7664)).
+
+### Tests
+
+- Regression test for vc-request encrypted by the server.
+- Test that channel summary does not have sender name.
+
 ## [2.36.0] - 2026-01-03
 
 ### CI
@@ -7507,3 +7542,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.34.0]: https://github.com/chatmail/core/compare/v2.33.0..v2.34.0
 [2.35.0]: https://github.com/chatmail/core/compare/v2.34.0..v2.35.0
 [2.36.0]: https://github.com/chatmail/core/compare/v2.35.0..v2.36.0
+[2.37.0]: https://github.com/chatmail/core/compare/v2.36.0..v2.37.0
