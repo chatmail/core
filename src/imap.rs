@@ -1112,6 +1112,11 @@ impl Session {
 
     /// Stores pending `\Seen` flags for messages in `imap_markseen` table.
     pub(crate) async fn store_seen_flags_on_imap(&mut self, context: &Context) -> Result<()> {
+        if context.get_config_bool(Config::TeamProfile).await? {
+            info!(context, "Team profile, skipping seen flag synchronization.");
+            return Ok(());
+        }
+
         let rows = context
             .sql
             .query_map_vec(
@@ -1177,6 +1182,11 @@ impl Session {
                 context,
                 "Server does not support CONDSTORE, skipping flag synchronization."
             );
+            return Ok(());
+        }
+
+        if context.get_config_bool(Config::TeamProfile).await? {
+            info!(context, "Team profile, skipping seen flag synchronization.");
             return Ok(());
         }
 

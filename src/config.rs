@@ -452,6 +452,10 @@ pub enum Config {
     /// The options are from the `WhoCanCallMe` enum.
     #[strum(props(default = "1"))]
     WhoCanCallMe,
+
+    /// Experimental option denoting that the current profile is shared between multiple team members.
+    /// For now, the only effect of this option is that seen flags are not synchronized.
+    TeamProfile,
 }
 
 impl Config {
