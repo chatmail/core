@@ -17,7 +17,7 @@ use std::fmt::Write;
 use std::future::Future;
 use std::ptr;
 use std::str::FromStr;
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
@@ -39,7 +39,7 @@ use deltachat_jsonrpc::yerpc::{OutReceiver, RpcClient, RpcSession};
 use message::Viewtype;
 use num_traits::{FromPrimitive, ToPrimitive};
 use tokio::runtime::Runtime;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 mod dc_array;
@@ -4795,7 +4795,10 @@ pub unsafe extern "C" fn dc_event_channel_get_event_emitter(
         return ptr::null_mut();
     }
 
-    let Some(event_channel) = &*(*event_channel).blocking_lock() else {
+    let Some(event_channel) = &*(*event_channel)
+        .lock()
+        .expect("call to dc_event_channel_get_event_emitter() failed: mutex is poisoned")
+    else {
         eprintln!(
             "ignoring careless call to dc_event_channel_get_event_emitter() 
             -> channel was already consumed, make sure you call this before dc_accounts_new_with_event_channel"
