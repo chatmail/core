@@ -100,7 +100,7 @@ class Client:
         if self.is_configured():
             self.account.start_io()
         self._process_messages()  # Process old messages.
-        self._process_events(until_func=func)  # Loop over incoming events
+        return self._process_events(until_func=func)  # Loop over incoming events
 
     def _process_events(
         self,
