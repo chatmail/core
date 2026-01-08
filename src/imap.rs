@@ -1143,13 +1143,16 @@ impl Session {
             return Ok(());
         }
 
+        let transport_id = self.transport_id();
         let rows = context
             .sql
             .query_map_vec(
                 "SELECT imap.id, uid, folder FROM imap, imap_markseen
-                 WHERE imap.id = imap_markseen.id AND target = folder
+                 WHERE imap.id = imap_markseen.id
+                 AND imap.transport_id=?
+                 AND target = folder
                  ORDER BY folder, uid",
-                [],
+                (transport_id,),
                 |row| {
                     let rowid: i64 = row.get(0)?;
                     let uid: u32 = row.get(1)?;
