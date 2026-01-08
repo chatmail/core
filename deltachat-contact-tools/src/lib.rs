@@ -104,14 +104,7 @@ pub fn sanitize_name_and_addr(name: &str, addr: &str) -> (String, String) {
     } else {
         (name, addr.to_string())
     };
-    let mut name = sanitize_name(name);
-
-    // If the 'display name' is just the address, remove it:
-    // Otherwise, the contact would sometimes be shown as "alice@example.com (alice@example.com)" (see `get_name_n_addr()`).
-    // If the display name is empty, DC will just show the address when it needs a display name.
-    if name == addr {
-        name = "".to_string();
-    }
+    let name = sanitize_name(name);
 
     (name, addr)
 }

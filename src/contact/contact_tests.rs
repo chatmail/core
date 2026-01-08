@@ -192,7 +192,6 @@ async fn test_add_or_lookup() {
     assert_eq!(contact.get_authname(), "bla foo");
     assert_eq!(contact.get_display_name(), "Name one");
     assert_eq!(contact.get_addr(), "one@eins.org");
-    assert_eq!(contact.get_name_n_addr(), "Name one (one@eins.org)");
 
     // modify first added contact
     let (contact_id_test, sth_modified) = Contact::add_or_lookup(
@@ -225,7 +224,6 @@ async fn test_add_or_lookup() {
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "three@drei.sam");
     assert_eq!(contact.get_addr(), "three@drei.sam");
-    assert_eq!(contact.get_name_n_addr(), "three@drei.sam");
 
     // add name to third contact from incoming message (this becomes authorized name)
     let (contact_id_test, sth_modified) = Contact::add_or_lookup(
@@ -239,7 +237,6 @@ async fn test_add_or_lookup() {
     assert_eq!(contact_id, contact_id_test);
     assert_eq!(sth_modified, Modifier::Modified);
     let contact = Contact::get_by_id(&t, contact_id).await.unwrap();
-    assert_eq!(contact.get_name_n_addr(), "m. serious (three@drei.sam)");
     assert!(!contact.is_blocked());
 
     // manually edit name of third contact (does not changed authorized name)
@@ -255,7 +252,6 @@ async fn test_add_or_lookup() {
     assert_eq!(sth_modified, Modifier::Modified);
     let contact = Contact::get_by_id(&t, contact_id).await.unwrap();
     assert_eq!(contact.get_authname(), "m. serious");
-    assert_eq!(contact.get_name_n_addr(), "schnucki (three@drei.sam)");
     assert!(!contact.is_blocked());
 
     // Fourth contact:
@@ -273,7 +269,6 @@ async fn test_add_or_lookup() {
     assert_eq!(contact.get_name(), "Wonderland, Alice");
     assert_eq!(contact.get_display_name(), "Wonderland, Alice");
     assert_eq!(contact.get_addr(), "alice@w.de");
-    assert_eq!(contact.get_name_n_addr(), "Wonderland, Alice (alice@w.de)");
 
     // check SELF
     let contact = Contact::get_by_id(&t, ContactId::SELF).await.unwrap();
@@ -311,7 +306,6 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_authname(), "");
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "f@example.org");
-    assert_eq!(contact.get_name_n_addr(), "f@example.org");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
     assert_eq!(contacts.len(), 0);
 
@@ -337,7 +331,6 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_authname(), "Flobbyfoo");
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "Flobbyfoo");
-    assert_eq!(contact.get_name_n_addr(), "Flobbyfoo (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
     assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
@@ -367,7 +360,6 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_authname(), "Foo Flobby");
     assert_eq!(contact.get_name(), "");
     assert_eq!(contact.get_display_name(), "Foo Flobby");
-    assert_eq!(contact.get_name_n_addr(), "Foo Flobby (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
     assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("flobbyfoo")).await?;
@@ -385,7 +377,6 @@ async fn test_contact_name_changes() -> Result<()> {
     assert_eq!(contact.get_authname(), "Foo Flobby");
     assert_eq!(contact.get_name(), "Falk");
     assert_eq!(contact.get_display_name(), "Falk");
-    assert_eq!(contact.get_name_n_addr(), "Falk (f@example.org)");
     let contacts = Contact::get_all(&t, 0, Some("f@example.org")).await?;
     assert_eq!(contacts.len(), 0);
     let contacts = Contact::get_all(&t, 0, Some("falk")).await?;

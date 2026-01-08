@@ -1158,11 +1158,11 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
 
             let contact_id = ContactId::new(arg1.parse()?);
             let contact = Contact::get_by_id(&context, contact_id).await?;
-            let name_n_addr = contact.get_name_n_addr();
+            let display_name = contact.get_display_name();
 
             let mut res = format!(
                 "Contact info for: {}:\nIcon: {}\n",
-                name_n_addr,
+                display_name,
                 match contact.get_profile_image(&context).await? {
                     Some(image) => image.to_str().unwrap().to_string(),
                     None => "NoIcon".to_string(),
