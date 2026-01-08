@@ -4816,7 +4816,7 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     dir: *const libc::c_char,
     writable: libc::c_int,
     event_channel: *mut dc_event_channel_t,
-) -> *mut dc_accounts_t {
+) -> *const dc_accounts_t {
     setup_panic!();
 
     if dir.is_null() || event_channel.is_null() {
@@ -4847,7 +4847,7 @@ pub unsafe extern "C" fn dc_accounts_new_with_event_channel(
     ));
 
     match accs {
-        Ok(accs) => Box::into_raw(Box::new(AccountsWrapper::new(accs))),
+        Ok(accs) => Arc::into_raw(Arc::new(RwLock::new(accs))),
         Err(err) => {
             // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
             eprintln!("failed to create accounts: {err:#}");
