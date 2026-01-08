@@ -343,8 +343,17 @@ impl Context {
                     .green {
                         background-color: #34c759;
                     }
+                    .grey {
+                        background-color: #808080;
+                    }
                     .yellow {
                         background-color: #fdc625;
+                    }
+                    .transport {
+                        margin-bottom: 1em;
+                    }
+                    .quota-list {
+                        padding-left: 0;
                     }
                 </style>
             </head>
@@ -419,7 +428,7 @@ impl Context {
                 .map_or(transport_addr.clone(), |email| email.domain);
             let domain_escaped = escaper::encode_minimal(domain);
 
-            ret += "<li>";
+            ret += "<li class=\"transport\">";
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
@@ -467,18 +476,19 @@ impl Context {
             match &quota.recent {
                 Err(e) => {
                     let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("<li>{error_escaped}</li>");
+                    ret += &format!("{error_escaped}");
                 }
                 Ok(quota) => {
                     if quota.is_empty() {
                         ret += &format!(
-                            "<li>Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                            "Warning: {domain_escaped} claims to support quota but gives no information"
                         );
                     } else {
+                        ret += "<ul class=\"quota-list\">";
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += &format!("<li>");
+                                ret += "<li>";
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
@@ -531,7 +541,7 @@ impl Context {
                                 } else if percent >= QUOTA_WARN_THRESHOLD_PERCENTAGE {
                                     "yellow"
                                 } else {
-                                    "green"
+                                    "grey"
                                 };
                                 let div_width_percent = min(100, percent);
                                 ret += &format!(
@@ -541,6 +551,7 @@ impl Context {
                                 ret += "</li>";
                             }
                         }
+                        ret += "</ul>";
                     }
                 }
             }
