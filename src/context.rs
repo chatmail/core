@@ -1106,6 +1106,10 @@ impl Context {
                 .await?
                 .unwrap_or_default(),
         );
+        res.insert(
+            "team_profile",
+            self.get_config_bool(Config::TeamProfile).await?.to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
