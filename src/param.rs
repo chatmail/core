@@ -251,6 +251,13 @@ pub enum Param {
 
     /// For info messages: Contact ID in added or removed to a group.
     ContactAddedRemoved = b'5',
+
+    /// For (pre-)Message: ViewType of the Post-Message,
+    /// because pre message is always `Viewtype::Text`.
+    PostMessageViewtype = b'8',
+
+    /// For (pre-)Message: File byte size of Post-Message attachment
+    PostMessageFileBytes = b'9',
 }
 
 /// An object for handling key=value parameter lists.
@@ -441,6 +448,15 @@ impl Params {
         }
         self
     }
+
+    /// Merge in parameters from other Params struct,
+    /// overwriting the keys that are in both
+    /// with the values from the new Params struct.
+    pub fn merge_in_params(&mut self, new_params: Self) -> &mut Self {
+        let mut new_params = new_params;
+        self.inner.append(&mut new_params.inner);
+        self
+    }
 }
 
 #[cfg(test)]
@@ -501,6 +517,20 @@ mod tests {
         assert_eq!(p.len(), 2);
         assert_eq!(p.get(Param::Width), Some("12"));
         assert_eq!(p.get(Param::Height), Some("14"));
+        Ok(())
+    }
+
+    #[test]
+    fn test_merge() -> Result<()> {
+        let mut p = Params::from_str("w=12\na=5\nh=14")?;
+        let p2 = Params::from_str("L=1\nh=17")?;
+        assert_eq!(p.len(), 3);
+        p.merge_in_params(p2);
+        assert_eq!(p.len(), 4);
+        assert_eq!(p.get(Param::Width), Some("12"));
+        assert_eq!(p.get(Param::Height), Some("17"));
+        assert_eq!(p.get(Param::Forwarded), Some("5"));
+        assert_eq!(p.get(Param::IsEdited), Some("1"));
         Ok(())
     }
 }

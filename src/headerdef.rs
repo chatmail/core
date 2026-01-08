@@ -102,6 +102,21 @@ pub enum HeaderDef {
     /// used to encrypt and decrypt messages.
     /// This secret is sent to a new member in the member-addition message.
     ChatBroadcastSecret,
+    /// A message with a large attachment is split into two messages:
+    /// A pre-message, which contains everything but the attachment,
+    /// and a Post-Message.
+    /// The Pre-Message gets a `Chat-Post-Message-Id` header
+    /// referencing the Post-Message's rfc724_mid.
+    ChatPostMessageId,
+
+    /// Announces Post-Message metadata in a Pre-Message.
+    /// Contains a serialized `PostMsgMetadata` struct.
+    ChatPostMessageMetadata,
+
+    /// This message is preceded by a Pre-Message
+    /// and thus this message can be skipped while fetching messages.
+    /// This is an unprotected header.
+    ChatIsPostMessage,
 
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
@@ -147,6 +162,9 @@ pub enum HeaderDef {
 
 impl HeaderDef {
     /// Returns the corresponding header string.
+    ///
+    /// Format is lower-kebab-case for easy comparisons.
+    /// This method is used in message receiving and testing.
     pub fn get_headername(&self) -> &'static str {
         self.into()
     }

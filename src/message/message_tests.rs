@@ -326,79 +326,7 @@ async fn test_markseen_msgs() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_markseen_not_downloaded_msg() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    alice.set_config(Config::DownloadLimit, Some("1")).await?;
-    let bob = &tcm.bob().await;
-    let bob_chat_id = bob.create_chat(alice).await.id;
-    alice.create_chat(bob).await; // Make sure the chat is accepted.
-
-    tcm.section("Bob sends a large message to Alice");
-    let file_bytes = include_bytes!("../../test-data/image/screenshot.png");
-    let mut msg = Message::new(Viewtype::Image);
-    msg.set_file_from_bytes(bob, "a.jpg", file_bytes, None)?;
-    let sent_msg = bob.send_msg(bob_chat_id, &mut msg).await;
-
-    tcm.section("Alice receives a large message from Bob");
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.download_state, DownloadState::Available);
-    assert!(!msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
-    assert_eq!(msg.state, MessageState::InFresh);
-    markseen_msgs(alice, vec![msg.id]).await?;
-    // A not downloaded message can be seen only if it's seen on another device.
-    assert_eq!(msg.id.get_state(alice).await?, MessageState::InNoticed);
-    // Marking the message as seen again is a no op.
-    markseen_msgs(alice, vec![msg.id]).await?;
-    assert_eq!(msg.id.get_state(alice).await?, MessageState::InNoticed);
-
-    msg.id
-        .update_download_state(alice, DownloadState::InProgress)
-        .await?;
-    markseen_msgs(alice, vec![msg.id]).await?;
-    assert_eq!(msg.id.get_state(alice).await?, MessageState::InNoticed);
-    msg.id
-        .update_download_state(alice, DownloadState::Failure)
-        .await?;
-    markseen_msgs(alice, vec![msg.id]).await?;
-    assert_eq!(msg.id.get_state(alice).await?, MessageState::InNoticed);
-    msg.id
-        .update_download_state(alice, DownloadState::Undecipherable)
-        .await?;
-    markseen_msgs(alice, vec![msg.id]).await?;
-    assert_eq!(msg.id.get_state(alice).await?, MessageState::InNoticed);
-
-    assert!(
-        !alice
-            .sql
-            .exists("SELECT COUNT(*) FROM smtp_mdns", ())
-            .await?
-    );
-
-    alice.set_config(Config::DownloadLimit, None).await?;
-    // Let's assume that Alice and Bob resolved the problem with encryption.
-    let old_msg = msg;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.chat_id, old_msg.chat_id);
-    assert_eq!(msg.download_state, DownloadState::Done);
-    assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
-    assert!(msg.get_showpadlock());
-    // The message state mustn't be downgraded to `InFresh`.
-    assert_eq!(msg.state, MessageState::InNoticed);
-    markseen_msgs(alice, vec![msg.id]).await?;
-    let msg = Message::load_from_db(alice, msg.id).await?;
-    assert_eq!(msg.state, MessageState::InSeen);
-    assert_eq!(
-        alice
-            .sql
-            .count("SELECT COUNT(*) FROM smtp_mdns", ())
-            .await?,
-        1
-    );
-    Ok(())
-}
-
+/// Message has been seen on another device when fully downloaded. `state` should be updated.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -411,24 +339,75 @@ async fn test_msg_seen_on_imap_when_downloaded() -> Result<()> {
     let mut msg = Message::new(Viewtype::Image);
     msg.set_file_from_bytes(bob, "a.jpg", file_bytes, None)?;
     let sent_msg = bob.send_msg(bob_chat_id, &mut msg).await;
-    let msg = alice.recv_msg(&sent_msg).await;
+    let pre_msg = bob.pop_sent_msg().await;
+    let msg = alice.recv_msg(&pre_msg).await;
     assert_eq!(msg.download_state, DownloadState::Available);
     assert_eq!(msg.state, MessageState::InFresh);
 
-    alice.set_config(Config::DownloadLimit, None).await?;
     let seen = true;
     let rcvd_msg = receive_imf(alice, sent_msg.payload().as_bytes(), seen)
-        .await
-        .unwrap()
+        .await?
         .unwrap();
-    assert_eq!(rcvd_msg.chat_id, msg.chat_id);
-    let msg = Message::load_from_db(alice, *rcvd_msg.msg_ids.last().unwrap())
-        .await
-        .unwrap();
+    assert_eq!(rcvd_msg.chat_id, DC_CHAT_ID_TRASH);
+    let msg = Message::load_from_db(alice, msg.id).await?;
     assert_eq!(msg.download_state, DownloadState::Done);
     assert!(msg.param.get_bool(Param::WantsMdn).unwrap_or_default());
     assert!(msg.get_showpadlock());
     assert_eq!(msg.state, MessageState::InSeen);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_pre_and_post_msgs_deleted() -> Result<()> {
+    let reorder = false;
+    test_pre_and_post_msgs_deleted_ex(reorder).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_reordered_pre_and_post_msgs_deleted() -> Result<()> {
+    let reorder = true;
+    test_pre_and_post_msgs_deleted_ex(reorder).await
+}
+
+async fn test_pre_and_post_msgs_deleted_ex(reorder: bool) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+
+    let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    let full_msg = alice.send_msg(alice_chat_id, &mut msg).await;
+    let pre_msg = alice.pop_sent_msg().await;
+
+    let rfc724_mid_pre = bob.parse_msg(&pre_msg).await.get_rfc724_mid().unwrap();
+    let msg = if reorder {
+        let msg = bob.recv_msg(&full_msg).await;
+        bob.recv_msg_trash(&pre_msg).await;
+        Message::load_from_db(bob, msg.id).await?
+    } else {
+        let msg = bob.recv_msg(&pre_msg).await;
+        bob.recv_msg_trash(&full_msg).await;
+        msg
+    };
+    assert_ne!(rfc724_mid_pre, msg.rfc724_mid);
+    for (rfc724_mid, uid) in [(&rfc724_mid_pre, 1), (&msg.rfc724_mid, 2)] {
+        bob.sql
+            .execute(
+                "INSERT INTO imap (transport_id, rfc724_mid, folder, uid, target, uidvalidity) VALUES (1, ?, 'INBOX', ?, 'INBOX', 12345)",
+                (rfc724_mid, uid),
+            )
+            .await?;
+    }
+
+    delete_msgs(bob, &[msg.id]).await?;
+    assert_eq!(
+        bob.sql
+            .count("SELECT COUNT(*) FROM imap WHERE target!=''", ())
+            .await?,
+        0
+    );
     Ok(())
 }
 

@@ -4,7 +4,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
-use humansize::{BINARY, format_size};
 use strum::EnumProperty as EnumPropertyTrait;
 use strum_macros::EnumProperty;
 use tokio::sync::RwLock;
@@ -17,7 +16,6 @@ use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
-use crate::tools::timestamp_to_str;
 
 /// Storage for string translations.
 #[derive(Debug, Clone)]
@@ -166,12 +164,6 @@ pub enum StockMessage {
                     You can check your current storage usage anytime at \"Settings / Connectivity\"."
     ))]
     QuotaExceedingMsgBody = 98,
-
-    #[strum(props(fallback = "%1$s message"))]
-    PartialDownloadMsgBody = 99,
-
-    #[strum(props(fallback = "Download maximum available until %1$s"))]
-    DownloadAvailability = 100,
 
     #[strum(props(fallback = "Multi Device Synchronization"))]
     SyncMsgSubject = 101,
@@ -1119,21 +1111,6 @@ pub(crate) async fn quota_exceeding(context: &Context, highest_usage: u64) -> St
         .replace("%%", "%")
 }
 
-/// Stock string: `%1$s message` with placeholder replaced by human-readable size.
-pub(crate) async fn partial_download_msg_body(context: &Context, org_bytes: u32) -> String {
-    let size = &format_size(org_bytes, BINARY);
-    translated(context, StockMessage::PartialDownloadMsgBody)
-        .await
-        .replace1(size)
-}
-
-/// Stock string: `Download maximum available until %1$s`.
-pub(crate) async fn download_availability(context: &Context, timestamp: i64) -> String {
-    translated(context, StockMessage::DownloadAvailability)
-        .await
-        .replace1(&timestamp_to_str(timestamp))
-}
-
 /// Stock string: `Incoming Messages`.
 pub(crate) async fn incoming_messages(context: &Context) -> String {
     translated(context, StockMessage::IncomingMessages).await
@@ -1252,6 +1229,25 @@ pub(crate) async fn proxy_description(context: &Context) -> String {
 /// Stock string: `Messages in this chat use classic email and are not encrypted.`.
 pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
     translated(context, StockMessage::ChatUnencryptedExplanation).await
+}
+
+impl Viewtype {
+    /// returns Localized name for message viewtype
+    pub async fn to_locale_string(&self, context: &Context) -> String {
+        match self {
+            Viewtype::Image => image(context).await,
+            Viewtype::Gif => gif(context).await,
+            Viewtype::Sticker => sticker(context).await,
+            Viewtype::Audio => audio(context).await,
+            Viewtype::Voice => voice_message(context).await,
+            Viewtype::Video => video(context).await,
+            Viewtype::File => file(context).await,
+            Viewtype::Webxdc => "Mini App".to_owned(),
+            Viewtype::Vcard => "👤".to_string(),
+            // The following shouldn't normally be shown to users, so translations aren't needed.
+            Viewtype::Unknown | Viewtype::Text | Viewtype::Call => self.to_string(),
+        }
+    }
 }
 
 impl Context {

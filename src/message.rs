@@ -8,6 +8,9 @@ use std::str;
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
 use deltachat_derive::{FromSql, ToSql};
+use humansize::BINARY;
+use humansize::format_size;
+use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, io};
 
@@ -128,10 +131,12 @@ impl MsgId {
             .sql
             .execute(
                 // If you change which information is preserved here, also change
-                // `delete_expired_messages()` and which information `receive_imf::add_parts()`
-                // still adds to the db if chat_id is TRASH.
-                "INSERT OR REPLACE INTO msgs (id, rfc724_mid, timestamp, chat_id, deleted)
-                 SELECT ?1, rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1",
+                // `ChatId::delete_ex()`, `delete_expired_messages()` and which information
+                // `receive_imf::add_parts()` still adds to the db if chat_id is TRASH.
+                "
+INSERT OR REPLACE INTO msgs (id, rfc724_mid, pre_rfc724_mid, timestamp, chat_id, deleted)
+SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
+                ",
                 (self, DC_CHAT_ID_TRASH, on_server),
             )
             .await?;
@@ -430,6 +435,10 @@ pub struct Message {
     pub(crate) ephemeral_timer: EphemeralTimer,
     pub(crate) ephemeral_timestamp: i64,
     pub(crate) text: String,
+    /// Text that is added to the end of Message.text
+    ///
+    /// Currently used for adding the download information on pre-messages
+    pub(crate) additional_text: String,
 
     /// Message subject.
     ///
@@ -438,6 +447,8 @@ pub struct Message {
 
     /// `Message-ID` header value.
     pub(crate) rfc724_mid: String,
+    /// `Message-ID` header value of the pre-message, if any.
+    pub(crate) pre_rfc724_mid: String,
 
     /// `In-Reply-To` header value.
     pub(crate) in_reply_to: Option<String>,
@@ -488,13 +499,14 @@ impl Message {
             !id.is_special(),
             "Can not load special message ID {id} from DB"
         );
-        let msg = context
+        let mut msg = context
             .sql
             .query_row_optional(
                 concat!(
                     "SELECT",
                     "    m.id AS id,",
                     "    rfc724_mid AS rfc724mid,",
+                    "    pre_rfc724_mid AS pre_rfc724mid,",
                     "    m.mime_in_reply_to AS mime_in_reply_to,",
                     "    m.chat_id AS chat_id,",
                     "    m.from_id AS from_id,",
@@ -550,6 +562,7 @@ impl Message {
                     let msg = Message {
                         id: row.get("id")?,
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
+                        pre_rfc724_mid: row.get::<_, String>("pre_rfc724mid")?,
                         in_reply_to: row
                             .get::<_, Option<String>>("mime_in_reply_to")?
                             .and_then(|in_reply_to| parse_message_id(&in_reply_to).ok()),
@@ -570,6 +583,7 @@ impl Message {
                         original_msg_id: row.get("original_msg_id")?,
                         mime_modified: row.get("mime_modified")?,
                         text,
+                        additional_text: String::new(),
                         subject: row.get("subject")?,
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
                         hidden: row.get("hidden")?,
@@ -584,7 +598,46 @@ impl Message {
             .await
             .with_context(|| format!("failed to load message {id} from the database"))?;
 
+        if let Some(msg) = &mut msg {
+            msg.additional_text =
+                Self::get_additional_text(context, msg.download_state, &msg.param).await?;
+        }
+
         Ok(msg)
+    }
+
+    /// Returns additional text which is appended to the message's text field
+    /// when it is loaded from the database.
+    /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
+    async fn get_additional_text(
+        context: &Context,
+        download_state: DownloadState,
+        param: &Params,
+    ) -> Result<String> {
+        if download_state != DownloadState::Done {
+            let file_size = param
+                .get(Param::PostMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+                .map(|file_size: usize| format_size(file_size, BINARY))
+                .unwrap_or("?".to_owned());
+            let viewtype = param
+                .get_i64(Param::PostMessageViewtype)
+                .and_then(Viewtype::from_i64)
+                .unwrap_or(Viewtype::Unknown);
+            let file_name = param
+                .get(Param::Filename)
+                .map(sanitize_filename)
+                .unwrap_or("?".to_owned());
+
+            return match viewtype {
+                Viewtype::File => Ok(format!(" [{file_name} – {file_size}]")),
+                _ => {
+                    let translated_viewtype = viewtype.to_locale_string(context).await;
+                    Ok(format!(" [{translated_viewtype} – {file_size}]"))
+                }
+            };
+        }
+        Ok(String::new())
     }
 
     /// Returns the MIME type of an attached file if it exists.
@@ -768,8 +821,11 @@ impl Message {
     }
 
     /// Returns the text of the message.
+    ///
+    /// Currently this includes `additional_text`, but this may change in future, when the UIs show
+    /// the necessary info themselves.
     pub fn get_text(&self) -> String {
-        self.text.clone()
+        self.text.clone() + &self.additional_text
     }
 
     /// Returns message subject.
@@ -791,7 +847,16 @@ impl Message {
     }
 
     /// Returns the size of the file in bytes, if applicable.
+    /// If message is a pre-message, then this returns the size of the file to be downloaded.
     pub async fn get_filebytes(&self, context: &Context) -> Result<Option<u64>> {
+        if self.download_state != DownloadState::Done
+            && let Some(file_size) = self
+                .param
+                .get(Param::PostMessageFileBytes)
+                .and_then(|s| s.parse().ok())
+        {
+            return Ok(Some(file_size));
+        }
         if let Some(path) = self.param.get_file_path(context)? {
             Ok(Some(get_filebytes(context, &path).await.with_context(
                 || format!("failed to get {} size in bytes", path.display()),
@@ -799,6 +864,19 @@ impl Message {
         } else {
             Ok(None)
         }
+    }
+
+    /// If message is a Pre-Message,
+    /// then this returns the viewtype it will have when it is downloaded.
+    #[cfg(test)]
+    pub(crate) fn get_post_message_viewtype(&self) -> Option<Viewtype> {
+        if self.download_state != DownloadState::Done {
+            return self
+                .param
+                .get_i64(Param::PostMessageViewtype)
+                .and_then(Viewtype::from_i64);
+        }
+        None
     }
 
     /// Returns width of associated image or video file.
@@ -1678,11 +1756,20 @@ pub async fn delete_msgs_ex(
 
         let target = context.get_delete_msgs_target().await?;
         let update_db = |trans: &mut rusqlite::Transaction| {
-            trans.execute(
-                "UPDATE imap SET target=? WHERE rfc724_mid=?",
-                (target, msg.rfc724_mid),
-            )?;
+            let mut stmt = trans.prepare("UPDATE imap SET target=? WHERE rfc724_mid=?")?;
+            stmt.execute((&target, &msg.rfc724_mid))?;
+            if !msg.pre_rfc724_mid.is_empty() {
+                stmt.execute((&target, &msg.pre_rfc724_mid))?;
+            }
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
+            trans.execute(
+                "DELETE FROM download WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
+            trans.execute(
+                "DELETE FROM available_post_msgs WHERE rfc724_mid=?",
+                (&msg.rfc724_mid,),
+            )?;
             Ok(())
         };
         if let Err(e) = context.sql.transaction(update_db).await {
@@ -1751,7 +1838,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 "SELECT
                     m.chat_id AS chat_id,
                     m.state AS state,
-                    m.download_state as download_state,
                     m.ephemeral_timer AS ephemeral_timer,
                     m.param AS param,
                     m.from_id AS from_id,
@@ -1764,7 +1850,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 |row| {
                     let chat_id: ChatId = row.get("chat_id")?;
                     let state: MessageState = row.get("state")?;
-                    let download_state: DownloadState = row.get("download_state")?;
                     let param: Params = row.get::<_, String>("param")?.parse().unwrap_or_default();
                     let from_id: ContactId = row.get("from_id")?;
                     let rfc724_mid: String = row.get("rfc724_mid")?;
@@ -1776,7 +1861,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                             id,
                             chat_id,
                             state,
-                            download_state,
                             param,
                             from_id,
                             rfc724_mid,
@@ -1809,7 +1893,6 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             id,
             curr_chat_id,
             curr_state,
-            curr_download_state,
             curr_param,
             curr_from_id,
             curr_rfc724_mid,
@@ -1819,14 +1902,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
         _curr_ephemeral_timer,
     ) in msgs
     {
-        if curr_download_state != DownloadState::Done {
-            if curr_state == MessageState::InFresh {
-                // Don't mark partially downloaded messages as seen or send a read receipt since
-                // they are not really seen by the user.
-                update_msg_state(context, id, MessageState::InNoticed).await?;
-                updated_chat_ids.insert(curr_chat_id);
-            }
-        } else if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
+        if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
             update_msg_state(context, id, MessageState::InSeen).await?;
             info!(context, "Seen message {}.", id);
 
@@ -2097,7 +2173,7 @@ pub(crate) async fn rfc724_mid_exists_ex(
         .query_row_optional(
             &("SELECT id, timestamp_sent, MIN(".to_string()
                 + expr
-                + ") FROM msgs WHERE rfc724_mid=?
+                + ") FROM msgs WHERE rfc724_mid=?1 OR pre_rfc724_mid=?1
               HAVING COUNT(*) > 0 -- Prevent MIN(expr) from returning NULL when there are no rows.
               ORDER BY timestamp_sent DESC"),
             (rfc724_mid,),
@@ -2106,6 +2182,32 @@ pub(crate) async fn rfc724_mid_exists_ex(
                 let expr_res: bool = row.get(2)?;
                 Ok((msg_id, expr_res))
             },
+        )
+        .await?;
+
+    Ok(res)
+}
+
+/// Returns `true` iff there is a message
+/// with the given `rfc724_mid`
+/// and a download state other than `DownloadState::Available`,
+/// i.e. it was already tried to download the message or it's sent locally.
+pub(crate) async fn rfc724_mid_download_tried(context: &Context, rfc724_mid: &str) -> Result<bool> {
+    let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
+    if rfc724_mid.is_empty() {
+        warn!(
+            context,
+            "Empty rfc724_mid passed to rfc724_mid_download_tried"
+        );
+        return Ok(false);
+    }
+
+    let res = context
+        .sql
+        .exists(
+            "SELECT COUNT(*) FROM msgs
+             WHERE rfc724_mid=? AND download_state<>?",
+            (rfc724_mid, DownloadState::Available),
         )
         .await?;
 

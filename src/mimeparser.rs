@@ -23,6 +23,7 @@ use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
 use crate::dehtml::dehtml;
+use crate::download::PostMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
@@ -147,6 +148,25 @@ pub(crate) struct MimeMessage {
     /// Sender timestamp in secs since epoch. Allowed to be in the future due to unsynchronized
     /// clocks, but not too much.
     pub(crate) timestamp_sent: i64,
+
+    pub(crate) pre_message: PreMessageMode,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum PreMessageMode {
+    /// This is a post-message.
+    /// It replaces its pre-message attachment if it exists already,
+    /// and if the pre-message does not exist, it is treated as a normal message.
+    Post,
+    /// This is a Pre-Message,
+    /// it adds a message preview for a Post-Message
+    /// and it is ignored if the Post-Message was downloaded already
+    Pre {
+        post_msg_rfc724_mid: String,
+        metadata: Option<PostMsgMetadata>,
+    },
+    /// Atomic ("normal") message.
+    None,
 }
 
 #[derive(Debug, PartialEq)]
@@ -240,12 +260,9 @@ const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
 impl MimeMessage {
     /// Parse a mime message.
     ///
-    /// If `partial` is set, it contains the full message size in bytes.
-    pub(crate) async fn from_bytes(
-        context: &Context,
-        body: &[u8],
-        partial: Option<u32>,
-    ) -> Result<Self> {
+    /// This method has some side-effects,
+    /// such as saving blobs and saving found public keys to the database.
+    pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
         let timestamp_rcvd = smeared_time(context);
@@ -302,7 +319,7 @@ impl MimeMessage {
                     );
                     (part, part.ctype.mimetype.parse::<Mime>()?)
                 } else {
-                    // If it's a partially fetched message, there are no subparts.
+                    // Not a valid signed message, handle it as plaintext.
                     (&mail, mimetype)
                 }
             } else {
@@ -351,6 +368,16 @@ impl MimeMessage {
         let incoming = !context.is_self_addr(&from.addr).await?;
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
+
+        let mut pre_message = if mail
+            .headers
+            .get_header_value(HeaderDef::ChatIsPostMessage)
+            .is_some()
+        {
+            PreMessageMode::Post
+        } else {
+            PreMessageMode::None
+        };
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
@@ -580,6 +607,39 @@ impl MimeMessage {
             signatures.clear();
         }
 
+        if let (Ok(mail), true) = (mail, is_encrypted)
+            && let Some(post_msg_rfc724_mid) =
+                mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
+        {
+            let post_msg_rfc724_mid = parse_message_id(&post_msg_rfc724_mid)?;
+            let metadata = if let Some(value) = mail
+                .headers
+                .get_header_value(HeaderDef::ChatPostMessageMetadata)
+            {
+                match PostMsgMetadata::try_from_header_value(&value) {
+                    Ok(metadata) => Some(metadata),
+                    Err(error) => {
+                        error!(
+                            context,
+                            "Failed to parse metadata header in pre-message for {post_msg_rfc724_mid}: {error:#}."
+                        );
+                        None
+                    }
+                }
+            } else {
+                warn!(
+                    context,
+                    "Expected pre-message for {post_msg_rfc724_mid} to have metadata header."
+                );
+                None
+            };
+
+            pre_message = PreMessageMode::Pre {
+                post_msg_rfc724_mid,
+                metadata,
+            };
+        }
+
         let mut parser = MimeMessage {
             parts: Vec::new(),
             headers,
@@ -615,33 +675,27 @@ impl MimeMessage {
             is_bot: None,
             timestamp_rcvd,
             timestamp_sent,
+            pre_message,
         };
 
-        match partial {
-            Some(org_bytes) => {
-                parser
-                    .create_stub_from_partial_download(context, org_bytes)
-                    .await?;
+        match mail {
+            Ok(mail) => {
+                parser.parse_mime_recursive(context, mail, false).await?;
             }
-            None => match mail {
-                Ok(mail) => {
-                    parser.parse_mime_recursive(context, mail, false).await?;
-                }
-                Err(err) => {
-                    let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
+            Err(err) => {
+                let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
 
-                    let part = Part {
-                        typ: Viewtype::Text,
-                        msg_raw: Some(txt.to_string()),
-                        msg: txt.to_string(),
-                        // Don't change the error prefix for now,
-                        // receive_imf.rs:lookup_chat_by_reply() checks it.
-                        error: Some(format!("Decrypting failed: {err:#}")),
-                        ..Default::default()
-                    };
-                    parser.do_add_single_part(part);
-                }
-            },
+                let part = Part {
+                    typ: Viewtype::Text,
+                    msg_raw: Some(txt.to_string()),
+                    msg: txt.to_string(),
+                    // Don't change the error prefix for now,
+                    // receive_imf.rs:lookup_chat_by_reply() checks it.
+                    error: Some(format!("Decrypting failed: {err:#}")),
+                    ..Default::default()
+                };
+                parser.do_add_single_part(part);
+            }
         };
 
         let is_location_only = parser.location_kml.is_some() && parser.parts.is_empty();
