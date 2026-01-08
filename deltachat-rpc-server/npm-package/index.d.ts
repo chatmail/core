@@ -15,7 +15,7 @@ export interface SearchOptions {
  */
 export function getRPCServerPath(
   options?: Partial<SearchOptions>
-): Promise<string>;
+): string;
 
 
 
@@ -33,8 +33,15 @@ export interface StartOptions {
  * @param directory directory for accounts folder
  * @param options 
  */
-export function startDeltaChat(directory: string, options?: Partial<SearchOptions & StartOptions> ): Promise<DeltaChatOverJsonRpcServer>
+export function startDeltaChat(directory: string, options?: Partial<SearchOptions & StartOptions> ): DeltaChatOverJsonRpcServer
 
+export class DeltaChatOverJsonRpc extends StdioDeltaChat {
+  constructor(
+    directory: string,
+    options?: Partial<SearchOptions & StartOptions>
+  );
+  readonly pathToServerBinary: string;
+}
 
 export namespace FnTypes {
     export type getRPCServerPath = typeof getRPCServerPath
