@@ -207,7 +207,7 @@ impl MsgId {
         ret += &format!("Sent: {fts}");
 
         let from_contact = Contact::get_by_id(context, msg.from_id).await?;
-        let name = from_contact.get_name();
+        let name = from_contact.get_display_name();
         if let Some(override_sender_name) = msg.get_override_sender_name() {
             ret += &format!(" by ~{override_sender_name}");
         } else {
