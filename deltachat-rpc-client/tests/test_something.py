@@ -370,13 +370,13 @@ def test_selfavatar_sync(acfactory, data, log) -> None:
     alice.set_config("selfavatar", image)
     avatar_config = alice.get_config("selfavatar")
     avatar_hash = os.path.basename(avatar_config)
-    print("Info: avatar hash is ", avatar_hash)
+    logging.info(f"Avatar hash is {avatar_hash}")
 
     log.section("First device receives avatar change")
     alice2.wait_for_event(EventType.SELFAVATAR_CHANGED)
     avatar_config2 = alice2.get_config("selfavatar")
     avatar_hash2 = os.path.basename(avatar_config2)
-    print("Info: avatar hash on second device is ", avatar_hash2)
+    logging.info(f"Avatar hash on second device is {avatar_hash2}")
     assert avatar_hash == avatar_hash2
     assert avatar_config != avatar_config2
 

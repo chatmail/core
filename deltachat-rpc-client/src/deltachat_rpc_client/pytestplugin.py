@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pathlib
 import platform
@@ -204,14 +205,13 @@ def log():
 
     class Printer:
         def section(self, msg: str) -> None:
-            print()
-            print("=" * 10, msg, "=" * 10)
+            logging.info("\n%s %s %s", "=" * 10, msg, "=" * 10)
 
         def step(self, msg: str) -> None:
-            print("-" * 5, "step " + msg, "-" * 5)
+            logging.info("%s step %s %s", "-" * 5, msg, "-" * 5)
 
         def indent(self, msg: str) -> None:
-            print("  " + msg)
+            logging.info("  " + msg)
 
     return Printer()
 
@@ -261,7 +261,7 @@ def get_core_python_env(tmp_path_factory):
             envs[core_version] = venv
         python = find_path(venv, "python")
         rpc_server_path = find_path(venv, "deltachat-rpc-server")
-        print(f"python={python}\nrpc_server={rpc_server_path}")
+        logging.info(f"Paths:\npython={python}\nrpc_server={rpc_server_path}")
         return python, rpc_server_path
 
     return get_versioned_venv
