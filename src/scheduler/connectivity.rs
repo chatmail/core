@@ -343,8 +343,17 @@ impl Context {
                     .green {
                         background-color: #34c759;
                     }
+                    .grey {
+                        background-color: #808080;
+                    }
                     .yellow {
                         background-color: #fdc625;
+                    }
+                    .transport {
+                        margin-bottom: 1em;
+                    }
+                    .quota-list {
+                        padding-left: 0;
                     }
                 </style>
             </head>
@@ -375,7 +384,7 @@ impl Context {
                     .boxes()
                     .map(|b| {
                         (
-                            b.host.clone(),
+                            b.addr.clone(),
                             b.meaning,
                             b.conn_state.state.connectivity.clone(),
                         )
@@ -396,73 +405,15 @@ impl Context {
         // =============================================================================================
         // Add e.g.
         //                              Incoming messages
-        //                               - "Inbox": Connected
+        //                               - [X] nine.testrun.org: Connected
+        //                                     1.34 GiB of 2 GiB used
+        //                                     [======67%=====       ]
         // =============================================================================================
 
         let watched_folders = get_watched_folder_configs(self).await?;
         let incoming_messages = stock_str::incoming_messages(self).await;
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
-        for (host, folder, state) in &folders_states {
-            let mut folder_added = false;
 
-            if let Some(config) = folder.to_config().filter(|c| watched_folders.contains(c)) {
-                let f = self.get_config(config).await.log_err(self).ok().flatten();
-
-                if let Some(foldername) = f {
-                    let detailed = &state.get_detailed();
-                    ret += "<li>";
-                    ret += &*detailed.to_icon();
-                    ret += " <b>";
-                    if folder == &FolderMeaning::Inbox {
-                        ret += &*escaper::encode_minimal(host);
-                    } else {
-                        ret += &*escaper::encode_minimal(&foldername);
-                    }
-                    ret += ":</b> ";
-                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                    ret += "</li>";
-
-                    folder_added = true;
-                }
-            }
-
-            if !folder_added && folder == &FolderMeaning::Inbox {
-                let detailed = &state.get_detailed();
-                if let DetailedConnectivity::Error(_) = detailed {
-                    // On the inbox thread, we also do some other things like scan_folders and run jobs
-                    // so, maybe, the inbox is not watched, but something else went wrong
-                    ret += "<li>";
-                    ret += &*detailed.to_icon();
-                    ret += " ";
-                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                    ret += "</li>";
-                }
-            }
-        }
-        ret += "</ul>";
-
-        // =============================================================================================
-        // Add e.g.
-        //                              Outgoing messages
-        //                                Your last message was sent successfully
-        // =============================================================================================
-
-        let outgoing_messages = stock_str::outgoing_messages(self).await;
-        ret += &format!("<h3>{outgoing_messages}</h3><ul><li>");
-        let detailed = smtp.get_detailed();
-        ret += &*detailed.to_icon();
-        ret += " ";
-        ret += &*escaper::encode_minimal(&detailed.to_string_smtp(self).await);
-        ret += "</li></ul>";
-
-        // =============================================================================================
-        // Add e.g.
-        //                              Storage on testrun.org
-        //                                1.34 GiB of 2 GiB used
-        //                                [======67%=====       ]
-        // =============================================================================================
-
-        ret += "<h3>Message Buffers</h3>";
         let transports = self
             .sql
             .query_map_vec("SELECT id, addr FROM transports", (), |row| {
@@ -472,31 +423,71 @@ impl Context {
             })
             .await?;
         let quota = self.quota.read().await;
-        ret += "<ul>";
         for (transport_id, transport_addr) in transports {
             let domain = &deltachat_contact_tools::EmailAddress::new(&transport_addr)
-                .map_or(transport_addr, |email| email.domain);
+                .map_or(transport_addr.clone(), |email| email.domain);
             let domain_escaped = escaper::encode_minimal(domain);
+
+            ret += "<li class=\"transport\">";
+            let folders = folders_states
+                .iter()
+                .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
+            for (_addr, folder, state) in folders {
+                let mut folder_added = false;
+
+                if let Some(config) = folder.to_config().filter(|c| watched_folders.contains(c)) {
+                    let f = self.get_config(config).await.log_err(self).ok().flatten();
+
+                    if let Some(foldername) = f {
+                        let detailed = &state.get_detailed();
+                        ret += &*detailed.to_icon();
+                        ret += " <b>";
+                        if folder == &FolderMeaning::Inbox {
+                            ret += &*domain_escaped;
+                        } else {
+                            ret += &*escaper::encode_minimal(&foldername);
+                        }
+                        ret += ":</b> ";
+                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                        ret += "<br />";
+
+                        folder_added = true;
+                    }
+                }
+
+                if !folder_added && folder == &FolderMeaning::Inbox {
+                    let detailed = &state.get_detailed();
+                    if let DetailedConnectivity::Error(_) = detailed {
+                        // On the inbox thread, we also do some other things like scan_folders and run jobs
+                        // so, maybe, the inbox is not watched, but something else went wrong
+
+                        ret += &*detailed.to_icon();
+                        ret += " ";
+                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                        ret += "<br />";
+                    }
+                }
+            }
+
             let Some(quota) = quota.get(&transport_id) else {
-                let not_connected = stock_str::not_connected(self).await;
-                ret += &format!("<li>{domain_escaped} &middot; {not_connected}</li>");
+                ret += "</li>";
                 continue;
             };
             match &quota.recent {
                 Err(e) => {
-                    let error_escaped = escaper::encode_minimal(&e.to_string());
-                    ret += &format!("<li>{domain_escaped} &middot; {error_escaped}</li>");
+                    ret += &escaper::encode_minimal(&e.to_string());
                 }
                 Ok(quota) => {
                     if quota.is_empty() {
                         ret += &format!(
-                            "<li>{domain_escaped} &middot; Warning: {domain_escaped} claims to support quota but gives no information</li>"
+                            "Warning: {domain_escaped} claims to support quota but gives no information"
                         );
                     } else {
+                        ret += "<ul class=\"quota-list\">";
                         for (root_name, resources) in quota {
                             use async_imap::types::QuotaResourceName::*;
                             for resource in resources {
-                                ret += &format!("<li>{domain_escaped} &middot; ");
+                                ret += "<li>";
 
                                 // root name is empty eg. for gmail and redundant eg. for riseup.
                                 // therefore, use it only if there are really several roots.
@@ -549,7 +540,7 @@ impl Context {
                                 } else if percent >= QUOTA_WARN_THRESHOLD_PERCENTAGE {
                                     "yellow"
                                 } else {
-                                    "green"
+                                    "grey"
                                 };
                                 let div_width_percent = min(100, percent);
                                 ret += &format!(
@@ -559,11 +550,27 @@ impl Context {
                                 ret += "</li>";
                             }
                         }
+                        ret += "</ul>";
                     }
                 }
             }
+            ret += "</li>";
         }
         ret += "</ul>";
+
+        // =============================================================================================
+        // Add e.g.
+        //                              Outgoing messages
+        //                                Your last message was sent successfully
+        // =============================================================================================
+
+        let outgoing_messages = stock_str::outgoing_messages(self).await;
+        ret += &format!("<h3>{outgoing_messages}</h3><ul><li>");
+        let detailed = smtp.get_detailed();
+        ret += &*detailed.to_icon();
+        ret += " ";
+        ret += &*escaper::encode_minimal(&detailed.to_string_smtp(self).await);
+        ret += "</li></ul>";
 
         // =============================================================================================
 
