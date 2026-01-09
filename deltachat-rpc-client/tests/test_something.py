@@ -381,6 +381,30 @@ def test_selfavatar_sync(acfactory, data, log) -> None:
     assert avatar_config != avatar_config2
 
 
+def test_dont_move_sync_msgs(acfactory, direct_imap):
+    addr, password = acfactory.get_credentials()
+    ac1 = acfactory.get_unconfigured_account()
+    ac1.set_config("bcc_self", "1")
+    ac1.set_config("fix_is_chatmail", "1")
+    ac1.add_or_update_transport({"addr": addr, "password": password})
+    ac1.bring_online()
+    ac1_direct_imap = direct_imap(ac1)
+
+    ac1_direct_imap.select_folder("Inbox")
+    # Sync messages may also be sent during configuration.
+    inbox_msg_cnt = len(ac1_direct_imap.get_all_messages())
+
+    ac1.set_config("displayname", "Alice")
+    ac1.wait_for_event(EventType.MSG_DELIVERED)
+    ac1.set_config("displayname", "Bob")
+    ac1.wait_for_event(EventType.MSG_DELIVERED)
+    ac1_direct_imap.select_folder("Inbox")
+    assert len(ac1_direct_imap.get_all_messages()) == inbox_msg_cnt + 2
+
+    ac1_direct_imap.select_folder("DeltaChat")
+    assert len(ac1_direct_imap.get_all_messages()) == 0
+
+
 def test_reaction_seen_on_another_dev(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
     alice2 = alice.clone()
