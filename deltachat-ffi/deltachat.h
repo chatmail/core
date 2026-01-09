@@ -5115,7 +5115,6 @@ void            dc_msg_force_plaintext        (dc_msg_t* msg);
  * By default, these names are equal,
  * but functions working with contact names
  * (e.g. dc_contact_get_name(), dc_contact_get_display_name(),
- * dc_contact_get_name_n_addr(),
  * dc_create_contact() or dc_add_address_book())
  * only affect the given-name.
  */
@@ -5165,7 +5164,7 @@ char*           dc_contact_get_addr          (const dc_contact_t* contact);
  * The function does not return the contact name as received from the network.
  *
  * This name is typically used in a form where the user can edit the name of a contact.
- * To get a fine name to display in lists etc., use dc_contact_get_display_name() or dc_contact_get_name_n_addr().
+ * To get a fine name to display in lists etc., use dc_contact_get_display_name().
  *
  * @memberof dc_contact_t
  * @param contact The contact object.
@@ -5218,23 +5217,6 @@ char*           dc_contact_get_display_name  (const dc_contact_t* contact);
 // dc_contact_get_first_name is removed,
 // the following define is to make upgrading more smoothly.
 #define         dc_contact_get_first_name    dc_contact_get_display_name
-
-
-/**
- * Get a summary of name and address.
- *
- * The returned string is either "Name (email@domain.com)" or just
- * "email@domain.com" if the name is unset.
- *
- * The summary is typically used when asking the user something about the contact.
- * The attached e-mail address makes the question unique, e.g. "Chat with Alan Miller (am@uniquedomain.com)?"
- *
- * @memberof dc_contact_t
- * @param contact The contact object.
- * @return A summary string, must be released using dc_str_unref().
- *     Never returns NULL.
- */
-char*           dc_contact_get_name_n_addr   (const dc_contact_t* contact);
 
 
 /**

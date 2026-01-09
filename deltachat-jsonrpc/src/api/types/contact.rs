@@ -17,7 +17,6 @@ pub struct ContactObject {
     id: u32,
     name: String,
     profile_image: Option<String>, // BLOBS
-    name_and_addr: String,
     is_blocked: bool,
 
     /// Is the contact a key contact.
@@ -96,7 +95,6 @@ impl ContactObject {
             id: contact.id.to_u32(),
             name: contact.get_name().to_owned(),
             profile_image, //BLOBS
-            name_and_addr: contact.get_name_n_addr(),
             is_blocked: contact.is_blocked(),
             is_key_contact: contact.is_key_contact(),
             e2ee_avail: contact.e2ee_avail(context).await?,

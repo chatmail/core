@@ -4203,18 +4203,6 @@ pub unsafe extern "C" fn dc_contact_get_display_name(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_contact_get_name_n_addr(
-    contact: *mut dc_contact_t,
-) -> *mut libc::c_char {
-    if contact.is_null() {
-        eprintln!("ignoring careless call to dc_contact_get_name_n_addr()");
-        return "".strdup();
-    }
-    let ffi_contact = &*contact;
-    ffi_contact.contact.get_name_n_addr().strdup()
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn dc_contact_get_profile_image(
     contact: *mut dc_contact_t,
 ) -> *mut libc::c_char {
