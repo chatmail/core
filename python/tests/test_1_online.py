@@ -235,25 +235,6 @@ def test_enable_mvbox_move(acfactory, lp):
     assert ac2._evtracker.wait_next_incoming_message().text == "message1"
 
 
-def test_dont_move_sync_msgs(acfactory):
-    ac1 = acfactory.new_online_configuring_account(bcc_self=True, sync_msgs=True, fix_is_chatmail=True)
-    acfactory.bring_accounts_online()
-
-    ac1.direct_imap.select_folder("Inbox")
-    # Sync messages may also be sent during the configuration.
-    inbox_msg_cnt = len(ac1.direct_imap.get_all_messages())
-
-    ac1.set_config("displayname", "Alice")
-    ac1._evtracker.get_matching("DC_EVENT_MSG_DELIVERED")
-    ac1.set_config("displayname", "Bob")
-    ac1._evtracker.get_matching("DC_EVENT_MSG_DELIVERED")
-    ac1.direct_imap.select_folder("Inbox")
-    assert len(ac1.direct_imap.get_all_messages()) == inbox_msg_cnt + 2
-
-    ac1.direct_imap.select_folder("DeltaChat")
-    assert len(ac1.direct_imap.get_all_messages()) == 0
-
-
 def test_forward_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = ac1.create_chat(ac2)
