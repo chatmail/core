@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import imaplib
 import io
+import logging
 import pathlib
 import ssl
 from contextlib import contextmanager
@@ -45,13 +46,13 @@ class DirectImap:
         try:
             self.conn.logout()
         except (OSError, imaplib.IMAP4.abort):
-            print("Could not logout direct_imap conn")
+            logging.warning("Could not logout direct_imap conn")
 
     def create_folder(self, foldername):
         try:
             self.conn.folder.create(foldername)
         except errors.MailboxFolderCreateError as e:
-            print("Can't create", foldername, "probably it already exists:", str(e))
+            logging.warning(f"Cannot create '{foldername}', probably it already exists: {str(e)}")
 
     def select_folder(self, foldername: str) -> tuple:
         assert not self._idling
@@ -95,7 +96,7 @@ class DirectImap:
         messages = self.get_unread_messages()
         if messages:
             res = self.conn.flag(messages, MailMessageFlags.SEEN, True)
-            print("marked seen:", messages, res)
+            logging.info(f"Marked seen: {messages} {res}")
 
     def get_unread_cnt(self) -> int:
         return len(self.get_unread_messages())
