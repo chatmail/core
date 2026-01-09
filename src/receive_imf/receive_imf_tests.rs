@@ -4748,7 +4748,7 @@ async fn test_list_from() -> Result<()> {
         "clubinfo@donotreply.oeamtc.at"
     );
     let info = msg.id.get_info(t).await?;
-    assert!(info.contains(" by ~ÖAMTC (clubinfo@donotreply.oeamtc.at)"));
+    assert!(info.contains(" by ~ÖAMTC"));
 
     Ok(())
 }

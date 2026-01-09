@@ -212,10 +212,9 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
         ret += &format!("Sent: {fts}");
 
         let from_contact = Contact::get_by_id(context, msg.from_id).await?;
-        let name = from_contact.get_name_n_addr();
+        let name = from_contact.get_display_name();
         if let Some(override_sender_name) = msg.get_override_sender_name() {
-            let addr = from_contact.get_addr();
-            ret += &format!(" by ~{override_sender_name} ({addr})");
+            ret += &format!(" by ~{override_sender_name}");
         } else {
             ret += &format!(" by {name}");
         }
@@ -263,7 +262,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
 
                 let name = Contact::get_by_id(context, contact_id)
                     .await
-                    .map(|contact| contact.get_name_n_addr())
+                    .map(|contact| contact.get_display_name().to_owned())
                     .unwrap_or_default();
 
                 ret += &format!(" by {name}");
