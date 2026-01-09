@@ -3878,6 +3878,11 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     let contacts = Contact::get_all(bob, 0, None).await?;
     assert_eq!(contacts.len(), 2);
     assert_eq!(contacts[0], bob_fiona_id);
+
+    send_text_msg(bob, bob_chat_id, "ehlo".to_string()).await?;
+    bob.pop_sent_msg().await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    assert_eq!(contacts[0], bob_fiona_id);
     Ok(())
 }
 
