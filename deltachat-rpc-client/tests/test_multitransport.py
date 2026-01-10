@@ -207,6 +207,29 @@ def test_transport_synchronization(acfactory, log) -> None:
     assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "Hello!"
 
 
+def test_transport_sync_new_as_primary(acfactory, log) -> None:
+    """Test synchronization of new transport as primary between devices."""
+    ac1 = acfactory.get_online_account()
+    ac1_clone = ac1.clone()
+    ac1_clone.bring_online()
+
+    qr = acfactory.get_account_qr()
+
+    ac1.add_transport_from_qr(qr)
+    ac1_transports = ac1.list_transports()
+    assert len(ac1_transports) == 2
+    [transport1, transport2] = ac1_transports
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    assert len(ac1_clone.list_transports()) == 2
+    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
+
+    log.section("ac1 changes the primary transport")
+    ac1.set_config("configured_addr", transport2["addr"])
+
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    assert ac1_clone.get_config("configured_addr") == transport2["addr"]
+
+
 def test_recognize_self_address(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
