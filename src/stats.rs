@@ -9,6 +9,7 @@ use anyhow::{Context as _, Result};
 use deltachat_derive::FromSql;
 use num_traits::ToPrimitive;
 use pgp::types::PublicKeyTrait;
+use rand::distr::SampleString as _;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
 
@@ -21,7 +22,7 @@ use crate::key::load_self_public_keyring;
 use crate::log::LogExt;
 use crate::message::{Message, Viewtype};
 use crate::securejoin::QrInvite;
-use crate::tools::{create_id, time};
+use crate::tools::time;
 
 pub(crate) const STATISTICS_BOT_EMAIL: &str = "self_reporting@testrun.org";
 const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
@@ -390,7 +391,9 @@ pub(crate) async fn stats_id(context: &Context) -> Result<String> {
     Ok(match context.get_config(Config::StatsId).await? {
         Some(id) => id,
         None => {
-            let id = create_id();
+            let id = rand::distr::Alphabetic
+                .sample_string(&mut rand::rng(), 25)
+                .to_lowercase();
             context
                 .set_config_internal(Config::StatsId, Some(&id))
                 .await?;
