@@ -81,9 +81,46 @@ async fn main_impl() -> Result<()> {
     let accounts = Arc::new(RwLock::new(accounts));
     let state = CommandApi::from_arc(accounts.clone()).await;
 
-    let (client, mut out_receiver) = RpcClient::new();
-    let session = RpcSession::new(client.clone(), state.clone());
     let main_cancel = CancellationToken::new();
+
+    let cancel = main_cancel.clone();
+    let sigterm_task: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
+        #[cfg(target_family = "unix")]
+        {
+            let _cancel_guard = cancel.clone().drop_guard();
+            tokio::select! {
+                _ = cancel.cancelled() => (),
+                _ = sigterm.recv() => {
+                    log::info!("got SIGTERM");
+                }
+            }
+        }
+        let _ = cancel;
+        Ok(())
+    });
+
+    let (send_task, recv_task) = stdio_impl(state, main_cancel.clone()).await?;
+
+    main_cancel.cancelled().await;
+    accounts.read().await.stop_io().await;
+    drop(accounts);
+    send_task.await??;
+    sigterm_task.await??;
+    recv_task.await??;
+
+    Ok(())
+}
+
+async fn stdio_impl(
+    state: CommandApi,
+    main_cancel: CancellationToken,
+) -> Result<(
+    JoinHandle<anyhow::Result<()>>,
+    JoinHandle<anyhow::Result<()>>,
+)> {
+    let (client, mut out_receiver) = RpcClient::new();
+
+    let session = RpcSession::new(client.clone(), state.clone());
 
     // Send task prints JSON responses to stdout.
     let cancel = main_cancel.clone();
@@ -100,22 +137,6 @@ async fn main_impl() -> Result<()> {
             log::trace!("RPC send {message}");
             println!("{message}");
         }
-        Ok(())
-    });
-
-    let cancel = main_cancel.clone();
-    let sigterm_task: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
-        #[cfg(target_family = "unix")]
-        {
-            let _cancel_guard = cancel.clone().drop_guard();
-            tokio::select! {
-                _ = cancel.cancelled() => (),
-                _ = sigterm.recv() => {
-                    log::info!("got SIGTERM");
-                }
-            }
-        }
-        let _ = cancel;
         Ok(())
     });
 
@@ -150,13 +171,5 @@ async fn main_impl() -> Result<()> {
         Ok(())
     });
 
-    main_cancel.cancelled().await;
-    accounts.read().await.stop_io().await;
-    drop(accounts);
-    drop(state);
-    send_task.await??;
-    sigterm_task.await??;
-    recv_task.await??;
-
-    Ok(())
+    Ok((send_task, recv_task))
 }
