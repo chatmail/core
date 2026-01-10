@@ -2855,6 +2855,14 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage)
         && (context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty())
     {
+        // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
+        // them. Normally the user should have a non-chatmail primary transport to send unencrypted
+        // messages.
+        if needs_encryption {
+            for addr in context.get_secondary_self_addrs().await? {
+                recipients.push(addr);
+            }
+        }
         recipients.push(from);
     }
 
