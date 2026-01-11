@@ -417,12 +417,12 @@ pub enum EventType {
         chat_id: ChatId,
     },
 
-    /// One or more transports has changed.
+    /// One or more transports has changed or another transport is primary now.
     ///
     /// UI should update the list.
     ///
-    /// This event is emitted when transport
-    /// synchronization messages arrives,
+    /// This event is emitted when a transport
+    /// synchronization message modifies transports,
     /// but not when the UI modifies the transport list by itself.
     TransportsModified,
 

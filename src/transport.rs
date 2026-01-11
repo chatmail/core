@@ -621,16 +621,17 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
 }
 
 /// Saves transport to the database.
+/// Returns whether transports are modified.
 pub(crate) async fn save_transport(
     context: &Context,
     entered_param: &EnteredLoginParam,
     configured: &ConfiguredLoginParamJson,
     add_timestamp: i64,
-) -> Result<()> {
+) -> Result<bool> {
     let addr = addr_normalize(&configured.addr);
     let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
 
-    context
+    let mut modified = context
         .sql
         .execute(
             "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
@@ -638,7 +639,10 @@ pub(crate) async fn save_transport(
              ON CONFLICT (addr)
              DO UPDATE SET entered_param=excluded.entered_param,
                            configured_param=excluded.configured_param,
-                           add_timestamp=excluded.add_timestamp",
+                           add_timestamp=excluded.add_timestamp
+             WHERE entered_param != excluded.entered_param
+                 OR configured_param != excluded.configured_param
+                 OR add_timestamp < excluded.add_timestamp",
             (
                 &addr,
                 serde_json::to_string(entered_param)?,
@@ -646,7 +650,8 @@ pub(crate) async fn save_transport(
                 add_timestamp,
             ),
         )
-        .await?;
+        .await?
+        > 0;
 
     if configured_addr.is_none() {
         // If there is no transport yet, set the new transport as the primary one
@@ -654,8 +659,9 @@ pub(crate) async fn save_transport(
             .sql
             .set_raw_config(Config::ConfiguredAddr.as_ref(), Some(&addr))
             .await?;
+        modified = true;
     }
-    Ok(())
+    Ok(modified)
 }
 
 /// Sends a sync message to synchronize transports across devices.
@@ -721,24 +727,25 @@ pub(crate) async fn sync_transports(
     transports: &[TransportData],
     removed_transports: &[RemovedTransportData],
 ) -> Result<()> {
+    let mut modified = false;
     for TransportData {
         configured,
         entered,
         timestamp,
     } in transports
     {
-        save_transport(context, entered, configured, *timestamp).await?;
+        modified |= save_transport(context, entered, configured, *timestamp).await?;
     }
 
     context
         .sql
         .transaction(|transaction| {
             for RemovedTransportData { addr, timestamp } in removed_transports {
-                transaction.execute(
+                modified |= transaction.execute(
                     "DELETE FROM transports
                      WHERE addr=? AND add_timestamp<=?",
                     (addr, timestamp),
-                )?;
+                )? > 0;
                 transaction.execute(
                     "INSERT INTO removed_transports (addr, remove_timestamp)
                      VALUES (?, ?)
@@ -752,7 +759,9 @@ pub(crate) async fn sync_transports(
         })
         .await?;
 
-    context.emit_event(EventType::TransportsModified);
+    if modified {
+        context.emit_event(EventType::TransportsModified);
+    }
     Ok(())
 }
 
