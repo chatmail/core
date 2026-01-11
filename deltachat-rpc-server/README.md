@@ -43,7 +43,7 @@ Run `deltachat-rpc-server --openrpc` to get [OpenRPC](https://open-rpc.org/) spe
 Standard I/O is the default option, but you can also tell `deltachat-rpc-server` to use a unix socket instead.
 
 ```
-deltachat-rpc-server --unix ./chatmail-core.sock
+RUST_LOG=info deltachat-rpc-server --unix ./chatmail-core.sock
 ```
 
 While this technically allows multiple processes to communicate with the same rpc server instance,
