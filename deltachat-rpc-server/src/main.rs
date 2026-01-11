@@ -2,9 +2,9 @@
 //! Delta Chat core RPC server.
 //!
 //! It speaks JSON Lines over stdio.
+use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::{env, ffi::OsStr};
 
 use anyhow::{anyhow, Context as _, Result};
 use deltachat::constants::DC_VERSION_STR;
@@ -14,6 +14,8 @@ use tokio::io::{self, AsyncBufReadExt, BufReader};
 use tracing_subscriber::EnvFilter;
 use yerpc::RpcServer as _;
 
+#[cfg(target_family = "unix")]
+use std::ffi::OsString;
 #[cfg(target_family = "unix")]
 use tokio::net::UnixListener;
 #[cfg(target_family = "unix")]
@@ -113,7 +115,7 @@ async fn main_impl() -> Result<()> {
             bail!("unix sockets are only supported on unix based operating systems");
         }
         #[cfg(target_family = "unix")]
-        unix_socket_impl(&unix_socket_path, state, main_cancel.clone()).await?
+        unix_socket_impl(unix_socket_path, state, main_cancel.clone()).await?
     } else {
         stdio_impl(state, main_cancel.clone()).await?
     };
@@ -193,7 +195,7 @@ async fn stdio_impl(
 
 #[cfg(target_family = "unix")]
 async fn unix_socket_impl(
-    unix_socket_path: &OsStr,
+    unix_socket_path: OsString,
     state: CommandApi,
     main_cancel: CancellationToken,
 ) -> Result<(
@@ -202,7 +204,7 @@ async fn unix_socket_impl(
 )> {
     let cancel = main_cancel.clone();
 
-    let listener = UnixListener::bind(unix_socket_path)?;
+    let listener = UnixListener::bind(&unix_socket_path)?;
 
     let recv_task: JoinHandle<anyhow::Result<()>> = tokio::spawn(async move {
         let _cancel_guard = cancel.clone().drop_guard();
@@ -241,7 +243,7 @@ async fn unix_socket_impl(
                                     read_lines.next_line()
                                      => match message? {
                                     None => {
-                                        log::info!("EOF reached on stdin");
+                                        log::info!("unix socket closed {addr:?}");
                                         break;
                                     }
                                     Some(message) => message,
@@ -274,15 +276,15 @@ async fn unix_socket_impl(
                         }
                         Ok(())
                     });
-
-                    // todo handle shutdown of _send_task and _receive_task
                 }
                 Err(e) => {
                     log::info!("connection failed {e:#}");
                 }
             }
         }
-        // todo shutdown all remaining unix streams via their shutdown method
+
+        drop(listener);
+        std::fs::remove_file(unix_socket_path)?;
 
         Ok(())
     });
