@@ -1164,6 +1164,20 @@ impl CommandApi {
         Ok(None)
     }
 
+    /// Mark all messages in all chats as _noticed_.
+    /// Skips messages from blocked contacts, but does not skip messages in muted chats.
+    ///
+    /// _Noticed_ messages are no longer _fresh_ and do not count as being unseen
+    /// but are still waiting for being marked as "seen" using markseen_msgs()
+    /// (IMAP/MDNs is not done for noticed messages).
+    ///
+    /// Calling this function usually results in the event #DC_EVENT_MSGS_NOTICED.
+    /// See also markseen_msgs().
+    pub async fn marknoticed_all_chats(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        marknoticed_all_chats(&ctx).await
+    }
+
     ///  Mark all messages in a chat as _noticed_.
     ///  _Noticed_ messages are no longer _fresh_ and do not count as being unseen
     ///  but are still waiting for being marked as "seen" using markseen_msgs()
