@@ -832,7 +832,9 @@ pub(crate) async fn receive_imf_inner(
 
                         let transport_changed = if transport_exists {
                             transaction.execute(
-                                "UPDATE config SET value=? WHERE keyname='configured_addr'",
+                                "
+UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
+                                ",
                                 (from_addr,),
                             )? > 0
                         } else {
@@ -848,6 +850,7 @@ pub(crate) async fn receive_imf_inner(
                 if transport_changed {
                     info!(context, "Primary transport changed to {from_addr:?}.");
                     context.sql.uncache_raw_config("configured_addr").await;
+                    context.emit_event(EventType::TransportsModified);
                 }
             } else {
                 warn!(context, "Sync items are not encrypted.");
