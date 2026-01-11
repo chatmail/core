@@ -811,6 +811,10 @@ pub(crate) async fn receive_imf_inner(
     if let Some(ref sync_items) = mime_parser.sync_items {
         if from_id == ContactId::SELF {
             if mime_parser.was_encrypted() {
+                context
+                    .execute_sync_items(sync_items, mime_parser.timestamp_sent)
+                    .await;
+
                 // Receiving encrypted message from self updates primary transport.
                 let from_addr = &mime_parser.from.addr;
 
@@ -845,10 +849,6 @@ pub(crate) async fn receive_imf_inner(
                     info!(context, "Primary transport changed to {from_addr:?}.");
                     context.sql.uncache_raw_config("configured_addr").await;
                 }
-
-                context
-                    .execute_sync_items(sync_items, mime_parser.timestamp_sent)
-                    .await;
             } else {
                 warn!(context, "Sync items are not encrypted.");
             }
