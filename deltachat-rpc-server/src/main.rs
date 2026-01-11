@@ -112,7 +112,9 @@ async fn main_impl() -> Result<()> {
     let (send_task, recv_task) = if let Some(unix_socket_path) = unix_socket {
         #[cfg(not(target_family = "unix"))]
         {
-            bail!("unix sockets are only supported on unix based operating systems");
+            return Err(anyhow!(
+                "unix sockets are only supported on unix based operating systems"
+            ));
         }
         #[cfg(target_family = "unix")]
         unix_socket_impl(unix_socket_path, state, main_cancel.clone()).await?
