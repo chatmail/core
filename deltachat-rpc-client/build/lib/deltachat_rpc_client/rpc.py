@@ -247,8 +247,11 @@ class RpcUnixSocket(BaseRpc):
     def connect_to_server(self):
         print(str(self.socket_path))
         self.client.connect(self.socket_path)
+        print("c1")
         writer = self.client.makefile("wb")
         reader = self.client.makefile("rb")
+        print("c2")
+        assert False
         return reader, writer
 
     def disconnect_from_server(self):
