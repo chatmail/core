@@ -596,7 +596,14 @@ pub(crate) async fn handle_securejoin_handshake(
                 // Join group.
                 chat::add_contact_to_chat_ex(context, Nosync, joining_chat_id, contact_id, true)
                     .await?;
+
                 let chat = Chat::load_from_db(context, joining_chat_id).await?;
+
+                if chat.typ == Chattype::OutBroadcast {
+                    // We don't use the membership consistency algorithm for broadcast channels,
+                    // so, sync the memberlist when adding a contact
+                    chat.sync_contacts(context).await.log_err(context).ok();
+                }
 
                 inviter_progress(context, contact_id, joining_chat_id, chat.typ)?;
                 // IMAP-delete the message to avoid handling it by another device and adding the
