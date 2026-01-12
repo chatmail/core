@@ -8,7 +8,7 @@ from .const import EventType, SpecialContactId
 from .contact import Contact
 from .deltachat import DeltaChat
 from .message import Message
-from .rpc import Rpc, RpcFIFO
+from .rpc import Rpc, RpcFIFO, RpcUnixSocket
 
 __all__ = [
     "Account",
@@ -23,6 +23,7 @@ __all__ = [
     "SpecialContactId",
     "Rpc",
     "RpcFIFO",
+    "RpcUnixSocket",
     "run_bot_cli",
     "run_client_cli",
 ]
