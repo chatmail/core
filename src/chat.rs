@@ -3222,7 +3222,7 @@ pub async fn get_chat_msgs_ex(
     Ok(items)
 }
 
-/// Marks all unread messages in all chat as noticed.
+/// Marks all unread messages in all chats as noticed.
 /// Ignores messages from blocked contacts, but does not ignore messages in muted chats.
 pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
     let list = context
