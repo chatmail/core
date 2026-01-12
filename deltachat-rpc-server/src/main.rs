@@ -24,6 +24,14 @@ use yerpc::{RpcClient, RpcSession};
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
+    // Logs from `log` crate and traces from `tracing` crate
+    // are configurable with `RUST_LOG` environment variable
+    // and go to stderr to avoid interfering with JSON-RPC using stdout.
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
+
     let r = main_impl().await;
     // From tokio documentation:
     // "For technical reasons, stdin is implemented by using an ordinary blocking read on a separate
@@ -63,14 +71,6 @@ async fn main_impl() -> Result<()> {
     let _ctrl_c = tokio::signal::ctrl_c();
     #[cfg(target_family = "unix")]
     let mut sigterm = signal_unix::signal(signal_unix::SignalKind::terminate())?;
-
-    // Logs from `log` crate and traces from `tracing` crate
-    // are configurable with `RUST_LOG` environment variable
-    // and go to stderr to avoid interfering with JSON-RPC using stdout.
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
-        .init();
 
     let path = std::env::var("DC_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts".to_string());
     log::info!("Starting with accounts directory `{path}`.");
