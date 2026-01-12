@@ -1492,6 +1492,15 @@ impl EventTracker {
     pub fn clear_events(&self) {
         while let Ok(_ev) = self.try_recv() {}
     }
+
+    /// Takes all items from event queue and returns them.
+    pub fn take_events(&self) -> Vec<Event> {
+        let mut events = Vec::new();
+        while let Ok(event) = self.try_recv() {
+            events.push(event);
+        }
+        events
+    }
 }
 
 /// Gets a specific message from a chat and asserts that the chat has a specific length.
