@@ -466,6 +466,12 @@ pub enum Config {
     /// Experimental option denoting that the current profile is shared between multiple team members.
     /// For now, the only effect of this option is that seen flags are not synchronized.
     TeamProfile,
+
+    /// Feature flag to disable sending pre-messages added on 2026-01-12.
+    ///
+    /// It is currently enabled only in tests. Once users upgrade
+    /// to be able to interpret pre-messages, the flag can be removed completely.
+    SendPreMessages,
 }
 
 impl Config {

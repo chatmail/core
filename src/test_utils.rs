@@ -565,6 +565,9 @@ impl TestContext {
             .unwrap();
         ctx.set_config(Config::BccSelf, Some("1")).await.unwrap();
         ctx.set_config(Config::SyncMsgs, Some("0")).await.unwrap();
+        ctx.set_config(Config::SendPreMessages, Some("1"))
+            .await
+            .unwrap();
 
         Self {
             ctx,

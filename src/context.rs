@@ -1103,6 +1103,12 @@ impl Context {
             "team_profile",
             self.get_config_bool(Config::TeamProfile).await?.to_string(),
         );
+        res.insert(
+            "send_pre_messages",
+            self.get_config_bool(Config::SendPreMessages)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));

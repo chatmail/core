@@ -2762,7 +2762,8 @@ async fn render_mime_message_and_pre_message(
     msg: &mut Message,
     mimefactory: MimeFactory,
 ) -> Result<(Option<RenderedEmail>, RenderedEmail)> {
-    let needs_pre_message = msg.viewtype.has_file()
+    let needs_pre_message = context.get_config_bool(Config::SendPreMessages).await?
+        && msg.viewtype.has_file()
         && mimefactory.will_be_encrypted() // unencrypted is likely email, we don't want to spam by sending multiple messages
         && msg
             .get_filebytes(context)

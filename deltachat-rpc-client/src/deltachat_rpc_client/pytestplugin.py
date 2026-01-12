@@ -46,7 +46,9 @@ class ACFactory:
 
     def get_unconfigured_account(self) -> Account:
         """Create a new unconfigured account."""
-        return self.deltachat.add_account()
+        account = self.deltachat.add_account()
+        account.set_config("send_pre_messages", "1")
+        return account
 
     def get_unconfigured_bot(self) -> Bot:
         """Create a new unconfigured bot."""
