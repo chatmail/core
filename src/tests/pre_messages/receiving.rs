@@ -130,7 +130,7 @@ async fn test_out_of_order_receiving() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_msg_text_on_lost_pre_msg() -> Result<()> {
+async fn test_lost_pre_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -144,7 +144,7 @@ async fn test_msg_text_on_lost_pre_msg() -> Result<()> {
     let _pre_msg = alice.pop_sent_msg().await;
     let msg = bob.recv_msg(&full_msg).await;
     assert_eq!(msg.download_state, DownloadState::Done);
-    assert_eq!(msg.text, "populate");
+    assert_eq!(msg.text, "");
     Ok(())
 }
 
