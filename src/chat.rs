@@ -4941,12 +4941,20 @@ async fn set_contacts_by_fingerprints(
     context
         .sql
         .transaction(move |transaction| {
-            transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (id,))?;
+            // For broadcast channels, we only add members,
+            // because we don't use the membership consistency algorithm,
+            // and are using sync messages as a basic way to ensure consistency between devices.
+            // For groups, we also remove members,
+            // because the sync message is used in order to sync unpromoted groups.
+            if chat.typ != Chattype::OutBroadcast {
+                transaction.execute("DELETE FROM chats_contacts WHERE chat_id=?", (id,))?;
+            }
 
             // We do not care about `add_timestamp` column
             // because timestamps are not used for broadcast channels.
-            let mut statement = transaction
-                .prepare("INSERT INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)")?;
+            let mut statement = transaction.prepare(
+                "INSERT OR IGNORE INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)",
+            )?;
             for contact_id in &contacts {
                 statement.execute((id, contact_id))?;
             }
