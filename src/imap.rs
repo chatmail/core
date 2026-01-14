@@ -23,7 +23,9 @@ use num_traits::FromPrimitive;
 use ratelimit::Ratelimit;
 use url::Url;
 
-use crate::calls::{create_fallback_ice_servers, create_ice_servers_from_metadata};
+use crate::calls::{
+    UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata,
+};
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
@@ -134,16 +136,15 @@ pub(crate) struct ServerMetadata {
 
     pub iroh_relay: Option<Url>,
 
-    /// JSON with ICE servers for WebRTC calls
-    /// and the expiration timestamp.
-    ///
-    /// If JSON is about to expire, new TURN credentials
-    /// should be fetched from the server
-    /// to be ready for WebRTC calls.
-    pub ice_servers: String,
+    /// ICE servers for WebRTC calls.
+    pub ice_servers: Vec<UnresolvedIceServer>,
 
     /// Timestamp when ICE servers are considered
     /// expired and should be updated.
+    ///
+    /// If ICE servers are about to expire, new TURN credentials
+    /// should be fetched from the server
+    /// to be ready for WebRTC calls.
     pub ice_servers_expiration_timestamp: i64,
 }
 
@@ -1552,7 +1553,7 @@ impl Session {
                     if m.entry == "/shared/vendor/deltachat/turn"
                         && let Some(value) = m.value
                     {
-                        match create_ice_servers_from_metadata(context, &value).await {
+                        match create_ice_servers_from_metadata(&value).await {
                             Ok((parsed_timestamp, parsed_ice_servers)) => {
                                 old_metadata.ice_servers_expiration_timestamp = parsed_timestamp;
                                 old_metadata.ice_servers = parsed_ice_servers;
@@ -1569,7 +1570,7 @@ impl Session {
                 info!(context, "Will use fallback ICE servers.");
                 // Set expiration timestamp 7 days in the future so we don't request it again.
                 old_metadata.ice_servers_expiration_timestamp = time() + 3600 * 24 * 7;
-                old_metadata.ice_servers = create_fallback_ice_servers(context).await?;
+                old_metadata.ice_servers = create_fallback_ice_servers();
             }
             return Ok(());
         }
@@ -1616,7 +1617,7 @@ impl Session {
                 }
                 "/shared/vendor/deltachat/turn" => {
                     if let Some(value) = m.value {
-                        match create_ice_servers_from_metadata(context, &value).await {
+                        match create_ice_servers_from_metadata(&value).await {
                             Ok((parsed_timestamp, parsed_ice_servers)) => {
                                 ice_servers_expiration_timestamp = parsed_timestamp;
                                 ice_servers = Some(parsed_ice_servers);
@@ -1635,7 +1636,7 @@ impl Session {
         } else {
             // Set expiration timestamp 7 days in the future so we don't request it again.
             ice_servers_expiration_timestamp = time() + 3600 * 24 * 7;
-            create_fallback_ice_servers(context).await?
+            create_fallback_ice_servers()
         };
 
         *lock = Some(ServerMetadata {
