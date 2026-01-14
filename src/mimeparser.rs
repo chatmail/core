@@ -2481,18 +2481,16 @@ async fn handle_mdn(
     let Some((msg_id, chat_id, has_mdns, is_dup)) = context
         .sql
         .query_row_optional(
-            concat!(
-                "SELECT",
-                "    m.id AS msg_id,",
-                "    c.id AS chat_id,",
-                "    mdns.contact_id AS mdn_contact",
-                " FROM msgs m ",
-                " LEFT JOIN chats c ON m.chat_id=c.id",
-                " LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id",
-                " WHERE rfc724_mid=? AND from_id=1",
-                " ORDER BY msg_id DESC, mdn_contact=? DESC",
-                " LIMIT 1",
-            ),
+            "SELECT
+                m.id AS msg_id,
+                c.id AS chat_id,
+                mdns.contact_id AS mdn_contact
+             FROM msgs m 
+             LEFT JOIN chats c ON m.chat_id=c.id
+             LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
+             WHERE rfc724_mid=? AND from_id=1
+             ORDER BY msg_id DESC, mdn_contact=? DESC
+             LIMIT 1",
             (&rfc724_mid, from_id),
             |row| {
                 let msg_id: MsgId = row.get("msg_id")?;

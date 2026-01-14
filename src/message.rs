@@ -87,12 +87,10 @@ impl MsgId {
         let result = context
             .sql
             .query_row_optional(
-                concat!(
-                    "SELECT m.state, mdns.msg_id",
-                    " FROM msgs m LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id",
-                    " WHERE id=?",
-                    " LIMIT 1",
-                ),
+                "SELECT m.state, mdns.msg_id
+                  FROM msgs m LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
+                  WHERE id=?
+                  LIMIT 1",
                 (self,),
                 |row| {
                     let state: MessageState = row.get(0)?;
@@ -501,40 +499,38 @@ impl Message {
         let mut msg = context
             .sql
             .query_row_optional(
-                concat!(
-                    "SELECT",
-                    "    m.id AS id,",
-                    "    rfc724_mid AS rfc724mid,",
-                    "    pre_rfc724_mid AS pre_rfc724mid,",
-                    "    m.mime_in_reply_to AS mime_in_reply_to,",
-                    "    m.chat_id AS chat_id,",
-                    "    m.from_id AS from_id,",
-                    "    m.to_id AS to_id,",
-                    "    m.timestamp AS timestamp,",
-                    "    m.timestamp_sent AS timestamp_sent,",
-                    "    m.timestamp_rcvd AS timestamp_rcvd,",
-                    "    m.ephemeral_timer AS ephemeral_timer,",
-                    "    m.ephemeral_timestamp AS ephemeral_timestamp,",
-                    "    m.type AS type,",
-                    "    m.state AS state,",
-                    "    mdns.msg_id AS mdn_msg_id,",
-                    "    m.download_state AS download_state,",
-                    "    m.error AS error,",
-                    "    m.msgrmsg AS msgrmsg,",
-                    "    m.starred AS original_msg_id,",
-                    "    m.mime_modified AS mime_modified,",
-                    "    m.txt AS txt,",
-                    "    m.subject AS subject,",
-                    "    m.param AS param,",
-                    "    m.hidden AS hidden,",
-                    "    m.location_id AS location,",
-                    "    c.blocked AS blocked",
-                    " FROM msgs m",
-                    " LEFT JOIN chats c ON c.id=m.chat_id",
-                    " LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id",
-                    " WHERE m.id=? AND chat_id!=3",
-                    " LIMIT 1",
-                ),
+                "SELECT
+                    m.id AS id,
+                    rfc724_mid AS rfc724mid,
+                    pre_rfc724_mid AS pre_rfc724mid,
+                    m.mime_in_reply_to AS mime_in_reply_to,
+                    m.chat_id AS chat_id,
+                    m.from_id AS from_id,
+                    m.to_id AS to_id,
+                    m.timestamp AS timestamp,
+                    m.timestamp_sent AS timestamp_sent,
+                    m.timestamp_rcvd AS timestamp_rcvd,
+                    m.ephemeral_timer AS ephemeral_timer,
+                    m.ephemeral_timestamp AS ephemeral_timestamp,
+                    m.type AS type,
+                    m.state AS state,
+                    mdns.msg_id AS mdn_msg_id,
+                    m.download_state AS download_state,
+                    m.error AS error,
+                    m.msgrmsg AS msgrmsg,
+                    m.starred AS original_msg_id,
+                    m.mime_modified AS mime_modified,
+                    m.txt AS txt,
+                    m.subject AS subject,
+                    m.param AS param,
+                    m.hidden AS hidden,
+                    m.location_id AS location,
+                    c.blocked AS blocked
+                 FROM msgs m
+                 LEFT JOIN chats c ON c.id=m.chat_id
+                 LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
+                 WHERE m.id=? AND chat_id!=3
+                 LIMIT 1",
                 (id,),
                 |row| {
                     let state: MessageState = row.get("state")?;
