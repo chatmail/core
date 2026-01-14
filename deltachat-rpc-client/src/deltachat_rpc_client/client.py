@@ -107,8 +107,8 @@ class Client:
         until_func: Callable[[AttrDict], bool],
         until_event: EventType = False,
     ) -> AttrDict:
-        """Process events until a certain event, or until the given callable
-        evaluates to True.
+        """Process events until the given callable evaluates to True,
+        or until a certain event happens.
 
         The until_func callable should accept an AttrDict object representing
         the last processed event. The event is returned when the callable
