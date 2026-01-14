@@ -1243,11 +1243,11 @@ async fn test_unarchive_if_muted() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_marknoticed_all_chats() -> Result<()> {
-    let mut t = TestContextManager::new();
-    let alice = &t.alice().await;
-    let bob = &t.bob().await;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
 
-    t.section("alice: create chats & promote them by sending a message");
+    tcm.section("alice: create chats & promote them by sending a message");
 
     let alice_chat_normal = alice
         .create_group_with_members("Chat (normal)", &[alice, bob])
@@ -1274,7 +1274,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
         .set_visibility(&alice.ctx, ChatVisibility::Archived)
         .await?;
 
-    t.section("bob: receive messages, accept all chats and send a reply to each messsage");
+    tcm.section("bob: receive messages, accept all chats and send a reply to each messsage");
 
     while let Some(sent_msg) = alice.pop_sent_msg_opt(Duration::default()).await {
         let bob_message = bob.recv_msg(&sent_msg).await;
@@ -1283,7 +1283,7 @@ async fn test_marknoticed_all_chats() -> Result<()> {
         send_text_msg(bob, bob_chat_id, "reply".to_string()).await?;
     }
 
-    t.section("alice: receive replies from bob");
+    tcm.section("alice: receive replies from bob");
     while let Some(sent_msg) = bob.pop_sent_msg_opt(Duration::default()).await {
         alice.recv_msg(&sent_msg).await;
     }
@@ -1297,10 +1297,10 @@ async fn test_marknoticed_all_chats() -> Result<()> {
         1
     );
 
-    t.section("alice: mark as read");
+    tcm.section("alice: mark as read");
     alice.evtracker.clear_events();
     marknoticed_all_chats(alice).await?;
-    t.section("alice: check that chats are no longer unread and that chatlist update events were received");
+    tcm.section("alice: check that chats are no longer unread and that chatlist update events were received");
     assert_eq!(alice_chat_normal.get_fresh_msg_cnt(alice).await?, 0);
     assert_eq!(alice_chat_muted.get_fresh_msg_cnt(alice).await?, 0);
     assert_eq!(
