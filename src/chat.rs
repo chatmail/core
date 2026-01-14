@@ -3229,7 +3229,7 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
         .sql
         .query_map_vec(
             concat!(
-                "SELECT c.id",
+                "SELECT DISTINCT(c.id)",
                 " FROM msgs m",
                 " LEFT JOIN contacts ct",
                 "        ON m.from_id=ct.id",
@@ -3239,8 +3239,7 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
                 "   AND m.hidden=0",
                 "   AND m.chat_id>9",
                 "   AND ct.blocked=0",
-                "   AND c.blocked=0",
-                " GROUP BY c.id;"
+                "   AND c.blocked=0;",
             ),
             (MessageState::InFresh,),
             |row| {
