@@ -55,6 +55,7 @@ cargo install --release --package deltachat-rpc-server --bin deltachat-rpc-serve
 # to a location that is included in your $PATH Environment variable.
 ```
 
+And make sure to enable the `takeVersionFromPATH` option:
 ```js
 startDeltaChat("data-dir", { takeVersionFromPATH: true });
 ```
