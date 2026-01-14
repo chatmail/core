@@ -3231,7 +3231,7 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
         .query_map_vec(
             "SELECT DISTINCT(c.id)
                  FROM msgs m
-                 LEFT JOIN chats c
+                 INNER JOIN chats c
                         ON m.chat_id=c.id
                  WHERE m.state=?
                    AND m.hidden=0
