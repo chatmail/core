@@ -121,11 +121,11 @@ class Client:
             if event.kind == EventType.INCOMING_MSG:
                 self._process_messages()
 
-            if event.kind == until_event:
-                return event
-
             stop = until_func(event)
             if stop:
+                return event
+
+            if event.kind == until_event:
                 return event
 
     def _on_event(self, event: AttrDict, filter_type: Type[EventFilter] = RawEvent) -> None:
