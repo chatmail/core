@@ -1311,28 +1311,22 @@ async fn test_marknoticed_all_chats() -> Result<()> {
     );
 
     let emitted_events = alice.evtracker.take_events();
-    macro_rules! contains_event {
-        ($event: expr) => {
-            assert!(
-                emitted_events
-                    .iter()
-                    .find(|Event { typ, .. }| typ == &$event)
-                    .is_some()
-            );
-        };
+    for event in &[
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_normal),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_muted),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_archived_and_muted),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(DC_CHAT_ID_ARCHIVED_LINK),
+        },
+    ] {
+        assert!(emitted_events.iter().any(|Event { typ, .. }| typ == event));
     }
-    contains_event!(EventType::ChatlistItemChanged {
-        chat_id: Some(alice_chat_normal)
-    });
-    contains_event!(EventType::ChatlistItemChanged {
-        chat_id: Some(alice_chat_muted)
-    });
-    contains_event!(EventType::ChatlistItemChanged {
-        chat_id: Some(alice_chat_archived_and_muted)
-    });
-    contains_event!(EventType::ChatlistItemChanged {
-        chat_id: Some(DC_CHAT_ID_ARCHIVED_LINK)
-    });
 
     Ok(())
 }
