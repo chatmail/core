@@ -3344,6 +3344,11 @@ async fn test_remove_member_from_broadcast() -> Result<()> {
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
     remove_contact_from_chat(alice, alice_chat_id, alice_bob_contact_id).await?;
 
+    // Alice must not remember old members,
+    // because we would like to remember the minimum information possible
+    let past_contacts = get_past_chat_contacts(alice, alice_chat_id).await?;
+    assert_eq!(past_contacts.len(), 0);
+
     let remove_msg = alice.pop_sent_msg().await;
     let rcvd = bob.recv_msg(&remove_msg).await;
     assert_eq!(rcvd.text, "Member Me removed by alice@example.org.");

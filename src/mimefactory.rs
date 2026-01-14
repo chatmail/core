@@ -247,6 +247,31 @@ impl MimeFactory {
 
             // Do not encrypt messages to mailing lists.
             encryption_pubkeys = None;
+        } else if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
+            // In a broadcast channel, only send member-added/removed messages
+            // to the affected member
+            let (authname, addr, public_key_bytes) = context
+                .sql
+                .query_row(
+                    "SELECT c.authname, c.addr, k.public_key
+                    FROM contacts c, public_keys k
+                    WHERE c.fingerprint=?1 AND k.fingerprint=?1",
+                    (fp?,),
+                    |row| {
+                        let authname: String = row.get(0)?;
+                        let addr: String = row.get(1)?;
+                        let public_key_bytes: Vec<u8> = row.get(2)?;
+
+                        Ok((authname, addr, public_key_bytes))
+                    },
+                )
+                .await?;
+
+            recipients.push(addr.clone());
+            to.push((authname, addr.clone()));
+
+            let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+            encryption_pubkeys = Some(vec![(addr, public_key)]);
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -305,13 +330,6 @@ impl MimeFactory {
 
                         for row in rows {
                             let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
-
-                            // In a broadcast channel, only send member-added/removed messages
-                            // to the affected member:
-                            if let Some(fp) = must_have_only_one_recipient(&msg, &chat)
-                                && fp? != fingerprint {
-                                    continue;
-                                }
 
                             let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
                                 Some(SignedPublicKey::from_slice(public_key_bytes)?)

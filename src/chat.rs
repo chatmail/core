@@ -4112,7 +4112,7 @@ pub async fn remove_contact_from_chat(
         } else {
             let mut sync = Nosync;
 
-            if chat.is_promoted() {
+            if chat.is_promoted() && chat.typ != Chattype::OutBroadcast {
                 remove_from_chat_contacts_table(context, chat_id, contact_id).await?;
             } else {
                 remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?;
