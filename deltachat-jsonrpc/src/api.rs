@@ -35,6 +35,7 @@ use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
+use deltachat::stock_str::{emit_events_for_updated_stock_strings, StockMessage};
 use deltachat::storage_usage::{get_blobdir_storage_usage, get_storage_usage};
 use deltachat::webxdc::StatusUpdateSerial;
 use deltachat::EventEmitter;
@@ -466,6 +467,10 @@ impl CommandApi {
                     .set_stock_translation(stock_id, stock_message)
                     .await?;
             }
+        }
+        // In the existing clients only one account is visible at a time.
+        if let Some(context) = accounts.get_selected_account() {
+            emit_events_for_updated_stock_strings(&context);
         }
         Ok(())
     }

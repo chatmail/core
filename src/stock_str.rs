@@ -1289,6 +1289,21 @@ impl Context {
     }
 }
 
+/// Emits events to invalidate cached data which contains core translated content
+///
+/// Only call this once after updating all your stockstrings,
+/// NOT after every single call to set_stock_translation, just once in the end.
+pub fn emit_events_for_updated_stock_strings(ctx: &Context) {
+    // update chatlist, which can contain all kinds of stockstrings in the message summary
+    ctx.emit_event(crate::EventType::ChatlistItemChanged { chat_id: None });
+    // And to update contact name [StockMessage::SelfMsg]
+    ctx.emit_event(crate::EventType::ContactsChanged(Some(ContactId::SELF)));
+    // To update bio/status [StockMessage::DeviceMessagesHint]
+    ctx.emit_event(crate::EventType::ContactsChanged(Some(ContactId::DEVICE)));
+    // reload connectivity view, which contains various stock stings
+    ctx.emit_event(crate::EventType::ConnectivityChanged);
+}
+
 impl Accounts {
     /// Set the stock string for the [StockMessage].
     ///
