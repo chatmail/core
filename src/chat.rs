@@ -3249,10 +3249,6 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
         marknoticed_chat(context, chat_id).await?;
     }
 
-    context.emit_event(EventType::MsgsNoticed(DC_CHAT_ID_ARCHIVED_LINK));
-    chatlist_events::emit_chatlist_item_changed(context, DC_CHAT_ID_ARCHIVED_LINK);
-    context.on_archived_chats_maybe_noticed();
-
     Ok(())
 }
 
