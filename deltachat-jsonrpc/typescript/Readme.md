@@ -52,7 +52,7 @@ For a more complete example refer to <https://github.com/deltachat-bot/echo/tree
 
 ```ts
 dc.on("Info", (accountId, { msg }) =>
-  console.info(accountId, "[core:info]", msg)
+  console.info(accountId, "[core:info]", msg),
 );
 // Or get an event emitter for only one account
 const emitter = dc.getContextEvents(accountId);
@@ -88,32 +88,35 @@ const accountId = await dc.rpc.addAccount();
 
 After that, register event listeners so you can see what core is doing:
 Intenally `@deltachat/jsonrpc-client` implments a loop that waits for new events and then emits them to javascript land.
+
 ```js
 dc.on("Info", (accountId, { msg }) =>
-  console.info(accountId, "[core:info]", msg)
+  console.info(accountId, "[core:info]", msg),
 );
 ```
 
 Now you can **configure the account:**
+
 ```js
 // use some real test credentials here
-await dc.rpc.setConfig(accountId, "addr", "alice@example.org")
-await dc.rpc.setConfig(accountId, "mail_pw", "***")
+await dc.rpc.setConfig(accountId, "addr", "alice@example.org");
+await dc.rpc.setConfig(accountId, "mail_pw", "***");
 // you can also set multiple config options in one call
 await dc.rpc.batchSetConfig(accountId, {
-     "addr": "alice@example.org",
-     "mail_pw": "***"
-})
+  addr: "alice@example.org",
+  mail_pw: "***",
+});
 
 // after setting the credentials attempt to login
-await dc.rpc.configure(accountId)
+await dc.rpc.configure(accountId);
 ```
 
 `configure()` returns a promise that is rejected on error (with await is is thrown).
 The configuration itself may take a while. You can monitor it's progress like this:
+
 ```js
 dc.on("ConfigureProgress", (accountId, { progress, comment }) => {
-    console.log(accountId, "ConfigureProgress", progress, comment);
+  console.log(accountId, "ConfigureProgress", progress, comment);
 });
 // make sure to register this event handler before calling `dc.rpc.configure()`
 ```
@@ -125,25 +128,33 @@ On subsequent starts it is not needed to call `dc.rpc.configure(accountId)`
 On a successfully configuration delta chat core automatically connects to the server, however subsequent starts you **need to do that manually** by calling `dc.rpc.startIo(accountId)` or `dc.rpc.startIoForAllAccounts()`.
 
 ```js
-if (!await dc.rpc.isConfigured(accountId)) {
-    // use some real test credentials here
-    await dc.rpc.batchSetConfig(accountId, {
-        "addr": "alice@example.org",
-        "mail_pw": "***"
-    })
-    await dc.rpc.configure(accountId)
+if (!(await dc.rpc.isConfigured(accountId))) {
+  // use some real test credentials here
+  await dc.rpc.batchSetConfig(accountId, {
+    addr: "alice@example.org",
+    mail_pw: "***",
+  });
+  await dc.rpc.configure(accountId);
 } else {
-    await dc.rpc.startIo(accountId)
+  await dc.rpc.startIo(accountId);
 }
 ```
 
 Now you can **send the first message:**
 
 ```js
-const contactId = await dc.rpc.createContact(accountId, "bob@example.org", null /* optional name */)
-const chatId = await dc.rpc.createChatByContactId(accountId, contactId)
+const contactId = await dc.rpc.createContact(
+  accountId,
+  "bob@example.org",
+  null /* optional name */,
+);
+const chatId = await dc.rpc.createChatByContactId(accountId, contactId);
 
-await dc.rpc.miscSendTextMessage(accountId, chatId, "Hi, here is my first message!")
+await dc.rpc.miscSendTextMessage(
+  accountId,
+  chatId,
+  "Hi, here is my first message!",
+);
 ```
 
 `dc.rpc.miscSendTextMessage()` returns immediately;
@@ -158,12 +169,13 @@ You can then **list all messages** of a chat as follows:
 ```js
 let i = 0;
 for (const msgId of await exp.rpc.getMessageIds(120, 12, false, false)) {
-    i++;
-    console.log(`Message: ${i}`, (await dc.rpc.getMessage(120, msgId)).text);
+  i++;
+  console.log(`Message: ${i}`, (await dc.rpc.getMessage(120, msgId)).text);
 }
 ```
 
 This will output the following two lines:
+
 ```
 Message 1: Hi, here is my first message!
 Message 2: Got it!
