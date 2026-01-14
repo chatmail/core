@@ -31,7 +31,7 @@ For a more complete example refer to https://github.com/deltachat-bot/echo/tree/
 
 You need to have rust installed to compile deltachat core for your platform and cpu architecture.
 <https://rustup.rs/> is the recommended way to install rust.
-Also your system probably needs more than 4gb ram to compile core, alternatively your could try to build the debug build, that might take less ram to build.
+Also your system probably needs more than 4GB RAM to compile core, alternatively your could try to build the debug build, which might take less RAM to build.
 
 1. clone the core repo, right next to your project folder: `git clone git@github.com:deltachat/deltachat-core-rust.git`
 2. go into your core checkout and run `git pull` and `git checkout <version>` to point it to the correct version (needs to be the same version the `@deltachat/jsonrpc-client` package has)
