@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 use typescript_type_def::TypeDef;
 
 use super::color_int_to_hex_string;
-use super::contact::ContactObject;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +47,6 @@ pub struct FullChat {
     chat_type: JsonrpcChatType,
     is_unpromoted: bool,
     is_self_talk: bool,
-    contacts: Vec<ContactObject>,
     contact_ids: Vec<u32>,
 
     /// Contact IDs of the past chat members.
@@ -82,20 +80,6 @@ impl FullChat {
 
         let contact_ids = get_chat_contacts(context, rust_chat_id).await?;
         let past_contact_ids = get_past_chat_contacts(context, rust_chat_id).await?;
-
-        let mut contacts = Vec::with_capacity(contact_ids.len());
-
-        for contact_id in &contact_ids {
-            contacts.push(
-                ContactObject::try_from_dc_contact(
-                    context,
-                    Contact::get_by_id(context, *contact_id)
-                        .await
-                        .context("failed to load contact")?,
-                )
-                .await?,
-            )
-        }
 
         let profile_image = match chat.get_profile_image(context).await? {
             Some(path_buf) => path_buf.to_str().map(|s| s.to_owned()),
@@ -132,7 +116,6 @@ impl FullChat {
             chat_type: chat.get_type().into(),
             is_unpromoted: chat.is_unpromoted(),
             is_self_talk: chat.is_self_talk(),
-            contacts,
             contact_ids: contact_ids.iter().map(|id| id.to_u32()).collect(),
             past_contact_ids: past_contact_ids.iter().map(|id| id.to_u32()).collect(),
             color,
@@ -150,7 +133,6 @@ impl FullChat {
 }
 
 /// cheaper version of fullchat, omits:
-/// - contacts
 /// - contact_ids
 /// - fresh_message_counter
 /// - ephemeral_timer
