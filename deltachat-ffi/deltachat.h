@@ -1564,7 +1564,7 @@ dc_array_t*     dc_wait_next_msgs            (dc_context_t* context);
  * Mark all messages in a chat as _noticed_.
  * _Noticed_ messages are no longer _fresh_ and do not count as being unseen
  * but are still waiting for being marked as "seen" using dc_markseen_msgs()
- * (IMAP/MDNs is not done for noticed messages).
+ * (read receipts aren't sent for noticed messages).
  *
  * Calling this function usually results in the event #DC_EVENT_MSGS_NOTICED.
  * See also dc_markseen_msgs().
