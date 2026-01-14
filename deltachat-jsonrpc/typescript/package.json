@@ -2,14 +2,12 @@
   "author": "Delta Chat Developers (ML) <delta@codespeak.net>",
   "dependencies": {
     "@deltachat/tiny-emitter": "3.0.0",
-    "isomorphic-ws": "^5.0.0",
     "yerpc": "^0.6.2"
   },
   "devDependencies": {
     "@types/chai": "^4.3.10",
     "@types/chai-as-promised": "^7.1.8",
     "@types/mocha": "^10.0.4",
-    "@types/ws": "^8.5.9",
     "c8": "^8.0.1",
     "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
@@ -19,8 +17,7 @@
     "npm-run-all": "^4.1.5",
     "prettier": "^3.5.3",
     "typedoc": "^0.28.5",
-    "typescript": "^5.8.3",
-    "ws": "^8.5.0"
+    "typescript": "^5.8.3"
   },
   "exports": {
     ".": {
