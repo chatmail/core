@@ -6,24 +6,30 @@ This package is a client for the jsonrpc server.
 
 ### Important Terms
 
-- [delta chat core](https://github.com/deltachat/deltachat-core-rust/) the heart of all Delta Chat clients. Handels all the heavy lifting (email, encryption, ...) and provides an easy api for bots and clients (`getChatlist`, `getChat`, `getContact`, ...).
-- [jsonrpc](https://www.jsonrpc.org/specification) is a json based protocol
+- [chat mail core (formerly delta chat core)](https://github.com/deltachat/deltachat-core-rust/) is heart of all Delta Chat clients. Handels all the heavy lifting (email, encryption, ...) and provides an easy api for bots and clients (`getChatlist`, `getChat`, `getContact`, ...).
+- [jsonrpc](https://www.jsonrpc.org/specification) is a JSON based protocol
   for applications to speak to each other by [remote procedure calls](https://en.wikipedia.org/wiki/Remote_procedure_call) (short RPC),
-  which basically means that the client can call methods on the server by sending a json messages.
+  which basically means that the client can call methods on the server by sending a JSON messages.
 - [`deltachat-rpc-server`](https://github.com/deltachat/deltachat-core-rust/tree/main/deltachat-rpc-server) provides the jsonrpc api over stdio (stdin/stdout)
 - [`@deltachat/stdio-rpc-server`](https://www.npmjs.com/package/@deltachat/stdio-rpc-server) is an easy way to install `deltachat-rpc-server` from npm and use it from nodejs.
 
 #### Transport
 
-You need to connect this client to an instance of deltachat core via a transport.
+You need to connect this client to an instance of chatmail-core via a transport.
 
-Currently there are 2 transports available:
-
-- (recomended) `StdioTransport` usable from `StdioDeltaChat` - speak to `deltachat-rpc-server` directly
-- `WebsocketTransport` usable from `WebsocketDeltaChat`
+For this you can use the `StdioTransport`, which you can use by importing `StdioDeltaChat`.
 
 You can also make your own transport, for example deltachat desktop uses a custom transport that sends the json messages over electron ipc.
 Just implement your transport based on the `Transport` interface - look at how the [stdio transport is implemented](https://github.com/deltachat/deltachat-core-rust/blob/7121675d226e69fd85d0194d4b9c4442e4dd8299/deltachat-jsonrpc/typescript/src/client.ts#L113) for an example, it's not hard.
+
+The other transports that exist (but note that those are not standalone, they list here only serves as reference on how to implement those.):
+
+- Electron IPC (from Delta Chat Desktop)
+  - [transport](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-electron/runtime-electron/runtime.ts#L49-L123),  [request handling](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-electron/src/deltachat/controller.ts#L199-L201) [responses](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-electron/src/deltachat/controller.ts#L93-L113)
+- Tauri IPC (from DC Desktop Tauri edition)
+  - [transport](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-tauri/runtime-tauri/runtime.ts#L86-L118), backend: [request handling](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-tauri/src-tauri/src/lib.rs#L85-L94) [responses](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-tauri/src-tauri/src/state/deltachat.rs#L43-L95)
+- Authenticated Websocket (from DC Desktop Browser edition)
+  - [transport](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-browser/runtime-browser/runtime.ts#L37-L80), backend: [authentication](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-browser/src/index.ts#L258-L275), [web socket server](https://github.com/deltachat/deltachat-desktop/blob/0a4fdb2065c7b14fa097769181afd05e3f552f54/packages/target-browser/src/deltachat-rpc.ts#L93) (this also contains some unrelated code, it's easier than it looks at first glance)
 
 ## Usage
 
