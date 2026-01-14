@@ -5,6 +5,8 @@ it does not use NAPI bindings but instead uses stdio executables
 to let you talk to core over jsonrpc over stdio.
 This simplifies cross-compilation and even reduces binary size (no CFFI layer and no NAPI layer).
 
+📚 Docs: <https://js.jsonrpc.delta.chat/>
+
 ## Usage
 
 > The **minimum** nodejs version for this package is `16`
@@ -25,7 +27,7 @@ async function main() {
 main();
 ```
 
-For a more complete example refer to https://github.com/deltachat-bot/echo/tree/master/nodejs_stdio_jsonrpc.
+For a more complete example refer to <https://github.com/deltachat-bot/echo/tree/master/nodejs_stdio_jsonrpc>.
 
 ## How to use on an unsupported platform
 
