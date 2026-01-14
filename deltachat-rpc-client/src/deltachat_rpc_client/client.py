@@ -14,6 +14,7 @@ from typing import (
 
 from ._utils import (
     AttrDict,
+    _forever,
     parse_system_add_remove,
     parse_system_image_changed,
     parse_system_title_changed,
@@ -91,19 +92,28 @@ class Client:
 
     def run_forever(self) -> None:
         """Process events forever."""
-        self.run_until(lambda _: False)
+        self.run_until(_forever)
 
     def run_until(self, func: Callable[[AttrDict], bool]) -> AttrDict:
-        """Process events until the given callable evaluates to True.
-
-        The callable should accept an AttrDict object representing the
-        last processed event. The event is returned when the callable
-        evaluates to True.
-        """
+        """Start the event processing loop."""
         self.logger.debug("Listening to incoming events...")
         if self.is_configured():
             self.account.start_io()
         self._process_messages()  # Process old messages.
+        return self._process_events(until_func=func)  # Loop over incoming events
+
+    def _process_events(
+        self,
+        until_func: Callable[[AttrDict], bool],
+        until_event: EventType = False,
+    ) -> AttrDict:
+        """Process events until the given callable evaluates to True,
+        or until a certain event happens.
+
+        The until_func callable should accept an AttrDict object representing
+        the last processed event. The event is returned when the callable
+        evaluates to True.
+        """
         while True:
             event = self.account.wait_for_event()
             event["kind"] = EventType(event.kind)
@@ -112,8 +122,11 @@ class Client:
             if event.kind == EventType.INCOMING_MSG:
                 self._process_messages()
 
-            stop = func(event)
+            stop = until_func(event)
             if stop:
+                return event
+
+            if event.kind == until_event:
                 return event
 
     def _on_event(self, event: AttrDict, filter_type: Type[EventFilter] = RawEvent) -> None:
