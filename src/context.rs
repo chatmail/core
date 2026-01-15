@@ -1120,21 +1120,19 @@ impl Context {
         let list = self
             .sql
             .query_map_vec(
-                concat!(
-                    "SELECT m.id",
-                    " FROM msgs m",
-                    " LEFT JOIN contacts ct",
-                    "        ON m.from_id=ct.id",
-                    " LEFT JOIN chats c",
-                    "        ON m.chat_id=c.id",
-                    " WHERE m.state=?",
-                    "   AND m.hidden=0",
-                    "   AND m.chat_id>9",
-                    "   AND ct.blocked=0",
-                    "   AND c.blocked=0",
-                    "   AND NOT(c.muted_until=-1 OR c.muted_until>?)",
-                    " ORDER BY m.timestamp DESC,m.id DESC;"
-                ),
+                "SELECT m.id
+FROM msgs m
+LEFT JOIN contacts ct
+    ON m.from_id=ct.id
+LEFT JOIN chats c
+    ON m.chat_id=c.id
+WHERE m.state=?
+AND m.hidden=0
+AND m.chat_id>9
+AND ct.blocked=0
+AND c.blocked=0
+AND NOT(c.muted_until=-1 OR c.muted_until>?)
+ORDER BY m.timestamp DESC,m.id DESC",
                 (MessageState::InFresh, time()),
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
