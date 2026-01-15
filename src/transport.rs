@@ -21,6 +21,7 @@ use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
 use crate::ensure_and_debug_assert;
 use crate::events::EventType;
+use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
 use crate::provider::{Protocol, Provider, Socket, UsernamePattern, get_provider_by_id};
@@ -774,6 +775,7 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
 /// Process received data for transport synchronization.
 pub(crate) async fn sync_transports(
     context: &Context,
+    from_addr: &str,
     transports: &[TransportData],
     removed_transports: &[RemovedTransportData],
 ) -> Result<()> {
@@ -788,7 +790,7 @@ pub(crate) async fn sync_transports(
         modified |= save_transport(context, entered, configured, *timestamp, *is_published).await?;
     }
 
-    context
+    let primary_changed = context
         .sql
         .transaction(|transaction| {
             for RemovedTransportData { addr, timestamp } in removed_transports {
@@ -806,13 +808,43 @@ pub(crate) async fn sync_transports(
                     (addr, timestamp),
                 )?;
             }
-            Ok(())
+
+            let transport_exists = transaction.query_row(
+                "SELECT COUNT(*) FROM transports WHERE addr=?",
+                (from_addr,),
+                |row| {
+                    let count: i64 = row.get(0)?;
+                    Ok(count > 0)
+                },
+            )?;
+
+            let primary_changed = if transport_exists {
+                transaction.execute(
+                    "
+UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
+                    ",
+                    (from_addr,),
+                )? > 0
+            } else {
+                warn!(
+                    context,
+                    "Received sync message from unknown address {from_addr:?}."
+                );
+                false
+            };
+            Ok(primary_changed)
         })
         .await?;
 
     if modified {
-        context.self_public_key.lock().await.take();
         tokio::task::spawn(restart_io_if_running_boxed(context.clone()));
+    }
+    if primary_changed {
+        info!(context, "Primary transport changed to {from_addr:?}.");
+        context.sql.uncache_raw_config("configured_addr").await;
+    }
+    if modified || primary_changed {
+        context.self_public_key.lock().await.take();
         context.emit_event(EventType::TransportsModified);
     }
     Ok(())
