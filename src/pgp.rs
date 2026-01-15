@@ -17,7 +17,9 @@ use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
-use pgp::types::{CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, StringToKey};
+use pgp::types::{
+    CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, SecretKeyTrait as _, StringToKey,
+};
 use rand_old::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
 
@@ -30,9 +32,6 @@ pub(crate) const HEADER_SETUPCODE: &str = "passphrase-begin";
 
 /// Preferred symmetric encryption algorithm.
 const SYMMETRIC_KEY_ALGORITHM: SymmetricKeyAlgorithm = SymmetricKeyAlgorithm::AES128;
-
-/// Preferred cryptographic hash.
-const HASH_ALGORITHM: HashAlgorithm = HashAlgorithm::Sha256;
 
 /// Split data from PGP Armored Data as defined in <https://tools.ietf.org/html/rfc4880#section-6.2>.
 ///
@@ -205,7 +204,8 @@ pub async fn pk_encrypt(
                         }
                     }
 
-                    msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+                    let hash_algorithm = private_key_for_signing.hash_alg();
+                    msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
                     if compress {
                         msg.compression(CompressionAlgorithm::ZLIB);
                     }
@@ -228,7 +228,8 @@ pub async fn pk_encrypt(
                         }
                     }
 
-                    msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+                    let hash_algorithm = private_key_for_signing.hash_alg();
+                    msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
                     if compress {
                         msg.compression(CompressionAlgorithm::ZLIB);
                     }
@@ -453,7 +454,8 @@ pub async fn symm_encrypt_message(
         );
         msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
 
-        msg.sign(&*private_key_for_signing, Password::empty(), HASH_ALGORITHM);
+        let hash_algorithm = private_key_for_signing.hash_alg();
+        msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
         if compress {
             msg.compression(CompressionAlgorithm::ZLIB);
         }
