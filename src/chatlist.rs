@@ -76,7 +76,7 @@ impl Chatlist {
     ///   the pseudo-chat DC_CHAT_ID_ARCHIVED_LINK is added if there are *any* archived
     ///   chats
     /// - the flag DC_GCL_FOR_FORWARDING sorts "Saved messages" to the top of the chatlist
-    ///   and hides the device-chat and contact requests
+    ///   and hides the device-chat, contact requests and incoming broadcasts.
     ///   typically used on forwarding, may be combined with DC_GCL_NO_SPECIALS
     /// - if the flag DC_GCL_NO_SPECIALS is set, archive link is not added
     ///   to the list (may be used eg. for selecting chats on forwarding, the flag is
@@ -224,8 +224,9 @@ impl Chatlist {
                 let process_rows = |rows: rusqlite::AndThenRows<_>| {
                     rows.filter_map(|row: std::result::Result<(_, _, Params, _), _>| match row {
                         Ok((chat_id, typ, param, msg_id)) => {
-                            if typ == Chattype::Mailinglist
-                                && param.get(Param::ListPost).is_none_or_empty()
+                            if typ == Chattype::InBroadcast
+                                || (typ == Chattype::Mailinglist
+                                    && param.get(Param::ListPost).is_none_or_empty())
                             {
                                 None
                             } else {
@@ -595,6 +596,41 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(chats.len(), 1);
+    }
+
+    /// Test that DC_CHAT_TYPE_IN_BROADCAST are hidden
+    /// and DC_CHAT_TYPE_OUT_BROADCAST are shown in chatlist for forwarding.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_broadcast_visiblity_on_forward() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let alice_broadcast_a_id = create_broadcast(alice, "Channel Alice".to_string()).await?;
+        let qr = get_securejoin_qr(alice, Some(alice_broadcast_a_id))
+            .await
+            .unwrap();
+        let bob_broadcast_a_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+        let bob_broadcast_b_id = create_broadcast(bob, "Channel Bob".to_string()).await?;
+
+        let chats = Chatlist::try_load(bob, DC_GCL_FOR_FORWARDING, None, None)
+            .await
+            .unwrap();
+
+        assert!(
+            !chats
+                .iter()
+                .any(|(chat_id, _)| chat_id == &bob_broadcast_a_id),
+            "alice broadcast is not shown in bobs forwarding chatlist"
+        );
+        assert!(
+            chats
+                .iter()
+                .any(|(chat_id, _)| chat_id == &bob_broadcast_b_id),
+            "bobs own broadcast is shown in his forwarding chatlist"
+        );
+
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

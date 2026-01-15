@@ -894,7 +894,7 @@ int             dc_preconfigure_keypair        (dc_context_t* context, const cha
  *       the pseudo-chat DC_CHAT_ID_ARCHIVED_LINK is added if there are _any_ archived
  *       chats
  *     - the flag DC_GCL_FOR_FORWARDING sorts "Saved messages" to the top of the chatlist
- *       and hides the "Device chat" and contact requests.
+ *       and hides the "Device chat", contact requests and incoming broadcasts.
  *       typically used on forwarding, may be combined with DC_GCL_NO_SPECIALS
  *       to also hide the archive link.
  *     - if the flag DC_GCL_NO_SPECIALS is set, archive link is not added
