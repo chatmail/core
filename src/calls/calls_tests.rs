@@ -68,6 +68,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
+        assert_eq!(info.has_video_initially(), true);
         assert_text(t, m.id, "Outgoing call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
@@ -89,6 +90,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
+        assert_eq!(info.has_video_initially(), true);
         assert_text(t, m.id, "Incoming call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }

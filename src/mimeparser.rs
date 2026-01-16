@@ -738,6 +738,9 @@ impl MimeMessage {
         let accepted = self
             .get_header(HeaderDef::ChatWebrtcAccepted)
             .map(|s| s.to_string());
+        let has_video = self
+            .get_header(HeaderDef::ChatWebrtcHasVideoInitially)
+            .map(|s| s.to_string());
         if let Some(part) = self.parts.first_mut() {
             if let Some(room) = room {
                 if content == "call" {
@@ -746,6 +749,9 @@ impl MimeMessage {
                 }
             } else if let Some(accepted) = accepted {
                 part.param.set(Param::WebrtcAccepted, accepted);
+            }
+            if let Some(has_video) = has_video {
+                part.param.set(Param::CallHasVideoInitially, has_video);
             }
         }
     }
