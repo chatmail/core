@@ -261,7 +261,10 @@ pub(super) async fn handle_auth_required(
             .await?;
 
         match invite {
-            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {}
+            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {
+                // This is to tell UI that Chat.can_send has changed
+                context.emit_event(EventType::ChatModified(chat_id));
+            }
             QrInvite::Group { .. } => {
                 // The message reads "Alice replied, waiting to be added to the group…",
                 // so only show it when joining a group and not for a 1:1 chat or broadcast channel.

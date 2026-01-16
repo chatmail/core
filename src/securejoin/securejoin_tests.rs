@@ -1370,3 +1370,109 @@ gU6dGXsFMe/RpRHrIAkMAaM5xkxMDRuRJDxiUdS/X+Y8
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_group_can_send_and_event() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    let alice_chatid = chat::create_group(&alice, "the chat").await?;
+
+    tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
+    let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
+
+    tcm.section("Step 2: Bob scans QR-code, sends vg-request");
+    let bob_chatid = join_securejoin(&bob, &qr).await?;
+    assert_eq!(
+        Chat::load_from_db(&bob, bob_chatid)
+            .await?
+            .can_send(&bob)
+            .await?,
+        false
+    );
+
+    let sent = bob.pop_sent_msg().await;
+    let _ = alice.parse_msg(&sent).await;
+
+    tcm.section("Step 3: Alice receives vg-request, sends vg-auth-required");
+    alice.recv_msg_trash(&sent).await;
+    let sent = alice.pop_sent_msg().await;
+    let _ = bob.parse_msg(&sent).await;
+
+    tcm.section("Step 4: Bob receives vg-auth-required, sends vg-request-with-auth");
+    bob.recv_msg_trash(&sent).await;
+    let sent = bob.pop_sent_msg().await;
+
+    tcm.section("Step 5+6: Alice receives vg-request-with-auth, sends vg-member-added");
+    alice.recv_msg_trash(&sent).await;
+    let sent = alice.pop_sent_msg().await;
+
+    bob.evtracker.clear_events();
+    assert_eq!(
+        Chat::load_from_db(&bob, bob_chatid)
+            .await?
+            .can_send(&bob)
+            .await?,
+        false
+    );
+
+    tcm.section("Step 7: Bob receives vg-member-added");
+    bob.recv_msg(&sent).await;
+
+    bob.evtracker
+        .get_matching(|typ| typ == &EventType::ChatModified(bob_chatid))
+        .await;
+
+    assert_eq!(
+        Chat::load_from_db(&bob, bob_chatid)
+            .await?
+            .can_send(&bob)
+            .await?,
+        true
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_contact_can_send_and_event() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+
+    tcm.section("Step 1: Generate QR-code, ChatId(0) indicates setup-contact");
+    let qr = get_securejoin_qr(&alice, None).await?;
+
+    tcm.section("Step 2: Bob scans QR-code, sends vc-request");
+    let bob_chat_id = join_securejoin(&bob.ctx, &qr).await?;
+
+    let bob_chat = Chat::load_from_db(&bob, bob_chat_id).await?;
+    assert_eq!(
+        bob_chat.why_cant_send(&bob).await?,
+        Some(CantSendReason::MissingKey)
+    );
+
+    let sent = bob.pop_sent_msg().await;
+
+    tcm.section("Step 3: Alice receives vc-request, sends vc-auth-required");
+    alice.recv_msg_trash(&sent).await;
+
+    let sent = alice.pop_sent_msg().await;
+    let bob_chat = bob.get_chat(&alice).await;
+    assert_eq!(bob_chat.can_send(&bob).await?, false);
+    bob.evtracker.clear_events();
+
+    tcm.section("Step 4: Bob receives vc-auth-required, sends vc-request-with-auth");
+    bob.recv_msg_trash(&sent).await;
+
+    bob.evtracker
+        .get_matching(|typ| typ == &EventType::ChatModified(bob_chat_id))
+        .await;
+
+    let bob_chat = bob.get_chat(&alice).await;
+    assert_eq!(bob_chat.can_send(&bob).await?, true);
+
+    // Rest of the steps (4-7) are irrelevant for this test
+    Ok(())
+}
