@@ -59,7 +59,7 @@ pub struct FullChat {
 
     is_device_chat: bool,
     /// Note that this is different from
-    /// [`ChatListItem::is_self_in_group`](`crate::api::types::chat_list::ChatListItemFetchResult::ChatListItem::is_self_in_group`).
+    /// [`ChatListItem::self_in_group`](`crate::api::types::chat_list::ChatListItemFetchResult::ChatListItem::self_in_group`).
     /// This property should only be accessed
     /// when [`FullChat::chat_type`] is [`Chattype::Group`].
     //
@@ -178,8 +178,9 @@ pub struct BasicChat {
     is_self_talk: bool,
     color: String,
     is_contact_request: bool,
-
+    // deprecated 2026-01, use is_device_talk instead
     is_device_chat: bool,
+    is_device_talk: bool,
     is_muted: bool,
 }
 
@@ -207,6 +208,7 @@ impl BasicChat {
             color,
             is_contact_request: chat.is_contact_request(),
             is_device_chat: chat.is_device_talk(),
+            is_device_talk: chat.is_device_talk(),
             is_muted: chat.is_muted(),
         })
     }
