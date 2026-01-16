@@ -1437,7 +1437,11 @@ impl CommandApi {
     /// Returns count of read receipts on message.
     ///
     /// This view count is meant as a feedback measure for the channel owner only.
-    async fn get_msg_read_receipt_count(&self, account_id: u32, message_id: u32) -> Result<usize> {
+    async fn get_message_read_receipt_count(
+        &self,
+        account_id: u32,
+        message_id: u32,
+    ) -> Result<usize> {
         let ctx = self.get_context(account_id).await?;
         get_msg_read_receipt_count(&ctx, MsgId::new(message_id)).await
     }
