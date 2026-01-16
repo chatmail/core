@@ -43,6 +43,15 @@ class Message:
         """Get message read receipts."""
         read_receipts = self._rpc.get_message_read_receipts(self.account.id, self.id)
         return [AttrDict(read_receipt) for read_receipt in read_receipts]
+    
+    def get_read_receipt_count(self) -> int:
+        """
+        Returns count of read receipts on message.
+        
+        This view count is meant as a feedback measure for the channel owner only.
+        """
+        read_receipts = self._rpc.get_message_read_receipts(self.account.id, self.id)
+        return read_receipts
 
     def get_reactions(self) -> Optional[AttrDict]:
         """Get message reactions."""

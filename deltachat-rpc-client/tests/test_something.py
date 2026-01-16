@@ -929,6 +929,9 @@ def test_read_receipt(acfactory):
     read_receipts = read_msg.get_read_receipts()
     assert len(read_receipts) == 1
     assert read_receipts[0].contact_id == alice_contact_bob.id
+    
+    read_receipt_cnt = read_msg.get_read_receipt_count()
+    assert read_receipt_cnt == 1
 
 
 def test_get_http_response(acfactory):
