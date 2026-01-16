@@ -50,8 +50,7 @@ class Message:
 
         This view count is meant as a feedback measure for the channel owner only.
         """
-        read_receipts = self._rpc.get_message_read_receipts(self.account.id, self.id)
-        return read_receipts
+        return self._rpc.get_message_read_receipts(self.account.id, self.id)
 
     def get_reactions(self) -> Optional[AttrDict]:
         """Get message reactions."""
