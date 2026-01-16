@@ -655,7 +655,6 @@ async fn decode_ideltachat(context: &Context, prefix: &str, qr: &str) -> Result<
 
 /// scheme: `DCACCOUNT:example.org`
 /// or `DCACCOUNT:https://example.org/new`
-/// or `DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3`
 fn decode_account(qr: &str) -> Result<Qr> {
     let payload = qr
         .get(DCACCOUNT_SCHEME.len()..)
