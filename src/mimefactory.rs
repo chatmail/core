@@ -248,24 +248,30 @@ impl MimeFactory {
             // Do not encrypt messages to mailing lists.
             encryption_pubkeys = None;
         } else if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
+            let fp = fp?;
             // In a broadcast channel, only send member-added/removed messages
             // to the affected member
-            let (authname, addr, public_key_bytes) = context
+            let (authname, addr) = context
                 .sql
                 .query_row(
-                    "SELECT c.authname, c.addr, k.public_key
-                    FROM contacts c, public_keys k
-                    WHERE c.fingerprint=?1 AND k.fingerprint=?1",
-                    (fp?,),
+                    "SELECT authname, addr FROM contacts WHERE fingerprint=?",
+                    (fp,),
                     |row| {
                         let authname: String = row.get(0)?;
                         let addr: String = row.get(1)?;
-                        let public_key_bytes: Vec<u8> = row.get(2)?;
-
-                        Ok((authname, addr, public_key_bytes))
+                        Ok((authname, addr))
                     },
                 )
                 .await?;
+
+            let public_key_bytes: Vec<_> = context
+                .sql
+                .query_get_value(
+                    "SELECT public_key FROM public_keys WHERE fingerprint=?",
+                    (fp,),
+                )
+                .await?
+                .context("Can't send member addition/removal: missing key")?;
 
             recipients.push(addr.clone());
             to.push((authname, addr.clone()));
