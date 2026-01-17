@@ -747,13 +747,23 @@ Content-Disposition: reaction\n\
             alice_reaction_msg.id.get_state(&alice).await?,
             MessageState::InSeen
         );
-        // Reactions don't request MDNs.
+        // Reactions don't request MDNs, but an MDN to self is sent.
         assert_eq!(
             alice
                 .sql
                 .count("SELECT COUNT(*) FROM smtp_mdns", ())
                 .await?,
-            0
+            1
+        );
+        assert_eq!(
+            alice
+                .sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                    (ContactId::SELF,)
+                )
+                .await?,
+            1
         );
 
         // Alice reacts to own message.

@@ -1,5 +1,6 @@
 //! Internet Message Format reception pipeline.
 
+use std::cmp;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::iter;
 use std::sync::LazyLock;
@@ -14,7 +15,7 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, save_broadcast_secret};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ChatVisibility, save_broadcast_secret};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -960,6 +961,74 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
             // This is a Delta Chat MDN. Mark as read.
             markseen_on_imap_table(context, rfc724_mid_orig).await?;
         }
+        if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
+            let mut updated_chats = BTreeMap::new();
+            let mut archived_chats_maybe_noticed = false;
+            for report in &mime_parser.mdn_reports {
+                for msg_rfc724_mid in report
+                    .original_message_id
+                    .iter()
+                    .chain(&report.additional_message_ids)
+                {
+                    let Some(msg_id) = rfc724_mid_exists(context, msg_rfc724_mid).await? else {
+                        continue;
+                    };
+                    let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
+                        continue;
+                    };
+                    if msg.state < MessageState::InFresh || msg.state >= MessageState::InSeen {
+                        continue;
+                    }
+                    if !mime_parser.was_encrypted() && msg.get_showpadlock() {
+                        warn!(context, "MDN: Not encrypted. Ignoring.");
+                        continue;
+                    }
+                    message::update_msg_state(context, msg_id, MessageState::InSeen).await?;
+                    if let Err(e) = msg_id.start_ephemeral_timer(context).await {
+                        error!(context, "start_ephemeral_timer for {msg_id}: {e:#}.");
+                    }
+                    if !mime_parser.has_chat_version() {
+                        continue;
+                    }
+                    archived_chats_maybe_noticed |= msg.state < MessageState::InNoticed
+                        && msg.chat_visibility == ChatVisibility::Archived;
+                    updated_chats
+                        .entry(msg.chat_id)
+                        .and_modify(|ts| *ts = cmp::max(*ts, msg.timestamp_sort))
+                        .or_insert(msg.timestamp_sort);
+                }
+            }
+            for (chat_id, timestamp_sort) in updated_chats {
+                context
+                    .sql
+                    .execute(
+                        "
+UPDATE msgs SET state=? WHERE
+    state=? AND
+    hidden=0 AND
+    chat_id=? AND
+    timestamp<?",
+                        (
+                            MessageState::InNoticed,
+                            MessageState::InFresh,
+                            chat_id,
+                            timestamp_sort,
+                        ),
+                    )
+                    .await
+                    .context("UPDATE msgs.state")?;
+                // Removes all notifications for the chat in UIs. Ideally should be under
+                // `if chat_id.get_fresh_msg_cnt(context).await? == 0`, but this causes a not
+                // updated profile badge counter in the UIs as of v2.35.0. Removed notifications for
+                // new messages is an already existing and known problem, so let's emit the event
+                // unconditionally for now.
+                context.emit_event(EventType::MsgsNoticed(chat_id));
+                chatlist_events::emit_chatlist_item_changed(context, chat_id);
+            }
+            if archived_chats_maybe_noticed {
+                context.on_archived_chats_maybe_noticed();
+            }
+        }
     }
 
     if mime_parser.is_call() {
@@ -1696,8 +1765,6 @@ async fn add_parts(
     }
 
     let is_location_kml = mime_parser.location_kml.is_some();
-    let is_mdn = !mime_parser.mdn_reports.is_empty();
-
     let mut group_changes = match chat.typ {
         _ if chat.id.is_special() => GroupChangesInfo::default(),
         Chattype::Single => GroupChangesInfo::default(),
@@ -1733,7 +1800,10 @@ async fn add_parts(
 
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
-    } else if seen || is_mdn || chat_id_blocked == Blocked::Yes || group_changes.silent
+    } else if seen
+        || !mime_parser.mdn_reports.is_empty()
+        || chat_id_blocked == Blocked::Yes
+        || group_changes.silent
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
@@ -2251,19 +2321,13 @@ RETURNING id
         }
     }
 
-    // Normally outgoing MDNs sent by us never appear in mailboxes, but Gmail saves all
-    // outgoing messages, including MDNs, to the Sent folder. If we detect such saved MDN,
-    // delete it.
-    let needs_delete_job =
-        !mime_parser.incoming && is_mdn && is_dc_message == MessengerMessage::Yes;
-
     Ok(ReceivedMsg {
         chat_id,
         state,
         hidden,
         sort_timestamp,
         msg_ids: created_db_entries,
-        needs_delete_job,
+        needs_delete_job: false,
     })
 }
 
