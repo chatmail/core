@@ -19,6 +19,7 @@ use strum_macros::EnumIter;
 
 use crate::blob::BlobObject;
 use crate::chatlist::Chatlist;
+use crate::chatlist_events;
 use crate::color::str_to_color;
 use crate::config::Config;
 use crate::constants::{
@@ -42,7 +43,7 @@ use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
 use crate::receive_imf::ReceivedMsg;
-use crate::smtp::send_msg_to_smtp;
+use crate::smtp::{self, send_msg_to_smtp};
 use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
@@ -51,7 +52,6 @@ use crate::tools::{
     gm2local_offset, normalize_text, smeared_time, time, truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
-use crate::{chatlist_events, imap};
 
 pub(crate) const PARAM_BROADCAST_SECRET: Param = Param::Arg3;
 
@@ -2135,10 +2135,11 @@ pub(crate) async fn sync(context: &Context, id: SyncId, action: SyncAction) -> R
 }
 
 /// Whether the chat is pinned or archived.
-#[derive(Debug, Copy, Eq, PartialEq, Clone, Serialize, Deserialize, EnumIter)]
+#[derive(Debug, Copy, Eq, PartialEq, Clone, Serialize, Deserialize, EnumIter, Default)]
 #[repr(i8)]
 pub enum ChatVisibility {
     /// Chat is neither archived nor pinned.
+    #[default]
     Normal = 0,
 
     /// Chat is archived.
@@ -2838,32 +2839,11 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     let from = context.get_primary_self_addr().await?;
     let lowercase_from = from.to_lowercase();
 
-    // Send BCC to self if it is enabled.
-    //
-    // Previous versions of Delta Chat did not send BCC self
-    // if DeleteServerAfter was set to immediately delete messages
-    // from the server. This is not the case anymore
-    // because BCC-self messages are also used to detect
-    // that message was sent if SMTP server is slow to respond
-    // and connection is frequently lost
-    // before receiving status line. NB: This is not a problem for chatmail servers, so `BccSelf`
-    // disabled by default is fine.
-    //
-    // `from` must be the last addr, see `receive_imf_inner()` why.
     recipients.retain(|x| x.to_lowercase() != lowercase_from);
-    if (context.get_config_bool(Config::BccSelf).await?
-        || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage)
-        && (context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty())
+    if context.get_config_bool(Config::BccSelf).await?
+        || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage
     {
-        // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
-        // them. Normally the user should have a non-chatmail primary transport to send unencrypted
-        // messages.
-        if needs_encryption {
-            for addr in context.get_secondary_self_addrs().await? {
-                recipients.push(addr);
-            }
-        }
-        recipients.push(from);
+        smtp::add_self_recipients(context, &mut recipients, needs_encryption).await?;
     }
 
     // Default Webxdc integrations are hidden messages and must not be sent out
@@ -3291,7 +3271,7 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
         let hidden_messages = context
             .sql
             .query_map_vec(
-                "SELECT id, rfc724_mid FROM msgs
+                "SELECT id FROM msgs
                     WHERE state=?
                       AND hidden=1
                       AND chat_id=?
@@ -3299,16 +3279,11 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
                 (MessageState::InFresh, chat_id), // No need to check for InNoticed messages, because reactions are never InNoticed
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
-                    let rfc724_mid: String = row.get(1)?;
-                    Ok((msg_id, rfc724_mid))
+                    Ok(msg_id)
                 },
             )
             .await?;
-        for (msg_id, rfc724_mid) in &hidden_messages {
-            message::update_msg_state(context, *msg_id, MessageState::InSeen).await?;
-            imap::markseen_on_imap_table(context, rfc724_mid).await?;
-        }
-
+        message::markseen_msgs(context, hidden_messages).await?;
         if noticed_msgs_count == 0 {
             return Ok(());
         }

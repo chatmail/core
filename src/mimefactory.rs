@@ -106,6 +106,7 @@ pub struct MimeFactory {
     /// addresses and OpenPGP keys
     /// to use for encryption.
     ///
+    /// If `Some`, encrypt to self also.
     /// `None` if the message is not encrypted.
     encryption_pubkeys: Option<Vec<(String, SignedPublicKey)>>,
 
@@ -234,7 +235,6 @@ impl MimeFactory {
             encryption_pubkeys = if msg.param.get_bool(Param::ForcePlaintext).unwrap_or(false) {
                 None
             } else {
-                // Encrypt, but only to self.
                 Some(Vec::new())
             };
         } else if chat.is_mailing_list() {
@@ -539,7 +539,9 @@ impl MimeFactory {
         let timestamp = create_smeared_timestamp(context);
 
         let addr = contact.get_addr().to_string();
-        let encryption_pubkeys = if contact.is_key_contact() {
+        let encryption_pubkeys = if from_id == ContactId::SELF {
+            Some(Vec::new())
+        } else if contact.is_key_contact() {
             if let Some(key) = contact.public_key(context).await? {
                 Some(vec![(addr.clone(), key)])
             } else {

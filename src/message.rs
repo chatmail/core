@@ -452,6 +452,7 @@ pub struct Message {
     pub(crate) is_dc_message: MessengerMessage,
     pub(crate) original_msg_id: MsgId,
     pub(crate) mime_modified: bool,
+    pub(crate) chat_visibility: ChatVisibility,
     pub(crate) chat_blocked: Blocked,
     pub(crate) location_id: u32,
     pub(crate) error: Option<String>,
@@ -525,6 +526,7 @@ impl Message {
                     m.param AS param,
                     m.hidden AS hidden,
                     m.location_id AS location,
+                    c.archived AS visibility,
                     c.blocked AS blocked
                  FROM msgs m
                  LEFT JOIN chats c ON c.id=m.chat_id
@@ -583,6 +585,7 @@ impl Message {
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
                         hidden: row.get("hidden")?,
                         location_id: row.get("location")?,
+                        chat_visibility: row.get::<_, Option<_>>("visibility")?.unwrap_or_default(),
                         chat_blocked: row
                             .get::<_, Option<Blocked>>("blocked")?
                             .unwrap_or_default(),
@@ -1837,6 +1840,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                     m.param AS param,
                     m.from_id AS from_id,
                     m.rfc724_mid AS rfc724_mid,
+                    m.hidden AS hidden,
                     c.archived AS archived,
                     c.blocked AS blocked
                  FROM msgs m LEFT JOIN chats c ON c.id=m.chat_id
@@ -1848,6 +1852,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                     let param: Params = row.get::<_, String>("param")?.parse().unwrap_or_default();
                     let from_id: ContactId = row.get("from_id")?;
                     let rfc724_mid: String = row.get("rfc724_mid")?;
+                    let hidden: bool = row.get("hidden")?;
                     let visibility: ChatVisibility = row.get("archived")?;
                     let blocked: Option<Blocked> = row.get("blocked")?;
                     let ephemeral_timer: EphemeralTimer = row.get("ephemeral_timer")?;
@@ -1859,6 +1864,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                             param,
                             from_id,
                             rfc724_mid,
+                            hidden,
                             visibility,
                             blocked.unwrap_or_default(),
                         ),
@@ -1891,6 +1897,7 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             curr_param,
             curr_from_id,
             curr_rfc724_mid,
+            curr_hidden,
             curr_visibility,
             curr_blocked,
         ),
@@ -1903,8 +1910,9 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
 
             markseen_on_imap_table(context, &curr_rfc724_mid).await?;
 
-            // Read receipts for system messages are never sent. These messages have no place to
-            // display received read receipt anyway.  And since their text is locally generated,
+            // Read receipts for system messages are never sent to contacts.
+            // These messages have no place to display received read receipt
+            // anyway. And since their text is locally generated,
             // quoting them is dangerous as it may contain contact names. E.g., for original message
             // "Group left by me", a read receipt will quote "Group left by <name>", and the name can
             // be a display name stored in address book rather than the name sent in the From field by
@@ -1912,25 +1920,35 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             //
             // We also don't send read receipts for contact requests.
             // Read receipts will not be sent even after accepting the chat.
-            if curr_blocked == Blocked::Not
+            let to_id = if curr_blocked == Blocked::Not
                 && curr_param.get_bool(Param::WantsMdn).unwrap_or_default()
                 && curr_param.get_cmd() == SystemMessage::Unknown
                 && context.should_send_mdns().await?
             {
+                Some(curr_from_id)
+            } else if context.get_config_bool(Config::BccSelf).await? {
+                Some(ContactId::SELF)
+            } else {
+                None
+            };
+            if let Some(to_id) = to_id {
                 context
                     .sql
                     .execute(
                         "INSERT INTO smtp_mdns (msg_id, from_id, rfc724_mid) VALUES(?, ?, ?)",
-                        (id, curr_from_id, curr_rfc724_mid),
+                        (id, to_id, curr_rfc724_mid),
                     )
                     .await
                     .context("failed to insert into smtp_mdns")?;
                 context.scheduler.interrupt_smtp().await;
             }
-            updated_chat_ids.insert(curr_chat_id);
+            if !curr_hidden {
+                updated_chat_ids.insert(curr_chat_id);
+            }
         }
-        archived_chats_maybe_noticed |=
-            curr_state == MessageState::InFresh && curr_visibility == ChatVisibility::Archived;
+        archived_chats_maybe_noticed |= curr_state == MessageState::InFresh
+            && !curr_hidden
+            && curr_visibility == ChatVisibility::Archived;
     }
 
     for updated_chat_id in updated_chat_ids {

@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::warn;
+use crate::log::{LogExt, warn};
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory::MimeFactory;
@@ -184,6 +184,9 @@ pub(crate) async fn smtp_send(
     smtp: &mut Smtp,
     msg_id: Option<MsgId>,
 ) -> SendResult {
+    if recipients.is_empty() {
+        return SendResult::Success;
+    }
     if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
         info!(context, "SMTP-sending out mime message:\n{message}");
     }
@@ -570,17 +573,32 @@ async fn send_mdn_rfc724_mid(
         additional_rfc724_mids.clone(),
     )
     .await?;
+    let encrypted = mimefactory.will_be_encrypted();
     let rendered_msg = mimefactory.render(context).await?;
     let body = rendered_msg.message;
 
-    let addr = contact.get_addr();
-    let recipient = async_smtp::EmailAddress::new(addr.to_string())
-        .map_err(|err| format_err!("invalid recipient: {addr} {err:?}"))?;
-    let recipients = vec![recipient];
+    let mut recipients = Vec::new();
+    if contact_id != ContactId::SELF {
+        recipients.push(contact.get_addr().to_string());
+    }
+    if context.get_config_bool(Config::BccSelf).await? {
+        add_self_recipients(context, &mut recipients, encrypted).await?;
+    }
+    let recipients: Vec<_> = recipients
+        .into_iter()
+        .filter_map(|addr| {
+            async_smtp::EmailAddress::new(addr.clone())
+                .with_context(|| format!("Invalid recipient: {addr}"))
+                .log_err(context)
+                .ok()
+        })
+        .collect();
 
     match smtp_send(context, &recipients, &body, smtp, None).await {
         SendResult::Success => {
-            info!(context, "Successfully sent MDN for {rfc724_mid}.");
+            if !recipients.is_empty() {
+                info!(context, "Successfully sent MDN for {rfc724_mid}.");
+            }
             context
                 .sql
                 .transaction(|transaction| {
@@ -666,4 +684,35 @@ async fn send_mdn(context: &Context, smtp: &mut Smtp) -> Result<bool> {
             Ok(true)
         }
     }
+}
+
+/// Adds self-addresses to `recipients` as necessary.
+/// This doesn't check `Config::BccSelf`, it should be checked by the caller if needed.
+pub(crate) async fn add_self_recipients(
+    context: &Context,
+    recipients: &mut Vec<String>,
+    encrypted: bool,
+) -> Result<()> {
+    // Previous versions of Delta Chat did not send BCC self
+    // if DeleteServerAfter was set to immediately delete messages
+    // from the server. This is not the case anymore
+    // because BCC-self messages are also used to detect
+    // that message was sent if SMTP server is slow to respond
+    // and connection is frequently lost
+    // before receiving status line. NB: This is not a problem for chatmail servers, so `BccSelf`
+    // disabled by default is fine.
+    if context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty() {
+        // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
+        // them. Normally the user should have a non-chatmail primary transport to send unencrypted
+        // messages.
+        if encrypted {
+            for addr in context.get_secondary_self_addrs().await? {
+                recipients.push(addr);
+            }
+        }
+        // `from` must be the last addr, see `receive_imf_inner()` why.
+        let from = context.get_primary_self_addr().await?;
+        recipients.push(from);
+    }
+    Ok(())
 }

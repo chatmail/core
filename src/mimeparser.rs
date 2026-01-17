@@ -2159,9 +2159,9 @@ pub(crate) struct Report {
     ///
     /// It MUST be present if the original message has a Message-ID according to RFC 8098.
     /// In case we can't find it (shouldn't happen), this is None.
-    original_message_id: Option<String>,
+    pub original_message_id: Option<String>,
     /// Additional-Message-IDs
-    additional_message_ids: Vec<String>,
+    pub additional_message_ids: Vec<String>,
 }
 
 /// Delivery Status Notification (RFC 3464, RFC 6533)
@@ -2468,13 +2468,7 @@ async fn handle_mdn(
     timestamp_sent: i64,
 ) -> Result<()> {
     if from_id == ContactId::SELF {
-        warn!(
-            context,
-            "Ignoring MDN sent to self, this is a bug on the sender device."
-        );
-
-        // This is not an error on our side,
-        // we successfully ignored an invalid MDN and return `Ok`.
+        // MDNs to self are handled in receive_imf_inner().
         return Ok(());
     }
 
