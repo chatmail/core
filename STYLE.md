@@ -21,7 +21,7 @@ text TEXT DEFAULT '' NOT NULL -- message text
 ```
 
 Do not use macros like [`concat!`](https://doc.rust-lang.org/std/macro.concat.html)
-or [`indoc!](https://docs.rs/indoc).
+or [`indoc!`](https://docs.rs/indoc).
 Do not escape newlines like this:
 ```
     sql.execute(
