@@ -261,7 +261,8 @@ pub(super) async fn handle_auth_required(
             .await?;
 
         match invite {
-            QrInvite::Contact { .. } | QrInvite::Broadcast { .. } => {
+            QrInvite::Broadcast { .. } => {}
+            QrInvite::Contact { .. } => {
                 // This is to tell UI that Chat.can_send has changed
                 context.emit_event(EventType::ChatModified(chat_id));
             }
