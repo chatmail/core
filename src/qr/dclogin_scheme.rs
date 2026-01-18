@@ -59,14 +59,12 @@ pub enum LoginOptions {
 /// scheme: `dclogin://user@host/?p=password&v=1[&options]`
 /// read more about the scheme at <https://github.com/deltachat/interface/blob/master/uri-schemes.md#DCLOGIN>
 pub(super) fn decode_login(qr: &str) -> Result<Qr> {
-    let url = url::Url::parse(qr).with_context(|| format!("Malformed url: {qr:?}"))?;
+    let qr = qr.replacen("://", ":", 1);
 
-    let url_without_scheme = qr
+    let url = url::Url::parse(&qr).with_context(|| format!("Malformed url: {qr:?}"))?;
+    let payload = qr
         .get(DCLOGIN_SCHEME.len()..)
         .context("invalid DCLOGIN payload E1")?;
-    let payload = url_without_scheme
-        .strip_prefix("//")
-        .unwrap_or(url_without_scheme);
 
     let addr = payload
         .split(['?', '/'])
@@ -362,6 +360,34 @@ mod test {
             assert_eq!(options, login_options_just_pw!("1234".to_owned()));
         } else {
             bail!("wrong type")
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_decode_dclogin_ipv4() -> anyhow::Result<()> {
+        let result = decode_login("dclogin://test@[127.0.0.1]?p=1234&v=1")?;
+        if let Qr::Login { address, options } = result {
+            assert_eq!(address, "test@[127.0.0.1]".to_owned());
+            assert_eq!(options, login_options_just_pw!("1234".to_owned()));
+        } else {
+            unreachable!("wrong type");
+        }
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_decode_dclogin_ipv6() -> anyhow::Result<()> {
+        let result =
+            decode_login("dclogin://test@[2001:0db8:85a3:0000:0000:8a2e:0370:7334]?p=1234&v=1")?;
+        if let Qr::Login { address, options } = result {
+            assert_eq!(
+                address,
+                "test@[2001:0db8:85a3:0000:0000:8a2e:0370:7334]".to_owned()
+            );
+            assert_eq!(options, login_options_just_pw!("1234".to_owned()));
+        } else {
+            unreachable!("wrong type");
         }
         Ok(())
     }
