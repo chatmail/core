@@ -23,8 +23,8 @@ use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
 use deltachat::message::{
-    self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipts, markseen_msgs, Message,
-    MessageState, MsgId, Viewtype,
+    self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipt_count, get_msg_read_receipts,
+    markseen_msgs, Message, MessageState, MsgId, Viewtype,
 };
 use deltachat::peer_channels::{
     leave_webxdc_realtime, send_webxdc_realtime_advertisement, send_webxdc_realtime_data,
@@ -1432,6 +1432,18 @@ impl CommandApi {
     ) -> Result<MessageInfo> {
         let ctx = self.get_context(account_id).await?;
         MessageInfo::from_msg_id(&ctx, MsgId::new(message_id)).await
+    }
+
+    /// Returns count of read receipts on message.
+    ///
+    /// This view count is meant as a feedback measure for the channel owner only.
+    async fn get_message_read_receipt_count(
+        &self,
+        account_id: u32,
+        message_id: u32,
+    ) -> Result<usize> {
+        let ctx = self.get_context(account_id).await?;
+        get_msg_read_receipt_count(&ctx, MsgId::new(message_id)).await
     }
 
     /// Returns contacts that sent read receipts and the time of reading.

@@ -1506,6 +1506,16 @@ pub async fn get_msg_read_receipts(
         .await
 }
 
+/// Returns count of read receipts on message.
+///
+/// This view count is meant as a feedback measure for the channel owner only.
+pub async fn get_msg_read_receipt_count(context: &Context, msg_id: MsgId) -> Result<usize> {
+    context
+        .sql
+        .count("SELECT COUNT(*) FROM msgs_mdns WHERE msg_id=?", (msg_id,))
+        .await
+}
+
 pub(crate) fn guess_msgtype_from_suffix(msg: &Message) -> Option<(Viewtype, &'static str)> {
     msg.param
         .get(Param::Filename)
