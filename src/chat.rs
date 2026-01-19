@@ -3306,7 +3306,6 @@ pub(crate) async fn mark_old_messages_as_noticed(
     mut msgs: Vec<ReceivedMsg>,
 ) -> Result<()> {
     if context.get_config_bool(Config::TeamProfile).await? {
-        info!(context, "Team profile, not marking old msgs as noticed.");
         return Ok(());
     }
 

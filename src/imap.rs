@@ -1140,7 +1140,6 @@ impl Session {
     /// Stores pending `\Seen` flags for messages in `imap_markseen` table.
     pub(crate) async fn store_seen_flags_on_imap(&mut self, context: &Context) -> Result<()> {
         if context.get_config_bool(Config::TeamProfile).await? {
-            info!(context, "Team profile, skipping seen flag synchronization.");
             return Ok(());
         }
 
@@ -1216,7 +1215,6 @@ impl Session {
         }
 
         if context.get_config_bool(Config::TeamProfile).await? {
-            info!(context, "Team profile, skipping seen flag synchronization.");
             return Ok(());
         }
 
