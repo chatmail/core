@@ -911,6 +911,47 @@ def test_markseen_contact_request(acfactory):
     assert message2.get_snapshot().state == MessageState.IN_SEEN
 
 
+@pytest.mark.parametrize("team_profile", [True, False])
+def test_no_markseen_in_team_profile(team_profile, acfactory):
+    """
+    Test that seen status is synchronized iff `team_profile` isn't set.
+    """
+    alice, bob = acfactory.get_online_accounts(2)
+    if team_profile:
+        bob.set_config("team_profile", "1")
+
+    # Bob sets up a second device.
+    bob2 = bob.clone()
+    bob2.start_io()
+
+    alice_chat_bob = alice.create_chat(bob)
+    bob_chat_alice = bob.create_chat(alice)
+    bob2.create_chat(alice)
+    alice_chat_bob.send_text("Hello Bob!")
+
+    message = bob.wait_for_incoming_msg()
+    message2 = bob2.wait_for_incoming_msg()
+    assert message2.get_snapshot().state == MessageState.IN_FRESH
+
+    message.mark_seen()
+
+    # Send a message and wait until it arrives
+    # in order to wait until Bob2 gets the markseen message.
+    # This also tests that outgoing messages
+    # don't mark preceeding messages as seen in team profiles.
+    bob_chat_alice.send_text("Outgoing message")
+    while True:
+        outgoing = bob2.wait_for_msg(EventType.MSGS_CHANGED)
+        if outgoing.id != 0:
+            break
+    assert outgoing.get_snapshot().text == "Outgoing message"
+
+    if team_profile:
+        assert message2.get_snapshot().state == MessageState.IN_FRESH
+    else:
+        assert message2.get_snapshot().state == MessageState.IN_SEEN
+
+
 def test_read_receipt(acfactory):
     """
     Test sending a read receipt and ensure it is attributed to the correct contact.
