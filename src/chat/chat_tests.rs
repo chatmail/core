@@ -5997,15 +5997,16 @@ async fn test_send_edit_request() -> Result<()> {
     assert!(!forwarded.is_edited());
 
     // If a message is too long after editing, it becomes an HTML message on both the sender and the receiver side.
+    message::dont_truncate_long_messages(alice);
     static REPEAT_TXT: &str = "this text with 42 chars is just repeated.\n";
     static REPEAT_CNT: usize = constants::DC_DESIRED_TEXT_LEN / REPEAT_TXT.len() + 2;
     let long_txt = REPEAT_TXT.repeat(REPEAT_CNT);
     send_edit_request(alice, alice_msg.id, long_txt.clone()).await?;
     let sent = alice.pop_sent_msg().await;
     let test = Message::load_from_db(alice, alice_msg.id).await?;
-    assert!(test.has_html());
-    assert_eq!(test.full_text.unwrap(), long_txt);
-    assert_ne!(test.text, long_txt);
+    assert!(!test.has_html());
+    assert_eq!(test.full_text, None);
+    assert_eq!(test.text, long_txt);
     bob.recv_msg_opt(&sent).await;
     let test = Message::load_from_db(bob, bob_msg.id).await?;
     assert!(test.is_edited());
