@@ -318,6 +318,11 @@ pub struct InnerContext {
             ) -> mail_builder::mime::MimePart<'a>,
         >,
     >,
+
+    /// Short lived DNS cache which only lives in memory.
+    /// Used for configuration from `dcaccount` links with ip address.
+    /// Like `dcaccount:example.org?a=127.0.0.1,[::1]`
+    pub(crate) dns_memory_cache: Arc<RwLock<HashMap<String, Vec<std::net::IpAddr>>>>,
 }
 
 /// The state of ongoing process.
