@@ -32,7 +32,7 @@ impl Message {
     /// The corresponding ffi-function is `dc_msg_has_html()`.
     /// To get the HTML-code of the message, use `MsgId.get_html()`.
     pub fn has_html(&self) -> bool {
-        self.mime_modified
+        self.mime_modified || self.full_text.is_some()
     }
 
     /// Set HTML-part part of a message that is about to be sent.
@@ -277,7 +277,7 @@ impl MsgId {
         if let Some(html) = param.get(SendHtml) {
             return Ok(Some(html.to_string()));
         }
-        let from_rawmime = |rawmime: Vec<u8>| {
+        let from_rawmime = async |rawmime: Vec<u8>| {
             if !rawmime.is_empty() {
                 match HtmlMsgParser::from_bytes(context, &rawmime) {
                     Err(err) => {
@@ -287,19 +287,30 @@ impl MsgId {
                     Ok((parser, _)) => Ok(Some(parser.html)),
                 }
             } else {
-                warn!(context, "get_html: no mime for {}", self);
-                Ok(None)
+                let msg = Message::load_from_db(context, self).await?;
+                if let Some(full_text) = &msg.full_text {
+                    let html = PlainText {
+                        text: full_text.clone(),
+                        flowed: false,
+                        delsp: false,
+                    }
+                    .to_html();
+                    Ok(Some(html))
+                } else {
+                    warn!(context, "get_html: no mime for {}", self);
+                    Ok(None)
+                }
             }
         };
 
         if compressed {
-            return from_rawmime(buf_decompress(&headers)?);
+            return from_rawmime(buf_decompress(&headers)?).await;
         }
         let headers2 = headers.clone();
         let compressed = match tokio::task::block_in_place(move || buf_compress(&headers2)) {
             Err(e) => {
                 warn!(context, "get_mime_headers: buf_compress() failed: {}", e);
-                return from_rawmime(headers);
+                return from_rawmime(headers).await;
             }
             Ok(o) => o,
         };
@@ -324,7 +335,7 @@ WHERE id=? AND mime_headers!='' AND mime_compressed=0",
                 "get_mime_headers: failed to update mime_headers: {}", e
             );
         }
-        from_rawmime(headers)
+        from_rawmime(headers).await
     }
 }
 

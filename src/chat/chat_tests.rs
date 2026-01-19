@@ -9,6 +9,7 @@ use crate::constants::{
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
+use crate::message;
 use crate::message::{Message, MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::qr::{Qr, check_qr};
@@ -5883,6 +5884,8 @@ async fn test_send_edit_request() -> Result<()> {
     forward_msgs(&alice2, &[test.id], test.chat_id).await?;
     let forwarded = alice2.get_last_msg().await;
     assert!(!forwarded.is_edited());
+
+    message::dont_truncate_long_messages(alice);
 
     // If a message is too long after editing, it becomes an HTML message on the receiver side. On
     // the sender side it's still text so that it can be edited again.
