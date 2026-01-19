@@ -636,10 +636,6 @@ impl ChatId {
                     (&delete_msgs_target, self,),
                 )?;
                 transaction.execute(
-                    "DELETE FROM smtp WHERE msg_id IN (SELECT id FROM msgs WHERE chat_id=?)",
-                    (self,),
-                )?;
-                transaction.execute(
                     "DELETE FROM msgs_mdns WHERE msg_id IN (SELECT id FROM msgs WHERE chat_id=?)",
                     (self,),
                 )?;

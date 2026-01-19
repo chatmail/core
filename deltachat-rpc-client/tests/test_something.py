@@ -1133,6 +1133,30 @@ def test_leave_broadcast(acfactory, all_devices_online):
     check_account(bob2, bob2.create_contact(alice), inviter_side=False)
 
 
+def test_leave_and_delete_group(acfactory, log):
+    alice, bob = acfactory.get_online_accounts(2)
+
+    log.section("Alice creates a group")
+    alice_chat = alice.create_group("Group")
+    alice_chat.add_contact(bob)
+    assert len(alice_chat.get_contacts()) == 2  # Alice and Bob
+    alice_chat.send_text("hello")
+
+    log.section("Bob sees the group, and leaves and deletes it")
+    msg = bob.wait_for_incoming_msg().get_snapshot()
+    assert msg.text == "hello"
+    msg.chat.accept()
+
+    msg.chat.leave()
+    # Bob deletes the chat. This must not prevent the leave message from being sent.
+    msg.chat.delete()
+
+    log.section("Alice receives the delete message")
+    # After Bob left, only Alice will be left in the group:
+    while len(alice_chat.get_contacts()) != 1:
+        alice.wait_for_event(EventType.CHAT_MODIFIED)
+
+
 def test_immediate_autodelete(acfactory, direct_imap, log):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
