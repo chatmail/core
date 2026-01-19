@@ -484,19 +484,10 @@ pub(crate) async fn handle_securejoin_handshake(
             )
             .await?;
 
-            let prefix = mime_message
-                .get_header(HeaderDef::SecureJoin)
-                .and_then(|step| step.get(..2))
-                .unwrap_or("vc");
-
             // Alice -> Bob
-            send_alice_handshake_msg(
-                context,
-                autocrypt_contact_id,
-                &format!("{prefix}-auth-required"),
-            )
-            .await
-            .context("failed sending auth-required handshake message")?;
+            send_alice_handshake_msg(context, autocrypt_contact_id, "vc-auth-required")
+                .await
+                .context("Failed sending auth-required handshake message")?;
             Ok(HandshakeMessage::Done)
         }
         SecureJoinStep::AuthRequired => {
