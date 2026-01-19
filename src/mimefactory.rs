@@ -247,6 +247,37 @@ impl MimeFactory {
 
             // Do not encrypt messages to mailing lists.
             encryption_pubkeys = None;
+        } else if let Some(fp) = must_have_only_one_recipient(&msg, &chat) {
+            let fp = fp?;
+            // In a broadcast channel, only send member-added/removed messages
+            // to the affected member
+            let (authname, addr) = context
+                .sql
+                .query_row(
+                    "SELECT authname, addr FROM contacts WHERE fingerprint=?",
+                    (fp,),
+                    |row| {
+                        let authname: String = row.get(0)?;
+                        let addr: String = row.get(1)?;
+                        Ok((authname, addr))
+                    },
+                )
+                .await?;
+
+            let public_key_bytes: Vec<_> = context
+                .sql
+                .query_get_value(
+                    "SELECT public_key FROM public_keys WHERE fingerprint=?",
+                    (fp,),
+                )
+                .await?
+                .context("Can't send member addition/removal: missing key")?;
+
+            recipients.push(addr.clone());
+            to.push((authname, addr.clone()));
+
+            let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+            encryption_pubkeys = Some(vec![(addr, public_key)]);
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
                 msg.param.get(Param::Arg)
@@ -305,13 +336,6 @@ impl MimeFactory {
 
                         for row in rows {
                             let (authname, addr, fingerprint, id, add_timestamp, remove_timestamp, public_key_bytes_opt) = row?;
-
-                            // In a broadcast channel, only send member-added/removed messages
-                            // to the affected member:
-                            if let Some(fp) = must_have_only_one_recipient(&msg, &chat)
-                                && fp? != fingerprint {
-                                    continue;
-                                }
 
                             let public_key_opt = if let Some(public_key_bytes) = &public_key_bytes_opt {
                                 Some(SignedPublicKey::from_slice(public_key_bytes)?)
