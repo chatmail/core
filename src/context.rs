@@ -225,6 +225,7 @@ impl WeakContext {
 pub struct InnerContext {
     /// Blob directory path
     pub(crate) blobdir: PathBuf,
+
     pub(crate) sql: Sql,
     /// The global "ongoing" process state.
     ///
