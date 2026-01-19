@@ -499,6 +499,7 @@ impl Context {
             self_fingerprint: OnceLock::new(),
             connectivities: parking_lot::Mutex::new(Vec::new()),
             pre_encrypt_mime_hook: None.into(),
+            dns_memory_cache: Arc::new(RwLock::new(HashMap::new())),
         };
 
         let ctx = Context {
