@@ -6030,6 +6030,8 @@ async fn test_send_edit_request() -> Result<()> {
     let forwarded = alice2.get_last_msg().await;
     assert!(!forwarded.is_edited());
 
+    message::dont_truncate_long_messages(alice);
+
     // If a message is too long after editing, it becomes an HTML message on the receiver side. On
     // the sender side it's still text so that it can be edited again.
     static REPEAT_TXT: &str = "this text with 42 chars is just repeated.\n";
