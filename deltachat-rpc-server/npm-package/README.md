@@ -18,7 +18,7 @@ import { startDeltaChat } from "@deltachat/stdio-rpc-server";
 import { C } from "@deltachat/jsonrpc-client";
 
 async function main() {
-    const dc = await startDeltaChat("deltachat-data");
+    const dc = startDeltaChat("deltachat-data");
     console.log(await dc.rpc.getSystemInfo());
     dc.close()
 }
