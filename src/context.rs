@@ -416,7 +416,6 @@ impl Context {
     ///
     /// Returns true if passphrase is correct, false is passphrase is not correct. Fails on other
     /// errors.
-    #[deprecated(since = "TBD")]
     pub async fn open(&self, passphrase: String) -> Result<bool> {
         if self.sql.check_passphrase(passphrase.clone()).await? {
             self.sql.open(self, passphrase).await?;
