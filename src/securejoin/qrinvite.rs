@@ -12,7 +12,7 @@ use crate::qr::Qr;
 
 /// Represents the data from a QR-code scan.
 ///
-/// There are methods to conveniently access fields present in both variants.
+/// There are methods to conveniently access fields present in all three variants.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum QrInvite {
     Contact {
@@ -20,6 +20,7 @@ pub enum QrInvite {
         fingerprint: Fingerprint,
         invitenumber: String,
         authcode: String,
+        is_v3: bool,
     },
     Group {
         contact_id: ContactId,
@@ -28,6 +29,7 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        is_v3: bool,
     },
     Broadcast {
         contact_id: ContactId,
@@ -36,6 +38,7 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        is_v3: bool,
     },
 }
 
@@ -76,6 +79,14 @@ impl QrInvite {
             Self::Contact { authcode, .. }
             | Self::Group { authcode, .. }
             | Self::Broadcast { authcode, .. } => authcode,
+        }
+    }
+
+    pub fn is_v3(&self) -> bool {
+        match self {
+            QrInvite::Contact { is_v3, .. } => is_v3,
+            QrInvite::Group { is_v3, .. } => is_v3,
+            QrInvite::Broadcast { is_v3, .. } => is_v3,
         }
     }
 }
