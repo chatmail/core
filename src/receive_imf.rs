@@ -196,7 +196,7 @@ async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Result<MsgId> 
 async fn get_to_and_past_contact_ids(
     context: &Context,
     mime_parser: &MimeMessage,
-    chat_assignment: &ChatAssignment,
+    chat_assignment: &mut ChatAssignment,
     parent_message: &Option<Message>,
     incoming_origin: Origin,
 ) -> Result<(Vec<Option<ContactId>>, Vec<Option<ContactId>>)> {
@@ -385,32 +385,6 @@ async fn get_to_and_past_contact_ids(
                 // mapped it to a key contact.
                 // This is an encrypted 1:1 chat.
                 to_ids = pgp_to_ids
-            } else if let Some(chat_id) = chat_id {
-                to_ids = match mime_parser.was_encrypted() {
-                    true => {
-                        lookup_key_contacts_by_address_list(
-                            context,
-                            &mime_parser.recipients,
-                            to_member_fingerprints,
-                            Some(chat_id),
-                        )
-                        .await?
-                    }
-                    false => {
-                        add_or_lookup_contacts_by_address_list(
-                            context,
-                            &mime_parser.recipients,
-                            if !mime_parser.incoming {
-                                Origin::OutgoingTo
-                            } else if incoming_origin.is_known() {
-                                Origin::IncomingTo
-                            } else {
-                                Origin::IncomingUnknownTo
-                            },
-                        )
-                        .await?
-                    }
-                }
             } else {
                 let ids = match mime_parser.was_encrypted() {
                     true => {
@@ -418,7 +392,7 @@ async fn get_to_and_past_contact_ids(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
-                            None,
+                            chat_id,
                         )
                         .await?
                     }
@@ -426,13 +400,20 @@ async fn get_to_and_past_contact_ids(
                 };
                 if mime_parser.was_encrypted() && !ids.contains(&None)
                 // Prefer creating PGP chats if there are any key-contacts. At least this prevents
-                // from replying unencrypted.
+                // from replying unencrypted. Otherwise downgrade to a non-replyable ad-hoc group.
                 || ids
                     .iter()
                     .any(|&c| c.is_some() && c != Some(ContactId::SELF))
                 {
                     to_ids = ids;
                 } else {
+                    if mime_parser.was_encrypted() {
+                        warn!(
+                            context,
+                            "No key-contact looked up. Downgrading to AdHocGroup."
+                        );
+                        *chat_assignment = ChatAssignment::AdHocGroup;
+                    }
                     to_ids = add_or_lookup_contacts_by_address_list(
                         context,
                         &mime_parser.recipients,
@@ -634,12 +615,12 @@ pub(crate) async fn receive_imf_inner(
     .await?
     .filter(|p| Some(p.id) != replace_msg_id);
 
-    let chat_assignment =
+    let mut chat_assignment =
         decide_chat_assignment(context, &mime_parser, &parent_message, rfc724_mid, from_id).await?;
     let (to_ids, past_ids) = get_to_and_past_contact_ids(
         context,
         &mime_parser,
-        &chat_assignment,
+        &mut chat_assignment,
         &parent_message,
         incoming_origin,
     )
@@ -2698,6 +2679,9 @@ async fn lookup_or_create_adhoc_group(
     let to_ids: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     let mut contact_ids = BTreeSet::<ContactId>::from_iter(to_ids.iter().copied());
     contact_ids.insert(from_id);
+    if mime_parser.was_encrypted() {
+        contact_ids.remove(&ContactId::SELF);
+    }
     let trans_fn = |t: &mut rusqlite::Transaction| {
         t.pragma_update(None, "query_only", "0")?;
         t.execute(
@@ -3099,7 +3083,9 @@ async fn apply_group_changes(
             if !from_id.is_special() {
                 new_members.insert(from_id);
             }
-
+            if mime_parser.was_encrypted() && chat.grpid.is_empty() {
+                new_members.remove(&ContactId::SELF);
+            }
             context
                 .sql
                 .transaction(|transaction| {
@@ -3171,6 +3157,10 @@ async fn apply_group_changes(
             // Apply explicit removal if any.
             if let Some(removed_id) = removed_id {
                 new_members.remove(&removed_id);
+            }
+
+            if mime_parser.was_encrypted() && chat.grpid.is_empty() {
+                new_members.remove(&ContactId::SELF);
             }
 
             if new_members != chat_contacts {
@@ -3814,11 +3804,15 @@ async fn create_adhoc_group(
     to_ids: &[ContactId],
     grpname: &str,
 ) -> Result<Option<(ChatId, Blocked)>> {
-    let mut member_ids: Vec<ContactId> = to_ids.to_vec();
-    if !member_ids.contains(&(from_id)) {
+    let mut member_ids: Vec<ContactId> = to_ids
+        .iter()
+        .copied()
+        .filter(|&id| id != ContactId::SELF)
+        .collect();
+    if from_id != ContactId::SELF && !member_ids.contains(&from_id) {
         member_ids.push(from_id);
     }
-    if !member_ids.contains(&(ContactId::SELF)) {
+    if !mime_parser.was_encrypted() {
         member_ids.push(ContactId::SELF);
     }
 
