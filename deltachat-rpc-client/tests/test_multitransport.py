@@ -209,7 +209,7 @@ def test_transport_synchronization(acfactory, log) -> None:
 
 def test_transport_sync_new_as_primary(acfactory, log) -> None:
     """Test synchronization of new transport as primary between devices."""
-    ac1 = acfactory.get_online_account()
+    ac1, bob = acfactory.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
@@ -228,6 +228,15 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert ac1_clone.get_config("configured_addr") == transport2["addr"]
+
+    log.section("ac1_clone receives a message via the new primary transport")
+    ac1_chat = ac1.create_chat(bob)
+    ac1_chat.send_text("Hello!")
+    bob_chat_id = bob.wait_for_incoming_msg_event().chat_id
+    bob_chat = bob.get_chat_by_id(bob_chat_id)
+    bob_chat.accept()
+    bob_chat.send_text("hello back")
+    assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "hello back"
 
 
 def test_recognize_self_address(acfactory) -> None:
