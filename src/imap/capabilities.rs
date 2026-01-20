@@ -17,10 +17,6 @@ pub(crate) struct Capabilities {
     /// <https://tools.ietf.org/html/rfc2087>
     pub can_check_quota: bool,
 
-    /// True if the server has CONDSTORE capability as defined in
-    /// <https://tools.ietf.org/html/rfc7162>
-    pub can_condstore: bool,
-
     /// True if the server has METADATA capability as defined in
     /// <https://tools.ietf.org/html/rfc5464>
     pub can_metadata: bool,
