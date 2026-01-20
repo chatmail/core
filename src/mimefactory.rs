@@ -2281,6 +2281,11 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::address::Address::new_list(to.clone()).into(),
     ));
 
+    headers.push((
+        "Subject",
+        mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
+    ));
+
     // TODO not sure if we even need a timestamp
     let timestamp = create_smeared_timestamp(context);
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
@@ -2344,7 +2349,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
 
     let outer_message = {
         let use_std_header_protection = true;
-        let mut message = add_headers_to_encrypted_part(
+        let message = add_headers_to_encrypted_part(
             message,
             &unprotected_headers,
             hidden_headers,
@@ -2356,13 +2361,6 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // there are no compression side channels
         // leaking information about the tokens.
         let compress = false;
-
-        if context.get_config_bool(Config::TestHooks).await?
-            && let Some(hook) = &*context.pre_encrypt_mime_hook.lock()
-        {
-            message = hook(context, message);
-        }
-
         let encrypted = encrypt_helper
             .encrypt_symmetrically(context, auth, message, compress)
             .await?;
