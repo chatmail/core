@@ -83,7 +83,7 @@ impl QrInvite {
     }
 
     pub fn is_v3(&self) -> bool {
-        match self {
+        match *self {
             QrInvite::Contact { is_v3, .. } => is_v3,
             QrInvite::Group { is_v3, .. } => is_v3,
             QrInvite::Broadcast { is_v3, .. } => is_v3,
@@ -101,11 +101,13 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => Ok(QrInvite::Contact {
                 contact_id,
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             }),
             Qr::AskVerifyGroup {
                 grpname,
@@ -114,6 +116,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => Ok(QrInvite::Group {
                 contact_id,
                 fingerprint,
@@ -121,6 +124,7 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 invitenumber,
                 authcode,
+                is_v3,
             }),
             Qr::AskJoinBroadcast {
                 name,
@@ -129,6 +133,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 authcode,
                 invitenumber,
+                is_v3,
             } => Ok(QrInvite::Broadcast {
                 name,
                 grpid,
@@ -136,6 +141,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 authcode,
                 invitenumber,
+                is_v3,
             }),
             _ => bail!("Unsupported QR type"),
         }

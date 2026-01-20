@@ -1,6 +1,6 @@
 //! Bob's side of SecureJoin handling, the joiner-side.
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
@@ -363,27 +363,25 @@ pub(crate) async fn send_handshake_message(
         msg.id = MsgId::new(u32::try_from(raw_id)?);
         */
 
-        let row_ids = create_send_msg_jobs(context, msg)
-            .await
-            .context("Failed to create send jobs")?;
-
         let rfc724_mid = create_outgoing_rfc724_mid();
         let contact = Contact::get_by_id(context, invite.contact_id()).await?;
         let recipient = contact.get_addr();
-
+        let attach_self_pubkey = false;
         let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
             context,
-            recipient,
-            rfc724_mid,
+            step.securejoin_header(invite),
+            &rfc724_mid,
+            attach_self_pubkey,
             invite.authcode(),
         )
         .await?;
 
+        // TODO code duplication
         context
             .sql
             .execute(
                 "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
-            VALUES            (?1,         ?2,         ?3,   ?4)",
+                VALUES            (?1,         ?2,         ?3,   ?4)",
                 (
                     &rfc724_mid,
                     &recipient,

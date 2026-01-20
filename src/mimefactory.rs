@@ -1915,8 +1915,7 @@ fn render_outer_message(
     let mut buffer = Vec::new();
     let cursor = Cursor::new(&mut buffer);
     outer_message.clone().write_part(cursor).ok();
-    let message = String::from_utf8_lossy(&buffer).to_string();
-    message
+    String::from_utf8_lossy(&buffer).to_string()
 }
 
 /// Takes the encrypted part, wraps it in a MimePart,
@@ -2279,15 +2278,14 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
 
     let from_addr = context.get_primary_self_addr().await?;
     let from = new_address_with_name("", from_addr.to_string());
-
-    let mut to: Vec<Address<'static>> = Vec::new();
-    to.push(hidden_recipients());
-
     headers.push(("From", from.into()));
+
+    let to: Vec<Address<'static>> = vec![hidden_recipients()];
     headers.push((
         "To",
         mail_builder::headers::address::Address::new_list(to.clone()).into(),
     ));
+
     headers.push((
         "Subject",
         mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
