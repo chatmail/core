@@ -5491,6 +5491,195 @@ async fn test_forward_msgs_2ctx() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_msgs_2ctx_with_file() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // First, establish a chat between Alice and Bob to have the chat IDs
+    let alice_bob_chat = alice.create_chat(bob).await;
+    let alice_initial = alice.send_text(alice_bob_chat.id, "hi").await;
+    let bob_alice_msg = bob.recv_msg(&alice_initial).await;
+    let bob_alice_chat_id = bob_alice_msg.chat_id;
+    bob_alice_chat_id.accept(bob).await?;
+
+    // Alice sends a message with an attached file to her self-chat
+    let alice_self_chat = alice.get_self_chat().await;
+    let file_bytes = b"test file content";
+    let file = alice.get_blobdir().join("test.txt");
+    tokio::fs::write(&file, file_bytes).await?;
+
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"), Some("text/plain"))?;
+    msg.set_text("Here's a file".to_string());
+
+    alice.send_msg(alice_self_chat.id, &mut msg).await;
+    let alice_self_msg = alice.get_last_msg().await;
+
+    // Verify the file exists in Alice's blobdir
+    assert_eq!(alice_self_msg.viewtype, Viewtype::File);
+    let alice_original_file_path = alice_self_msg.get_file(alice).unwrap();
+    let alice_original_content = tokio::fs::read(&alice_original_file_path).await?;
+    assert_eq!(alice_original_content, file_bytes);
+
+    // Alice forwards the message to Bob using forward_msgs_2ctx
+    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await?;
+
+    // Bob should have the forwarded message with the file in his database
+    let bob_msg = bob.get_last_msg().await;
+    assert_eq!(bob_msg.viewtype, Viewtype::File);
+    assert!(bob_msg.is_forwarded());
+    assert_eq!(bob_msg.text, "Here's a file");
+    assert_eq!(bob_msg.from_id, ContactId::SELF);
+
+    // Verify Bob has the file in his blobdir with correct content
+    let bob_file_path = bob_msg.get_file(bob).unwrap();
+    let bob_file_content = tokio::fs::read(&bob_file_path).await?;
+    assert_eq!(bob_file_content, file_bytes);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_msgs_2ctx_with_image() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_bob_chat = alice.create_chat(bob).await;
+    let alice_initial = alice.send_text(alice_bob_chat.id, "hi").await;
+    let bob_alice_msg = bob.recv_msg(&alice_initial).await;
+    let bob_alice_chat_id = bob_alice_msg.chat_id;
+    bob_alice_chat_id.accept(bob).await?;
+
+    // Alice sends an image to her self-chat
+    let alice_self_chat = alice.get_self_chat().await;
+    let image_bytes = include_bytes!("../../test-data/image/logo.png");
+    let file = alice.get_blobdir().join("image.png");
+    tokio::fs::write(&file, image_bytes).await?;
+
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_and_deduplicate(alice, &file, Some("image.png"), None)?;
+
+    alice.send_msg(alice_self_chat.id, &mut msg).await;
+    let alice_self_msg = alice.get_last_msg().await;
+
+    // Verify the image exists in Alice's blobdir
+    assert_eq!(alice_self_msg.viewtype, Viewtype::Image);
+    let alice_original_file_path = alice_self_msg.get_file(alice).unwrap();
+    assert!(alice_original_file_path.exists());
+
+    // Alice forwards the image to Bob using forward_msgs_2ctx
+    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await?;
+
+    // Verify Bob has the forwarded image in his database
+    let bob_msg = bob.get_last_msg().await;
+    assert_eq!(bob_msg.viewtype, Viewtype::Image);
+    assert!(bob_msg.is_forwarded());
+    assert_eq!(bob_msg.from_id, ContactId::SELF);
+
+    // Verify Bob has the image in his blobdir
+    let bob_file_path = bob_msg.get_file(bob).unwrap();
+    assert!(bob_file_path.exists());
+    let bob_file_size = tokio::fs::metadata(&bob_file_path).await?.len();
+    assert!(bob_file_size > 0);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_msgs_2ctx_with_sticker() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_bob_chat = alice.create_chat(bob).await;
+    let alice_initial = alice.send_text(alice_bob_chat.id, "hi").await;
+    let bob_alice_msg = bob.recv_msg(&alice_initial).await;
+    let bob_alice_chat_id = bob_alice_msg.chat_id;
+    bob_alice_chat_id.accept(bob).await?;
+
+    // Alice sends a sticker to her self-chat
+    let alice_self_chat = alice.get_self_chat().await;
+    let sticker_bytes = include_bytes!("../../test-data/image/logo.png");
+    let file = alice.get_blobdir().join("sticker.png");
+    tokio::fs::write(&file, sticker_bytes).await?;
+
+    let mut msg = Message::new(Viewtype::Sticker);
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.png"), None)?;
+
+    alice.send_msg(alice_self_chat.id, &mut msg).await;
+    let alice_self_msg = alice.get_last_msg().await;
+
+    // Verify the sticker exists in Alice's blobdir
+    assert_eq!(alice_self_msg.viewtype, Viewtype::Sticker);
+    let alice_original_file_path = alice_self_msg.get_file(alice).unwrap();
+    assert!(alice_original_file_path.exists());
+
+    // Alice forwards the sticker to Bob using forward_msgs_2ctx
+    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await?;
+
+    // Verify Bob has the forwarded sticker in his database
+    let bob_msg = bob.get_last_msg().await;
+    assert_eq!(bob_msg.viewtype, Viewtype::Sticker);
+    // Stickers should not have the forwarded flag
+    assert!(!bob_msg.is_forwarded());
+    assert_eq!(bob_msg.from_id, ContactId::SELF);
+
+    // Verify Bob has the sticker in his blobdir
+    let bob_file_path = bob_msg.get_file(bob).unwrap();
+    assert!(bob_file_path.exists());
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_forward_msgs_2ctx_missing_blob() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_bob_chat = alice.create_chat(bob).await;
+    let alice_initial = alice.send_text(alice_bob_chat.id, "hi").await;
+    let bob_alice_msg = bob.recv_msg(&alice_initial).await;
+    let bob_alice_chat_id = bob_alice_msg.chat_id;
+    bob_alice_chat_id.accept(bob).await?;
+
+    // Alice sends a file to her self-chat
+    let alice_self_chat = alice.get_self_chat().await;
+    let file_bytes = b"test content";
+    let file = alice.get_blobdir().join("test.txt");
+    tokio::fs::write(&file, file_bytes).await?;
+
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_file_and_deduplicate(alice, &file, Some("test.txt"), Some("text/plain"))?;
+    msg.set_text("File message".to_string());
+
+    alice.send_msg(alice_self_chat.id, &mut msg).await;
+    let alice_self_msg = alice.get_last_msg().await;
+
+    // Delete the blob file from Alice's blobdir to simulate a missing file
+    let alice_file_path = alice_self_msg.get_file(alice).unwrap();
+    tokio::fs::remove_file(&alice_file_path).await?;
+
+    // Alice tries to forward the message - this should not fail, just log a warning
+    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await?;
+
+    // Bob should have the message in his database
+    // Since the blob file was missing in Alice's blobdir, it's converted to Text viewtype
+    let bob_forwarded_msg = bob.get_last_msg().await;
+
+    // The message should exist with the text but as Text viewtype (since file was missing)
+    assert_eq!(bob_forwarded_msg.text, "File message");
+    assert!(bob_forwarded_msg.is_forwarded());
+    assert_eq!(bob_forwarded_msg.viewtype, Viewtype::Text);
+    // The file param should not be set since the source blob was missing
+    assert_eq!(bob_forwarded_msg.param.get(Param::File), None);
+
+    Ok(())
+}
+
 /// Tests that in multi-device setup
 /// second device learns the key of a contact
 /// via Autocrypt-Gossip in 1:1 chats.
