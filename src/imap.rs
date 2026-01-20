@@ -1205,6 +1205,7 @@ impl Session {
     }
 
     /// Synchronizes `\Seen` flags using `CONDSTORE` extension.
+    #[allow(dead_code)]
     pub(crate) async fn sync_seen_flags(&mut self, context: &Context, folder: &str) -> Result<()> {
         if !self.can_condstore() {
             info!(
