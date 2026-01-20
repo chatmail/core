@@ -177,22 +177,6 @@ pub(crate) async fn receive_imf_from_inbox(
     receive_imf_inner(context, rfc724_mid, imf_raw, seen).await
 }
 
-/// Inserts a tombstone into `msgs` table
-/// to prevent downloading the same message in the future.
-///
-/// Returns tombstone database row ID.
-async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Result<MsgId> {
-    let row_id = context
-        .sql
-        .insert(
-            "INSERT INTO msgs(rfc724_mid, chat_id) VALUES (?,?)",
-            (rfc724_mid, DC_CHAT_ID_TRASH),
-        )
-        .await?;
-    let msg_id = MsgId::new(u32::try_from(row_id)?);
-    Ok(msg_id)
-}
-
 async fn get_to_and_past_contact_ids(
     context: &Context,
     mime_parser: &MimeMessage,
@@ -477,7 +461,7 @@ pub(crate) async fn receive_imf_inner(
                 return Ok(None);
             }
 
-            let msg_ids = vec![insert_tombstone(context, rfc724_mid).await?];
+            let msg_ids = vec![message::insert_tombstone(context, rfc724_mid).await?];
 
             return Ok(Some(ReceivedMsg {
                 chat_id: DC_CHAT_ID_TRASH,
@@ -653,7 +637,7 @@ pub(crate) async fn receive_imf_inner(
 
         match res {
             securejoin::HandshakeMessage::Done | securejoin::HandshakeMessage::Ignore => {
-                let msg_id = insert_tombstone(context, rfc724_mid).await?;
+                let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
                 received_msg = Some(ReceivedMsg {
                     chat_id: DC_CHAT_ID_TRASH,
                     state: MessageState::InSeen,

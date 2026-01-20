@@ -2064,6 +2064,22 @@ pub(crate) async fn set_msg_failed(
     Ok(())
 }
 
+/// Inserts a tombstone into `msgs` table
+/// to prevent downloading the same message in the future.
+///
+/// Returns tombstone database row ID.
+pub(crate) async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Result<MsgId> {
+    let row_id = context
+        .sql
+        .insert(
+            "INSERT INTO msgs(rfc724_mid, chat_id) VALUES (?,?)",
+            (rfc724_mid, DC_CHAT_ID_TRASH),
+        )
+        .await?;
+    let msg_id = MsgId::new(u32::try_from(row_id)?);
+    Ok(msg_id)
+}
+
 /// The number of messages assigned to unblocked chats
 pub async fn get_unblocked_msg_cnt(context: &Context) -> usize {
     match context

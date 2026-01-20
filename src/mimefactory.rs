@@ -2367,7 +2367,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // leaking information about the tokens.
         let compress = false;
         let encrypted = encrypt_helper
-            .encrypt_symmetrically(context, auth, message, compress)
+            .encrypt_symmetrically(context, auth, message, compress) // TODO this also signs the message. vc-request-pubkey shouldn't be signed.
             .await?;
 
         wrap_encrypted_part(encrypted)

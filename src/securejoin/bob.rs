@@ -11,10 +11,12 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
 use crate::log::LogExt;
-use crate::message::{Message, MsgId, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
-use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
+use crate::securejoin::{
+    ContactId, encrypted_and_signed, insert_into_smtp, verify_sender_by_fingerprint,
+};
 use crate::stock_str;
 use crate::sync::Sync::*;
 use crate::tools::{create_outgoing_rfc724_mid, smeared_time, time};
@@ -302,95 +304,21 @@ pub(crate) async fn send_handshake_message(
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
         // Send a minimal symmetrically-encrypted vc-request message
 
-        // TODO: Either add a message to the database, or make sure that smtp.rs gets along with a 0 or NULL msg_id
-        /*
-        msg.state = MessageState::OutPending;
-        msg.timestamp_sort = create_smeared_timestamp(context);
-        msg.rfc724_mid = create_outgoing_rfc724_mid();
-        let is_bot = context.get_config_bool(Config::Bot).await?;
-        msg.param
-            .set_optional(Param::Bot, Some("1").filter(|_| is_bot));
-
-        let raw_id = context
-            .sql
-            .insert(
-                "INSERT INTO msgs (
-                        rfc724_mid,
-                        chat_id,
-                        from_id,
-                        to_id,
-                        timestamp,
-                        type,
-                        state,
-                        txt,
-                        txt_normalized,
-                        subject,
-                        param,
-                        hidden,
-                        mime_in_reply_to,
-                        mime_references,
-                        mime_modified,
-                        mime_headers,
-                        mime_compressed,
-                        location_id,
-                        ephemeral_timer,
-                        ephemeral_timestamp)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?,?);",
-                params_slice![
-                    msg.rfc724_mid,
-                    msg.chat_id,
-                    msg.from_id,
-                    to_id,
-                    msg.timestamp_sort,
-                    msg.viewtype,
-                    msg.state,
-                    msg_text,
-                    normalize_text(&msg_text),
-                    &msg.subject,
-                    msg.param.to_string(),
-                    msg.hidden,
-                    msg.in_reply_to.as_deref().unwrap_or_default(),
-                    new_references,
-                    new_mime_headers.is_some(),
-                    new_mime_headers.unwrap_or_default(),
-                    location_id as i32,
-                    ephemeral_timer,
-                    ephemeral_timestamp
-                ],
-            )
-            .await?;
-        context.new_msgs_notify.notify_one();
-        msg.id = MsgId::new(u32::try_from(raw_id)?);
-        */
-
         let rfc724_mid = create_outgoing_rfc724_mid();
         let contact = Contact::get_by_id(context, invite.contact_id()).await?;
         let recipient = contact.get_addr();
         let attach_self_pubkey = false;
         let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
             context,
-            step.securejoin_header(invite),
+            "vc-request-pubkey",
             &rfc724_mid,
             attach_self_pubkey,
             invite.authcode(),
         )
         .await?;
 
-        // TODO code duplication
-        context
-            .sql
-            .execute(
-                "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
-                VALUES            (?1,         ?2,         ?3,   ?4)",
-                (
-                    &rfc724_mid,
-                    &recipient,
-                    &rendered_message,
-                    0, // TODO
-                ),
-            )
-            .await?;
-
+        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
+        insert_into_smtp(context, &rfc724_mid, recipient, rendered_message, msg_id).await?;
         context.scheduler.interrupt_smtp().await;
     } else {
         let mut msg = Message {
