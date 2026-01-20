@@ -20,14 +20,14 @@ use crate::headerdef::HeaderDef;
 use crate::key::{DcKey, Fingerprint, load_self_public_key};
 use crate::log::LogExt as _;
 use crate::log::warn;
-use crate::message::{Message, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::Param;
 use crate::qr::check_qr;
 use crate::securejoin::bob::JoinerProgress;
 use crate::sync::Sync::*;
-use crate::tools::{create_id, time};
-use crate::{SecurejoinSource, stats};
+use crate::tools::{create_id, create_outgoing_rfc724_mid, time};
+use crate::{SecurejoinSource, mimefactory, stats};
 use crate::{SecurejoinUiPath, token};
 
 mod bob;
@@ -346,11 +346,17 @@ pub(crate) enum HandshakeMessage {
 /// Step of Secure-Join protocol.
 #[derive(Debug, Display, PartialEq, Eq)]
 pub(crate) enum SecureJoinStep {
-    /// vc-request or vg-request
+    /// vc-request or vg-request; only used in legacy securejoin
     Request { invitenumber: String },
 
-    /// vc-auth-required or vg-auth-required
+    /// vc-auth-required or vg-auth-required; only used in legacy securejoin
     AuthRequired,
+
+    /// vc-request-pubkey; only used in securejoin v3
+    RequestPubkey,
+
+    /// vc-pubkey; only used in securejoin v3
+    Pubkey,
 
     /// vc-request-with-auth or vg-request-with-auth
     RequestWithAuth,
@@ -381,6 +387,8 @@ pub(crate) fn get_secure_join_step(mime_message: &MimeMessage) -> Option<SecureJ
         })
     } else if let Some(step) = mime_message.get_header(HeaderDef::SecureJoin) {
         match step {
+            "vc-request-pubkey" => Some(SecureJoinStep::RequestPubkey),
+            "vc-pubkey" => Some(SecureJoinStep::Pubkey),
             "vg-auth-required" | "vc-auth-required" => Some(SecureJoinStep::AuthRequired),
             "vg-request-with-auth" | "vc-request-with-auth" => {
                 Some(SecureJoinStep::RequestWithAuth)
@@ -438,7 +446,10 @@ pub(crate) async fn handle_securejoin_handshake(
     // will improve security (completely unrelated to the securejoin protocol)
     // and is something we want to do in the future:
     // https://www.rfc-editor.org/rfc/rfc9580.html#name-surreptitious-forwarding
-    if !matches!(step, SecureJoinStep::Request { .. }) {
+    if !matches!(
+        step,
+        SecureJoinStep::Request { .. } | SecureJoinStep::RequestPubkey
+    ) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
         for (addr, key) in &mime_message.gossiped_keys {
@@ -505,6 +516,53 @@ pub(crate) async fn handle_securejoin_handshake(
             ====   Step 4 in "Setup verified contact" protocol   =====
             ========================================================*/
             bob::handle_auth_required(context, mime_message).await
+        }
+        SecureJoinStep::RequestPubkey => {
+            /*========================================================
+            ====             Alice - the inviter's side          =====
+            ====   Bob requests our public key (Securejoin v3)   =====
+            ========================================================*/
+
+            if !mime_message.was_encrypted() {
+                warn!(context, "Ignoring unencrypted RequestPubkey");
+                return Ok(HandshakeMessage::Ignore);
+            }
+            let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
+                warn!(
+                    context,
+                    "Ignoring {step} message because of missing auth code."
+                );
+                return Ok(HandshakeMessage::Ignore);
+            };
+            if !token::exists(context, token::Namespace::Auth, auth).await? {
+                warn!(context, "Secure-join denied (bad auth).");
+                return Ok(HandshakeMessage::Ignore);
+            }
+
+            let rfc724_mid = create_outgoing_rfc724_mid();
+            let addr = ContactAddress::new(&mime_message.from.addr)?;
+            let attach_self_pubkey = true;
+            let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+                context,
+                "vc-pubkey",
+                &rfc724_mid,
+                attach_self_pubkey,
+                auth,
+            )
+            .await?;
+
+            let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
+            insert_into_smtp(context, &rfc724_mid, &addr, rendered_message, msg_id).await?;
+            context.scheduler.interrupt_smtp().await;
+
+            Ok(HandshakeMessage::Done)
+        }
+        SecureJoinStep::Pubkey => {
+            /*========================================================
+            ====             Bob - the joiner's side             =====
+            ====     Alice sent us her pubkey (Securejoin v3)    =====
+            ========================================================*/
+            todo!()
         }
         SecureJoinStep::RequestWithAuth => {
             /*==========================================================
@@ -665,6 +723,24 @@ pub(crate) async fn handle_securejoin_handshake(
     }
 }
 
+async fn insert_into_smtp(
+    context: &Context,
+    rfc724_mid: &str,
+    recipient: &str,
+    rendered_message: String,
+    msg_id: MsgId,
+) -> Result<(), Error> {
+    context
+        .sql
+        .execute(
+            "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
+            VALUES            (?1,         ?2,         ?3,   ?4)",
+            (&rfc724_mid, &recipient, &rendered_message, msg_id),
+        )
+        .await?;
+    Ok(())
+}
+
 /// Observe self-sent Securejoin message.
 ///
 /// In a multi-device-setup, there may be other devices that "see" the handshake messages.
@@ -696,6 +772,8 @@ pub(crate) async fn observe_securejoin_on_other_device(
     match step {
         SecureJoinStep::Request { .. }
         | SecureJoinStep::AuthRequired
+        | SecureJoinStep::RequestPubkey
+        | SecureJoinStep::Pubkey
         | SecureJoinStep::Deprecated
         | SecureJoinStep::Unknown { .. } => {
             return Ok(HandshakeMessage::Ignore);

@@ -18,7 +18,6 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
-use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{try_decrypt, validate_detached_signature};
@@ -36,6 +35,7 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, tools};
+use crate::{constants, token};
 
 /// Public key extracted from `Autocrypt-Gossip`
 /// header with associated information.
@@ -382,13 +382,15 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
-        let secrets: Vec<String> = context
+        let mut secrets: Vec<String> = context
             .sql
             .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
                 let secret: String = row.get(0)?;
                 Ok(secret)
             })
             .await?;
+
+        secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
 
         let (mail, is_encrypted) =
             match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {

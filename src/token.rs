@@ -62,6 +62,17 @@ pub async fn lookup(
         .await
 }
 
+pub async fn lookup_all(context: &Context, namespace: Namespace) -> Result<Vec<String>> {
+    context
+        .sql
+        .query_map_vec(
+            "SELECT token FROM tokens WHERE namespc=? ORDER BY timestamp DESC LIMIT 1",
+            (namespace,),
+            |row| Ok(row.get(0)?),
+        )
+        .await
+}
+
 pub async fn lookup_or_new(
     context: &Context,
     namespace: Namespace,
