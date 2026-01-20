@@ -2205,5 +2205,290 @@ fn b_encode(value: &str) -> String {
     )
 }
 
+pub(crate) async fn render_symm_encrypted_securejoin_message(
+    context: &Context,
+    step: &str,
+    rfc724_mid: &str,
+    attach_self_pubkey: bool,
+    auth: &str,
+) -> Result<String> {
+    info!(context, "Sending secure-join message {step:?}.");
+
+    let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
+
+    let from_addr = context.get_primary_self_addr().await?;
+    let from = new_address_with_name("", from_addr);
+
+    let mut to: Vec<Address<'static>> = Vec::new();
+    to.push(hidden_recipients());
+
+    headers.push(("From", from.into()));
+
+    headers.push((
+        "To",
+        mail_builder::headers::address::Address::new_list(to.clone()).into(),
+    ));
+
+    // TODO not sure if we even need a timestamp
+    let timestamp = create_smeared_timestamp(context);
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
+        .unwrap()
+        .to_rfc2822();
+    headers.push(("Date", mail_builder::headers::raw::Raw::new(date).into()));
+
+    headers.push((
+        "Message-ID",
+        mail_builder::headers::message_id::MessageId::new(rfc724_mid.to_string()).into(),
+    ));
+
+    // Automatic Response headers <https://www.rfc-editor.org/rfc/rfc3834>
+    if context.get_config_bool(Config::Bot).await? {
+        headers.push((
+            "Auto-Submitted",
+            mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
+        ));
+    } else if step != "vc-request" {
+        headers.push((
+            "Auto-Submitted",
+            mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
+        ));
+    }
+
+    let encrypt_helper = EncryptHelper::new(context).await?;
+
+    if attach_self_pubkey {
+        let aheader = encrypt_helper.get_aheader().to_string();
+        headers.push((
+            "Autocrypt",
+            mail_builder::headers::raw::Raw::new(aheader).into(),
+        ));
+    }
+
+    headers.push((
+        "Secure-Join",
+        mail_builder::headers::raw::Raw::new(step.to_string()).into(),
+    ));
+
+    headers.push((
+        "Secure-Join-Auth",
+        mail_builder::headers::text::Text::new(auth.to_string()).into(),
+    ));
+
+    let message: MimePart<'static> = MimePart::new("text/plain", "Secure-Join");
+
+    // Split headers based on header confidentiality policy.
+
+    // Headers that must go into IMF header section.
+    //
+    // These are standard headers such as Date, In-Reply-To, References, which cannot be placed
+    // anywhere else according to the standard. Placing headers here also allows them to be fetched
+    // individually over IMAP without downloading the message body. This is why Chat-Version is
+    // placed here.
+    let mut unprotected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
+
+    // Headers that MUST NOT (only) go into IMF header section:
+    // - Large headers which may hit the header section size limit on the server, such as
+    //   Chat-User-Avatar with a base64-encoded image inside.
+    // - Headers duplicated here that servers mess up with in the IMF header section, like
+    //   Message-ID.
+    // - Nonstandard headers that should be DKIM-protected because e.g. OpenDKIM only signs
+    //   known headers.
+    //
+    // The header should be hidden from MTA
+    // by moving it either into protected part
+    // in case of encrypted mails
+    // or unprotected MIME preamble in case of unencrypted mails.
+    let mut hidden_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
+
+    // Opportunistically protected headers.
+    //
+    // These headers are placed into encrypted part *if* the message is encrypted. Place headers
+    // which are not needed before decryption (e.g. Chat-Group-Name) or are not interesting if the
+    // message cannot be decrypted (e.g. Chat-Disposition-Notification-To) here.
+    //
+    // If the message is not encrypted, these headers are placed into IMF header section, so make
+    // sure that the message will be encrypted if you place any sensitive information here.
+    let mut protected_headers: Vec<(&'static str, HeaderType<'static>)> = Vec::new();
+
+    // MIME header <https://datatracker.ietf.org/doc/html/rfc2045>.
+    unprotected_headers.push((
+        "MIME-Version",
+        mail_builder::headers::raw::Raw::new("1.0").into(),
+    ));
+
+    for header @ (original_header_name, _header_value) in &headers {
+        let header_name = original_header_name.to_lowercase();
+        if header_name == "message-id" {
+            unprotected_headers.push(header.clone());
+            hidden_headers.push(header.clone());
+        } else if is_hidden(&header_name) {
+            hidden_headers.push(header.clone());
+        } else if header_name == "from" {
+            protected_headers.push(header.clone());
+
+            unprotected_headers.push(header.clone());
+        } else if header_name == "to" {
+            unprotected_headers.push(("To", hidden_recipients().into()));
+        } else if header_name == "date" {
+            protected_headers.push(header.clone());
+
+            // Randomized date goes to unprotected header.
+            //
+            // We cannot just send "Thu, 01 Jan 1970 00:00:00 +0000"
+            // or omit the header because GMX then fails with
+            //
+            // host mx00.emig.gmx.net[212.227.15.9] said:
+            // 554-Transaction failed
+            // 554-Reject due to policy restrictions.
+            // 554 For explanation visit https://postmaster.gmx.net/en/case?...
+            // (in reply to end of DATA command)
+            //
+            // and the explanation page says
+            // "The time information deviates too much from the actual time".
+            //
+            // We also limit the range to 6 days (518400 seconds)
+            // because with a larger range we got
+            // error "500 Date header far in the past/future"
+            // which apparently originates from Symantec Messaging Gateway
+            // and means the message has a Date that is more
+            // than 7 days in the past:
+            // <https://github.com/chatmail/core/issues/7466>
+            let timestamp_offset = rand::random_range(0..518400);
+            let protected_timestamp = timestamp.saturating_sub(timestamp_offset);
+            let unprotected_date =
+                chrono::DateTime::<chrono::Utc>::from_timestamp(protected_timestamp, 0)
+                    .unwrap()
+                    .to_rfc2822();
+            unprotected_headers.push((
+                "Date",
+                mail_builder::headers::raw::Raw::new(unprotected_date).into(),
+            ));
+        } else {
+            protected_headers.push(header.clone());
+
+            match header_name.as_str() {
+                "subject" => {
+                    unprotected_headers.push((
+                        "Subject",
+                        mail_builder::headers::raw::Raw::new("[...]").into(),
+                    ));
+                }
+                "in-reply-to"
+                | "references"
+                | "auto-submitted"
+                | "chat-version"
+                | "autocrypt-setup-message" => {
+                    unprotected_headers.push(header.clone());
+                }
+                _ => {
+                    // Other headers are removed from unprotected part.
+                }
+            }
+        }
+    }
+
+    let outer_message = {
+        // Store protected headers in the inner message.
+        let message = protected_headers
+            .into_iter()
+            .fold(message, |message, (header, value)| {
+                message.header(header, value)
+            });
+
+        // Add hidden headers to encrypted payload.
+        let mut message: MimePart<'static> = hidden_headers
+            .into_iter()
+            .fold(message, |message, (header, value)| {
+                message.header(header, value)
+            });
+
+        message = unprotected_headers
+            .iter()
+            // Structural headers shouldn't be added as "HP-Outer". They are defined in
+            // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
+            .filter(|(name, _)| {
+                !(name.eq_ignore_ascii_case("mime-version")
+                    || name.eq_ignore_ascii_case("content-type")
+                    || name.eq_ignore_ascii_case("content-transfer-encoding")
+                    || name.eq_ignore_ascii_case("content-disposition"))
+            })
+            .fold(message, |message, (name, value)| {
+                message.header(format!("HP-Outer: {name}"), value.clone())
+            });
+
+        // Set the appropriate Content-Type for the inner message.
+        for (h, v) in &mut message.headers {
+            if h == "Content-Type"
+                && let mail_builder::headers::HeaderType::ContentType(ct) = v
+            {
+                let mut ct_new = ct.clone();
+                ct_new = ct_new.attribute("protected-headers", "v1");
+                ct_new = ct_new.attribute("hp", "cipher");
+                *ct = ct_new;
+                break;
+            }
+        }
+
+        // Disable compression for SecureJoin to ensure
+        // there are no compression side channels
+        // leaking information about the tokens.
+        let compress = false;
+
+        if context.get_config_bool(Config::TestHooks).await?
+            && let Some(hook) = &*context.pre_encrypt_mime_hook.lock()
+        {
+            message = hook(context, message);
+        }
+
+        let encrypted = encrypt_helper
+            .encrypt_symmetrically(context, auth, message, compress)
+            .await?;
+
+        // XXX: additional newline is needed
+        // to pass filtermail at
+        // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
+        let encrypted = encrypted + "\n";
+
+        // Set the appropriate Content-Type for the outer message
+        MimePart::new(
+            "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
+            vec![
+                // Autocrypt part 1
+                MimePart::new("application/pgp-encrypted", "Version: 1\r\n").header(
+                    "Content-Description",
+                    mail_builder::headers::raw::Raw::new("PGP/MIME version identification"),
+                ),
+                // Autocrypt part 2
+                MimePart::new(
+                    "application/octet-stream; name=\"encrypted.asc\"",
+                    encrypted,
+                )
+                .header(
+                    "Content-Description",
+                    mail_builder::headers::raw::Raw::new("OpenPGP encrypted message"),
+                )
+                .header(
+                    "Content-Disposition",
+                    mail_builder::headers::raw::Raw::new("inline; filename=\"encrypted.asc\";"),
+                ),
+            ],
+        )
+    };
+
+    // Store the unprotected headers on the outer message.
+    let outer_message = unprotected_headers
+        .into_iter()
+        .fold(outer_message, |message, (header, value)| {
+            message.header(header, value)
+        });
+
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    outer_message.clone().write_part(cursor).ok();
+    let message = String::from_utf8_lossy(&buffer).to_string();
+
+    Ok(message)
+}
+
 #[cfg(test)]
 mod mimefactory_tests;
