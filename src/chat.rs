@@ -3206,6 +3206,36 @@ pub async fn get_chat_msgs_ex(
     Ok(items)
 }
 
+/// Marks all unread messages in all chats as noticed.
+/// Ignores messages from blocked contacts, but does not ignore messages in muted chats.
+pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
+    // The sql statement here is similar to the one in get_fresh_msgs
+    let list = context
+        .sql
+        .query_map_vec(
+            "SELECT DISTINCT(c.id)
+                 FROM msgs m
+                 INNER JOIN chats c
+                        ON m.chat_id=c.id
+                 WHERE m.state=?
+                   AND m.hidden=0
+                   AND m.chat_id>9
+                   AND c.blocked=0;",
+            (MessageState::InFresh,),
+            |row| {
+                let msg_id: ChatId = row.get(0)?;
+                Ok(msg_id)
+            },
+        )
+        .await?;
+
+    for chat_id in list {
+        marknoticed_chat(context, chat_id).await?;
+    }
+
+    Ok(())
+}
+
 /// Marks all messages in the chat as noticed.
 /// If the given chat-id is the archive-link, marks all messages in all archived chats as noticed.
 pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> {

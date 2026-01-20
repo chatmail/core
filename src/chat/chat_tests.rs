@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use super::*;
+use crate::Event;
 use crate::chatlist::get_archived_cnt;
 use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
 use crate::ephemeral::Timer;
@@ -1236,6 +1237,96 @@ async fn test_unarchive_if_muted() -> Result<()> {
     set_muted(&t, chat_id, MuteDuration::NotMuted).await?;
     send_text_msg(&t, chat_id, "out2".to_string()).await?;
     assert_eq!(get_archived_cnt(&t).await?, 0);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_marknoticed_all_chats() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.section("alice: create chats & promote them by sending a message");
+
+    let alice_chat_normal = alice
+        .create_group_with_members("Chat (normal)", &[alice, bob])
+        .await;
+    send_text_msg(alice, alice_chat_normal, "Hi".to_string()).await?;
+
+    let alice_chat_muted = alice
+        .create_group_with_members("Chat (muted)", &[alice, bob])
+        .await;
+    send_text_msg(alice, alice_chat_muted, "Hi".to_string()).await?;
+    set_muted(&alice.ctx, alice_chat_muted, MuteDuration::Forever).await?;
+
+    let alice_chat_archived_and_muted = alice
+        .create_group_with_members("Chat (archived and muted)", &[alice, bob])
+        .await;
+    send_text_msg(alice, alice_chat_archived_and_muted, "Hi".to_string()).await?;
+    set_muted(
+        &alice.ctx,
+        alice_chat_archived_and_muted,
+        MuteDuration::Forever,
+    )
+    .await?;
+    alice_chat_archived_and_muted
+        .set_visibility(&alice.ctx, ChatVisibility::Archived)
+        .await?;
+
+    tcm.section("bob: receive messages, accept all chats and send a reply to each messsage");
+
+    while let Some(sent_msg) = alice.pop_sent_msg_opt(Duration::default()).await {
+        let bob_message = bob.recv_msg(&sent_msg).await;
+        let bob_chat_id = bob_message.chat_id;
+        bob_chat_id.accept(bob).await?;
+        send_text_msg(bob, bob_chat_id, "reply".to_string()).await?;
+    }
+
+    tcm.section("alice: receive replies from bob");
+    while let Some(sent_msg) = bob.pop_sent_msg_opt(Duration::default()).await {
+        alice.recv_msg(&sent_msg).await;
+    }
+    // ensure chats have unread messages
+    assert_eq!(alice_chat_normal.get_fresh_msg_cnt(alice).await?, 1);
+    assert_eq!(alice_chat_muted.get_fresh_msg_cnt(alice).await?, 1);
+    assert_eq!(
+        alice_chat_archived_and_muted
+            .get_fresh_msg_cnt(alice)
+            .await?,
+        1
+    );
+
+    tcm.section("alice: mark as read");
+    alice.evtracker.clear_events();
+    marknoticed_all_chats(alice).await?;
+    tcm.section("alice: check that chats are no longer unread and that chatlist update events were received");
+    assert_eq!(alice_chat_normal.get_fresh_msg_cnt(alice).await?, 0);
+    assert_eq!(alice_chat_muted.get_fresh_msg_cnt(alice).await?, 0);
+    assert_eq!(
+        alice_chat_archived_and_muted
+            .get_fresh_msg_cnt(alice)
+            .await?,
+        0
+    );
+
+    let emitted_events = alice.evtracker.take_events();
+    for event in &[
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_normal),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_muted),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(alice_chat_archived_and_muted),
+        },
+        EventType::ChatlistItemChanged {
+            chat_id: Some(DC_CHAT_ID_ARCHIVED_LINK),
+        },
+    ] {
+        assert!(emitted_events.iter().any(|Event { typ, .. }| typ == event));
+    }
 
     Ok(())
 }
