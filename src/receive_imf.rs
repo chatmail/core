@@ -1017,12 +1017,12 @@ UPDATE msgs SET state=? WHERE
                     )
                     .await
                     .context("UPDATE msgs.state")?;
-                // Removes all notifications for the chat in UIs. Ideally should be under
-                // `if chat_id.get_fresh_msg_cnt(context).await? == 0`, but this causes a not
-                // updated profile badge counter in the UIs as of v2.35.0. Removed notifications for
-                // new messages is an already existing and known problem, so let's emit the event
-                // unconditionally for now.
-                context.emit_event(EventType::MsgsNoticed(chat_id));
+                if chat_id.get_fresh_msg_cnt(context).await? == 0 {
+                    // Removes all notifications for the chat in UIs.
+                    context.emit_event(EventType::MsgsNoticed(chat_id));
+                } else {
+                    context.emit_msgs_changed_without_msg_id(chat_id);
+                }
                 chatlist_events::emit_chatlist_item_changed(context, chat_id);
             }
             if archived_chats_maybe_noticed {
