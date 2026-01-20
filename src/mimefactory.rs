@@ -1204,7 +1204,7 @@ impl MimeFactory {
                     .await?
             };
 
-            set_content_type_to_encrypted(encrypted)
+            wrap_encrypted_part(encrypted)
         } else if matches!(self.loaded, Loaded::Mdn { .. }) {
             // Never add outer multipart/mixed wrapper to MDN
             // as multipart/report Content-Type is used to recognize MDNs
@@ -1271,22 +1271,12 @@ impl MimeFactory {
             }
         };
 
-        // Store the unprotected headers on the outer message.
-        let outer_message = unprotected_headers
-            .into_iter()
-            .fold(outer_message, |message, (header, value)| {
-                message.header(header, value)
-            });
-
         let MimeFactory {
             last_added_location_id,
             ..
         } = self;
 
-        let mut buffer = Vec::new();
-        let cursor = Cursor::new(&mut buffer);
-        outer_message.clone().write_part(cursor).ok();
-        let message = String::from_utf8_lossy(&buffer).to_string();
+        let message = render_outer_message(unprotected_headers, outer_message);
 
         Ok(RenderedEmail {
             message,
@@ -1911,8 +1901,27 @@ impl MimeFactory {
     }
 }
 
-/// Set the appropriate Content-Type for the outer message
-fn set_content_type_to_encrypted(encrypted: String) -> MimePart<'static> {
+/// Stores the unprotected headers on the outer message, and renders it.
+fn render_outer_message(
+    unprotected_headers: Vec<(&'static str, HeaderType<'static>)>,
+    outer_message: MimePart<'static>,
+) -> String {
+    let outer_message = unprotected_headers
+        .into_iter()
+        .fold(outer_message, |message, (header, value)| {
+            message.header(header, value)
+        });
+
+    let mut buffer = Vec::new();
+    let cursor = Cursor::new(&mut buffer);
+    outer_message.clone().write_part(cursor).ok();
+    let message = String::from_utf8_lossy(&buffer).to_string();
+    message
+}
+
+/// Takes the encrypted part, wraps it in a MimePart,
+/// and sets the appropriate Content-Type for the outer message
+fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
     // XXX: additional newline is needed
     // to pass filtermail at
     // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
@@ -2275,12 +2284,10 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     to.push(hidden_recipients());
 
     headers.push(("From", from.into()));
-
     headers.push((
         "To",
         mail_builder::headers::address::Address::new_list(to.clone()).into(),
     ));
-
     headers.push((
         "Subject",
         mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
@@ -2365,20 +2372,10 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
             .encrypt_symmetrically(context, auth, message, compress)
             .await?;
 
-        set_content_type_to_encrypted(encrypted)
+        wrap_encrypted_part(encrypted)
     };
 
-    // Store the unprotected headers on the outer message.
-    let outer_message = unprotected_headers
-        .into_iter()
-        .fold(outer_message, |message, (header, value)| {
-            message.header(header, value)
-        });
-
-    let mut buffer = Vec::new();
-    let cursor = Cursor::new(&mut buffer);
-    outer_message.clone().write_part(cursor).ok();
-    let message = String::from_utf8_lossy(&buffer).to_string();
+    let message = render_outer_message(unprotected_headers, outer_message);
 
     Ok(message)
 }
