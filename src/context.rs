@@ -36,6 +36,8 @@ use crate::tools::{self, duration_to_str, time, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 use crate::{chatlist_events, stats};
 
+pub use crate::scheduler::connectivity::Connectivity;
+
 /// Builder for the [`Context`].
 ///
 /// Many arguments to the [`Context`] are kind of optional and only needed to handle
