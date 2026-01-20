@@ -66,7 +66,6 @@ pub(crate) async fn determine_capabilities(
         can_idle: caps.has_str("IDLE"),
         can_move: caps.has_str("MOVE"),
         can_check_quota: caps.has_str("QUOTA"),
-        can_condstore: caps.has_str("CONDSTORE"),
         can_metadata: caps.has_str("METADATA"),
         can_compress: caps.has_str("COMPRESS=DEFLATE"),
         can_push: caps.has_str("XDELTAPUSH"),

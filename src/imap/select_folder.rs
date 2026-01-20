@@ -65,11 +65,7 @@ impl ImapSession {
         self.maybe_close_folder(context).await?;
 
         // select new folder
-        let res = if self.can_condstore() {
-            self.select_condstore(folder).await
-        } else {
-            self.select(folder).await
-        };
+        let res = self.select(folder).await;
 
         let transport_id = self.transport_id();
 

@@ -102,10 +102,6 @@ impl Session {
         self.capabilities.can_check_quota
     }
 
-    pub fn can_condstore(&self) -> bool {
-        self.capabilities.can_condstore
-    }
-
     pub fn can_metadata(&self) -> bool {
         self.capabilities.can_metadata
     }
