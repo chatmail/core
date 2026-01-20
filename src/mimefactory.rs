@@ -1025,35 +1025,13 @@ impl MimeFactory {
             .get_config_bool(Config::StdHeaderProtectionComposing)
             .await?;
         let outer_message = if let Some(encryption_pubkeys) = self.encryption_pubkeys {
-            // Store protected headers in the inner message.
-            let message = protected_headers
-                .into_iter()
-                .fold(message, |message, (header, value)| {
-                    message.header(header, value)
-                });
-
-            // Add hidden headers to encrypted payload.
-            let mut message: MimePart<'static> = hidden_headers
-                .into_iter()
-                .fold(message, |message, (header, value)| {
-                    message.header(header, value)
-                });
-
-            if use_std_header_protection {
-                message = unprotected_headers
-                    .iter()
-                    // Structural headers shouldn't be added as "HP-Outer". They are defined in
-                    // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
-                    .filter(|(name, _)| {
-                        !(name.eq_ignore_ascii_case("mime-version")
-                            || name.eq_ignore_ascii_case("content-type")
-                            || name.eq_ignore_ascii_case("content-transfer-encoding")
-                            || name.eq_ignore_ascii_case("content-disposition"))
-                    })
-                    .fold(message, |message, (name, value)| {
-                        message.header(format!("HP-Outer: {name}"), value.clone())
-                    });
-            }
+            let mut message = add_headers_to_encrypted_part(
+                message,
+                &unprotected_headers,
+                hidden_headers,
+                protected_headers,
+                use_std_header_protection,
+            );
 
             // Add gossip headers in chats with multiple recipients
             let multiple_recipients =
@@ -1144,21 +1122,6 @@ impl MimeFactory {
                 }
             }
 
-            // Set the appropriate Content-Type for the inner message.
-            for (h, v) in &mut message.headers {
-                if h == "Content-Type"
-                    && let mail_builder::headers::HeaderType::ContentType(ct) = v
-                {
-                    let mut ct_new = ct.clone();
-                    ct_new = ct_new.attribute("protected-headers", "v1");
-                    if use_std_header_protection {
-                        ct_new = ct_new.attribute("hp", "cipher");
-                    }
-                    *ct = ct_new;
-                    break;
-                }
-            }
-
             // Disable compression for SecureJoin to ensure
             // there are no compression side channels
             // leaking information about the tokens.
@@ -1241,35 +1204,7 @@ impl MimeFactory {
                     .await?
             };
 
-            // XXX: additional newline is needed
-            // to pass filtermail at
-            // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
-            let encrypted = encrypted + "\n";
-
-            // Set the appropriate Content-Type for the outer message
-            MimePart::new(
-                "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
-                vec![
-                    // Autocrypt part 1
-                    MimePart::new("application/pgp-encrypted", "Version: 1\r\n").header(
-                        "Content-Description",
-                        mail_builder::headers::raw::Raw::new("PGP/MIME version identification"),
-                    ),
-                    // Autocrypt part 2
-                    MimePart::new(
-                        "application/octet-stream; name=\"encrypted.asc\"",
-                        encrypted,
-                    )
-                    .header(
-                        "Content-Description",
-                        mail_builder::headers::raw::Raw::new("OpenPGP encrypted message"),
-                    )
-                    .header(
-                        "Content-Disposition",
-                        mail_builder::headers::raw::Raw::new("inline; filename=\"encrypted.asc\";"),
-                    ),
-                ],
-            )
+            set_content_type_to_encrypted(encrypted)
         } else if matches!(self.loaded, Loaded::Mdn { .. }) {
             // Never add outer multipart/mixed wrapper to MDN
             // as multipart/report Content-Type is used to recognize MDNs
@@ -1976,6 +1911,93 @@ impl MimeFactory {
     }
 }
 
+/// Set the appropriate Content-Type for the outer message
+fn set_content_type_to_encrypted(encrypted: String) -> MimePart<'static> {
+    // XXX: additional newline is needed
+    // to pass filtermail at
+    // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
+    let encrypted = encrypted + "\n";
+
+    MimePart::new(
+        "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
+        vec![
+            // Autocrypt part 1
+            MimePart::new("application/pgp-encrypted", "Version: 1\r\n").header(
+                "Content-Description",
+                mail_builder::headers::raw::Raw::new("PGP/MIME version identification"),
+            ),
+            // Autocrypt part 2
+            MimePart::new(
+                "application/octet-stream; name=\"encrypted.asc\"",
+                encrypted,
+            )
+            .header(
+                "Content-Description",
+                mail_builder::headers::raw::Raw::new("OpenPGP encrypted message"),
+            )
+            .header(
+                "Content-Disposition",
+                mail_builder::headers::raw::Raw::new("inline; filename=\"encrypted.asc\";"),
+            ),
+        ],
+    )
+}
+
+fn add_headers_to_encrypted_part(
+    message: MimePart<'static>,
+    unprotected_headers: &[(&'static str, HeaderType<'static>)],
+    hidden_headers: Vec<(&'static str, HeaderType<'static>)>,
+    protected_headers: Vec<(&'static str, HeaderType<'static>)>,
+    use_std_header_protection: bool,
+) -> MimePart<'static> {
+    // Store protected headers in the inner message.
+    let message = protected_headers
+        .into_iter()
+        .fold(message, |message, (header, value)| {
+            message.header(header, value)
+        });
+
+    // Add hidden headers to encrypted payload.
+    let mut message: MimePart<'static> = hidden_headers
+        .into_iter()
+        .fold(message, |message, (header, value)| {
+            message.header(header, value)
+        });
+
+    if use_std_header_protection {
+        message = unprotected_headers
+            .iter()
+            // Structural headers shouldn't be added as "HP-Outer". They are defined in
+            // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
+            .filter(|(name, _)| {
+                !(name.eq_ignore_ascii_case("mime-version")
+                    || name.eq_ignore_ascii_case("content-type")
+                    || name.eq_ignore_ascii_case("content-transfer-encoding")
+                    || name.eq_ignore_ascii_case("content-disposition"))
+            })
+            .fold(message, |message, (name, value)| {
+                message.header(format!("HP-Outer: {name}"), value.clone())
+            });
+    }
+
+    // Set the appropriate Content-Type for the inner message
+    for (h, v) in &mut message.headers {
+        if h == "Content-Type"
+            && let mail_builder::headers::HeaderType::ContentType(ct) = v
+        {
+            let mut ct_new = ct.clone();
+            ct_new = ct_new.attribute("protected-headers", "v1");
+            if use_std_header_protection {
+                ct_new = ct_new.attribute("hp", "cipher");
+            }
+            *ct = ct_new;
+            break;
+        }
+    }
+
+    message
+}
+
 struct HeadersByConfidentiality {
     /// Headers that must go into IMF header section.
     ///
@@ -2321,46 +2343,14 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
     );
 
     let outer_message = {
-        // Store protected headers in the inner message.
-        let message = protected_headers
-            .into_iter()
-            .fold(message, |message, (header, value)| {
-                message.header(header, value)
-            });
-
-        // Add hidden headers to encrypted payload.
-        let mut message: MimePart<'static> = hidden_headers
-            .into_iter()
-            .fold(message, |message, (header, value)| {
-                message.header(header, value)
-            });
-
-        message = unprotected_headers
-            .iter()
-            // Structural headers shouldn't be added as "HP-Outer". They are defined in
-            // <https://www.rfc-editor.org/rfc/rfc9787.html#structural-header-fields>.
-            .filter(|(name, _)| {
-                !(name.eq_ignore_ascii_case("mime-version")
-                    || name.eq_ignore_ascii_case("content-type")
-                    || name.eq_ignore_ascii_case("content-transfer-encoding")
-                    || name.eq_ignore_ascii_case("content-disposition"))
-            })
-            .fold(message, |message, (name, value)| {
-                message.header(format!("HP-Outer: {name}"), value.clone())
-            });
-
-        // Set the appropriate Content-Type for the inner message.
-        for (h, v) in &mut message.headers {
-            if h == "Content-Type"
-                && let mail_builder::headers::HeaderType::ContentType(ct) = v
-            {
-                let mut ct_new = ct.clone();
-                ct_new = ct_new.attribute("protected-headers", "v1");
-                ct_new = ct_new.attribute("hp", "cipher");
-                *ct = ct_new;
-                break;
-            }
-        }
+        let use_std_header_protection = true;
+        let mut message = add_headers_to_encrypted_part(
+            message,
+            &unprotected_headers,
+            hidden_headers,
+            protected_headers,
+            use_std_header_protection,
+        );
 
         // Disable compression for SecureJoin to ensure
         // there are no compression side channels
@@ -2377,35 +2367,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
             .encrypt_symmetrically(context, auth, message, compress)
             .await?;
 
-        // XXX: additional newline is needed
-        // to pass filtermail at
-        // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:
-        let encrypted = encrypted + "\n";
-
-        // Set the appropriate Content-Type for the outer message
-        MimePart::new(
-            "multipart/encrypted; protocol=\"application/pgp-encrypted\"",
-            vec![
-                // Autocrypt part 1
-                MimePart::new("application/pgp-encrypted", "Version: 1\r\n").header(
-                    "Content-Description",
-                    mail_builder::headers::raw::Raw::new("PGP/MIME version identification"),
-                ),
-                // Autocrypt part 2
-                MimePart::new(
-                    "application/octet-stream; name=\"encrypted.asc\"",
-                    encrypted,
-                )
-                .header(
-                    "Content-Description",
-                    mail_builder::headers::raw::Raw::new("OpenPGP encrypted message"),
-                )
-                .header(
-                    "Content-Disposition",
-                    mail_builder::headers::raw::Raw::new("inline; filename=\"encrypted.asc\";"),
-                ),
-            ],
-        )
+        set_content_type_to_encrypted(encrypted)
     };
 
     // Store the unprotected headers on the outer message.
