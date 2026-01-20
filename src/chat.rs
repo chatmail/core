@@ -4380,7 +4380,71 @@ pub async fn forward_msgs_2ctx(
         }
 
         let param = &mut param;
-        msg.param.steal(param, Param::File);
+
+        // When forwarding between different accounts, blob files must be physically copied
+        // because each account has its own blob directory.
+        if let Some(file_name) = param.get(Param::File) {
+            match BlobObject::from_name(ctx_src, file_name) {
+                Ok(src_blob) => {
+                    let src_path = src_blob.to_abs_path();
+                    let filename = param.get(Param::Filename).unwrap_or("file");
+                    match BlobObject::create_and_deduplicate(
+                        ctx_dst,
+                        &src_path,
+                        Path::new(filename),
+                    ) {
+                        Ok(new_blob) => {
+                            msg.param.set(Param::File, new_blob.as_name());
+                        }
+                        Err(err) => {
+                            warn!(
+                                ctx_dst,
+                                "Failed to copy blob file to destination account: {:#}", err
+                            );
+                            // If file copy failed, convert message to text to avoid sending failure
+                            if msg.viewtype != Viewtype::Text && msg.viewtype != Viewtype::Sticker {
+                                msg.viewtype = Viewtype::Text;
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!(ctx_src, "Failed to get source blob: {:#}", err);
+                    // If blob doesn't exist, convert message to text
+                    if msg.viewtype != Viewtype::Text && msg.viewtype != Viewtype::Sticker {
+                        msg.viewtype = Viewtype::Text;
+                    }
+                }
+            }
+        }
+
+        // Copy webxdc document blob if present
+        if let Some(webxdc_name) = param.get(Param::WebxdcDocument) {
+            match BlobObject::from_name(ctx_src, webxdc_name) {
+                Ok(src_blob) => {
+                    let src_path = src_blob.to_abs_path();
+                    match BlobObject::create_and_deduplicate(
+                        ctx_dst,
+                        &src_path,
+                        Path::new("document.xdc"),
+                    ) {
+                        Ok(new_blob) => {
+                            msg.param.set(Param::WebxdcDocument, new_blob.as_name());
+                        }
+                        Err(err) => {
+                            warn!(
+                                ctx_dst,
+                                "Failed to copy webxdc document to destination account: {:#}", err
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    warn!(ctx_src, "Failed to get source webxdc blob: {:#}", err);
+                }
+            }
+        }
+
         msg.param.steal(param, Param::Filename);
         msg.param.steal(param, Param::Width);
         msg.param.steal(param, Param::Height);
