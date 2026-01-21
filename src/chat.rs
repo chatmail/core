@@ -4388,12 +4388,9 @@ pub async fn forward_msgs_2ctx(
                 .with_context(|| format!("Failed to get source blob: {file_name}"))?;
             let src_path = src_blob.to_abs_path();
             let filename = param.get(Param::Filename).unwrap_or("file");
-            let new_blob = BlobObject::create_and_deduplicate(
-                ctx_dst,
-                &src_path,
-                Path::new(filename),
-            )
-            .context("Failed to copy blob file to destination account")?;
+            let new_blob =
+                BlobObject::create_and_deduplicate(ctx_dst, &src_path, Path::new(filename))
+                    .context("Failed to copy blob file to destination account")?;
             msg.param.set(Param::File, new_blob.as_name());
         }
 
@@ -4402,12 +4399,9 @@ pub async fn forward_msgs_2ctx(
             let src_blob = BlobObject::from_name(ctx_src, webxdc_name)
                 .with_context(|| format!("Failed to get source webxdc blob: {webxdc_name}"))?;
             let src_path = src_blob.to_abs_path();
-            let new_blob = BlobObject::create_and_deduplicate(
-                ctx_dst,
-                &src_path,
-                Path::new("document.xdc"),
-            )
-            .context("Failed to copy webxdc document to destination account")?;
+            let new_blob =
+                BlobObject::create_and_deduplicate(ctx_dst, &src_path, Path::new("document.xdc"))
+                    .context("Failed to copy webxdc document to destination account")?;
             msg.param.set(Param::WebxdcDocument, new_blob.as_name());
         }
 
