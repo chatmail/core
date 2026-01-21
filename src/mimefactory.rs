@@ -1169,8 +1169,9 @@ impl MimeFactory {
             }
 
             let encrypted = if let Some(shared_secret) = shared_secret {
+                let sign = true;
                 encrypt_helper
-                    .encrypt_symmetrically(context, &shared_secret, message, compress)
+                    .encrypt_symmetrically(context, &shared_secret, message, compress, sign)
                     .await?
             } else {
                 // Asymmetric encryption
@@ -2366,8 +2367,10 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         // there are no compression side channels
         // leaking information about the tokens.
         let compress = false;
+        // Only sign the message if we attach the pubkey.
+        let sign = attach_self_pubkey;
         let encrypted = encrypt_helper
-            .encrypt_symmetrically(context, auth, message, compress) // TODO this also signs the message. vc-request-pubkey shouldn't be signed.
+            .encrypt_symmetrically(context, auth, message, compress, sign)
             .await?;
 
         wrap_encrypted_part(encrypted)
