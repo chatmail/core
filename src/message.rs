@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::str;
+use std::sync::atomic::Ordering;
 
 use anyhow::{Context as _, Result, ensure, format_err};
 use deltachat_contact_tools::{VcardContact, parse_vcard};
@@ -2392,6 +2393,23 @@ impl Viewtype {
             Viewtype::Vcard => true,
         }
     }
+}
+
+/// Opt out of truncating long messages.
+///
+/// After calling this function, long messages
+/// will not be truncated during loading.
+///
+/// UIs should call this function if they
+/// can handle long messages by cutting them
+/// and displaying "Show full message" option.
+///
+/// Has no effect for bots which never
+/// truncate messages when loading.
+pub fn dont_truncate_long_messages(context: &Context) {
+    context
+        .truncate_long_messages
+        .store(false, Ordering::Relaxed);
 }
 
 #[cfg(test)]

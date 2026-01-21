@@ -9,6 +9,7 @@ use std::mem;
 use std::ops::{AddAssign, Deref};
 use std::path::{Path, PathBuf};
 use std::str::from_utf8;
+use std::sync::atomic::Ordering;
 // If a time value doesn't need to be sent to another host, saved to the db or otherwise used across
 // program restarts, a monotonically nondecreasing clock (`Instant`) should be used. But as
 // `Instant` may use `libc::clock_gettime(CLOCK_MONOTONIC)`, e.g. on Android, and does not advance
@@ -137,7 +138,9 @@ pub(crate) fn truncate_by_lines(
 ///
 /// Returns the resulting text and a bool telling whether a truncation was done.
 pub(crate) async fn truncate_msg_text(context: &Context, text: String) -> Result<(String, bool)> {
-    if context.get_config_bool(Config::Bot).await? {
+    if !context.truncate_long_messages.load(Ordering::Relaxed)
+        || context.get_config_bool(Config::Bot).await?
+    {
         return Ok((text, false));
     }
     // Truncate text if it has too many lines
