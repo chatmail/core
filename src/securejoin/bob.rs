@@ -215,11 +215,11 @@ LIMIT 1
     Ok(())
 }
 
-/// Handles `vc-auth-required` and `vg-auth-required` handshake messages.
+/// Handles `vc-auth-required`, `vg-auth-required`, and `vc-pubkey` handshake messages.
 ///
 /// # Bob - the joiner's side
 /// ## Step 4 in the "Setup Contact protocol"
-pub(super) async fn handle_auth_required(
+pub(super) async fn handle_auth_required_or_pubkey(
     context: &Context,
     message: &MimeMessage,
 ) -> Result<HandshakeMessage> {
