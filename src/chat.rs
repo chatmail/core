@@ -4393,18 +4393,6 @@ pub async fn forward_msgs_2ctx(
                     .context("Failed to copy blob file to destination account")?;
             msg.param.set(Param::File, new_blob.as_name());
         }
-
-        // Copy webxdc document blob if present
-        if let Some(webxdc_name) = param.get(Param::WebxdcDocument) {
-            let src_blob = BlobObject::from_name(ctx_src, webxdc_name)
-                .with_context(|| format!("Failed to get source webxdc blob: {webxdc_name}"))?;
-            let src_path = src_blob.to_abs_path();
-            let new_blob =
-                BlobObject::create_and_deduplicate(ctx_dst, &src_path, Path::new("document.xdc"))
-                    .context("Failed to copy webxdc document to destination account")?;
-            msg.param.set(Param::WebxdcDocument, new_blob.as_name());
-        }
-
         msg.param.steal(param, Param::Filename);
         msg.param.steal(param, Param::Width);
         msg.param.steal(param, Param::Height);

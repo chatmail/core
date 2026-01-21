@@ -5582,58 +5582,6 @@ async fn test_forward_msgs_2ctx_missing_blob() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_forward_msgs_2ctx_with_webxdc() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    // First, establish a chat between Alice and Bob
-    let alice_chat = alice.create_chat(bob).await;
-    let alice_initial = alice.send_text(alice_chat.id, "hi").await;
-    let bob_alice_msg = bob.recv_msg(&alice_initial).await;
-    let bob_chat_id = bob_alice_msg.chat_id;
-    bob_chat_id.accept(bob).await?;
-
-    // Alice sends a webxdc message to her self-chat
-    let alice_self_chat = alice.get_self_chat().await;
-    let webxdc_bytes = include_bytes!("../../test-data/webxdc/minimal.xdc");
-
-    let mut msg = Message::new(Viewtype::Webxdc);
-    msg.set_file_from_bytes(alice, "minimal.xdc", webxdc_bytes, None)?;
-    msg.set_text("Test webxdc app".to_string());
-
-    alice.send_msg(alice_self_chat.id, &mut msg).await;
-    let alice_self_msg = alice.get_last_msg().await;
-
-    // Verify the webxdc exists in Alice's blobdir
-    assert_eq!(alice_self_msg.viewtype, Viewtype::Webxdc);
-    let alice_original_file_path = alice_self_msg.get_file(alice).unwrap();
-    let alice_original_content = tokio::fs::read(&alice_original_file_path).await?;
-    assert_eq!(alice_original_content.len(), webxdc_bytes.len());
-
-    // Alice forwards the webxdc message to Bob using forward_msgs_2ctx
-    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_chat_id).await?;
-
-    // Bob should have the forwarded webxdc message
-    let bob_msg = bob.get_last_msg().await;
-    assert_eq!(bob_msg.viewtype, Viewtype::Webxdc);
-    assert!(bob_msg.is_forwarded());
-    assert_eq!(bob_msg.text, "Test webxdc app");
-    assert_eq!(bob_msg.from_id, ContactId::SELF);
-
-    // Verify Bob has the webxdc file in his blobdir with correct content
-    let bob_file_path = bob_msg.get_file(bob).unwrap();
-    let bob_file_content = tokio::fs::read(&bob_file_path).await?;
-    assert_eq!(bob_file_content.len(), webxdc_bytes.len());
-    assert_eq!(bob_file_content, alice_original_content);
-
-    // Verify that the blob was copied (different paths in different accounts)
-    assert_ne!(alice_original_file_path, bob_file_path);
-
-    Ok(())
-}
-
 /// Tests that in multi-device setup
 /// second device learns the key of a contact
 /// via Autocrypt-Gossip in 1:1 chats.
