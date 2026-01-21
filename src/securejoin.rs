@@ -515,7 +515,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ====             Bob - the joiner's side             =====
             ====   Step 4 in "Setup verified contact" protocol   =====
             ========================================================*/
-            bob::handle_auth_required(context, mime_message).await
+            bob::handle_auth_required_or_pubkey(context, mime_message).await
         }
         SecureJoinStep::RequestPubkey => {
             /*========================================================
@@ -562,7 +562,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ====             Bob - the joiner's side             =====
             ====     Alice sent us her pubkey (Securejoin v3)    =====
             ========================================================*/
-            todo!("Hocuri Pubkey not implemented")
+            bob::handle_auth_required_or_pubkey(context, mime_message).await
         }
         SecureJoinStep::RequestWithAuth => {
             /*==========================================================

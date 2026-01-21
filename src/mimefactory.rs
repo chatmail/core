@@ -2309,7 +2309,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
             "Auto-Submitted",
             mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
         ));
-    } else if step != "vc-request" {
+    } else if step != "vc-request-pubkey" {
         headers.push((
             "Auto-Submitted",
             mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
