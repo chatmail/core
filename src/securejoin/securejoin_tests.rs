@@ -460,7 +460,7 @@ async fn test_secure_join() -> Result<()> {
     assert!(msg.signature.is_none());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-request-pubkey"
+        "vc-request-pubkey"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
