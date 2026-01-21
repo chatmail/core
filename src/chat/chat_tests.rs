@@ -2741,8 +2741,8 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         let vc_pubkey = alice.pop_sent_msg().await;
         assert_eq!(vc_pubkey.recipients, "charlie@example.net");
         let parsed = charlie.parse_msg(&vc_pubkey).await;
-        assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
-        assert!(parsed.decoded_data_contains("charlie@example.net"));
+        assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_none());
+        assert_eq!(parsed.decoded_data_contains("charlie@example.net"), false);
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&vc_pubkey).await;
@@ -3182,14 +3182,17 @@ async fn test_broadcast_joining_golden() -> Result<()> {
         .await;
 
     let alice_bob_contact = alice.add_or_lookup_contact_no_key(bob).await;
-    let private_chat = ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
-        .await?
-        .unwrap();
     // The 1:1 chat with Bob should not be visible to the user:
-    assert_eq!(private_chat.blocked, Blocked::Yes);
+    assert!(
+        ChatIdBlocked::lookup_by_contact(alice, alice_bob_contact.id)
+            .await?
+            .is_none()
+    );
+    let private_chat_id =
+        ChatId::create_for_contact_with_blocked(alice, alice_bob_contact.id, Blocked::Not).await?;
     alice
         .golden_test_chat(
-            private_chat.id,
+            private_chat_id,
             "test_broadcast_joining_golden_private_chat",
         )
         .await;
