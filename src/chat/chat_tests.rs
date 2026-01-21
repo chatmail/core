@@ -5570,19 +5570,10 @@ async fn test_forward_msgs_2ctx_missing_blob() -> Result<()> {
     let alice_file_path = alice_self_msg.get_file(alice).unwrap();
     tokio::fs::remove_file(&alice_file_path).await?;
 
-    // Alice tries to forward the message - this should not fail, just log a warning
-    forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await?;
-
-    // Bob should have the message in his database
-    // Since the blob file was missing in Alice's blobdir, it's converted to Text viewtype
-    let bob_forwarded_msg = bob.get_last_msg().await;
-
-    // The message should exist with the text but as Text viewtype (since file was missing)
-    assert_eq!(bob_forwarded_msg.text, "File message");
-    assert!(bob_forwarded_msg.is_forwarded());
-    assert_eq!(bob_forwarded_msg.viewtype, Viewtype::Text);
-    // The file param should not be set since the source blob was missing
-    assert_eq!(bob_forwarded_msg.param.get(Param::File), None);
+    // Alice tries to forward the message - this should fail with an error
+    let result = forward_msgs_2ctx(alice, &[alice_self_msg.id], bob, bob_alice_chat_id).await;
+    assert!(result.is_err());
+    assert!(result.unwrap_err().to_string().contains("Failed to copy blob file"));
 
     Ok(())
 }
