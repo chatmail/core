@@ -448,7 +448,7 @@ pub(crate) async fn handle_securejoin_handshake(
     // https://www.rfc-editor.org/rfc/rfc9580.html#name-surreptitious-forwarding
     if !matches!(
         step,
-        SecureJoinStep::Request { .. } | SecureJoinStep::RequestPubkey
+        SecureJoinStep::Request { .. } | SecureJoinStep::RequestPubkey | SecureJoinStep::Pubkey
     ) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
@@ -523,8 +523,8 @@ pub(crate) async fn handle_securejoin_handshake(
             ====   Bob requests our public key (Securejoin v3)   =====
             ========================================================*/
 
-            if !mime_message.was_encrypted() {
-                warn!(context, "Ignoring unencrypted RequestPubkey");
+            if mime_message.signature.is_some() {
+                warn!(context, "RequestPubkey is not supposed to be signed");
                 return Ok(HandshakeMessage::Ignore);
             }
             let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
@@ -562,7 +562,7 @@ pub(crate) async fn handle_securejoin_handshake(
             ====             Bob - the joiner's side             =====
             ====     Alice sent us her pubkey (Securejoin v3)    =====
             ========================================================*/
-            todo!()
+            todo!("Hocuri Pubkey not implemented")
         }
         SecureJoinStep::RequestWithAuth => {
             /*==========================================================
