@@ -2310,6 +2310,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
             "Auto-Submitted",
             mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
         ));
+        // TODO it's not nice that we're comparing strings here
     } else if step != "vc-request-pubkey" {
         headers.push((
             "Auto-Submitted",
