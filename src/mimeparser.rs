@@ -355,7 +355,7 @@ impl MimeMessage {
 
         // Remove headers that are allowed _only_ in the encrypted+signed part. It's ok to leave
         // them in signed-only emails, but has no value currently.
-        Self::remove_secured_headers(&mut headers, &mut headers_removed);
+        Self::remove_secured_headers(&mut headers, &mut headers_removed, false);
 
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
@@ -382,6 +382,11 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+
+        // TODO performance:
+        // - maybe we should start sorting by timestamp
+        // - we shouldn't do 3 SQL requests even if the message isn't symm-encrypted
+        // - we're loading the whole bobstate, just to get the auth token
         let mut secrets: Vec<String> = context
             .sql
             .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
@@ -389,8 +394,24 @@ impl MimeMessage {
                 Ok(secret)
             })
             .await?;
-
         secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
+        context
+            .sql
+            .query_map(
+                "SELECT id, invite FROM bobstate",
+                (),
+                |row| {
+                    let invite: crate::securejoin::QrInvite = row.get(1)?;
+                    Ok(invite)
+                },
+                |rows| {
+                    for row in rows {
+                        secrets.push(row?.authcode().to_string());
+                    }
+                    Ok(())
+                },
+            )
+            .await?;
 
         let (mail, is_encrypted) =
             match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
@@ -608,7 +629,7 @@ impl MimeMessage {
             }
         }
         if signatures.is_empty() {
-            Self::remove_secured_headers(&mut headers, &mut headers_removed);
+            Self::remove_secured_headers(&mut headers, &mut headers_removed, is_encrypted);
         }
         if !is_encrypted {
             signatures.clear();
@@ -1707,20 +1728,34 @@ impl MimeMessage {
             .and_then(|msgid| parse_message_id(msgid).ok())
     }
 
+    /// Remove headers that are only allowed to be present in an encrypted-and-signed message:
     fn remove_secured_headers(
         headers: &mut HashMap<String, String>,
         removed: &mut HashSet<String>,
+        // Whether the message was encrypted (but not signed):
+        encrypted: bool,
     ) {
         remove_header(headers, "secure-join-fingerprint", removed);
-        remove_header(headers, "secure-join-auth", removed);
         remove_header(headers, "chat-verified", removed);
         remove_header(headers, "autocrypt-gossip", removed);
 
-        // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
-        if let Some(secure_join) = remove_header(headers, "secure-join", removed)
-            && (secure_join == "vc-request" || secure_join == "vg-request")
-        {
-            headers.insert("secure-join".to_string(), secure_join);
+        if headers.get("secure-join") == Some(&"vc-request-pubkey".to_string()) && encrypted {
+            // vc-request-pubkey message is encrypted, but unsigned,
+            // and contains a Secure-Join-Auth header.
+            //
+            // It is unsigned in order not to leak Bob's identity to a server operator
+            // that scraped the AUTH token somewhere from the web,
+            // and because Alice anyways couldn't verify his signature at this step,
+            // because she doesn't know his public key yet.
+        } else {
+            remove_header(headers, "secure-join-auth", removed);
+
+            // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
+            if let Some(secure_join) = remove_header(headers, "secure-join", removed)
+                && (secure_join == "vc-request" || secure_join == "vg-request")
+            {
+                headers.insert("secure-join".to_string(), secure_join);
+            }
         }
     }
 
