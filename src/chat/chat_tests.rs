@@ -2731,27 +2731,24 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         join_securejoin(charlie, &qr).await.unwrap();
 
         let request = charlie.pop_sent_msg().await;
-        assert_eq!(request.recipients, "alice@example.org charlie@example.net");
+        assert_eq!(request.recipients, "alice@example.org");
 
         alice.recv_msg_trash(&request).await;
     }
 
-    tcm.section("Alice sends auth-required");
+    tcm.section("Alice sends vc-pubkey");
     {
-        let auth_required = alice.pop_sent_msg().await;
-        assert_eq!(
-            auth_required.recipients,
-            "charlie@example.net alice@example.org"
-        );
-        let parsed = charlie.parse_msg(&auth_required).await;
+        let vc_pubkey = alice.pop_sent_msg().await;
+        assert_eq!(vc_pubkey.recipients, "charlie@example.net");
+        let parsed = charlie.parse_msg(&vc_pubkey).await;
         assert!(parsed.get_header(HeaderDef::AutocryptGossip).is_some());
         assert!(parsed.decoded_data_contains("charlie@example.net"));
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
-        let parsed_by_bob = bob.parse_msg(&auth_required).await;
+        let parsed_by_bob = bob.parse_msg(&vc_pubkey).await;
         assert!(parsed_by_bob.decrypting_failed);
 
-        charlie.recv_msg_trash(&auth_required).await;
+        charlie.recv_msg_trash(&vc_pubkey).await;
     }
 
     tcm.section("Charlie sends request-with-auth");
@@ -2992,9 +2989,8 @@ async fn test_broadcast_recipients_sync1() -> Result<()> {
     alice1.recv_msg_trash(&request).await;
     alice2.recv_msg_trash(&request).await;
 
-    let auth_required = alice1.pop_sent_msg().await;
-    charlie.recv_msg_trash(&auth_required).await;
-    alice2.recv_msg_trash(&auth_required).await;
+    let vc_pubkey = alice1.pop_sent_msg().await;
+    charlie.recv_msg_trash(&vc_pubkey).await;
 
     let request_with_auth = charlie.pop_sent_msg().await;
     alice1.recv_msg_trash(&request_with_auth).await;
@@ -3470,16 +3466,13 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     join_securejoin(bob0, &qr).await.unwrap();
 
     let request = bob0.pop_sent_msg().await;
-    assert_eq!(request.recipients, "alice@example.org bob@example.net");
+    assert_eq!(request.recipients, "alice@example.org");
 
     alice.recv_msg_trash(&request).await;
-    let auth_required = alice.pop_sent_msg().await;
-    assert_eq!(
-        auth_required.recipients,
-        "bob@example.net alice@example.org"
-    );
+    let vc_pubkey = alice.pop_sent_msg().await;
+    assert_eq!(vc_pubkey.recipients, "bob@example.net");
 
-    bob0.recv_msg_trash(&auth_required).await;
+    bob0.recv_msg_trash(&vc_pubkey).await;
     let request_with_auth = bob0.pop_sent_msg().await;
     assert_eq!(
         request_with_auth.recipients,
@@ -3495,7 +3488,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberAddedToGroup);
 
     tcm.section("Bob's second device also receives these messages");
-    bob1.recv_msg_trash(&auth_required).await;
+    bob1.recv_msg_trash(&vc_pubkey).await;
     bob1.recv_msg_trash(&request_with_auth).await;
     bob1.recv_msg(&member_added).await;
 
