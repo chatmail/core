@@ -377,15 +377,15 @@ pub(crate) async fn send_msg_to_smtp(
         return Ok(());
     };
     if retries > 6 {
-        if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
-            message::set_msg_failed(context, &mut msg, "Number of retries exceeded the limit.")
-                .await?;
-        }
         context
             .sql
             .execute("DELETE FROM smtp WHERE id=?", (rowid,))
             .await
             .context("Failed to remove message with exceeded retry limit from smtp table")?;
+        if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
+            message::set_msg_failed(context, &mut msg, "Number of retries exceeded the limit.")
+                .await?;
+        }
         return Ok(());
     }
     info!(
