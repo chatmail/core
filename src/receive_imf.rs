@@ -636,8 +636,6 @@ pub(crate) async fn receive_imf_inner(
 
     let chat_assignment =
         decide_chat_assignment(context, &mime_parser, &parent_message, rfc724_mid, from_id).await?;
-    info!(context, "Chat assignment is {chat_assignment:?}.");
-
     let (to_ids, past_ids) = get_to_and_past_contact_ids(
         context,
         &mime_parser,
@@ -1313,17 +1311,34 @@ async fn decide_chat_assignment(
     if from_id != ContactId::SELF && !has_self_addr {
         num_recipients += 1;
     }
-    let can_be_11_chat = num_recipients <= 1
-        && (from_id != ContactId::SELF
-            || !(mime_parser.recipients.is_empty() || has_self_addr)
-            || mime_parser.was_encrypted());
+    let mut can_be_11_chat_log = String::new();
+    let mut l = |cond: bool, s: String| {
+        can_be_11_chat_log += &s;
+        cond
+    };
+    let can_be_11_chat = l(
+        num_recipients <= 1,
+        format!("num_recipients={num_recipients}."),
+    ) && (l(from_id != ContactId::SELF, format!(" from_id={from_id}."))
+        || !(l(
+            mime_parser.recipients.is_empty(),
+            format!(" Raw recipients len={}.", mime_parser.recipients.len()),
+        ) || l(has_self_addr, format!(" has_self_addr={has_self_addr}.")))
+        || l(
+            mime_parser.was_encrypted(),
+            format!(" was_encrypted={}.", mime_parser.was_encrypted()),
+        ));
 
+    let chat_assignment_log;
     let chat_assignment = if should_trash {
+        chat_assignment_log = "".to_string();
         ChatAssignment::Trash
     } else if mime_parser.get_mailinglist_header().is_some() {
+        chat_assignment_log = "Mailing list header found.".to_string();
         ChatAssignment::MailingListOrBroadcast
     } else if let Some(grpid) = mime_parser.get_chat_group_id() {
         if mime_parser.was_encrypted() {
+            chat_assignment_log = "Encrypted group message.".to_string();
             ChatAssignment::GroupChat {
                 grpid: grpid.to_string(),
             }
@@ -1332,11 +1347,13 @@ async fn decide_chat_assignment(
                 lookup_chat_by_reply(context, mime_parser, parent).await?
             {
                 // Try to assign to a chat based on In-Reply-To/References.
+                chat_assignment_log = "Unencrypted group reply.".to_string();
                 ChatAssignment::ExistingChat {
                     chat_id,
                     chat_id_blocked,
                 }
             } else {
+                chat_assignment_log = "Unencrypted group reply.".to_string();
                 ChatAssignment::AdHocGroup
             }
         } else {
@@ -1347,6 +1364,7 @@ async fn decide_chat_assignment(
             // even if it had only two members.
             //
             // Group ID is ignored, however.
+            chat_assignment_log = "Unencrypted group message, no parent.".to_string();
             ChatAssignment::AdHocGroup
         }
     } else if let Some(parent) = &parent_message {
@@ -1354,24 +1372,38 @@ async fn decide_chat_assignment(
             lookup_chat_by_reply(context, mime_parser, parent).await?
         {
             // Try to assign to a chat based on In-Reply-To/References.
+            chat_assignment_log = "Reply w/o grpid.".to_string();
             ChatAssignment::ExistingChat {
                 chat_id,
                 chat_id_blocked,
             }
         } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
+            chat_assignment_log = "Reply with Chat-Group-Name.".to_string();
             ChatAssignment::AdHocGroup
         } else if can_be_11_chat {
+            chat_assignment_log = format!("Non-group reply. {can_be_11_chat_log}");
             ChatAssignment::OneOneChat
         } else {
+            chat_assignment_log = format!("Non-group reply. {can_be_11_chat_log}");
             ChatAssignment::AdHocGroup
         }
     } else if mime_parser.get_header(HeaderDef::ChatGroupName).is_some() {
+        chat_assignment_log = "Message with Chat-Group-Name, no parent.".to_string();
         ChatAssignment::AdHocGroup
     } else if can_be_11_chat {
+        chat_assignment_log = format!("Non-group message, no parent. {can_be_11_chat_log}");
         ChatAssignment::OneOneChat
     } else {
+        chat_assignment_log = format!("Non-group message, no parent. {can_be_11_chat_log}");
         ChatAssignment::AdHocGroup
     };
+
+    if !chat_assignment_log.is_empty() {
+        info!(
+            context,
+            "{chat_assignment_log} Chat assignment = {chat_assignment:?}."
+        );
+    }
     Ok(chat_assignment)
 }
 
