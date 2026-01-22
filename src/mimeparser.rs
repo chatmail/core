@@ -1728,7 +1728,7 @@ impl MimeMessage {
             .and_then(|msgid| parse_message_id(msgid).ok())
     }
 
-    /// Remove headers that are only allowed to be present in an encrypted-and-signed message:
+    /// Remove headers that are only allowed to be present in an encrypted-and-signed message
     fn remove_secured_headers(
         headers: &mut HashMap<String, String>,
         removed: &mut HashSet<String>,
