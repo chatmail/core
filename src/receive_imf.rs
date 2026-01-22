@@ -3005,6 +3005,8 @@ async fn apply_group_changes(
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
 ) -> Result<GroupChangesInfo> {
+    let from_is_key_contact = Contact::get_by_id(context, from_id).await?.is_key_contact();
+    ensure!(from_is_key_contact || chat.grpid.is_empty());
     let to_ids_flat: Vec<ContactId> = to_ids.iter().filter_map(|x| *x).collect();
     ensure!(chat.typ == Chattype::Group);
     ensure!(!chat.id.is_special());
@@ -3086,7 +3088,10 @@ async fn apply_group_changes(
         )
         .await?;
 
-        if chat.member_list_is_stale(context).await? {
+        // Avoid insertion of `from_id` into a group with inappropriate encryption state.
+        if from_is_key_contact != chat.grpid.is_empty()
+            && chat.member_list_is_stale(context).await?
+        {
             info!(context, "Member list is stale.");
             let mut new_members: HashSet<ContactId> =
                 HashSet::from_iter(to_ids_flat.iter().copied());
@@ -3144,7 +3149,7 @@ async fn apply_group_changes(
             if self_added {
                 new_members = HashSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
-                if !from_id.is_special() {
+                if !from_id.is_special() && from_is_key_contact != chat.grpid.is_empty() {
                     new_members.insert(from_id);
                 }
             } else {
