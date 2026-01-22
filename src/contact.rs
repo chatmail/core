@@ -1454,7 +1454,7 @@ WHERE addr=?
     /// Returns true if the contact is a key-contact.
     /// Otherwise it is an addresss-contact.
     pub fn is_key_contact(&self) -> bool {
-        self.fingerprint.is_some()
+        self.fingerprint.is_some() || self.id == ContactId::SELF
     }
 
     /// Returns OpenPGP fingerprint of a contact.
