@@ -9,6 +9,7 @@
 //! and configured list of connection candidates.
 
 use std::fmt;
+use std::pin::Pin;
 
 use anyhow::{Context as _, Result, bail, format_err};
 use deltachat_contact_tools::{EmailAddress, addr_normalize};
@@ -760,9 +761,16 @@ pub(crate) async fn sync_transports(
         .await?;
 
     if modified {
+        tokio::task::spawn(restart_io_if_running_boxed(context.clone()));
         context.emit_event(EventType::TransportsModified);
     }
     Ok(())
+}
+
+/// Same as `context.restart_io_if_running()`, but `Box::pin`ed and with a `+ Send` bound,
+/// so that it can be called recursively.
+fn restart_io_if_running_boxed(context: Context) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+    Box::pin(async move { context.restart_io_if_running().await })
 }
 
 /// Adds transport entry to the `transports` table with empty configuration.
