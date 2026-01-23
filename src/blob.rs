@@ -1,5 +1,6 @@
 //! # Blob directory management.
 
+use std::cmp::max;
 use std::io::{Cursor, Seek};
 use std::iter::FusedIterator;
 use std::mem;
@@ -386,6 +387,9 @@ impl<'a> BlobObject<'a> {
             };
 
             let exceeds_wh = img.width() > img_wh || img.height() > img_wh;
+            if !exceeds_wh {
+                img_wh = max(img.width(), img.height());
+            }
             let exceeds_max_bytes = nr_bytes > max_bytes as u64;
 
             let jpeg_quality = 75;
