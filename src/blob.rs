@@ -1,6 +1,5 @@
 //! # Blob directory management.
 
-use core::cmp::max;
 use std::io::{Cursor, Seek};
 use std::iter::FusedIterator;
 use std::mem;
@@ -425,15 +424,6 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
-                if !exceeds_wh {
-                    img_wh = max(img.width(), img.height());
-                    // PNGs and WebPs may be huge because of animation, which is lost by the `image`
-                    // crate when recoding, so don't scale them down.
-                    if matches!(fmt, ImageFormat::Jpeg) || !encoded.is_empty() {
-                        img_wh = img_wh * 2 / 3;
-                    }
-                }
-
                 loop {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
