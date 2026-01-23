@@ -801,7 +801,7 @@ async fn test_create_and_deduplicate_from_bytes() -> Result<()> {
 
 /// Tests that an image that already fits into the width limit,
 /// but not the bytes limit,
-/// is downscaled without changing the resolution.
+/// is compressed without changing the resolution.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recode_without_downscaling() -> Result<()> {
     let t = &TestContext::new().await;
