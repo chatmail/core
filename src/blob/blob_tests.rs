@@ -818,26 +818,35 @@ async fn test_recode_without_downscaling() -> Result<()> {
         assert!(
             fs::metadata(&image_path).await.unwrap().len() > constants::WORSE_AVATAR_BYTES as u64
         );
-        let mut viewtype = Viewtype::Image;
-        let new_name = blob.check_or_recode_to_size(
-            t,
-            Some("image.jpg".to_string()),
-            &mut viewtype,
-            constants::WORSE_AVATAR_SIZE,
-            constants::WORSE_AVATAR_BYTES,
-            is_avatar,
-        )?;
-        let image_path = blob.to_abs_path();
-        assert_eq!(new_name, "image.jpg"); // The name shall not have changed
-        assert_eq!(viewtype, Viewtype::Image); // The viewtype shall not have changed
-        check_image_size(&image_path, 120, 120); // The resolution shall not have changed
 
-        let new_image_bytes = fs::metadata(&image_path).await.unwrap().len();
-        assert!(
-            new_image_bytes < constants::WORSE_AVATAR_BYTES as u64,
-            "The new image size, {new_image_bytes}, should be lower than {}, is_avatar={is_avatar}",
-            constants::WORSE_AVATAR_BYTES
-        );
+        // Repeat the check, because a second call to `check_or_recode_to_size()`
+        // is not supposed to change anything:
+        let mut imgs = vec![];
+        for _ in 0..2 {
+            let mut viewtype = Viewtype::Image;
+            let new_name = blob.check_or_recode_to_size(
+                t,
+                Some("image.jpg".to_string()),
+                &mut viewtype,
+                constants::WORSE_AVATAR_SIZE,
+                constants::WORSE_AVATAR_BYTES,
+                is_avatar,
+            )?;
+            let image_path = blob.to_abs_path();
+            assert_eq!(new_name, "image.jpg"); // The name shall not have changed
+            assert_eq!(viewtype, Viewtype::Image); // The viewtype shall not have changed
+            let img = check_image_size(&image_path, 120, 120); // The resolution shall not have changed
+            imgs.push(img);
+
+            let new_image_bytes = fs::metadata(&image_path).await.unwrap().len();
+            assert!(
+                new_image_bytes < constants::WORSE_AVATAR_BYTES as u64,
+                "The new image size, {new_image_bytes}, should be lower than {}, is_avatar={is_avatar}",
+                constants::WORSE_AVATAR_BYTES
+            );
+        }
+
+        assert_eq!(imgs[0], imgs[1]);
     }
 
     Ok(())
