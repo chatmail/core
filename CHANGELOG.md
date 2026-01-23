@@ -1,5 +1,26 @@
 # Changelog
 
+## [2.39.0] - 2026-01-23
+
+### CI
+
+- Update Rust to 1.93.0.
+
+### Documentation
+
+- RELEASE.md: Push preparation commit to the main branch before tagging.
+- RELEASE.md: Add section about dealing with failed releases.
+
+### Fixes
+
+- Forward message with file ([#7755](https://github.com/chatmail/core/pull/7755)).
+- Do not additionally reduce the resolution of images that fit into the resolution-limit and are larger than the file-size-limit ([#7760](https://github.com/chatmail/core/pull/7760)).
+
+### Miscellaneous Tasks
+
+- Merge v2.38.0 into main branch.
+- Cleanup deprecated functions/defines ([#7763](https://github.com/chatmail/core/pull/7763)).
+
 ## [2.38.0] - 2026-01-22
 
 ### API-Changes
