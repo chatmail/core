@@ -22,7 +22,7 @@ from .rpc import Rpc
 E2EE_INFO_MSGS = 1
 """
 The number of info messages added to new e2ee chats.
-Currently this is "End-to-end encryption available".
+Currently this is "Messages are end-to-end encrypted."
 """
 
 

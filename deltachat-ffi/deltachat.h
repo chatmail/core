@@ -7012,7 +7012,7 @@ void dc_event_unref(dc_event_t* event);
 
 /// "End-to-end encryption available."
 ///
-/// Used to build the string returned by dc_get_contact_encrinfo().
+/// @deprecated 2026-01-23
 #define DC_STR_E2E_AVAILABLE              25
 
 /// "No encryption."

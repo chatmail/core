@@ -1152,7 +1152,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             return Ok(stock_str::encr_none(context).await);
         }
 
-        let mut ret = stock_str::e2e_available(context).await + "\n";
+        let mut ret = stock_str::messages_e2e_encrypted(context).await + "\n";
 
         for &contact_id in get_chat_contacts(context, self)
             .await?
