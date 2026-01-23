@@ -2261,22 +2261,6 @@ pub unsafe extern "C" fn dc_get_contacts(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_get_blocked_cnt(context: *mut dc_context_t) -> libc::c_int {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_get_blocked_cnt()");
-        return 0;
-    }
-    let ctx = &*context;
-
-    block_on(async move {
-        Contact::get_all_blocked(ctx)
-            .await
-            .unwrap_or_log_default(ctx, "failed to get blocked count")
-            .len() as libc::c_int
-    })
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn dc_get_blocked_contacts(
     context: *mut dc_context_t,
 ) -> *mut dc_array::dc_array_t {

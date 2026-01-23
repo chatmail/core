@@ -2220,10 +2220,6 @@ uint32_t        dc_lookup_contact_id_by_addr (dc_context_t* context, const char*
 uint32_t        dc_create_contact            (dc_context_t* context, const char* name, const char* addr);
 
 
-
-// Deprecated 2025-05-20, setting this flag is a no-op.
-#define         DC_GCL_DEPRECATED_VERIFIED_ONLY         0x01
-
 #define         DC_GCL_ADD_SELF              0x02
 #define         DC_GCL_ADDRESS               0x04
 
@@ -2294,17 +2290,6 @@ dc_array_t*     dc_import_vcard              (dc_context_t* context, const char*
  *     after usage.
  */
 dc_array_t*     dc_get_contacts              (dc_context_t* context, uint32_t flags, const char* query);
-
-
-/**
- * Get the number of blocked contacts.
- *
- * @deprecated Deprecated 2021-02-22, use dc_array_get_cnt() on dc_get_blocked_contacts() instead.
- * @memberof dc_context_t
- * @param context The context object.
- * @return The number of blocked contacts.
- */
-int             dc_get_blocked_cnt           (dc_context_t* context);
 
 
 /**
@@ -2579,7 +2564,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_FPR_MISMATCH           220 // id=contact
 #define         DC_QR_FPR_WITHOUT_ADDR       230 // test1=formatted fingerprint
 #define         DC_QR_ACCOUNT                250 // text1=domain
-#define         DC_QR_BACKUP                 251 // deprecated
 #define         DC_QR_BACKUP2                252
 #define         DC_QR_BACKUP_TOO_NEW         255
 #define         DC_QR_PROXY                  271 // text1=address (e.g. "127.0.0.1:9050")
@@ -4675,7 +4659,6 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_LOCATION_ONLY              9
 #define         DC_INFO_EPHEMERAL_TIMER_CHANGED   10
 #define         DC_INFO_PROTECTION_ENABLED        11
-#define         DC_INFO_PROTECTION_DISABLED       12 // deprecated 2025-07
 #define         DC_INFO_INVALID_UNENCRYPTED_MAIL  13
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
 #define         DC_INFO_CHAT_E2EE                 50
@@ -7022,60 +7005,15 @@ void dc_event_unref(dc_event_t* event);
 /// Used in summaries.
 #define DC_STR_FILE                       12
 
-/// "Group name changed from %1$s to %2$s."
-///
-/// Used in status messages for group name changes.
-/// - %1$s will be replaced by the old group name
-/// - %2$s will be replaced by the new group name
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGGRPNAME                 15
-
-/// "Group image changed."
-///
-/// Used in status messages for group images changes.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGGRPIMGCHANGED           16
-
-/// "Member %1$s added."
-///
-/// Used in status messages for added members.
-/// - %1$s will be replaced by the name of the added member
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGADDMEMBER               17
-
-/// "Member %1$s removed."
-///
-/// Used in status messages for removed members.
-/// - %1$s will be replaced by the name of the removed member
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGDELMEMBER               18
-
-/// "Group left."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGGROUPLEFT               19
-
 /// "GIF"
 ///
 /// Used in summaries.
 #define DC_STR_GIF                        23
 
-/// @deprecated 2025-07, this string is no longer needed.
-#define DC_STR_ENCRYPTEDMSG               24
-
 /// "End-to-end encryption available."
 ///
 /// Used to build the string returned by dc_get_contact_encrinfo().
 #define DC_STR_E2E_AVAILABLE              25
-
-/// @deprecated Deprecated 2021-02-07, this string is no longer needed.
-#define DC_STR_ENCR_TRANSP                27
 
 /// "No encryption."
 ///
@@ -7087,89 +7025,22 @@ void dc_event_unref(dc_event_t* event);
 /// Used to build the string returned by dc_get_contact_encrinfo().
 #define DC_STR_FINGERPRINTS               30
 
-/// "Message opened"
-///
-/// Used in subjects of outgoing read receipts.
-///
-/// @deprecated Deprecated 2024-07-26
-#define DC_STR_READRCPT                   31
-
-/// "The message '%1$s' you sent was displayed on the screen of the recipient."
-///
-/// Used as message text of outgoing read receipts.
-/// - %1$s will be replaced by the subject of the displayed message
-///
-/// @deprecated Deprecated 2024-06-23
-#define DC_STR_READRCPT_MAILBODY          32
-
-/// @deprecated Deprecated, this string is no longer needed.
-#define DC_STR_MSGGRPIMGDELETED           33
-
-/// "End-to-end encryption preferred."
-///
-/// Used to build the string returned by dc_get_contact_encrinfo().
-/// @deprecated 2025-06-05
-#define DC_STR_E2E_PREFERRED              34
-
 /// "%1$s verified"
 ///
 /// Used in status messages.
 /// - %1$s will be replaced by the name of the verified contact
 #define DC_STR_CONTACT_VERIFIED           35
 
-/// "Cannot establish guaranteed end-to-end encryption with %1$s."
-///
-/// Used in status messages.
-/// - %1$s will be replaced by the name of the contact that cannot be verified
-/// @deprecated 2025-06-05
-#define DC_STR_CONTACT_NOT_VERIFIED       36
-
-/// "Changed setup for %1$s."
-///
-/// Used in status messages.
-/// - %1$s will be replaced by the name of the contact with the changed setup
-/// @deprecated 2025-06-05
-#define DC_STR_CONTACT_SETUP_CHANGED      37
-
 /// "Archived chats"
 ///
 /// Used as the name for the corresponding chatlist entry.
 #define DC_STR_ARCHIVEDCHATS              40
-
-/// "Autocrypt Setup Message"
-///
-/// @deprecated 2025-04
-#define DC_STR_AC_SETUP_MSG_SUBJECT       42
-
-/// "This is the Autocrypt Setup Message, open it in a compatible client to use your setup"
-///
-/// @deprecated 2025-04
-#define DC_STR_AC_SETUP_MSG_BODY          43
 
 /// "Cannot login as %1$s."
 ///
 /// Used in error strings.
 /// - %1$s will be replaced by the failing login name
 #define DC_STR_CANNOT_LOGIN               60
-
-/// "%1$s by %2$s"
-///
-/// Used to concretize actions,
-/// - %1$s will be replaced by an action
-///   as #DC_STR_MSGADDMEMBER or #DC_STR_MSGGRPIMGCHANGED (full-stop removed, if any)
-/// - %2$s will be replaced by the name of the user taking that action
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGACTIONBYUSER            62
-
-/// "%1$s by me"
-///
-/// Used to concretize actions.
-/// - %1$s will be replaced by an action
-///   as #DC_STR_MSGADDMEMBER or #DC_STR_MSGGRPIMGCHANGED (full-stop removed, if any)
-///
-/// @deprecated 2022-09-10
-#define DC_STR_MSGACTIONBYME              63
 
 /// "Location streaming enabled."
 ///
@@ -7211,13 +7082,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used as message text for the message added to the device chat after successful login.
 #define DC_STR_WELCOME_MESSAGE            71
 
-/// "Unknown sender for this chat. See 'info' for more details."
-///
-/// Use as message text if assigning the message to a chat is not totally correct.
-///
-/// @deprecated 2025-08-18
-#define DC_STR_UNKNOWN_SENDER_FOR_CHAT    72
-
 /// "Message from %1$s"
 ///
 /// Used in subjects of outgoing messages in one-to-one chats.
@@ -7230,53 +7094,6 @@ void dc_event_unref(dc_event_t* event);
 /// Unused. Was used in group chat status messages.
 /// - %1$s will be replaced by the name of the contact the message cannot be sent to
 #define DC_STR_FAILED_SENDING_TO          74
-
-/// "Message deletion timer is disabled."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_DISABLED         75
-
-/// "Message deletion timer is set to %1$s s."
-///
-/// Used in status messages when the other constants
-/// (#DC_STR_EPHEMERAL_MINUTE, #DC_STR_EPHEMERAL_HOUR and so on) do not match the timer.
-/// - %1$s will be replaced by the number of seconds the timer is set to
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_SECONDS          76
-
-/// "Message deletion timer is set to 1 minute."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_MINUTE           77
-
-/// "Message deletion timer is set to 1 hour."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_HOUR             78
-
-/// "Message deletion timer is set to 1 day."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_DAY              79
-
-/// "Message deletion timer is set to 1 week."
-///
-/// Used in status messages.
-///
-/// @deprecated 2022-09-10
-#define DC_STR_EPHEMERAL_WEEK             80
-
-/// @deprecated Deprecated 2021-01-30, DC_STR_EPHEMERAL_WEEKS is used instead.
-#define DC_STR_EPHEMERAL_FOUR_WEEKS       81
 
 /// "Error: %1$s"
 ///
@@ -7311,42 +7128,6 @@ void dc_event_unref(dc_event_t* event);
 /// Used as device message text.
 #define DC_STR_SELF_DELETED_MSG_BODY      91
 
-/// "Message deletion timer is set to %1$s minutes."
-///
-/// Used in status messages.
-///
-/// `%1$s` will be replaced by the number of minutes (always >1) the timer is set to.
-///
-/// @deprecated Replaced by DC_STR_MSG_YOU_EPHEMERAL_TIMER_MINUTES and DC_STR_MSG_EPHEMERAL_TIMER_MINUTES_BY.
-#define DC_STR_EPHEMERAL_MINUTES          93
-
-/// "Message deletion timer is set to %1$s hours."
-///
-/// Used in status messages.
-///
-/// `%1$s` will be replaced by the number of hours (always >1) the timer is set to.
-///
-/// @deprecated Replaced by DC_STR_MSG_YOU_EPHEMERAL_TIMER_HOURS and DC_STR_MSG_EPHEMERAL_TIMER_HOURS_BY.
-#define DC_STR_EPHEMERAL_HOURS            94
-
-/// "Message deletion timer is set to %1$s days."
-///
-/// Used in status messages.
-///
-/// `%1$s` will be replaced by the number of days (always >1) the timer is set to.
-///
-/// @deprecated Replaced by DC_STR_MSG_YOU_EPHEMERAL_TIMER_DAYS and DC_STR_MSG_EPHEMERAL_TIMER_DAYS_BY.
-#define DC_STR_EPHEMERAL_DAYS             95
-
-/// "Message deletion timer is set to %1$s weeks."
-///
-/// Used in status messages.
-///
-/// `%1$s` will be replaced by the number of weeks (always >1) the timer is set to.
-///
-/// @deprecated Replaced by DC_STR_MSG_YOU_EPHEMERAL_TIMER_WEEKS and DC_STR_MSG_EPHEMERAL_TIMER_WEEKS_BY.
-#define DC_STR_EPHEMERAL_WEEKS            96
-
 /// "Forwarded"
 ///
 /// Used in message summary text for notifications and chatlist.
@@ -7358,9 +7139,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// `%1$s` will be replaced by the percentage used
 #define DC_STR_QUOTA_EXCEEDING_MSG_BODY   98
-
-/// @deprecated Deprecated 2025-11-12, this string is no longer needed.
-#define DC_STR_PARTIAL_DOWNLOAD_MSG_BODY  99
 
 /// "Multi Device Synchronization"
 ///
@@ -7386,10 +7164,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as a headline in the connectivity view.
 #define DC_STR_OUTGOING_MESSAGES          104
-
-
-/// @deprecated Deprecated 2022-04-16, this string is no longer needed.
-#define DC_STR_ONE_MOMENT                 106
 
 /// "Connected"
 ///
@@ -7480,12 +7254,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as status in the connectivity view.
 #define DC_STR_NOT_CONNECTED              121
-
-/// "%1$s changed their address from %2$s to %3$s"
-///
-/// Used as an info message to chats with contacts that changed their address.
-/// @deprecated 2025-06-05
-#define DC_STR_AEAP_ADDR_CHANGED          122
 
 /// "You changed group name from \"%1$s\" to \"%2$s\"."
 ///
@@ -7600,17 +7368,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used in status messages.
 #define DC_STR_EPHEMERAL_TIMER_SECONDS_BY_OTHER 141
-
-/// "You set message deletion timer to 1 minute."
-///
-/// @deprecated 2025-11-14, this string is no longer needed
-#define DC_STR_EPHEMERAL_TIMER_1_MINUTE_BY_YOU 142
-
-/// "Message deletion timer is set to 1 minute by %1$s."
-///
-/// `%1$s` will be replaced by name of the contact.
-/// @deprecated 2025-11-14, this string is no longer needed
-#define DC_STR_EPHEMERAL_TIMER_1_MINUTE_BY_OTHER 143
 
 /// "You set message deletion timer to 1 hour."
 ///
@@ -7780,17 +7537,6 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as info message.
 #define DC_STR_SECUREJOIN_WAIT 190
-
-/// "Could not yet establish guaranteed end-to-end encryption, but you may already send a message."
-///
-/// @deprecated 2025-03
-#define DC_STR_SECUREJOIN_WAIT_TIMEOUT 191
-
-/// "The contact must be online to proceed. This process will continue automatically in background."
-///
-/// Used as info message.
-/// @deprecated 2025-06-05
-#define DC_STR_SECUREJOIN_TAKES_LONGER 192
 
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193

@@ -259,9 +259,6 @@ class TestOfflineChat:
             ac1.set_stock_translation(dc.const.DC_STR_FILE, "xyz %1$s")
         ac1._evtracker.get_matching("DC_EVENT_WARNING")
         with pytest.raises(ValueError):
-            ac1.set_stock_translation(dc.const.DC_STR_CONTACT_NOT_VERIFIED, "xyz %2$s")
-        ac1._evtracker.get_matching("DC_EVENT_WARNING")
-        with pytest.raises(ValueError):
             ac1.set_stock_translation(500, "xyz %1$s")
         ac1._evtracker.get_matching("DC_EVENT_WARNING")
         chat = ac1.create_group_chat(name="homework", contacts=[])

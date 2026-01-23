@@ -1299,18 +1299,6 @@ WHERE addr=?
         Ok(())
     }
 
-    /// Returns number of blocked contacts.
-    pub async fn get_blocked_cnt(context: &Context) -> Result<usize> {
-        let count = context
-            .sql
-            .count(
-                "SELECT COUNT(*) FROM contacts WHERE id>? AND blocked!=0",
-                (ContactId::LAST_SPECIAL,),
-            )
-            .await?;
-        Ok(count)
-    }
-
     /// Get blocked contacts.
     pub async fn get_all_blocked(context: &Context) -> Result<Vec<ContactId>> {
         Contact::update_blocked_mailinglist_contacts(context)
