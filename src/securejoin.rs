@@ -784,7 +784,7 @@ fn encrypted_and_signed(
     mimeparser: &MimeMessage,
     expected_fingerprint: &Fingerprint,
 ) -> bool {
-    if let Some(signature) = mimeparser.signature.as_ref() {
+    if let Some((signature, _)) = mimeparser.signature.as_ref() {
         if signature == expected_fingerprint {
             true
         } else {

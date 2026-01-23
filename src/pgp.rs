@@ -1,6 +1,6 @@
 //! OpenPGP helper module using [rPGP facilities](https://github.com/rpgp/rpgp).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Cursor};
 
 use anyhow::{Context as _, Result, bail};
@@ -370,19 +370,28 @@ fn check_symmetric_encryption(msg: &Message<'_>) -> std::result::Result<(), &'st
 
 /// Returns fingerprints
 /// of all keys from the `public_keys_for_validation` keyring that
-/// have valid signatures there.
+/// have valid signatures in `msg` and corresponding intended recipient fingerprints
+/// (<https://www.rfc-editor.org/rfc/rfc9580.html#name-intended-recipient-fingerpr>) if any.
 ///
-/// If the message is wrongly signed, HashSet will be empty.
+/// If the message is wrongly signed, returns an empty map.
 pub fn valid_signature_fingerprints(
     msg: &pgp::composed::Message,
     public_keys_for_validation: &[SignedPublicKey],
-) -> HashSet<Fingerprint> {
-    let mut ret_signature_fingerprints: HashSet<Fingerprint> = Default::default();
+) -> HashMap<Fingerprint, Vec<Fingerprint>> {
+    let mut ret_signature_fingerprints = HashMap::new();
     if msg.is_signed() {
         for pkey in public_keys_for_validation {
-            if msg.verify(&pkey.primary_key).is_ok() {
+            if let Ok(signature) = msg.verify(&pkey.primary_key) {
                 let fp = pkey.dc_fingerprint();
-                ret_signature_fingerprints.insert(fp);
+                let mut recipient_fps = Vec::new();
+                if let Some(cfg) = signature.config() {
+                    for subpkt in &cfg.hashed_subpackets {
+                        if let SubpacketData::IntendedRecipientFingerprint(fp) = &subpkt.data {
+                            recipient_fps.push(fp.clone().into());
+                        }
+                    }
+                }
+                ret_signature_fingerprints.insert(fp, recipient_fps);
             }
         }
     }
@@ -497,13 +506,14 @@ mod tests {
     use pgp::composed::Esk;
     use pgp::packet::PublicKeyEncryptedSessionKey;
 
+    #[expect(clippy::type_complexity)]
     fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
         private_keys_for_decryption: &'a [SignedSecretKey],
         public_keys_for_validation: &[SignedPublicKey],
     ) -> Result<(
         pgp::composed::Message<'static>,
-        HashSet<Fingerprint>,
+        HashMap<Fingerprint, Vec<Fingerprint>>,
         Vec<u8>,
     )> {
         let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
@@ -611,7 +621,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_decrypt_singed() {
+    async fn test_decrypt_signed() {
         // Check decrypting as Alice
         let decrypt_keyring = vec![KEYS.alice_secret.clone()];
         let sig_check_keyring = vec![KEYS.alice_public.clone()];
@@ -623,6 +633,10 @@ mod tests {
         .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
+        for recipient_fps in valid_signatures.values() {
+            // Intended Recipient Fingerprint subpackets aren't added currently.
+            assert_eq!(recipient_fps.len(), 0);
+        }
 
         // Check decrypting as Bob
         let decrypt_keyring = vec![KEYS.bob_secret.clone()];
@@ -635,6 +649,9 @@ mod tests {
         .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
+        for recipient_fps in valid_signatures.values() {
+            assert_eq!(recipient_fps.len(), 0);
+        }
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
