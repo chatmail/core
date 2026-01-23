@@ -21,3 +21,10 @@ For example, to release version 1.116.0 of the core, do the following steps.
 8. Push the release tag: `git push origin v1.116.0`.
 
 9. Create a GitHub release: `gh release create v1.116.0 --notes ''`.
+
+## Dealing with failed releases
+
+Once you make a GitHub release,
+CI will try to build and publish [PyPI](https://pypi.org/) and [npm](https://www.npmjs.com/) packages.
+If this fails for some reason, do not modify the failed tag, do not delete it and do not force-push to the `main` branch.
+Fix the build process and tag a new release instead.
