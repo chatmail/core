@@ -2220,10 +2220,6 @@ uint32_t        dc_lookup_contact_id_by_addr (dc_context_t* context, const char*
 uint32_t        dc_create_contact            (dc_context_t* context, const char* name, const char* addr);
 
 
-
-// Deprecated 2025-05-20, setting this flag is a no-op.
-#define         DC_GCL_DEPRECATED_VERIFIED_ONLY         0x01
-
 #define         DC_GCL_ADD_SELF              0x02
 #define         DC_GCL_ADDRESS               0x04
 
@@ -2294,17 +2290,6 @@ dc_array_t*     dc_import_vcard              (dc_context_t* context, const char*
  *     after usage.
  */
 dc_array_t*     dc_get_contacts              (dc_context_t* context, uint32_t flags, const char* query);
-
-
-/**
- * Get the number of blocked contacts.
- *
- * @deprecated Deprecated 2021-02-22, use dc_array_get_cnt() on dc_get_blocked_contacts() instead.
- * @memberof dc_context_t
- * @param context The context object.
- * @return The number of blocked contacts.
- */
-int             dc_get_blocked_cnt           (dc_context_t* context);
 
 
 /**
@@ -2579,7 +2564,6 @@ void            dc_stop_ongoing_process      (dc_context_t* context);
 #define         DC_QR_FPR_MISMATCH           220 // id=contact
 #define         DC_QR_FPR_WITHOUT_ADDR       230 // test1=formatted fingerprint
 #define         DC_QR_ACCOUNT                250 // text1=domain
-#define         DC_QR_BACKUP                 251 // deprecated
 #define         DC_QR_BACKUP2                252
 #define         DC_QR_BACKUP_TOO_NEW         255
 #define         DC_QR_PROXY                  271 // text1=address (e.g. "127.0.0.1:9050")
@@ -4675,7 +4659,6 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_LOCATION_ONLY              9
 #define         DC_INFO_EPHEMERAL_TIMER_CHANGED   10
 #define         DC_INFO_PROTECTION_ENABLED        11
-#define         DC_INFO_PROTECTION_DISABLED       12 // deprecated 2025-07
 #define         DC_INFO_INVALID_UNENCRYPTED_MAIL  13
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
 #define         DC_INFO_CHAT_E2EE                 50
