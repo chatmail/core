@@ -89,11 +89,12 @@ pub(crate) struct MimeMessage {
     pub decrypting_failed: bool,
 
     /// Valid signature fingerprint if a message is an
-    /// Autocrypt encrypted and signed message.
+    /// Autocrypt encrypted and signed message and corresponding intended recipient fingerprints
+    /// (<https://www.rfc-editor.org/rfc/rfc9580.html#name-intended-recipient-fingerpr>) if any.
     ///
     /// If a message is not encrypted or the signature is not valid,
     /// this is `None`.
-    pub signature: Option<Fingerprint>,
+    pub signature: Option<(Fingerprint, HashSet<Fingerprint>)>,
 
     /// The addresses for which there was a gossip header
     /// and their respective gossiped keys.
@@ -529,12 +530,16 @@ impl MimeMessage {
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
             crate::pgp::valid_signature_fingerprints(decrypted_msg, &public_keyring)
         } else {
-            HashSet::new()
+            HashMap::new()
         };
 
         let mail = mail.as_ref().map(|mail| {
             let (content, signatures_detached) = validate_detached_signature(mail, &public_keyring)
                 .unwrap_or((mail, Default::default()));
+            let signatures_detached = signatures_detached
+                .into_iter()
+                .map(|fp| (fp, Vec::new()))
+                .collect::<HashMap<_, _>>();
             signatures.extend(signatures_detached);
             content
         });
@@ -640,6 +645,10 @@ impl MimeMessage {
             };
         }
 
+        let signature = signatures
+            .into_iter()
+            .last()
+            .map(|(fp, recipient_fps)| (fp, recipient_fps.into_iter().collect::<HashSet<_>>()));
         let mut parser = MimeMessage {
             parts: Vec::new(),
             headers,
@@ -655,7 +664,7 @@ impl MimeMessage {
             decrypting_failed: mail.is_err(),
 
             // only non-empty if it was a valid autocrypt message
-            signature: signatures.into_iter().last(),
+            signature,
             autocrypt_fingerprint,
             gossiped_keys,
             is_forwarded: false,
