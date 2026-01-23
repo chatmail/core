@@ -1,5 +1,59 @@
 # Changelog
 
+## [2.38.0] - 2026-01-22
+
+### API-Changes
+
+- [**breaking**] Jsonrpc: remove `contacts` from `FullChat`. To migrate load contacts on demand via `get_contacts_by_ids` using `FullChat.contactIds` ([#7282](https://github.com/chatmail/core/pull/7282)).
+- jsonrpc: Add run_until parameter for bots ([#7688](https://github.com/chatmail/core/pull/7688)).
+- rust, jsonrpc: Add `get_message_read_receipt_count` method ([#7732](https://github.com/chatmail/core/pull/7732)).
+- rust and jsonrpc: Marknoticed_all_chats method to mark all chats as notices, including muted ones. ([#7709](https://github.com/chatmail/core/pull/7709)).
+- Public re-export of Connectivity ([#7737](https://github.com/chatmail/core/pull/7737)).
+
+### Documentation
+
+- Fix chat types.
+- Set_config_from_qr() configures context for "DCACCOUNT:" and "DCLOGIN:" QRs ([#7450](https://github.com/chatmail/core/pull/7450)).
+- Fix formatting of `indoc!` link.
+
+### Features / Changes
+
+- Pre-messages / next version of download on demand ([#7371](https://github.com/chatmail/core/pull/7371)).
+- Connectivity view: move quota up and combine with IMAP state. ([#7653](https://github.com/chatmail/core/pull/7653)).
+- Execute sync message before checking for primary transport update.
+- Disable partial search by contact address.
+- Don't put text into post-message ([#7714](https://github.com/chatmail/core/pull/7714)).
+- Don't scale up Origin of multiple and broadcast recipients when sending a message.
+- pgp: Use preferred hash algorithm for signing instead of hardcoded SHA256.
+- In teamprofiles, don't mark chat as read on outgoing message ([#7717](https://github.com/chatmail/core/pull/7717)).
+- Send and apply MDNs to self ([#7005](https://github.com/chatmail/core/pull/7005))
+
+### Fixes
+
+- Do not show contact address in message info ([#7695](https://github.com/chatmail/core/pull/7695)).
+- Take transport_id into account when marking messages with \Seen flags.
+- Send bcc-self messages to all own relays ([#7656](https://github.com/chatmail/core/pull/7656)).
+- Only emit TransportsModified if transports are really modified.
+- Logging errors in deltachat-rpc-server during startup ([#7707](https://github.com/chatmail/core/pull/7707)).
+- Use only lowercase letters for stats id ([#7700](https://github.com/chatmail/core/pull/7700)).
+- Hide incoming broadcasts in `DC_GCL_FOR_FORWARDING` ([#7726](https://github.com/chatmail/core/pull/7726)).
+- Do not resolve ICE server hostnames during IMAP loop.
+- More reliable parsing of `dclogin:` links with ip address as host ([#7734](https://github.com/chatmail/core/pull/7734)).
+- Don't remember old channel members in the database ([#7716](https://github.com/chatmail/core/pull/7716)).
+- Make it possible to leave and immediately delete a chat ([#7744](https://github.com/chatmail/core/pull/7744)).
+- Emit MsgsChanged instead of MsgsNoticed on self-MDN if chat still has fresh messages.
+- Prevent possible infinite loop with invalid `smtp` row ([#7746](https://github.com/chatmail/core/pull/7746)).
+- Sync broadcast subscribers list ([#7578](https://github.com/chatmail/core/pull/7578))
+
+### Refactor
+
+- Don't use `concat!` in sql statements ([#7720](https://github.com/chatmail/core/pull/7720)).
+
+### Tests
+
+- Port test_dont_move_sync_msgs to JSON-RPC ([#7676](https://github.com/chatmail/core/pull/7676)).
+- rpc-client: Replace remaining print()s with `logging` ([#6082](https://github.com/chatmail/core/pull/6082)).
+
 ## [2.37.0] - 2026-01-08
 
 ### API-Changes
@@ -7543,3 +7597,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.35.0]: https://github.com/chatmail/core/compare/v2.34.0..v2.35.0
 [2.36.0]: https://github.com/chatmail/core/compare/v2.35.0..v2.36.0
 [2.37.0]: https://github.com/chatmail/core/compare/v2.36.0..v2.37.0
+[2.38.0]: https://github.com/chatmail/core/compare/v2.37.0..v2.38.0
