@@ -63,10 +63,7 @@ pub enum StockMessage {
     #[strum(props(fallback = "GIF"))]
     Gif = 23,
 
-    #[strum(props(fallback = "End-to-end encryption available"))]
-    E2eAvailable = 25,
-
-    #[strum(props(fallback = "No encryption"))]
+    #[strum(props(fallback = "No encryption."))]
     EncrNone = 28,
 
     #[strum(props(fallback = "Fingerprints"))]
@@ -705,11 +702,6 @@ pub(crate) async fn msg_reacted(
 /// Stock string: `GIF`.
 pub(crate) async fn gif(context: &Context) -> String {
     translated(context, StockMessage::Gif).await
-}
-
-/// Stock string: `End-to-end encryption available.`.
-pub(crate) async fn e2e_available(context: &Context) -> String {
-    translated(context, StockMessage::E2eAvailable).await
 }
 
 /// Stock string: `No encryption.`.

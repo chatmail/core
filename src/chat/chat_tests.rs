@@ -3816,13 +3816,13 @@ async fn test_chat_get_encryption_info() -> Result<()> {
     let chat_id = create_group(alice, "Group").await?;
     assert_eq!(
         chat_id.get_encryption_info(alice).await?,
-        "End-to-end encryption available"
+        "Messages are end-to-end encrypted."
     );
 
     add_contact_to_chat(alice, chat_id, contact_bob).await?;
     assert_eq!(
         chat_id.get_encryption_info(alice).await?,
-        "End-to-end encryption available\n\
+        "Messages are end-to-end encrypted.\n\
          \n\
          bob@example.net\n\
          CCCB 5AA9 F6E1 141C 9431\n\
@@ -3832,7 +3832,7 @@ async fn test_chat_get_encryption_info() -> Result<()> {
     add_contact_to_chat(alice, chat_id, contact_fiona).await?;
     assert_eq!(
         chat_id.get_encryption_info(alice).await?,
-        "End-to-end encryption available\n\
+        "Messages are end-to-end encrypted.\n\
          \n\
          fiona@example.net\n\
          C8BA 50BF 4AC1 2FAF 38D7\n\
@@ -3846,13 +3846,13 @@ async fn test_chat_get_encryption_info() -> Result<()> {
     let email_chat = alice.create_email_chat(bob).await;
     assert_eq!(
         email_chat.id.get_encryption_info(alice).await?,
-        "No encryption"
+        "No encryption."
     );
 
     alice.sql.execute("DELETE FROM public_keys", ()).await?;
     assert_eq!(
         chat_id.get_encryption_info(alice).await?,
-        "End-to-end encryption available\n\
+        "Messages are end-to-end encrypted.\n\
          \n\
          fiona@example.net\n\
          (key missing)\n\
