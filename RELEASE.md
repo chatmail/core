@@ -1,4 +1,4 @@
-# Releasing a new version of DeltaChat core
+# Releasing a new version of chatmail core
 
 For example, to release version 1.116.0 of the core, do the following steps.
 
@@ -14,8 +14,10 @@ For example, to release version 1.116.0 of the core, do the following steps.
 5. Commit the changes as `chore(release): prepare for 1.116.0`.
    Optionally, use a separate branch like `prep-1.116.0` for this commit and open a PR for review.
 
-6. Tag the release: `git tag --annotate v1.116.0`.
+6. Push the commit to the `main` branch.
 
-7. Push the release tag: `git push origin v1.116.0`.
+7. Once the commit is on the `main` branch and passed CI, tag the release: `git tag --annotate v1.116.0`.
 
-8. Create a GitHub release: `gh release create v1.116.0 --notes ''`.
+8. Push the release tag: `git push origin v1.116.0`.
+
+9. Create a GitHub release: `gh release create v1.116.0 --notes ''`.
