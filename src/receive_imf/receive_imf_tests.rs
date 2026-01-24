@@ -5117,6 +5117,7 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     tcm.execute_securejoin(bob, a0).await;
     let chat_id_a0_bob = a0.create_chat_id(bob).await;
     let sent_msg = a0.send_text(chat_id_a0_bob, "Hi").await;
+    bob.recv_msg(&sent_msg).await;
     let msg_a1 = a1.recv_msg(&sent_msg).await;
     assert!(msg_a1.get_showpadlock());
     let chat_a1 = Chat::load_from_db(a1, msg_a1.chat_id).await?;
@@ -5132,6 +5133,7 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     );
 
     let sent_msg = a0.send_text(chat_id_a0_bob, "Hi again").await;
+    bob.recv_msg(&sent_msg).await;
     let msg_a1 = a1.recv_msg(&sent_msg).await;
     assert!(msg_a1.get_showpadlock());
     assert_eq!(msg_a1.chat_id, chat_a1.id);
@@ -5140,6 +5142,45 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
         chat_a1.why_cant_send(a1).await?,
         Some(CantSendReason::NotAMember)
     );
+
+    let msg_a1 = tcm.send_recv(bob, a1, "Hi back").await;
+    assert!(msg_a1.get_showpadlock());
+    let chat_a1 = Chat::load_from_db(a1, msg_a1.chat_id).await?;
+    assert_eq!(chat_a1.typ, Chattype::Single);
+    assert!(chat_a1.is_encrypted(a1).await?);
+    // Weird, but fine, anyway the bigger problem is the conversation split into two chats.
+    assert_eq!(
+        chat_a1.why_cant_send(a1).await?,
+        Some(CantSendReason::ContactRequest)
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recv_outgoing_msg_before_having_key_and_after() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.execute_securejoin(bob, a0).await;
+    let chat_id_a0_bob = a0.create_chat_id(bob).await;
+    let sent_msg = a0.send_text(chat_id_a0_bob, "Hi").await;
+    let msg_a1 = a1.recv_msg(&sent_msg).await;
+    assert!(msg_a1.get_showpadlock());
+    let chat_a1 = Chat::load_from_db(a1, msg_a1.chat_id).await?;
+    assert_eq!(chat_a1.typ, Chattype::Group);
+    assert!(!chat_a1.is_encrypted(a1).await?);
+
+    // Device a1 somehow learns Bob's key and creates the corresponding chat. However, this doesn't
+    // help currently because we only look up key contacts by address in a particular chat and the
+    // new chat isn't referenced by the received message. This should be fixed by sending and
+    // receiving Intended Recipient Fingerprint subpackets.
+    a1.create_chat_id(bob).await;
+    let sent_msg = a0.send_text(chat_id_a0_bob, "Hi again").await;
+    let msg_a1 = a1.recv_msg(&sent_msg).await;
+    assert!(msg_a1.get_showpadlock());
+    assert_eq!(msg_a1.chat_id, chat_a1.id);
     Ok(())
 }
 
