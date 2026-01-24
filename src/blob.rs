@@ -409,19 +409,18 @@ impl<'a> BlobObject<'a> {
             // images.
             let do_scale = exceeds_max_bytes
                 || is_avatar
-                    && (exceeds_wh
-                        || exif.is_some() && {
-                            if mem::take(&mut add_white_bg) {
-                                self::add_white_bg(&mut img);
-                            }
-                            encoded_img_exceeds_bytes(
-                                context,
-                                &img,
-                                ofmt.clone(),
-                                max_bytes,
-                                &mut encoded,
-                            )?
-                        });
+                    && (exceeds_wh || exif.is_some() || {
+                        if mem::take(&mut add_white_bg) {
+                            self::add_white_bg(&mut img);
+                        }
+                        encoded_img_exceeds_bytes(
+                            context,
+                            &img,
+                            ofmt.clone(),
+                            max_bytes,
+                            &mut encoded,
+                        )?
+                    });
 
             if do_scale {
                 loop {
