@@ -17,6 +17,7 @@ use super::message::MessageViewtype;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(tag = "kind")]
+#[allow(clippy::large_enum_variant)]
 pub enum ChatListItemFetchResult {
     #[serde(rename_all = "camelCase")]
     ChatListItem {
@@ -63,9 +64,8 @@ pub enum ChatListItemFetchResult {
         is_self_talk: bool,
         is_device_talk: bool,
         is_sending_location: bool,
-        /// deprecated 2026-01, use self_in_group instead
+        /// deprecated 2026-01
         is_self_in_group: bool,
-        self_in_group: bool,
         /// deprecated 2026-01, use archived instead
         is_archived: bool,
         archived: bool,
@@ -173,7 +173,6 @@ pub(crate) async fn get_chat_list_item_by_id(
         is_self_talk: chat.is_self_talk(),
         is_device_talk: chat.is_device_talk(),
         is_self_in_group: chat.is_self_in_chat(ctx).await?,
-        self_in_group: chat.is_self_in_chat(ctx).await?,
         is_sending_location: chat.is_sending_locations(),
         archived: visibility == ChatVisibility::Archived,
         is_archived: visibility == ChatVisibility::Archived,
