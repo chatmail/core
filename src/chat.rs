@@ -3317,7 +3317,10 @@ pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> 
 
     context.emit_event(EventType::MsgsNoticed(chat_id));
     chatlist_events::emit_chatlist_item_changed(context, chat_id);
-    context.on_archived_chats_maybe_noticed();
+    if !chat_id.is_archived_link() {
+        // prevents event duplication when marking all archived chats as noticed
+        context.on_archived_chats_maybe_noticed();
+    }
     Ok(())
 }
 
@@ -5122,12 +5125,14 @@ impl Context {
         }
     }
 
-    /// Emits the appropriate `MsgsChanged` event. Should be called if the number of unnoticed
+    /// Emits the appropriate `MsgsChanged` and `ChatlistItemChanged` event.
+    /// Should be called if the number of unnoticed
     /// archived chats could decrease. In general we don't want to make an extra db query to know if
     /// a noticed chat is archived. Emitting events should be cheap, a false-positive `MsgsChanged`
     /// is ok.
     pub(crate) fn on_archived_chats_maybe_noticed(&self) {
         self.emit_msgs_changed_without_msg_id(DC_CHAT_ID_ARCHIVED_LINK);
+        chatlist_events::emit_chatlist_item_changed(self, DC_CHAT_ID_ARCHIVED_LINK);
     }
 }
 
