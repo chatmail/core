@@ -385,7 +385,10 @@ impl<'a> BlobObject<'a> {
                 Some(270) => img.rotate270(),
                 _ => img,
             };
-
+           
+            // img_wh is the currently set resolution-limit.
+            // It will be adjusted for use as the target-resolution,
+            // for resizing the image.
             let exceeds_wh = img.width() > img_wh || img.height() > img_wh;
             if !exceeds_wh {
                 img_wh = max(img.width(), img.height());
