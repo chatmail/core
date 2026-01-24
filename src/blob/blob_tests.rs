@@ -807,11 +807,11 @@ async fn test_recode_without_downscaling() -> Result<()> {
     let t = &TestContext::new().await;
 
     let image = include_bytes!("../../test-data/image/screenshot120x120.jpg");
-    assert!(120 < constants::WORSE_AVATAR_SIZE);
+    const { assert!(120 < constants::WORSE_AVATAR_SIZE) };
 
     for is_avatar in [true, false] {
         let mut blob =
-            BlobObject::create_and_deduplicate_from_bytes(&t, image, "image.jpg").unwrap();
+            BlobObject::create_and_deduplicate_from_bytes(t, image, "image.jpg").unwrap();
         let image_path = blob.to_abs_path();
         check_image_size(&image_path, 120, 120);
 

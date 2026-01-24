@@ -308,7 +308,7 @@ impl<'a> BlobObject<'a> {
         self.check_or_recode_to_size(context, name, viewtype, max_wh, max_bytes, is_avatar)
     }
 
-    /// Checks or recodes the image so that it fits into limits on width/height or byte size.
+    /// Checks or recodes the image so that it fits into limits on width/height and/or byte size.
     ///
     /// If `!is_avatar`, then if `max_bytes` is exceeded, reduces the image to `max_wh` and proceeds
     /// with the result (even if `max_bytes` is still exceeded).
