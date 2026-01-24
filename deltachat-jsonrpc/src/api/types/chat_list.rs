@@ -17,7 +17,7 @@ use super::message::MessageViewtype;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(tag = "kind")]
-#[allow(clippy::large_enum_variant)]
+#[expect(clippy::large_enum_variant)]
 pub enum ChatListItemFetchResult {
     #[serde(rename_all = "camelCase")]
     ChatListItem {
