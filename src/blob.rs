@@ -410,6 +410,7 @@ impl<'a> BlobObject<'a> {
             let do_scale = exceeds_max_bytes
                 || is_avatar
                     && (exceeds_wh || exif.is_some() || {
+                        // Check if the file-size of the avatar would be too large with a white background added to it.
                         if mem::take(&mut add_white_bg) {
                             self::add_white_bg(&mut img);
                         }
@@ -442,6 +443,7 @@ impl<'a> BlobObject<'a> {
                         img.thumbnail(img_wh, img_wh)
                     };
 
+                    // This also encodes the image for use, not only for checking the file-size.
                     if encoded_img_exceeds_bytes(
                         context,
                         &new_img,
