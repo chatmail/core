@@ -3284,7 +3284,8 @@ async fn test_blocked_contact_creates_group() -> Result<()> {
 
     let sent = bob.send_text(group_id, "Heyho, I'm a spammer!").await;
     let rcvd = alice.recv_msg(&sent).await;
-    // Alice blocked Bob, so she shouldn't get the message
+    // Alice blocked Bob, so she shouldn't be notified.
+    assert_eq!(rcvd.state, MessageState::InSeen);
     assert_eq!(rcvd.chat_blocked, Blocked::Yes);
 
     // Fiona didn't block Bob, though, so she gets the message
