@@ -798,3 +798,56 @@ async fn test_create_and_deduplicate_from_bytes() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that an image that already fits into the width limit,
+/// but not the bytes limit,
+/// is compressed without changing the resolution.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_without_downscaling() -> Result<()> {
+    let t = &TestContext::new().await;
+
+    let image = include_bytes!("../../test-data/image/screenshot120x120.jpg");
+    const { assert!(120 < constants::WORSE_AVATAR_SIZE) };
+
+    for is_avatar in [true, false] {
+        let mut blob =
+            BlobObject::create_and_deduplicate_from_bytes(t, image, "image.jpg").unwrap();
+        let image_path = blob.to_abs_path();
+        check_image_size(&image_path, 120, 120);
+
+        assert!(
+            fs::metadata(&image_path).await.unwrap().len() > constants::WORSE_AVATAR_BYTES as u64
+        );
+
+        // Repeat the check, because a second call to `check_or_recode_to_size()`
+        // is not supposed to change anything:
+        let mut imgs = vec![];
+        for _ in 0..2 {
+            let mut viewtype = Viewtype::Image;
+            let new_name = blob.check_or_recode_to_size(
+                t,
+                Some("image.jpg".to_string()),
+                &mut viewtype,
+                constants::WORSE_AVATAR_SIZE,
+                constants::WORSE_AVATAR_BYTES,
+                is_avatar,
+            )?;
+            let image_path = blob.to_abs_path();
+            assert_eq!(new_name, "image.jpg"); // The name shall not have changed
+            assert_eq!(viewtype, Viewtype::Image); // The viewtype shall not have changed
+            let img = check_image_size(&image_path, 120, 120); // The resolution shall not have changed
+            imgs.push(img);
+
+            let new_image_bytes = fs::metadata(&image_path).await.unwrap().len();
+            assert!(
+                new_image_bytes < constants::WORSE_AVATAR_BYTES as u64,
+                "The new image size, {new_image_bytes}, should be lower than {}, is_avatar={is_avatar}",
+                constants::WORSE_AVATAR_BYTES
+            );
+        }
+
+        assert_eq!(imgs[0], imgs[1]);
+    }
+
+    Ok(())
+}

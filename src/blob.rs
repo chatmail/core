@@ -1,5 +1,6 @@
 //! # Blob directory management.
 
+use std::cmp::max;
 use std::io::{Cursor, Seek};
 use std::iter::FusedIterator;
 use std::mem;
@@ -255,7 +256,7 @@ impl<'a> BlobObject<'a> {
 
     /// Recode image to avatar size.
     pub async fn recode_to_avatar_size(&mut self, context: &Context) -> Result<()> {
-        let (img_wh, max_bytes) =
+        let (max_wh, max_bytes) =
             match MediaQuality::from_i32(context.get_config_int(Config::MediaQuality).await?)
                 .unwrap_or_default()
             {
@@ -272,7 +273,7 @@ impl<'a> BlobObject<'a> {
         let is_avatar = true;
         self.check_or_recode_to_size(
             context, None, // The name of an avatar doesn't matter
-            viewtype, img_wh, max_bytes, is_avatar,
+            viewtype, max_wh, max_bytes, is_avatar,
         )?;
 
         Ok(())
@@ -293,7 +294,7 @@ impl<'a> BlobObject<'a> {
         name: Option<String>,
         viewtype: &mut Viewtype,
     ) -> Result<String> {
-        let (img_wh, max_bytes) =
+        let (max_wh, max_bytes) =
             match MediaQuality::from_i32(context.get_config_int(Config::MediaQuality).await?)
                 .unwrap_or_default()
             {
@@ -304,13 +305,15 @@ impl<'a> BlobObject<'a> {
                 MediaQuality::Worse => (constants::WORSE_IMAGE_SIZE, constants::WORSE_IMAGE_BYTES),
             };
         let is_avatar = false;
-        self.check_or_recode_to_size(context, name, viewtype, img_wh, max_bytes, is_avatar)
+        self.check_or_recode_to_size(context, name, viewtype, max_wh, max_bytes, is_avatar)
     }
 
-    /// Checks or recodes the image so that it fits into limits on width/height and byte size.
+    /// Checks or recodes the image so that it fits into limits on width/height and/or byte size.
     ///
-    /// If `!is_avatar`, then if `max_bytes` is exceeded, reduces the image to `img_wh` and proceeds
-    /// with the result without rechecking.
+    /// If `!is_avatar`, then if `max_bytes` is exceeded, reduces the image to `max_wh` and proceeds
+    /// with the result (even if `max_bytes` is still exceeded).
+    ///
+    /// If `is_avatar`, the resolution will be reduced in a loop until the image fits `max_bytes`.
     ///
     /// This modifies the blob object in-place.
     ///
@@ -323,7 +326,7 @@ impl<'a> BlobObject<'a> {
         context: &Context,
         name: Option<String>,
         viewtype: &mut Viewtype,
-        mut img_wh: u32,
+        max_wh: u32,
         max_bytes: usize,
         is_avatar: bool,
     ) -> Result<String> {
@@ -385,7 +388,14 @@ impl<'a> BlobObject<'a> {
                 _ => img,
             };
 
-            let exceeds_wh = img.width() > img_wh || img.height() > img_wh;
+            // max_wh is the maximum image width and height, i.e. the resolution-limit.
+            // target_wh target-resolution for resizing the image.
+            let exceeds_wh = img.width() > max_wh || img.height() > max_wh;
+            let mut target_wh = if exceeds_wh {
+                max_wh
+            } else {
+                max(img.width(), img.height())
+            };
             let exceeds_max_bytes = nr_bytes > max_bytes as u64;
 
             let jpeg_quality = 75;
@@ -438,9 +448,9 @@ impl<'a> BlobObject<'a> {
                     // usually has less pixels by cropping, UI that needs to wait anyways,
                     // and also benefits from slightly better (5%) encoding of Triangle-filtered images.
                     let new_img = if is_avatar {
-                        img.resize(img_wh, img_wh, image::imageops::FilterType::Triangle)
+                        img.resize(target_wh, target_wh, image::imageops::FilterType::Triangle)
                     } else {
-                        img.thumbnail(img_wh, img_wh)
+                        img.thumbnail(target_wh, target_wh)
                     };
 
                     if encoded_img_exceeds_bytes(
@@ -451,19 +461,19 @@ impl<'a> BlobObject<'a> {
                         &mut encoded,
                     )? && is_avatar
                     {
-                        if img_wh < 20 {
+                        if target_wh < 20 {
                             return Err(format_err!(
                                 "Failed to scale image to below {max_bytes}B.",
                             ));
                         }
 
-                        img_wh = img_wh * 2 / 3;
+                        target_wh = target_wh * 2 / 3;
                     } else {
                         info!(
                             context,
                             "Final scaled-down image size: {}B ({}px).",
                             encoded.len(),
-                            img_wh
+                            target_wh
                         );
                         break;
                     }
