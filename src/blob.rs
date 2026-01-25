@@ -388,7 +388,7 @@ impl<'a> BlobObject<'a> {
                 _ => img,
             };
 
-            // img_wh_max is the maximum image width and height, i.e. the resolution-limit.
+            // max_wh is the maximum image width and height, i.e. the resolution-limit.
             // target_wh target-resolution for resizing the image.
             let exceeds_wh = img.width() > max_wh || img.height() > max_wh;
             let mut target_wh = if exceeds_wh {
