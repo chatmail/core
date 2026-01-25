@@ -10,7 +10,7 @@ use pgp::armor::BlockType;
 use pgp::composed::{
     ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, KeyType as PgpKeyType,
     Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey,
-    SignedSecretKey, SubkeyParamsBuilder, TheRing,
+    SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig, TheRing,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
@@ -18,7 +18,8 @@ use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
-    CompressionAlgorithm, KeyDetails, Password, PublicKeyTrait, SecretKeyTrait as _, StringToKey,
+    CompressionAlgorithm, KeyDetails, KeyVersion, Password, PublicKeyTrait, SecretKeyTrait as _,
+    StringToKey,
 };
 use rand_old::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
@@ -190,6 +191,30 @@ pub async fn pk_encrypt(
             let pkeys = public_keys_for_encryption
                 .iter()
                 .filter_map(select_pk_for_encryption);
+            let subpkts = {
+                let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
+                hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
+                    chrono::Utc::now().trunc_subsecs(0),
+                ))?);
+                for key in &public_keys_for_encryption {
+                    let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
+                    let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
+                        true => Subpacket::regular(data)?,
+                        false => Subpacket::critical(data)?,
+                    };
+                    hashed.push(subpkt);
+                }
+                hashed.push(Subpacket::regular(SubpacketData::IssuerFingerprint(
+                    private_key_for_signing.fingerprint(),
+                ))?);
+                let mut unhashed = vec![];
+                if private_key_for_signing.version() <= KeyVersion::V4 {
+                    unhashed.push(Subpacket::regular(SubpacketData::Issuer(
+                        private_key_for_signing.key_id(),
+                    ))?);
+                }
+                SubpacketConfig::UserDefined { hashed, unhashed }
+            };
 
             let msg = MessageBuilder::from_bytes("", plain);
             let encoded_msg = match seipd_version {
@@ -205,7 +230,12 @@ pub async fn pk_encrypt(
                     }
 
                     let hash_algorithm = private_key_for_signing.hash_alg();
-                    msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
+                    msg.sign_with_subpackets(
+                        &*private_key_for_signing,
+                        Password::empty(),
+                        hash_algorithm,
+                        subpkts,
+                    );
                     if compress {
                         msg.compression(CompressionAlgorithm::ZLIB);
                     }
@@ -229,7 +259,12 @@ pub async fn pk_encrypt(
                     }
 
                     let hash_algorithm = private_key_for_signing.hash_alg();
-                    msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
+                    msg.sign_with_subpackets(
+                        &*private_key_for_signing,
+                        Password::empty(),
+                        hash_algorithm,
+                        subpkts,
+                    );
                     if compress {
                         msg.compression(CompressionAlgorithm::ZLIB);
                     }
@@ -264,9 +299,14 @@ pub fn pk_calc_signature(
             chrono::Utc::now().trunc_subsecs(0),
         ))?,
     ];
-    config.unhashed_subpackets = vec![Subpacket::regular(SubpacketData::Issuer(
-        private_key_for_signing.key_id(),
-    ))?];
+    config.unhashed_subpackets = vec![];
+    if private_key_for_signing.version() <= KeyVersion::V4 {
+        config
+            .unhashed_subpackets
+            .push(Subpacket::regular(SubpacketData::Issuer(
+                private_key_for_signing.key_id(),
+            ))?);
+    }
 
     let signature = config.sign(
         &private_key_for_signing.primary_key,
@@ -634,8 +674,7 @@ mod tests {
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
         for recipient_fps in valid_signatures.values() {
-            // Intended Recipient Fingerprint subpackets aren't added currently.
-            assert_eq!(recipient_fps.len(), 0);
+            assert_eq!(recipient_fps.len(), 2);
         }
 
         // Check decrypting as Bob
@@ -650,7 +689,7 @@ mod tests {
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
         for recipient_fps in valid_signatures.values() {
-            assert_eq!(recipient_fps.len(), 0);
+            assert_eq!(recipient_fps.len(), 2);
         }
     }
 

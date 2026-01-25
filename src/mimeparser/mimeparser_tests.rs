@@ -1,11 +1,13 @@
 use mailparse::ParsedMail;
 use std::mem;
+use std::time::Duration;
 
 use super::*;
 use crate::{
     chat,
     chatlist::Chatlist,
     constants::{self, Blocked, DC_DESIRED_TEXT_LEN, DC_ELLIPSIS},
+    key,
     message::{MessageState, MessengerMessage},
     receive_imf::receive_imf,
     test_utils::{TestContext, TestContextManager},
@@ -1417,6 +1419,40 @@ async fn test_extra_imf_headers() -> Result<()> {
         assert!(!msg.headers.contains_key("chat-forty-two"));
         assert_ne!(msg.headers.contains_key("forty-two"), std_hp_composing);
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_intended_recipient_fingerprint() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let t_fp = key::load_self_public_key(t).await?.dc_fingerprint();
+    t.set_config_bool(Config::BccSelf, false).await.unwrap();
+    let members = [tcm.bob().await, tcm.fiona().await];
+    let chat_id = chat::create_group(t, "").await?;
+
+    chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
+    assert!(t.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+
+    for (i, member) in members.iter().enumerate() {
+        let contact = t.add_or_lookup_contact(member).await;
+        chat::add_contact_to_chat(t, chat_id, contact.id).await?;
+        let sent_msg = t.pop_sent_msg().await;
+        let (fp, recipient_fps) = t.parse_msg(&sent_msg).await.signature.unwrap();
+        assert_eq!(fp, t_fp);
+        // `mimefactory` encrypts to self unconditionally.
+        assert_eq!(recipient_fps.len(), 1 + i + 1);
+        assert!(recipient_fps.contains(&t_fp));
+        assert!(recipient_fps.contains(&contact.fingerprint().unwrap()));
+    }
+
+    t.set_config_bool(Config::BccSelf, true).await.unwrap();
+    chat::send_text_msg(t, chat_id, "hi!".to_string()).await?;
+    let sent_msg = t.pop_sent_msg().await;
+    let (fp, recipient_fps) = t.parse_msg(&sent_msg).await.signature.unwrap();
+    assert_eq!(fp, t_fp);
+    assert_eq!(recipient_fps.len(), 1 + members.len());
+    assert!(recipient_fps.contains(&t_fp));
     Ok(())
 }
 
