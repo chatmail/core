@@ -281,11 +281,6 @@ impl Context {
                     "To use additional relays, disable the legacy option \"Settings / Advanced / Only Fetch from DeltaChat Folder\"."
                 );
             }
-            if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
-                bail!(
-                    "To use additional relays, disable the legacy option \"Settings / Advanced / Move automatically to DeltaChat Folder\"."
-                );
-            }
 
             if self
                 .sql

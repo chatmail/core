@@ -19,7 +19,7 @@ use crate::constants::{self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSI
 use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::imap::{FolderMeaning, Imap, ServerMetadata};
+use crate::imap::{Imap, ServerMetadata};
 use crate::key::self_fingerprint;
 use crate::log::warn;
 use crate::logged_debug_assert;
@@ -28,7 +28,7 @@ use crate::net::tls::TlsSessionStore;
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
-use crate::scheduler::{ConnectivityStore, SchedulerState, convert_folder_meaning};
+use crate::scheduler::{ConnectivityStore, SchedulerState};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
 use crate::timesmearing::SmearedTimestamp;
@@ -603,17 +603,14 @@ impl Context {
             let mut session = connection.prepare(self).await?;
 
             // Fetch IMAP folders.
-            // Inbox is fetched before Mvbox because fetching from Inbox
-            // may result in moving some messages to Mvbox.
-            for folder_meaning in [FolderMeaning::Inbox, FolderMeaning::Mvbox] {
-                if let Some((_folder_config, watch_folder)) =
-                    convert_folder_meaning(self, folder_meaning).await?
-                {
-                    connection
-                        .fetch_move_delete(self, &mut session, &watch_folder, folder_meaning)
-                        .await?;
-                }
-            }
+            let folder = if self.get_config_bool(Config::OnlyFetchMvbox).await? {
+                "DeltaChat"
+            } else {
+                "INBOX"
+            };
+            connection
+                .fetch_move_delete(self, &mut session, folder)
+                .await?;
 
             // Update quota (to send warning if full) - but only check it once in a while.
             // note: For now this only checks quota of primary transport,
@@ -864,7 +861,6 @@ impl Context {
             Err(err) => format!("<key failure: {err}>"),
         };
 
-        let mvbox_move = self.get_config_int(Config::MvboxMove).await?;
         let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
         let folders_configured = self
             .sql
@@ -956,7 +952,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert("mvbox_move", mvbox_move.to_string());
         res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
         res.insert(
             constants::DC_FOLDERS_CONFIGURED_KEY,
@@ -1261,12 +1256,6 @@ ORDER BY m.timestamp DESC,m.id DESC",
         };
 
         Ok(list)
-    }
-
-    /// Returns true if given folder name is the name of the "DeltaChat" folder.
-    pub async fn is_mvbox(&self, folder_name: &str) -> Result<bool> {
-        let mvbox = self.get_config(Config::ConfiguredMvboxFolder).await?;
-        Ok(mvbox.as_deref() == Some(folder_name))
     }
 
     pub(crate) fn derive_blobdir(dbfile: &Path) -> PathBuf {
