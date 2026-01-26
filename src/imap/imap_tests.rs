@@ -100,23 +100,16 @@ fn test_build_sequence_sets() {
 
 async fn check_target_folder_combination(
     folder: &str,
-    mvbox_move: bool,
     chat_msg: bool,
     expected_destination: &str,
     accepted_chat: bool,
     outgoing: bool,
 ) -> Result<()> {
     println!(
-        "Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}"
+        "Testing: For folder {folder}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}"
     );
 
     let t = TestContext::new_alice().await;
-    t.ctx
-        .set_config(Config::ConfiguredMvboxFolder, Some("DeltaChat"))
-        .await?;
-    t.ctx
-        .set_config(Config::MvboxMove, Some(if mvbox_move { "1" } else { "0" }))
-        .await?;
 
     if accepted_chat {
         let contact_id = Contact::create(&t.ctx, "", "bob@example.net").await?;
@@ -161,64 +154,42 @@ async fn check_target_folder_combination(
     assert_eq!(
         expected,
         actual.as_deref(),
-        "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}: expected {expected:?}, got {actual:?}"
+        "For folder {folder}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}: expected {expected:?}, got {actual:?}"
     );
     Ok(())
 }
 
 // chat_msg means that the message was sent by Delta Chat
-// The tuples are (folder, mvbox_move, chat_msg, expected_destination)
-const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, bool, &str)] = &[
-    ("INBOX", false, false, "INBOX"),
-    ("INBOX", false, true, "INBOX"),
-    ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "DeltaChat"),
-    ("Spam", false, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
-    ("Spam", false, true, "INBOX"),
-    ("Spam", true, false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
-    ("Spam", true, true, "DeltaChat"),
+// The tuples are (folder, chat_msg, expected_destination)
+const COMBINATIONS_ACCEPTED_CHAT: &[(&str, bool, &str)] = &[
+    ("INBOX", false, "INBOX"),
+    ("INBOX", true, "INBOX"),
+    ("Spam", false, "INBOX"), // Move classical emails in accepted chats from Spam to Inbox, not 100% sure on this, we could also just never move non-chat-msgs
+    ("Spam", true, "INBOX"),
 ];
 
 // These are the same as above, but non-chat messages in Spam stay in Spam
-const COMBINATIONS_REQUEST: &[(&str, bool, bool, &str)] = &[
-    ("INBOX", false, false, "INBOX"),
-    ("INBOX", false, true, "INBOX"),
-    ("INBOX", true, false, "INBOX"),
-    ("INBOX", true, true, "DeltaChat"),
-    ("Spam", false, false, "Spam"),
-    ("Spam", false, true, "INBOX"),
-    ("Spam", true, false, "Spam"),
-    ("Spam", true, true, "DeltaChat"),
+const COMBINATIONS_REQUEST: &[(&str, bool, &str)] = &[
+    ("INBOX", false, "INBOX"),
+    ("INBOX", true, "INBOX"),
+    ("Spam", false, "Spam"),
+    ("Spam", true, "INBOX"),
 ];
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_incoming_accepted() -> Result<()> {
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
-        check_target_folder_combination(
-            folder,
-            *mvbox_move,
-            *chat_msg,
-            expected_destination,
-            true,
-            false,
-        )
-        .await?;
+    for (folder, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
+        check_target_folder_combination(folder, *chat_msg, expected_destination, true, false)
+            .await?;
     }
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_incoming_request() -> Result<()> {
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_REQUEST {
-        check_target_folder_combination(
-            folder,
-            *mvbox_move,
-            *chat_msg,
-            expected_destination,
-            false,
-            false,
-        )
-        .await?;
+    for (folder, chat_msg, expected_destination) in COMBINATIONS_REQUEST {
+        check_target_folder_combination(folder, *chat_msg, expected_destination, false, false)
+            .await?;
     }
     Ok(())
 }
@@ -226,16 +197,9 @@ async fn test_target_folder_incoming_request() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_target_folder_outgoing() -> Result<()> {
     // Test outgoing emails
-    for (folder, mvbox_move, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
-        check_target_folder_combination(
-            folder,
-            *mvbox_move,
-            *chat_msg,
-            expected_destination,
-            true,
-            true,
-        )
-        .await?;
+    for (folder, chat_msg, expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
+        check_target_folder_combination(folder, *chat_msg, expected_destination, true, true)
+            .await?;
     }
     Ok(())
 }
