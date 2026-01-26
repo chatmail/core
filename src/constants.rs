@@ -210,11 +210,6 @@ pub const WORSE_IMAGE_SIZE: u32 = 640;
 /// usage by UIs.
 pub const MAX_RCVD_IMAGE_PIXELS: u32 = 50_000_000;
 
-// Key for the folder configuration version (see below).
-pub(crate) const DC_FOLDERS_CONFIGURED_KEY: &str = "folders_configured";
-// this value can be increased if the folder configuration is changed and must be redone on next program start
-pub(crate) const DC_FOLDERS_CONFIGURED_VERSION: i32 = 5;
-
 // If more recipients are needed in SMTP's `RCPT TO:` header, the recipient list is split into
 // chunks. This does not affect MIME's `To:` header. Can be overwritten by setting
 // `max_smtp_rcpt_to` in the provider db.

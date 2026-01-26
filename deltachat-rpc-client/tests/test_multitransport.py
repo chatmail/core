@@ -9,10 +9,6 @@ def test_add_second_address(acfactory) -> None:
     account = acfactory.new_configured_account()
     assert len(account.list_transports()) == 1
 
-    # When the first transport is created,
-    # mvbox_move and only_fetch_mvbox should be disabled.
-    assert account.get_config("mvbox_move") == "0"
-    assert account.get_config("only_fetch_mvbox") == "0"
     assert account.get_config("show_emails") == "2"
 
     qr = acfactory.get_account_qr()
@@ -32,30 +28,8 @@ def test_add_second_address(acfactory) -> None:
     account.delete_transport(second_addr)
     assert len(account.list_transports()) == 2
 
-    # Enabling mvbox_move or only_fetch_mvbox
-    # is not allowed when multi-transport is enabled.
-    for option in ["mvbox_move", "only_fetch_mvbox"]:
-        with pytest.raises(JsonRpcError):
-            account.set_config(option, "1")
-
     # show_emails does not matter for multi-relay, can be set to anything
     account.set_config("show_emails", "0")
-
-
-@pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
-def test_no_second_transport_with_mvbox(acfactory, key) -> None:
-    """Test that second transport cannot be configured if mvbox is used."""
-    account = acfactory.new_configured_account()
-    assert len(account.list_transports()) == 1
-
-    assert account.get_config("mvbox_move") == "0"
-    assert account.get_config("only_fetch_mvbox") == "0"
-
-    qr = acfactory.get_account_qr()
-    account.set_config(key, "1")
-
-    with pytest.raises(JsonRpcError):
-        account.add_transport_from_qr(qr)
 
 
 def test_second_transport_without_classic_emails(acfactory) -> None:
@@ -147,43 +121,12 @@ def test_download_on_demand(acfactory) -> None:
         assert msg.get_snapshot().download_state == dstate
 
 
-@pytest.mark.parametrize("is_chatmail", ["0", "1"])
-def test_mvbox_move_first_transport(acfactory, is_chatmail) -> None:
-    """Test that mvbox_move is disabled by default even for non-chatmail accounts.
-    Disabling mvbox_move is required to be able to setup a second transport.
-    """
-    account = acfactory.get_unconfigured_account()
-
-    account.set_config("fix_is_chatmail", "1")
-    account.set_config("is_chatmail", is_chatmail)
-
-    # The default value when the setting is unset is "1".
-    # This is not changed for compatibility with old databases
-    # imported from backups.
-    assert account.get_config("mvbox_move") == "1"
-
-    qr = acfactory.get_account_qr()
-    account.add_transport_from_qr(qr)
-
-    # Once the first transport is set up,
-    # mvbox_move is disabled.
-    assert account.get_config("mvbox_move") == "0"
-    assert account.get_config("is_chatmail") == is_chatmail
-
-
 def test_reconfigure_transport(acfactory) -> None:
-    """Test that reconfiguring the transport works
-    even if settings not supported for multi-transport
-    like mvbox_move are enabled."""
+    """Test that reconfiguring the transport works."""
     account = acfactory.get_online_account()
-    account.set_config("mvbox_move", "1")
 
     [transport] = account.list_transports()
     account.add_or_update_transport(transport)
-
-    # Reconfiguring the transport should not reset
-    # the settings as if when configuring the first transport.
-    assert account.get_config("mvbox_move") == "1"
 
 
 def test_transport_synchronization(acfactory, log) -> None:
