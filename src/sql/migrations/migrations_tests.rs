@@ -96,9 +96,6 @@ async fn test_key_contacts_migration_email1() -> Result<()> {
     assert_eq!(email_bob.fingerprint(), None);
     assert_eq!(email_bob.get_verifier_id(&t).await?, None);
 
-    let bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
-    dbg!(&bob_chat_contacts);
-
     Ok(())
 }
 
@@ -137,9 +134,6 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
     assert_eq!(email_bob.fingerprint(), None);
     assert_eq!(email_bob.get_verifier_id(&t).await?, None);
 
-    let bob_chat_contacts = chat::get_chat_contacts(&t, ChatId::new(10)).await?;
-    dbg!(&bob_chat_contacts);
-
     Ok(())
 }
 
@@ -176,7 +170,6 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
     let pgp_bob_id = bob_chat_contacts[0];
 
     let pgp_bob = Contact::get_by_id(&t, pgp_bob_id).await?;
-    dbg!(&pgp_bob);
     assert_eq!(pgp_bob.origin, Origin::OutgoingTo);
     assert_eq!(pgp_bob.e2ee_avail(&t).await?, true);
     assert_eq!(
