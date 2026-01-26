@@ -405,36 +405,26 @@ def test_mvbox_and_trash(acfactory, direct_imap, log):
 
 
 @pytest.mark.parametrize(
-    ("folder", "move", "expected_destination"),
+    ("folder", "expected_destination"),
     [
         (
             "xyz",
-            False,
             "xyz",
         ),  # Test that emails aren't found in a random folder
         (
-            "xyz",
-            True,
-            "xyz",
-        ),  # ...emails are found in a random folder and downloaded without moving
-        (
             "Spam",
-            False,
             "INBOX",
         ),  # ...emails are moved from the spam folder to the Inbox
     ],
 )
 # Testrun.org does not support the CREATE-SPECIAL-USE capability, which means that we can't create a folder with
 # the "\Junk" flag (see https://tools.ietf.org/html/rfc6154). So, we can't test spam folder detection by flag.
-def test_scan_folders(acfactory, log, direct_imap, folder, move, expected_destination):
+def test_scan_folders(acfactory, log, direct_imap, folder, expected_destination):
     """Delta Chat periodically scans all folders for new messages to make sure we don't miss any."""
-    variant = folder + "-" + str(move) + "-" + expected_destination
+    variant = folder + "-" + expected_destination
     log.section("Testing variant " + variant)
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac1.set_config("delete_server_after", "0")
-    if move:
-        ac1.set_config("mvbox_move", "1")
-        ac1.bring_online()
 
     ac1.stop_io()
     ac1_direct_imap = direct_imap(ac1)

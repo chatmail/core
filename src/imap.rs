@@ -1690,43 +1690,6 @@ impl Session {
         }
         Ok(())
     }
-
-    /// Attempts to configure mvbox.
-    ///
-    /// Tries to find any folder examining `folders` in the order they go.
-    /// This method does not use LIST command to ensure that
-    /// configuration works even if mailbox lookup is forbidden via Access Control List (see
-    /// <https://datatracker.ietf.org/doc/html/rfc4314>).
-    ///
-    /// Returns first found folder name.
-    async fn configure_mvbox<'a>(
-        &mut self,
-        context: &Context,
-        folders: &[&'a str],
-    ) -> Result<Option<&'a str>> {
-        // Close currently selected folder if needed.
-        // We are going to select folders using low-level EXAMINE operations below.
-        self.maybe_close_folder(context).await?;
-
-        for folder in folders {
-            info!(context, "Looking for MVBOX-folder \"{}\"...", &folder);
-            let res = self.examine(&folder).await;
-            if res.is_ok() {
-                info!(
-                    context,
-                    "MVBOX-folder {:?} successfully selected, using it.", &folder
-                );
-                self.close().await?;
-                // Before moving emails to the mvbox we need to remember its UIDVALIDITY, otherwise
-                // emails moved before that wouldn't be fetched but considered "old" instead.
-                let folder_exists = self.select_with_uidvalidity(context, folder).await?;
-                ensure!(folder_exists, "No MVBOX folder {:?}??", &folder);
-                return Ok(Some(folder));
-            }
-        }
-
-        Ok(None)
-    }
 }
 
 impl Imap {
@@ -1739,22 +1702,10 @@ impl Imap {
             .list(Some(""), Some("*"))
             .await
             .context("list_folders failed")?;
-        let mut delimiter = ".".to_string();
-        let mut delimiter_is_default = true;
         let mut folder_configs = BTreeMap::new();
 
         while let Some(folder) = folders.try_next().await? {
             info!(context, "Scanning folder: {:?}", folder);
-
-            // Update the delimiter iff there is a different one, but only once.
-            if let Some(d) = folder.delimiter()
-                && delimiter_is_default
-                && !d.is_empty()
-                && delimiter != d
-            {
-                delimiter = d.to_string();
-                delimiter_is_default = false;
-            }
 
             let folder_meaning = get_folder_meaning_by_attrs(folder.attributes());
             let folder_name_meaning = get_folder_meaning_by_name(folder.name());
@@ -1770,23 +1721,9 @@ impl Imap {
         }
         drop(folders);
 
-        info!(context, "Using \"{}\" as folder-delimiter.", delimiter);
-
-        let fallback_folder = format!("INBOX{delimiter}DeltaChat");
-        let mvbox_folder = session
-            .configure_mvbox(context, &["DeltaChat", &fallback_folder])
-            .await
-            .context("failed to configure mvbox")?;
-
         context
             .set_config_internal(Config::ConfiguredInboxFolder, Some("INBOX"))
             .await?;
-        if let Some(mvbox_folder) = mvbox_folder {
-            info!(context, "Setting MVBOX FOLDER TO {}", &mvbox_folder);
-            context
-                .set_config_internal(Config::ConfiguredMvboxFolder, Some(mvbox_folder))
-                .await?;
-        }
         for (config, name) in folder_configs {
             context.set_config_internal(config, Some(&name)).await?;
         }
@@ -1934,15 +1871,7 @@ async fn spam_target_folder_cfg(
         return Ok(None);
     }
 
-    if needs_move_to_mvbox(context, headers).await?
-        // If OnlyFetchMvbox is set, we don't want to move the message to
-        // the inbox where we wouldn't fetch it again:
-        || context.get_config_bool(Config::OnlyFetchMvbox).await?
-    {
-        Ok(Some(Config::ConfiguredMvboxFolder))
-    } else {
-        Ok(Some(Config::ConfiguredInboxFolder))
-    }
+    Ok(Some(Config::ConfiguredInboxFolder))
 }
 
 /// Returns `ConfiguredInboxFolder` or `ConfiguredMvboxFolder` if
@@ -1959,10 +1888,6 @@ pub async fn target_folder_cfg(
 
     if folder_meaning == FolderMeaning::Spam {
         spam_target_folder_cfg(context, headers).await
-    } else if folder_meaning == FolderMeaning::Inbox
-        && needs_move_to_mvbox(context, headers).await?
-    {
-        Ok(Some(Config::ConfiguredMvboxFolder))
     } else {
         Ok(None)
     }
@@ -1980,36 +1905,6 @@ pub async fn target_folder(
             None => Ok(folder.to_string()),
         },
         None => Ok(folder.to_string()),
-    }
-}
-
-async fn needs_move_to_mvbox(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<bool> {
-    let has_chat_version = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    if !context.get_config_bool(Config::MvboxMove).await? {
-        return Ok(false);
-    }
-
-    if headers
-        .get_header_value(HeaderDef::AutocryptSetupMessage)
-        .is_some()
-    {
-        // do not move setup messages;
-        // there may be a non-delta device that wants to handle it
-        return Ok(false);
-    }
-
-    if has_chat_version {
-        Ok(true)
-    } else if let Some(parent) = get_prefetch_parent_message(context, headers).await? {
-        match parent.is_dc_message {
-            MessengerMessage::No => Ok(false),
-            MessengerMessage::Yes | MessengerMessage::Reply => Ok(true),
-        }
-    } else {
-        Ok(false)
     }
 }
 

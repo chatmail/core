@@ -211,25 +211,19 @@ impl SchedulerState {
     /// Indicate that the network likely has come back.
     pub(crate) async fn maybe_network(&self) {
         let inner = self.inner.read().await;
-        let (inboxes, oboxes) = match *inner {
+        let inboxes = match *inner {
             InnerSchedulerState::Started(ref scheduler) => {
                 scheduler.maybe_network();
-                let inboxes = scheduler
+                scheduler
                     .inboxes
                     .iter()
                     .map(|b| b.conn_state.state.connectivity.clone())
-                    .collect::<Vec<_>>();
-                let oboxes = scheduler
-                    .oboxes
-                    .iter()
-                    .map(|b| b.conn_state.state.connectivity.clone())
-                    .collect::<Vec<_>>();
-                (inboxes, oboxes)
+                    .collect::<Vec<_>>()
             }
             _ => return,
         };
         drop(inner);
-        connectivity::idle_interrupted(inboxes, oboxes);
+        connectivity::idle_interrupted(inboxes);
     }
 
     /// Indicate that the network likely is lost.
@@ -253,14 +247,6 @@ impl SchedulerState {
         let inner = self.inner.read().await;
         if let InnerSchedulerState::Started(ref scheduler) = *inner {
             scheduler.interrupt_inbox();
-        }
-    }
-
-    /// Interrupt optional boxes (mvbox currently) loops.
-    pub(crate) async fn interrupt_oboxes(&self) {
-        let inner = self.inner.read().await;
-        if let InnerSchedulerState::Started(ref scheduler) = *inner {
-            scheduler.interrupt_oboxes();
         }
     }
 
@@ -338,8 +324,6 @@ struct SchedBox {
 pub(crate) struct Scheduler {
     /// Inboxes, one per transport.
     inboxes: Vec<SchedBox>,
-    /// Optional boxes -- mvbox.
-    oboxes: Vec<SchedBox>,
     smtp: SmtpConnectionState,
     smtp_handle: task::JoinHandle<()>,
     ephemeral_handle: task::JoinHandle<()>,
@@ -487,7 +471,12 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         .await
         .context("Failed to register push token")?;
 
-    let session = fetch_idle(ctx, imap, session, FolderMeaning::Inbox).await?;
+    let folder_meaning = if ctx.get_config_bool(Config::OnlyFetchMvbox).await? {
+        FolderMeaning::Mvbox
+    } else {
+        FolderMeaning::Inbox
+    };
+    let session = fetch_idle(ctx, imap, session, folder_meaning).await?;
     Ok(session)
 }
 
@@ -512,12 +501,10 @@ async fn fetch_idle(
         bail!("Cannot fetch folder {folder_meaning} because it is not configured");
     };
 
-    if folder_config == Config::ConfiguredInboxFolder {
-        session
-            .store_seen_flags_on_imap(ctx)
-            .await
-            .context("store_seen_flags_on_imap")?;
-    }
+    session
+        .store_seen_flags_on_imap(ctx)
+        .await
+        .context("store_seen_flags_on_imap")?;
 
     if !ctx.should_delete_to_trash().await?
         || ctx
@@ -628,73 +615,6 @@ async fn fetch_idle(
     Ok(session)
 }
 
-/// Simplified IMAP loop to watch non-inbox folders.
-async fn simple_imap_loop(
-    ctx: Context,
-    started: oneshot::Sender<()>,
-    inbox_handlers: ImapConnectionHandlers,
-    folder_meaning: FolderMeaning,
-) {
-    use futures::future::FutureExt;
-
-    info!(ctx, "Starting simple loop for {folder_meaning}.");
-    let ImapConnectionHandlers {
-        mut connection,
-        stop_token,
-    } = inbox_handlers;
-
-    let ctx1 = ctx.clone();
-
-    let fut = async move {
-        let ctx = ctx1;
-        if let Err(()) = started.send(()) {
-            warn!(
-                ctx,
-                "Simple imap loop for {folder_meaning}, missing started receiver."
-            );
-            return;
-        }
-
-        let mut old_session: Option<Session> = None;
-        loop {
-            let session = if let Some(session) = old_session.take() {
-                session
-            } else {
-                info!(ctx, "Preparing new IMAP session for {folder_meaning}.");
-                match connection.prepare(&ctx).await {
-                    Err(err) => {
-                        warn!(
-                            ctx,
-                            "Failed to prepare {folder_meaning} connection: {err:#}."
-                        );
-                        continue;
-                    }
-                    Ok(session) => session,
-                }
-            };
-
-            match fetch_idle(&ctx, &mut connection, session, folder_meaning).await {
-                Err(err) => warn!(ctx, "Failed fetch_idle: {err:#}"),
-                Ok(session) => {
-                    info!(
-                        ctx,
-                        "IMAP loop iteration for {folder_meaning} finished, keeping the session"
-                    );
-                    old_session = Some(session);
-                }
-            }
-        }
-    };
-
-    stop_token
-        .cancelled()
-        .map(|_| {
-            info!(ctx, "Shutting down IMAP loop for {folder_meaning}.");
-        })
-        .race(fut)
-        .await;
-}
-
 async fn smtp_loop(
     ctx: Context,
     started: oneshot::Sender<()>,
@@ -797,7 +717,6 @@ impl Scheduler {
         let (location_interrupt_send, location_interrupt_recv) = channel::bounded(1);
 
         let mut inboxes = Vec::new();
-        let mut oboxes = Vec::new();
         let mut start_recvs = Vec::new();
 
         for (transport_id, configured_login_param) in ConfiguredLoginParam::load_all(ctx).await? {
@@ -817,22 +736,6 @@ impl Scheduler {
             };
             inboxes.push(inbox);
             start_recvs.push(inbox_start_recv);
-
-            if ctx.should_watch_mvbox().await? {
-                let (conn_state, handlers) =
-                    ImapConnectionState::new(ctx, transport_id, configured_login_param).await?;
-                let (start_send, start_recv) = oneshot::channel();
-                let ctx = ctx.clone();
-                let meaning = FolderMeaning::Mvbox;
-                let handle = task::spawn(simple_imap_loop(ctx, start_send, handlers, meaning));
-                oboxes.push(SchedBox {
-                    addr,
-                    meaning,
-                    conn_state,
-                    handle,
-                });
-                start_recvs.push(start_recv);
-            }
         }
 
         let smtp_handle = {
@@ -859,7 +762,6 @@ impl Scheduler {
 
         let res = Self {
             inboxes,
-            oboxes,
             smtp,
             smtp_handle,
             ephemeral_handle,
@@ -879,7 +781,7 @@ impl Scheduler {
     }
 
     fn boxes(&self) -> impl Iterator<Item = &SchedBox> {
-        self.inboxes.iter().chain(self.oboxes.iter())
+        self.inboxes.iter()
     }
 
     fn maybe_network(&self) {
@@ -898,12 +800,6 @@ impl Scheduler {
 
     fn interrupt_inbox(&self) {
         for b in &self.inboxes {
-            b.conn_state.interrupt();
-        }
-    }
-
-    fn interrupt_oboxes(&self) {
-        for b in &self.oboxes {
             b.conn_state.interrupt();
         }
     }
@@ -939,7 +835,7 @@ impl Scheduler {
         let timeout_duration = std::time::Duration::from_secs(30);
 
         let tracker = TaskTracker::new();
-        for b in self.inboxes.into_iter().chain(self.oboxes.into_iter()) {
+        for b in self.inboxes {
             let context = context.clone();
             tracker.spawn(async move {
                 tokio::time::timeout(timeout_duration, b.handle)
