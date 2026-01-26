@@ -522,7 +522,6 @@ class ACFactory:
         ac = self.get_unconfigured_account()
         assert "addr" in configdict and "mail_pw" in configdict, configdict
         configdict.setdefault("bcc_self", False)
-        configdict.setdefault("mvbox_move", False)
         configdict.setdefault("sync_msgs", False)
         configdict.setdefault("delete_server_after", 0)
         ac.update_config(configdict)

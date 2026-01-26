@@ -34,6 +34,7 @@ async fn test_save_load_login_param() -> Result<()> {
             },
             user: "alice".to_string(),
         }],
+        imap_folder: None,
         imap_user: "".to_string(),
         imap_password: "foo".to_string(),
         smtp: vec![ConfiguredServerLoginParam {
@@ -142,6 +143,7 @@ async fn test_posteo_alias() -> Result<()> {
                 user: user.to_string(),
             },
         ],
+        imap_folder: None,
         imap_user: "alice@posteo.de".to_string(),
         imap_password: "foobarbaz".to_string(),
         smtp: vec![
@@ -272,6 +274,7 @@ fn dummy_configured_login_param(
             },
             user: addr.to_string(),
         }],
+        imap_folder: None,
         imap_user: addr.to_string(),
         imap_password: "foobarbaz".to_string(),
         smtp: vec![ConfiguredServerLoginParam {
