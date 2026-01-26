@@ -9,6 +9,7 @@ use rusqlite::{Connection, OpenFlags, Row, config::DbConfig, types::ValueRef};
 use tokio::sync::RwLock;
 
 use crate::blob::BlobObject;
+use crate::chat::add_device_msg;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
 use crate::context::Context;
@@ -17,11 +18,13 @@ use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::BLOBS_BACKUP_NAME;
 use crate::location::delete_orphaned_poi_locations;
 use crate::log::{LogExt, warn};
+use crate::message::Message;
 use crate::message::MsgId;
 use crate::net::dns::prune_dns_cache;
 use crate::net::http::http_cache_cleanup;
 use crate::net::prune_connection_history;
 use crate::param::{Param, Params};
+use crate::stock_str;
 use crate::tools::{SystemTime, Time, delete_file, time, time_elapsed};
 
 /// Extension to [`rusqlite::ToSql`] trait
@@ -865,6 +868,12 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         );
     }
 
+    maybe_add_mvbox_move_deprecation_message(context)
+        .await
+        .context("maybe_add_mvbox_move_deprecation_message")
+        .log_err(context)
+        .ok();
+
     if let Err(err) = incremental_vacuum(context).await {
         warn!(context, "Failed to run incremental vacuum: {err:#}.");
     }
@@ -921,6 +930,18 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .ok();
 
     info!(context, "Housekeeping done.");
+    Ok(())
+}
+
+/// Adds device message about `mvbox_move` config deprecation
+/// if the user has it enabled.
+async fn maybe_add_mvbox_move_deprecation_message(context: &Context) -> Result<()> {
+    if !context.get_config_bool(Config::OnlyFetchMvbox).await?
+        && context.get_config_bool(Config::MvboxMove).await?
+    {
+        let mut msg = Message::new_text(stock_str::mvbox_move_deprecation(context).await);
+        add_device_msg(context, Some("mvbox_move_deprecation"), Some(&mut msg)).await?;
+    }
     Ok(())
 }
 
