@@ -52,19 +52,19 @@ class TestOfflineAccountBasic:
 
     def test_set_config_int_conversion(self, acfactory):
         ac1 = acfactory.get_unconfigured_account()
-        ac1.set_config("mvbox_move", False)
-        assert ac1.get_config("mvbox_move") == "0"
-        ac1.set_config("mvbox_move", True)
-        assert ac1.get_config("mvbox_move") == "1"
-        ac1.set_config("mvbox_move", 0)
-        assert ac1.get_config("mvbox_move") == "0"
-        ac1.set_config("mvbox_move", 1)
-        assert ac1.get_config("mvbox_move") == "1"
+        ac1.set_config("bcc_self", False)
+        assert ac1.get_config("bcc_self") == "0"
+        ac1.set_config("bcc_self", True)
+        assert ac1.get_config("bcc_self") == "1"
+        ac1.set_config("bcc_self", 0)
+        assert ac1.get_config("bcc_self") == "0"
+        ac1.set_config("bcc_self", 1)
+        assert ac1.get_config("bcc_self") == "1"
 
     def test_update_config(self, acfactory):
         ac1 = acfactory.get_unconfigured_account()
-        ac1.update_config({"mvbox_move": False})
-        assert ac1.get_config("mvbox_move") == "0"
+        ac1.update_config({"bcc_self": True})
+        assert ac1.get_config("bcc_self") == "1"
 
     def test_has_bccself(self, acfactory):
         ac1 = acfactory.get_unconfigured_account()

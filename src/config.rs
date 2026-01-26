@@ -155,11 +155,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     MdnsEnabled,
 
-    /// True if chat messages should be moved to a separate folder. Auto-sent messages like sync
-    /// ones are moved there anyway.
-    #[strum(props(default = "1"))]
-    MvboxMove,
-
     /// Watch for new messages in the "Mvbox" (aka DeltaChat folder) only.
     ///
     /// This will not entirely disable other folders, e.g. the spam folder will also still
@@ -467,7 +462,6 @@ impl Config {
             self,
             Self::Displayname
                 | Self::MdnsEnabled
-                | Self::MvboxMove
                 | Self::ShowEmails
                 | Self::Selfavatar
                 | Self::Selfstatus,
@@ -476,10 +470,7 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(
-            self,
-            Config::MvboxMove | Config::OnlyFetchMvbox | Config::ConfiguredAddr
-        )
+        matches!(self, Config::OnlyFetchMvbox | Config::ConfiguredAddr)
     }
 }
 
@@ -596,8 +587,7 @@ impl Context {
 
     /// Returns true if movebox ("DeltaChat" folder) should be watched.
     pub(crate) async fn should_watch_mvbox(&self) -> Result<bool> {
-        Ok(self.get_config_bool(Config::MvboxMove).await?
-            || self.get_config_bool(Config::OnlyFetchMvbox).await?)
+        self.get_config_bool(Config::OnlyFetchMvbox).await
     }
 
     /// Returns true if sync messages should be sent.
@@ -681,7 +671,6 @@ impl Context {
             | Config::ProxyEnabled
             | Config::BccSelf
             | Config::MdnsEnabled
-            | Config::MvboxMove
             | Config::OnlyFetchMvbox
             | Config::Configured
             | Config::Bot
@@ -706,7 +695,7 @@ impl Context {
         Self::check_config(key, value)?;
 
         let n_transports = self.count_transports().await?;
-        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
+        if n_transports > 1 && matches!(key, Config::OnlyFetchMvbox) {
             bail!("Cannot reconfigure {key} when multiple transports are configured");
         }
 
@@ -786,12 +775,6 @@ impl Context {
             Config::Addr => {
                 self.sql
                     .set_raw_config(key.as_ref(), value.map(|s| s.to_lowercase()).as_deref())
-                    .await?;
-            }
-            Config::MvboxMove => {
-                self.sql.set_raw_config(key.as_ref(), value).await?;
-                self.sql
-                    .set_raw_config(constants::DC_FOLDERS_CONFIGURED_KEY, None)
                     .await?;
             }
             Config::ConfiguredAddr => {
