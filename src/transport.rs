@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::configure::server_params::{ServerParams, expand_param_vector};
 use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
+use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
@@ -163,22 +164,30 @@ pub(crate) struct ConfiguredLoginParam {
     /// `From:` address that was used at the time of configuration.
     pub addr: String,
 
+    /// List of IMAP candidates to try.
     pub imap: Vec<ConfiguredServerLoginParam>,
 
-    // Custom IMAP user.
-    //
-    // This overwrites autoconfig from the provider database
-    // if non-empty.
+    /// Custom IMAP user.
+    ///
+    /// This overwrites autoconfig from the provider database
+    /// if non-empty.
     pub imap_user: String,
 
     pub imap_password: String,
 
+    // IMAP folder to watch.
+    //
+    // If not stored, should be interpreted as "INBOX".
+    // If stored, should be a folder name and not empty.
+    pub imap_folder: Option<String>,
+
+    /// List of SMTP candidates to try.
     pub smtp: Vec<ConfiguredServerLoginParam>,
 
-    // Custom SMTP user.
-    //
-    // This overwrites autoconfig from the provider database
-    // if non-empty.
+    /// Custom SMTP user.
+    ///
+    /// This overwrites autoconfig from the provider database
+    /// if non-empty.
     pub smtp_user: String,
 
     pub smtp_password: String,
@@ -199,6 +208,13 @@ pub(crate) struct ConfiguredLoginParam {
 pub(crate) struct ConfiguredLoginParamJson {
     pub addr: String,
     pub imap: Vec<ConfiguredServerLoginParam>,
+
+    /// IMAP folder to watch.
+    ///
+    /// Defaults to "INBOX" if unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub imap_folder: Option<String>,
+
     pub imap_user: String,
     pub imap_password: String,
     pub smtp: Vec<ConfiguredServerLoginParam>,
@@ -545,6 +561,7 @@ impl ConfiguredLoginParam {
         Ok(Some(ConfiguredLoginParam {
             addr,
             imap,
+            imap_folder: None,
             imap_user: mail_user,
             imap_password: mail_pw,
             smtp,
@@ -569,11 +586,18 @@ impl ConfiguredLoginParam {
     pub(crate) fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
 
+        ensure_and_debug_assert!(
+            json.imap_folder
+                .as_ref()
+                .is_none_or(|folder| !folder.is_empty()),
+            "Configured watched folder name cannot be empty"
+        );
         let provider = json.provider_id.and_then(|id| get_provider_by_id(&id));
 
         Ok(ConfiguredLoginParam {
             addr: json.addr,
             imap: json.imap,
+            imap_folder: json.imap_folder,
             imap_user: json.imap_user,
             imap_password: json.imap_password,
             smtp: json.smtp,
@@ -611,6 +635,7 @@ impl From<ConfiguredLoginParam> for ConfiguredLoginParamJson {
             imap: configured_login_param.imap,
             imap_user: configured_login_param.imap_user,
             imap_password: configured_login_param.imap_password,
+            imap_folder: configured_login_param.imap_folder,
             smtp: configured_login_param.smtp,
             smtp_user: configured_login_param.smtp_user,
             smtp_password: configured_login_param.smtp_password,
@@ -629,9 +654,16 @@ pub(crate) async fn save_transport(
     configured: &ConfiguredLoginParamJson,
     add_timestamp: i64,
 ) -> Result<bool> {
+    ensure_and_debug_assert!(
+        configured
+            .imap_folder
+            .as_ref()
+            .is_none_or(|folder| !folder.is_empty()),
+        "Configured watched folder name cannot be empty"
+    );
+
     let addr = addr_normalize(&configured.addr);
     let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-
     let mut modified = context
         .sql
         .execute(
@@ -820,6 +852,7 @@ mod tests {
                 },
                 user: "alice".to_string(),
             }],
+            imap_folder: None,
             imap_user: "".to_string(),
             imap_password: "foo".to_string(),
             smtp: vec![ConfiguredServerLoginParam {
@@ -928,6 +961,7 @@ mod tests {
                     user: user.to_string(),
                 },
             ],
+            imap_folder: None,
             imap_user: "alice@posteo.de".to_string(),
             imap_password: "foobarbaz".to_string(),
             smtp: vec![
@@ -1041,6 +1075,7 @@ mod tests {
                 },
                 user: addr.clone(),
             }],
+            imap_folder: None,
             imap_user: addr.clone(),
             imap_password: "foobarbaz".to_string(),
             smtp: vec![ConfiguredServerLoginParam {
