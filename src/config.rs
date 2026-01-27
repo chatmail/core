@@ -175,11 +175,6 @@ pub enum Config {
     #[strum(props(default = "0"))] // also change MediaQuality.default() on changes
     MediaQuality,
 
-    /// If set to "1", then existing messages are considered to be already fetched.
-    /// This flag is reset after successful configuration.
-    #[strum(props(default = "1"))]
-    FetchedExistingMsgs,
-
     /// Timer in seconds after which the message is deleted from the
     /// server.
     ///
