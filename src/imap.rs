@@ -848,12 +848,14 @@ impl Imap {
         context: &Context,
         session: &mut Session,
     ) -> Result<()> {
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredMvboxFolder)
+        if let Some(mvbox) = context.get_config(Config::ConfiguredMvboxFolder).await? {
+            add_all_recipients_as_contacts(context, session, mvbox)
+                .await
+                .context("Failed to get recipients from the movebox")?;
+        }
+        add_all_recipients_as_contacts(context, session, "INBOX")
             .await
-            .context("failed to get recipients from the movebox")?;
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredInboxFolder)
-            .await
-            .context("failed to get recipients from the inbox")?;
+            .context("Failed to get recipients from the inbox")?;
 
         info!(context, "Done fetching existing messages.");
         Ok(())
@@ -2554,17 +2556,8 @@ impl std::fmt::Display for UidRange {
 async fn add_all_recipients_as_contacts(
     context: &Context,
     session: &mut Session,
-    folder: Config,
+    mailbox: &str,
 ) -> Result<()> {
-    let mailbox = if let Some(m) = context.get_config(folder).await? {
-        m
-    } else {
-        info!(
-            context,
-            "Folder {} is not configured, skipping fetching contacts from it.", folder
-        );
-        return Ok(());
-    };
     let create = false;
     let folder_exists = session
         .select_with_uidvalidity(context, &mailbox, create)
