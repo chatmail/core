@@ -27,7 +27,7 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
-use crate::key::{self_fingerprint, self_fingerprint_opt};
+use crate::key::{load_self_public_key_opt, self_fingerprint, self_fingerprint_opt};
 use crate::log::{LogExt as _, warn};
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
@@ -469,6 +469,18 @@ pub(crate) async fn receive_imf_inner(
         );
     }
 
+    let trash = || async {
+        let msg_ids = vec![insert_tombstone(context, rfc724_mid).await?];
+        Ok(Some(ReceivedMsg {
+            chat_id: DC_CHAT_ID_TRASH,
+            state: MessageState::Undefined,
+            hidden: false,
+            sort_timestamp: 0,
+            msg_ids,
+            needs_delete_job: false,
+        }))
+    };
+
     let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw).await {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
@@ -476,17 +488,7 @@ pub(crate) async fn receive_imf_inner(
                 // We don't have an rfc724_mid, there's no point in adding a trash entry
                 return Ok(None);
             }
-
-            let msg_ids = vec![insert_tombstone(context, rfc724_mid).await?];
-
-            return Ok(Some(ReceivedMsg {
-                chat_id: DC_CHAT_ID_TRASH,
-                state: MessageState::Undefined,
-                hidden: false,
-                sort_timestamp: 0,
-                msg_ids,
-                needs_delete_job: false,
-            }));
+            return trash().await;
         }
         Ok(mime_parser) => mime_parser,
     };
@@ -494,6 +496,18 @@ pub(crate) async fn receive_imf_inner(
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
+
+    if let Some((_, recipient_fps)) = &mime_parser.signature
+        && !recipient_fps.is_empty()
+        && let Some(self_pubkey) = load_self_public_key_opt(context).await?
+        && !recipient_fps.contains(&self_pubkey.dc_fingerprint())
+    {
+        warn!(
+            context,
+            "Message {rfc724_mid_orig:?} is not intended for us (TRASH)."
+        );
+        return trash().await;
+    }
     info!(
         context,
         "Receiving message {rfc724_mid_orig:?}, seen={seen}...",
