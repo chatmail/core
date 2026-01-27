@@ -282,7 +282,7 @@ async fn get_to_and_past_contact_ids(
             .await?;
 
             if let Some(chat_id) = chat_id {
-                past_ids = lookup_key_contacts_by_address_list(
+                past_ids = lookup_key_contacts_fallback_to_chat(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -315,7 +315,7 @@ async fn get_to_and_past_contact_ids(
                     Origin::Hidden,
                 )
                 .await?;
-                past_ids = lookup_key_contacts_by_address_list(
+                past_ids = lookup_key_contacts_fallback_to_chat(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -388,7 +388,7 @@ async fn get_to_and_past_contact_ids(
             } else {
                 let ids = match mime_parser.was_encrypted() {
                     true => {
-                        lookup_key_contacts_by_address_list(
+                        lookup_key_contacts_fallback_to_chat(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
@@ -4185,7 +4185,7 @@ async fn lookup_key_contact_by_fingerprint(
     }
 }
 
-/// Looks up key-contacts by email addresses.
+/// Adds or looks up key-contacts by fingerprints or by email addresses in the given chat.
 ///
 /// `fingerprints` may be empty.
 /// This is used as a fallback when email addresses are available,
@@ -4200,7 +4200,7 @@ async fn lookup_key_contact_by_fingerprint(
 /// is the same as the number of addresses in the header
 /// and it is possible to find corresponding
 /// `Chat-Group-Member-Timestamps` items.
-async fn lookup_key_contacts_by_address_list(
+async fn lookup_key_contacts_fallback_to_chat(
     context: &Context,
     address_list: &[SingleInfo],
     fingerprints: &[Fingerprint],
