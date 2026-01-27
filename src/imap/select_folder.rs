@@ -89,33 +89,6 @@ impl ImapSession {
         }
     }
 
-    /// Selects a folder. Tries to create it once and select again if the folder does not exist.
-    pub(super) async fn select_or_create_folder(
-        &mut self,
-        context: &Context,
-        folder: &str,
-    ) -> anyhow::Result<NewlySelected> {
-        match self.select_folder(context, folder).await {
-            Ok(newly_selected) => Ok(newly_selected),
-            Err(err) => match err {
-                Error::NoFolder(..) => {
-                    info!(context, "Failed to select folder {folder:?} because it does not exist, trying to create it.");
-                    let create_res = self.create(folder).await;
-                    if let Err(ref err) = create_res {
-                        info!(context, "Couldn't select folder, then create() failed: {err:#}.");
-                        // Need to recheck, could have been created in parallel.
-                    }
-                    let select_res = self.select_folder(context, folder).await.with_context(|| format!("failed to select newely created folder {folder}"));
-                    if select_res.is_err() {
-                        create_res?;
-                    }
-                    select_res
-                }
-                _ => Err(err).with_context(|| format!("failed to select folder {folder} with error other than NO, not trying to create it")),
-            },
-        }
-    }
-
     /// Selects a folder optionally creating it and takes care of UIDVALIDITY changes. Returns false
     /// iff `folder` doesn't exist.
     ///
@@ -129,23 +102,16 @@ impl ImapSession {
         &mut self,
         context: &Context,
         folder: &str,
-        create: bool,
     ) -> anyhow::Result<bool> {
-        let newly_selected = if create {
-            self.select_or_create_folder(context, folder)
-                .await
-                .with_context(|| format!("Failed to select or create folder {folder:?}"))?
-        } else {
-            match self.select_folder(context, folder).await {
-                Ok(newly_selected) => newly_selected,
-                Err(err) => match err {
-                    Error::NoFolder(..) => return Ok(false),
-                    _ => {
-                        return Err(err)
-                            .with_context(|| format!("Failed to select folder {folder:?}"))?;
-                    }
-                },
-            }
+        let newly_selected = match self.select_folder(context, folder).await {
+            Ok(newly_selected) => newly_selected,
+            Err(err) => match err {
+                Error::NoFolder(..) => return Ok(false),
+                _ => {
+                    return Err(err)
+                        .with_context(|| format!("Failed to select folder {folder:?}"))?;
+                }
+            },
         };
         let transport_id = self.transport_id();
 

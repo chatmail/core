@@ -401,9 +401,6 @@ def test_dont_move_sync_msgs(acfactory, direct_imap):
     ac1_direct_imap.select_folder("Inbox")
     assert len(ac1_direct_imap.get_all_messages()) == inbox_msg_cnt + 2
 
-    ac1_direct_imap.select_folder("DeltaChat")
-    assert len(ac1_direct_imap.get_all_messages()) == 0
-
 
 def test_reaction_seen_on_another_dev(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)

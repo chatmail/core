@@ -499,13 +499,7 @@ impl Imap {
             .get_raw_config_int(constants::DC_FOLDERS_CONFIGURED_KEY)
             .await?;
         if folders_configured.unwrap_or_default() < constants::DC_FOLDERS_CONFIGURED_VERSION {
-            let is_chatmail = match context.get_config_bool(Config::FixIsChatmail).await? {
-                false => session.is_chatmail(),
-                true => context.get_config_bool(Config::IsChatmail).await?,
-            };
-            let create_mvbox = !is_chatmail || context.get_config_bool(Config::MvboxMove).await?;
-            self.configure_folders(context, &mut session, create_mvbox)
-                .await?;
+            self.configure_folders(context, &mut session).await?;
         }
 
         Ok(session)
@@ -563,9 +557,8 @@ impl Imap {
             return Ok(false);
         }
 
-        let create = false;
         let folder_exists = session
-            .select_with_uidvalidity(context, folder, create)
+            .select_with_uidvalidity(context, folder)
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
         if !folder_exists {
@@ -873,10 +866,7 @@ impl Session {
         // Collect pairs of UID and Message-ID.
         let mut msgs = BTreeMap::new();
 
-        let create = false;
-        let folder_exists = self
-            .select_with_uidvalidity(context, folder, create)
-            .await?;
+        let folder_exists = self.select_with_uidvalidity(context, folder).await?;
         let transport_id = self.transport_id();
         if folder_exists {
             let mut list = self
@@ -1082,10 +1072,7 @@ impl Session {
             // MOVE/DELETE operations. This does not result in multiple SELECT commands
             // being sent because `select_folder()` does nothing if the folder is already
             // selected.
-            let create = false;
-            let folder_exists = self
-                .select_with_uidvalidity(context, folder, create)
-                .await?;
+            let folder_exists = self.select_with_uidvalidity(context, folder).await?;
             ensure!(folder_exists, "No folder {folder}");
 
             // Empty target folder name means messages should be deleted.
@@ -1140,8 +1127,7 @@ impl Session {
             .await?;
 
         for (folder, rowid_set, uid_set) in UidGrouper::from(rows) {
-            let create = false;
-            let folder_exists = match self.select_with_uidvalidity(context, &folder, create).await {
+            let folder_exists = match self.select_with_uidvalidity(context, &folder).await {
                 Err(err) => {
                     warn!(
                         context,
@@ -1195,9 +1181,8 @@ impl Session {
             return Ok(());
         }
 
-        let create = false;
         let folder_exists = self
-            .select_with_uidvalidity(context, folder, create)
+            .select_with_uidvalidity(context, folder)
             .await
             .context("Failed to select folder")?;
         if !folder_exists {
@@ -1708,17 +1693,16 @@ impl Session {
 
     /// Attempts to configure mvbox.
     ///
-    /// Tries to find any folder examining `folders` in the order they go. If none is found, tries
-    /// to create any folder in the same order. This method does not use LIST command to ensure that
+    /// Tries to find any folder examining `folders` in the order they go.
+    /// This method does not use LIST command to ensure that
     /// configuration works even if mailbox lookup is forbidden via Access Control List (see
     /// <https://datatracker.ietf.org/doc/html/rfc4314>).
     ///
-    /// Returns first found or created folder name.
+    /// Returns first found folder name.
     async fn configure_mvbox<'a>(
         &mut self,
         context: &Context,
         folders: &[&'a str],
-        create_mvbox: bool,
     ) -> Result<Option<&'a str>> {
         // Close currently selected folder if needed.
         // We are going to select folders using low-level EXAMINE operations below.
@@ -1735,34 +1719,12 @@ impl Session {
                 self.close().await?;
                 // Before moving emails to the mvbox we need to remember its UIDVALIDITY, otherwise
                 // emails moved before that wouldn't be fetched but considered "old" instead.
-                let create = false;
-                let folder_exists = self
-                    .select_with_uidvalidity(context, folder, create)
-                    .await?;
+                let folder_exists = self.select_with_uidvalidity(context, folder).await?;
                 ensure!(folder_exists, "No MVBOX folder {:?}??", &folder);
                 return Ok(Some(folder));
             }
         }
 
-        if !create_mvbox {
-            return Ok(None);
-        }
-        // Some servers require namespace-style folder names like "INBOX.DeltaChat", so we try all
-        // the variants here.
-        for folder in folders {
-            match self
-                .select_with_uidvalidity(context, folder, create_mvbox)
-                .await
-            {
-                Ok(_) => {
-                    info!(context, "MVBOX-folder {} created.", folder);
-                    return Ok(Some(folder));
-                }
-                Err(err) => {
-                    warn!(context, "Cannot create MVBOX-folder {:?}: {}", folder, err);
-                }
-            }
-        }
         Ok(None)
     }
 }
@@ -1772,7 +1734,6 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
-        create_mvbox: bool,
     ) -> Result<()> {
         let mut folders = session
             .list(Some(""), Some("*"))
@@ -1813,7 +1774,7 @@ impl Imap {
 
         let fallback_folder = format!("INBOX{delimiter}DeltaChat");
         let mvbox_folder = session
-            .configure_mvbox(context, &["DeltaChat", &fallback_folder], create_mvbox)
+            .configure_mvbox(context, &["DeltaChat", &fallback_folder])
             .await
             .context("failed to configure mvbox")?;
 

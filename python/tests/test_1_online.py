@@ -220,21 +220,6 @@ def test_webxdc_huge_update(acfactory, data, lp):
     assert update["payload"] == payload
 
 
-def test_enable_mvbox_move(acfactory, lp):
-    (ac1,) = acfactory.get_online_accounts(1)
-
-    lp.sec("ac2: start without mvbox thread")
-    ac2 = acfactory.new_online_configuring_account(mvbox_move=False)
-    acfactory.bring_accounts_online()
-
-    lp.sec("ac2: configuring mvbox")
-    ac2.set_config("mvbox_move", "1")
-
-    lp.sec("ac1: send message and wait for ac2 to receive it")
-    acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
-    assert ac2._evtracker.wait_next_incoming_message().text == "message1"
-
-
 def test_forward_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = ac1.create_chat(ac2)
@@ -350,7 +335,7 @@ def test_long_group_name(acfactory, lp):
 
 
 def test_send_self_message(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True, bcc_self=True)
+    ac1 = acfactory.new_online_configuring_account(bcc_self=True)
     acfactory.bring_accounts_online()
     lp.sec("ac1: create self chat")
     chat = ac1.get_self_contact().create_chat()
@@ -509,7 +494,7 @@ def test_reply_privately(acfactory):
 
 
 def test_mdn_asymmetric(acfactory, lp):
-    ac1 = acfactory.new_online_configuring_account(mvbox_move=True)
+    ac1 = acfactory.new_online_configuring_account()
     ac2 = acfactory.new_online_configuring_account()
     acfactory.bring_accounts_online()
 
@@ -538,19 +523,13 @@ def test_mdn_asymmetric(acfactory, lp):
     ac2.mark_seen_messages([msg])
 
     lp.sec("ac1: waiting for incoming activity")
-    # MDN should be moved even though MDNs are already disabled
-    ac1._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_MOVED")
-
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
     # Wait for the message to be marked as seen on IMAP.
-    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder DeltaChat as seen.")
+    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     # MDN is received even though MDNs are already disabled
     assert msg_out.is_out_mdn_received()
-
-    ac1.direct_imap.select_config_folder("mvbox")
-    assert len(list(ac1.direct_imap.conn.fetch(AND(seen=True)))) == 1
 
 
 def test_send_receive_encrypt(acfactory, lp):
