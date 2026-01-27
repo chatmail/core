@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 pub(crate) use self::connectivity::ConnectivityStore;
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
@@ -477,29 +477,6 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     };
 
     maybe_send_stats(ctx).await.log_err(ctx).ok();
-    match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
-        Ok(fetched_existing_msgs) => {
-            if !fetched_existing_msgs {
-                // Consider it done even if we fail.
-                //
-                // This operation is not critical enough to retry,
-                // especially if the error is persistent.
-                if let Err(err) = ctx
-                    .set_config_internal(Config::FetchedExistingMsgs, config::from_bool(true))
-                    .await
-                {
-                    warn!(ctx, "Can't set Config::FetchedExistingMsgs: {:#}", err);
-                }
-
-                if let Err(err) = imap.fetch_existing_msgs(ctx, &mut session).await {
-                    warn!(ctx, "Failed to fetch existing messages: {:#}", err);
-                }
-            }
-        }
-        Err(err) => {
-            warn!(ctx, "Can't get Config::FetchedExistingMsgs: {:#}", err);
-        }
-    }
 
     session
         .update_metadata(ctx)

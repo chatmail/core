@@ -947,12 +947,6 @@ impl Context {
 
         res.insert("secondary_addrs", secondary_addrs);
         res.insert(
-            "fetched_existing_msgs",
-            self.get_config_bool(Config::FetchedExistingMsgs)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "show_emails",
             self.get_config_int(Config::ShowEmails).await?.to_string(),
         );

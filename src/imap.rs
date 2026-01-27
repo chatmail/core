@@ -16,7 +16,6 @@ use std::{
 use anyhow::{Context as _, Result, bail, ensure, format_err};
 use async_channel::{self, Receiver, Sender};
 use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
-use deltachat_contact_tools::ContactAddress;
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use num_traits::FromPrimitive;
@@ -30,7 +29,7 @@ use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{self, Blocked, DC_VERSION_STR, ShowEmails};
-use crate::contact::{Contact, ContactId, Modifier, Origin};
+use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -59,7 +58,6 @@ pub mod select_folder;
 pub(crate) mod session;
 
 use client::{Client, determine_capabilities};
-use mailparse::SingleInfo;
 use session::Session;
 
 pub(crate) const GENERATED_PREFIX: &str = "GEN_";
@@ -837,27 +835,6 @@ impl Imap {
 
         Ok((read_cnt, fetch_more))
     }
-
-    /// Read the recipients from old emails sent by the user and add them as contacts.
-    /// This way, we can already offer them some email addresses they can write to.
-    ///
-    /// Then, Fetch the last messages DC_FETCH_EXISTING_MSGS_COUNT emails from the server
-    /// and show them in the chat list.
-    pub(crate) async fn fetch_existing_msgs(
-        &mut self,
-        context: &Context,
-        session: &mut Session,
-    ) -> Result<()> {
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredMvboxFolder)
-            .await
-            .context("failed to get recipients from the movebox")?;
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredInboxFolder)
-            .await
-            .context("failed to get recipients from the inbox")?;
-
-        info!(context, "Done fetching existing messages.");
-        Ok(())
-    }
 }
 
 impl Session {
@@ -1310,41 +1287,6 @@ impl Session {
         }
 
         Ok(())
-    }
-
-    /// Gets the from, to and bcc addresses from all existing outgoing emails.
-    pub async fn get_all_recipients(&mut self, context: &Context) -> Result<Vec<SingleInfo>> {
-        let mut uids: Vec<_> = self
-            .uid_search(get_imap_self_sent_search_command(context).await?)
-            .await?
-            .into_iter()
-            .collect();
-        uids.sort_unstable();
-
-        let mut result = Vec::new();
-        for (_, uid_set) in build_sequence_sets(&uids)? {
-            let mut list = self
-                .uid_fetch(uid_set, "(UID BODY.PEEK[HEADER.FIELDS (FROM TO CC BCC)])")
-                .await
-                .context("IMAP Could not fetch")?;
-
-            while let Some(msg) = list.try_next().await? {
-                match get_fetch_headers(&msg) {
-                    Ok(headers) => {
-                        if let Some(from) = mimeparser::get_from(&headers)
-                            && context.is_self_addr(&from.addr).await?
-                        {
-                            result.extend(mimeparser::get_recipients(&headers));
-                        }
-                    }
-                    Err(err) => {
-                        warn!(context, "{}", err);
-                        continue;
-                    }
-                };
-            }
-        }
-        Ok(result)
     }
 
     /// Fetches a list of messages by server UID.
@@ -2467,18 +2409,6 @@ async fn get_modseq(context: &Context, transport_id: u32, folder: &str) -> Resul
         .unwrap_or(0))
 }
 
-/// Compute the imap search expression for all self-sent mails (for all self addresses)
-pub(crate) async fn get_imap_self_sent_search_command(context: &Context) -> Result<String> {
-    // See https://www.rfc-editor.org/rfc/rfc3501#section-6.4.4 for syntax of SEARCH and OR
-    let mut search_command = format!("FROM \"{}\"", context.get_primary_self_addr().await?);
-
-    for item in context.get_secondary_self_addrs().await? {
-        search_command = format!("OR ({search_command}) (FROM \"{item}\")");
-    }
-
-    Ok(search_command)
-}
-
 /// Whether to ignore fetching messages from a folder.
 ///
 /// This caters for the [`Config::OnlyFetchMvbox`] setting which means mails from folders
@@ -2550,66 +2480,6 @@ impl std::fmt::Display for UidRange {
             write!(f, "{}:{}", self.start, self.end)
         }
     }
-}
-async fn add_all_recipients_as_contacts(
-    context: &Context,
-    session: &mut Session,
-    folder: Config,
-) -> Result<()> {
-    let mailbox = if let Some(m) = context.get_config(folder).await? {
-        m
-    } else {
-        info!(
-            context,
-            "Folder {} is not configured, skipping fetching contacts from it.", folder
-        );
-        return Ok(());
-    };
-    let create = false;
-    let folder_exists = session
-        .select_with_uidvalidity(context, &mailbox, create)
-        .await
-        .with_context(|| format!("could not select {mailbox}"))?;
-    if !folder_exists {
-        return Ok(());
-    }
-
-    let recipients = session
-        .get_all_recipients(context)
-        .await
-        .context("could not get recipients")?;
-
-    let mut any_modified = false;
-    for recipient in recipients {
-        let recipient_addr = match ContactAddress::new(&recipient.addr) {
-            Err(err) => {
-                warn!(
-                    context,
-                    "Could not add contact for recipient with address {:?}: {:#}",
-                    recipient.addr,
-                    err
-                );
-                continue;
-            }
-            Ok(recipient_addr) => recipient_addr,
-        };
-
-        let (_, modified) = Contact::add_or_lookup(
-            context,
-            &recipient.display_name.unwrap_or_default(),
-            &recipient_addr,
-            Origin::OutgoingTo,
-        )
-        .await?;
-        if modified != Modifier::None {
-            any_modified = true;
-        }
-    }
-    if any_modified {
-        context.emit_event(EventType::ContactsChanged(None));
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
