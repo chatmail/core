@@ -4029,12 +4029,13 @@ async fn add_or_lookup_key_contacts(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        let fp = fingerprint_iter.next();
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
             contact_ids.push(None);
             continue;
         }
-        let fingerprint: String = if let Some(fp) = fingerprint_iter.next() {
+        let fingerprint: String = if let Some(fp) = fp {
             // Iterator has not ran out of fingerprints yet.
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
@@ -4209,13 +4210,14 @@ async fn lookup_key_contacts_fallback_to_chat(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        let fp = fingerprint_iter.next();
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
             contact_ids.push(None);
             continue;
         }
 
-        if let Some(fp) = fingerprint_iter.next() {
+        if let Some(fp) = fp {
             // Iterator has not ran out of fingerprints yet.
             let display_name = info.display_name.as_deref();
             let fingerprint: String = fp.hex();
