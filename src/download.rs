@@ -189,10 +189,7 @@ impl Session {
             bail!("Attempt to fetch UID 0");
         }
 
-        let create = false;
-        let folder_exists = self
-            .select_with_uidvalidity(context, folder, create)
-            .await?;
+        let folder_exists = self.select_with_uidvalidity(context, folder).await?;
         ensure!(folder_exists, "No folder {folder}");
 
         // we are connected, and the folder is selected

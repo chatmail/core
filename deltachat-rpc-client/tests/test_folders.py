@@ -8,8 +8,10 @@ from imap_tools import AND, U
 from deltachat_rpc_client import Contact, EventType, Message
 
 
-def test_move_works(acfactory):
+def test_move_works(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("DeltaChat")
     ac2.set_config("mvbox_move", "1")
     ac2.bring_online()
 
@@ -34,6 +36,8 @@ def test_move_avoids_loop(acfactory, direct_imap):
     We do not want to move this message from `INBOX.DeltaChat` to `DeltaChat` again.
     """
     ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("DeltaChat")
     ac2.set_config("mvbox_move", "1")
     ac2.set_config("delete_server_after", "0")
     ac2.bring_online()
@@ -97,6 +101,8 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     addr, password = acfactory.get_credentials()
     ac2 = acfactory.get_unconfigured_account()
     ac2.add_or_update_transport({"addr": addr, "password": password})
+    ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("DeltaChat")
     ac2.set_config("mvbox_move", "1")
     assert ac2.is_configured()
 
@@ -128,30 +134,6 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     assert len(contacts) == 1
     assert contacts[0].get_snapshot().address == ac1.get_config("addr")
     assert list(reactions.reactions_by_contact.values())[0] == [react_str]
-
-
-def test_delete_deltachat_folder(acfactory, direct_imap):
-    """Test that DeltaChat folder is recreated if user deletes it manually."""
-    ac1 = acfactory.new_configured_account()
-    ac1.set_config("mvbox_move", "1")
-    ac1.bring_online()
-
-    ac1_direct_imap = direct_imap(ac1)
-    ac1_direct_imap.conn.folder.delete("DeltaChat")
-    assert "DeltaChat" not in ac1_direct_imap.list_folders()
-
-    # Wait until new folder is created and UIDVALIDITY is updated.
-    while True:
-        event = ac1.wait_for_event()
-        if event.kind == EventType.INFO and "transport 1: UID validity for folder DeltaChat changed from " in event.msg:
-            break
-
-    ac2 = acfactory.get_online_account()
-    ac2.create_chat(ac1).send_text("hello")
-    msg = ac1.wait_for_incoming_msg().get_snapshot()
-    assert msg.text == "hello"
-
-    assert "DeltaChat" in ac1_direct_imap.list_folders()
 
 
 def test_dont_show_emails(acfactory, direct_imap, log):
@@ -294,10 +276,12 @@ def test_dont_show_emails(acfactory, direct_imap, log):
     assert len(msg.chat.get_messages()) == 2
 
 
-def test_move_works_on_self_sent(acfactory):
+def test_move_works_on_self_sent(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
-    # Enable movebox and wait until it is created.
+    # Create and enable movebox.
+    ac1_direct_imap = direct_imap(ac1)
+    ac1_direct_imap.create_folder("DeltaChat")
     ac1.set_config("mvbox_move", "1")
     ac1.set_config("bcc_self", "1")
     ac1.bring_online()
@@ -314,6 +298,8 @@ def test_move_works_on_self_sent(acfactory):
 def test_moved_markseen(acfactory, direct_imap):
     """Test that message already moved to DeltaChat folder is marked as seen."""
     ac1, ac2 = acfactory.get_online_accounts(2)
+    ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("DeltaChat")
     ac2.set_config("mvbox_move", "1")
     ac2.set_config("delete_server_after", "0")
     ac2.set_config("sync_msgs", "0")  # Do not send a sync message when accepting a contact request.
@@ -356,6 +342,8 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
     for ac in ac1, ac2:
         ac.set_config("delete_server_after", "0")
         if mvbox_move:
+            ac_direct_imap = direct_imap(ac)
+            ac_direct_imap.create_folder("DeltaChat")
             ac.set_config("mvbox_move", "1")
             ac.bring_online()
 
@@ -393,6 +381,8 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
 def test_mvbox_and_trash(acfactory, direct_imap, log):
     log.section("ac1: start with mvbox")
     ac1 = acfactory.get_online_account()
+    ac1_direct_imap = direct_imap(ac1)
+    ac1_direct_imap.create_folder("DeltaChat")
     ac1.set_config("mvbox_move", "1")
     ac1.bring_online()
 
@@ -400,7 +390,6 @@ def test_mvbox_and_trash(acfactory, direct_imap, log):
     ac2 = acfactory.get_online_account()
 
     log.section("ac1: create trash")
-    ac1_direct_imap = direct_imap(ac1)
     ac1_direct_imap.create_folder("Trash")
     ac1.set_config("scan_all_folders_debounce_secs", "0")
     ac1.stop_io()
