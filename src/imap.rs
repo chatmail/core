@@ -183,7 +183,7 @@ impl FolderMeaning {
             FolderMeaning::Spam => None,
             FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
             FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
-            FolderMeaning::Trash => Some(Config::ConfiguredTrashFolder),
+            FolderMeaning::Trash => None,
             FolderMeaning::Virtual => None,
         }
     }
@@ -611,7 +611,6 @@ impl Imap {
         let mut download_later: Vec<String> = Vec::new();
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
-        let delete_target = context.get_delete_msgs_target().await?;
 
         let download_limit: Option<u32> = context
             .get_config_parsed(Config::DownloadLimit)
@@ -661,7 +660,7 @@ impl Imap {
 
             let _target;
             let target = if delete {
-                &delete_target
+                ""
             } else {
                 _target = target_folder(context, folder, folder_meaning, &headers).await?;
                 &_target
@@ -988,17 +987,6 @@ impl Session {
                     return Ok(());
                 }
                 Err(err) => {
-                    if context.should_delete_to_trash().await? {
-                        error!(
-                            context,
-                            "Cannot move messages {} to {}, no fallback to COPY/DELETE because \
-                            delete_to_trash is set. Error: {:#}",
-                            set,
-                            target,
-                            err,
-                        );
-                        return Err(err.into());
-                    }
                     warn!(
                         context,
                         "Cannot move messages, fallback to COPY/DELETE {} to {}: {}",
@@ -1012,19 +1000,11 @@ impl Session {
 
         // Server does not support MOVE or MOVE failed.
         // Copy messages to the destination folder if needed and mark records for deletion.
-        let copy = !context.is_trash(target).await?;
-        if copy {
-            info!(
-                context,
-                "Server does not support MOVE, fallback to COPY/DELETE {} to {}", set, target
-            );
-            self.uid_copy(&set, &target).await?;
-        } else {
-            error!(
-                context,
-                "Server does not support MOVE, fallback to DELETE {} to {}", set, target,
-            );
-        }
+        info!(
+            context,
+            "Server does not support MOVE, fallback to COPY/DELETE {} to {}", set, target
+        );
+        self.uid_copy(&set, &target).await?;
         context
             .sql
             .transaction(|transaction| {
@@ -1036,11 +1016,9 @@ impl Session {
             })
             .await
             .context("Cannot plan deletion of messages")?;
-        if copy {
-            context.emit_event(EventType::ImapMessageMoved(format!(
-                "IMAP messages {set} copied to {target}"
-            )));
-        }
+        context.emit_event(EventType::ImapMessageMoved(format!(
+            "IMAP messages {set} copied to {target}"
+        )));
         Ok(())
     }
 
