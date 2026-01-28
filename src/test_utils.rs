@@ -117,6 +117,8 @@ impl TestContextManager {
             .await
     }
 
+    /// Returns new elena's "device".
+    /// Elena doesn't send Intended Recipient Fingerprint subpackets to simulate old Delta Chat.
     pub async fn elena(&mut self) -> TestContext {
         TestContext::builder()
             .configure_elena()
