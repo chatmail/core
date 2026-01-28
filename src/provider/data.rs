@@ -577,10 +577,7 @@ static P_GMAIL: Provider = Provider {
             username_pattern: Email,
         },
     ],
-    opt: ProviderOptions {
-        delete_to_trash: true,
-        ..ProviderOptions::new()
-    },
+    opt: ProviderOptions::new(),
     config_defaults: None,
     oauth2_authorizer: None,
 };
@@ -2625,4 +2622,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 27).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 28).unwrap());
