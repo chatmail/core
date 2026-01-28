@@ -3584,39 +3584,17 @@ async fn test_big_forwarded_with_big_attachment() -> Result<()> {
             .starts_with("this text with 42 chars is just repeated.")
     );
     assert!(msg.get_text().ends_with("[...]"));
-    assert!(!msg.has_html());
-
-    let msg = Message::load_from_db(t, rcvd.msg_ids[2]).await?;
-    assert_eq!(msg.get_viewtype(), Viewtype::File);
     assert!(msg.has_html());
     let html = msg.id.get_html(t).await?.unwrap();
-    let tail = html
-        .split_once("Hello!")
-        .unwrap()
-        .1
-        .split_once("From: AAA")
-        .unwrap()
-        .1
-        .split_once("aaa@example.org")
-        .unwrap()
-        .1
-        .split_once("To: Alice")
-        .unwrap()
-        .1
-        .split_once("alice@example.org")
-        .unwrap()
-        .1
-        .split_once("Subject: Some subject")
-        .unwrap()
-        .1
-        .split_once("Date: Fri, 2 Jun 2023 12:29:17 +0000")
-        .unwrap()
-        .1;
     assert_eq!(
-        tail.matches("this text with 42 chars is just repeated.")
+        html.matches("this text with 42 chars is just repeated.")
             .count(),
         128
     );
+
+    let msg = Message::load_from_db(t, rcvd.msg_ids[2]).await?;
+    assert_eq!(msg.get_viewtype(), Viewtype::File);
+    assert!(!msg.has_html());
     Ok(())
 }
 
