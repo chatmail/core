@@ -932,7 +932,6 @@ def test_set_get_group_image(acfactory, data, lp):
 
 def test_connectivity(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
 
     ac1._evtracker.wait_for_connectivity(dc.const.DC_CONNECTIVITY_CONNECTED)
 

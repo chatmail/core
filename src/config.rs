@@ -328,10 +328,6 @@ pub enum Config {
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
 
-    /// To how many seconds to debounce scan_all_folders. Used mainly in tests, to disable debouncing completely.
-    #[strum(props(default = "60"))]
-    ScanAllFoldersDebounceSecs,
-
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
     /// This is a developer option for testing "fake idle".

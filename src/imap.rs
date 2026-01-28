@@ -53,7 +53,6 @@ use crate::transport::{
 pub(crate) mod capabilities;
 mod client;
 mod idle;
-pub mod scan_folders;
 pub mod select_folder;
 pub(crate) mod session;
 
@@ -2419,6 +2418,24 @@ impl std::fmt::Display for UidRange {
             write!(f, "{}:{}", self.start, self.end)
         }
     }
+}
+
+pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
+    let mut res = vec![Config::ConfiguredInboxFolder];
+    if context.should_watch_mvbox().await? {
+        res.push(Config::ConfiguredMvboxFolder);
+    }
+    Ok(res)
+}
+
+pub(crate) async fn get_watched_folders(context: &Context) -> Result<Vec<String>> {
+    let mut res = Vec::new();
+    for folder_config in get_watched_folder_configs(context).await? {
+        if let Some(folder) = context.get_config(folder_config).await? {
+            res.push(folder);
+        }
+    }
+    Ok(res)
 }
 
 #[cfg(test)]
