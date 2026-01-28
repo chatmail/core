@@ -19,6 +19,8 @@ pub enum QrObject {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
     /// Ask the user whether to join the group.
     AskVerifyGroup {
@@ -34,6 +36,8 @@ pub enum QrObject {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
     /// Ask the user whether to join the broadcast channel.
     AskJoinBroadcast {
@@ -54,6 +58,8 @@ pub enum QrObject {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
     /// Contact fingerprint is verified.
     ///
@@ -229,6 +235,7 @@ impl From<Qr> for QrObject {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.to_string();
@@ -237,6 +244,7 @@ impl From<Qr> for QrObject {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 }
             }
             Qr::AskVerifyGroup {
@@ -246,6 +254,7 @@ impl From<Qr> for QrObject {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.to_string();
@@ -256,6 +265,7 @@ impl From<Qr> for QrObject {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 }
             }
             Qr::AskJoinBroadcast {
@@ -265,6 +275,7 @@ impl From<Qr> for QrObject {
                 fingerprint,
                 authcode,
                 invitenumber,
+                is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
                 let fingerprint = fingerprint.to_string();
@@ -275,6 +286,7 @@ impl From<Qr> for QrObject {
                     fingerprint,
                     authcode,
                     invitenumber,
+                    is_v3,
                 }
             }
             Qr::FprOk { contact_id } => {

@@ -61,6 +61,9 @@ pub enum Qr {
 
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Ask the user whether to join the group.
@@ -82,6 +85,9 @@ pub enum Qr {
 
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Ask whether to join the broadcast channel.
@@ -106,6 +112,9 @@ pub enum Qr {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Contact fingerprint is verified.
@@ -501,6 +510,8 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let grpname = decode_name(&param, "g")?;
     let broadcast_name = decode_name(&param, "b")?;
 
+    let is_v3 = param.get("v") == Some(&"3");
+
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
         let (contact_id, _) = Contact::add_or_lookup_ex(
@@ -546,6 +557,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 })
             }
         } else if let (Some(grpid), Some(name)) = (grpid, broadcast_name) {
@@ -581,6 +593,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 })
             }
         } else if context.is_self_addr(&addr).await? {
@@ -605,6 +618,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             })
         }
     } else if let Some(addr) = addr {

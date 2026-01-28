@@ -480,7 +480,7 @@ pub async fn symm_encrypt_autocrypt_setup(passphrase: &str, plain: Vec<u8>) -> R
 /// `shared secret` is the secret that will be used for symmetric encryption.
 pub async fn symm_encrypt_message(
     plain: Vec<u8>,
-    private_key_for_signing: SignedSecretKey,
+    private_key_for_signing: Option<SignedSecretKey>,
     shared_secret: &str,
     compress: bool,
 ) -> Result<String> {
@@ -503,8 +503,10 @@ pub async fn symm_encrypt_message(
         );
         msg.encrypt_with_password(&mut rng, s2k, &shared_secret)?;
 
-        let hash_algorithm = private_key_for_signing.hash_alg();
-        msg.sign(&*private_key_for_signing, Password::empty(), hash_algorithm);
+        if let Some(private_key_for_signing) = private_key_for_signing.as_deref() {
+            let hash_algorithm = private_key_for_signing.hash_alg();
+            msg.sign(private_key_for_signing, Password::empty(), hash_algorithm);
+        }
         if compress {
             msg.compression(CompressionAlgorithm::ZLIB);
         }
@@ -737,7 +739,7 @@ mod tests {
         let shared_secret = "shared secret";
         let ctext = symm_encrypt_message(
             plain.clone(),
-            load_self_secret_key(alice).await?,
+            Some(load_self_secret_key(alice).await?),
             shared_secret,
             true,
         )

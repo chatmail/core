@@ -27,7 +27,7 @@ enum SetupContactCase {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_setup_contact() {
+async fn test_setup_contact_basic() {
     test_setup_contact_ex(SetupContactCase::Normal).await
 }
 
@@ -118,12 +118,15 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(!sent.payload.contains("Bob Examplenet"));
     assert_eq!(sent.recipient(), EmailAddress::new(alice_addr).unwrap());
     let msg = alice.parse_msg(&sent).await;
-    assert!(!msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-request");
-    assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
+    assert!(msg.signature.is_none());
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        "vc-request-pubkey"
+    );
+    assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
-    tcm.section("Step 3: Alice receives vc-request, sends vc-auth-required");
+    tcm.section("Step 3: Alice receives vc-request-pubkey, sends vc-pubkey");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
@@ -138,10 +141,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
-    assert_eq!(
-        msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vc-auth-required"
-    );
+    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
 
     let bob_chat = bob.get_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
@@ -421,11 +421,12 @@ async fn test_setup_contact_concurrent_calls() -> Result<()> {
     assert!(!alice_id.is_special());
     assert_eq!(chat.typ, Chattype::Single);
     assert_ne!(claire_id, alice_id);
-    assert!(
+    assert_eq!(
         bob.pop_sent_msg()
             .await
             .payload()
-            .contains("alice@example.org")
+            .contains("alice@example.org"),
+        false // Alice's address must not be sent in cleartext
     );
 
     Ok(())
@@ -456,9 +457,12 @@ async fn test_secure_join() -> Result<()> {
         EmailAddress::new("alice@example.org").unwrap()
     );
     let msg = alice.parse_msg(&sent).await;
-    assert!(!msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vg-request");
-    assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
+    assert!(msg.signature.is_none());
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        "vc-request-pubkey"
+    );
+    assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
     // Old Delta Chat core sent `Secure-Join-Group` header in `vg-request`,
@@ -469,19 +473,16 @@ async fn test_secure_join() -> Result<()> {
     // is only sent in `vg-request-with-auth` for compatibility.
     assert!(!msg.header_exists(HeaderDef::SecureJoinGroup));
 
-    tcm.section("Step 3: Alice receives vg-request, sends vg-auth-required");
+    tcm.section("Step 3: Alice receives vc-request-pubkey, sends vc-pubkey");
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;
     assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
-    assert_eq!(
-        msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-auth-required"
-    );
+    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
 
-    tcm.section("Step 4: Bob receives vg-auth-required, sends vg-request-with-auth");
+    tcm.section("Step 4: Bob receives vc-pubkey, sends vg-request-with-auth");
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
@@ -575,13 +576,12 @@ async fn test_secure_join() -> Result<()> {
     {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
-
-        let chat = alice.get_chat(&bob).await;
-        assert_eq!(
-            chat.blocked,
-            Blocked::Yes,
-            "Alice's 1:1 chat with Bob is not hidden"
+        assert!(
+            ChatIdBlocked::lookup_by_contact(&alice, contact_bob.id)
+                .await?
+                .is_none()
         );
+
         // There should be 2 messages in the chat:
         // - The ChatProtectionEnabled message
         // - You added member bob@example.net
