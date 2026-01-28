@@ -201,7 +201,7 @@ impl ConnectivityStore {
 /// Set all folder states to InterruptingIdle in case they were `Idle` before.
 /// Called during `dc_maybe_network()` to make sure that `all_work_done()`
 /// returns false immediately after `dc_maybe_network()`.
-pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>, oboxes: Vec<ConnectivityStore>) {
+pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>) {
     for inbox in inboxes {
         let mut connectivity_lock = inbox.0.lock();
         // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
@@ -216,12 +216,6 @@ pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>, oboxes: Vec<Conn
         }
     }
 
-    for state in oboxes {
-        let mut connectivity_lock = state.0.lock();
-        if *connectivity_lock == DetailedConnectivity::Idle {
-            *connectivity_lock = DetailedConnectivity::InterruptingIdle;
-        }
-    }
     // No need to send ConnectivityChanged, the user-facing connectivity doesn't change because
     // of what we do here.
 }

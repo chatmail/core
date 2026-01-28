@@ -864,7 +864,6 @@ impl Context {
             Err(err) => format!("<key failure: {err}>"),
         };
 
-        let mvbox_move = self.get_config_int(Config::MvboxMove).await?;
         let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
         let folders_configured = self
             .sql
@@ -960,7 +959,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert("mvbox_move", mvbox_move.to_string());
         res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
         res.insert(
             constants::DC_FOLDERS_CONFIGURED_KEY,
