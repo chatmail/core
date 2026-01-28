@@ -145,6 +145,7 @@ pub struct Provider {
 
 /// Provider options with good defaults.
 #[derive(Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct ProviderOptions {
     /// True if provider is known to use use proper,
     /// not self-signed certificates.
