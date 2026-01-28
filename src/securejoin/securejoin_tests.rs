@@ -14,7 +14,7 @@ use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
-    TimeShiftFalsePositiveNote, get_chat_msg,
+    TimeShiftFalsePositiveNote, get_chat_msg, sync,
 };
 use crate::tools::SystemTime;
 
@@ -1367,6 +1367,44 @@ gU6dGXsFMe/RpRHrIAkMAaM5xkxMDRuRJDxiUdS/X+Y8
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
         "vc-auth-required"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_auth_token_is_synchronized() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob")).await?;
+
+    alice1.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+    // This creates first auth token:
+    let qr1 = get_securejoin_qr(alice1, None).await?;
+
+    // This creates another auth token; both of them need to be synchronized
+    let qr2 = get_securejoin_qr(alice1, None).await?;
+    sync(alice1, alice2).await;
+    tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr2)
+        .await;
+
+    let contacts = Contact::get_all(alice2, 0, Some("Bob")).await?;
+    assert_eq!(contacts[0], alice2.add_or_lookup_contact_id(bob).await);
+    assert_eq!(contacts.len(), 1);
+
+    let chatlist = Chatlist::try_load(alice2, 0, Some("Bob"), None).await?;
+    assert_eq!(chatlist.get_chat_id(0)?, alice2.get_chat(bob).await.id);
+    assert_eq!(chatlist.len(), 1);
+
+    for qr in [qr1, qr2] {
+        let qr = check_qr(alice2, &qr).await?;
+        let qr = QrInvite::try_from(qr)?;
+        assert!(token::exists(alice2, Namespace::InviteNumber, qr.invitenumber()).await?);
+        assert!(token::exists(alice2, Namespace::Auth, qr.authcode()).await?);
+    }
 
     Ok(())
 }
