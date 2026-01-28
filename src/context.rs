@@ -1280,12 +1280,6 @@ ORDER BY m.timestamp DESC,m.id DESC",
         Ok(list)
     }
 
-    /// Returns true if given folder name is the name of the inbox.
-    pub async fn is_inbox(&self, folder_name: &str) -> Result<bool> {
-        let inbox = self.get_config(Config::ConfiguredInboxFolder).await?;
-        Ok(inbox.as_deref() == Some(folder_name))
-    }
-
     /// Returns true if given folder name is the name of the "DeltaChat" folder.
     pub async fn is_mvbox(&self, folder_name: &str) -> Result<bool> {
         let mvbox = self.get_config(Config::ConfiguredMvboxFolder).await?;
