@@ -189,6 +189,7 @@ pub(crate) fn login_param_from_login_qr(
                 },
                 certificate_checks: certificate_checks.unwrap_or_default(),
                 oauth2: false,
+                dns_prefill: Default::default(),
             };
             Ok(param)
         }

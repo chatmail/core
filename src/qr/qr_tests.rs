@@ -712,6 +712,31 @@ async fn test_decode_account() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_decode_account_with_dns_prefill() -> Result<()> {
+    let ctx = &TestContext::new().await;
+
+    for (qr, prefill_ips) in [
+        (
+            "dcaccount:example.org?a=127.0.0.1,[::1]",
+            vec!["127.0.0.1", "[::1]"],
+        ),
+        (
+            "DCACCOUNT:example.org?a=127.0.0.1,[::1]",
+            vec!["127.0.0.1", "[::1]"],
+        ),
+        ("dcaccount:example.org?a=[::1]", vec!["[::1]"]),
+        ("DCACCOUNT:example.org?a=127.0.0.1", vec!["127.0.0.1"]),
+    ] {
+        let param = login_param_from_account_qr(ctx, qr).await?;
+        println!("addr {}", param.addr);
+        assert!(param.addr.ends_with("example.org"));
+        assert_eq!(param.dns_prefill, prefill_ips);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_tg_socks_proxy() -> Result<()> {
     let t = TestContext::new().await;
 
