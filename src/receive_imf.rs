@@ -27,7 +27,9 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
-use crate::key::{load_self_public_key_opt, self_fingerprint, self_fingerprint_opt};
+use crate::key::{
+    load_self_public_key, load_self_public_key_opt, self_fingerprint, self_fingerprint_opt,
+};
 use crate::log::{LogExt as _, warn};
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
@@ -386,8 +388,30 @@ async fn get_to_and_past_contact_ids(
                 // This is an encrypted 1:1 chat.
                 to_ids = pgp_to_ids
             } else {
-                let ids = match mime_parser.was_encrypted() {
-                    true => {
+                let ids = if mime_parser.was_encrypted() {
+                    let mut recipient_fps = mime_parser
+                        .signature
+                        .as_ref()
+                        .map(|(_, recipient_fps)| recipient_fps.iter().cloned().collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    // If there are extra recipient fingerprints, it may be a non-chat "implicit
+                    // Bcc" message. Fall back to in-chat lookup if so.
+                    if !recipient_fps.is_empty() && recipient_fps.len() <= 2 {
+                        let self_fp = load_self_public_key(context).await?.dc_fingerprint();
+                        recipient_fps.retain(|fp| *fp != self_fp);
+                        if recipient_fps.is_empty() {
+                            vec![Some(ContactId::SELF)]
+                        } else {
+                            add_or_lookup_key_contacts(
+                                context,
+                                &mime_parser.recipients,
+                                &mime_parser.gossiped_keys,
+                                &recipient_fps,
+                                Origin::Hidden,
+                            )
+                            .await?
+                        }
+                    } else {
                         lookup_key_contacts_fallback_to_chat(
                             context,
                             &mime_parser.recipients,
@@ -396,7 +420,8 @@ async fn get_to_and_past_contact_ids(
                         )
                         .await?
                     }
-                    false => vec![],
+                } else {
+                    vec![]
                 };
                 if mime_parser.was_encrypted() && !ids.contains(&None)
                 // Prefer creating PGP chats if there are any key-contacts. At least this prevents

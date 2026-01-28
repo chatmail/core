@@ -5111,9 +5111,9 @@ async fn test_dont_verify_by_verified_by_unknown() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let a0 = &tcm.alice().await;
-    let a1 = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    let a0 = &tcm.elena().await;
+    let a1 = &tcm.elena().await;
 
     tcm.execute_securejoin(bob, a0).await;
     let chat_id_a0_bob = a0.create_chat_id(bob).await;
@@ -5154,14 +5154,31 @@ async fn test_recv_outgoing_msg_before_securejoin() -> Result<()> {
         chat_a1.why_cant_send(a1).await?,
         Some(CantSendReason::ContactRequest)
     );
+
+    let a0 = &tcm.alice().await;
+    let a1 = &tcm.alice().await;
+    tcm.execute_securejoin(bob, a0).await;
+    let chat_id_a0_bob = a0.create_chat_id(bob).await;
+    let sent_msg = a0.send_text(chat_id_a0_bob, "Hi").await;
+    bob.recv_msg(&sent_msg).await;
+    let msg_a1 = a1.recv_msg(&sent_msg).await;
+    assert!(msg_a1.get_showpadlock());
+    let chat_a1 = Chat::load_from_db(a1, msg_a1.chat_id).await?;
+    assert_eq!(chat_a1.typ, Chattype::Single);
+    assert!(chat_a1.is_encrypted(a1).await?);
+    assert_eq!(
+        chat::get_chat_contacts(a1, chat_a1.id).await?,
+        [a1.add_or_lookup_contact_id(bob).await]
+    );
+    assert!(chat_a1.can_send(a1).await?);
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recv_outgoing_msg_before_having_key_and_after() -> Result<()> {
     let mut tcm = TestContextManager::new();
-    let a0 = &tcm.alice().await;
-    let a1 = &tcm.alice().await;
+    let a0 = &tcm.elena().await;
+    let a1 = &tcm.elena().await;
     let bob = &tcm.bob().await;
 
     tcm.execute_securejoin(bob, a0).await;
@@ -5174,9 +5191,9 @@ async fn test_recv_outgoing_msg_before_having_key_and_after() -> Result<()> {
     assert!(!chat_a1.is_encrypted(a1).await?);
 
     // Device a1 somehow learns Bob's key and creates the corresponding chat. However, this doesn't
-    // help currently because we only look up key contacts by address in a particular chat and the
-    // new chat isn't referenced by the received message. This should be fixed by sending and
-    // receiving Intended Recipient Fingerprint subpackets.
+    // help because we only look up key contacts by address in a particular chat and the new chat
+    // isn't referenced by the received message. This is fixed by sending and receiving Intended
+    // Recipient Fingerprint subpackets which elena doesn't send.
     a1.create_chat_id(bob).await;
     let sent_msg = a0.send_text(chat_id_a0_bob, "Hi again").await;
     let msg_a1 = a1.recv_msg(&sent_msg).await;

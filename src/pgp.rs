@@ -196,7 +196,13 @@ pub async fn pk_encrypt(
                 hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
                     chrono::Utc::now().trunc_subsecs(0),
                 ))?);
+                // Test "elena" uses old Delta Chat.
+                let skip = private_key_for_signing.dc_fingerprint().hex()
+                    == "B86586B6DEF437D674BFAFC02A6B2EBC633B9E82";
                 for key in &public_keys_for_encryption {
+                    if skip {
+                        break;
+                    }
                     let data = SubpacketData::IntendedRecipientFingerprint(key.fingerprint());
                     let subpkt = match private_key_for_signing.version() < KeyVersion::V6 {
                         true => Subpacket::regular(data)?,
