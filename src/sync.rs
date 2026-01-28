@@ -303,7 +303,12 @@ impl Context {
     /// If an error is returned, the caller shall not try over because some sync items could be
     /// already executed. Sync items are considered independent and executed in the given order but
     /// regardless of whether executing of the previous items succeeded.
-    pub(crate) async fn execute_sync_items(&self, items: &SyncItems, timestamp_sent: i64) {
+    pub(crate) async fn execute_sync_items(
+        &self,
+        items: &SyncItems,
+        timestamp_sent: i64,
+        from: &str,
+    ) {
         info!(self, "executing {} sync item(s)", items.items.len());
         for item in &items.items {
             // Limit the timestamp to ensure it is not in the future.
@@ -323,7 +328,7 @@ impl Context {
                     SyncData::Transports {
                         transports,
                         removed_transports,
-                    } => sync_transports(self, transports, removed_transports).await,
+                    } => sync_transports(self, from, transports, removed_transports).await,
                 },
                 SyncDataOrUnknown::Unknown(data) => {
                     warn!(self, "Ignored unknown sync item: {data}.");
@@ -632,7 +637,12 @@ mod tests {
                 .to_string(),
             )
             ?;
-        t.execute_sync_items(&sync_items, timestamp_sent).await;
+        t.execute_sync_items(
+            &sync_items,
+            timestamp_sent,
+            &t.get_config(Config::Addr).await?.unwrap(),
+        )
+        .await;
 
         assert!(
             Contact::lookup_id_by_addr(&t, "bob@example.net", Origin::Unknown)
