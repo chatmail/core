@@ -84,17 +84,6 @@ impl Imap {
             }
         }
 
-        // Set config for the Trash folder. Or reset if the folder was deleted.
-        let conf = Config::ConfiguredTrashFolder;
-        let val = folder_configs.get(&conf).map(|s| s.as_str());
-        let interrupt = val.is_some() && context.get_config(conf).await?.is_none();
-        context.set_config_internal(conf, val).await?;
-        if interrupt {
-            // `Imap::fetch_move_delete()`, particularly message deletion, is possible now for other
-            // folders (NB: we are in the Inbox loop).
-            context.scheduler.interrupt_oboxes().await;
-        }
-
         info!(context, "Found folders: {folder_names:?}.");
         Ok(true)
     }
