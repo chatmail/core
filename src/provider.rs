@@ -153,9 +153,6 @@ pub struct ProviderOptions {
 
     /// Maximum number of recipients the provider allows to send a single email to.
     pub max_smtp_rcpt_to: Option<u16>,
-
-    /// Move messages to the Trash folder instead of marking them "\Deleted".
-    pub delete_to_trash: bool,
 }
 
 impl ProviderOptions {
@@ -163,7 +160,6 @@ impl ProviderOptions {
         Self {
             strict_tls: true,
             max_smtp_rcpt_to: None,
-            delete_to_trash: false,
         }
     }
 }
