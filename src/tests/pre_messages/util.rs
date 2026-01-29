@@ -17,10 +17,10 @@ pub async fn send_large_file_message<'a>(
     content: &[u8],
 ) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
     let mut msg = Message::new(view_type);
-    let file_name = if view_type == Viewtype::Webxdc {
-        "test.xdc"
-    } else {
-        "test.bin"
+    let file_name = match view_type {
+        Viewtype::Webxdc => "test.xdc",
+        Viewtype::Vcard => "test.vcf",
+        _ => "test.bin",
     };
     msg.set_file_from_bytes(sender, file_name, content, None)?;
     msg.set_text("test".to_owned());

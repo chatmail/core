@@ -4374,10 +4374,7 @@ pub async fn forward_msgs_2ctx(
         if msg.get_viewtype() == Viewtype::Call {
             msg.viewtype = Viewtype::Text;
         }
-
-        if msg.download_state != DownloadState::Done {
-            msg.text += &msg.additional_text;
-        }
+        msg.text += &msg.additional_text;
 
         let param = &mut param;
 
@@ -4465,9 +4462,7 @@ pub(crate) async fn save_copy_in_self_talk(
     msg.param.remove(Param::PostMessageFileBytes);
     msg.param.remove(Param::PostMessageViewtype);
 
-    if msg.download_state != DownloadState::Done {
-        msg.text += &msg.additional_text;
-    }
+    msg.text += &msg.additional_text;
 
     if !msg.original_msg_id.is_unset() {
         bail!("message already saved.");
