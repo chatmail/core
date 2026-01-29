@@ -412,6 +412,11 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Messages in this chat use classic email and are not encrypted."))]
     ChatUnencryptedExplanation = 230,
+
+    #[strum(props(
+        fallback = "You are using the legacy option \"Move automatically to DeltaChat Folder\". We regret to inform you this option is deprecated and is scheduled for deletion in a few weeks, due to maintenance burden and rare use. We recommend to disable it. If having chat messages mixed into your Inbox is a problem, you can move to a separate mailbox by following this guide here: https://example.com/some/blog/post"
+    ))]
+    MvboxMoveDeprecation = 231,
 }
 
 impl StockMessage {
@@ -1221,6 +1226,11 @@ pub(crate) async fn proxy_description(context: &Context) -> String {
 /// Stock string: `Messages in this chat use classic email and are not encrypted.`.
 pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
     translated(context, StockMessage::ChatUnencryptedExplanation).await
+}
+
+/// Stock string: `You are using the legacy option "Move automatically to DeltaChat Folder`…
+pub(crate) async fn mvbox_move_deprecation(context: &Context) -> String {
+    translated(context, StockMessage::MvboxMoveDeprecation).await
 }
 
 impl Viewtype {
