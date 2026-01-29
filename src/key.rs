@@ -156,24 +156,14 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
 }
 
 /// Returns our own public keyring.
+///
+/// No keys are generated and at most one key is returned.
 pub(crate) async fn load_self_public_keyring(context: &Context) -> Result<Vec<SignedPublicKey>> {
-    let keys = context
-        .sql
-        .query_map_vec(
-            r#"SELECT public_key
-               FROM keypairs
-               ORDER BY id=(SELECT value FROM config WHERE keyname='key_id') DESC"#,
-            (),
-            |row| {
-                let public_key_bytes: Vec<u8> = row.get(0)?;
-                Ok(public_key_bytes)
-            },
-        )
-        .await?
-        .into_iter()
-        .filter_map(|bytes| SignedPublicKey::from_slice(&bytes).log_err(context).ok())
-        .collect();
-    Ok(keys)
+    if let Some(public_key) = load_self_public_key_opt(context).await? {
+        Ok(vec![public_key])
+    } else {
+        Ok(vec![])
+    }
 }
 
 /// Returns own public key fingerprint in (not human-readable) hex representation.
