@@ -4,6 +4,9 @@ use std::borrow::Cow;
 use std::fmt;
 use std::str;
 
+use anyhow::Result;
+use num_traits::FromPrimitive;
+
 use crate::calls::{CallState, call_state};
 use crate::chat::Chat;
 use crate::constants::Chattype;
@@ -15,7 +18,6 @@ use crate::param::Param;
 use crate::stock_str;
 use crate::stock_str::msg_reacted;
 use crate::tools::truncate;
-use anyhow::Result;
 
 /// Prefix displayed before message and separated by ":" in the chatlist.
 #[derive(Debug)]
@@ -167,7 +169,15 @@ impl Message {
     /// Returns a summary text without "Forwarded:" prefix.
     async fn get_summary_text_without_prefix(&self, context: &Context) -> String {
         let (emoji, type_name, type_file, append_text);
-        match self.viewtype {
+        let viewtype = match self
+            .param
+            .get_i64(Param::PostMessageViewtype)
+            .and_then(Viewtype::from_i64)
+        {
+            Some(vt) => vt,
+            None => self.viewtype,
+        };
+        match viewtype {
             Viewtype::Image => {
                 emoji = Some("📷");
                 type_name = Some(stock_str::image(context).await);
@@ -211,20 +221,29 @@ impl Message {
                 append_text = true
             }
             Viewtype::Webxdc => {
-                emoji = None;
                 type_name = None;
-                type_file = Some(
-                    self.get_webxdc_info(context)
-                        .await
-                        .map(|info| info.name)
-                        .unwrap_or_else(|_| "ErrWebxdcName".to_string()),
-                );
+                if self.viewtype == Viewtype::Webxdc {
+                    emoji = None;
+                    type_file = Some(
+                        self.get_webxdc_info(context)
+                            .await
+                            .map(|info| info.name)
+                            .unwrap_or_else(|_| "ErrWebxdcName".to_string()),
+                    );
+                } else {
+                    emoji = Some("📱");
+                    type_file = Some(viewtype.to_locale_string(context).await);
+                }
                 append_text = true;
             }
             Viewtype::Vcard => {
                 emoji = Some("👤");
                 type_name = None;
-                type_file = self.param.get(Param::Summary1).map(|s| s.to_string());
+                if self.viewtype == Viewtype::Vcard {
+                    type_file = self.param.get(Param::Summary1).map(|s| s.to_string());
+                } else {
+                    type_file = None;
+                }
                 append_text = true;
             }
             Viewtype::Call => {
@@ -261,7 +280,7 @@ impl Message {
             }
         };
 
-        let text = self.text.clone() + &self.additional_text;
+        let text = self.text.clone();
 
         let summary = if let Some(type_file) = type_file {
             if append_text && !text.is_empty() {
@@ -294,6 +313,13 @@ impl Message {
 }
 
 #[cfg(test)]
+/// Asserts that the summary text with and w/o prefix is `expected`.
+pub async fn assert_summary_texts(msg: &Message, ctx: &Context, expected: &str) {
+    assert_eq!(msg.get_summary_text(ctx).await, expected);
+    assert_eq!(msg.get_summary_text_without_prefix(ctx).await, expected);
+}
+
+#[cfg(test)]
 mod tests {
     use std::path::PathBuf;
 
@@ -301,11 +327,6 @@ mod tests {
     use crate::chat::ChatId;
     use crate::param::Param;
     use crate::test_utils::TestContext;
-
-    async fn assert_summary_texts(msg: &Message, ctx: &Context, expected: &str) {
-        assert_eq!(msg.get_summary_text(ctx).await, expected);
-        assert_eq!(msg.get_summary_text_without_prefix(ctx).await, expected);
-    }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_get_summary_text() {

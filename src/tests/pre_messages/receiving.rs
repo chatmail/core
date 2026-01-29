@@ -10,6 +10,7 @@ use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
+use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
     send_large_file_message, send_large_image_message, send_large_webxdc_message,
@@ -76,6 +77,39 @@ async fn test_receive_pre_message() -> Result<()> {
     assert_eq!(msg.get_filebytes(bob).await?, Some(1_000_000));
     assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::File));
     assert_eq!(msg.get_filename(), Some("test.bin".to_owned()));
+    assert_summary_texts(&msg, bob, "📎 test.bin – test").await;
+
+    // Some viewtypes are displayed unwell currently, still test them.
+
+    let (pre_message, ..) = send_large_webxdc_message(alice, alice_group_id).await?;
+    let msg = bob.recv_msg(&pre_message).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_summary_texts(
+        &msg,
+        bob,
+        &format!("📱 {} – test", Viewtype::Webxdc.to_locale_string(bob).await),
+    )
+    .await;
+
+    let (pre_message, ..) = send_large_file_message(
+        alice,
+        alice_group_id,
+        Viewtype::Vcard,
+        format!(
+            "BEGIN:VCARD\r\n\
+             VERSION:4.0\r\n\
+             EMAIL:alice@example.org\r\n\
+             FN:Alice\r\n\
+             NOTE:{}\r\n\
+             END:VCARD\r\n",
+            String::from_utf8(vec![97u8; 1_000_000])?,
+        )
+        .as_bytes(),
+    )
+    .await?;
+    let msg = bob.recv_msg(&pre_message).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_summary_texts(&msg, bob, "👤 test").await;
 
     Ok(())
 }
