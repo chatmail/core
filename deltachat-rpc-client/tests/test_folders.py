@@ -378,32 +378,6 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
 
 
-def test_mvbox_and_trash(acfactory, direct_imap, log):
-    log.section("ac1: start with mvbox")
-    ac1 = acfactory.get_online_account()
-    ac1_direct_imap = direct_imap(ac1)
-    ac1_direct_imap.create_folder("DeltaChat")
-    ac1.set_config("mvbox_move", "1")
-    ac1.bring_online()
-
-    log.section("ac2: start without a mvbox")
-    ac2 = acfactory.get_online_account()
-
-    log.section("ac1: create trash")
-    ac1_direct_imap.create_folder("Trash")
-    ac1.set_config("scan_all_folders_debounce_secs", "0")
-    ac1.stop_io()
-    ac1.start_io()
-
-    log.section("ac1: send message and wait for ac2 to receive it")
-    acfactory.get_accepted_chat(ac1, ac2).send_text("message1")
-    assert ac2.wait_for_incoming_msg().get_snapshot().text == "message1"
-
-    assert ac1.get_config("configured_mvbox_folder") == "DeltaChat"
-    while ac1.get_config("configured_trash_folder") != "Trash":
-        ac1.wait_for_event(EventType.CONNECTIVITY_CHANGED)
-
-
 @pytest.mark.parametrize(
     ("folder", "move", "expected_destination"),
     [
@@ -479,20 +453,8 @@ def test_trash_multiple_messages(acfactory, direct_imap, log):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac2.stop_io()
 
-    # Create the Trash folder on IMAP server and configure deletion to it. There was a bug that if
-    # Trash wasn't configured initially, it can't be configured later, let's check this.
-    log.section("Creating trash folder")
-    ac2_direct_imap = direct_imap(ac2)
-    ac2_direct_imap.create_folder("Trash")
     ac2.set_config("delete_server_after", "0")
     ac2.set_config("sync_msgs", "0")
-    ac2.set_config("delete_to_trash", "1")
-
-    log.section("Check that Trash can be configured initially as well")
-    ac3 = ac2.clone()
-    ac3.bring_online()
-    assert ac3.get_config("configured_trash_folder")
-    ac3.stop_io()
 
     ac2.start_io()
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
@@ -509,17 +471,15 @@ def test_trash_multiple_messages(acfactory, direct_imap, log):
         assert msg.text in texts
         if text != "second":
             to_delete.append(msg)
-    # ac2 has received some messages, this is impossible w/o the trash folder configured, let's
-    # check the configuration.
-    assert ac2.get_config("configured_trash_folder") == "Trash"
 
     log.section("ac2: deleting all messages except second")
     assert len(to_delete) == len(texts) - 1
     ac2.delete_messages(to_delete)
 
     log.section("ac2: test that only one message is left")
+    ac2_direct_imap = direct_imap(ac2)
     while 1:
-        ac2.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
+        ac2.wait_for_event(EventType.IMAP_MESSAGE_DELETED)
         ac2_direct_imap.select_config_folder("inbox")
         nr_msgs = len(ac2_direct_imap.get_all_messages())
         assert nr_msgs > 0
