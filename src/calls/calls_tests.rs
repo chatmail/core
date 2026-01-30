@@ -25,13 +25,6 @@ async fn assert_text(t: &TestContext, call_id: MsgId, text: &str) -> Result<()> 
 const PLACE_INFO: &str = "v=0\r\no=alice 2890844526 2890844526 IN IP4 host.anywhere.com\r\ns=-\r\nc=IN IP4 host.anywhere.com\r\nt=0 0\r\nm=audio 62986 RTP/AVP 0 4 18\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=rtpmap:18 G729/8000\r\na=inactive\r\n";
 const ACCEPT_INFO: &str = "v=0\r\no=bob 2890844730 2890844731 IN IP4 host.example.com\r\ns=\r\nc=IN IP4 host.example.com\r\nt=0 0\r\nm=audio 54344 RTP/AVP 0 4\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=inactive\r\n";
 
-/// Example from <https://datatracker.ietf.org/doc/rfc9143/>
-/// with `s= ` replaced with `s=-`.
-///
-/// `s=` cannot be empty according to RFC 3264,
-/// so it is more clear as `s=-`.
-const PLACE_INFO_VIDEO: &str = "v=0\r\no=alice 2890844526 2890844526 IN IP6 2001:db8::3\r\ns=-\r\nc=IN IP6 2001:db8::3\r\nt=0 0\r\na=group:BUNDLE foo bar\r\n\r\nm=audio 10000 RTP/AVP 0 8 97\r\nb=AS:200\r\na=mid:foo\r\na=rtcp-mux\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:97 iLBC/8000\r\na=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n\r\nm=video 10002 RTP/AVP 31 32\r\nb=AS:1000\r\na=mid:bar\r\na=rtcp-mux\r\na=rtpmap:31 H261/90000\r\na=rtpmap:32 MPV/90000\r\na=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n";
-
 async fn setup_call() -> Result<CallSetup> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
