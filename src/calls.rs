@@ -128,7 +128,10 @@ impl CallInfo {
 
     /// Returns true if the call is started as a video call.
     pub fn has_video_initially(&self) -> bool {
-        self.msg.param.get_bool(Param::CallHasVideoInitially).unwrap_or(false)
+        self.msg
+            .param
+            .get_bool(Param::CallHasVideoInitially)
+            .unwrap_or(false)
     }
 
     /// Returns true if the call is missed
@@ -205,7 +208,8 @@ impl Context {
             ..Default::default()
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
-        call.param.set_int(Param::CallHasVideoInitially, has_video_initially as i32);
+        call.param
+            .set_int(Param::CallHasVideoInitially, has_video_initially as i32);
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
