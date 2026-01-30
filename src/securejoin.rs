@@ -127,9 +127,6 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         None => None,
     };
     let grpid = chat.as_ref().map(|c| c.grpid.as_str());
-    let sync_token = token::lookup(context, Namespace::InviteNumber, grpid)
-        .await?
-        .is_none();
     // Invite number is used to request the inviter key.
     let invitenumber = token::lookup_or_new(context, Namespace::InviteNumber, grpid).await?;
 
@@ -156,12 +153,10 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         .unwrap_or_default();
 
     let qr = if let Some(chat) = chat {
-        if sync_token {
-            context
-                .sync_qr_code_tokens(Some(chat.grpid.as_str()))
-                .await?;
-            context.scheduler.interrupt_smtp().await;
-        }
+        context
+            .sync_qr_code_tokens(Some(chat.grpid.as_str()))
+            .await?;
+        context.scheduler.interrupt_smtp().await;
 
         let chat_name = chat.get_name();
         let chat_name_shortened = shorten_name(chat_name, 25);
@@ -190,10 +185,10 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
         let self_name_urlencoded = utf8_percent_encode(&self_name_shortened, DISALLOWED_CHARACTERS)
             .to_string()
             .replace("%20", "+");
-        if sync_token {
-            context.sync_qr_code_tokens(None).await?;
-            context.scheduler.interrupt_smtp().await;
-        }
+
+        context.sync_qr_code_tokens(None).await?;
+        context.scheduler.interrupt_smtp().await;
+
         format!(
             "https://i.delta.chat/#{fingerprint}&v=3&i={invitenumber}&s={auth}&a={self_addr_urlencoded}&n={self_name_urlencoded}",
         )

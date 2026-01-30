@@ -33,7 +33,7 @@ pub async fn save(
     context
         .sql
         .execute(
-            "INSERT INTO tokens (namespc, foreign_key, token, timestamp) VALUES (?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO tokens (namespc, foreign_key, token, timestamp) VALUES (?, ?, ?, ?)",
             (namespace, foreign_key.unwrap_or(""), token, timestamp),
         )
         .await?;
@@ -56,7 +56,7 @@ pub async fn lookup(
     context
         .sql
         .query_get_value(
-            "SELECT token FROM tokens WHERE namespc=? AND foreign_key=? ORDER BY timestamp DESC LIMIT 1",
+            "SELECT token FROM tokens WHERE namespc=? AND foreign_key=? ORDER BY id DESC LIMIT 1",
             (namespace, foreign_key.unwrap_or("")),
         )
         .await
@@ -66,7 +66,7 @@ pub async fn lookup_all(context: &Context, namespace: Namespace) -> Result<Vec<S
     context
         .sql
         .query_map_vec(
-            "SELECT token FROM tokens WHERE namespc=? ORDER BY timestamp DESC",
+            "SELECT token FROM tokens WHERE namespc=? ORDER BY id DESC",
             (namespace,),
             |row| Ok(row.get(0)?),
         )

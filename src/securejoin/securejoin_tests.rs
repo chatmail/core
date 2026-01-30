@@ -1388,6 +1388,11 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
     // This creates another auth token; both of them need to be synchronized
     let qr2 = get_securejoin_qr(alice1, None).await?;
     sync(alice1, alice2).await;
+
+    // Note that Bob will throw away the AUTH token after sending `vc-request-with-auth`.
+    // Therefore, he will fail to decrypt the answer from alice,
+    // which leads to a "decryption failed: missing key" message in the logs.
+    // This is fine.
     tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr2)
         .await;
 
@@ -1400,11 +1405,33 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
     assert_eq!(chatlist.len(), 1);
 
     for qr in [qr1, qr2] {
-        let qr = check_qr(alice2, &qr).await?;
-        let qr = QrInvite::try_from(qr)?;
+        let qr = check_qr(bob, &qr).await?;
+        let qr = QrInvite::try_from(dbg!(qr))?;
         assert!(token::exists(alice2, Namespace::InviteNumber, qr.invitenumber()).await?);
         assert!(token::exists(alice2, Namespace::Auth, qr.authcode()).await?);
     }
+
+    // Check that alice2 only saves the invite number twice:
+    let invite_count: u32 = alice2
+        .sql
+        .query_get_value(
+            "SELECT COUNT(*) FROM tokens WHERE namespc=?;",
+            (Namespace::InviteNumber,),
+        )
+        .await?
+        .unwrap();
+    assert_eq!(invite_count, 1);
+
+    // ...but knows two AUTH tokens:
+    let auth_count: u32 = alice2
+        .sql
+        .query_get_value(
+            "SELECT COUNT(*) FROM tokens WHERE namespc=?;",
+            (Namespace::Auth,),
+        )
+        .await?
+        .unwrap();
+    assert_eq!(auth_count, 2);
 
     Ok(())
 }
