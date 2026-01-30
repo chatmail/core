@@ -952,7 +952,7 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
 
     if !received_msg.msg_ids.is_empty() {
         let target = if received_msg.needs_delete_job || delete_server_after == Some(0) {
-            Some(context.get_delete_msgs_target().await?)
+            Some("".to_string())
         } else {
             None
         };
