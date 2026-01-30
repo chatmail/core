@@ -149,7 +149,7 @@ pub enum Param {
     WebrtcAccepted = b'7',
 
     /// For Messages
-    CallHasVideoInitially = b'8',
+    CallHasVideoInitially = b'z',
 
     /// For Messages: space-separated list of messaged IDs of forwarded copies.
     ///
