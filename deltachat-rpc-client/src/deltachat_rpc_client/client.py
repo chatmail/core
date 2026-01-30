@@ -104,7 +104,7 @@ class Client:
 
     def _process_events(
         self,
-        until_func: Callable[[AttrDict], bool],
+        until_func: Callable[[AttrDict], bool] = _forever,
         until_event: EventType = False,
     ) -> AttrDict:
         """Process events until the given callable evaluates to True,
