@@ -209,7 +209,7 @@ impl Context {
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
         call.param
-            .set_int(Param::CallHasVideoInitially, has_video_initially as i32);
+            .set_int(Param::CallHasVideoInitially, has_video_initially.into());
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
