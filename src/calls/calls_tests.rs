@@ -25,13 +25,6 @@ async fn assert_text(t: &TestContext, call_id: MsgId, text: &str) -> Result<()> 
 const PLACE_INFO: &str = "v=0\r\no=alice 2890844526 2890844526 IN IP4 host.anywhere.com\r\ns=-\r\nc=IN IP4 host.anywhere.com\r\nt=0 0\r\nm=audio 62986 RTP/AVP 0 4 18\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=rtpmap:18 G729/8000\r\na=inactive\r\n";
 const ACCEPT_INFO: &str = "v=0\r\no=bob 2890844730 2890844731 IN IP4 host.example.com\r\ns=\r\nc=IN IP4 host.example.com\r\nt=0 0\r\nm=audio 54344 RTP/AVP 0 4\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:4 G723/8000\r\na=inactive\r\n";
 
-/// Example from <https://datatracker.ietf.org/doc/rfc9143/>
-/// with `s= ` replaced with `s=-`.
-///
-/// `s=` cannot be empty according to RFC 3264,
-/// so it is more clear as `s=-`.
-const PLACE_INFO_VIDEO: &str = "v=0\r\no=alice 2890844526 2890844526 IN IP6 2001:db8::3\r\ns=-\r\nc=IN IP6 2001:db8::3\r\nt=0 0\r\na=group:BUNDLE foo bar\r\n\r\nm=audio 10000 RTP/AVP 0 8 97\r\nb=AS:200\r\na=mid:foo\r\na=rtcp-mux\r\na=rtpmap:0 PCMU/8000\r\na=rtpmap:8 PCMA/8000\r\na=rtpmap:97 iLBC/8000\r\na=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n\r\nm=video 10002 RTP/AVP 31 32\r\nb=AS:1000\r\na=mid:bar\r\na=rtcp-mux\r\na=rtpmap:31 H261/90000\r\na=rtpmap:32 MPV/90000\r\na=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r\n";
-
 async fn setup_call() -> Result<CallSetup> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
@@ -52,7 +45,7 @@ async fn setup_call() -> Result<CallSetup> {
     bob2.create_chat(&alice).await;
 
     let test_msg_id = alice
-        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string())
+        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string(), true)
         .await?;
     let sent1 = alice.pop_sent_msg().await;
     assert_eq!(sent1.sender_msg_id, test_msg_id);
@@ -68,6 +61,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
+        assert_eq!(info.has_video_initially(), true);
         assert_text(t, m.id, "Outgoing call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
@@ -89,6 +83,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(info.is_incoming());
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
+        assert_eq!(info.has_video_initially(), true);
         assert_text(t, m.id, "Incoming call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
@@ -525,13 +520,6 @@ async fn test_update_call_text() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sdp_has_video() {
-    assert!(sdp_has_video("foobar").is_err());
-    assert_eq!(sdp_has_video(PLACE_INFO).unwrap(), false);
-    assert_eq!(sdp_has_video(PLACE_INFO_VIDEO).unwrap(), true);
-}
-
 /// Tests that calls are forwarded as text messages.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_forward_call() -> Result<()> {
@@ -542,7 +530,7 @@ async fn test_forward_call() -> Result<()> {
 
     let alice_bob_chat = alice.create_chat(bob).await;
     let alice_msg_id = alice
-        .place_outgoing_call(alice_bob_chat.id, PLACE_INFO.to_string())
+        .place_outgoing_call(alice_bob_chat.id, PLACE_INFO.to_string(), true)
         .await
         .context("Failed to place a call")?;
     let alice_call = Message::load_from_db(alice, alice_msg_id).await?;

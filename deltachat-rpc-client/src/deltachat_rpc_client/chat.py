@@ -303,7 +303,7 @@ class Chat:
             f.flush()
             self._rpc.send_msg(self.account.id, self.id, {"viewtype": ViewType.VCARD, "file": f.name})
 
-    def place_outgoing_call(self, place_call_info: str) -> Message:
+    def place_outgoing_call(self, place_call_info: str, has_video_initially: bool) -> Message:
         """Starts an outgoing call."""
-        msg_id = self._rpc.place_outgoing_call(self.account.id, self.id, place_call_info)
+        msg_id = self._rpc.place_outgoing_call(self.account.id, self.id, place_call_info, has_video_initially)
         return Message(self.account, msg_id)

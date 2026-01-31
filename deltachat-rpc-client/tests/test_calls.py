@@ -10,15 +10,15 @@ def test_calls(acfactory) -> None:
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
     bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
-    outgoing_call_message = alice_chat_bob.place_outgoing_call(place_call_info)
+    outgoing_call_message = alice_chat_bob.place_outgoing_call(place_call_info, True)
     assert outgoing_call_message.get_call_info().state.kind == "Alerting"
 
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
     assert incoming_call_event.place_call_info == place_call_info
-    assert not incoming_call_event.has_video  # Cannot be parsed as SDP, so false by default
+    assert incoming_call_event.has_video
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
     assert incoming_call_message.get_call_info().state.kind == "Alerting"
-    assert not incoming_call_message.get_call_info().has_video
+    assert incoming_call_message.get_call_info().has_video
 
     incoming_call_message.accept_incoming_call(accept_call_info)
     assert incoming_call_message.get_call_info().sdp_offer == place_call_info
@@ -71,7 +71,7 @@ a=extmap:1 urn:ietf:params:rtp-hdrext:sdes:mid\r
     bob.create_chat(alice)  # Accept the chat so incoming call causes a notification.
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
-    alice_chat_bob.place_outgoing_call(place_call_info)
+    alice_chat_bob.place_outgoing_call(place_call_info, True)
 
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
     assert incoming_call_event.place_call_info == place_call_info
@@ -92,7 +92,7 @@ def test_no_contact_request_call(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
     alice_chat_bob = alice.create_chat(bob)
-    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.place_outgoing_call("offer", True)
     alice_chat_bob.send_text("Hello!")
 
     # Notification for "Hello!" message should arrive
@@ -119,7 +119,7 @@ def test_who_can_call_me_nobody(acfactory) -> None:
     bob.create_chat(alice)
 
     alice_chat_bob = alice.create_chat(bob)
-    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.place_outgoing_call("offer", True)
     alice_chat_bob.send_text("Hello!")
 
     # Notification for "Hello!" message should arrive
@@ -144,7 +144,7 @@ def test_who_can_call_me_everybody(acfactory) -> None:
     bob.set_config("who_can_call_me", "0")
 
     alice_chat_bob = alice.create_chat(bob)
-    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.place_outgoing_call("offer", True)
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
 
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
