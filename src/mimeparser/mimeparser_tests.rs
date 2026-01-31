@@ -1285,12 +1285,12 @@ async fn test_mime_modified_large_plain() -> Result<()> {
 
     {
         let mimemsg = MimeMessage::from_bytes(&t, long_txt.as_ref()).await?;
-        assert!(mimemsg.is_mime_modified);
-        assert!(
-            mimemsg.parts[0].msg.matches("just repeated").count()
-                <= DC_DESIRED_TEXT_LEN / REPEAT_TXT.len()
+        assert!(!mimemsg.is_mime_modified);
+        assert!(mimemsg.parts[0].msg.matches("just repeated").count() == REPEAT_CNT);
+        assert_eq!(
+            mimemsg.parts[0].msg.len() + 1,
+            REPEAT_TXT.len() * REPEAT_CNT
         );
-        assert!(mimemsg.parts[0].msg.len() <= DC_DESIRED_TEXT_LEN + DC_ELLIPSIS.len());
     }
 
     for draft in [false, true] {

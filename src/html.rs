@@ -30,7 +30,7 @@ impl Message {
     /// The corresponding ffi-function is `dc_msg_has_html()`.
     /// To get the HTML-code of the message, use `MsgId.get_html()`.
     pub fn has_html(&self) -> bool {
-        self.mime_modified
+        self.mime_modified || self.full_text.is_some()
     }
 
     /// Set HTML-part part of a message that is about to be sent.
@@ -270,8 +270,19 @@ impl MsgId {
                 Ok((parser, _)) => Ok(Some(parser.html)),
             }
         } else {
-            warn!(context, "get_html: no mime for {}", self);
-            Ok(None)
+            let msg = Message::load_from_db(context, self).await?;
+            if let Some(full_text) = &msg.full_text {
+                let html = PlainText {
+                    text: full_text.clone(),
+                    flowed: false,
+                    delsp: false,
+                }
+                .to_html();
+                Ok(Some(html))
+            } else {
+                warn!(context, "get_html: no mime for {}", self);
+                Ok(None)
+            }
         }
     }
 }
