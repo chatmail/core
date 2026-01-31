@@ -119,7 +119,7 @@ def test_who_can_call_me_nobody(acfactory) -> None:
     bob.create_chat(alice)
 
     alice_chat_bob = alice.create_chat(bob)
-    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.place_outgoing_call("offer", True)
     alice_chat_bob.send_text("Hello!")
 
     # Notification for "Hello!" message should arrive
@@ -144,7 +144,7 @@ def test_who_can_call_me_everybody(acfactory) -> None:
     bob.set_config("who_can_call_me", "0")
 
     alice_chat_bob = alice.create_chat(bob)
-    alice_chat_bob.place_outgoing_call("offer")
+    alice_chat_bob.place_outgoing_call("offer", True)
     incoming_call_event = bob.wait_for_event(EventType.INCOMING_CALL)
 
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
