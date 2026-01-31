@@ -1,6 +1,7 @@
 import pytest
 
 from deltachat_rpc_client import EventType
+from deltachat_rpc_client.const import DownloadState
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -118,6 +119,33 @@ def test_change_address(acfactory) -> None:
     assert sender_addr1 != sender_addr2
     assert sender_addr1 == old_alice_addr
     assert sender_addr2 == new_alice_addr
+
+
+def test_download_on_demand(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+    alice.set_config("download_limit", "1")
+
+    alice.stop_io()
+    qr = acfactory.get_account_qr()
+    alice.add_transport_from_qr(qr)
+    alice.start_io()
+
+    alice.create_chat(bob)
+    chat_bob_alice = bob.create_chat(alice)
+    chat_bob_alice.send_message(file="../test-data/image/screenshot.jpg")
+    msg = alice.wait_for_incoming_msg()
+    snapshot = msg.get_snapshot()
+    assert snapshot.download_state == DownloadState.AVAILABLE
+    chat_id = snapshot.chat_id
+    # Actually the message isn't available yet. Wait somehow for the post-message to arrive.
+    chat_bob_alice.send_message("Now you can download my previous message")
+    alice.wait_for_incoming_msg()
+    alice._rpc.download_full_message(alice.id, msg.id)
+    for dstate in [DownloadState.IN_PROGRESS, DownloadState.DONE]:
+        event = alice.wait_for_event(EventType.MSGS_CHANGED)
+        assert event.chat_id == chat_id
+        assert event.msg_id == msg.id
+        assert msg.get_snapshot().download_state == dstate
 
 
 @pytest.mark.parametrize("is_chatmail", ["0", "1"])
