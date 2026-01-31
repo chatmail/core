@@ -99,7 +99,8 @@ impl MsgId {
         Ok(())
     }
 
-    /// Updates the message download state. Returns `Ok` if the message doesn't exist anymore.
+    /// Updates the message download state. Returns `Ok` if the message doesn't exist anymore or has
+    /// the download state up to date.
     pub(crate) async fn update_download_state(
         self,
         context: &Context,
@@ -108,7 +109,7 @@ impl MsgId {
         if context
             .sql
             .execute(
-                "UPDATE msgs SET download_state=? WHERE id=?;",
+                "UPDATE msgs SET download_state=? WHERE id=? AND download_state<>?1",
                 (download_state, self),
             )
             .await?
@@ -135,42 +136,46 @@ impl Message {
     }
 }
 
-/// Actually download a message partially downloaded before.
+/// Actually downloads a message partially downloaded before if the message is available on the
+/// session transport, in which case returns `Some`. If the message is available on another
+/// transport, returns `None`.
 ///
 /// Most messages are downloaded automatically on fetch instead.
 pub(crate) async fn download_msg(
     context: &Context,
     rfc724_mid: String,
     session: &mut Session,
-) -> Result<()> {
+) -> Result<Option<()>> {
     let transport_id = session.transport_id();
     let row = context
         .sql
         .query_row_optional(
-            "SELECT uid, folder FROM imap
-             WHERE rfc724_mid=?
-             AND transport_id=?
-             AND target!=''",
+            "SELECT uid, folder, transport_id FROM imap
+             WHERE rfc724_mid=? AND target!=''
+             ORDER BY transport_id=? DESC LIMIT 1",
             (&rfc724_mid, transport_id),
             |row| {
                 let server_uid: u32 = row.get(0)?;
                 let server_folder: String = row.get(1)?;
-                Ok((server_uid, server_folder))
+                let msg_transport_id: u32 = row.get(2)?;
+                Ok((server_uid, server_folder, msg_transport_id))
             },
         )
         .await?;
 
-    let Some((server_uid, server_folder)) = row else {
+    let Some((server_uid, server_folder, msg_transport_id)) = row else {
         // No IMAP record found, we don't know the UID and folder.
         return Err(anyhow!(
             "IMAP location for {rfc724_mid:?} post-message is unknown"
         ));
     };
-
+    if msg_transport_id != transport_id {
+        return Ok(None);
+    }
     session
         .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
         .await?;
-    Ok(())
+    Ok(Some(()))
 }
 
 impl Session {
@@ -272,7 +277,7 @@ pub(crate) async fn download_msgs(context: &Context, session: &mut Session) -> R
 
     for rfc724_mid in &rfc724_mids {
         let res = download_msg(context, rfc724_mid.clone(), session).await;
-        if res.is_ok() {
+        if let Ok(Some(())) = res {
             delete_from_downloads(context, rfc724_mid).await?;
             delete_from_available_post_msgs(context, rfc724_mid).await?;
         }
@@ -327,7 +332,7 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
             // The message may be in the wrong order,
             // but at least we have it at all.
             let res = download_msg(context, rfc724_mid.clone(), session).await;
-            if res.is_ok() {
+            if let Ok(Some(())) = res {
                 delete_from_available_post_msgs(context, rfc724_mid).await?;
             }
             if let Err(err) = res {
