@@ -16,7 +16,7 @@ pub struct JsonrpcCallInfo {
     pub sdp_offer: String,
 
     /// True if the call is started as a video call.
-    pub has_video_initially: bool,
+    pub has_video: bool,
 
     /// Call state.
     ///
@@ -30,12 +30,12 @@ impl JsonrpcCallInfo {
             format!("Attempting to get call state of non-call message {msg_id}")
         })?;
         let sdp_offer = call_info.place_call_info.clone();
-        let has_video_initially = call_info.has_video_initially();
+        let has_video = call_info.has_video_initially();
         let state = JsonrpcCallState::from_msg_id(context, msg_id).await?;
 
         Ok(JsonrpcCallInfo {
             sdp_offer,
-            has_video_initially,
+            has_video,
             state,
         })
     }
