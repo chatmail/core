@@ -202,7 +202,7 @@ serde_json = "1"
 tempfile = "3.24.0"
 thiserror = "2"
 tokio = "1"
-tokio-util = "0.7.17"
+tokio-util = "0.7.18"
 tracing-subscriber = "0.3"
 yerpc = "0.6.4"
 
