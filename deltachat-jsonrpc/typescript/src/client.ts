@@ -40,20 +40,51 @@ export class BaseDeltaChat<
      * and emitting the respective events on this class.
      */
     startEventLoop: boolean,
+    options?: {
+      /**
+       * @see {@linkcode BaseDeltaChat.eventLoop}.
+       *
+       * Has no effect if {@linkcode startEventLoop} === false.
+       */
+      eventLoopRequestPoolSize?: number;
+    },
   ) {
     super();
     this.rpc = new RawClient(this.transport);
     if (startEventLoop) {
-      this.eventTask = this.eventLoop();
+      this.eventTask = this.eventLoop({
+        eventLoopRequestPoolSize: options?.eventLoopRequestPoolSize,
+      });
     }
   }
 
   /**
    * @see the constructor's `startEventLoop`
    */
-  async eventLoop(): Promise<void> {
+  async eventLoop(options?: {
+    /**
+     * How many {@linkcode RawClient.getNextEvent} to constantly keep open.
+     * Having a value > 1 improves performance
+     * when dealing with bursts of events.
+     *
+     * Must be >= 1.
+     *
+     * @default 20
+     */
+    eventLoopRequestPoolSize?: number;
+  }): Promise<void> {
+    const promises: ReturnType<typeof this.rpc.getNextEvent>[] = [];
+    for (let i = 0; i < (options?.eventLoopRequestPoolSize ?? 20); i++) {
+      promises.push(this.rpc.getNextEvent());
+    }
+    const bufferLength = promises.length;
+    let currInd = 0;
+
     while (true) {
-      const event = await this.rpc.getNextEvent();
+      const event = await promises[currInd];
+      promises[currInd] = this.rpc.getNextEvent();
+      currInd = (currInd + 1) % bufferLength;
+
       //@ts-ignore
       this.emit(event.event.kind, event.contextId, event.event);
       this.emit("ALL", event.contextId, event.event);
