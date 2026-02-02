@@ -4,7 +4,9 @@ use super::*;
 use crate::message::{Message, Viewtype};
 use crate::param::Param;
 use crate::sql;
-use crate::test_utils::{self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext};
+use crate::test_utils::{
+    self, AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
+};
 use crate::tools::SystemTime;
 
 fn check_image_size(path: impl AsRef<Path>, width: u32, height: u32) -> image::DynamicImage {
@@ -237,6 +239,22 @@ async fn test_selfavatar_in_blobdir() {
         constants::BALANCED_AVATAR_SIZE,
         constants::BALANCED_AVATAR_SIZE,
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_huge_selfavatar() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.unconfigured().await;
+    let avatar_src = t.get_blobdir().join("avatar.png");
+    let bytes = include_bytes!("../../test-data/image/noise400x400.png");
+
+    fs::write(&avatar_src, bytes).await?;
+    t.set_config(Config::Selfavatar, Some(avatar_src.to_str().unwrap()))
+        .await?;
+    let avatar_cfg = t.get_config(Config::Selfavatar).await?.unwrap();
+    // At 3/4 the avatar is still huge, so it's downscaled to 5/8.
+    check_image_size(avatar_cfg, 250, 250);
+    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
