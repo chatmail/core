@@ -4379,7 +4379,9 @@ pub async fn forward_msgs_2ctx(
 
         // When forwarding between different accounts, blob files must be physically copied
         // because each account has its own blob directory.
-        if let Some(src_path) = param.get_file_path(ctx_src)? {
+        if ctx_src.blobdir == ctx_dst.blobdir {
+            msg.param.steal(param, Param::File);
+        } else if let Some(src_path) = param.get_file_path(ctx_src)? {
             let new_blob = BlobObject::create_and_deduplicate(ctx_dst, &src_path, &src_path)
                 .context("Failed to copy blob file to destination account")?;
             msg.param.set(Param::File, new_blob.as_name());
