@@ -431,7 +431,7 @@ impl Context {
     /// Changes encrypted database passphrase.
     /// Deprecated 2025-11, see [`ContextBuilder::with_password()`] for reasoning.
     pub async fn change_passphrase(&self, passphrase: String) -> Result<()> {
-        self.sql.change_passphrase(passphrase).await?;
+        self.sql.change_passphrase(self, passphrase).await?;
         Ok(())
     }
 
