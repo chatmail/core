@@ -17,11 +17,6 @@ ignore = [
     # It is a transitive dependency of iroh 0.35.0,
     # this should be fixed by upgrading to iroh 1.0 once it is released.
     "RUSTSEC-2025-0134",
-
-    # Old versions of "lru" are transitive dependencies of iroh 0.35.0.
-    # <https://rustsec.org/advisories/RUSTSEC-2026-0002>
-    # <https://github.com/chatmail/core/issues/7692>
-    "RUSTSEC-2026-0002",
 ]
 
 [bans]
