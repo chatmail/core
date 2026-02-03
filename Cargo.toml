@@ -56,7 +56,7 @@ chrono = { workspace = true, features = ["alloc", "clock", "std"] }
 colorutils-rs = { version = "0.7.5", default-features = false }
 data-encoding = "2.9.0"
 escaper = "0.1"
-fast-socks5 = "0.10"
+fast-socks5 = "1"
 fd-lock = "4"
 futures-lite = { workspace = true }
 futures = { workspace = true }
