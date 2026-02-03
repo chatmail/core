@@ -3902,7 +3902,8 @@ async fn test_get_chat_media() -> Result<()> {
             Some(chat_id1),
             Viewtype::Image,
             Viewtype::Sticker,
-            Viewtype::Unknown
+            Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -3963,6 +3964,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Image,
             Viewtype::Unknown,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -3975,6 +3977,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Sticker,
             Viewtype::Unknown,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -3987,10 +3990,24 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Sticker,
             Viewtype::Image,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
         2
+    );
+    assert_eq!(
+        get_chat_media(
+            &t,
+            Some(chat_id1),
+            Viewtype::Sticker,
+            Viewtype::Image,
+            Viewtype::Unknown,
+            Some(1),
+        )
+        .await?
+        .len(),
+        1
     );
     assert_eq!(
         get_chat_media(
@@ -3999,6 +4016,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Webxdc,
             Viewtype::Unknown,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -4011,6 +4029,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Image,
             Viewtype::Unknown,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -4023,6 +4042,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Image,
             Viewtype::Sticker,
             Viewtype::Unknown,
+            None,
         )
         .await?
         .len(),
@@ -4035,6 +4055,33 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Image,
             Viewtype::Sticker,
             Viewtype::Webxdc,
+            None,
+        )
+        .await?
+        .len(),
+        4
+    );
+    assert_eq!(
+        get_chat_media(
+            &t,
+            None,
+            Viewtype::Image,
+            Viewtype::Sticker,
+            Viewtype::Webxdc,
+            Some(3),
+        )
+        .await?
+        .len(),
+        3
+    );
+    assert_eq!(
+        get_chat_media(
+            &t,
+            None,
+            Viewtype::Image,
+            Viewtype::Sticker,
+            Viewtype::Webxdc,
+            Some(99),
         )
         .await?
         .len(),
@@ -4050,6 +4097,7 @@ async fn test_get_chat_media() -> Result<()> {
             Viewtype::Image,
             Viewtype::Sticker,
             Viewtype::Webxdc,
+            None,
         )
         .await?
         .len(),
@@ -4091,6 +4139,7 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         Viewtype::Webxdc,
         Viewtype::Unknown,
         Viewtype::Unknown,
+        None,
     )
     .await?;
     assert_eq!(media.first().unwrap(), &instance1_id);
@@ -4106,6 +4155,7 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
         Viewtype::Webxdc,
         Viewtype::Unknown,
         Viewtype::Unknown,
+        None,
     )
     .await?;
     assert_eq!(media.first().unwrap(), &instance2_id);
