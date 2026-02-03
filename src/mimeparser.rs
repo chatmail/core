@@ -32,9 +32,7 @@ use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_
 use crate::param::{Param, Params};
 use crate::simplify::{SimplifiedText, simplify};
 use crate::sync::SyncItems;
-use crate::tools::{
-    get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
-};
+use crate::tools::{get_filemeta, parse_receive_headers, smeared_time, time, validate_id};
 use crate::{chatlist_events, location, tools};
 
 /// Public key extracted from `Autocrypt-Gossip`
@@ -1453,12 +1451,6 @@ impl MimeMessage {
                         } else {
                             (simplified_txt, top_quote)
                         };
-
-                        let (simplified_txt, was_truncated) =
-                            truncate_msg_text(context, simplified_txt).await?;
-                        if was_truncated {
-                            self.is_mime_modified = was_truncated;
-                        }
 
                         if !simplified_txt.is_empty() || simplified_quote.is_some() {
                             let mut part = Part {

@@ -49,7 +49,7 @@ use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
     IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_secret, create_id,
     create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
-    gm2local_offset, normalize_text, smeared_time, time, truncate_msg_text,
+    gm2local_offset, normalize_text, smeared_time, time,
 };
 use crate::webxdc::StatusUpdateSerial;
 
@@ -1883,7 +1883,8 @@ impl Chat {
             EphemeralTimer::Enabled { duration } => time().saturating_add(duration.into()),
         };
 
-        let (msg_text, was_truncated) = truncate_msg_text(context, msg.text.clone()).await?;
+        let msg_text = msg.text.clone();
+
         let new_mime_headers = if msg.has_html() {
             if msg.param.exists(Param::Forwarded) {
                 msg.get_id().get_html(context).await?
@@ -1899,13 +1900,6 @@ impl Chat {
             let cursor = Cursor::new(&mut buffer);
             html_part.write_part(cursor).ok();
             String::from_utf8_lossy(&buffer).to_string()
-        });
-        let new_mime_headers = new_mime_headers.or_else(|| match was_truncated {
-            // We need to add some headers so that they are stripped before formatting HTML by
-            // `MsgId::get_html()`, not a part of the actual text. Let's add "Content-Type", it's
-            // anyway a useful metadata about the stored text.
-            true => Some("Content-Type: text/plain; charset=utf-8\r\n\r\n".to_string() + &msg.text),
-            false => None,
         });
         let new_mime_headers = match new_mime_headers {
             Some(h) => Some(tokio::task::block_in_place(move || {
