@@ -1,6 +1,6 @@
 //@ts-check
 import { spawn } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { statSync } from "node:fs";
 import os from "node:os";
 import process from "node:process";
 import { ENV_VAR_NAME, PATH_EXECUTABLE_NAME } from "./src/const.js";
@@ -36,7 +36,7 @@ function findRPCServerInNodeModules() {
 }
 
 /** @type {import("./index").FnTypes.getRPCServerPath} */
-export async function getRPCServerPath(options = {}) {
+export function getRPCServerPath(options = {}) {
   const { takeVersionFromPATH, disableEnvPath } = {
     takeVersionFromPATH: false,
     disableEnvPath: false,
@@ -45,7 +45,7 @@ export async function getRPCServerPath(options = {}) {
   // 1. check if it is set as env var
   if (process.env[ENV_VAR_NAME] && !disableEnvPath) {
     try {
-      if (!(await stat(process.env[ENV_VAR_NAME])).isFile()) {
+      if (!statSync(process.env[ENV_VAR_NAME]).isFile()) {
         throw new Error(
           `expected ${ENV_VAR_NAME} to point to the deltachat-rpc-server executable`
         );
@@ -68,41 +68,49 @@ export async function getRPCServerPath(options = {}) {
 import { StdioDeltaChat } from "@deltachat/jsonrpc-client";
 
 /** @type {import("./index").FnTypes.startDeltaChat} */
-export async function startDeltaChat(directory, options = {}) {
-  const pathToServerBinary = await getRPCServerPath(options);
-  const server = spawn(pathToServerBinary, {
-    env: {
-      RUST_LOG: process.env.RUST_LOG,
-      DC_ACCOUNTS_PATH: directory,
-    },
-    stdio: ["pipe", "pipe", options.muteStdErr ? "ignore" : "inherit"],
-  });
+export function startDeltaChat(directory, options = {}) {
+  return new DeltaChatOverJsonRpc(directory, options);
+}
 
-  server.on("error", (err) => {
-    throw new Error(FAILED_TO_START_SERVER_EXECUTABLE(pathToServerBinary, err));
-  });
-  let shouldClose = false;
+export class DeltaChatOverJsonRpc extends StdioDeltaChat {
+  /**
+   *
+   * @param {string} directory
+   * @param {Partial<import("./index").SearchOptions & import("./index").StartOptions>} options
+   */
+  constructor(directory, options = {}) {
+    const pathToServerBinary = getRPCServerPath(options);
+    const server = spawn(pathToServerBinary, {
+      env: {
+        RUST_LOG: process.env.RUST_LOG,
+        DC_ACCOUNTS_PATH: directory,
+      },
+      stdio: ["pipe", "pipe", options.muteStdErr ? "ignore" : "inherit"],
+    });
 
-  server.on("exit", () => {
-    if (shouldClose) {
-      return;
-    }
-    throw new Error("Server quit");
-  });
+    server.on("error", (err) => {
+      throw new Error(
+        FAILED_TO_START_SERVER_EXECUTABLE(pathToServerBinary, err)
+      );
+    });
+    let shouldClose = false;
 
-  /** @type {import('./index').DeltaChatOverJsonRpcServer} */
-  //@ts-expect-error
-  const dc = new StdioDeltaChat(server.stdin, server.stdout, true);
+    server.on("exit", () => {
+      if (shouldClose) {
+        return;
+      }
+      throw new Error("Server quit");
+    });
 
-  dc.close = () => {
-    shouldClose = true;
-    if (!server.kill()) {
-      console.log("server termination failed");
-    }
-  };
+    super(server.stdin, server.stdout, true);
 
-  //@ts-expect-error
-  dc.pathToServerBinary = pathToServerBinary;
+    this.close = () => {
+      shouldClose = true;
+      if (!server.kill()) {
+        console.log("server termination failed");
+      }
+    };
 
-  return dc;
+    this.pathToServerBinary = pathToServerBinary;
+  }
 }
