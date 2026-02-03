@@ -5,7 +5,7 @@ Some of the standards chatmail is based on:
 Tasks                            | Standards
 -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 Transport                        | IMAP v4 ([RFC 3501][]), SMTP ([RFC 5321][]) and Internet Message Format (IMF, [RFC 5322][])
-Proxy                            | SOCKS5 ([RFC 1928][])
+Proxy                            | SOCKS5 ([RFC 1928][]), [Shadowsocks](https://github.com/Shadowsocks-NET/shadowsocks-specs)
 Embedded media                   | MIME Document Series ([RFC 2045][], [RFC 2046][]), Content-Disposition Header ([RFC 2183][]), Multipart/Related ([RFC 2387][])
 Text and Quote encoding          | Fixed, Flowed ([RFC 3676][])
 Reactions                        | Reaction: Indicating Summary Reaction to a Message ([RFC 9078][])
