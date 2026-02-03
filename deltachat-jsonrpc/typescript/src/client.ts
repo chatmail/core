@@ -5,14 +5,14 @@ import { RawClient } from "../generated/client.js";
 import { BaseTransport, Request } from "yerpc";
 import { TinyEmitter } from "@deltachat/tiny-emitter";
 
-type Events = { ALL: (accountId: number, event: EventType) => void } & {
+export type Events = { ALL: (accountId: number, event: EventType) => void } & {
   [Property in EventType["kind"]]: (
     accountId: number,
     event: Extract<EventType, { kind: Property }>,
   ) => void;
 };
 
-type ContextEvents = { ALL: (event: EventType) => void } & {
+export type ContextEvents = { ALL: (event: EventType) => void } & {
   [Property in EventType["kind"]]: (
     event: Extract<EventType, { kind: Property }>,
   ) => void;
