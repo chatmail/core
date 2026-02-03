@@ -17,12 +17,15 @@ use super::message::MessageViewtype;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(tag = "kind")]
+#[expect(clippy::large_enum_variant)]
 pub enum ChatListItemFetchResult {
     #[serde(rename_all = "camelCase")]
     ChatListItem {
         id: u32,
         name: String,
+        /// deprecated 2026-01, use profile_image instead
         avatar_path: Option<String>,
+        profile_image: Option<String>,
         color: String,
         chat_type: JsonrpcChatType,
         last_updated: Option<i64>,
@@ -61,9 +64,14 @@ pub enum ChatListItemFetchResult {
         is_self_talk: bool,
         is_device_talk: bool,
         is_sending_location: bool,
+        /// deprecated 2026-01
         is_self_in_group: bool,
+        /// deprecated 2026-01, use archived instead
         is_archived: bool,
+        archived: bool,
+        /// deprecated 2026-01, use pinned instead
         is_pinned: bool,
+        pinned: bool,
         is_muted: bool,
         is_contact_request: bool,
         /// contact id if this is a dm chat (for view profile entry in context menu)
@@ -105,7 +113,7 @@ pub(crate) async fn get_chat_list_item_by_id(
 
     let visibility = chat.get_visibility();
 
-    let avatar_path = chat
+    let profile_image = chat
         .get_profile_image(ctx)
         .await?
         .map(|path| path.to_str().unwrap_or("invalid/path").to_owned());
@@ -150,7 +158,8 @@ pub(crate) async fn get_chat_list_item_by_id(
     Ok(ChatListItemFetchResult::ChatListItem {
         id: chat_id.to_u32(),
         name: chat.get_name().to_owned(),
-        avatar_path,
+        profile_image: profile_image.clone(),
+        avatar_path: profile_image.clone(),
         color,
         chat_type: chat.get_type().into(),
         last_updated,
@@ -165,7 +174,9 @@ pub(crate) async fn get_chat_list_item_by_id(
         is_device_talk: chat.is_device_talk(),
         is_self_in_group: chat.is_self_in_chat(ctx).await?,
         is_sending_location: chat.is_sending_locations(),
+        archived: visibility == ChatVisibility::Archived,
         is_archived: visibility == ChatVisibility::Archived,
+        pinned: visibility == ChatVisibility::Pinned,
         is_pinned: visibility == ChatVisibility::Pinned,
         is_muted: chat.is_muted(),
         is_contact_request: chat.is_contact_request(),
