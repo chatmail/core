@@ -388,14 +388,9 @@ impl<'a> BlobObject<'a> {
                 _ => img,
             };
 
-            // max_wh is the maximum image width and height, i.e. the resolution-limit.
-            // target_wh target-resolution for resizing the image.
+            // max_wh is the maximum image width and height, i.e. the resolution-limit,
+            // as set by the media-quality-setting.
             let exceeds_wh = img.width() > max_wh || img.height() > max_wh;
-            let mut target_wh = if exceeds_wh {
-                max_wh
-            } else {
-                max(img.width(), img.height())
-            };
             let exceeds_max_bytes = nr_bytes > max_bytes as u64;
 
             let jpeg_quality = 75;
@@ -434,6 +429,15 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                // target_wh will be used as the target-resolution for resizing the image,
+                // so that the longest sides of the image match the target-resolution,
+                // without changing the aspect-ratio.
+                let mut target_wh = if exceeds_wh {
+                    max_wh
+                } else {
+                    max(img.width(), img.height())
+                };
+
                 loop {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
