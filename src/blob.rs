@@ -483,7 +483,8 @@ impl<'a> BlobObject<'a> {
                             ));
                         }
 
-                        target_wh = target_wh * 2 / 3;
+                        // Note: This is only done for avatar-images.
+                        target_wh = target_wh * 7 / 8;
                     } else {
                         info!(
                             context,
