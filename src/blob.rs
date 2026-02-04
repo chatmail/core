@@ -465,7 +465,7 @@ impl<'a> BlobObject<'a> {
                             ));
                         }
 
-                        target_wh = target_wh * 2 / 3;
+                        target_wh = target_wh * 7 / 8;
                     } else {
                         info!(
                             context,
