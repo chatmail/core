@@ -429,13 +429,25 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                let resolution_of_longest_side_of_image = max(img.width(), img.height());
+                let square_root_of_number_of_pixels_in_image =
+                    f64::from(img.width() * img.height()).sqrt();
+
                 // target_wh will be used as the target-resolution for resizing the image,
                 // so that the longest sides of the image match the target-resolution,
                 // without changing the aspect-ratio.
-                let mut target_wh = if exceeds_wh {
-                    max_wh
+                let mut target_wh = if !is_avatar && exceeds_wh {
+                    // Limit resolution to the number of pixels that fit within max_wh * max_wh,
+                    // so that the image-quality does not depend on the aspect-ratio.
+                    (f64::from(resolution_of_longest_side_of_image)
+                        * (f64::from(max_wh) / square_root_of_number_of_pixels_in_image))
+                        as u32
                 } else {
-                    max(img.width(), img.height())
+                    max_wh
+                };
+
+                if target_wh > resolution_of_longest_side_of_image {
+                    target_wh = resolution_of_longest_side_of_image
                 };
 
                 loop {
