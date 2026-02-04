@@ -1,6 +1,6 @@
 //! # Blob directory management.
 
-use std::cmp::max;
+use std::cmp::{max, min};
 use std::io::{Cursor, Seek};
 use std::iter::FusedIterator;
 use std::mem;
@@ -12,7 +12,7 @@ use futures::StreamExt;
 use image::ImageReader;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat, Pixel, Rgba};
 use image::{codecs::jpeg::JpegEncoder, metadata::Orientation};
-use num_traits::FromPrimitive;
+use num_traits::{FromPrimitive, cast};
 use tokio::{fs, task};
 use tokio_stream::wrappers::ReadDirStream;
 
@@ -427,13 +427,34 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                let longest_side_len = max(img.width(), img.height());
+
                 // target_wh will be used as the target-resolution for resizing the image,
                 // so that the longest sides of the image match the target-resolution.
-                let mut target_wh = if exceeds_wh {
-                    max_wh
+                let mut target_wh = if !is_avatar {
+                    let area_sqrt = (f64::from(img.width()) * f64::from(img.height())).sqrt();
+                    // Limit resolution to the number of pixels that fit within max_wh * max_wh,
+                    // so that the image-quality does not depend on the aspect-ratio.
+                    let mut resolution_limit: u32 = cast(
+                        (f64::from(longest_side_len) * (f64::from(max_wh) / area_sqrt)).floor(),
+                    )
+                    .unwrap_or(max_wh);
+                    // Align at least one dimension of the resampled image to a multiple of 8 pixels,
+                    // to have fewer partially used JPEG-blocks (which represent 8x8 pixels each).
+                    if resolution_limit < longest_side_len && resolution_limit > 8 {
+                        while !resolution_limit.is_multiple_of(8) {
+                            resolution_limit -= 1
+                        }
+                    }
+                    resolution_limit
                 } else {
-                    max(img.width(), img.height())
+                    max_wh
                 };
+
+                target_wh = min(target_wh, longest_side_len);
+
+                // For images in JPEG-format, 65535 pixels is the maximum resolution per dimension.
+                target_wh = min(target_wh, 65535);
 
                 loop {
                     if mem::take(&mut add_white_bg) {
