@@ -254,13 +254,20 @@ fn mimepart_to_data_url(mail: &mailparse::ParsedMail<'_>) -> Result<String> {
 
 impl MsgId {
     /// Get HTML by database message id.
-    /// This requires `mime_headers` field to be set for the message;
-    /// this is the case at least when `Message.has_html()` returns true
-    /// (we do not save raw mime unconditionally in the database to save space).
+    /// Returns `Some` at least if `Message.has_html()` is true.
+    /// NB: we do not save raw mime unconditionally in the database to save space.
     /// The corresponding ffi-function is `dc_get_msg_html()`.
     pub async fn get_html(self, context: &Context) -> Result<Option<String>> {
-        let rawmime = message::get_mime_headers(context, self).await?;
+        // If there are many concurrent db readers, going to the queue earlier makes sense.
+        let (param, rawmime) = tokio::join!(
+            self.get_param(context),
+            message::get_mime_headers(context, self)
+        );
+        if let Some(html) = param?.get(SendHtml) {
+            return Ok(Some(html.to_string()));
+        }
 
+        let rawmime = rawmime?;
         if !rawmime.is_empty() {
             match HtmlMsgParser::from_bytes(context, &rawmime).await {
                 Err(err) => {
@@ -279,9 +286,9 @@ impl MsgId {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::chat;
-    use crate::chat::{forward_msgs, save_msgs};
+    use crate::chat::{self, Chat, forward_msgs, save_msgs};
     use crate::config::Config;
+    use crate::constants;
     use crate::contact::ContactId;
     use crate::message::{MessengerMessage, Viewtype};
     use crate::receive_imf::receive_imf;
@@ -440,7 +447,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_html_forwarding() {
+    async fn test_html_forwarding() -> Result<()> {
         // alice receives a non-delta html-message
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
@@ -459,31 +466,57 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         assert!(html.contains("this is <b>html</b>"));
 
         // alice: create chat with bob and forward received html-message there
-        let chat = alice.create_chat_with_contact("", "bob@example.net").await;
-        forward_msgs(alice, &[msg.get_id()], chat.get_id())
+        let chat_alice = alice.create_chat_with_contact("", "bob@example.net").await;
+        forward_msgs(alice, &[msg.get_id()], chat_alice.get_id())
             .await
             .unwrap();
-        let msg = alice.get_last_msg_in(chat.get_id()).await;
-        assert_eq!(msg.get_from_id(), ContactId::SELF);
-        assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
-        assert!(msg.is_forwarded());
-        assert!(msg.get_text().contains("this is plain"));
-        assert!(msg.has_html());
-        let html = msg.get_id().get_html(alice).await.unwrap().unwrap();
-        assert!(html.contains("this is <b>html</b>"));
+        async fn check_sender(ctx: &TestContext, chat: &Chat) {
+            let msg = ctx.get_last_msg_in(chat.get_id()).await;
+            assert_eq!(msg.get_from_id(), ContactId::SELF);
+            assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
+            assert!(msg.is_forwarded());
+            assert!(msg.get_text().contains("this is plain"));
+            assert!(msg.has_html());
+            let html = msg.get_id().get_html(ctx).await.unwrap().unwrap();
+            assert!(html.contains("this is <b>html</b>"));
+        }
+        check_sender(alice, &chat_alice).await;
 
         // bob: check that bob also got the html-part of the forwarded message
         let bob = &tcm.bob().await;
-        let chat = bob.create_chat_with_contact("", "alice@example.org").await;
-        let msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
-        assert_eq!(chat.id, msg.chat_id);
-        assert_ne!(msg.get_from_id(), ContactId::SELF);
-        assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
-        assert!(msg.is_forwarded());
-        assert!(msg.get_text().contains("this is plain"));
+        let chat_bob = bob.create_chat_with_contact("", "alice@example.org").await;
+        async fn check_receiver(ctx: &TestContext, chat: &Chat, sender: &TestContext) {
+            let msg = ctx.recv_msg(&sender.pop_sent_msg().await).await;
+            assert_eq!(chat.id, msg.chat_id);
+            assert_ne!(msg.get_from_id(), ContactId::SELF);
+            assert_eq!(msg.is_dc_message, MessengerMessage::Yes);
+            assert!(msg.is_forwarded());
+            assert!(msg.get_text().contains("this is plain"));
+            assert!(msg.has_html());
+            let html = msg.get_id().get_html(ctx).await.unwrap().unwrap();
+            assert!(html.contains("this is <b>html</b>"));
+        }
+        check_receiver(bob, &chat_bob, alice).await;
+
+        // Let's say that the alice and bob profiles are on the same device,
+        // so alice can forward the message to herself via bob profile!
+        chat::forward_msgs_2ctx(alice, &[msg.get_id()], bob, chat_bob.get_id()).await?;
+        check_sender(bob, &chat_bob).await;
+        check_receiver(alice, &chat_alice, bob).await;
+
+        // Check cross-profile forwarding of long outgoing messages.
+        let line = "this text with 42 chars is just repeated.\n";
+        let long_txt = line.repeat(constants::DC_DESIRED_TEXT_LEN / line.len() + 2);
+        let mut msg = Message::new_text(long_txt);
+        alice.send_msg(chat_alice.id, &mut msg).await;
+        let msg = alice.get_last_msg_in(chat_alice.id).await;
         assert!(msg.has_html());
-        let html = msg.get_id().get_html(bob).await.unwrap().unwrap();
-        assert!(html.contains("this is <b>html</b>"));
+        let html = msg.id.get_html(alice).await?.unwrap();
+        chat::forward_msgs_2ctx(alice, &[msg.get_id()], bob, chat_bob.get_id()).await?;
+        let msg = bob.get_last_msg_in(chat_bob.id).await;
+        assert!(msg.has_html());
+        assert_eq!(msg.id.get_html(bob).await?.unwrap(), html);
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
