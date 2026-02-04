@@ -154,15 +154,15 @@ class Rpc:
     def events_loop(self) -> None:
         """Request new events and distributes them between queues."""
         try:
-            while True:
+            while events := self.get_next_event_batch():
+                for event in events:
+                    account_id = event["contextId"]
+                    queue = self.get_queue(account_id)
+                    payload = event["event"]
+                    logging.debug("account_id=%d got an event %s", account_id, payload)
+                    queue.put(payload)
                 if self.closing:
                     return
-                event = self.get_next_event()
-                account_id = event["contextId"]
-                queue = self.get_queue(account_id)
-                event = event["event"]
-                logging.debug("account_id=%d got an event %s", account_id, event)
-                queue.put(event)
         except Exception:
             # Log an exception if the event loop dies.
             logging.exception("Exception in the event loop")
