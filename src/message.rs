@@ -980,7 +980,7 @@ impl Message {
 
     /// Returns true if the message is a forwarded message.
     pub fn is_forwarded(&self) -> bool {
-        0 != self.param.get_int(Param::Forwarded).unwrap_or_default()
+        self.param.get_int(Param::Forwarded).is_some()
     }
 
     /// Returns true if the message is edited.
