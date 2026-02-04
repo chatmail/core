@@ -194,6 +194,16 @@ impl CommandApi {
             .context("event channel is closed")
     }
 
+    /// Waits for at least one event and return a batch of events.
+    async fn get_next_event_batch(&self) -> Vec<Event> {
+        self.event_emitter
+            .recv_batch()
+            .await
+            .into_iter()
+            .map(|event| event.into())
+            .collect()
+    }
+
     // ---------------------------------------------
     // Account Management
     // ---------------------------------------------
