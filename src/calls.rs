@@ -128,7 +128,7 @@ impl CallInfo {
     pub fn has_video_initially(&self) -> bool {
         self.msg
             .param
-            .get_bool(Param::CallHasVideoInitially)
+            .get_bool(Param::WebrtcHasVideoInitially)
             .unwrap_or(false)
     }
 
@@ -207,7 +207,7 @@ impl Context {
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
         call.param
-            .set_int(Param::CallHasVideoInitially, has_video_initially.into());
+            .set_int(Param::WebrtcHasVideoInitially, has_video_initially.into());
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
