@@ -1,5 +1,80 @@
 # Changelog
 
+## [2.40.0] - 2026-02-04
+
+### Features / Changes
+
+- Receive_imf: Log reasoning for chat assignment.
+- Use more fitting encryption info message.
+- Send Intended Recipient Fingerprint subpackets.
+- Trash messages with intended recipient fingerprints, but w/o our one included.
+- Do not collect email addresses from messages after configuration.
+- Add device message about legacy `mvbox_move`.
+- Never create IMAP folders.
+- Make summary for pre-messages look like summary for fully downloaded messages ([#7775](https://github.com/chatmail/core/pull/7775)).
+- Don't call `BlobObject::create_and_deduplicate()` when forwarding message to the same account.
+- Allow clients to specify whether a call has video initially or not ([#7740](https://github.com/chatmail/core/pull/7740)).
+- Do not load more than one own key from the keychain.
+
+### Fixes
+
+- Cross-account forwarding of a message which `has_html()` ([#7791](https://github.com/chatmail/core/pull/7791)).
+- Make self-contact a key-contact even if key isn't generated yet.
+- `apply_group_changes()`: Check whether From is key-contact.
+- Don't add SELF to unencrypted chat created from encrypted message ([#7661](https://github.com/chatmail/core/pull/7661)).
+- Don't upscale images and test that image resolution isn't changed unnecessarily ([#7769](https://github.com/chatmail/core/pull/7769)).
+- Restart i/o when there are new transports in a sync message ([#7640](https://github.com/chatmail/core/pull/7640)).
+- `add_or_lookup_key_contacts*()`: Advance fingerprint_iter on invalid address.
+- `receive_imf`: Look up key contact by intended recipient fingerprint ([#7661](https://github.com/chatmail/core/pull/7661)).
+- Remove `Config::DeleteToTrash` and `Config::ConfiguredTrashFolder`.
+
+### API-Changes
+
+- jsonrpc(python): Process events forever by default.
+
+### CI
+
+- Make scripts/deny.sh test the locked version of dependencies.
+
+### Refactor
+
+- Remove unneeded dbg! statements ([#7776](https://github.com/chatmail/core/pull/7776)).
+- Remove unused Context.is_inbox().
+- Rename lookup_key_contacts_by_address_list() to lookup_key_contacts_fallback_to_chat().
+- Mark `ProviderOptions` as `non_exhaustive`.
+
+### Miscellaneous Tasks
+
+- Update provider database.
+- cargo: Update `bytes` from 1.11.0 to 1.11.1.
+- cargo: Bump tokio from 1.48.0 to 1.49.0.
+- cargo: Bump tokio-util from 0.7.17 to 0.7.18.
+- cargo: Bump libc from 0.2.178 to 0.2.180.
+- cargo: Bump quote from 1.0.42 to 1.0.44.
+- cargo: Bump syn from 2.0.111 to 2.0.114.
+- cargo: Bump human-panic from 2.0.4 to 2.0.6.
+- cargo: Bump chrono from 0.4.42 to 0.4.43.
+- cargo: Bump data-encoding from 2.9.0 to 2.10.0.
+- cargo: Bump colorutils-rs from 0.7.5 to 0.7.6.
+- Update provider database.
+- cargo: Bump thiserror from 2.0.17 to 2.0.18.
+- deps: Bump EmbarkStudios/cargo-deny-action from 2.0.14 to 2.0.15.
+- Remove RUSTSEC-2026-0002 exception from deny.toml.
+- cargo: Bump tokio-stream from 0.1.17 to 0.1.18.
+- cargo: Bump toml from 0.9.10+spec-1.1.0 to 0.9.11+spec-1.1.0.
+- cargo: Bump serde_json from 1.0.148 to 1.0.149.
+- cargo: Bump uuid from 1.19.0 to 1.20.0.
+- cargo: Bump rustls-pki-types from 1.13.2 to 1.14.0.
+- cargo: Bump tracing-subscriber from 0.3.20 to 0.3.22.
+
+### Tests
+
+- 2nd device receives message via new primary transport.
+- Make `test_dont_move_sync_msgs` less flaky.
+- Encrypted incoming message goes to encrypted 1:1 chat even if references messages in ad-hoc group.
+- Message in blocked chat arrives as InSeen.
+- Set `mvbox_move` to 0 for test rust accounts.
+
 ## [2.39.0] - 2026-01-23
 
 ### CI
@@ -7619,3 +7694,5 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.36.0]: https://github.com/chatmail/core/compare/v2.35.0..v2.36.0
 [2.37.0]: https://github.com/chatmail/core/compare/v2.36.0..v2.37.0
 [2.38.0]: https://github.com/chatmail/core/compare/v2.37.0..v2.38.0
+[2.39.0]: https://github.com/chatmail/core/compare/v2.38.0..v2.39.0
+[2.40.0]: https://github.com/chatmail/core/compare/v2.39.0..v2.40.0
