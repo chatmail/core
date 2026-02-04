@@ -56,6 +56,7 @@ def test_video_call(acfactory) -> None:
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
     assert incoming_call_message.get_call_info().has_video
 
+
 def test_audio_call(acfactory) -> None:
     alice, bob = acfactory.get_online_accounts(2)
 
@@ -70,6 +71,7 @@ def test_audio_call(acfactory) -> None:
 
     incoming_call_message = Message(bob, incoming_call_event.msg_id)
     assert not incoming_call_message.get_call_info().has_video
+
 
 def test_ice_servers(acfactory) -> None:
     alice = acfactory.get_online_account()
