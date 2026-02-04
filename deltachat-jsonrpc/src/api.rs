@@ -2167,10 +2167,11 @@ impl CommandApi {
         account_id: u32,
         chat_id: u32,
         place_call_info: String,
+        has_video: bool,
     ) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         let msg_id = ctx
-            .place_outgoing_call(ChatId::new(chat_id), place_call_info)
+            .place_outgoing_call(ChatId::new(chat_id), place_call_info, has_video)
             .await?;
         Ok(msg_id.to_u32())
     }

@@ -1840,6 +1840,12 @@ impl MimeFactory {
                 mail_builder::headers::raw::Raw::new(b_encode(answer)).into(),
             ));
         }
+        if let Some(has_video) = msg.param.get(Param::WebrtcHasVideoInitially) {
+            headers.push((
+                "Chat-Webrtc-Has-Video-Initially",
+                mail_builder::headers::raw::Raw::new(b_encode(has_video)).into(),
+            ))
+        }
 
         if msg.viewtype == Viewtype::Voice
             || msg.viewtype == Viewtype::Audio

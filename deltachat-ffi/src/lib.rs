@@ -1181,6 +1181,7 @@ pub unsafe extern "C" fn dc_place_outgoing_call(
     context: *mut dc_context_t,
     chat_id: u32,
     place_call_info: *const libc::c_char,
+    has_video: bool,
 ) -> u32 {
     if context.is_null() || chat_id == 0 {
         eprintln!("ignoring careless call to dc_place_outgoing_call()");
@@ -1190,7 +1191,7 @@ pub unsafe extern "C" fn dc_place_outgoing_call(
     let chat_id = ChatId::new(chat_id);
     let place_call_info = to_string_lossy(place_call_info);
 
-    block_on(ctx.place_outgoing_call(chat_id, place_call_info))
+    block_on(ctx.place_outgoing_call(chat_id, place_call_info, has_video))
         .context("Failed to place call")
         .log_err(ctx)
         .map(|msg_id| msg_id.to_u32())

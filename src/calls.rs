@@ -19,9 +19,7 @@ use crate::tools::{normalize_text, time};
 use anyhow::{Context as _, Result, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use num_traits::FromPrimitive;
-use sdp::SessionDescription;
 use serde::Serialize;
-use std::io::Cursor;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::task;
@@ -126,6 +124,14 @@ impl CallInfo {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
     }
 
+    /// Returns true if the call is started as a video call.
+    pub fn has_video_initially(&self) -> bool {
+        self.msg
+            .param
+            .get_bool(Param::WebrtcHasVideoInitially)
+            .unwrap_or(false)
+    }
+
     /// Returns true if the call is missed
     /// because the caller canceled it
     /// explicitly before ringing stopped.
@@ -185,6 +191,7 @@ impl Context {
         &self,
         chat_id: ChatId,
         place_call_info: String,
+        has_video_initially: bool,
     ) -> Result<MsgId> {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(
@@ -199,6 +206,8 @@ impl Context {
             ..Default::default()
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
+        call.param
+            .set_int(Param::WebrtcHasVideoInitially, has_video_initially.into());
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
@@ -344,13 +353,6 @@ impl Context {
                 } else {
                     call.update_text(self, "Incoming call").await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
-                    let has_video = match sdp_has_video(&call.place_call_info) {
-                        Ok(has_video) => has_video,
-                        Err(err) => {
-                            warn!(self, "Failed to determine if SDP offer has video: {err:#}.");
-                            false
-                        }
-                    };
                     let can_call_me = match who_can_call_me(self).await? {
                         WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
                             .await?
@@ -377,7 +379,7 @@ impl Context {
                             msg_id: call.msg.id,
                             chat_id: call.msg.chat_id,
                             place_call_info: call.place_call_info.to_string(),
-                            has_video,
+                            has_video: call.has_video_initially(),
                         });
                     }
                     let wait = call.remaining_ring_seconds();
@@ -505,19 +507,6 @@ impl Context {
             msg: call,
         })
     }
-}
-
-/// Returns true if SDP offer has a video.
-pub fn sdp_has_video(sdp: &str) -> Result<bool> {
-    let mut cursor = Cursor::new(sdp);
-    let session_description =
-        SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
-    for media_description in &session_description.media_descriptions {
-        if media_description.media_name.media == "video" {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 /// State of the call for display in the message bubble.
