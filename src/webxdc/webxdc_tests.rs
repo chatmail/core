@@ -1602,7 +1602,7 @@ async fn test_webxdc_chatlist_summary() -> Result<()> {
     let chatlist = Chatlist::try_load(&t, 0, None, None).await?;
     assert_eq!(chatlist.len(), 1);
     let summary = chatlist.get_summary(&t, 0, None).await?;
-    assert_eq!(summary.text, "nice app!".to_string());
+    assert_eq!(summary.text, "📱 nice app!".to_string());
     assert_eq!(summary.thumbnail_path.unwrap(), "webxdc-icon://last-msg-id");
 
     Ok(())
