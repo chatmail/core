@@ -1242,11 +1242,12 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *     This needs to be a one-to-one chat.
  * @param place_call_info any data that other devices receive
  *     in #DC_EVENT_INCOMING_CALL.
- * @param has_video_initially Whether the call has video.
- *     This allows the recipient's client to adjust UX.
+ * @param has_video Whether the call has video initially.
+ *     This allows the recipient's client to adjust incoming call UX.
+ *     A call can be upgraded to include video later.
  * @return ID of the system message announcing the call.
  */
-uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id, const char* place_call_info, int has_video_initially);
+uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id, const char* place_call_info, int has_video);
 
 
 /**
