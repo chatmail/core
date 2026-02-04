@@ -814,7 +814,7 @@ impl MimeMessage {
                 part.param.set(Param::WebrtcAccepted, accepted);
             }
             if let Some(has_video) = has_video {
-                part.param.set(Param::CallHasVideoInitially, has_video);
+                part.param.set(Param::WebrtcHasVideoInitially, has_video);
             }
         }
     }
@@ -2494,7 +2494,7 @@ async fn handle_mdn(
                 m.id AS msg_id,
                 c.id AS chat_id,
                 mdns.contact_id AS mdn_contact
-             FROM msgs m 
+             FROM msgs m
              LEFT JOIN chats c ON m.chat_id=c.id
              LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
              WHERE rfc724_mid=? AND from_id=1
