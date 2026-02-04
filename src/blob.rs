@@ -429,12 +429,28 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                let n_px_longest_side = max(img.width(), img.height());
+
                 // target_wh will be used as the target-resolution for resizing the image,
                 // so that the longest sides of the image match the target-resolution.
-                let mut target_wh = if exceeds_wh {
-                    max_wh
+                let mut target_wh = if !is_avatar {
+                    let n_all_px_sqrt = f64::from(img.width() * img.height()).sqrt();
+                    // Limit resolution to the number of pixels that fit within max_wh * max_wh,
+                    // so that the image-quality does not depend on the aspect-ratio.
+                    let mut resolution_limit =
+                        (f64::from(n_px_longest_side) * (f64::from(max_wh) / n_all_px_sqrt)) as u32;
+                    // Align (at least) two sides of the resampled image to a multiple of 8 pixels,
+                    // to have fewer partially used JPEG-blocks (which represent 8x8 pixels each).
+                    while !resolution_limit.is_multiple_of(8) {
+                        resolution_limit -= 1
+                    }
+                    resolution_limit
                 } else {
-                    max(img.width(), img.height())
+                    max_wh
+                };
+
+                if target_wh > n_px_longest_side {
+                    target_wh = n_px_longest_side;
                 };
 
                 loop {
