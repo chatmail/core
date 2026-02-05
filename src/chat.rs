@@ -1278,7 +1278,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         let description = context
             .sql
             .query_get_value(
-                "SELECT description FROM chat_descriptions WHERE id=?",
+                "SELECT description FROM chats_descriptions WHERE id=?",
                 (self,),
             )
             .await?
@@ -4241,8 +4241,8 @@ async fn set_chat_description_ex(
         context
             .sql
             .execute(
-                "UPDATE chats SET description=? WHERE id=?",
-                (&new_description, chat_id),
+                "INSERT OR REPLACE INTO chats_descriptions(id, description) VALUES(?, ?)",
+                (chat_id, &new_description),
             )
             .await?;
 

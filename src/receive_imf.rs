@@ -3342,10 +3342,6 @@ async fn apply_chat_name_and_avatar_changes(
 
     // ========== Apply chat description changes ==========
 
-    let chat_description_timestamp = mime_parser
-        .get_header(HeaderDef::ChatGroupDescriptionTimestamp)
-        .and_then(|s| s.parse::<i64>().ok());
-
     if let Some(new_description) = mime_parser
         .get_header(HeaderDef::ChatGroupDescription)
         .map(|d| d.trim())
@@ -3353,22 +3349,20 @@ async fn apply_chat_name_and_avatar_changes(
         let new_description = sanitize_bidi_characters(new_description.trim());
         let old_description = chat.id.get_description(context).await?;
 
-        let chat_group_description_timestamp = chat
+        let old_timestamp = chat
             .param
             .get_i64(Param::ChatDescriptionTimestamp)
             .unwrap_or(0);
-        let chat_description_timestamp =
-            chat_description_timestamp.unwrap_or(mime_parser.timestamp_sent);
-        // To provide group description consistency, compare descriptions if timestamps are equal.
-        if (chat_group_description_timestamp, &new_description)
-            < (chat_description_timestamp, &old_description)
+        let timestamp_in_header = mime_parser
+            .get_header(HeaderDef::ChatGroupDescriptionTimestamp)
+            .and_then(|s| s.parse::<i64>().ok());
+
+        let new_timestamp = timestamp_in_header.unwrap_or(mime_parser.timestamp_sent);
+        // To provide consistency, compare descriptions if timestamps are equal.
+        if (new_timestamp, &new_description) > (old_timestamp, &old_description)
             && chat
                 .id
-                .update_timestamp(
-                    context,
-                    Param::ChatDescriptionTimestamp,
-                    chat_description_timestamp,
-                )
+                .update_timestamp(context, Param::ChatDescriptionTimestamp, old_timestamp)
                 .await?
             && new_description != old_description
         {
@@ -3376,8 +3370,8 @@ async fn apply_chat_name_and_avatar_changes(
             context
                 .sql
                 .execute(
-                    "UPDATE chats SET description=? WHERE id=?",
-                    (&new_description, chat.id),
+                    "INSERT OR REPLACE INTO chats_descriptions(id, description) VALUES(?, ?)",
+                    (chat.id, &new_description),
                 )
                 .await?;
             *send_event_chat_modified = true;
