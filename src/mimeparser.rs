@@ -776,7 +776,10 @@ impl MimeMessage {
             self.is_system_message = SystemMessage::MemberAddedToGroup;
         } else if self.get_header(HeaderDef::ChatGroupNameChanged).is_some() {
             self.is_system_message = SystemMessage::GroupNameChanged;
-        } else if self.get_header(HeaderDef::ChatGroupDescriptionChanged).is_some() {
+        } else if self
+            .get_header(HeaderDef::ChatGroupDescriptionChanged)
+            .is_some()
+        {
             self.is_system_message = SystemMessage::GroupDescriptionChanged;
         }
     }
