@@ -1272,23 +1272,6 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
         Ok(sort_timestamp)
     }
-
-    // TODO maybe move to be a free function
-    /// Load the chat description from the database.
-    ///
-    /// This should be shown in the profile page of the chat,
-    /// and is settable by [`set_chat_description`]
-    pub async fn get_description(&self, context: &Context) -> Result<String> {
-        let description = context
-            .sql
-            .query_get_value(
-                "SELECT description FROM chats_descriptions WHERE id=?",
-                (self,),
-            )
-            .await?
-            .unwrap_or_default();
-        Ok(description)
-    }
 }
 
 impl std::fmt::Display for ChatId {
@@ -4212,7 +4195,7 @@ async fn send_member_removal_msg(
 ///
 /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
 ///
-/// See also [`ChatId::get_description`]
+/// See also [`get_chat_description`]
 pub async fn set_chat_description(
     context: &Context,
     chat_id: ChatId,
@@ -4232,7 +4215,7 @@ async fn set_chat_description_ex(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
     let mut chat = Chat::load_from_db(context, chat_id).await?;
-    let old_description = chat_id.get_description(context).await?;
+    let old_description = get_chat_description(context, chat_id).await?;
     ensure!(
         chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
         "Can only set profile image for groups / broadcasts"
@@ -4262,7 +4245,7 @@ async fn set_chat_description_ex(
             let mut msg = Message::new(Viewtype::Text);
             msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
             msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
-            chat.param.set_i64(Param::ChatDescriptionTimestamp, time());
+            chat.param.set_i64(Param::GroupDescriptionTimestamp, time());
             chat.update_param(context).await?;
 
             msg.id = send_msg(context, chat_id, &mut msg).await?;
@@ -4282,6 +4265,23 @@ async fn set_chat_description_ex(
     Ok(())
 }
 
+// TODO maybe move to be a free function
+/// Load the chat description from the database.
+///
+/// This should be shown in the profile page of the chat,
+/// and is settable by [`set_chat_description`]
+pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<String> {
+    let description = context
+        .sql
+        .query_get_value(
+            "SELECT description FROM chats_descriptions WHERE id=?",
+            (chat_id,),
+        )
+        .await?
+        .unwrap_or_default();
+    Ok(description)
+}
+
 /// Set group or broadcast channel description.
 ///
 /// If the group is already _promoted_ (any message was sent to the group),
@@ -4290,7 +4290,7 @@ async fn set_chat_description_ex(
 ///
 /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
 ///
-/// To find out the description of a chat, use dc_chat_get_description().
+/// See [`get_chat_description`].
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
     rename_ex(context, Sync, chat_id, new_name).await
 }
