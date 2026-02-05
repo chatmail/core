@@ -3156,6 +3156,51 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_description() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // alice.set_config_bool(Config::SyncMsgs, true).await?;
+
+    tcm.section("Create a group chat, and add Bob");
+    let alice_chat_id = create_group(alice, "My Group").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    tcm.section("Alice sets a chat description");
+    set_chat_description(alice, alice_chat_id, "This is a cool group").await?;
+    let sent = alice.pop_sent_msg().await;
+
+    tcm.section("Bob receives the description change");
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
+    assert_eq!(
+        rcvd.text,
+        "Group description changed to \"This is a cool group\" by alice@example.org."
+    );
+
+    let bob_chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
+    assert_eq!(bob_chat.get_description(), "This is a cool group");
+
+    tcm.section("Check Alice's second device");
+    alice2.recv_msg(&sent).await;
+    let alice2_chat_id = get_chat_id_by_grpid(
+        alice2,
+        &Chat::load_from_db(alice, alice_chat_id).await?.grpid,
+    )
+    .await?
+    .unwrap()
+    .0;
+    let alice2_chat = Chat::load_from_db(alice2, alice2_chat_id).await?;
+    println!("alice2 chat description: {}", alice2_chat.get_description());
+    assert_eq!(alice2_chat.get_description(), "This is a cool group");
+
+    Ok(())
+}
+
 /// Tests that directly after broadcast-securejoin,
 /// the brodacast is shown correctly on both devices.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

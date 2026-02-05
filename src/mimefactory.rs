@@ -1602,6 +1602,20 @@ impl MimeFactory {
                 ));
             }
 
+            // TODO we don't want to send the description in every message
+            if !chat.description.is_empty() {
+                headers.push((
+                    "Chat-Group-Description",
+                    mail_builder::headers::text::Text::new(chat.description.clone()).into(),
+                ));
+            }
+            if let Some(ts) = chat.param.get_i64(Param::ChatDescriptionTimestamp) {
+                headers.push((
+                    "Chat-Group-Description-Timestamp",
+                    mail_builder::headers::text::Text::new(ts.to_string()).into(),
+                ));
+            }
+
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
@@ -1667,6 +1681,14 @@ impl MimeFactory {
                     headers.push((
                         "Chat-Group-Name-Changed",
                         mail_builder::headers::text::Text::new(old_name).into(),
+                    ));
+                }
+                SystemMessage::GroupDescriptionChanged => {
+                    let old_description = msg.param.get(Param::Arg).unwrap_or_default().to_string();
+                    // TODO this is unnecessary
+                    headers.push((
+                        "Chat-Group-Description-Changed",
+                        mail_builder::headers::text::Text::new(old_description).into(),
                     ));
                 }
                 SystemMessage::GroupImageChanged => {
