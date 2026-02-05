@@ -62,7 +62,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
         assert_eq!(info.has_video_initially(), true);
-        assert_text(t, m.id, "Outgoing call").await?;
+        assert_text(t, m.id, "Outgoing video call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
 
@@ -84,7 +84,7 @@ async fn setup_call() -> Result<CallSetup> {
         assert!(!info.is_accepted());
         assert_eq!(info.place_call_info, PLACE_INFO);
         assert_eq!(info.has_video_initially(), true);
-        assert_text(t, m.id, "Incoming call").await?;
+        assert_text(t, m.id, "Incoming video call").await?;
         assert_eq!(call_state(t, m.id).await?, CallState::Alerting);
     }
 
@@ -115,7 +115,7 @@ async fn accept_call() -> Result<CallSetup> {
     // Bob accepts the incoming call
     bob.accept_incoming_call(bob_call.id, ACCEPT_INFO.to_string())
         .await?;
-    assert_text(&bob, bob_call.id, "Incoming call").await?;
+    assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
@@ -129,7 +129,7 @@ async fn accept_call() -> Result<CallSetup> {
     assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Active);
 
     bob2.recv_msg_trash(&sent2).await;
-    assert_text(&bob, bob_call.id, "Incoming call").await?;
+    assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
         .await;
@@ -142,7 +142,7 @@ async fn accept_call() -> Result<CallSetup> {
 
     // Alice receives the acceptance message
     alice.recv_msg_trash(&sent2).await;
-    assert_text(&alice, alice_call.id, "Outgoing call").await?;
+    assert_text(&alice, alice_call.id, "Outgoing video call").await?;
     let ev = alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
@@ -164,7 +164,7 @@ async fn accept_call() -> Result<CallSetup> {
     assert_eq!(call_state(&alice, alice_call.id).await?, CallState::Active);
 
     alice2.recv_msg_trash(&sent2).await;
-    assert_text(&alice2, alice2_call.id, "Outgoing call").await?;
+    assert_text(&alice2, alice2_call.id, "Outgoing video call").await?;
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::OutgoingCallAccepted { .. }))
@@ -203,7 +203,7 @@ async fn test_accept_call_callee_ends() -> Result<()> {
 
     // Bob has accepted the call and also ends it
     bob.end_call(bob_call.id).await?;
-    assert_text(&bob, bob_call.id, "Incoming call\n<1 minute").await?;
+    assert_text(&bob, bob_call.id, "Incoming video call\n<1 minute").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
@@ -214,7 +214,7 @@ async fn test_accept_call_callee_ends() -> Result<()> {
     ));
 
     bob2.recv_msg_trash(&sent3).await;
-    assert_text(&bob2, bob2_call.id, "Incoming call\n<1 minute").await?;
+    assert_text(&bob2, bob2_call.id, "Incoming video call\n<1 minute").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
@@ -225,7 +225,7 @@ async fn test_accept_call_callee_ends() -> Result<()> {
 
     // Alice receives the ending message
     alice.recv_msg_trash(&sent3).await;
-    assert_text(&alice, alice_call.id, "Outgoing call\n<1 minute").await?;
+    assert_text(&alice, alice_call.id, "Outgoing video call\n<1 minute").await?;
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -236,7 +236,7 @@ async fn test_accept_call_callee_ends() -> Result<()> {
     ));
 
     alice2.recv_msg_trash(&sent3).await;
-    assert_text(&alice2, alice2_call.id, "Outgoing call\n<1 minute").await?;
+    assert_text(&alice2, alice2_call.id, "Outgoing video call\n<1 minute").await?;
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -266,7 +266,7 @@ async fn test_accept_call_caller_ends() -> Result<()> {
 
     // Bob has accepted the call but Alice ends it
     alice.end_call(alice_call.id).await?;
-    assert_text(&alice, alice_call.id, "Outgoing call\n<1 minute").await?;
+    assert_text(&alice, alice_call.id, "Outgoing video call\n<1 minute").await?;
     alice
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -278,7 +278,7 @@ async fn test_accept_call_caller_ends() -> Result<()> {
     ));
 
     alice2.recv_msg_trash(&sent3).await;
-    assert_text(&alice2, alice2_call.id, "Outgoing call\n<1 minute").await?;
+    assert_text(&alice2, alice2_call.id, "Outgoing video call\n<1 minute").await?;
     alice2
         .evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -290,7 +290,7 @@ async fn test_accept_call_caller_ends() -> Result<()> {
 
     // Bob receives the ending message
     bob.recv_msg_trash(&sent3).await;
-    assert_text(&bob, bob_call.id, "Incoming call\n<1 minute").await?;
+    assert_text(&bob, bob_call.id, "Incoming video call\n<1 minute").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
@@ -300,7 +300,7 @@ async fn test_accept_call_caller_ends() -> Result<()> {
     ));
 
     bob2.recv_msg_trash(&sent3).await;
-    assert_text(&bob2, bob2_call.id, "Incoming call\n<1 minute").await?;
+    assert_text(&bob2, bob2_call.id, "Incoming video call\n<1 minute").await?;
     bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
@@ -420,7 +420,7 @@ async fn test_caller_cancels_call() -> Result<()> {
     // Test that message summary says it is a missed call.
     let bob_call_msg = Message::load_from_db(&bob, bob_call.id).await?;
     let summary = bob_call_msg.get_summary(&bob, None).await?;
-    assert_eq!(summary.text, "📞 Missed call");
+    assert_eq!(summary.text, "🎥 Missed call");
 
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Missed call").await?;

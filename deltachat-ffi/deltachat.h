@@ -7544,12 +7544,6 @@ void dc_event_unref(dc_event_t* event);
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193
 
-/// "Outgoing call"
-#define DC_STR_OUTGOING_CALL 194
-
-/// "Incoming call"
-#define DC_STR_INCOMING_CALL 195
-
 /// "Declined call"
 #define DC_STR_DECLINED_CALL 196
 
@@ -7600,6 +7594,18 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as the first info messages in newly created classic email threads.
 #define DC_STR_CHAT_UNENCRYPTED_EXPLANATON 230
+
+/// "Outgoing audio call"
+#define DC_STR_OUTGOING_AUDIO_CALL 232
+
+/// "Outgoing video call"
+#define DC_STR_OUTGOING_VIDEO_CALL 233
+
+/// "Incoming audio call"
+#define DC_STR_INCOMING_AUDIO_CALL 234
+
+/// "Incoming video call"
+#define DC_STR_INCOMING_VIDEO_CALL 235
 
 /**
  * @}
