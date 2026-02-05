@@ -1602,13 +1602,12 @@ impl MimeFactory {
                 ));
             }
 
+            let description = chat.id.get_description(context).await?;
             // TODO we don't want to send the description in every message
-            if !chat.description.is_empty() {
-                headers.push((
-                    "Chat-Group-Description",
-                    mail_builder::headers::text::Text::new(chat.description.clone()).into(),
-                ));
-            }
+            headers.push((
+                "Chat-Group-Description",
+                mail_builder::headers::text::Text::new(description.clone()).into(),
+            ));
             if let Some(ts) = chat.param.get_i64(Param::ChatDescriptionTimestamp) {
                 headers.push((
                     "Chat-Group-Description-Timestamp",

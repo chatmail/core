@@ -3179,8 +3179,10 @@ async fn test_chat_description() -> Result<()> {
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
     assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
 
-    let bob_chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
-    assert_eq!(bob_chat.get_description(), "This is a cool group");
+    assert_eq!(
+        rcvd.chat_id.get_description(bob).await?,
+        "This is a cool group"
+    );
 
     tcm.section("Check Alice's second device");
     alice2.recv_msg(&sent).await;
@@ -3191,9 +3193,13 @@ async fn test_chat_description() -> Result<()> {
     .await?
     .unwrap()
     .0;
-    let alice2_chat = Chat::load_from_db(alice2, alice2_chat_id).await?;
-    println!("alice2 chat description: {}", alice2_chat.get_description());
-    assert_eq!(alice2_chat.get_description(), "This is a cool group");
+
+    assert_eq!(
+        alice2_chat_id.get_description(alice2).await?,
+        "This is a cool group"
+    );
+
+    //TODO check deleting again
 
     Ok(())
 }
