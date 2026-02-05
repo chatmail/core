@@ -1098,8 +1098,8 @@ impl CommandApi {
 
     /// Load the chat description from the database.
     ///
-    /// This should be shown in the profile page of the chat,
-    /// and is settable by [`Self::set_chat_description`] / `setChatDescription()`.
+    /// UIs show this in the profile page of the chat,
+    /// it is settable by [`Self::set_chat_description`] / `setChatDescription()`.
     async fn get_chat_description(&self, account_id: u32, chat_id: u32) -> Result<String> {
         let ctx = self.get_context(account_id).await?;
         chat::get_chat_description(&ctx, ChatId::new(chat_id)).await
