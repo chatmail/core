@@ -247,16 +247,18 @@ impl Message {
                 append_text = true;
             }
             Viewtype::Call => {
+                let call_info = context.load_call_by_id(self.id).await.unwrap_or(None);
+                let has_video = call_info.is_some_and(|c| c.has_video_initially());
                 let call_state = call_state(context, self.id)
                     .await
                     .unwrap_or(CallState::Alerting);
-                emoji = Some("📞");
+                emoji = Some(if has_video { "🎥" } else { "📞" });
                 type_name = Some(match call_state {
                     CallState::Alerting | CallState::Active | CallState::Completed { .. } => {
                         if self.from_id == ContactId::SELF {
-                            stock_str::outgoing_call(context).await
+                            stock_str::outgoing_call(context, has_video).await
                         } else {
-                            stock_str::incoming_call(context).await
+                            stock_str::incoming_call(context, has_video).await
                         }
                     }
                     CallState::Missed => stock_str::missed_call(context).await,

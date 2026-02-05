@@ -103,10 +103,14 @@ impl CallInfo {
         };
 
         if self.is_incoming() {
-            self.update_text(context, &format!("Incoming call\n{duration}"))
+            let incoming_call_str =
+                stock_str::incoming_call(context, self.has_video_initially()).await;
+            self.update_text(context, &format!("{incoming_call_str}\n{duration}"))
                 .await?;
         } else {
-            self.update_text(context, &format!("Outgoing call\n{duration}"))
+            let outgoing_call_str =
+                stock_str::outgoing_call(context, self.has_video_initially()).await;
+            self.update_text(context, &format!("{outgoing_call_str}\n{duration}"))
                 .await?;
         }
         Ok(())
@@ -201,7 +205,7 @@ impl Context {
         );
         ensure!(!chat.is_self_talk(), "Cannot call self");
 
-        let outgoing_call_str = stock_str::outgoing_call(self).await;
+        let outgoing_call_str = stock_str::outgoing_call(self, has_video_initially).await;
         let mut call = Message {
             viewtype: Viewtype::Call,
             text: outgoing_call_str,
@@ -358,7 +362,8 @@ impl Context {
                     call.update_text(self, &missed_call_str).await?;
                     self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
                 } else {
-                    let incoming_call_str = stock_str::incoming_call(self).await;
+                    let incoming_call_str =
+                        stock_str::incoming_call(self, call.has_video_initially()).await;
                     call.update_text(self, &incoming_call_str).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
                     let can_call_me = match who_can_call_me(self).await? {
@@ -399,7 +404,8 @@ impl Context {
                     ));
                 }
             } else {
-                let outgoing_call_str = stock_str::outgoing_call(self).await;
+                let outgoing_call_str =
+                    stock_str::outgoing_call(self, call.has_video_initially()).await;
                 call.update_text(self, &outgoing_call_str).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
             }
