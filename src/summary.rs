@@ -231,7 +231,7 @@ impl Message {
                             .unwrap_or_else(|_| "ErrWebxdcName".to_string()),
                     );
                 } else {
-                    type_file = Some(viewtype.to_locale_string(context).await);
+                    type_file = self.get_filename();
                 }
                 append_text = true;
             }
