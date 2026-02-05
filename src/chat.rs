@@ -4207,7 +4207,6 @@ pub async fn set_chat_description(
     set_chat_description_ex(context, Sync, chat_id, new_description).await
 }
 
-// TODO compare with set_chat_profile_image()
 async fn set_chat_description_ex(
     context: &Context,
     mut sync: sync::Sync,
@@ -4215,61 +4214,50 @@ async fn set_chat_description_ex(
     new_description: &str,
 ) -> Result<()> {
     let new_description = sanitize_bidi_characters(new_description.trim());
-    let mut success = false;
 
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
-    let chat = Chat::load_from_db(context, chat_id).await?;
+    let mut chat = Chat::load_from_db(context, chat_id).await?;
+    ensure!(
+        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
+        "Can only set profile image for groups / broadcasts"
+    );
     ensure!(
         !chat.grpid.is_empty(),
         "Cannot set description for ad hoc groups"
     );
 
-    if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
-        if chat.description == new_description {
-            success = true;
-        } else if !chat.is_self_in_chat(context).await? {
-            context.emit_event(EventType::ErrorSelfNotInGroup(
-                "Cannot set chat description; self not in group".into(),
-            ));
-        } else {
-            context
-                .sql
-                .execute(
-                    "UPDATE chats SET description=? WHERE id=?",
-                    (&new_description, chat_id),
-                )
-                .await?;
+    if chat.description == new_description {
+        // Nothing to do
+    } else if !chat.is_self_in_chat(context).await? {
+        context.emit_event(EventType::ErrorSelfNotInGroup(
+            "Cannot set chat description; self not in group".into(),
+        ));
+        bail!("Failed to set profile image");
+    } else {
+        context
+            .sql
+            .execute(
+                "UPDATE chats SET description=? WHERE id=?",
+                (&new_description, chat_id),
+            )
+            .await?;
 
-            if chat.is_promoted() {
-                let mut msg = Message::new(Viewtype::Text);
-                msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
-                msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
-                // msg.param.set(Param::Arg, &new_description); // TODO I don't think we need this
-                let timestamp = time();
-                // TODO not sure if we need this timestamp here -
-                // we don't have it for the chat name
-                msg.param
-                    .set_i64(Param::ChatDescriptionTimestamp, timestamp);
+        if chat.is_promoted() {
+            let mut msg = Message::new(Viewtype::Text);
+            msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
+            msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
+            chat.param.set_i64(Param::ChatDescriptionTimestamp, time());
+            chat.description = new_description.to_string();
+            chat.update_param(context).await?;
 
-                let mut chat = chat.clone();
-                chat.param
-                    .set_i64(Param::ChatDescriptionTimestamp, timestamp);
-                chat.description = new_description.to_string();
-                chat.update_param(context).await?;
-
-                msg.id = send_msg(context, chat_id, &mut msg).await?;
-                context.emit_msgs_changed(chat_id, msg.id);
-                sync = Nosync;
-            }
-            context.emit_event(EventType::ChatModified(chat_id));
-            success = true;
+            msg.id = send_msg(context, chat_id, &mut msg).await?;
+            context.emit_msgs_changed(chat_id, msg.id);
+            sync = Nosync;
         }
+        context.emit_event(EventType::ChatModified(chat_id));
     }
 
-    if !success {
-        bail!("Failed to set chat description");
-    }
     if sync.into() && chat.description != new_description {
         chat.sync(context, SyncAction::SetDescription(new_description))
             .await
@@ -4280,6 +4268,15 @@ async fn set_chat_description_ex(
     Ok(())
 }
 
+/// Set group or broadcast channel description.
+///
+/// If the group is already _promoted_ (any message was sent to the group),
+/// or if this is a brodacast channel,
+/// all members are informed by a special status message that is sent automatically by this function.
+///
+/// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
+///
+/// To find out the description of a chat, use dc_chat_get_description().
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
     rename_ex(context, Sync, chat_id, new_name).await
 }

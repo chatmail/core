@@ -3177,10 +3177,7 @@ async fn test_chat_description() -> Result<()> {
     tcm.section("Bob receives the description change");
     let rcvd = bob.recv_msg(&sent).await;
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
-    assert_eq!(
-        rcvd.text,
-        "Group description changed to \"This is a cool group\" by alice@example.org."
-    );
+    assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
 
     let bob_chat = Chat::load_from_db(bob, rcvd.chat_id).await?;
     assert_eq!(bob_chat.get_description(), "This is a cool group");
