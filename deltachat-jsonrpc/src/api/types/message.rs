@@ -388,7 +388,7 @@ impl From<download::DownloadState> for DownloadState {
 pub enum SystemMessageType {
     Unknown,
     GroupNameChanged,
-    GroupDescriptionChanged, // TODO maybe rename to ChatDescriptionChanged
+    GroupDescriptionChanged,
     GroupImageChanged,
     MemberAddedToGroup,
     MemberRemovedFromGroup,
