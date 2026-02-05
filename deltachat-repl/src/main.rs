@@ -179,7 +179,7 @@ const DB_COMMANDS: [&str; 11] = [
     "housekeeping",
 ];
 
-const CHAT_COMMANDS: [&str; 39] = [
+const CHAT_COMMANDS: [&str; 40] = [
     "listchats",
     "listarchived",
     "start-realtime",

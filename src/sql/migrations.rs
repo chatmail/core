@@ -1561,7 +1561,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
     inc_and_check(&mut migration_version, 147)?;
     if dbversion < migration_version {
         sql.execute_migration(
-            "ALTER TABLE chats ADD COLUMN description TEXT DEFAULT '';",
+            "CREATE TABLE chats_descriptions (id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL DEFAULT '') STRICT;",
             migration_version,
         )
         .await?;

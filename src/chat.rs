@@ -1272,6 +1272,19 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
 
         Ok(sort_timestamp)
     }
+
+    /// Returns chat description.
+    pub async fn get_description(&self, context: &Context) -> Result<String> {
+        let description = context
+            .sql
+            .query_get_value(
+                "SELECT description FROM chat_descriptions WHERE id=?",
+                (self,),
+            )
+            .await?
+            .unwrap_or_default();
+        Ok(description)
+    }
 }
 
 impl std::fmt::Display for ChatId {
@@ -1330,9 +1343,6 @@ pub struct Chat {
     /// Chat name.
     pub name: String,
 
-    /// Chat description.
-    pub description: String,
-
     /// Whether the chat is archived or pinned.
     pub visibility: ChatVisibility,
 
@@ -1360,7 +1370,7 @@ impl Chat {
             .sql
             .query_row(
                 "SELECT c.type, c.name, c.grpid, c.param, c.archived,
-                    c.blocked, c.locations_send_until, c.muted_until, c.description
+                    c.blocked, c.locations_send_until, c.muted_until
              FROM chats c
              WHERE c.id=?;",
                 (chat_id,),
@@ -1375,9 +1385,6 @@ impl Chat {
                         blocked: row.get::<_, Option<_>>(5)?.unwrap_or_default(),
                         is_sending_locations: row.get(6)?,
                         mute_duration: row.get(7)?,
-                        // TODO I'm not sure if we actually want to load the description every time the chat is opened
-                        // Probably there should be just an extra call to load it
-                        description: row.get::<_, String>(8)?,
                     };
                     Ok(c)
                 },
@@ -1543,11 +1550,6 @@ impl Chat {
     /// Returns chat name.
     pub fn get_name(&self) -> &str {
         &self.name
-    }
-
-    /// Returns chat description.
-    pub fn get_description(&self) -> &str {
-        &self.description
     }
 
     /// Returns mailing list address where messages are sent to.
@@ -4218,6 +4220,7 @@ async fn set_chat_description_ex(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
     let mut chat = Chat::load_from_db(context, chat_id).await?;
+    let old_description = chat_id.get_description(context).await?;
     ensure!(
         chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
         "Can only set profile image for groups / broadcasts"
@@ -4227,7 +4230,7 @@ async fn set_chat_description_ex(
         "Cannot set description for ad hoc groups"
     );
 
-    if chat.description == new_description {
+    if old_description == new_description {
         // Nothing to do
     } else if !chat.is_self_in_chat(context).await? {
         context.emit_event(EventType::ErrorSelfNotInGroup(
@@ -4248,7 +4251,6 @@ async fn set_chat_description_ex(
             msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
             msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
             chat.param.set_i64(Param::ChatDescriptionTimestamp, time());
-            chat.description = new_description.to_string();
             chat.update_param(context).await?;
 
             msg.id = send_msg(context, chat_id, &mut msg).await?;
@@ -4258,7 +4260,7 @@ async fn set_chat_description_ex(
         context.emit_event(EventType::ChatModified(chat_id));
     }
 
-    if sync.into() && chat.description != new_description {
+    if sync.into() && old_description != new_description {
         chat.sync(context, SyncAction::SetDescription(new_description))
             .await
             .log_err(context)

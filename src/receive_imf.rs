@@ -3351,6 +3351,7 @@ async fn apply_chat_name_and_avatar_changes(
         .map(|d| d.trim())
     {
         let new_description = sanitize_bidi_characters(new_description.trim());
+        let old_description = chat.id.get_description(context).await?;
 
         let chat_group_description_timestamp = chat
             .param
@@ -3360,7 +3361,7 @@ async fn apply_chat_name_and_avatar_changes(
             chat_description_timestamp.unwrap_or(mime_parser.timestamp_sent);
         // To provide group description consistency, compare descriptions if timestamps are equal.
         if (chat_group_description_timestamp, &new_description)
-            < (chat_description_timestamp, &chat.description)
+            < (chat_description_timestamp, &old_description)
             && chat
                 .id
                 .update_timestamp(
@@ -3369,7 +3370,7 @@ async fn apply_chat_name_and_avatar_changes(
                     chat_description_timestamp,
                 )
                 .await?
-            && new_description != chat.description
+            && new_description != old_description
         {
             info!(context, "Updating description for chat {}.", chat.id);
             context
