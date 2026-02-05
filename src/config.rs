@@ -712,12 +712,7 @@ impl Context {
         Self::check_config(key, value)?;
 
         let n_transports = self.count_transports().await?;
-        if n_transports > 1
-            && matches!(
-                key,
-                Config::MvboxMove | Config::OnlyFetchMvbox | Config::ShowEmails
-            )
-        {
+        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
             bail!("Cannot reconfigure {key} when multiple transports are configured");
         }
 

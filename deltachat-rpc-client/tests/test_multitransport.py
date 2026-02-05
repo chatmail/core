@@ -37,8 +37,8 @@ def test_add_second_address(acfactory) -> None:
         with pytest.raises(JsonRpcError):
             account.set_config(option, "1")
 
-    with pytest.raises(JsonRpcError):
-        account.set_config("show_emails", "0")
+    # show_emails does not matter for multi-relay, can be set to anything
+    account.set_config("show_emails", "0")
 
 
 @pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
@@ -57,8 +57,8 @@ def test_no_second_transport_with_mvbox(acfactory, key) -> None:
         account.add_transport_from_qr(qr)
 
 
-def test_no_second_transport_without_classic_emails(acfactory) -> None:
-    """Test that second transport cannot be configured if classic emails are not fetched."""
+def test_second_transport_without_classic_emails(acfactory) -> None:
+    """Test that second transport can be configured if classic emails are not fetched."""
     account = acfactory.new_configured_account()
     assert len(account.list_transports()) == 1
 
@@ -67,8 +67,7 @@ def test_no_second_transport_without_classic_emails(acfactory) -> None:
     qr = acfactory.get_account_qr()
     account.set_config("show_emails", "0")
 
-    with pytest.raises(JsonRpcError):
-        account.add_transport_from_qr(qr)
+    account.add_transport_from_qr(qr)
 
 
 def test_change_address(acfactory) -> None:
