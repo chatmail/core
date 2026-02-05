@@ -1273,7 +1273,11 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         Ok(sort_timestamp)
     }
 
-    /// Returns chat description.
+    // TODO maybe move to be a free function
+    /// Load the chat description from the database.
+    ///
+    /// This should be shown in the profile page of the chat,
+    /// and is settable by [`set_chat_description`]
     pub async fn get_description(&self, context: &Context) -> Result<String> {
         let description = context
             .sql
@@ -4200,7 +4204,15 @@ async fn send_member_removal_msg(
     send_msg(context, chat.id, &mut msg).await
 }
 
-/// Sets group or mailing list chat name.
+/// Set group or broadcast channel description.
+///
+/// If the group is already _promoted_ (any message was sent to the group),
+/// or if this is a brodacast channel,
+/// all members are informed by a special status message that is sent automatically by this function.
+///
+/// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
+///
+/// See also [`ChatId::get_description`]
 pub async fn set_chat_description(
     context: &Context,
     chat_id: ChatId,
