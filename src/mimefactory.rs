@@ -1693,12 +1693,12 @@ impl MimeFactory {
             if command == SystemMessage::GroupDescriptionChanged
                 || command == SystemMessage::MemberAddedToGroup
             {
-                let description = chat.id.get_description(context).await?;
+                let description = chat::get_chat_description(context, chat.id).await?;
                 headers.push((
                     "Chat-Group-Description",
                     mail_builder::headers::text::Text::new(description.clone()).into(),
                 ));
-                if let Some(ts) = chat.param.get_i64(Param::ChatDescriptionTimestamp) {
+                if let Some(ts) = chat.param.get_i64(Param::GroupDescriptionTimestamp) {
                     headers.push((
                         "Chat-Group-Description-Timestamp",
                         mail_builder::headers::text::Text::new(ts.to_string()).into(),

@@ -3347,11 +3347,11 @@ async fn apply_chat_name_and_avatar_changes(
         .map(|d| d.trim())
     {
         let new_description = sanitize_bidi_characters(new_description.trim());
-        let old_description = chat.id.get_description(context).await?;
+        let old_description = chat::get_chat_description(context, chat.id).await?;
 
         let old_timestamp = chat
             .param
-            .get_i64(Param::ChatDescriptionTimestamp)
+            .get_i64(Param::GroupDescriptionTimestamp)
             .unwrap_or(0);
         let timestamp_in_header = mime_parser
             .get_header(HeaderDef::ChatGroupDescriptionTimestamp)
@@ -3362,7 +3362,7 @@ async fn apply_chat_name_and_avatar_changes(
         if (new_timestamp, &new_description) > (old_timestamp, &old_description)
             && chat
                 .id
-                .update_timestamp(context, Param::ChatDescriptionTimestamp, old_timestamp)
+                .update_timestamp(context, Param::GroupDescriptionTimestamp, old_timestamp)
                 .await?
             && new_description != old_description
         {

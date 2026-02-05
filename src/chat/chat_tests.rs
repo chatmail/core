@@ -3193,13 +3193,16 @@ async fn test_chat_description(initial_description: &str) -> Result<()> {
     .unwrap()
     .0;
     assert_eq!(
-        alice2_chat_id.get_description(alice2).await?,
+        get_chat_description(alice2, alice2_chat_id).await?,
         initial_description
     );
 
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
-    assert_eq!(bob_chat_id.get_description(bob).await?, initial_description);
+    assert_eq!(
+        get_chat_description(bob, bob_chat_id).await?,
+        initial_description
+    );
 
     for description in ["This is a cool group", ""] {
         tcm.section(&format!(
@@ -3213,7 +3216,7 @@ async fn test_chat_description(initial_description: &str) -> Result<()> {
         assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
         assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
 
-        assert_eq!(rcvd.chat_id.get_description(bob).await?, description);
+        assert_eq!(get_chat_description(bob, rcvd.chat_id).await?, description);
 
         tcm.section("Check Alice's second device");
         alice2.recv_msg(&sent).await;
@@ -3225,7 +3228,10 @@ async fn test_chat_description(initial_description: &str) -> Result<()> {
         .unwrap()
         .0;
 
-        assert_eq!(alice2_chat_id.get_description(alice2).await?, description);
+        assert_eq!(
+            get_chat_description(alice2, alice2_chat_id).await?,
+            description
+        );
     }
 
     Ok(())

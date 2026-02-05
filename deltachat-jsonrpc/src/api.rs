@@ -1102,7 +1102,7 @@ impl CommandApi {
     /// and is settable by [`Self::set_chat_description`] / `setChatDescription()`.
     async fn get_chat_description(&self, account_id: u32, chat_id: u32) -> Result<String> {
         let ctx = self.get_context(account_id).await?;
-        ChatId::new(chat_id).get_description(&ctx).await
+        chat::get_chat_description(&ctx, ChatId::new(chat_id)).await
     }
 
     /// Set group profile image.
