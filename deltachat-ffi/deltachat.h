@@ -1870,7 +1870,6 @@ int             dc_remove_contact_from_chat  (dc_context_t* context, uint32_t ch
  */
 int             dc_set_chat_name             (dc_context_t* context, uint32_t chat_id, const char* name);
 
-
 /**
  * Set the chat's ephemeral message timer.
  *
