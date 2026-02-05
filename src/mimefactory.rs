@@ -1602,19 +1602,6 @@ impl MimeFactory {
                 ));
             }
 
-            let description = chat.id.get_description(context).await?;
-            // TODO we don't want to send the description in every message
-            headers.push((
-                "Chat-Group-Description",
-                mail_builder::headers::text::Text::new(description.clone()).into(),
-            ));
-            if let Some(ts) = chat.param.get_i64(Param::ChatDescriptionTimestamp) {
-                headers.push((
-                    "Chat-Group-Description-Timestamp",
-                    mail_builder::headers::text::Text::new(ts.to_string()).into(),
-                ));
-            }
-
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
@@ -1683,11 +1670,9 @@ impl MimeFactory {
                     ));
                 }
                 SystemMessage::GroupDescriptionChanged => {
-                    let old_description = msg.param.get(Param::Arg).unwrap_or_default().to_string();
-                    // TODO this is unnecessary
                     headers.push((
                         "Chat-Group-Description-Changed",
-                        mail_builder::headers::text::Text::new(old_description).into(),
+                        mail_builder::headers::text::Text::new("").into(),
                     ));
                 }
                 SystemMessage::GroupImageChanged => {
@@ -1703,6 +1688,22 @@ impl MimeFactory {
                     }
                 }
                 _ => {}
+            }
+
+            if command == SystemMessage::GroupDescriptionChanged
+                || command == SystemMessage::MemberAddedToGroup
+            {
+                let description = chat.id.get_description(context).await?;
+                headers.push((
+                    "Chat-Group-Description",
+                    mail_builder::headers::text::Text::new(description.clone()).into(),
+                ));
+                if let Some(ts) = chat.param.get_i64(Param::ChatDescriptionTimestamp) {
+                    headers.push((
+                        "Chat-Group-Description-Timestamp",
+                        mail_builder::headers::text::Text::new(ts.to_string()).into(),
+                    ));
+                }
             }
         }
 
