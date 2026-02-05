@@ -3157,35 +3157,34 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_chat_description() -> Result<()> {
+async fn test_chat_description_basic() {
+    test_chat_description("").await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_description_unpromoted_description() {
+    test_chat_description("Unpromoted description in the bedinning")
+        .await
+        .unwrap()
+}
+
+async fn test_chat_description(initial_description: &str) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    // alice.set_config_bool(Config::SyncMsgs, true).await?;
+    alice.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
 
     tcm.section("Create a group chat, and add Bob");
     let alice_chat_id = create_group(alice, "My Group").await?;
-    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
-    tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
-    tcm.section("Alice sets a chat description");
-    set_chat_description(alice, alice_chat_id, "This is a cool group").await?;
-    let sent = alice.pop_sent_msg().await;
+    if !initial_description.is_empty() {
+        set_chat_description(alice, alice_chat_id, initial_description).await?;
+    }
+    sync(alice, alice2).await;
 
-    tcm.section("Bob receives the description change");
-    let rcvd = bob.recv_msg(&sent).await;
-    assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
-    assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
-
-    assert_eq!(
-        rcvd.chat_id.get_description(bob).await?,
-        "This is a cool group"
-    );
-
-    tcm.section("Check Alice's second device");
-    alice2.recv_msg(&sent).await;
     let alice2_chat_id = get_chat_id_by_grpid(
         alice2,
         &Chat::load_from_db(alice, alice_chat_id).await?.grpid,
@@ -3193,13 +3192,41 @@ async fn test_chat_description() -> Result<()> {
     .await?
     .unwrap()
     .0;
-
     assert_eq!(
         alice2_chat_id.get_description(alice2).await?,
-        "This is a cool group"
+        initial_description
     );
 
-    //TODO check deleting again
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    assert_eq!(bob_chat_id.get_description(bob).await?, initial_description);
+
+    for description in ["This is a cool group", ""] {
+        tcm.section(&format!(
+            "Alice sets the chat description to '{description}'"
+        ));
+        set_chat_description(alice, alice_chat_id, description).await?;
+        let sent = alice.pop_sent_msg().await;
+
+        tcm.section("Bob receives the description change");
+        let rcvd = bob.recv_msg(&sent).await;
+        assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
+        assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
+
+        assert_eq!(rcvd.chat_id.get_description(bob).await?, description);
+
+        tcm.section("Check Alice's second device");
+        alice2.recv_msg(&sent).await;
+        let alice2_chat_id = get_chat_id_by_grpid(
+            alice2,
+            &Chat::load_from_db(alice, alice_chat_id).await?.grpid,
+        )
+        .await?
+        .unwrap()
+        .0;
+
+        assert_eq!(alice2_chat_id.get_description(alice2).await?, description);
+    }
 
     Ok(())
 }
