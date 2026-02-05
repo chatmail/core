@@ -591,8 +591,7 @@ impl Context {
             .get_config(key)
             .await?
             .and_then(|s| s.parse::<i32>().ok())
-            .map(|x| x != 0)
-            .unwrap_or_default())
+            .is_some_and(|x| x != 0))
     }
 
     /// Returns true if movebox ("DeltaChat" folder) should be watched.

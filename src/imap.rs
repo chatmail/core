@@ -2152,11 +2152,10 @@ pub(crate) async fn prefetch_should_download(
     let accepted_contact = origin.is_known();
     let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
         .await?
-        .map(|parent| match parent.is_dc_message {
+        .is_some_and(|parent| match parent.is_dc_message {
             MessengerMessage::No => false,
             MessengerMessage::Yes | MessengerMessage::Reply => true,
-        })
-        .unwrap_or_default();
+        });
 
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
