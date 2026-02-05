@@ -16,6 +16,7 @@ use super::color_int_to_hex_string;
 pub struct FullChat {
     id: u32,
     name: String,
+    description: String,
 
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
@@ -109,6 +110,7 @@ impl FullChat {
         Ok(FullChat {
             id: chat_id,
             name: chat.name.clone(),
+            description: chat.description.clone(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,
@@ -146,6 +148,7 @@ impl FullChat {
 pub struct BasicChat {
     id: u32,
     name: String,
+    description: String,
 
     /// True if the chat is encrypted.
     /// This means that all messages in the chat are encrypted,
@@ -197,6 +200,7 @@ impl BasicChat {
         Ok(BasicChat {
             id: chat_id,
             name: chat.name.clone(),
+            description: chat.description.clone(),
             is_encrypted: chat.is_encrypted(context).await?,
             profile_image, //BLOBS ?
             archived: chat.get_visibility() == chat::ChatVisibility::Archived,

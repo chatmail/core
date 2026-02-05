@@ -192,6 +192,7 @@ const CHAT_COMMANDS: [&str; 39] = [
     "addmember",
     "removemember",
     "groupname",
+    "groupdescription",
     "groupimage",
     "chatinfo",
     "sendlocations",

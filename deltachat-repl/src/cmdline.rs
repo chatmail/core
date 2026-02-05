@@ -343,6 +343,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  addmember <contact-id>\n\
                  removemember <contact-id>\n\
                  groupname <name>\n\
+                 groupdescription <description>\n\
                  groupimage <image>\n\
                  chatinfo\n\
                  sendlocations <seconds>\n\
@@ -769,6 +770,13 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             .await?;
 
             println!("Chat name set");
+        }
+        "groupdescription" => {
+            ensure!(sel_chat.is_some(), "No chat selected.");
+            ensure!(!arg1.is_empty(), "Argument <description> missing.");
+            chat::set_chat_description(&context, sel_chat.as_ref().unwrap().get_id(), arg1).await?;
+
+            println!("Chat description set");
         }
         "groupimage" => {
             ensure!(sel_chat.is_some(), "No chat selected.");

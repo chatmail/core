@@ -1330,6 +1330,9 @@ pub struct Chat {
     /// Chat name.
     pub name: String,
 
+    /// Chat description.
+    pub description: String,
+
     /// Whether the chat is archived or pinned.
     pub visibility: ChatVisibility,
 
@@ -1357,7 +1360,7 @@ impl Chat {
             .sql
             .query_row(
                 "SELECT c.type, c.name, c.grpid, c.param, c.archived,
-                    c.blocked, c.locations_send_until, c.muted_until
+                    c.blocked, c.locations_send_until, c.muted_until, c.description
              FROM chats c
              WHERE c.id=?;",
                 (chat_id,),
@@ -1372,6 +1375,9 @@ impl Chat {
                         blocked: row.get::<_, Option<_>>(5)?.unwrap_or_default(),
                         is_sending_locations: row.get(6)?,
                         mute_duration: row.get(7)?,
+                        // TODO I'm not sure if we actually want to load the description every time the chat is opened
+                        // Probably there should be just an extra call to load it
+                        description: row.get::<_, String>(8)?,
                     };
                     Ok(c)
                 },
@@ -1537,6 +1543,11 @@ impl Chat {
     /// Returns chat name.
     pub fn get_name(&self) -> &str {
         &self.name
+    }
+
+    /// Returns chat description.
+    pub fn get_description(&self) -> &str {
+        &self.description
     }
 
     /// Returns mailing list address where messages are sent to.
@@ -4188,6 +4199,87 @@ async fn send_member_removal_msg(
 }
 
 /// Sets group or mailing list chat name.
+pub async fn set_chat_description(
+    context: &Context,
+    chat_id: ChatId,
+    new_description: &str,
+) -> Result<()> {
+    set_chat_description_ex(context, Sync, chat_id, new_description).await
+}
+
+// TODO compare with set_chat_profile_image()
+async fn set_chat_description_ex(
+    context: &Context,
+    mut sync: sync::Sync,
+    chat_id: ChatId,
+    new_description: &str,
+) -> Result<()> {
+    let new_description = sanitize_bidi_characters(new_description.trim());
+    let mut success = false;
+
+    ensure!(!chat_id.is_special(), "Invalid chat ID");
+
+    let chat = Chat::load_from_db(context, chat_id).await?;
+    ensure!(
+        !chat.grpid.is_empty(),
+        "Cannot set description for ad hoc groups"
+    );
+
+    if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
+        if chat.description == new_description {
+            success = true;
+        } else if !chat.is_self_in_chat(context).await? {
+            context.emit_event(EventType::ErrorSelfNotInGroup(
+                "Cannot set chat description; self not in group".into(),
+            ));
+        } else {
+            context
+                .sql
+                .execute(
+                    "UPDATE chats SET description=? WHERE id=?",
+                    (&new_description, chat_id),
+                )
+                .await?;
+
+            if chat.is_promoted() {
+                let mut msg = Message::new(Viewtype::Text);
+                msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
+                msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
+                // msg.param.set(Param::Arg, &new_description); // TODO I don't think we need this
+                let timestamp = time();
+                // TODO not sure if we need this timestamp here -
+                // we don't have it for the chat name
+                msg.param
+                    .set_i64(Param::ChatDescriptionTimestamp, timestamp);
+
+                let mut chat = chat.clone();
+                chat.param
+                    .set_i64(Param::ChatDescriptionTimestamp, timestamp);
+                chat.description = new_description.to_string();
+                chat.update_param(context).await?;
+
+                msg.id = send_msg(context, chat_id, &mut msg).await?;
+                context.emit_msgs_changed(chat_id, msg.id);
+                sync = Nosync;
+            }
+            context.emit_event(EventType::ChatModified(chat_id));
+            success = true;
+        }
+    }
+
+    if !success {
+        bail!("Failed to set chat description");
+    }
+    if sync.into() && chat.description != new_description {
+        chat.sync(context, SyncAction::SetDescription(new_description))
+            .await
+            .log_err(context)
+            .ok();
+    }
+
+    Ok(())
+}
+
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
     rename_ex(context, Sync, chat_id, new_name).await
 }
@@ -5015,6 +5107,7 @@ pub(crate) enum SyncAction {
     ///
     /// The list is a list of pairs of fingerprint and address.
     SetPgpContacts(Vec<(String, String)>),
+    SetDescription(String),
     Delete,
 }
 
@@ -5113,6 +5206,9 @@ impl Context {
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
+            SyncAction::SetDescription(to) => {
+                set_chat_description_ex(self, Nosync, chat_id, to).await
+            }
             SyncAction::SetContacts(addrs) => set_contacts_by_addrs(self, chat_id, addrs).await,
             SyncAction::SetPgpContacts(fingerprint_addrs) => {
                 set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await

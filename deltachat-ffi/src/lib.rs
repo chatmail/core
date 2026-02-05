@@ -1842,6 +1842,27 @@ pub unsafe extern "C" fn dc_set_chat_name(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn dc_set_chat_description(
+    context: *mut dc_context_t,
+    chat_id: u32,
+    description: *const libc::c_char,
+) -> libc::c_int {
+    if context.is_null() || description.is_null() {
+        eprintln!("ignoring careless call to dc_set_chat_description()");
+        return 0;
+    }
+    let ctx = &*context;
+    let description = to_string_lossy(description);
+
+    block_on(async move {
+        chat::set_chat_description(ctx, ChatId::new(chat_id), &description)
+            .await
+            .map(|_| 1)
+            .unwrap_or_log_default(ctx, "Failed set_chat_description")
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn dc_set_chat_profile_image(
     context: *mut dc_context_t,
     chat_id: u32,
@@ -3064,6 +3085,16 @@ pub unsafe extern "C" fn dc_chat_get_name(chat: *mut dc_chat_t) -> *mut libc::c_
     }
     let ffi_chat = &*chat;
     ffi_chat.chat.get_name().strdup()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dc_chat_get_description(chat: *mut dc_chat_t) -> *mut libc::c_char {
+    if chat.is_null() {
+        eprintln!("ignoring careless call to dc_chat_get_description()");
+        return "".strdup();
+    }
+    let ffi_chat = &*chat;
+    ffi_chat.chat.get_description().strdup()
 }
 
 #[no_mangle]

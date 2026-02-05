@@ -8,7 +8,8 @@ use std::sync::LazyLock;
 use anyhow::{Context as _, Result, ensure};
 use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::{
-    ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_single_line,
+    ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_bidi_characters,
+    sanitize_single_line,
 };
 use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
@@ -3336,6 +3337,56 @@ async fn apply_chat_name_and_avatar_changes(
             let old_name = &sanitize_single_line(old_name);
             better_msg
                 .get_or_insert(stock_str::msg_grp_name(context, old_name, grpname, from_id).await);
+        }
+    }
+
+    // ========== Apply chat description changes ==========
+
+    let chat_description_timestamp = mime_parser
+        .get_header(HeaderDef::ChatGroupDescriptionTimestamp)
+        .and_then(|s| s.parse::<i64>().ok());
+
+    if let Some(new_description) = mime_parser
+        .get_header(HeaderDef::ChatGroupDescription)
+        .map(|d| d.trim())
+    {
+        let new_description = sanitize_bidi_characters(new_description.trim());
+
+        let chat_group_description_timestamp = chat
+            .param
+            .get_i64(Param::ChatDescriptionTimestamp)
+            .unwrap_or(0);
+        let chat_description_timestamp =
+            chat_description_timestamp.unwrap_or(mime_parser.timestamp_sent);
+        // To provide group description consistency, compare descriptions if timestamps are equal.
+        if (chat_group_description_timestamp, &new_description)
+            < (chat_description_timestamp, &chat.description)
+            && chat
+                .id
+                .update_timestamp(
+                    context,
+                    Param::ChatDescriptionTimestamp,
+                    chat_description_timestamp,
+                )
+                .await?
+            && new_description != chat.description
+        {
+            info!(context, "Updating description for chat {}.", chat.id);
+            context
+                .sql
+                .execute(
+                    "UPDATE chats SET description=? WHERE id=?",
+                    (&new_description, chat.id),
+                )
+                .await?;
+            *send_event_chat_modified = true;
+        }
+        if mime_parser
+            .get_header(HeaderDef::ChatGroupDescriptionChanged)
+            .is_some()
+        {
+            better_msg
+                .get_or_insert(stock_str::msg_chat_description_changed(context, from_id).await);
         }
     }
 

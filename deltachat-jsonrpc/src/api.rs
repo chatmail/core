@@ -1076,6 +1076,16 @@ impl CommandApi {
         chat::set_chat_name(&ctx, ChatId::new(chat_id), &new_name).await
     }
 
+    async fn set_chat_description(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        new_description: String,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        chat::set_chat_description(&ctx, ChatId::new(chat_id), &new_description).await
+    }
+
     /// Set group profile image.
     ///
     /// If the group is already _promoted_ (any message was sent to the group),
