@@ -4218,7 +4218,7 @@ async fn set_chat_description_ex(
     let old_description = get_chat_description(context, chat_id).await?;
     ensure!(
         chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
-        "Can only set profile image for groups / broadcasts"
+        "Can only set description for groups / broadcasts"
     );
     ensure!(
         !chat.grpid.is_empty(),
@@ -4265,11 +4265,10 @@ async fn set_chat_description_ex(
     Ok(())
 }
 
-// TODO maybe move to be a free function
 /// Load the chat description from the database.
 ///
-/// This should be shown in the profile page of the chat,
-/// and is settable by [`set_chat_description`]
+/// UIs show this in the profile page of the chat,
+/// it is settable by [`set_chat_description`]
 pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<String> {
     let description = context
         .sql
@@ -4282,15 +4281,13 @@ pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<
     Ok(description)
 }
 
-/// Set group or broadcast channel description.
+/// Sets group, mailing list, or broadcast channel chat name.
 ///
 /// If the group is already _promoted_ (any message was sent to the group),
 /// or if this is a brodacast channel,
 /// all members are informed by a special status message that is sent automatically by this function.
 ///
 /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
-///
-/// See [`get_chat_description`].
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
     rename_ex(context, Sync, chat_id, new_name).await
 }

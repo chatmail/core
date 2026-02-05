@@ -186,10 +186,10 @@ pub enum SystemMessage {
     #[default]
     Unknown = 0,
 
-    /// Group name changed.
+    /// Group or broadcast channel name changed.
     GroupNameChanged = 2,
 
-    /// Group avatar changed.
+    /// Group or broadcast channel avatar changed.
     GroupImageChanged = 3,
 
     /// Member was added to the group.
@@ -231,9 +231,6 @@ pub enum SystemMessage {
     /// send messages.
     SecurejoinWaitTimeout = 15,
 
-    /// Group description changed.
-    GroupDescriptionChanged = 19,
-
     /// Self-sent-message that contains only json used for multi-device-sync;
     /// if possible, we attach that to other messages as for locations.
     MultiDeviceSync = 20,
@@ -257,6 +254,9 @@ pub enum SystemMessage {
 
     /// Message indicating that a call was ended.
     CallEnded = 67,
+
+    /// Group or broadcast channel description changed.
+    GroupDescriptionChanged = 70,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";

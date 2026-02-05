@@ -3163,7 +3163,7 @@ async fn test_chat_description_basic() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_unpromoted_description() {
-    test_chat_description("Unpromoted description in the bedinning")
+    test_chat_description("Unpromoted description in the beginning")
         .await
         .unwrap()
 }
