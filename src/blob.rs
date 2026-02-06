@@ -388,14 +388,9 @@ impl<'a> BlobObject<'a> {
                 _ => img,
             };
 
-            // max_wh is the maximum image width and height, i.e. the resolution-limit.
-            // target_wh target-resolution for resizing the image.
+            // max_wh is the maximum image width and height, i.e. the resolution-limit,
+            // as set by the media-quality-setting.
             let exceeds_wh = img.width() > max_wh || img.height() > max_wh;
-            let mut target_wh = if exceeds_wh {
-                max_wh
-            } else {
-                max(img.width(), img.height())
-            };
             let exceeds_max_bytes = nr_bytes > max_bytes as u64;
 
             let jpeg_quality = 75;
@@ -434,6 +429,27 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                let resolution_of_longest_side_of_image = max(img.width(), img.height());
+                let square_root_of_number_of_pixels_in_image =
+                    f64::from(img.width() * img.height()).sqrt();
+
+                // target_wh will be used as the target-resolution for resizing the image,
+                // so that the longest sides of the image match the target-resolution,
+                // without changing the aspect-ratio.
+                let mut target_wh = if !is_avatar && exceeds_wh {
+                    // Limit resolution to the number of pixels that fit within max_wh * max_wh,
+                    // so that the image-quality does not depend on the aspect-ratio.
+                    (f64::from(resolution_of_longest_side_of_image)
+                        * (f64::from(max_wh) / square_root_of_number_of_pixels_in_image))
+                        as u32
+                } else {
+                    max_wh
+                };
+
+                if target_wh > resolution_of_longest_side_of_image {
+                    target_wh = resolution_of_longest_side_of_image
+                };
+
                 loop {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
@@ -467,7 +483,8 @@ impl<'a> BlobObject<'a> {
                             ));
                         }
 
-                        target_wh = target_wh * 2 / 3;
+                        // Note: This is only done for avatar-images.
+                        target_wh = target_wh * 7 / 8;
                     } else {
                         info!(
                             context,
