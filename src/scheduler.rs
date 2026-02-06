@@ -562,14 +562,6 @@ async fn fetch_idle(
         }
     }
 
-    // Synchronize Seen flags.
-    session
-        .sync_seen_flags(ctx, &watch_folder)
-        .await
-        .context("sync_seen_flags")
-        .log_err(ctx)
-        .ok();
-
     connection.connectivity.set_idle(ctx);
 
     ctx.emit_event(EventType::ImapInboxIdle);
