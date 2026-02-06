@@ -320,6 +320,11 @@ pub struct InnerContext {
             ) -> mail_builder::mime::MimePart<'a>,
         >,
     >,
+
+    /// Short lived DNS cache which only lives in memory.
+    /// Used for configuration from `dcaccount` links with ip address.
+    /// Like `dcaccount:example.org?a=127.0.0.1,[::1]`
+    pub(crate) dns_memory_cache: Arc<RwLock<HashMap<String, Vec<std::net::IpAddr>>>>,
 }
 
 /// The state of ongoing process.
@@ -496,6 +501,7 @@ impl Context {
             self_fingerprint: OnceLock::new(),
             connectivities: parking_lot::Mutex::new(Vec::new()),
             pre_encrypt_mime_hook: None.into(),
+            dns_memory_cache: Arc::new(RwLock::new(HashMap::new())),
         };
 
         let ctx = Context {

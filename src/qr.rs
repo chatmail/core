@@ -12,6 +12,7 @@ use percent_encoding::{NON_ALPHANUMERIC, percent_decode_str, percent_encode};
 use rand::TryRngCore as _;
 use rand::distr::{Alphanumeric, SampleString};
 use serde::Deserialize;
+use url::Url;
 
 use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
@@ -656,6 +657,7 @@ async fn decode_ideltachat(context: &Context, prefix: &str, qr: &str) -> Result<
 /// scheme: `DCACCOUNT:example.org`
 /// or `DCACCOUNT:https://example.org/new`
 /// or `DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3`
+/// or `dcaccount:example.org?a=127.0.0.1,[::1]`
 fn decode_account(qr: &str) -> Result<Qr> {
     let payload = qr
         .get(DCACCOUNT_SCHEME.len()..)
@@ -784,8 +786,32 @@ pub(crate) async fn login_param_from_account_qr(
     if !payload.starts_with(HTTPS_SCHEME) {
         let rng = &mut rand::rngs::OsRng.unwrap_err();
         let username = Alphanumeric.sample_string(rng, 9);
-        let addr = username + "@" + payload;
+        let host = if let Some(start_of_query) = payload.find("?") {
+            payload
+                .get(..start_of_query)
+                .context("failed to ignore query part")?
+        } else {
+            payload
+        };
+        let addr = username + "@" + host;
         let password = Alphanumeric.sample_string(rng, 50);
+
+        let dns_prefill: Vec<String> = match Url::parse(qr) {
+            Ok(url) => {
+                let options = url.query_pairs();
+                let parameter_map: BTreeMap<String, String> = options
+                    .map(|(key, value)| (key.into_owned(), value.into_owned()))
+                    .collect();
+                parameter_map
+                    .get("a")
+                    .map(|ips| ips.split(",").map(|s| s.to_owned()).collect())
+                    .unwrap_or_default()
+            }
+            Err(err) => {
+                error!(context, "error parsing parameter of account url: {err}");
+                Default::default()
+            }
+        };
 
         let param = EnteredLoginParam {
             addr,
@@ -796,6 +822,7 @@ pub(crate) async fn login_param_from_account_qr(
             smtp: Default::default(),
             certificate_checks: EnteredCertificateChecks::Strict,
             oauth2: false,
+            dns_prefill,
         };
         return Ok(param);
     }
@@ -816,6 +843,7 @@ pub(crate) async fn login_param_from_account_qr(
             smtp: Default::default(),
             certificate_checks: EnteredCertificateChecks::Strict,
             oauth2: false,
+            dns_prefill: Default::default(),
         };
 
         Ok(param)

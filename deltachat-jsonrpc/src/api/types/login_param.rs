@@ -54,6 +54,9 @@ pub struct EnteredLoginParam {
     /// If true, login via OAUTH2 (not recommended anymore).
     /// Default: false
     pub oauth2: Option<bool>,
+
+    /// IP addresses for prefilling DNS
+    pub dns_prefill: Vec<String>,
 }
 
 impl From<dc::EnteredLoginParam> for EnteredLoginParam {
@@ -75,6 +78,7 @@ impl From<dc::EnteredLoginParam> for EnteredLoginParam {
             smtp_password: param.smtp.password.into_option(),
             certificate_checks: certificate_checks.into_option(),
             oauth2: param.oauth2.into_option(),
+            dns_prefill: param.dns_prefill,
         }
     }
 }
@@ -101,6 +105,7 @@ impl TryFrom<EnteredLoginParam> for dc::EnteredLoginParam {
             },
             certificate_checks: param.certificate_checks.unwrap_or_default().into(),
             oauth2: param.oauth2.unwrap_or_default(),
+            dns_prefill: param.dns_prefill,
         })
     }
 }
