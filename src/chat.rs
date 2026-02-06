@@ -4223,7 +4223,7 @@ async fn set_chat_description_ex(
 
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
-    let mut chat = Chat::load_from_db(context, chat_id).await?;
+    let chat = Chat::load_from_db(context, chat_id).await?;
     let old_description = get_chat_description(context, chat_id).await?;
     ensure!(
         chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
