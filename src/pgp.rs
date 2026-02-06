@@ -4,13 +4,12 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Cursor};
 
 use anyhow::{Context as _, Result, bail};
-use chrono::SubsecRound;
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, KeyType as PgpKeyType,
-    Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey,
-    SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig, TheRing,
+    ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, EncryptionCaps,
+    KeyType as PgpKeyType, Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey,
+    SignedPublicSubKey, SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig, TheRing,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
@@ -18,8 +17,7 @@ use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
 use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
-    CompressionAlgorithm, KeyDetails, KeyVersion, Password, PublicKeyTrait, SecretKeyTrait as _,
-    StringToKey,
+    CompressionAlgorithm, KeyDetails, KeyVersion, Password, SigningKey as _, StringToKey,
 };
 use rand_old::{Rng as _, thread_rng};
 use tokio::runtime::Handle;
@@ -83,9 +81,7 @@ impl KeyPair {
     ///
     /// Public key is split off the secret key.
     pub fn new(secret: SignedSecretKey) -> Result<Self> {
-        use crate::key::DcSecretKey;
-
-        let public = secret.split_public_key()?;
+        let public = secret.to_public_key();
         Ok(Self { public, secret })
     }
 }
@@ -123,7 +119,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
         .subkey(
             SubkeyParamsBuilder::default()
                 .key_type(encryption_key_type)
-                .can_encrypt(true)
+                .can_encrypt(EncryptionCaps::All)
                 .passphrase(None)
                 .build()
                 .context("failed to build subkey parameters")?,
@@ -134,18 +130,16 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
     let mut rng = thread_rng();
     let secret_key = key_params
         .generate(&mut rng)
-        .context("failed to generate the key")?
-        .sign(&mut rng, &Password::empty())
-        .context("failed to sign secret key")?;
+        .context("Failed to generate the key")?;
     secret_key
-        .verify()
-        .context("invalid secret key generated")?;
+        .verify_bindings()
+        .context("Invalid secret key generated")?;
 
     let key_pair = KeyPair::new(secret_key)?;
     key_pair
         .public
-        .verify()
-        .context("invalid public key generated")?;
+        .verify_bindings()
+        .context("Invalid public key generated")?;
     Ok(key_pair)
 }
 
@@ -157,7 +151,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
 fn select_pk_for_encryption(key: &SignedPublicKey) -> Option<&SignedPublicSubKey> {
     key.public_subkeys
         .iter()
-        .find(|subkey| subkey.is_encryption_key())
+        .find(|subkey| subkey.algorithm().can_encrypt())
 }
 
 /// Version of SEIPD packet to use.
@@ -194,7 +188,7 @@ pub async fn pk_encrypt(
             let subpkts = {
                 let mut hashed = Vec::with_capacity(1 + public_keys_for_encryption.len() + 1);
                 hashed.push(Subpacket::critical(SubpacketData::SignatureCreationTime(
-                    chrono::Utc::now().trunc_subsecs(0),
+                    pgp::types::Timestamp::now(),
                 ))?);
                 // Test "elena" uses old Delta Chat.
                 let skip = private_key_for_signing.dc_fingerprint().hex()
@@ -215,8 +209,8 @@ pub async fn pk_encrypt(
                 ))?);
                 let mut unhashed = vec![];
                 if private_key_for_signing.version() <= KeyVersion::V4 {
-                    unhashed.push(Subpacket::regular(SubpacketData::Issuer(
-                        private_key_for_signing.key_id(),
+                    unhashed.push(Subpacket::regular(SubpacketData::IssuerKeyId(
+                        private_key_for_signing.legacy_key_id(),
                     ))?);
                 }
                 SubpacketConfig::UserDefined { hashed, unhashed }
@@ -302,15 +296,15 @@ pub fn pk_calc_signature(
             private_key_for_signing.fingerprint(),
         ))?,
         Subpacket::critical(SubpacketData::SignatureCreationTime(
-            chrono::Utc::now().trunc_subsecs(0),
+            pgp::types::Timestamp::now(),
         ))?,
     ];
     config.unhashed_subpackets = vec![];
     if private_key_for_signing.version() <= KeyVersion::V4 {
         config
             .unhashed_subpackets
-            .push(Subpacket::regular(SubpacketData::Issuer(
-                private_key_for_signing.key_id(),
+            .push(Subpacket::regular(SubpacketData::IssuerKeyId(
+                private_key_for_signing.legacy_key_id(),
             ))?);
     }
 

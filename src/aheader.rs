@@ -110,9 +110,9 @@ impl FromStr for Aheader {
                 SignedPublicKey::from_base64(&raw).context("autocrypt key cannot be decoded")
             })
             .and_then(|key| {
-                key.verify()
+                key.verify_bindings()
                     .and(Ok(key))
-                    .context("autocrypt key cannot be verified")
+                    .context("Autocrypt key cannot be verified")
             })?;
 
         let prefer_encrypt = attributes

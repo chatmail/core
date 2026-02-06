@@ -32,7 +32,7 @@ use crate::contact::{
 };
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, DcKey, DcSecretKey, self_fingerprint};
+use crate::key::{self, DcKey, self_fingerprint};
 use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MessageState, MsgId, update_msg_state};
@@ -1355,7 +1355,7 @@ impl SentMessage<'_> {
 pub fn alice_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1365,7 +1365,7 @@ pub fn alice_keypair() -> KeyPair {
 pub fn bob_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1376,7 +1376,7 @@ pub fn charlie_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
             .unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1386,7 +1386,7 @@ pub fn charlie_keypair() -> KeyPair {
 pub fn dom_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1396,7 +1396,7 @@ pub fn dom_keypair() -> KeyPair {
 pub fn elena_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1406,7 +1406,7 @@ pub fn elena_keypair() -> KeyPair {
 pub fn fiona_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
