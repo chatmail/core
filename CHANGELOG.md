@@ -119,7 +119,7 @@
 - [**breaking**] Jsonrpc: remove `contacts` from `FullChat`. To migrate load contacts on demand via `get_contacts_by_ids` using `FullChat.contactIds` ([#7282](https://github.com/chatmail/core/pull/7282)).
 - jsonrpc: Add run_until parameter for bots ([#7688](https://github.com/chatmail/core/pull/7688)).
 - rust, jsonrpc: Add `get_message_read_receipt_count` method ([#7732](https://github.com/chatmail/core/pull/7732)).
-- rust and jsonrpc: Marknoticed_all_chats method to mark all chats as notices, including muted ones. ([#7709](https://github.com/chatmail/core/pull/7709)).
+- rust and jsonrpc: Marknoticed_all_chats method to mark all chats as noticed, including muted ones. ([#7709](https://github.com/chatmail/core/pull/7709)).
 - Public re-export of Connectivity ([#7737](https://github.com/chatmail/core/pull/7737)).
 
 ### Documentation
