@@ -1680,8 +1680,8 @@ async fn test_save_mime_headers_off() -> anyhow::Result<()> {
 
     let msg = bob.recv_msg(&alice.pop_sent_msg().await).await;
     assert_eq!(msg.get_text(), "hi!");
-    let mime = message::get_mime_headers(&bob, msg.id).await?;
-    assert!(mime.is_empty());
+    let html = msg.id.get_html(&bob).await?;
+    assert!(html.is_none());
     Ok(())
 }
 

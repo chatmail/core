@@ -32,13 +32,12 @@ use crate::mimeparser::{SystemMessage, parse_message_id};
 use crate::param::{Param, Params};
 use crate::pgp::split_armored_data;
 use crate::reaction::get_msg_reactions;
-use crate::sql;
 use crate::summary::Summary;
 use crate::sync::SyncData;
 use crate::tools::create_outgoing_rfc724_mid;
 use crate::tools::{
-    buf_compress, buf_decompress, get_filebytes, get_filemeta, gm2local_offset, read_file,
-    sanitize_filename, time, timestamp_to_str,
+    get_filebytes, get_filemeta, gm2local_offset, read_file, sanitize_filename, time,
+    timestamp_to_str,
 };
 
 /// Message ID, including reserved IDs.
@@ -1615,62 +1614,6 @@ pub(crate) fn guess_msgtype_from_path_suffix(path: &Path) -> Option<(Viewtype, &
         }
     };
     Some(info)
-}
-
-/// Get the raw mime-headers of the given message.
-/// Raw headers are saved for large messages
-/// that need a "Show full message..."
-/// to see HTML part.
-///
-/// Returns an empty vector if there are no headers saved for the given message.
-pub(crate) async fn get_mime_headers(context: &Context, msg_id: MsgId) -> Result<Vec<u8>> {
-    let (headers, compressed) = context
-        .sql
-        .query_row(
-            "SELECT mime_headers, mime_compressed FROM msgs WHERE id=?",
-            (msg_id,),
-            |row| {
-                let headers = sql::row_get_vec(row, 0)?;
-                let compressed: bool = row.get(1)?;
-                Ok((headers, compressed))
-            },
-        )
-        .await?;
-    if compressed {
-        return buf_decompress(&headers);
-    }
-
-    let headers2 = headers.clone();
-    let compressed = match tokio::task::block_in_place(move || buf_compress(&headers2)) {
-        Err(e) => {
-            warn!(context, "get_mime_headers: buf_compress() failed: {}", e);
-            return Ok(headers);
-        }
-        Ok(o) => o,
-    };
-    let update = |conn: &mut rusqlite::Connection| {
-        match conn.execute(
-            "\
-            UPDATE msgs SET mime_headers=?, mime_compressed=1 \
-            WHERE id=? AND mime_headers!='' AND mime_compressed=0",
-            (compressed, msg_id),
-        ) {
-            Ok(rows_updated) => ensure!(rows_updated <= 1),
-            Err(e) => {
-                warn!(context, "get_mime_headers: UPDATE failed: {}", e);
-                return Err(e.into());
-            }
-        }
-        Ok(())
-    };
-    if let Err(e) = context.sql.call_write(update).await {
-        warn!(
-            context,
-            "get_mime_headers: failed to update mime_headers: {}", e
-        );
-    }
-
-    Ok(headers)
 }
 
 /// Delete a single message from the database, including references in other tables.
