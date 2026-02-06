@@ -1394,10 +1394,7 @@ impl MimeFactory {
             }
         }
 
-        if chat.typ == Chattype::Group
-            || chat.typ == Chattype::OutBroadcast
-            || chat.typ == Chattype::InBroadcast
-        {
+        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
             headers.push((
                 "Chat-Group-Name",
                 mail_builder::headers::text::Text::new(chat.name.to_string()).into(),
@@ -1408,7 +1405,11 @@ impl MimeFactory {
                     mail_builder::headers::text::Text::new(ts.to_string()).into(),
                 ));
             }
-
+        }
+        if chat.typ == Chattype::Group
+            || chat.typ == Chattype::OutBroadcast
+            || chat.typ == Chattype::InBroadcast
+        {
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
