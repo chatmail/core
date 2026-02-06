@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.41.0] - 2026-02-06
+
+### Features / Changes
+
+- Do not require `ShowEmails` to be set to `All` for adding second relay.
+- Use different strings for audio and video calls.
+
+### Fixes
+
+- Don't set download state to Failure if message is available on another Session's transport ([#7684](https://github.com/chatmail/core/pull/7684)).
+- Make use of call stock strings.
+
+### Miscellaneous Tasks
+
+- cargo: Bump `time` from 0.3.37 to 0.3.47.
+
 ## [2.40.0] - 2026-02-04
 
 ### Features / Changes
@@ -7696,3 +7712,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.38.0]: https://github.com/chatmail/core/compare/v2.37.0..v2.38.0
 [2.39.0]: https://github.com/chatmail/core/compare/v2.38.0..v2.39.0
 [2.40.0]: https://github.com/chatmail/core/compare/v2.39.0..v2.40.0
+[2.41.0]: https://github.com/chatmail/core/compare/v2.40.0..v2.41.0
