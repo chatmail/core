@@ -5,11 +5,9 @@ use anyhow::{Context as _, Result};
 use async_imap::Session as ImapSession;
 use async_imap::types::Mailbox;
 use futures::TryStreamExt;
-use tokio::sync::Mutex;
 
 use crate::imap::capabilities::Capabilities;
 use crate::net::session::SessionStream;
-use crate::tools;
 
 /// Prefetch:
 /// - Message-ID to check if we already have the message.
@@ -45,8 +43,6 @@ pub(crate) struct Session {
     pub selected_mailbox: Option<Mailbox>,
 
     pub selected_folder_needs_expunge: bool,
-
-    pub(crate) last_full_folder_scan: Mutex<Option<tools::Time>>,
 
     /// True if currently selected folder has new messages.
     ///
@@ -84,7 +80,6 @@ impl Session {
             selected_folder: None,
             selected_mailbox: None,
             selected_folder_needs_expunge: false,
-            last_full_folder_scan: Mutex::new(None),
             new_mail: false,
             resync_request_sender,
         }
