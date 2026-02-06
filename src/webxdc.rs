@@ -34,7 +34,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tokio::{fs::File, io::BufReader};
 
-use crate::chat::{self, Chat};
+use crate::chat::{self, CantSendReason, Chat};
 use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
@@ -534,9 +534,14 @@ impl Context {
         let chat = Chat::load_from_db(self, chat_id)
             .await
             .with_context(|| format!("Failed to load chat {chat_id} from the database"))?;
-        if let Some(reason) = chat.why_cant_send(self).await.with_context(|| {
-            format!("Failed to check if webxdc update can be sent to chat {chat_id}")
-        })? {
+        let skip_fn = |reason: &CantSendReason| *reason == CantSendReason::InBroadcast;
+        if let Some(reason) = chat
+            .why_cant_send_ex(self, &skip_fn)
+            .await
+            .with_context(|| {
+                format!("Failed to check if webxdc update can be sent to chat {chat_id}")
+            })?
+        {
             bail!("Cannot send to {chat_id}: {reason}.");
         }
 
