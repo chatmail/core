@@ -2805,6 +2805,15 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
             "alice@example.org charlie@example.net"
         );
 
+        // Check additionally that subscribers don't send "Chat-Group-Name*" headers.
+        let parsed = alice.parse_msg(&request_with_auth).await;
+        assert!(parsed.get_header(HeaderDef::ChatGroupName).is_none());
+        assert!(
+            parsed
+                .get_header(HeaderDef::ChatGroupNameTimestamp)
+                .is_none()
+        );
+
         alice.recv_msg_trash(&request_with_auth).await;
     }
 
