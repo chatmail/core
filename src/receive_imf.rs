@@ -3359,7 +3359,7 @@ async fn apply_chat_name_and_avatar_changes(
 
         let new_timestamp = timestamp_in_header.unwrap_or(mime_parser.timestamp_sent);
         // To provide consistency, compare descriptions if timestamps are equal.
-        if (new_timestamp, &new_description) >= (old_timestamp, &old_description)
+        if (old_timestamp, &old_description) < (new_timestamp, &new_description)
             && chat
                 .id
                 .update_timestamp(context, Param::GroupDescriptionTimestamp, new_timestamp)

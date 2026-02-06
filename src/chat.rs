@@ -2807,9 +2807,18 @@ async fn render_mime_message_and_pre_message(
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
 pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
-    if msg.param.get_cmd() == SystemMessage::GroupNameChanged {
+    let cmd = msg.param.get_cmd();
+    if cmd == SystemMessage::GroupNameChanged || cmd == SystemMessage::GroupDescriptionChanged {
         msg.chat_id
-            .update_timestamp(context, Param::GroupNameTimestamp, msg.timestamp_sort)
+            .update_timestamp(
+                context,
+                if cmd == SystemMessage::GroupNameChanged {
+                    Param::GroupNameTimestamp
+                } else {
+                    Param::GroupDescriptionTimestamp
+                },
+                msg.timestamp_sort,
+            )
             .await?;
     }
 
@@ -4245,8 +4254,6 @@ async fn set_chat_description_ex(
             let mut msg = Message::new(Viewtype::Text);
             msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
             msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
-            chat.param.set_i64(Param::GroupDescriptionTimestamp, time());
-            chat.update_param(context).await?;
 
             msg.id = send_msg(context, chat_id, &mut msg).await?;
             context.emit_msgs_changed(chat_id, msg.id);
