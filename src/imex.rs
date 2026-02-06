@@ -19,7 +19,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::e2ee;
 use crate::events::EventType;
-use crate::key::{self, DcKey, DcSecretKey, SignedPublicKey, SignedSecretKey};
+use crate::key::{self, DcKey, SignedPublicKey, SignedSecretKey};
 use crate::log::{LogExt, warn};
 use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
@@ -142,7 +142,7 @@ pub async fn has_backup(_context: &Context, dir_name: &Path) -> Result<String> {
 
 async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
     let private_key = SignedSecretKey::from_asc(armored)?;
-    let public_key = private_key.split_public_key()?;
+    let public_key = private_key.to_public_key();
 
     let keypair = pgp::KeyPair {
         public: public_key,
@@ -153,7 +153,7 @@ async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
     info!(
         context,
         "stored self key: {:?}",
-        keypair.secret.public_key().key_id()
+        keypair.secret.public_key().legacy_key_id()
     );
     Ok(())
 }

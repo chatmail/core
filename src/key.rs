@@ -10,7 +10,7 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{KeyDetails, KeyId, Password};
+use pgp::types::{KeyDetails, KeyId};
 use tokio::runtime::Handle;
 
 use crate::context::Context;
@@ -264,7 +264,7 @@ impl DcKey for SignedPublicKey {
     }
 
     fn key_id(&self) -> KeyId {
-        KeyDetails::key_id(self)
+        KeyDetails::legacy_key_id(self)
     }
 }
 
@@ -291,30 +291,7 @@ impl DcKey for SignedSecretKey {
     }
 
     fn key_id(&self) -> KeyId {
-        KeyDetails::key_id(&**self)
-    }
-}
-
-/// Deltachat extension trait for secret keys.
-///
-/// Provides some convenience wrappers only applicable to [SignedSecretKey].
-pub(crate) trait DcSecretKey {
-    /// Create a public key from a private one.
-    fn split_public_key(&self) -> Result<SignedPublicKey>;
-}
-
-impl DcSecretKey for SignedSecretKey {
-    fn split_public_key(&self) -> Result<SignedPublicKey> {
-        self.verify()?;
-        let unsigned_pubkey = self.public_key();
-        let mut rng = rand_old::thread_rng();
-        let signed_pubkey = unsigned_pubkey.sign(
-            &mut rng,
-            &self.primary_key,
-            self.primary_key.public_key(),
-            &Password::empty(),
-        )?;
-        Ok(signed_pubkey)
+        KeyDetails::legacy_key_id(&**self)
     }
 }
 
@@ -426,7 +403,7 @@ pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> 
 /// Use import/export APIs instead.
 pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Result<()> {
     let secret = SignedSecretKey::from_asc(secret_data)?;
-    let public = secret.split_public_key()?;
+    let public = secret.to_public_key();
     let keypair = KeyPair { public, secret };
     store_self_keypair(context, &keypair).await?;
     Ok(())
@@ -700,12 +677,6 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
         let res0 = thr0.join().unwrap();
         let res1 = thr1.join().unwrap();
         assert_eq!(res0.unwrap(), res1.unwrap());
-    }
-
-    #[test]
-    fn test_split_key() {
-        let pubkey = KEYPAIR.secret.split_public_key().unwrap();
-        assert_eq!(pubkey.primary_key, KEYPAIR.public.primary_key);
     }
 
     /// Tests that setting a default key second time is not allowed.

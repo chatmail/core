@@ -496,8 +496,7 @@ impl MimeMessage {
                 // We don't decompress messages compressed multiple times.
                 None
             }
-            Some(pgp::composed::Message::SignedOnePass { reader, .. }) => reader.signature(),
-            Some(pgp::composed::Message::Signed { reader, .. }) => Some(reader.signature()),
+            Some(pgp::composed::Message::Signed { reader, .. }) => reader.signature(0),
             Some(pgp::composed::Message::Encrypted { .. }) => {
                 // The message is already decrypted once.
                 None
@@ -1636,7 +1635,7 @@ impl MimeMessage {
             }
             Ok(key) => key,
         };
-        if let Err(err) = key.verify() {
+        if let Err(err) = key.verify_bindings() {
             warn!(context, "Attached PGP key verification failed: {err:#}.");
             return Ok(false);
         }
