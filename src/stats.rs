@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use anyhow::{Context as _, Result};
 use deltachat_derive::FromSql;
 use num_traits::ToPrimitive;
-use pgp::types::PublicKeyTrait;
+use pgp::types::KeyDetails as _;
 use rand::distr::SampleString as _;
 use rusqlite::OptionalExtension;
 use serde::Serialize;
@@ -33,7 +33,7 @@ const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less th
 #[derive(Serialize)]
 struct Statistics {
     core_version: String,
-    key_create_timestamps: Vec<i64>,
+    key_create_timestamps: Vec<u32>,
     stats_id: String,
     is_chatmail: bool,
     contact_stats: Vec<ContactStat>,
@@ -345,10 +345,10 @@ async fn get_stats(context: &Context) -> Result<String> {
         .get_config_u32(Config::StatsLastOldContactId)
         .await?;
 
-    let key_create_timestamps: Vec<i64> = load_self_public_keyring(context)
+    let key_create_timestamps: Vec<u32> = load_self_public_keyring(context)
         .await?
         .iter()
-        .map(|k| k.created_at().timestamp())
+        .map(|k| k.created_at().as_secs())
         .collect();
 
     let sending_enabled_timestamps =
