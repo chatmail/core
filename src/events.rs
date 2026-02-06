@@ -71,7 +71,7 @@ impl EventEmitter {
     /// [`try_recv`]: Self::try_recv
     pub async fn recv(&self) -> Option<Event> {
         let mut lock = self.0.lock().await;
-        match lock.recv().await {
+        match lock.recv_direct().await {
             Err(async_broadcast::RecvError::Overflowed(n)) => Some(Event {
                 id: 0,
                 typ: EventType::EventChannelOverflow { n },
