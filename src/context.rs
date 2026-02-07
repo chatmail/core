@@ -872,10 +872,6 @@ impl Context {
             .get_config(Config::ConfiguredInboxFolder)
             .await?
             .unwrap_or_else(|| "<unset>".to_string());
-        let configured_mvbox_folder = self
-            .get_config(Config::ConfiguredMvboxFolder)
-            .await?
-            .unwrap_or_else(|| "<unset>".to_string());
 
         let mut res = get_info();
 
@@ -958,7 +954,6 @@ impl Context {
             folders_configured.to_string(),
         );
         res.insert("configured_inbox_folder", configured_inbox_folder);
-        res.insert("configured_mvbox_folder", configured_mvbox_folder);
         res.insert("mdns_enabled", mdns_enabled.to_string());
         res.insert("bcc_self", bcc_self.to_string());
         res.insert("sync_msgs", sync_msgs.to_string());

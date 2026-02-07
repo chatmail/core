@@ -2271,22 +2271,12 @@ impl std::fmt::Display for UidRange {
     }
 }
 
-pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
-    let mut res = vec![Config::ConfiguredInboxFolder];
-    if context.should_watch_mvbox().await? {
-        res.push(Config::ConfiguredMvboxFolder);
-    }
-    Ok(res)
-}
-
 pub(crate) async fn get_watched_folders(context: &Context) -> Result<Vec<String>> {
-    let mut res = Vec::new();
-    for folder_config in get_watched_folder_configs(context).await? {
-        if let Some(folder) = context.get_config(folder_config).await? {
-            res.push(folder);
-        }
+    if context.get_config_bool(Config::OnlyFetchMvbox).await? {
+        Ok(vec!["DeltaChat".to_string()])
+    } else {
+        Ok(vec!["INBOX".to_string()])
     }
-    Ok(res)
 }
 
 #[cfg(test)]
