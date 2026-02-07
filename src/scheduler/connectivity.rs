@@ -5,11 +5,11 @@ use std::{iter::once, ops::Deref, sync::Arc};
 use anyhow::Result;
 use humansize::{BINARY, format_size};
 
+use crate::context::Context;
 use crate::events::EventType;
 use crate::imap::get_watched_folders;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
-use crate::context::Context;
 
 use super::InnerSchedulerState;
 
@@ -407,19 +407,19 @@ impl Context {
                 let mut folder_added = false;
 
                 if watched_folders.contains(folder) {
-                        let detailed = &state.get_detailed();
-                        ret += &*detailed.to_icon();
-                        ret += " <b>";
-                        if folder == "INBOX" {
-                            ret += &*domain_escaped;
-                        } else {
-                            ret += &*escaper::encode_minimal(&folder);
-                        }
-                        ret += ":</b> ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                        ret += "<br />";
+                    let detailed = &state.get_detailed();
+                    ret += &*detailed.to_icon();
+                    ret += " <b>";
+                    if folder == "INBOX" {
+                        ret += &*domain_escaped;
+                    } else {
+                        ret += &*escaper::encode_minimal(folder);
+                    }
+                    ret += ":</b> ";
+                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                    ret += "<br />";
 
-                        folder_added = true;
+                    folder_added = true;
                 }
 
                 if !folder_added && folder == "INBOX" {
