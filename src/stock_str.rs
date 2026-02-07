@@ -424,11 +424,11 @@ https://delta.chat/donate"))]
     #[strum(props(fallback = "Incoming video call"))]
     IncomingVideoCall = 235,
 
-    #[strum(props(fallback = "Chat description changed by %1$s."))]
+    #[strum(props(fallback = "You changed the chat description."))]
     MsgYouChangedDescription = 240,
 
-    #[strum(props(fallback = "You changed the chat description."))]
-    MsgYouChatDescriptionChangedBy = 241,
+    #[strum(props(fallback = "Chat description changed by %1$s."))]
+    MsgChatDescriptionChangedBy = 241,
 }
 
 impl StockMessage {
@@ -614,7 +614,7 @@ pub(crate) async fn msg_chat_description_changed(
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouChangedDescription).await
     } else {
-        translated(context, StockMessage::MsgYouChangedDescription)
+        translated(context, StockMessage::MsgChatDescriptionChangedBy)
             .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
