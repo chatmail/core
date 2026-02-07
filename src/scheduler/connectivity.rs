@@ -410,11 +410,7 @@ impl Context {
                     let detailed = &state.get_detailed();
                     ret += &*detailed.to_icon();
                     ret += " <b>";
-                    if folder == "INBOX" {
-                        ret += &*domain_escaped;
-                    } else {
-                        ret += &*escaper::encode_minimal(folder);
-                    }
+                    ret += &*domain_escaped;
                     ret += ":</b> ";
                     ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
                     ret += "<br />";
