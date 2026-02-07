@@ -315,7 +315,7 @@ struct SchedBox {
 
     /// Folder name
     folder: String,
-    
+
     conn_state: ImapConnectionState,
 
     /// IMAP loop task handle.
