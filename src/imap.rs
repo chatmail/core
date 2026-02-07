@@ -28,7 +28,7 @@ use crate::calls::{
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, DC_VERSION_STR, ShowEmails};
+use crate::constants::{Blocked, DC_VERSION_STR, ShowEmails};
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
@@ -172,18 +172,6 @@ pub enum FolderMeaning {
     /// from the real folder and the result of moving and deleting messages via
     /// virtual folder is unclear.
     Virtual,
-}
-
-impl FolderMeaning {
-    pub fn to_config(self) -> Option<Config> {
-        match self {
-            FolderMeaning::Unknown => None,
-            FolderMeaning::Spam => None,
-            FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
-            FolderMeaning::Trash => None,
-            FolderMeaning::Virtual => None,
-        }
-    }
 }
 
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
@@ -483,21 +471,13 @@ impl Imap {
     /// that folders are created and IMAP capabilities are determined.
     pub(crate) async fn prepare(&mut self, context: &Context) -> Result<Session> {
         let configuring = false;
-        let mut session = match self.connect(context, configuring).await {
+        let session = match self.connect(context, configuring).await {
             Ok(session) => session,
             Err(err) => {
                 self.connectivity.set_err(context, &err);
                 return Err(err);
             }
         };
-
-        let folders_configured = context
-            .sql
-            .get_raw_config_int(constants::DC_FOLDERS_CONFIGURED_KEY)
-            .await?;
-        if folders_configured.unwrap_or_default() < constants::DC_FOLDERS_CONFIGURED_VERSION {
-            self.configure_folders(context, &mut session).await?;
-        }
 
         Ok(session)
     }
@@ -1588,13 +1568,8 @@ impl Session {
             // Store new encrypted device token on the server
             // even if it is the same as the old one.
             if let Some(encrypted_device_token) = new_encrypted_device_token {
-                let folder = context
-                    .get_config(Config::ConfiguredInboxFolder)
-                    .await?
-                    .context("INBOX is not configured")?;
-
                 self.run_command_and_check_ok(&format_setmetadata(
-                    &folder,
+                    "INBOX",
                     &encrypted_device_token,
                 ))
                 .await
@@ -1637,54 +1612,6 @@ impl Session {
         while let Some(_response) = responses.try_next().await? {
             // Read all the responses
         }
-        Ok(())
-    }
-}
-
-impl Imap {
-    pub(crate) async fn configure_folders(
-        &mut self,
-        context: &Context,
-        session: &mut Session,
-    ) -> Result<()> {
-        let mut folders = session
-            .list(Some(""), Some("*"))
-            .await
-            .context("list_folders failed")?;
-        let mut folder_configs = BTreeMap::new();
-
-        while let Some(folder) = folders.try_next().await? {
-            info!(context, "Scanning folder: {:?}", folder);
-
-            let folder_meaning = get_folder_meaning_by_attrs(folder.attributes());
-            let folder_name_meaning = get_folder_meaning_by_name(folder.name());
-            if let Some(config) = folder_meaning.to_config() {
-                // Always takes precedence
-                folder_configs.insert(config, folder.name().to_string());
-            } else if let Some(config) = folder_name_meaning.to_config() {
-                // only set if none has been already set
-                folder_configs
-                    .entry(config)
-                    .or_insert_with(|| folder.name().to_string());
-            }
-        }
-        drop(folders);
-
-        context
-            .set_config_internal(Config::ConfiguredInboxFolder, Some("INBOX"))
-            .await?;
-        for (config, name) in folder_configs {
-            context.set_config_internal(config, Some(&name)).await?;
-        }
-        context
-            .sql
-            .set_raw_config_int(
-                constants::DC_FOLDERS_CONFIGURED_KEY,
-                constants::DC_FOLDERS_CONFIGURED_VERSION,
-            )
-            .await?;
-
-        info!(context, "FINISHED configuring IMAP-folders.");
         Ok(())
     }
 }

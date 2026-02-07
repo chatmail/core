@@ -862,16 +862,6 @@ impl Context {
         };
 
         let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
-        let folders_configured = self
-            .sql
-            .get_raw_config_int(constants::DC_FOLDERS_CONFIGURED_KEY)
-            .await?
-            .unwrap_or_default();
-
-        let configured_inbox_folder = self
-            .get_config(Config::ConfiguredInboxFolder)
-            .await?
-            .unwrap_or_else(|| "<unset>".to_string());
 
         let mut res = get_info();
 
@@ -949,11 +939,6 @@ impl Context {
                 .to_string(),
         );
         res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
-        res.insert(
-            constants::DC_FOLDERS_CONFIGURED_KEY,
-            folders_configured.to_string(),
-        );
-        res.insert("configured_inbox_folder", configured_inbox_folder);
         res.insert("mdns_enabled", mdns_enabled.to_string());
         res.insert("bcc_self", bcc_self.to_string());
         res.insert("sync_msgs", sync_msgs.to_string());
