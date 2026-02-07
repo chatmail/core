@@ -3210,6 +3210,10 @@ async fn test_chat_description(initial_description: &str) -> Result<()> {
         ));
         set_chat_description(alice, alice_chat_id, description).await?;
         let sent = alice.pop_sent_msg().await;
+        assert_eq!(
+            sent.load_from_db().await.text,
+            "You changed the chat description."
+        );
 
         tcm.section("Bob receives the description change");
         let rcvd = bob.recv_msg(&sent).await;
