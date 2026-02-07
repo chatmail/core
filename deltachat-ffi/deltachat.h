@@ -430,10 +430,6 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                    1=send a copy of outgoing messages to self (default).
  *                    Sending messages to self is needed for a proper multi-account setup,
  *                    however, on the other hand, may lead to unwanted notifications in non-delta clients.
- * - `mvbox_move`   = 1=detect chat messages,
- *                    move them to the `DeltaChat` folder,
- *                    and watch the `DeltaChat` folder for updates (default),
- *                    0=do not move chat-messages
  * - `only_fetch_mvbox` = 1=Do not fetch messages from folders other than the
  *                    `DeltaChat` folder. Messages will still be fetched from the
  *                    spam folder.
