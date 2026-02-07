@@ -6,10 +6,10 @@ use anyhow::Result;
 use humansize::{BINARY, format_size};
 
 use crate::events::EventType;
-use crate::imap::{FolderMeaning, get_watched_folder_configs};
+use crate::imap::get_watched_folders;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
-use crate::{context::Context, log::LogExt};
+use crate::context::Context;
 
 use super::InnerSchedulerState;
 
@@ -356,7 +356,7 @@ impl Context {
                     .map(|b| {
                         (
                             b.addr.clone(),
-                            b.meaning,
+                            b.folder.clone(),
                             b.conn_state.state.connectivity.clone(),
                         )
                     })
@@ -381,7 +381,7 @@ impl Context {
         //                                     [======67%=====       ]
         // =============================================================================================
 
-        let watched_folders = get_watched_folder_configs(self).await?;
+        let watched_folders = get_watched_folders(self).await?;
         let incoming_messages = stock_str::incoming_messages(self).await;
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
 
@@ -406,27 +406,23 @@ impl Context {
             for (_addr, folder, state) in folders {
                 let mut folder_added = false;
 
-                if let Some(config) = folder.to_config().filter(|c| watched_folders.contains(c)) {
-                    let f = self.get_config(config).await.log_err(self).ok().flatten();
-
-                    if let Some(foldername) = f {
+                if watched_folders.contains(folder) {
                         let detailed = &state.get_detailed();
                         ret += &*detailed.to_icon();
                         ret += " <b>";
-                        if folder == &FolderMeaning::Inbox {
+                        if folder == "INBOX" {
                             ret += &*domain_escaped;
                         } else {
-                            ret += &*escaper::encode_minimal(&foldername);
+                            ret += &*escaper::encode_minimal(&folder);
                         }
                         ret += ":</b> ";
                         ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
                         ret += "<br />";
 
                         folder_added = true;
-                    }
                 }
 
-                if !folder_added && folder == &FolderMeaning::Inbox {
+                if !folder_added && folder == "INBOX" {
                     let detailed = &state.get_detailed();
                     if let DetailedConnectivity::Error(_) = detailed {
                         // On the inbox thread, we also do some other things like scan_folders and run jobs

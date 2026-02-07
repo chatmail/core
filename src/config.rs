@@ -263,9 +263,6 @@ pub enum Config {
     /// Configured folder for incoming messages.
     ConfiguredInboxFolder,
 
-    /// Configured folder for chat messages.
-    ConfiguredMvboxFolder,
-
     /// Unix timestamp of the last successful configuration.
     ConfiguredTimestamp,
 
@@ -584,11 +581,6 @@ impl Context {
             .and_then(|s| s.parse::<i32>().ok())
             .map(|x| x != 0)
             .unwrap_or_default())
-    }
-
-    /// Returns true if movebox ("DeltaChat" folder) should be watched.
-    pub(crate) async fn should_watch_mvbox(&self) -> Result<bool> {
-        self.get_config_bool(Config::OnlyFetchMvbox).await
     }
 
     /// Returns true if sync messages should be sent.

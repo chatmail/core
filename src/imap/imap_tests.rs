@@ -111,9 +111,6 @@ async fn check_target_folder_combination(
     );
 
     let t = TestContext::new_alice().await;
-    t.ctx
-        .set_config(Config::ConfiguredMvboxFolder, Some("DeltaChat"))
-        .await?;
 
     if accepted_chat {
         let contact_id = Contact::create(&t.ctx, "", "bob@example.net").await?;

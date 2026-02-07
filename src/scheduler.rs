@@ -17,7 +17,7 @@ use crate::context::Context;
 use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
 use crate::ephemeral::{self, delete_expired_imap_messages};
 use crate::events::EventType;
-use crate::imap::{FolderMeaning, Imap, session::Session};
+use crate::imap::{Imap, session::Session};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::smtp::{Smtp, send_smtp_messages};
@@ -312,7 +312,10 @@ impl Drop for IoPausedGuard {
 struct SchedBox {
     /// Address at the used chatmail/email relay
     addr: String,
-    meaning: FolderMeaning,
+
+    /// Folder name
+    folder: String,
+    
     conn_state: ImapConnectionState,
 
     /// IMAP loop task handle.
@@ -647,9 +650,14 @@ impl Scheduler {
                 task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
             };
             let addr = configured_login_param.addr.clone();
+            let folder = if ctx.get_config_bool(Config::OnlyFetchMvbox).await? {
+                "DeltaChat"
+            } else {
+                "INBOX"
+            };
             let inbox = SchedBox {
                 addr: addr.clone(),
-                meaning: FolderMeaning::Inbox,
+                folder: folder.to_string(),
                 conn_state,
                 handle,
             };
