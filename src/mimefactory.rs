@@ -1669,6 +1669,12 @@ impl MimeFactory {
                         mail_builder::headers::text::Text::new(old_name).into(),
                     ));
                 }
+                SystemMessage::GroupDescriptionChanged => {
+                    headers.push((
+                        "Chat-Group-Description-Changed",
+                        mail_builder::headers::text::Text::new("").into(),
+                    ));
+                }
                 SystemMessage::GroupImageChanged => {
                     headers.push((
                         "Chat-Content",
@@ -1682,6 +1688,22 @@ impl MimeFactory {
                     }
                 }
                 _ => {}
+            }
+
+            if command == SystemMessage::GroupDescriptionChanged
+                || command == SystemMessage::MemberAddedToGroup
+            {
+                let description = chat::get_chat_description(context, chat.id).await?;
+                headers.push((
+                    "Chat-Group-Description",
+                    mail_builder::headers::text::Text::new(description.clone()).into(),
+                ));
+                if let Some(ts) = chat.param.get_i64(Param::GroupDescriptionTimestamp) {
+                    headers.push((
+                        "Chat-Group-Description-Timestamp",
+                        mail_builder::headers::text::Text::new(ts.to_string()).into(),
+                    ));
+                }
             }
         }
 

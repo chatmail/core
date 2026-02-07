@@ -388,6 +388,7 @@ impl From<download::DownloadState> for DownloadState {
 pub enum SystemMessageType {
     Unknown,
     GroupNameChanged,
+    GroupDescriptionChanged,
     GroupImageChanged,
     MemberAddedToGroup,
     MemberRemovedFromGroup,
@@ -440,6 +441,7 @@ impl From<deltachat::mimeparser::SystemMessage> for SystemMessageType {
         match system_message_type {
             SystemMessage::Unknown => SystemMessageType::Unknown,
             SystemMessage::GroupNameChanged => SystemMessageType::GroupNameChanged,
+            SystemMessage::GroupDescriptionChanged => SystemMessageType::GroupDescriptionChanged,
             SystemMessage::GroupImageChanged => SystemMessageType::GroupImageChanged,
             SystemMessage::MemberAddedToGroup => SystemMessageType::MemberAddedToGroup,
             SystemMessage::MemberRemovedFromGroup => SystemMessageType::MemberRemovedFromGroup,

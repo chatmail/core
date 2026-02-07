@@ -219,6 +219,9 @@ pub enum Param {
     /// For Chats: timestamp of group name update.
     GroupNameTimestamp = b'g',
 
+    /// For Chats: timestamp of chat description update.
+    GroupDescriptionTimestamp = b'6',
+
     /// For Chats: timestamp of member list update.
     MemberListTimestamp = b'k',
 
