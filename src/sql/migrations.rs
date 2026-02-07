@@ -1525,6 +1525,39 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    // Copy of migration 144, but inserts a value for `mvbox_move`
+    // if it does not exist, because no value is treated as `1`.
+    inc_and_check(&mut migration_version, 146)?;
+    if dbversion < migration_version {
+        sql.execute_migration_transaction(
+            |transaction| {
+                let is_chatmail = transaction
+                    .query_row(
+                        "SELECT value FROM config WHERE keyname='is_chatmail'",
+                        (),
+                        |row| {
+                            let value: String = row.get(0)?;
+                            Ok(value)
+                        },
+                    )
+                    .optional()?
+                    .as_deref()
+                    == Some("1");
+
+                if is_chatmail {
+                    transaction.execute_batch(
+                        "DELETE FROM config WHERE keyname='only_fetch_mvbox';
+                         DELETE FROM config WHERE keyname='show_emails';
+                         INSERT OR REPLACE INTO config (keyname, value) VALUES ('mvbox_move', '0')",
+                    )?;
+                }
+                Ok(())
+            },
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
