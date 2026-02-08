@@ -1612,7 +1612,7 @@ async fn test_in_broadcast_send_status_update() -> Result<()> {
     bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
         .await?;
     bob.flush_status_updates().await?;
-    let sent_msg = bob.pop_sent_msg().await;
+    let sent_msg = bob.pop_sent_msg_opt(Duration::ZERO).await.unwrap();
 
     alice.recv_msg_trash(&sent_msg).await;
     assert_eq!(
@@ -1636,6 +1636,24 @@ async fn test_in_broadcast_send_status_update() -> Result<()> {
     let status =
         helper_send_receive_status_update(bob, alice, &bob_instance, &alice_instance).await?;
     assert_eq!(status, r#"[{"payload":42,"serial":1,"max_serial":1}]"#);
+
+    // Subscribers' status updates are confidential.
+    let fiona = &tcm.fiona().await;
+    let fiona_chat_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+    resend_msgs(alice, &[alice_instance.id]).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    alice.flush_status_updates().await?;
+    // See above for bob -- status updates are flushed immediately, no need to wait.
+    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    let fiona_instance = fiona.recv_msg(&sent1).await;
+    assert_eq!(fiona_instance.chat_id, fiona_chat_id);
+    assert_eq!(fiona_instance.chat_typ, Chattype::InBroadcast);
+    assert_eq!(
+        fiona
+            .get_webxdc_status_updates(fiona_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[]"#
+    );
     Ok(())
 }
 

@@ -452,6 +452,7 @@ pub struct Message {
     pub(crate) is_dc_message: MessengerMessage,
     pub(crate) original_msg_id: MsgId,
     pub(crate) mime_modified: bool,
+    pub(crate) chat_typ: Chattype,
     pub(crate) chat_visibility: ChatVisibility,
     pub(crate) chat_blocked: Blocked,
     pub(crate) location_id: u32,
@@ -526,6 +527,7 @@ impl Message {
                     m.param AS param,
                     m.hidden AS hidden,
                     m.location_id AS location,
+                    c.type AS chat_typ,
                     c.archived AS visibility,
                     c.blocked AS blocked
                  FROM msgs m
@@ -585,6 +587,10 @@ impl Message {
                         param: row.get::<_, String>("param")?.parse().unwrap_or_default(),
                         hidden: row.get("hidden")?,
                         location_id: row.get("location")?,
+                        // This is safe: see `ChatId::delete_ex()`, `None` chat type can't happen.
+                        chat_typ: row
+                            .get::<_, Option<_>>("chat_typ")?
+                            .unwrap_or(Chattype::Single),
                         chat_visibility: row.get::<_, Option<_>>("visibility")?.unwrap_or_default(),
                         chat_blocked: row
                             .get::<_, Option<Blocked>>("blocked")?

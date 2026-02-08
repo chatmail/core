@@ -4560,7 +4560,7 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
         // note(treefit): only matters if it is the last message in chat (but probably to expensive to check, debounce also solves it)
         chatlist_events::emit_chatlist_item_changed(context, msg.chat_id);
 
-        if msg.viewtype == Viewtype::Webxdc {
+        if msg.viewtype == Viewtype::Webxdc && msg.chat_typ != Chattype::OutBroadcast {
             let conn_fn = |conn: &mut rusqlite::Connection| {
                 let range = conn.query_row(
                     "SELECT IFNULL(min(id), 1), IFNULL(max(id), 0) \
