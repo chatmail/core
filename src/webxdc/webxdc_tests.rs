@@ -1600,33 +1600,49 @@ async fn test_in_broadcast_send_status_update() -> Result<()> {
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
-    let alice_instance = send_webxdc_instance(alice, alice_chat_id).await?;
+    let mut alice_instance = create_webxdc_instance(
+        alice,
+        "minimal.xdc",
+        include_bytes!("../../test-data/webxdc/minimal.xdc"),
+    )?;
+    alice_chat_id
+        .set_draft(alice, Some(&mut alice_instance))
+        .await?;
+    alice_instance = alice_chat_id.get_draft(alice).await?.unwrap();
+    alice
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload":41}"#)
+        .await?;
+    send_msg(alice, alice_chat_id, &mut alice_instance).await?;
     let sent_msg = alice.pop_sent_msg().await;
     let bob_instance = bob.recv_msg(&sent_msg).await;
     assert_eq!(bob_instance.chat_id, bob_chat_id);
 
     let provider = BackupProvider::prepare(bob).await?;
-    let bob1 = &tcm.unconfigured().await;
-    get_backup(bob1, provider.qr()).await?;
+    let bob2 = &tcm.unconfigured().await;
+    get_backup(bob2, provider.qr()).await?;
 
     bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
         .await?;
     bob.flush_status_updates().await?;
-    let sent_msg = bob.pop_sent_msg().await;
+    // Don't wait to make sure that status updates are sent immediately, otherwise the check for
+    // Alice below isn't reliable.
+    let sent_msg = bob.pop_sent_msg_opt(Duration::ZERO).await.unwrap();
 
     alice.recv_msg_trash(&sent_msg).await;
     assert_eq!(
         alice
             .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
             .await?,
-        r#"[{"payload":42,"serial":1,"max_serial":1}]"#
+        r#"[{"payload":41,"serial":1,"max_serial":2},
+{"payload":42,"serial":2,"max_serial":2}]"#
     );
 
-    bob1.recv_msg_trash(&sent_msg).await;
+    bob2.recv_msg_trash(&sent_msg).await;
     assert_eq!(
-        bob1.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
+        bob2.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
             .await?,
-        r#"[{"payload":42,"serial":1,"max_serial":1}]"#
+        r#"[{"payload":41,"serial":1,"max_serial":2},
+{"payload":42,"serial":2,"max_serial":2}]"#
     );
 
     // Non-subscriber's status updates are rejected.
@@ -1635,7 +1651,29 @@ async fn test_in_broadcast_send_status_update() -> Result<()> {
     alice.pop_sent_msg().await;
     let status =
         helper_send_receive_status_update(bob, alice, &bob_instance, &alice_instance).await?;
-    assert_eq!(status, r#"[{"payload":42,"serial":1,"max_serial":1}]"#);
+    assert_eq!(
+        status,
+        r#"[{"payload":41,"serial":1,"max_serial":2},
+{"payload":42,"serial":2,"max_serial":2}]"#
+    );
+
+    // Subscribers' status updates are confidential and shalln't be re-sent. So initial status
+    // updates aren't re-sent too.
+    let fiona = &tcm.fiona().await;
+    let fiona_chat_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+    resend_msgs(alice, &[alice_instance.id]).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    alice.flush_status_updates().await?;
+    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    let fiona_instance = fiona.recv_msg(&sent1).await;
+    assert_eq!(fiona_instance.chat_id, fiona_chat_id);
+    assert_eq!(fiona_instance.chat_typ, Chattype::InBroadcast);
+    assert_eq!(
+        fiona
+            .get_webxdc_status_updates(fiona_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[]"#
+    );
     Ok(())
 }
 
