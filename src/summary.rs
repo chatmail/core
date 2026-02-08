@@ -221,9 +221,9 @@ impl Message {
                 append_text = true
             }
             Viewtype::Webxdc => {
+                emoji = Some("📱");
                 type_name = None;
                 if self.viewtype == Viewtype::Webxdc {
-                    emoji = None;
                     type_file = Some(
                         self.get_webxdc_info(context)
                             .await
@@ -231,8 +231,7 @@ impl Message {
                             .unwrap_or_else(|_| "ErrWebxdcName".to_string()),
                     );
                 } else {
-                    emoji = Some("📱");
-                    type_file = Some(viewtype.to_locale_string(context).await);
+                    type_file = self.get_filename();
                 }
                 append_text = true;
             }
@@ -426,10 +425,10 @@ mod tests {
             .unwrap();
         chat_id.set_draft(ctx, Some(&mut msg)).await.unwrap();
         assert_eq!(msg.viewtype, Viewtype::Webxdc);
-        assert_summary_texts(&msg, ctx, "nice app!").await;
+        assert_summary_texts(&msg, ctx, "📱 nice app!").await;
         msg.set_text(some_text.clone());
         chat_id.set_draft(ctx, Some(&mut msg)).await.unwrap();
-        assert_summary_texts(&msg, ctx, "nice app! \u{2013} bla bla").await;
+        assert_summary_texts(&msg, ctx, "📱 nice app! \u{2013} bla bla").await;
 
         let file = write_file_to_blobdir(&d).await;
         let mut msg = Message::new(Viewtype::File);

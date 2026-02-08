@@ -41,6 +41,14 @@ impl PostMsgMetadata {
             .get(Param::Filename)
             .unwrap_or_default()
             .to_owned();
+        let filename = match message.viewtype {
+            Viewtype::Webxdc => message
+                .get_webxdc_info(context)
+                .await
+                .map(|info| info.name)
+                .unwrap_or_else(|_| filename),
+            _ => filename,
+        };
         let wh = {
             match (
                 message.param.get_int(Param::Width),
