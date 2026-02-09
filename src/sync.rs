@@ -789,19 +789,7 @@ mod tests {
 
         let bob = &tcm.bob().await;
         tcm.exec_securejoin_qr(bob, alice, &qr).await;
-        let msg_id = alice.send_sync_msg().await?;
-        // Core <= v1.143 doesn't sync QR code tokens immediately, so current Core does that when a
-        // group is promoted for compatibility (because the group could be created by older Core).
-        // TODO: assert!(msg_id.is_none());
-        assert!(msg_id.is_some());
-        let sent = alice.pop_sent_msg().await;
-        let msg = alice.parse_msg(&sent).await;
-        let mut sync_items = msg.sync_items.unwrap().items;
-        assert_eq!(sync_items.len(), 1);
-        let data = sync_items.pop().unwrap().data;
-        let SyncDataOrUnknown::SyncData(AddQrToken(_)) = data else {
-            unreachable!();
-        };
+        assert!(alice.send_sync_msg().await?.is_none());
 
         // Remove Bob because alice2 doesn't have their key.
         let alice_bob_id = alice.add_or_lookup_contact(bob).await.id;
