@@ -3102,7 +3102,7 @@ async fn apply_group_changes(
     }
 
     if is_from_in_chat {
-        apply_chat_name_and_avatar_changes(
+        apply_chat_name_avatar_and_description_changes(
             context,
             mime_parser,
             from_id,
@@ -3281,7 +3281,7 @@ async fn apply_group_changes(
 ///
 /// - `send_event_chat_modified` is set to `true` if ChatModified event should be sent
 /// - `better_msg` is filled with an info message about name change, if necessary
-async fn apply_chat_name_and_avatar_changes(
+async fn apply_chat_name_avatar_and_description_changes(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
@@ -3713,7 +3713,7 @@ async fn apply_out_broadcast_changes(
     let mut better_msg = None;
 
     if from_id == ContactId::SELF {
-        apply_chat_name_and_avatar_changes(
+        apply_chat_name_avatar_and_description_changes(
             context,
             mime_parser,
             from_id,
@@ -3803,7 +3803,7 @@ async fn apply_in_broadcast_changes(
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
 
-    apply_chat_name_and_avatar_changes(
+    apply_chat_name_avatar_and_description_changes(
         context,
         mime_parser,
         from_id,
