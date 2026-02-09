@@ -1090,10 +1090,10 @@ impl CommandApi {
         &self,
         account_id: u32,
         chat_id: u32,
-        new_description: String,
+        description: String,
     ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
-        chat::set_chat_description(&ctx, ChatId::new(chat_id), &new_description).await
+        chat::set_chat_description(&ctx, ChatId::new(chat_id), &description).await
     }
 
     /// Load the chat description from the database.

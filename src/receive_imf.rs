@@ -3370,7 +3370,7 @@ async fn apply_chat_name_and_avatar_changes(
             context
                 .sql
                 .execute(
-                    "INSERT OR REPLACE INTO chats_descriptions(id, description) VALUES(?, ?)",
+                    "INSERT OR REPLACE INTO chats_descriptions(chat_id, description) VALUES(?, ?)",
                     (chat.id, &new_description),
                 )
                 .await?;

@@ -4227,7 +4227,6 @@ async fn set_chat_description_ex(
     ensure!(!chat_id.is_special(), "Invalid chat ID");
 
     let chat = Chat::load_from_db(context, chat_id).await?;
-    let old_description = get_chat_description(context, chat_id).await?;
     ensure!(
         chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
         "Can only set description for groups / broadcasts"
@@ -4236,36 +4235,37 @@ async fn set_chat_description_ex(
         !chat.grpid.is_empty(),
         "Cannot set description for ad hoc groups"
     );
-
-    if old_description == new_description {
-        // Nothing to do
-    } else if !chat.is_self_in_chat(context).await? {
+    if !chat.is_self_in_chat(context).await? {
         context.emit_event(EventType::ErrorSelfNotInGroup(
             "Cannot set chat description; self not in group".into(),
         ));
-        bail!("Failed to set profile image");
-    } else {
-        context
-            .sql
-            .execute(
-                "INSERT OR REPLACE INTO chats_descriptions(id, description) VALUES(?, ?)",
-                (chat_id, &new_description),
-            )
-            .await?;
-
-        if chat.is_promoted() {
-            let mut msg = Message::new(Viewtype::Text);
-            msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
-            msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
-
-            msg.id = send_msg(context, chat_id, &mut msg).await?;
-            context.emit_msgs_changed(chat_id, msg.id);
-            sync = Nosync;
-        }
-        context.emit_event(EventType::ChatModified(chat_id));
+        bail!("Failed to set chat description");
     }
 
-    if sync.into() && old_description != new_description {
+    let affected_rows = context
+        .sql
+        .execute(
+            "INSERT OR REPLACE INTO chats_descriptions(chat_id, description) VALUES(?, ?)",
+            (chat_id, &new_description),
+        )
+        .await?;
+
+    if affected_rows == 0 {
+        return Ok(());
+    }
+
+    if chat.is_promoted() {
+        let mut msg = Message::new(Viewtype::Text);
+        msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
+        msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
+
+        msg.id = send_msg(context, chat_id, &mut msg).await?;
+        context.emit_msgs_changed(chat_id, msg.id);
+        sync = Nosync;
+    }
+    context.emit_event(EventType::ChatModified(chat_id));
+
+    if sync.into() {
         chat.sync(context, SyncAction::SetDescription(new_description))
             .await
             .log_err(context)
@@ -4283,7 +4283,7 @@ pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<
     let description = context
         .sql
         .query_get_value(
-            "SELECT description FROM chats_descriptions WHERE id=?",
+            "SELECT description FROM chats_descriptions WHERE chat_id=?",
             (chat_id,),
         )
         .await?
