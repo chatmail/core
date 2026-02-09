@@ -3158,17 +3158,29 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_basic() {
-    test_chat_description("").await.unwrap()
+    test_chat_description("", false).await.unwrap()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_unpromoted_description() {
-    test_chat_description("Unpromoted description in the beginning")
+    test_chat_description("Unpromoted description in the beginning", false)
         .await
         .unwrap()
 }
 
-async fn test_chat_description(initial_description: &str) -> Result<()> {
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_description_qr() {
+    test_chat_description("", true).await.unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_chat_description_unpromoted_description_qr() {
+    test_chat_description("Unpromoted description in the beginning", true)
+        .await
+        .unwrap()
+}
+
+async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -3197,8 +3209,15 @@ async fn test_chat_description(initial_description: &str) -> Result<()> {
         initial_description
     );
 
-    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
-    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    let bob_chat_id = if join_via_qr {
+        let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+        tcm.exec_securejoin_qr(bob, alice, &qr).await
+    } else {
+        let alice_bob_id = alice.add_or_lookup_contact_id(bob).await;
+        add_contact_to_chat(alice, alice_chat_id, alice_bob_id).await?;
+        let sent = alice.send_text(alice_chat_id, "promoting the group").await;
+        bob.recv_msg(&sent).await.chat_id
+    };
     assert_eq!(
         get_chat_description(bob, bob_chat_id).await?,
         initial_description

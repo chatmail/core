@@ -663,7 +663,7 @@ impl MimeFactory {
 
                 if msg
                     .param
-                    .get_bool(Param::AttachGroupImage)
+                    .get_bool(Param::AttachChatAvatarAndDescription)
                     .unwrap_or_default()
                 {
                     return chat.param.get(Param::ProfileImage).map(Into::into);
@@ -1692,6 +1692,10 @@ impl MimeFactory {
 
             if command == SystemMessage::GroupDescriptionChanged
                 || command == SystemMessage::MemberAddedToGroup
+                || msg
+                    .param
+                    .get_bool(Param::AttachChatAvatarAndDescription)
+                    .unwrap_or_default()
             {
                 let description = chat::get_chat_description(context, chat.id).await?;
                 headers.push((

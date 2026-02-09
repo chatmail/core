@@ -1763,7 +1763,7 @@ impl Chat {
         } else if matches!(self.typ, Chattype::Group | Chattype::OutBroadcast)
             && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
         {
-            msg.param.set_int(Param::AttachGroupImage, 1);
+            msg.param.set_int(Param::AttachChatAvatarAndDescription, 1);
             self.param
                 .remove(Param::Unpromoted)
                 .set_i64(Param::GroupNameTimestamp, msg.timestamp_sort)

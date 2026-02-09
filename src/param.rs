@@ -140,7 +140,7 @@ pub enum Param {
     Arg4 = b'H',
 
     /// For Messages
-    AttachGroupImage = b'A',
+    AttachChatAvatarAndDescription = b'A',
 
     /// For Messages
     WebrtcRoom = b'V',
