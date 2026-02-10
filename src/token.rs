@@ -30,6 +30,10 @@ pub async fn save(
     token: &str,
     timestamp: i64,
 ) -> Result<()> {
+    if token.is_empty() {
+        info!(context, "Not saving empty {namespace} token");
+        return Ok(());
+    }
     context
         .sql
         .execute(

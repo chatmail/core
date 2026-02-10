@@ -486,6 +486,12 @@ async fn test_withdraw_verifycontact(remove_invite: bool) -> Result<()> {
         check_qr(&alice, &qr).await?,
         Qr::WithdrawVerifyContact { .. }
     ));
+    // Even if we removed the INVITE token above,
+    // there must not be a "" token in the database:
+    assert_eq!(
+        token::exists(&alice, token::Namespace::InviteNumber, "").await?,
+        false
+    );
 
     // someone else always scans as ask-verify-contact
     let bob = TestContext::new_bob().await;
