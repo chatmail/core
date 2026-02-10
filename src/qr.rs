@@ -61,6 +61,9 @@ pub enum Qr {
 
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Ask the user whether to join the group.
@@ -82,6 +85,9 @@ pub enum Qr {
 
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Ask whether to join the broadcast channel.
@@ -106,6 +112,9 @@ pub enum Qr {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
+
+        /// Whether the sender supports the new Securejoin v3 protocol
+        is_v3: bool,
     },
 
     /// Contact fingerprint is verified.
@@ -483,7 +492,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     let name = decode_name(&param, "n")?.unwrap_or_default();
 
-    let invitenumber = param
+    let mut invitenumber = param
         .get("i")
         // For historic reansons, broadcasts currently use j instead of i for the invitenumber:
         .or_else(|| param.get("j"))
@@ -500,6 +509,16 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     let grpname = decode_name(&param, "g")?;
     let broadcast_name = decode_name(&param, "b")?;
+
+    let mut is_v3 = param.get("v") == Some(&"3");
+
+    if authcode.is_some() && invitenumber.is_none() {
+        // Securejoin v3 doesn't need an invitenumber.
+        // We want to remove the invitenumber and the `v=3` parameter eventually;
+        // therefore, we accept v3 QR codes without an invitenumber.
+        is_v3 = true;
+        invitenumber = Some("".to_string());
+    }
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
@@ -519,7 +538,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 .await
                 .with_context(|| format!("can't check if address {addr:?} is our address"))?
             {
-                if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
+                if token::exists(context, token::Namespace::Auth, &authcode).await? {
                     Ok(Qr::WithdrawVerifyGroup {
                         grpname,
                         grpid,
@@ -546,6 +565,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 })
             }
         } else if let (Some(grpid), Some(name)) = (grpid, broadcast_name) {
@@ -554,7 +574,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 .await
                 .with_context(|| format!("Can't check if {addr:?} is our address"))?
             {
-                if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
+                if token::exists(context, token::Namespace::Auth, &authcode).await? {
                     Ok(Qr::WithdrawJoinBroadcast {
                         name,
                         grpid,
@@ -581,10 +601,11 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                     fingerprint,
                     invitenumber,
                     authcode,
+                    is_v3,
                 })
             }
         } else if context.is_self_addr(&addr).await? {
-            if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
+            if token::exists(context, token::Namespace::Auth, &authcode).await? {
                 Ok(Qr::WithdrawVerifyContact {
                     contact_id,
                     fingerprint,
@@ -605,6 +626,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             })
         }
     } else if let Some(addr) = addr {

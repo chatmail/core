@@ -18,10 +18,9 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
-use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{try_decrypt, validate_detached_signature};
+use crate::decrypt::{get_encrypted_pgp_message, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::download::PostMsgMetadata;
 use crate::events::EventType;
@@ -36,6 +35,7 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, tools};
+use crate::{constants, token};
 
 /// Public key extracted from `Autocrypt-Gossip`
 /// header with associated information.
@@ -358,7 +358,7 @@ impl MimeMessage {
 
         // Remove headers that are allowed _only_ in the encrypted+signed part. It's ok to leave
         // them in signed-only emails, but has no value currently.
-        Self::remove_secured_headers(&mut headers, &mut headers_removed);
+        Self::remove_secured_headers(&mut headers, &mut headers_removed, false);
 
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
@@ -383,59 +383,65 @@ impl MimeMessage {
             PreMessageMode::None
         };
 
+        let encrypted_pgp_message = get_encrypted_pgp_message(&mail)?;
+
+        let secrets: Vec<String>;
+        if let Some(e) = &encrypted_pgp_message
+            && crate::pgp::check_symmetric_encryption(e).is_ok()
+        {
+            secrets = load_shared_secrets(context).await?;
+        } else {
+            // No need to load all the secrets if the message isn't symmetrically encrypted
+            secrets = vec![];
+        }
+
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
-        let secrets: Vec<String> = context
-            .sql
-            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
-                let secret: String = row.get(0)?;
-                Ok(secret)
-            })
-            .await?;
 
-        let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
-                Ok(Some(mut msg)) => {
-                    mail_raw = msg.as_data_vec().unwrap_or_default();
+        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
+            encrypted_pgp_message.map(|e| crate::pgp::decrypt(e, &private_keyring, &secrets))
+        }) {
+            Some(Ok(mut msg)) => {
+                mail_raw = msg.as_data_vec().unwrap_or_default();
 
-                    let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
-                    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-                        info!(
-                            context,
-                            "decrypted message mime-body:\n{}",
-                            String::from_utf8_lossy(&mail_raw),
-                        );
-                    }
-
-                    decrypted_msg = Some(msg);
-
-                    timestamp_sent = Self::get_timestamp_sent(
-                        &decrypted_mail.headers,
-                        timestamp_sent,
-                        timestamp_rcvd,
+                let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
+                if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
+                    info!(
+                        context,
+                        "decrypted message mime-body:\n{}",
+                        String::from_utf8_lossy(&mail_raw),
                     );
+                }
 
-                    let protected_aheader_values = decrypted_mail
-                        .headers
-                        .get_all_values(HeaderDef::Autocrypt.into());
-                    if !protected_aheader_values.is_empty() {
-                        aheader_values = protected_aheader_values;
-                    }
+                decrypted_msg = Some(msg);
 
-                    (Ok(decrypted_mail), true)
+                timestamp_sent = Self::get_timestamp_sent(
+                    &decrypted_mail.headers,
+                    timestamp_sent,
+                    timestamp_rcvd,
+                );
+
+                let protected_aheader_values = decrypted_mail
+                    .headers
+                    .get_all_values(HeaderDef::Autocrypt.into());
+                if !protected_aheader_values.is_empty() {
+                    aheader_values = protected_aheader_values;
                 }
-                Ok(None) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    (Ok(mail), false)
-                }
-                Err(err) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    warn!(context, "decryption failed: {:#}", err);
-                    (Err(err), false)
-                }
-            };
+
+                (Ok(decrypted_mail), true)
+            }
+            None => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                (Ok(mail), false)
+            }
+            Some(Err(err)) => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                warn!(context, "decryption failed: {:#}", err);
+                (Err(err), false)
+            }
+        };
 
         let mut autocrypt_header = None;
         if incoming {
@@ -608,7 +614,7 @@ impl MimeMessage {
             }
         }
         if signatures.is_empty() {
-            Self::remove_secured_headers(&mut headers, &mut headers_removed);
+            Self::remove_secured_headers(&mut headers, &mut headers_removed, is_encrypted);
         }
         if !is_encrypted {
             signatures.clear();
@@ -1718,20 +1724,34 @@ impl MimeMessage {
             .and_then(|msgid| parse_message_id(msgid).ok())
     }
 
+    /// Remove headers that are only allowed to be present in an encrypted-and-signed message
     fn remove_secured_headers(
         headers: &mut HashMap<String, String>,
         removed: &mut HashSet<String>,
+        // Whether the message was encrypted (but not signed):
+        encrypted: bool,
     ) {
         remove_header(headers, "secure-join-fingerprint", removed);
-        remove_header(headers, "secure-join-auth", removed);
         remove_header(headers, "chat-verified", removed);
         remove_header(headers, "autocrypt-gossip", removed);
 
-        // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
-        if let Some(secure_join) = remove_header(headers, "secure-join", removed)
-            && (secure_join == "vc-request" || secure_join == "vg-request")
-        {
-            headers.insert("secure-join".to_string(), secure_join);
+        if headers.get("secure-join") == Some(&"vc-request-pubkey".to_string()) && encrypted {
+            // vc-request-pubkey message is encrypted, but unsigned,
+            // and contains a Secure-Join-Auth header.
+            //
+            // It is unsigned in order not to leak Bob's identity to a server operator
+            // that scraped the AUTH token somewhere from the web,
+            // and because Alice anyways couldn't verify his signature at this step,
+            // because she doesn't know his public key yet.
+        } else {
+            remove_header(headers, "secure-join-auth", removed);
+
+            // Secure-Join is secured unless it is an initial "vc-request"/"vg-request".
+            if let Some(secure_join) = remove_header(headers, "secure-join", removed)
+                && (secure_join == "vc-request" || secure_join == "vg-request")
+            {
+                headers.insert("secure-join".to_string(), secure_join);
+            }
         }
     }
 
@@ -2080,6 +2100,36 @@ impl MimeMessage {
             Vec::new()
         }
     }
+}
+
+/// Loads all the shared secrets
+/// that will be tried to decrypt a symmetrically-encrypted message
+async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
+    // First, try decrypting using the bobstate,
+    // because usually there will only be 1 or 2 of it,
+    // so, it should be fast
+    let mut secrets: Vec<String> = context
+        .sql
+        .query_map_vec("SELECT id, invite FROM bobstate", (), |row| {
+            let invite: crate::securejoin::QrInvite = row.get(1)?;
+            Ok(invite.authcode().to_string())
+        })
+        .await?;
+    // Then, try decrypting using broadcast secrets
+    // Usually, the user won't be in more than ~10 broadcast channels
+    secrets.extend(
+        context
+            .sql
+            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
+                let secret: String = row.get(0)?;
+                Ok(secret)
+            })
+            .await?,
+    );
+    // Finally, try decrypting using AUTH tokens
+    // There can be a lot of AUTH tokens, because a new one is generated every time a QR code is shown
+    secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
+    Ok(secrets)
 }
 
 fn rm_legacy_display_elements(text: &str) -> String {

@@ -1567,6 +1567,27 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    // Add UNIQUE bound to token, in order to avoid saving the same token multiple times
+    inc_and_check(&mut migration_version, 148)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE tokens_new (
+                id INTEGER PRIMARY KEY,
+                namespc INTEGER DEFAULT 0,
+                foreign_key TEXT DEFAULT '',
+                token TEXT DEFAULT '' UNIQUE,
+                timestamp INTEGER DEFAULT 0,
+                foreign_id INTEGER NOT NULL DEFAULT 0
+            ) STRICT;
+            INSERT OR IGNORE INTO tokens_new
+                SELECT id, namespc, foreign_key, token, timestamp, foreign_id FROM tokens;
+            DROP TABLE tokens;
+            ALTER TABLE tokens_new RENAME TO tokens;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

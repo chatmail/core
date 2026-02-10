@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use deltachat_contact_tools::EmailAddress;
+use regex::Regex;
 
 use super::*;
 use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
@@ -14,7 +15,7 @@ use crate::receive_imf::receive_imf;
 use crate::stock_str::{self, messages_e2e_encrypted};
 use crate::test_utils::{
     AVATAR_64x64_BYTES, AVATAR_64x64_DEDUPLICATED, TestContext, TestContextManager,
-    TimeShiftFalsePositiveNote, get_chat_msg,
+    TimeShiftFalsePositiveNote, get_chat_msg, sync,
 };
 use crate::tools::SystemTime;
 
@@ -27,7 +28,7 @@ enum SetupContactCase {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_setup_contact() {
+async fn test_setup_contact_basic() {
     test_setup_contact_ex(SetupContactCase::Normal).await
 }
 
@@ -62,13 +63,13 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     bob.set_config(Config::Displayname, Some("Bob Examplenet"))
         .await
         .unwrap();
-    let alice_auto_submitted_hdr;
+    let alice_auto_submitted_hdr: bool;
     match case {
         SetupContactCase::AliceIsBot => {
             alice.set_config_bool(Config::Bot, true).await.unwrap();
-            alice_auto_submitted_hdr = "Auto-Submitted: auto-generated";
+            alice_auto_submitted_hdr = true;
         }
-        _ => alice_auto_submitted_hdr = "Auto-Submitted: auto-replied",
+        _ => alice_auto_submitted_hdr = false,
     };
 
     assert_eq!(
@@ -118,12 +119,15 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert!(!sent.payload.contains("Bob Examplenet"));
     assert_eq!(sent.recipient(), EmailAddress::new(alice_addr).unwrap());
     let msg = alice.parse_msg(&sent).await;
-    assert!(!msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-request");
-    assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
+    assert!(msg.signature.is_none());
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        "vc-request-pubkey"
+    );
+    assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
-    tcm.section("Step 3: Alice receives vc-request, sends vc-auth-required");
+    tcm.section("Step 3: Alice receives vc-request-pubkey, sends vc-pubkey");
     alice.recv_msg_trash(&sent).await;
     assert_eq!(
         Chatlist::try_load(&alice, 0, None, None)
@@ -134,14 +138,14 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
 
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains(alice_auto_submitted_hdr));
+    assert_eq!(
+        sent.payload.contains("Auto-Submitted: auto-generated"),
+        alice_auto_submitted_hdr
+    );
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
-    assert_eq!(
-        msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vc-auth-required"
-    );
+    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
 
     let bob_chat = bob.get_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
@@ -170,7 +174,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Bob sent the right message.
     let sent = bob.pop_sent_msg().await;
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     assert!(!sent.payload.contains("Bob Examplenet"));
     let mut msg = alice.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -261,7 +264,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Alice sent the right message to Bob.
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains(alice_auto_submitted_hdr));
+    assert_eq!(
+        sent.payload.contains("Auto-Submitted: auto-generated"),
+        alice_auto_submitted_hdr
+    );
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -421,18 +427,31 @@ async fn test_setup_contact_concurrent_calls() -> Result<()> {
     assert!(!alice_id.is_special());
     assert_eq!(chat.typ, Chattype::Single);
     assert_ne!(claire_id, alice_id);
-    assert!(
+    assert_eq!(
         bob.pop_sent_msg()
             .await
             .payload()
-            .contains("alice@example.org")
+            .contains("alice@example.org"),
+        false // Alice's address must not be sent in cleartext
     );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_secure_join() -> Result<()> {
+async fn test_secure_join_group_legacy() -> Result<()> {
+    test_secure_join_group_ex(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_group_v3() -> Result<()> {
+    test_secure_join_group_ex(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_group_v3_without_invite() -> Result<()> {
+    test_secure_join_group_ex(true, true).await
+}
+
+async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -444,7 +463,8 @@ async fn test_secure_join() -> Result<()> {
     let alice_chatid = chat::create_group(&alice, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
-    let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
+    let mut qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
+    manipulate_qr(v3, remove_invite, &mut qr);
 
     tcm.section("Step 2: Bob scans QR-code, sends vg-request");
     let bob_chatid = join_securejoin(&bob, &qr).await?;
@@ -456,9 +476,20 @@ async fn test_secure_join() -> Result<()> {
         EmailAddress::new("alice@example.org").unwrap()
     );
     let msg = alice.parse_msg(&sent).await;
-    assert!(!msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vg-request");
-    assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
+    assert!(msg.signature.is_none());
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        if v3 {
+            "vc-request-pubkey"
+        } else {
+            "vg-request"
+        }
+    );
+    assert_eq!(msg.get_header(HeaderDef::SecureJoinAuth).is_some(), v3);
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some(),
+        !v3
+    );
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
     // Old Delta Chat core sent `Secure-Join-Group` header in `vg-request`,
@@ -469,19 +500,18 @@ async fn test_secure_join() -> Result<()> {
     // is only sent in `vg-request-with-auth` for compatibility.
     assert!(!msg.header_exists(HeaderDef::SecureJoinGroup));
 
-    tcm.section("Step 3: Alice receives vg-request, sends vg-auth-required");
+    tcm.section("Step 3: Alice receives vc-request-pubkey and sends vc-pubkey, or receives vg-request and sends vg-auth-required");
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-auth-required"
+        if v3 { "vc-pubkey" } else { "vg-auth-required" }
     );
 
-    tcm.section("Step 4: Bob receives vg-auth-required, sends vg-request-with-auth");
+    tcm.section("Step 4: Bob receives vc-pubkey or vg-auth-required, sends v*-request-with-auth");
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
@@ -511,7 +541,6 @@ async fn test_secure_join() -> Result<()> {
     }
 
     // Check Bob sent the right handshake message.
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = alice.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(
@@ -575,13 +604,21 @@ async fn test_secure_join() -> Result<()> {
     {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
+        if v3 {
+            assert!(
+                ChatIdBlocked::lookup_by_contact(&alice, contact_bob.id)
+                    .await?
+                    .is_none()
+            );
+        } else {
+            let chat = alice.get_chat(&bob).await;
+            assert_eq!(
+                chat.blocked,
+                Blocked::Yes,
+                "Alice's 1:1 chat with Bob is not hidden"
+            );
+        }
 
-        let chat = alice.get_chat(&bob).await;
-        assert_eq!(
-            chat.blocked,
-            Blocked::Yes,
-            "Alice's 1:1 chat with Bob is not hidden"
-        );
         // There should be 2 messages in the chat:
         // - The ChatProtectionEnabled message
         // - You added member bob@example.net
@@ -638,6 +675,97 @@ async fn test_secure_join() -> Result<()> {
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 2);
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_legacy() -> Result<()> {
+    test_secure_join_broadcast_ex(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_v3() -> Result<()> {
+    test_secure_join_broadcast_ex(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_v3_without_invite() -> Result<()> {
+    test_secure_join_broadcast_ex(true, true).await
+}
+
+async fn test_secure_join_broadcast_ex(v3: bool, remove_invite: bool) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_broadcast(alice, "Channel".to_string()).await?;
+    let mut qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    manipulate_qr(v3, remove_invite, &mut qr);
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let sent = alice.send_text(alice_chat_id, "Hi channel").await;
+    assert!(sent.recipients.contains("bob@example.net"));
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, bob_chat_id);
+    assert_eq!(rcvd.text, "Hi channel");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_legacy() -> Result<()> {
+    test_setup_contact_compatibility_ex(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_v3() -> Result<()> {
+    test_setup_contact_compatibility_ex(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_v3_without_invite() -> Result<()> {
+    test_setup_contact_compatibility_ex(true, true).await
+}
+
+async fn test_setup_contact_compatibility_ex(v3: bool, remove_invite: bool) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config(Config::Displayname, Some("Alice")).await?;
+
+    let mut qr = get_securejoin_qr(alice, None).await?;
+    manipulate_qr(v3, remove_invite, &mut qr);
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.name, "Alice");
+    assert!(bob_chat.can_send(bob).await?);
+    assert_eq!(bob_chat.typ, Chattype::Single);
+    assert_eq!(bob_chat.id, bob.get_chat(alice).await.id);
+
+    let alice_chat = alice.get_chat(bob).await;
+    assert_eq!(alice_chat.name, "bob@example.net");
+    assert!(alice_chat.can_send(alice).await?);
+    assert_eq!(alice_chat.typ, Chattype::Single);
+
+    Ok(())
+}
+
+fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
+    if remove_invite {
+        // Remove the INVITENUBMER. It's not needed in Securejoin v3,
+        // but still included for backwards compatibility reasons.
+        // We want to be able to remove it in the future,
+        // therefore we test that things work without it.
+        let new_qr = Regex::new("&i=.*?&").unwrap().replace(qr, "&");
+        // Broadcast channels use `j` for the INVITENUMBER
+        let new_qr = Regex::new("&j=.*?&").unwrap().replace(&new_qr, "&");
+        assert!(new_qr != *qr);
+        *qr = new_qr.to_string();
+    }
+    // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
+    // If `remove_invite`, we can also remove the v=3 parameter,
+    // because a QR with AUTH but no INVITE is obviously v3 QR code.
+    if !v3 || remove_invite {
+        let new_qr = Regex::new("&v=3").unwrap().replace(qr, "");
+        assert!(new_qr != *qr);
+        *qr = new_qr.to_string();
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -1367,6 +1495,71 @@ gU6dGXsFMe/RpRHrIAkMAaM5xkxMDRuRJDxiUdS/X+Y8
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
         "vc-auth-required"
     );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_auth_token_is_synchronized() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice1 = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob")).await?;
+
+    alice1.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+    // This creates first auth token:
+    let qr1 = get_securejoin_qr(alice1, None).await?;
+
+    // This creates another auth token; both of them need to be synchronized
+    let qr2 = get_securejoin_qr(alice1, None).await?;
+    sync(alice1, alice2).await;
+
+    // Note that Bob will throw away the AUTH token after sending `vc-request-with-auth`.
+    // Therefore, he will fail to decrypt the answer from Alice's second device,
+    // which leads to a "decryption failed: missing key" message in the logs.
+    // This is fine.
+    tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr2)
+        .await;
+
+    let contacts = Contact::get_all(alice2, 0, Some("Bob")).await?;
+    assert_eq!(contacts[0], alice2.add_or_lookup_contact_id(bob).await);
+    assert_eq!(contacts.len(), 1);
+
+    let chatlist = Chatlist::try_load(alice2, 0, Some("Bob"), None).await?;
+    assert_eq!(chatlist.get_chat_id(0)?, alice2.get_chat(bob).await.id);
+    assert_eq!(chatlist.len(), 1);
+
+    for qr in [qr1, qr2] {
+        let qr = check_qr(bob, &qr).await?;
+        let qr = QrInvite::try_from(qr)?;
+        assert!(token::exists(alice2, Namespace::InviteNumber, qr.invitenumber()).await?);
+        assert!(token::exists(alice2, Namespace::Auth, qr.authcode()).await?);
+    }
+
+    // Check that alice2 only saves the invite number once:
+    let invite_count: u32 = alice2
+        .sql
+        .query_get_value(
+            "SELECT COUNT(*) FROM tokens WHERE namespc=?;",
+            (Namespace::InviteNumber,),
+        )
+        .await?
+        .unwrap();
+    assert_eq!(invite_count, 1);
+
+    // ...but knows two AUTH tokens:
+    let auth_count: u32 = alice2
+        .sql
+        .query_get_value(
+            "SELECT COUNT(*) FROM tokens WHERE namespc=?;",
+            (Namespace::Auth,),
+        )
+        .await?
+        .unwrap();
+    assert_eq!(auth_count, 2);
 
     Ok(())
 }
