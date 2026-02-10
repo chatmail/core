@@ -459,22 +459,7 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
     let mut qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
-    if remove_invite {
-        // Remove the INVITENUBMER. It's not needed in Securejoin v3,
-        // but still included for backwards compatibility reasons.
-        // We want to be able to remove it in the future, however.
-        let new_qr = Regex::new("&i=.*?&").unwrap().replace(&qr, "&");
-        assert!(new_qr != qr);
-        qr = new_qr.to_string();
-    }
-    if !v3 || remove_invite {
-        // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
-        // If `remove_invite`, we can also remove the v=3 parameter,
-        // because any QR with AUTH but no INVITE must treated as a v3 QR code.
-        let new_qr = Regex::new("&v=3").unwrap().replace(&qr, "");
-        assert!(new_qr != qr);
-        qr = new_qr.to_string();
-    }
+    manipulate_qr(v3, remove_invite, &mut qr);
 
     tcm.section("Step 2: Bob scans QR-code, sends vg-request");
     let bob_chatid = join_securejoin(&bob, &qr).await?;
@@ -689,6 +674,91 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
     assert_eq!(Chatlist::try_load(&bob, 0, None, None).await?.len(), 2);
 
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_legacy() -> Result<()> {
+    test_secure_join_broadcast(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_v3() -> Result<()> {
+    test_secure_join_broadcast(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_broadcast_v3_without_invite() -> Result<()> {
+    test_secure_join_broadcast(true, true).await
+}
+
+async fn test_secure_join_broadcast(v3: bool, remove_invite: bool) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = chat::create_broadcast(alice, "Channel".to_string()).await?;
+    let mut qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    manipulate_qr(v3, remove_invite, &mut qr);
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let sent = alice.send_text(alice_chat_id, "Hi channel").await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, bob_chat_id);
+    assert_eq!(rcvd.text, "Hi channel");
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_legacy() -> Result<()> {
+    test_setup_contact_compatibility(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_v3() -> Result<()> {
+    test_setup_contact_compatibility(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setup_contact_compatibility_v3_without_invite() -> Result<()> {
+    test_setup_contact_compatibility(true, true).await
+}
+
+async fn test_setup_contact_compatibility(v3: bool, remove_invite: bool) -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let mut qr = get_securejoin_qr(alice, None).await?;
+    manipulate_qr(v3, remove_invite, &mut qr);
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    assert_eq!(bob_chat_id, bob.get_chat(alice).await.id);
+
+    let sent = alice
+        .send_text(alice.get_chat(bob).await.id, "Hi Bob")
+        .await;
+    let rcvd = bob.recv_msg(&sent).await;
+    assert_eq!(rcvd.chat_id, bob_chat_id);
+    assert_eq!(rcvd.text, "Hi Bob");
+
+    Ok(())
+}
+
+fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
+    if remove_invite {
+        // Remove the INVITENUBMER. It's not needed in Securejoin v3,
+        // but still included for backwards compatibility reasons.
+        // We want to be able to remove it in the future, however.
+        let new_qr = Regex::new("&i=.*?&").unwrap().replace(qr, "&");
+        // Broadcast channels use `j` for the INVITENUMBER, so we need to remove it, too:
+        let new_qr = Regex::new("&j=.*?&").unwrap().replace(&new_qr, "&");
+        assert!(new_qr != *qr);
+        *qr = new_qr.to_string();
+    }
+    if !v3 || remove_invite {
+        // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
+        // If `remove_invite`, we can also remove the v=3 parameter,
+        // because any QR with AUTH but no INVITE must treated as a v3 QR code.
+        let new_qr = Regex::new("&v=3").unwrap().replace(qr, "");
+        assert!(new_qr != *qr);
+        *qr = new_qr.to_string();
+    }
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
