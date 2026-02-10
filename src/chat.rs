@@ -4245,7 +4245,9 @@ async fn set_chat_description_ex(
     let affected_rows = context
         .sql
         .execute(
-            "INSERT OR REPLACE INTO chats_descriptions(chat_id, description) VALUES(?, ?)",
+            "INSERT INTO chats_descriptions(chat_id, description) VALUES(?, ?)
+            ON CONFLICT(chat_id) DO UPDATE
+            SET description=excluded.description WHERE description<>excluded.description",
             (chat_id, &new_description),
         )
         .await?;

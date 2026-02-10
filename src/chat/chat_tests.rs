@@ -3223,7 +3223,7 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
         initial_description
     );
 
-    for description in ["This is a cool group", ""] {
+    for description in ["This is a cool group", "", "ä ẟ 😂"] {
         tcm.section(&format!(
             "Alice sets the chat description to '{description}'"
         ));
@@ -3256,6 +3256,15 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
             description
         );
     }
+
+    tcm.section("Alice calls set_chat_description() without actually changing the description");
+    set_chat_description(alice, alice_chat_id, "ä ẟ 😂").await?;
+    assert!(
+        alice
+            .pop_sent_msg_opt(Duration::from_secs(0))
+            .await
+            .is_none()
+    );
 
     Ok(())
 }
