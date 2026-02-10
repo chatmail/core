@@ -63,13 +63,13 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     bob.set_config(Config::Displayname, Some("Bob Examplenet"))
         .await
         .unwrap();
-    let alice_auto_submitted_hdr;
+    let alice_auto_submitted_hdr: bool;
     match case {
         SetupContactCase::AliceIsBot => {
             alice.set_config_bool(Config::Bot, true).await.unwrap();
-            alice_auto_submitted_hdr = "Auto-Submitted: auto-generated";
+            alice_auto_submitted_hdr = true;
         }
-        _ => alice_auto_submitted_hdr = "Auto-Submitted: auto-replied",
+        _ => alice_auto_submitted_hdr = false,
     };
 
     assert_eq!(
@@ -138,7 +138,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
 
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains(alice_auto_submitted_hdr));
+    assert_eq!(
+        sent.payload.contains("Auto-Submitted: auto-generated"),
+        alice_auto_submitted_hdr
+    );
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -171,7 +174,6 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Bob sent the right message.
     let sent = bob.pop_sent_msg().await;
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     assert!(!sent.payload.contains("Bob Examplenet"));
     let mut msg = alice.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -262,7 +264,10 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
 
     // Check Alice sent the right message to Bob.
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains(alice_auto_submitted_hdr));
+    assert_eq!(
+        sent.payload.contains("Auto-Submitted: auto-generated"),
+        alice_auto_submitted_hdr
+    );
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
@@ -499,7 +504,6 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(
@@ -537,7 +541,6 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
     }
 
     // Check Bob sent the right handshake message.
-    assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = alice.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(

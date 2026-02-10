@@ -869,16 +869,6 @@ impl MimeFactory {
                 "Auto-Submitted",
                 mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
             ));
-        } else if let Loaded::Message { msg, .. } = &self.loaded
-            && msg.param.get_cmd() == SystemMessage::SecurejoinMessage
-        {
-            let step = msg.param.get(Param::Arg).unwrap_or_default();
-            if step != "vg-request" && step != "vc-request" {
-                headers.push((
-                    "Auto-Submitted",
-                    mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
-                ));
-            }
         }
 
         if let Loaded::Message { msg, chat } = &self.loaded
@@ -2302,7 +2292,6 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
     ));
 
-    // TODO not sure if we even need a timestamp
     let timestamp = create_smeared_timestamp(context);
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
         .unwrap()
@@ -2319,12 +2308,6 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         headers.push((
             "Auto-Submitted",
             mail_builder::headers::raw::Raw::new("auto-generated".to_string()).into(),
-        ));
-        // TODO it's not nice that we're comparing strings here
-    } else if step != "vc-request-pubkey" {
-        headers.push((
-            "Auto-Submitted",
-            mail_builder::headers::raw::Raw::new("auto-replied".to_string()).into(),
         ));
     }
 
