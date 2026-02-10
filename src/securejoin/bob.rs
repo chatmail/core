@@ -302,7 +302,7 @@ pub(crate) async fn send_handshake_message(
     step: BobHandshakeMsg,
 ) -> Result<()> {
     if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
-        // Send a minimal symmetrically-encrypted vc-request message
+        // Send a minimal symmetrically-encrypted vc-request-pubkey message
         let rfc724_mid = create_outgoing_rfc724_mid();
         let contact = Contact::get_by_id(context, invite.contact_id()).await?;
         let recipient = contact.get_addr();
