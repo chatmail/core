@@ -1763,10 +1763,11 @@ impl Chat {
         } else if matches!(self.typ, Chattype::Group | Chattype::OutBroadcast)
             && self.param.get_int(Param::Unpromoted).unwrap_or_default() == 1
         {
-            msg.param.set_int(Param::AttachGroupImage, 1);
+            msg.param.set_int(Param::AttachChatAvatarAndDescription, 1);
             self.param
                 .remove(Param::Unpromoted)
-                .set_i64(Param::GroupNameTimestamp, msg.timestamp_sort);
+                .set_i64(Param::GroupNameTimestamp, msg.timestamp_sort)
+                .set_i64(Param::GroupDescriptionTimestamp, msg.timestamp_sort);
             self.update_param(context).await?;
             // TODO: Remove this compat code needed because Core <= v1.143:
             // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also
@@ -2807,9 +2808,18 @@ async fn render_mime_message_and_pre_message(
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
 pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
-    if msg.param.get_cmd() == SystemMessage::GroupNameChanged {
+    let cmd = msg.param.get_cmd();
+    if cmd == SystemMessage::GroupNameChanged || cmd == SystemMessage::GroupDescriptionChanged {
         msg.chat_id
-            .update_timestamp(context, Param::GroupNameTimestamp, msg.timestamp_sort)
+            .update_timestamp(
+                context,
+                if cmd == SystemMessage::GroupNameChanged {
+                    Param::GroupNameTimestamp
+                } else {
+                    Param::GroupDescriptionTimestamp
+                },
+                msg.timestamp_sort,
+            )
             .await?;
     }
 
@@ -3882,9 +3892,11 @@ pub(crate) async fn add_contact_to_chat_ex(
 
     let sync_qr_code_tokens;
     if from_handshake && chat.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
+        let smeared_time = smeared_time(context);
         chat.param
             .remove(Param::Unpromoted)
-            .set_i64(Param::GroupNameTimestamp, smeared_time(context));
+            .set_i64(Param::GroupNameTimestamp, smeared_time)
+            .set_i64(Param::GroupDescriptionTimestamp, smeared_time);
         chat.update_param(context).await?;
         sync_qr_code_tokens = true;
     } else {
@@ -4187,7 +4199,107 @@ async fn send_member_removal_msg(
     send_msg(context, chat.id, &mut msg).await
 }
 
-/// Sets group or mailing list chat name.
+/// Set group or broadcast channel description.
+///
+/// If the group is already _promoted_ (any message was sent to the group),
+/// or if this is a brodacast channel,
+/// all members are informed by a special status message that is sent automatically by this function.
+///
+/// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
+///
+/// See also [`get_chat_description`]
+pub async fn set_chat_description(
+    context: &Context,
+    chat_id: ChatId,
+    new_description: &str,
+) -> Result<()> {
+    set_chat_description_ex(context, Sync, chat_id, new_description).await
+}
+
+async fn set_chat_description_ex(
+    context: &Context,
+    mut sync: sync::Sync,
+    chat_id: ChatId,
+    new_description: &str,
+) -> Result<()> {
+    let new_description = sanitize_bidi_characters(new_description.trim());
+
+    ensure!(!chat_id.is_special(), "Invalid chat ID");
+
+    let chat = Chat::load_from_db(context, chat_id).await?;
+    ensure!(
+        chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast,
+        "Can only set description for groups / broadcasts"
+    );
+    ensure!(
+        !chat.grpid.is_empty(),
+        "Cannot set description for ad hoc groups"
+    );
+    if !chat.is_self_in_chat(context).await? {
+        context.emit_event(EventType::ErrorSelfNotInGroup(
+            "Cannot set chat description; self not in group".into(),
+        ));
+        bail!("Cannot set chat description; self not in group");
+    }
+
+    let affected_rows = context
+        .sql
+        .execute(
+            "INSERT INTO chats_descriptions(chat_id, description) VALUES(?, ?)
+            ON CONFLICT(chat_id) DO UPDATE
+            SET description=excluded.description WHERE description<>excluded.description",
+            (chat_id, &new_description),
+        )
+        .await?;
+
+    if affected_rows == 0 {
+        return Ok(());
+    }
+
+    if chat.is_promoted() {
+        let mut msg = Message::new(Viewtype::Text);
+        msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
+        msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
+
+        msg.id = send_msg(context, chat_id, &mut msg).await?;
+        context.emit_msgs_changed(chat_id, msg.id);
+        sync = Nosync;
+    }
+    context.emit_event(EventType::ChatModified(chat_id));
+
+    if sync.into() {
+        chat.sync(context, SyncAction::SetDescription(new_description))
+            .await
+            .log_err(context)
+            .ok();
+    }
+
+    Ok(())
+}
+
+/// Load the chat description from the database.
+///
+/// UIs show this in the profile page of the chat,
+/// it is settable by [`set_chat_description`]
+pub async fn get_chat_description(context: &Context, chat_id: ChatId) -> Result<String> {
+    let description = context
+        .sql
+        .query_get_value(
+            "SELECT description FROM chats_descriptions WHERE chat_id=?",
+            (chat_id,),
+        )
+        .await?
+        .unwrap_or_default();
+    Ok(description)
+}
+
+/// Sets group, mailing list, or broadcast channel chat name.
+///
+/// If the group is already _promoted_ (any message was sent to the group),
+/// or if this is a brodacast channel,
+/// all members are informed by a special status message that is sent automatically by this function.
+///
+/// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
 pub async fn set_chat_name(context: &Context, chat_id: ChatId, new_name: &str) -> Result<()> {
     rename_ex(context, Sync, chat_id, new_name).await
 }
@@ -5015,6 +5127,7 @@ pub(crate) enum SyncAction {
     ///
     /// The list is a list of pairs of fingerprint and address.
     SetPgpContacts(Vec<(String, String)>),
+    SetDescription(String),
     Delete,
 }
 
@@ -5113,6 +5226,9 @@ impl Context {
                 Err(anyhow!("sync_alter_chat({id:?}, {action:?}): Bad request."))
             }
             SyncAction::Rename(to) => rename_ex(self, Nosync, chat_id, to).await,
+            SyncAction::SetDescription(to) => {
+                set_chat_description_ex(self, Nosync, chat_id, to).await
+            }
             SyncAction::SetContacts(addrs) => set_contacts_by_addrs(self, chat_id, addrs).await,
             SyncAction::SetPgpContacts(fingerprint_addrs) => {
                 set_contacts_by_fingerprints(self, chat_id, fingerprint_addrs).await

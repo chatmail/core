@@ -1068,7 +1068,8 @@ impl CommandApi {
     /// Set group name.
     ///
     /// If the group is already _promoted_ (any message was sent to the group),
-    /// all group members are informed by a special status message that is sent automatically by this function.
+    /// or if this is a brodacast channel,
+    /// all members are informed by a special status message that is sent automatically by this function.
     ///
     /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
     async fn set_chat_name(&self, account_id: u32, chat_id: u32, new_name: String) -> Result<()> {
@@ -1076,10 +1077,39 @@ impl CommandApi {
         chat::set_chat_name(&ctx, ChatId::new(chat_id), &new_name).await
     }
 
+    /// Set group or broadcast channel description.
+    ///
+    /// If the group is already _promoted_ (any message was sent to the group),
+    /// or if this is a brodacast channel,
+    /// all members are informed by a special status message that is sent automatically by this function.
+    ///
+    /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
+    ///
+    /// See also [`Self::get_chat_description`] / `getChatDescription()`.
+    async fn set_chat_description(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        description: String,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        chat::set_chat_description(&ctx, ChatId::new(chat_id), &description).await
+    }
+
+    /// Load the chat description from the database.
+    ///
+    /// UIs show this in the profile page of the chat,
+    /// it is settable by [`Self::set_chat_description`] / `setChatDescription()`.
+    async fn get_chat_description(&self, account_id: u32, chat_id: u32) -> Result<String> {
+        let ctx = self.get_context(account_id).await?;
+        chat::get_chat_description(&ctx, ChatId::new(chat_id)).await
+    }
+
     /// Set group profile image.
     ///
     /// If the group is already _promoted_ (any message was sent to the group),
-    /// all group members are informed by a special status message that is sent automatically by this function.
+    /// or if this is a brodacast channel,
+    /// all members are informed by a special status message that is sent automatically by this function.
     ///
     /// Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
     ///

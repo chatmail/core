@@ -186,10 +186,10 @@ pub enum SystemMessage {
     #[default]
     Unknown = 0,
 
-    /// Group name changed.
+    /// Group or broadcast channel name changed.
     GroupNameChanged = 2,
 
-    /// Group avatar changed.
+    /// Group or broadcast channel avatar changed.
     GroupImageChanged = 3,
 
     /// Member was added to the group.
@@ -254,6 +254,9 @@ pub enum SystemMessage {
 
     /// Message indicating that a call was ended.
     CallEnded = 67,
+
+    /// Group or broadcast channel description changed.
+    GroupDescriptionChanged = 70,
 }
 
 const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
@@ -773,6 +776,11 @@ impl MimeMessage {
             self.is_system_message = SystemMessage::MemberAddedToGroup;
         } else if self.get_header(HeaderDef::ChatGroupNameChanged).is_some() {
             self.is_system_message = SystemMessage::GroupNameChanged;
+        } else if self
+            .get_header(HeaderDef::ChatGroupDescriptionChanged)
+            .is_some()
+        {
+            self.is_system_message = SystemMessage::GroupDescriptionChanged;
         }
     }
 

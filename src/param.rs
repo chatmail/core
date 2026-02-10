@@ -140,7 +140,7 @@ pub enum Param {
     Arg4 = b'H',
 
     /// For Messages
-    AttachGroupImage = b'A',
+    AttachChatAvatarAndDescription = b'A',
 
     /// For Messages
     WebrtcRoom = b'V',
@@ -218,6 +218,9 @@ pub enum Param {
 
     /// For Chats: timestamp of group name update.
     GroupNameTimestamp = b'g',
+
+    /// For Chats: timestamp of chat description update.
+    GroupDescriptionTimestamp = b'6',
 
     /// For Chats: timestamp of member list update.
     MemberListTimestamp = b'k',

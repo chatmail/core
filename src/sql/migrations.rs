@@ -1558,6 +1558,15 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 147)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE chats_descriptions (chat_id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL DEFAULT '') STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
