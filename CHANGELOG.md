@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.42.0] - 2026-02-10
+
+### Fixes
+
+- Set `mvbox_move` to '0' explicitly for existing chatmail profiles.
+  It's needed to prevent device message about deprecated `mvbox_move` option from appearing in chatmail profiles.
+
+### Features / Changes
+
+- Do not scan not watched folders.
+
+### Miscellaneous Tasks
+
+- Update rPGP from 0.18.0 to 0.19.0.
+- cargo: Bump quick-xml from 0.38.4 to 0.39.0.
+
+### Tests
+
+- Remove test_dont_show_emails.
+
+### Other
+
+- Fix typo in CHANGELOG for marknoticed_all_chats.
+
 ## [2.41.0] - 2026-02-06
 
 ### Features / Changes
@@ -7713,3 +7737,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.39.0]: https://github.com/chatmail/core/compare/v2.38.0..v2.39.0
 [2.40.0]: https://github.com/chatmail/core/compare/v2.39.0..v2.40.0
 [2.41.0]: https://github.com/chatmail/core/compare/v2.40.0..v2.41.0
+[2.42.0]: https://github.com/chatmail/core/compare/v2.41.0..v2.42.0
