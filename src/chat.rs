@@ -4239,7 +4239,7 @@ async fn set_chat_description_ex(
         context.emit_event(EventType::ErrorSelfNotInGroup(
             "Cannot set chat description; self not in group".into(),
         ));
-        bail!("Failed to set chat description");
+        bail!("Cannot set chat description; self not in group");
     }
 
     let affected_rows = context
