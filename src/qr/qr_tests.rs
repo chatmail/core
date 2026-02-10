@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use super::*;
 use crate::chat::{Chat, create_broadcast, create_group, get_chat_contacts};
 use crate::config::Config;
@@ -445,9 +447,27 @@ async fn test_decode_openpgp_without_addr() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_withdraw_verifycontact() -> Result<()> {
+async fn test_withdraw_verifycontact_basic() -> Result<()> {
+    test_withdraw_verifycontact(false).await
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_withdraw_verifycontact_without_invite() -> Result<()> {
+    test_withdraw_verifycontact(true).await
+}
+
+async fn test_withdraw_verifycontact(remove_invite: bool) -> Result<()> {
     let alice = TestContext::new_alice().await;
-    let qr = get_securejoin_qr(&alice, None).await?;
+    let mut qr = get_securejoin_qr(&alice, None).await?;
+
+    if remove_invite {
+        // Remove the INVITENUBMER. It's not needed in Securejoin v3,
+        // but still included for backwards compatibility reasons.
+        // We want to be able to remove it in the future, however.
+        let new_qr = Regex::new("&i=.*?&").unwrap().replace(&qr, "&");
+        assert!(new_qr != *qr);
+        qr = new_qr.to_string();
+    }
 
     // scanning own verify-contact code offers withdrawing
     assert!(matches!(
