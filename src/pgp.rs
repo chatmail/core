@@ -327,13 +327,10 @@ pub fn pk_calc_signature(
 ///
 /// Returns the decrypted and decompressed message.
 pub fn decrypt(
-    ctext: Vec<u8>,
+    msg: Message<'static>,
     private_keys_for_decryption: &[SignedSecretKey],
     mut shared_secrets: &[String],
 ) -> Result<pgp::composed::Message<'static>> {
-    let cursor = Cursor::new(ctext);
-    let (msg, _headers) = Message::from_armor(cursor)?;
-
     let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
     let empty_pw = Password::empty();
 
@@ -389,7 +386,9 @@ pub fn decrypt(
 /// with all of the known shared secrets.
 /// In order to prevent this, we do not try to symmetrically decrypt messages
 /// that use a string2key algorithm other than 'Salted'.
-fn check_symmetric_encryption(msg: &Message<'_>) -> std::result::Result<(), &'static str> {
+pub(crate) fn check_symmetric_encryption(
+    msg: &Message<'_>,
+) -> std::result::Result<(), &'static str> {
     let Message::Encrypted { esk, .. } = msg else {
         return Err("not encrypted");
     };
@@ -548,6 +547,16 @@ mod tests {
     use pgp::composed::Esk;
     use pgp::packet::PublicKeyEncryptedSessionKey;
 
+    fn decrypt_bytes(
+        bytes: Vec<u8>,
+        private_keys_for_decryption: &[SignedSecretKey],
+        shared_secrets: &[String],
+    ) -> Result<pgp::composed::Message<'static>> {
+        let cursor = Cursor::new(bytes);
+        let (msg, _headers) = Message::from_armor(cursor).unwrap();
+        decrypt(msg, private_keys_for_decryption, shared_secrets)
+    }
+
     #[expect(clippy::type_complexity)]
     fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
@@ -558,7 +567,7 @@ mod tests {
         HashMap<Fingerprint, Vec<Fingerprint>>,
         Vec<u8>,
     )> {
-        let mut msg = decrypt(ctext.to_vec(), private_keys_for_decryption, &[])?;
+        let mut msg = decrypt_bytes(ctext.to_vec(), private_keys_for_decryption, &[])?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -746,7 +755,7 @@ mod tests {
         .await?;
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let mut decrypted = decrypt(
+        let mut decrypted = decrypt_bytes(
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
@@ -789,7 +798,7 @@ mod tests {
         // Trying to decrypt it should fail with a helpful error message:
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let error = decrypt(
+        let error = decrypt_bytes(
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
@@ -826,7 +835,7 @@ mod tests {
 
         // Trying to decrypt it should fail with an OK error message:
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let error = decrypt(ctext.into(), &bob_private_keyring, &[]).unwrap_err();
+        let error = decrypt_bytes(ctext.into(), &bob_private_keyring, &[]).unwrap_err();
 
         assert_eq!(
             error.to_string(),

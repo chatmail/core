@@ -20,7 +20,7 @@ use crate::chat::ChatId;
 use crate::config::Config;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{try_decrypt, validate_detached_signature};
+use crate::decrypt::{get_encrypted_pgp_message, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::download::PostMsgMetadata;
 use crate::events::EventType;
@@ -380,82 +380,93 @@ impl MimeMessage {
             PreMessageMode::None
         };
 
+        // TODO performance:
+        // - maybe we should start sorting by timestamp
+        // - we're loading the whole bobstate, just to get the auth token
+
+        let encrypted_pgp_message = get_encrypted_pgp_message(&mail)?;
+
+        let mut secrets: Vec<String>;
+        if let Some(e) = &encrypted_pgp_message
+            && crate::pgp::check_symmetric_encryption(e).is_ok()
+        {
+            secrets = context
+                .sql
+                .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
+                    let secret: String = row.get(0)?;
+                    Ok(secret)
+                })
+                .await?;
+            secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
+            context
+                .sql
+                .query_map(
+                    "SELECT id, invite FROM bobstate",
+                    (),
+                    |row| {
+                        let invite: crate::securejoin::QrInvite = row.get(1)?;
+                        Ok(invite)
+                    },
+                    |rows| {
+                        for row in rows {
+                            secrets.push(row?.authcode().to_string());
+                        }
+                        Ok(())
+                    },
+                )
+                .await?;
+        } else {
+            // No need to load all the secrets if the message isn't symmetrically encrypted
+            secrets = vec![];
+        }
+
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
 
-        // TODO performance:
-        // - maybe we should start sorting by timestamp
-        // - we shouldn't do 3 SQL requests even if the message isn't symm-encrypted
-        // - we're loading the whole bobstate, just to get the auth token
-        let mut secrets: Vec<String> = context
-            .sql
-            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
-                let secret: String = row.get(0)?;
-                Ok(secret)
-            })
-            .await?;
-        secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
-        context
-            .sql
-            .query_map(
-                "SELECT id, invite FROM bobstate",
-                (),
-                |row| {
-                    let invite: crate::securejoin::QrInvite = row.get(1)?;
-                    Ok(invite)
-                },
-                |rows| {
-                    for row in rows {
-                        secrets.push(row?.authcode().to_string());
-                    }
-                    Ok(())
-                },
-            )
-            .await?;
+        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
+            encrypted_pgp_message.map(|e| crate::pgp::decrypt(e, &private_keyring, &secrets))
+        }) {
+            Some(Ok(mut msg)) => {
+                mail_raw = msg.as_data_vec().unwrap_or_default();
 
-        let (mail, is_encrypted) =
-            match tokio::task::block_in_place(|| try_decrypt(&mail, &private_keyring, &secrets)) {
-                Ok(Some(mut msg)) => {
-                    mail_raw = msg.as_data_vec().unwrap_or_default();
-
-                    let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
-                    if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
-                        info!(
-                            context,
-                            "decrypted message mime-body:\n{}",
-                            String::from_utf8_lossy(&mail_raw),
-                        );
-                    }
-
-                    decrypted_msg = Some(msg);
-
-                    timestamp_sent = Self::get_timestamp_sent(
-                        &decrypted_mail.headers,
-                        timestamp_sent,
-                        timestamp_rcvd,
+                let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
+                if std::env::var(crate::DCC_MIME_DEBUG).is_ok() {
+                    info!(
+                        context,
+                        "decrypted message mime-body:\n{}",
+                        String::from_utf8_lossy(&mail_raw),
                     );
+                }
 
-                    let protected_aheader_values = decrypted_mail
-                        .headers
-                        .get_all_values(HeaderDef::Autocrypt.into());
-                    if !protected_aheader_values.is_empty() {
-                        aheader_values = protected_aheader_values;
-                    }
+                decrypted_msg = Some(msg);
 
-                    (Ok(decrypted_mail), true)
+                timestamp_sent = Self::get_timestamp_sent(
+                    &decrypted_mail.headers,
+                    timestamp_sent,
+                    timestamp_rcvd,
+                );
+
+                let protected_aheader_values = decrypted_mail
+                    .headers
+                    .get_all_values(HeaderDef::Autocrypt.into());
+                if !protected_aheader_values.is_empty() {
+                    aheader_values = protected_aheader_values;
                 }
-                Ok(None) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    (Ok(mail), false)
-                }
-                Err(err) => {
-                    mail_raw = Vec::new();
-                    decrypted_msg = None;
-                    warn!(context, "decryption failed: {:#}", err);
-                    (Err(err), false)
-                }
-            };
+
+                (Ok(decrypted_mail), true)
+            }
+            None => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                (Ok(mail), false)
+            }
+            Some(Err(err)) => {
+                mail_raw = Vec::new();
+                decrypted_msg = None;
+                warn!(context, "decryption failed: {:#}", err);
+                (Err(err), false)
+            }
+        };
 
         let mut autocrypt_header = None;
         if incoming {
