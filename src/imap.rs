@@ -356,10 +356,10 @@ impl Imap {
                 context,
                 self.proxy_config.clone(),
                 self.strict_tls,
-                connection_candidate,
+                &connection_candidate,
             )
             .await
-            .context("IMAP failed to connect")
+            .with_context(|| format!("IMAP failed to connect to {connection_candidate}"))
             {
                 Ok(client) => client,
                 Err(err) => {

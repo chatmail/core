@@ -109,8 +109,8 @@ pub(crate) async fn connect_tcp_inner(
 ) -> Result<Pin<Box<TimeoutStream<TcpStream>>>> {
     let tcp_stream = timeout(TIMEOUT, TcpStream::connect(addr))
         .await
-        .context("connection timeout")?
-        .context("connection failure")?;
+        .context("Connection timeout")?
+        .context("Connection failure")?;
 
     // Disable Nagle's algorithm.
     tcp_stream.set_nodelay(true)?;

@@ -150,7 +150,7 @@ impl Client {
             Err(err) => {
                 warn!(
                     context,
-                    "Failed to connect to {host} ({resolved_addr}): {err:#}."
+                    "IMAP failed to connect to {host} ({resolved_addr}): {err:#}."
                 );
                 Err(err)
             }
@@ -161,7 +161,7 @@ impl Client {
         context: &Context,
         proxy_config: Option<ProxyConfig>,
         strict_tls: bool,
-        candidate: ConnectionCandidate,
+        candidate: &ConnectionCandidate,
     ) -> Result<Self> {
         let host = &candidate.host;
         let port = candidate.port;
