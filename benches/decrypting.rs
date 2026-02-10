@@ -178,7 +178,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 )
                 .await
                 .unwrap();
-                assert_eq!(text, "Symmetrically encrypted message");
+                assert_eq!(black_box(text), "Symmetrically encrypted message");
             }
         });
     });
@@ -193,7 +193,7 @@ fn criterion_benchmark(c: &mut Criterion) {
                 )
                 .await
                 .unwrap();
-                assert_eq!(text, "hi");
+                assert_eq!(black_box(text), "hi");
             }
         });
     });
