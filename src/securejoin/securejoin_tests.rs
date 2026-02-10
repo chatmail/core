@@ -439,19 +439,19 @@ async fn test_setup_contact_concurrent_calls() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_secure_join_legacy() -> Result<()> {
-    test_secure_join(false, false).await
+async fn test_secure_join_group_legacy() -> Result<()> {
+    test_secure_join_group_ex(false, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_secure_join_v3() -> Result<()> {
-    test_secure_join(true, false).await
+async fn test_secure_join_group_v3() -> Result<()> {
+    test_secure_join_group_ex(true, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_secure_join_v3_without_invite() -> Result<()> {
-    test_secure_join(true, true).await
+async fn test_secure_join_group_v3_without_invite() -> Result<()> {
+    test_secure_join_group_ex(true, true).await
 }
 
-async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
+async fn test_secure_join_group_ex(v3: bool, remove_invite: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -605,8 +605,6 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
         if v3 {
-            // In version 3 of the Securejoin protocol,
-            // the chat is not even created
             assert!(
                 ChatIdBlocked::lookup_by_contact(&alice, contact_bob.id)
                     .await?
@@ -681,18 +679,18 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_secure_join_broadcast_legacy() -> Result<()> {
-    test_secure_join_broadcast(false, false).await
+    test_secure_join_broadcast_ex(false, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_secure_join_broadcast_v3() -> Result<()> {
-    test_secure_join_broadcast(true, false).await
+    test_secure_join_broadcast_ex(true, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_secure_join_broadcast_v3_without_invite() -> Result<()> {
-    test_secure_join_broadcast(true, true).await
+    test_secure_join_broadcast_ex(true, true).await
 }
 
-async fn test_secure_join_broadcast(v3: bool, remove_invite: bool) -> Result<()> {
+async fn test_secure_join_broadcast_ex(v3: bool, remove_invite: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -713,18 +711,18 @@ async fn test_secure_join_broadcast(v3: bool, remove_invite: bool) -> Result<()>
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_compatibility_legacy() -> Result<()> {
-    test_setup_contact_compatibility(false, false).await
+    test_setup_contact_compatibility_ex(false, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_compatibility_v3() -> Result<()> {
-    test_setup_contact_compatibility(true, false).await
+    test_setup_contact_compatibility_ex(true, false).await
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_setup_contact_compatibility_v3_without_invite() -> Result<()> {
-    test_setup_contact_compatibility(true, true).await
+    test_setup_contact_compatibility_ex(true, true).await
 }
 
-async fn test_setup_contact_compatibility(v3: bool, remove_invite: bool) -> Result<()> {
+async fn test_setup_contact_compatibility_ex(v3: bool, remove_invite: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;

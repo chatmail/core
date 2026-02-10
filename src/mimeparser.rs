@@ -2095,7 +2095,7 @@ impl MimeMessage {
 }
 
 /// Loads all the shared secrets
-/// that can be used to decrypt a symmetrically-encrypted message
+/// that will be tried to decrypt a symmetrically-encrypted message
 async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
     // First, try decrypting using the bobstate,
     // because usually there will only be 1 or 2 of it,

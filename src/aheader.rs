@@ -48,10 +48,10 @@ pub struct Aheader {
     pub prefer_encrypt: EncryptPreference,
 
     /// Whether `_verified` attribute is present.
-    //
-    // `_verified` attribute is an extension to `Autocrypt-Gossip`
-    // header that is used to tell that the sender
-    // marked this key as verified.
+    ///
+    /// `_verified` attribute is an extension to `Autocrypt-Gossip`
+    /// header that is used to tell that the sender
+    /// marked this key as verified.
     pub verified: bool,
 }
 

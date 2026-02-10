@@ -71,8 +71,7 @@ pub async fn lookup_all(context: &Context, namespace: Namespace) -> Result<Vec<S
         .sql
         .query_map_vec(
             // `ORDER BY id DESC` in order to try the most-recently saved tokens first.
-            // This improves performance, esp. when decrypting a message
-            // that was encrypted with an AUTH token.
+            // This improves performance when Bob scans a QR code that was just created.
             "SELECT token FROM tokens WHERE namespc=? ORDER BY id DESC",
             (namespace,),
             |row| Ok(row.get(0)?),
