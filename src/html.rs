@@ -9,7 +9,7 @@
 
 use std::mem;
 
-use anyhow::{Context as _, Result};
+use anyhow::{Context as _, Result, ensure};
 use base64::Engine as _;
 use mailparse::ParsedContentType;
 use mime::Mime;
@@ -17,10 +17,12 @@ use mime::Mime;
 use crate::context::Context;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::log::warn;
-use crate::message::{self, Message, MsgId};
+use crate::message::{Message, MsgId};
 use crate::mimeparser::parse_message_id;
-use crate::param::Param::SendHtml;
+use crate::param::{Param::SendHtml, Params};
 use crate::plaintext::PlainText;
+use crate::sql;
+use crate::tools::{buf_compress, buf_decompress};
 
 impl Message {
     /// Check if the message can be retrieved as HTML.
@@ -258,28 +260,71 @@ impl MsgId {
     /// NB: we do not save raw mime unconditionally in the database to save space.
     /// The corresponding ffi-function is `dc_get_msg_html()`.
     pub async fn get_html(self, context: &Context) -> Result<Option<String>> {
-        // If there are many concurrent db readers, going to the queue earlier makes sense.
-        let (param, rawmime) = tokio::join!(
-            self.get_param(context),
-            message::get_mime_headers(context, self)
-        );
-        if let Some(html) = param?.get(SendHtml) {
+        let (param, headers, compressed) = context
+            .sql
+            .query_row(
+                "SELECT param, mime_headers, mime_compressed FROM msgs WHERE id=?",
+                (self,),
+                |row| {
+                    let param: String = row.get(0)?;
+                    let param: Params = param.parse().unwrap_or_default();
+                    let headers = sql::row_get_vec(row, 1)?;
+                    let compressed: bool = row.get(2)?;
+                    Ok((param, headers, compressed))
+                },
+            )
+            .await?;
+        if let Some(html) = param.get(SendHtml) {
             return Ok(Some(html.to_string()));
         }
-
-        let rawmime = rawmime?;
-        if !rawmime.is_empty() {
-            match HtmlMsgParser::from_bytes(context, &rawmime).await {
-                Err(err) => {
-                    warn!(context, "get_html: parser error: {:#}", err);
-                    Ok(None)
+        let from_rawmime = |rawmime: Vec<u8>| async move {
+            if !rawmime.is_empty() {
+                match HtmlMsgParser::from_bytes(context, &rawmime).await {
+                    Err(err) => {
+                        warn!(context, "get_html: parser error: {:#}", err);
+                        Ok(None)
+                    }
+                    Ok((parser, _)) => Ok(Some(parser.html)),
                 }
-                Ok((parser, _)) => Ok(Some(parser.html)),
+            } else {
+                warn!(context, "get_html: no mime for {}", self);
+                Ok(None)
             }
-        } else {
-            warn!(context, "get_html: no mime for {}", self);
-            Ok(None)
+        };
+
+        if compressed {
+            return from_rawmime(buf_decompress(&headers)?).await;
         }
+        let headers2 = headers.clone();
+        let compressed = match tokio::task::block_in_place(move || buf_compress(&headers2)) {
+            Err(e) => {
+                warn!(context, "get_mime_headers: buf_compress() failed: {}", e);
+                return from_rawmime(headers).await;
+            }
+            Ok(o) => o,
+        };
+        let update = |conn: &mut rusqlite::Connection| {
+            match conn.execute(
+                "
+UPDATE msgs SET mime_headers=?, mime_compressed=1
+WHERE id=? AND mime_headers!='' AND mime_compressed=0",
+                (compressed, self),
+            ) {
+                Ok(rows_updated) => ensure!(rows_updated <= 1),
+                Err(e) => {
+                    warn!(context, "get_mime_headers: UPDATE failed: {}", e);
+                    return Err(e.into());
+                }
+            }
+            Ok(())
+        };
+        if let Err(e) = context.sql.call_write(update).await {
+            warn!(
+                context,
+                "get_mime_headers: failed to update mime_headers: {}", e
+            );
+        }
+        return from_rawmime(headers).await;
     }
 }
 
