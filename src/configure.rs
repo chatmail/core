@@ -684,6 +684,20 @@ async fn get_autoconfig(
     }
     progress!(ctx, 310);
 
+    if let Ok(res) = moz_autoconfigure(
+        ctx,
+        // the unsecured http:// call is listed as an optional fallback in the RFC
+        &format!(
+            "http://autoconfig.{param_domain}/mail/config-v1.1.xml?emailaddress={param_addr_urlencoded}"
+        ),
+        &param.addr,
+    )
+    .await
+    {
+        return Some(res);
+    }
+    progress!(ctx, 315);
+
     // Outlook uses always SSL but different domains (this comment describes the next two steps)
     if let Ok(res) = outlk_autodiscover(
         ctx,
