@@ -1854,15 +1854,16 @@ int             dc_remove_contact_from_chat  (dc_context_t* context, uint32_t ch
 
 
 /**
- * Set group name.
+ * Set the name of a group or broadcast channel.
  *
  * If the group is already _promoted_ (any message was sent to the group),
- * all group members are informed by a special status message that is sent automatically by this function.
+ * or if this is a brodacast channel,
+ * all members are informed by a special status message that is sent automatically by this function.
  *
  * Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
  *
  * @memberof dc_context_t
- * @param chat_id The chat ID to set the name for. Must be a group chat.
+ * @param chat_id The chat ID to set the name for. Must be a group chat or broadcast channel.
  * @param name New name of the group.
  * @param context The context object.
  * @return 1=success, 0=error
@@ -1889,10 +1890,11 @@ int             dc_set_chat_name             (dc_context_t* context, uint32_t ch
 int dc_set_chat_ephemeral_timer (dc_context_t* context, uint32_t chat_id, uint32_t timer);
 
 /**
- * Set group profile image.
+ * Set group or broadcast channel profile image.
  *
  * If the group is already _promoted_ (any message was sent to the group),
- * all group members are informed by a special status message that is sent automatically by this function.
+ * or if this is a brodacast channel,
+ * all members are informed by a special status message that is sent automatically by this function.
  *
  * Sends out #DC_EVENT_CHAT_MODIFIED and #DC_EVENT_MSGS_CHANGED if a status message was sent.
  *
@@ -1900,7 +1902,7 @@ int dc_set_chat_ephemeral_timer (dc_context_t* context, uint32_t chat_id, uint32
  *
  * @memberof dc_context_t
  * @param context The context object.
- * @param chat_id The chat ID to set the image for.
+ * @param chat_id The chat ID to set the image for.  Must be a group chat or broadcast channel.
  * @param image Full path of the image to use as the group image. The image will immediately be copied to the 
  *     `blobdir`; the original image will not be needed anymore.
  *      If you pass NULL here, the group image is deleted (for promoted groups, all members are informed about 

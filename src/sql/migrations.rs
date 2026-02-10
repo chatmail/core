@@ -1558,8 +1558,17 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
-    // Add UNIQUE bound to token, in order to avoid saving the same token multiple times
     inc_and_check(&mut migration_version, 147)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE chats_descriptions (chat_id INTEGER PRIMARY KEY AUTOINCREMENT, description TEXT NOT NULL DEFAULT '') STRICT;",
+            migration_version,
+        )
+        .await?;
+    }
+
+    // Add UNIQUE bound to token, in order to avoid saving the same token multiple times
+    inc_and_check(&mut migration_version, 148)?;
     if dbversion < migration_version {
         sql.execute_migration(
             "CREATE TABLE tokens_new (
