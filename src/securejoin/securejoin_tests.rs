@@ -703,6 +703,7 @@ async fn test_secure_join_broadcast(v3: bool, remove_invite: bool) -> Result<()>
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
     let sent = alice.send_text(alice_chat_id, "Hi channel").await;
+    assert!(sent.recipients.contains("bob@example.net"));
     let rcvd = bob.recv_msg(&sent).await;
     assert_eq!(rcvd.chat_id, bob_chat_id);
     assert_eq!(rcvd.text, "Hi channel");
@@ -727,18 +728,22 @@ async fn test_setup_contact_compatibility(v3: bool, remove_invite: bool) -> Resu
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.set_config(Config::Displayname, Some("Alice")).await?;
 
     let mut qr = get_securejoin_qr(alice, None).await?;
     manipulate_qr(v3, remove_invite, &mut qr);
     let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
-    assert_eq!(bob_chat_id, bob.get_chat(alice).await.id);
 
-    let sent = alice
-        .send_text(alice.get_chat(bob).await.id, "Hi Bob")
-        .await;
-    let rcvd = bob.recv_msg(&sent).await;
-    assert_eq!(rcvd.chat_id, bob_chat_id);
-    assert_eq!(rcvd.text, "Hi Bob");
+    let bob_chat = Chat::load_from_db(bob, bob_chat_id).await?;
+    assert_eq!(bob_chat.name, "Alice");
+    assert!(bob_chat.can_send(bob).await?);
+    assert_eq!(bob_chat.typ, Chattype::Single);
+    assert_eq!(bob_chat.id, bob.get_chat(alice).await.id);
+
+    let alice_chat = alice.get_chat(bob).await;
+    assert_eq!(alice_chat.name, "bob@example.net");
+    assert!(alice_chat.can_send(alice).await?);
+    assert_eq!(alice_chat.typ, Chattype::Single);
 
     Ok(())
 }
