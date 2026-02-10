@@ -31,15 +31,9 @@ use deltachat::internals_for_benches::create_broadcast_secret;
 use deltachat::internals_for_benches::save_broadcast_secret;
 use deltachat::securejoin::get_securejoin_qr;
 use deltachat::{
-    Events,
-    chat::ChatId,
-    config::Config,
-    context::Context,
-    internals_for_benches::key_from_asc,
-    internals_for_benches::parse_and_get_text,
-    internals_for_benches::store_self_keypair,
-    pgp::KeyPair,
-    stock_str::StockStrings,
+    Events, chat::ChatId, config::Config, context::Context, internals_for_benches::key_from_asc,
+    internals_for_benches::parse_and_get_text, internals_for_benches::store_self_keypair,
+    pgp::KeyPair, stock_str::StockStrings,
 };
 use tempfile::tempdir;
 

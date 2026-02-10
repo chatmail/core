@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use deltachat_contact_tools::EmailAddress;
+use regex::Regex;
 
 use super::*;
 use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
@@ -433,7 +434,19 @@ async fn test_setup_contact_concurrent_calls() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_secure_join() -> Result<()> {
+async fn test_secure_join_legacy() -> Result<()> {
+    test_secure_join(false, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_v3() -> Result<()> {
+    test_secure_join(true, false).await
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_secure_join_v3_without_invite() -> Result<()> {
+    test_secure_join(true, true).await
+}
+
+async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
@@ -445,7 +458,21 @@ async fn test_secure_join() -> Result<()> {
     let alice_chatid = chat::create_group(&alice, "the chat").await?;
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
-    let qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
+    let mut qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
+    if !v3 {
+        // Force legacy securejoin to run by removing the &v=3 parameter
+        let new_qr = Regex::new("&v=3").unwrap().replace(&qr, "");
+        assert!(new_qr != qr);
+        qr = new_qr.to_string();
+    }
+    if remove_invite {
+        // Remove the INVITENUBMER. It's not needed in Securejoin v3,
+        // but still included for backwards compatibility reasons.
+        // We want to be able to remove it in the future, however.
+        let new_qr = Regex::new("&i=.*?&").unwrap().replace(&qr, "&");
+        assert!(new_qr != qr);
+        qr = new_qr.to_string();
+    }
 
     tcm.section("Step 2: Bob scans QR-code, sends vg-request");
     let bob_chatid = join_securejoin(&bob, &qr).await?;
@@ -460,9 +487,17 @@ async fn test_secure_join() -> Result<()> {
     assert!(msg.signature.is_none());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vc-request-pubkey"
+        if v3 {
+            "vc-request-pubkey"
+        } else {
+            "vg-request"
+        }
     );
-    assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
+    assert_eq!(msg.get_header(HeaderDef::SecureJoinAuth).is_some(), v3);
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some(),
+        !v3
+    );
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
     // Old Delta Chat core sent `Secure-Join-Group` header in `vg-request`,
@@ -473,16 +508,19 @@ async fn test_secure_join() -> Result<()> {
     // is only sent in `vg-request-with-auth` for compatibility.
     assert!(!msg.header_exists(HeaderDef::SecureJoinGroup));
 
-    tcm.section("Step 3: Alice receives vc-request-pubkey, sends vc-pubkey");
+    tcm.section("Step 3: Alice receives vc-request-pubkey and sends vc-pubkey, or vg-request and sends vg-auth-required");
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;
     assert!(sent.payload.contains("Auto-Submitted: auto-replied"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
+    assert_eq!(
+        msg.get_header(HeaderDef::SecureJoin).unwrap(),
+        if v3 { "vc-pubkey" } else { "vg-auth-required" }
+    );
 
-    tcm.section("Step 4: Bob receives vc-pubkey, sends vg-request-with-auth");
+    tcm.section("Step 4: Bob receives vc-pubkey or vg-auth-required, sends v*-request-with-auth");
     bob.recv_msg_trash(&sent).await;
     let sent = bob.pop_sent_msg().await;
 
@@ -576,11 +614,22 @@ async fn test_secure_join() -> Result<()> {
     {
         // Now Alice's chat with Bob should still be hidden, the verified message should
         // appear in the group chat.
-        assert!(
-            ChatIdBlocked::lookup_by_contact(&alice, contact_bob.id)
-                .await?
-                .is_none()
-        );
+        if v3 {
+            // In version 3 of the Securejoin protocol,
+            // the chat is not even created
+            assert!(
+                ChatIdBlocked::lookup_by_contact(&alice, contact_bob.id)
+                    .await?
+                    .is_none()
+            );
+        } else {
+            let chat = alice.get_chat(&bob).await;
+            assert_eq!(
+                chat.blocked,
+                Blocked::Yes,
+                "Alice's 1:1 chat with Bob is not hidden"
+            );
+        }
 
         // There should be 2 messages in the chat:
         // - The ChatProtectionEnabled message

@@ -492,7 +492,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
 
     let name = decode_name(&param, "n")?.unwrap_or_default();
 
-    let invitenumber = param
+    let mut invitenumber = param
         .get("i")
         // For historic reansons, broadcasts currently use j instead of i for the invitenumber:
         .or_else(|| param.get("j"))
@@ -510,7 +510,15 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
     let grpname = decode_name(&param, "g")?;
     let broadcast_name = decode_name(&param, "b")?;
 
-    let is_v3 = param.get("v") == Some(&"3");
+    let mut is_v3 = param.get("v") == Some(&"3");
+
+    if authcode.is_some() && invitenumber.is_none() {
+        // Securejoin v3 doesn't need an invitenumber.
+        // We want to remove the invitenumber and the `v=3` parameter eventually;
+        // therefore, we accept v3 QR codes without an invitenumber.
+        is_v3 = true;
+        invitenumber = Some("".to_string());
+    }
 
     if let (Some(addr), Some(invitenumber), Some(authcode)) = (&addr, invitenumber, authcode) {
         let addr = ContactAddress::new(addr)?;
@@ -530,6 +538,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
                 .await
                 .with_context(|| format!("can't check if address {addr:?} is our address"))?
             {
+                // TODO check AUTH instead
                 if token::exists(context, token::Namespace::InviteNumber, &invitenumber).await? {
                     Ok(Qr::WithdrawVerifyGroup {
                         grpname,
