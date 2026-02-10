@@ -500,7 +500,7 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
     // is only sent in `vg-request-with-auth` for compatibility.
     assert!(!msg.header_exists(HeaderDef::SecureJoinGroup));
 
-    tcm.section("Step 3: Alice receives vc-request-pubkey and sends vc-pubkey, or vg-request and sends vg-auth-required");
+    tcm.section("Step 3: Alice receives vc-request-pubkey and sends vc-pubkey, or receives vg-request and sends vg-auth-required");
     alice.recv_msg_trash(&sent).await;
 
     let sent = alice.pop_sent_msg().await;
@@ -752,17 +752,18 @@ fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
     if remove_invite {
         // Remove the INVITENUBMER. It's not needed in Securejoin v3,
         // but still included for backwards compatibility reasons.
-        // We want to be able to remove it in the future, however.
+        // We want to be able to remove it in the future,
+        // therefore we test that things work without it.
         let new_qr = Regex::new("&i=.*?&").unwrap().replace(qr, "&");
-        // Broadcast channels use `j` for the INVITENUMBER, so we need to remove it, too:
+        // Broadcast channels use `j` for the INVITENUMBER
         let new_qr = Regex::new("&j=.*?&").unwrap().replace(&new_qr, "&");
         assert!(new_qr != *qr);
         *qr = new_qr.to_string();
     }
+    // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
+    // If `remove_invite`, we can also remove the v=3 parameter,
+    // because a QR with AUTH but no INVITE is obviously v3 QR code.
     if !v3 || remove_invite {
-        // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
-        // If `remove_invite`, we can also remove the v=3 parameter,
-        // because any QR with AUTH but no INVITE must treated as a v3 QR code.
         let new_qr = Regex::new("&v=3").unwrap().replace(qr, "");
         assert!(new_qr != *qr);
         *qr = new_qr.to_string();
@@ -1519,7 +1520,7 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
     sync(alice1, alice2).await;
 
     // Note that Bob will throw away the AUTH token after sending `vc-request-with-auth`.
-    // Therefore, he will fail to decrypt the answer from alice,
+    // Therefore, he will fail to decrypt the answer from Alice's second device,
     // which leads to a "decryption failed: missing key" message in the logs.
     // This is fine.
     tcm.exec_securejoin_qr_multi_device(bob, &[alice1, alice2], &qr2)
@@ -1535,12 +1536,12 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
 
     for qr in [qr1, qr2] {
         let qr = check_qr(bob, &qr).await?;
-        let qr = QrInvite::try_from(dbg!(qr))?;
+        let qr = QrInvite::try_from(qr)?;
         assert!(token::exists(alice2, Namespace::InviteNumber, qr.invitenumber()).await?);
         assert!(token::exists(alice2, Namespace::Auth, qr.authcode()).await?);
     }
 
-    // Check that alice2 only saves the invite number twice:
+    // Check that alice2 only saves the invite number once:
     let invite_count: u32 = alice2
         .sql
         .query_get_value(

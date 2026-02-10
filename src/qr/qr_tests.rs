@@ -463,7 +463,8 @@ async fn test_withdraw_verifycontact(remove_invite: bool) -> Result<()> {
     if remove_invite {
         // Remove the INVITENUBMER. It's not needed in Securejoin v3,
         // but still included for backwards compatibility reasons.
-        // We want to be able to remove it in the future, however.
+        // We want to be able to remove it in the future,
+        // therefore we test that things work without it.
         let new_qr = Regex::new("&i=.*?&").unwrap().replace(&qr, "&");
         assert!(new_qr != *qr);
         qr = new_qr.to_string();
