@@ -459,17 +459,19 @@ async fn test_secure_join(v3: bool, remove_invite: bool) -> Result<()> {
 
     tcm.section("Step 1: Generate QR-code, secure-join implied by chatid");
     let mut qr = get_securejoin_qr(&alice, Some(alice_chatid)).await.unwrap();
-    if !v3 {
-        // Force legacy securejoin to run by removing the &v=3 parameter
-        let new_qr = Regex::new("&v=3").unwrap().replace(&qr, "");
-        assert!(new_qr != qr);
-        qr = new_qr.to_string();
-    }
     if remove_invite {
         // Remove the INVITENUBMER. It's not needed in Securejoin v3,
         // but still included for backwards compatibility reasons.
         // We want to be able to remove it in the future, however.
         let new_qr = Regex::new("&i=.*?&").unwrap().replace(&qr, "&");
+        assert!(new_qr != qr);
+        qr = new_qr.to_string();
+    }
+    if !v3 || remove_invite {
+        // If `!v3`, force legacy securejoin to run by removing the &v=3 parameter.
+        // If `remove_invite`, we can also remove the v=3 parameter,
+        // because any QR with AUTH but no INVITE must treated as a v3 QR code.
+        let new_qr = Regex::new("&v=3").unwrap().replace(&qr, "");
         assert!(new_qr != qr);
         qr = new_qr.to_string();
     }
