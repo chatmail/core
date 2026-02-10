@@ -380,41 +380,13 @@ impl MimeMessage {
             PreMessageMode::None
         };
 
-        // TODO performance:
-        // - maybe we should start sorting by timestamp
-        // - we're loading the whole bobstate, just to get the auth token
-
         let encrypted_pgp_message = get_encrypted_pgp_message(&mail)?;
 
-        let mut secrets: Vec<String>;
+        let secrets: Vec<String>;
         if let Some(e) = &encrypted_pgp_message
             && crate::pgp::check_symmetric_encryption(e).is_ok()
         {
-            secrets = context
-                .sql
-                .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
-                    let secret: String = row.get(0)?;
-                    Ok(secret)
-                })
-                .await?;
-            secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
-            context
-                .sql
-                .query_map(
-                    "SELECT id, invite FROM bobstate",
-                    (),
-                    |row| {
-                        let invite: crate::securejoin::QrInvite = row.get(1)?;
-                        Ok(invite)
-                    },
-                    |rows| {
-                        for row in rows {
-                            secrets.push(row?.authcode().to_string());
-                        }
-                        Ok(())
-                    },
-                )
-                .await?;
+            secrets = load_shared_secrets(context).await?;
         } else {
             // No need to load all the secrets if the message isn't symmetrically encrypted
             secrets = vec![];
@@ -2120,6 +2092,36 @@ impl MimeMessage {
             Vec::new()
         }
     }
+}
+
+/// Loads all the shared secrets
+/// that can be used to decrypt a symmetrically-encrypted message
+async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
+    // First, try decrypting using the bobstate,
+    // because usually there will only be 1 or 2 of it,
+    // so, it should be fast
+    let mut secrets: Vec<String> = context
+        .sql
+        .query_map_vec("SELECT id, invite FROM bobstate", (), |row| {
+            let invite: crate::securejoin::QrInvite = row.get(1)?;
+            Ok(invite.authcode().to_string())
+        })
+        .await?;
+    // Then, try decrypting using broadcast secrets
+    // Usually, the user won't be in more than ~10 broadcast channels
+    secrets.extend(
+        context
+            .sql
+            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
+                let secret: String = row.get(0)?;
+                Ok(secret)
+            })
+            .await?,
+    );
+    // Finally, try decrypting using AUTH tokens
+    // There can be a lot of AUTH tokens, because a new one is generated every time a QR code is shown
+    secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
+    Ok(secrets)
 }
 
 fn rm_legacy_display_elements(text: &str) -> String {
