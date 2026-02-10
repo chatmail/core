@@ -5,6 +5,7 @@ import logging
 import os
 import socket
 import subprocess
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -387,22 +388,29 @@ def test_dont_move_sync_msgs(acfactory, direct_imap):
     ac1.set_config("bcc_self", "1")
     ac1.set_config("fix_is_chatmail", "1")
     ac1.add_or_update_transport({"addr": addr, "password": password})
-    ac1.bring_online()
+    ac1.start_io()
     ac1_direct_imap = direct_imap(ac1)
 
-    ac1_direct_imap.select_folder("Inbox")
     # Sync messages may also be sent during configuration.
-    inbox_msg_cnt = len(ac1_direct_imap.get_all_messages())
+    ac1.wait_for_event(EventType.MSG_DELIVERED)
+    ac1_direct_imap.select_folder("Inbox")
+    while True:
+        if len(ac1_direct_imap.get_all_messages()) == 1:
+            break
+        time.sleep(1)
 
     ac1.set_config("displayname", "Alice")
     ac1.wait_for_event(EventType.MSG_DELIVERED)
     ac1.set_config("displayname", "Bob")
     ac1.wait_for_event(EventType.MSG_DELIVERED)
-    ac1_direct_imap.select_folder("Inbox")
-    assert len(ac1_direct_imap.get_all_messages()) == inbox_msg_cnt + 2
 
-    ac1_direct_imap.select_folder("DeltaChat")
-    assert len(ac1_direct_imap.get_all_messages()) == 0
+    # Message may not be delivered to IMAP immediately
+    # after sending over SMTP,
+    # retry until they are delivered to IMAP.
+    while True:
+        if len(ac1_direct_imap.get_all_messages()) == 3:
+            break
+        time.sleep(1)
 
 
 def test_reaction_seen_on_another_dev(acfactory) -> None:

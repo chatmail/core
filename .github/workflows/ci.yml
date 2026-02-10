@@ -59,9 +59,9 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@76cd80eb775d7bbbd2d80292136d74d39e1b4918
+      - uses: EmbarkStudios/cargo-deny-action@3fd3802e88374d3fe9159b834c7714ec57d6c979
         with:
-          arguments: --all-features --workspace
+          arguments: --workspace --all-features --locked
           command: check
           command-arguments: "-Dwarnings"
 

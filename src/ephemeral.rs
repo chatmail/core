@@ -665,25 +665,19 @@ pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()
                 now - max(delete_server_after, MIN_DELETE_SERVER_AFTER),
             ),
         };
-    let target = context.get_delete_msgs_target().await?;
 
     context
         .sql
         .execute(
             "UPDATE imap
-             SET target=?
+             SET target=''
              WHERE rfc724_mid IN (
                SELECT rfc724_mid FROM msgs
                WHERE ((download_state = 0 AND timestamp < ?) OR
                       (download_state != 0 AND timestamp < ?) OR
                       (ephemeral_timestamp != 0 AND ephemeral_timestamp <= ?))
              )",
-            (
-                &target,
-                threshold_timestamp,
-                threshold_timestamp_extended,
-                now,
-            ),
+            (threshold_timestamp, threshold_timestamp_extended, now),
         )
         .await?;
 

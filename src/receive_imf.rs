@@ -27,7 +27,9 @@ use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::imap::{GENERATED_PREFIX, markseen_on_imap_table};
 use crate::key::{DcKey, Fingerprint};
-use crate::key::{self_fingerprint, self_fingerprint_opt};
+use crate::key::{
+    load_self_public_key, load_self_public_key_opt, self_fingerprint, self_fingerprint_opt,
+};
 use crate::log::{LogExt as _, warn};
 use crate::message::{
     self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
@@ -266,7 +268,7 @@ async fn get_to_and_past_contact_ids(
             .await?;
 
             if let Some(chat_id) = chat_id {
-                past_ids = lookup_key_contacts_by_address_list(
+                past_ids = lookup_key_contacts_fallback_to_chat(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -299,7 +301,7 @@ async fn get_to_and_past_contact_ids(
                     Origin::Hidden,
                 )
                 .await?;
-                past_ids = lookup_key_contacts_by_address_list(
+                past_ids = lookup_key_contacts_fallback_to_chat(
                     context,
                     &mime_parser.past_members,
                     past_member_fingerprints,
@@ -370,9 +372,31 @@ async fn get_to_and_past_contact_ids(
                 // This is an encrypted 1:1 chat.
                 to_ids = pgp_to_ids
             } else {
-                let ids = match mime_parser.was_encrypted() {
-                    true => {
-                        lookup_key_contacts_by_address_list(
+                let ids = if mime_parser.was_encrypted() {
+                    let mut recipient_fps = mime_parser
+                        .signature
+                        .as_ref()
+                        .map(|(_, recipient_fps)| recipient_fps.iter().cloned().collect::<Vec<_>>())
+                        .unwrap_or_default();
+                    // If there are extra recipient fingerprints, it may be a non-chat "implicit
+                    // Bcc" message. Fall back to in-chat lookup if so.
+                    if !recipient_fps.is_empty() && recipient_fps.len() <= 2 {
+                        let self_fp = load_self_public_key(context).await?.dc_fingerprint();
+                        recipient_fps.retain(|fp| *fp != self_fp);
+                        if recipient_fps.is_empty() {
+                            vec![Some(ContactId::SELF)]
+                        } else {
+                            add_or_lookup_key_contacts(
+                                context,
+                                &mime_parser.recipients,
+                                &mime_parser.gossiped_keys,
+                                &recipient_fps,
+                                Origin::Hidden,
+                            )
+                            .await?
+                        }
+                    } else {
+                        lookup_key_contacts_fallback_to_chat(
                             context,
                             &mime_parser.recipients,
                             to_member_fingerprints,
@@ -380,7 +404,8 @@ async fn get_to_and_past_contact_ids(
                         )
                         .await?
                     }
-                    false => vec![],
+                } else {
+                    vec![]
                 };
                 if mime_parser.was_encrypted() && !ids.contains(&None)
                 // Prefer creating PGP chats if there are any key-contacts. At least this prevents
@@ -453,6 +478,18 @@ pub(crate) async fn receive_imf_inner(
         );
     }
 
+    let trash = || async {
+        let msg_ids = vec![message::insert_tombstone(context, rfc724_mid).await?];
+        Ok(Some(ReceivedMsg {
+            chat_id: DC_CHAT_ID_TRASH,
+            state: MessageState::Undefined,
+            hidden: false,
+            sort_timestamp: 0,
+            msg_ids,
+            needs_delete_job: false,
+        }))
+    };
+
     let mut mime_parser = match MimeMessage::from_bytes(context, imf_raw).await {
         Err(err) => {
             warn!(context, "receive_imf: can't parse MIME: {err:#}.");
@@ -460,17 +497,7 @@ pub(crate) async fn receive_imf_inner(
                 // We don't have an rfc724_mid, there's no point in adding a trash entry
                 return Ok(None);
             }
-
-            let msg_ids = vec![message::insert_tombstone(context, rfc724_mid).await?];
-
-            return Ok(Some(ReceivedMsg {
-                chat_id: DC_CHAT_ID_TRASH,
-                state: MessageState::Undefined,
-                hidden: false,
-                sort_timestamp: 0,
-                msg_ids,
-                needs_delete_job: false,
-            }));
+            return trash().await;
         }
         Ok(mime_parser) => mime_parser,
     };
@@ -478,6 +505,18 @@ pub(crate) async fn receive_imf_inner(
     let rfc724_mid_orig = &mime_parser
         .get_rfc724_mid()
         .unwrap_or(rfc724_mid.to_string());
+
+    if let Some((_, recipient_fps)) = &mime_parser.signature
+        && !recipient_fps.is_empty()
+        && let Some(self_pubkey) = load_self_public_key_opt(context).await?
+        && !recipient_fps.contains(&self_pubkey.dc_fingerprint())
+    {
+        warn!(
+            context,
+            "Message {rfc724_mid_orig:?} is not intended for us (TRASH)."
+        );
+        return trash().await;
+    }
     info!(
         context,
         "Receiving message {rfc724_mid_orig:?}, seen={seen}...",
@@ -897,7 +936,7 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
 
     if !received_msg.msg_ids.is_empty() {
         let target = if received_msg.needs_delete_job || delete_server_after == Some(0) {
-            Some(context.get_delete_msgs_target().await?)
+            Some("".to_string())
         } else {
             None
         };
@@ -4013,12 +4052,13 @@ async fn add_or_lookup_key_contacts(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        let fp = fingerprint_iter.next();
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
             contact_ids.push(None);
             continue;
         }
-        let fingerprint: String = if let Some(fp) = fingerprint_iter.next() {
+        let fingerprint: String = if let Some(fp) = fp {
             // Iterator has not ran out of fingerprints yet.
             fp.hex()
         } else if let Some(key) = gossiped_keys.get(addr) {
@@ -4169,7 +4209,7 @@ async fn lookup_key_contact_by_fingerprint(
     }
 }
 
-/// Looks up key-contacts by email addresses.
+/// Adds or looks up key-contacts by fingerprints or by email addresses in the given chat.
 ///
 /// `fingerprints` may be empty.
 /// This is used as a fallback when email addresses are available,
@@ -4184,7 +4224,7 @@ async fn lookup_key_contact_by_fingerprint(
 /// is the same as the number of addresses in the header
 /// and it is possible to find corresponding
 /// `Chat-Group-Member-Timestamps` items.
-async fn lookup_key_contacts_by_address_list(
+async fn lookup_key_contacts_fallback_to_chat(
     context: &Context,
     address_list: &[SingleInfo],
     fingerprints: &[Fingerprint],
@@ -4193,13 +4233,14 @@ async fn lookup_key_contacts_by_address_list(
     let mut contact_ids = Vec::new();
     let mut fingerprint_iter = fingerprints.iter();
     for info in address_list {
+        let fp = fingerprint_iter.next();
         let addr = &info.addr;
         if !may_be_valid_addr(addr) {
             contact_ids.push(None);
             continue;
         }
 
-        if let Some(fp) = fingerprint_iter.next() {
+        if let Some(fp) = fp {
             // Iterator has not ran out of fingerprints yet.
             let display_name = info.display_name.as_deref();
             let fingerprint: String = fp.hex();

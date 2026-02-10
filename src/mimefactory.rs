@@ -1644,6 +1644,12 @@ impl MimeFactory {
                 mail_builder::headers::raw::Raw::new(b_encode(answer)).into(),
             ));
         }
+        if let Some(has_video) = msg.param.get(Param::WebrtcHasVideoInitially) {
+            headers.push((
+                "Chat-Webrtc-Has-Video-Initially",
+                mail_builder::headers::raw::Raw::new(b_encode(has_video)).into(),
+            ))
+        }
 
         if msg.viewtype == Viewtype::Voice
             || msg.viewtype == Viewtype::Audio
@@ -1738,15 +1744,19 @@ impl MimeFactory {
 
         let mut parts = Vec::new();
 
-        // add HTML-part, this is needed only if a HTML-message from a non-delta-client is forwarded;
-        // for simplificity and to avoid conversion errors, we're generating the HTML-part from the original message.
         if msg.has_html() {
-            let html = if let Some(orig_msg_id) = msg.param.get_int(Param::Forwarded) {
+            let html = if let Some(html) = msg.param.get(Param::SendHtml) {
+                Some(html.to_string())
+            } else if let Some(orig_msg_id) = msg.param.get_int(Param::Forwarded)
+                && orig_msg_id != 0
+            {
+                // Legacy forwarded messages may not have `Param::SendHtml` set. Let's hope the
+                // original message exists.
                 MsgId::new(orig_msg_id.try_into()?)
                     .get_html(context)
                     .await?
             } else {
-                msg.param.get(Param::SendHtml).map(|s| s.to_string())
+                None
             };
             if let Some(html) = html {
                 main_part = MimePart::new(

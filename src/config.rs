@@ -175,11 +175,6 @@ pub enum Config {
     #[strum(props(default = "0"))] // also change MediaQuality.default() on changes
     MediaQuality,
 
-    /// If set to "1", then existing messages are considered to be already fetched.
-    /// This flag is reset after successful configuration.
-    #[strum(props(default = "1"))]
-    FetchedExistingMsgs,
-
     /// Timer in seconds after which the message is deleted from the
     /// server.
     ///
@@ -198,10 +193,6 @@ pub enum Config {
     /// deleted.
     #[strum(props(default = "0"))]
     DeleteDeviceAfter,
-
-    /// Move messages to the Trash folder instead of marking them "\Deleted". Overrides
-    /// `ProviderOptions::delete_to_trash`.
-    DeleteToTrash,
 
     /// The primary email address.
     ConfiguredAddr,
@@ -280,9 +271,6 @@ pub enum Config {
     /// Configured folder for chat messages.
     ConfiguredMvboxFolder,
 
-    /// Configured "Trash" folder.
-    ConfiguredTrashFolder,
-
     /// Unix timestamp of the last successful configuration.
     ConfiguredTimestamp,
 
@@ -339,10 +327,6 @@ pub enum Config {
 
     /// Timestamp of the last `CantDecryptOutgoingMsgs` notification.
     LastCantDecryptOutgoingMsgs,
-
-    /// To how many seconds to debounce scan_all_folders. Used mainly in tests, to disable debouncing completely.
-    #[strum(props(default = "60"))]
-    ScanAllFoldersDebounceSecs,
 
     /// Whether to avoid using IMAP IDLE even if the server supports it.
     ///
@@ -607,8 +591,7 @@ impl Context {
             .get_config(key)
             .await?
             .and_then(|s| s.parse::<i32>().ok())
-            .map(|x| x != 0)
-            .unwrap_or_default())
+            .is_some_and(|x| x != 0))
     }
 
     /// Returns true if movebox ("DeltaChat" folder) should be watched.
@@ -701,7 +684,6 @@ impl Context {
             | Config::MdnsEnabled
             | Config::MvboxMove
             | Config::OnlyFetchMvbox
-            | Config::DeleteToTrash
             | Config::Configured
             | Config::Bot
             | Config::NotifyAboutWrongPw
@@ -725,12 +707,7 @@ impl Context {
         Self::check_config(key, value)?;
 
         let n_transports = self.count_transports().await?;
-        if n_transports > 1
-            && matches!(
-                key,
-                Config::MvboxMove | Config::OnlyFetchMvbox | Config::ShowEmails
-            )
-        {
+        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
             bail!("Cannot reconfigure {key} when multiple transports are configured");
         }
 

@@ -16,7 +16,6 @@ use std::{
 use anyhow::{Context as _, Result, bail, ensure, format_err};
 use async_channel::{self, Receiver, Sender};
 use async_imap::types::{Fetch, Flag, Name, NameAttribute, UnsolicitedResponse};
-use deltachat_contact_tools::ContactAddress;
 use futures::{FutureExt as _, TryStreamExt};
 use futures_lite::FutureExt;
 use num_traits::FromPrimitive;
@@ -30,7 +29,7 @@ use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
 use crate::constants::{self, Blocked, DC_VERSION_STR, ShowEmails};
-use crate::contact::{Contact, ContactId, Modifier, Origin};
+use crate::contact::ContactId;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
@@ -54,12 +53,10 @@ use crate::transport::{
 pub(crate) mod capabilities;
 mod client;
 mod idle;
-pub mod scan_folders;
 pub mod select_folder;
 pub(crate) mod session;
 
 use client::{Client, determine_capabilities};
-use mailparse::SingleInfo;
 use session::Session;
 
 pub(crate) const GENERATED_PREFIX: &str = "GEN_";
@@ -185,7 +182,7 @@ impl FolderMeaning {
             FolderMeaning::Spam => None,
             FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
             FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
-            FolderMeaning::Trash => Some(Config::ConfiguredTrashFolder),
+            FolderMeaning::Trash => None,
             FolderMeaning::Virtual => None,
         }
     }
@@ -501,13 +498,7 @@ impl Imap {
             .get_raw_config_int(constants::DC_FOLDERS_CONFIGURED_KEY)
             .await?;
         if folders_configured.unwrap_or_default() < constants::DC_FOLDERS_CONFIGURED_VERSION {
-            let is_chatmail = match context.get_config_bool(Config::FixIsChatmail).await? {
-                false => session.is_chatmail(),
-                true => context.get_config_bool(Config::IsChatmail).await?,
-            };
-            let create_mvbox = !is_chatmail || context.get_config_bool(Config::MvboxMove).await?;
-            self.configure_folders(context, &mut session, create_mvbox)
-                .await?;
+            self.configure_folders(context, &mut session).await?;
         }
 
         Ok(session)
@@ -565,9 +556,8 @@ impl Imap {
             return Ok(false);
         }
 
-        let create = false;
         let folder_exists = session
-            .select_with_uidvalidity(context, folder, create)
+            .select_with_uidvalidity(context, folder)
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
         if !folder_exists {
@@ -620,7 +610,6 @@ impl Imap {
         let mut download_later: Vec<String> = Vec::new();
         let mut uid_message_ids = BTreeMap::new();
         let mut largest_uid_skipped = None;
-        let delete_target = context.get_delete_msgs_target().await?;
 
         let download_limit: Option<u32> = context
             .get_config_parsed(Config::DownloadLimit)
@@ -670,7 +659,7 @@ impl Imap {
 
             let _target;
             let target = if delete {
-                &delete_target
+                ""
             } else {
                 _target = target_folder(context, folder, folder_meaning, &headers).await?;
                 &_target
@@ -837,27 +826,6 @@ impl Imap {
 
         Ok((read_cnt, fetch_more))
     }
-
-    /// Read the recipients from old emails sent by the user and add them as contacts.
-    /// This way, we can already offer them some email addresses they can write to.
-    ///
-    /// Then, Fetch the last messages DC_FETCH_EXISTING_MSGS_COUNT emails from the server
-    /// and show them in the chat list.
-    pub(crate) async fn fetch_existing_msgs(
-        &mut self,
-        context: &Context,
-        session: &mut Session,
-    ) -> Result<()> {
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredMvboxFolder)
-            .await
-            .context("failed to get recipients from the movebox")?;
-        add_all_recipients_as_contacts(context, session, Config::ConfiguredInboxFolder)
-            .await
-            .context("failed to get recipients from the inbox")?;
-
-        info!(context, "Done fetching existing messages.");
-        Ok(())
-    }
 }
 
 impl Session {
@@ -896,10 +864,7 @@ impl Session {
         // Collect pairs of UID and Message-ID.
         let mut msgs = BTreeMap::new();
 
-        let create = false;
-        let folder_exists = self
-            .select_with_uidvalidity(context, folder, create)
-            .await?;
+        let folder_exists = self.select_with_uidvalidity(context, folder).await?;
         let transport_id = self.transport_id();
         if folder_exists {
             let mut list = self
@@ -1021,17 +986,6 @@ impl Session {
                     return Ok(());
                 }
                 Err(err) => {
-                    if context.should_delete_to_trash().await? {
-                        error!(
-                            context,
-                            "Cannot move messages {} to {}, no fallback to COPY/DELETE because \
-                            delete_to_trash is set. Error: {:#}",
-                            set,
-                            target,
-                            err,
-                        );
-                        return Err(err.into());
-                    }
                     warn!(
                         context,
                         "Cannot move messages, fallback to COPY/DELETE {} to {}: {}",
@@ -1045,19 +999,11 @@ impl Session {
 
         // Server does not support MOVE or MOVE failed.
         // Copy messages to the destination folder if needed and mark records for deletion.
-        let copy = !context.is_trash(target).await?;
-        if copy {
-            info!(
-                context,
-                "Server does not support MOVE, fallback to COPY/DELETE {} to {}", set, target
-            );
-            self.uid_copy(&set, &target).await?;
-        } else {
-            error!(
-                context,
-                "Server does not support MOVE, fallback to DELETE {} to {}", set, target,
-            );
-        }
+        info!(
+            context,
+            "Server does not support MOVE, fallback to COPY/DELETE {} to {}", set, target
+        );
+        self.uid_copy(&set, &target).await?;
         context
             .sql
             .transaction(|transaction| {
@@ -1069,11 +1015,9 @@ impl Session {
             })
             .await
             .context("Cannot plan deletion of messages")?;
-        if copy {
-            context.emit_event(EventType::ImapMessageMoved(format!(
-                "IMAP messages {set} copied to {target}"
-            )));
-        }
+        context.emit_event(EventType::ImapMessageMoved(format!(
+            "IMAP messages {set} copied to {target}"
+        )));
         Ok(())
     }
 
@@ -1105,10 +1049,7 @@ impl Session {
             // MOVE/DELETE operations. This does not result in multiple SELECT commands
             // being sent because `select_folder()` does nothing if the folder is already
             // selected.
-            let create = false;
-            let folder_exists = self
-                .select_with_uidvalidity(context, folder, create)
-                .await?;
+            let folder_exists = self.select_with_uidvalidity(context, folder).await?;
             ensure!(folder_exists, "No folder {folder}");
 
             // Empty target folder name means messages should be deleted.
@@ -1163,8 +1104,7 @@ impl Session {
             .await?;
 
         for (folder, rowid_set, uid_set) in UidGrouper::from(rows) {
-            let create = false;
-            let folder_exists = match self.select_with_uidvalidity(context, &folder, create).await {
+            let folder_exists = match self.select_with_uidvalidity(context, &folder).await {
                 Err(err) => {
                     warn!(
                         context,
@@ -1218,9 +1158,8 @@ impl Session {
             return Ok(());
         }
 
-        let create = false;
         let folder_exists = self
-            .select_with_uidvalidity(context, folder, create)
+            .select_with_uidvalidity(context, folder)
             .await
             .context("Failed to select folder")?;
         if !folder_exists {
@@ -1310,41 +1249,6 @@ impl Session {
         }
 
         Ok(())
-    }
-
-    /// Gets the from, to and bcc addresses from all existing outgoing emails.
-    pub async fn get_all_recipients(&mut self, context: &Context) -> Result<Vec<SingleInfo>> {
-        let mut uids: Vec<_> = self
-            .uid_search(get_imap_self_sent_search_command(context).await?)
-            .await?
-            .into_iter()
-            .collect();
-        uids.sort_unstable();
-
-        let mut result = Vec::new();
-        for (_, uid_set) in build_sequence_sets(&uids)? {
-            let mut list = self
-                .uid_fetch(uid_set, "(UID BODY.PEEK[HEADER.FIELDS (FROM TO CC BCC)])")
-                .await
-                .context("IMAP Could not fetch")?;
-
-            while let Some(msg) = list.try_next().await? {
-                match get_fetch_headers(&msg) {
-                    Ok(headers) => {
-                        if let Some(from) = mimeparser::get_from(&headers)
-                            && context.is_self_addr(&from.addr).await?
-                        {
-                            result.extend(mimeparser::get_recipients(&headers));
-                        }
-                    }
-                    Err(err) => {
-                        warn!(context, "{}", err);
-                        continue;
-                    }
-                };
-            }
-        }
-        Ok(result)
     }
 
     /// Fetches a list of messages by server UID.
@@ -1766,17 +1670,16 @@ impl Session {
 
     /// Attempts to configure mvbox.
     ///
-    /// Tries to find any folder examining `folders` in the order they go. If none is found, tries
-    /// to create any folder in the same order. This method does not use LIST command to ensure that
+    /// Tries to find any folder examining `folders` in the order they go.
+    /// This method does not use LIST command to ensure that
     /// configuration works even if mailbox lookup is forbidden via Access Control List (see
     /// <https://datatracker.ietf.org/doc/html/rfc4314>).
     ///
-    /// Returns first found or created folder name.
+    /// Returns first found folder name.
     async fn configure_mvbox<'a>(
         &mut self,
         context: &Context,
         folders: &[&'a str],
-        create_mvbox: bool,
     ) -> Result<Option<&'a str>> {
         // Close currently selected folder if needed.
         // We are going to select folders using low-level EXAMINE operations below.
@@ -1793,34 +1696,12 @@ impl Session {
                 self.close().await?;
                 // Before moving emails to the mvbox we need to remember its UIDVALIDITY, otherwise
                 // emails moved before that wouldn't be fetched but considered "old" instead.
-                let create = false;
-                let folder_exists = self
-                    .select_with_uidvalidity(context, folder, create)
-                    .await?;
+                let folder_exists = self.select_with_uidvalidity(context, folder).await?;
                 ensure!(folder_exists, "No MVBOX folder {:?}??", &folder);
                 return Ok(Some(folder));
             }
         }
 
-        if !create_mvbox {
-            return Ok(None);
-        }
-        // Some servers require namespace-style folder names like "INBOX.DeltaChat", so we try all
-        // the variants here.
-        for folder in folders {
-            match self
-                .select_with_uidvalidity(context, folder, create_mvbox)
-                .await
-            {
-                Ok(_) => {
-                    info!(context, "MVBOX-folder {} created.", folder);
-                    return Ok(Some(folder));
-                }
-                Err(err) => {
-                    warn!(context, "Cannot create MVBOX-folder {:?}: {}", folder, err);
-                }
-            }
-        }
         Ok(None)
     }
 }
@@ -1830,7 +1711,6 @@ impl Imap {
         &mut self,
         context: &Context,
         session: &mut Session,
-        create_mvbox: bool,
     ) -> Result<()> {
         let mut folders = session
             .list(Some(""), Some("*"))
@@ -1871,7 +1751,7 @@ impl Imap {
 
         let fallback_folder = format!("INBOX{delimiter}DeltaChat");
         let mvbox_folder = session
-            .configure_mvbox(context, &["DeltaChat", &fallback_folder], create_mvbox)
+            .configure_mvbox(context, &["DeltaChat", &fallback_folder])
             .await
             .context("failed to configure mvbox")?;
 
@@ -2272,11 +2152,10 @@ pub(crate) async fn prefetch_should_download(
     let accepted_contact = origin.is_known();
     let is_reply_to_chat_message = get_prefetch_parent_message(context, headers)
         .await?
-        .map(|parent| match parent.is_dc_message {
+        .is_some_and(|parent| match parent.is_dc_message {
             MessengerMessage::No => false,
             MessengerMessage::Yes | MessengerMessage::Reply => true,
-        })
-        .unwrap_or_default();
+        });
 
     let show_emails =
         ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?).unwrap_or_default();
@@ -2467,18 +2346,6 @@ async fn get_modseq(context: &Context, transport_id: u32, folder: &str) -> Resul
         .unwrap_or(0))
 }
 
-/// Compute the imap search expression for all self-sent mails (for all self addresses)
-pub(crate) async fn get_imap_self_sent_search_command(context: &Context) -> Result<String> {
-    // See https://www.rfc-editor.org/rfc/rfc3501#section-6.4.4 for syntax of SEARCH and OR
-    let mut search_command = format!("FROM \"{}\"", context.get_primary_self_addr().await?);
-
-    for item in context.get_secondary_self_addrs().await? {
-        search_command = format!("OR ({search_command}) (FROM \"{item}\")");
-    }
-
-    Ok(search_command)
-}
-
 /// Whether to ignore fetching messages from a folder.
 ///
 /// This caters for the [`Config::OnlyFetchMvbox`] setting which means mails from folders
@@ -2551,65 +2418,23 @@ impl std::fmt::Display for UidRange {
         }
     }
 }
-async fn add_all_recipients_as_contacts(
-    context: &Context,
-    session: &mut Session,
-    folder: Config,
-) -> Result<()> {
-    let mailbox = if let Some(m) = context.get_config(folder).await? {
-        m
-    } else {
-        info!(
-            context,
-            "Folder {} is not configured, skipping fetching contacts from it.", folder
-        );
-        return Ok(());
-    };
-    let create = false;
-    let folder_exists = session
-        .select_with_uidvalidity(context, &mailbox, create)
-        .await
-        .with_context(|| format!("could not select {mailbox}"))?;
-    if !folder_exists {
-        return Ok(());
+
+pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
+    let mut res = vec![Config::ConfiguredInboxFolder];
+    if context.should_watch_mvbox().await? {
+        res.push(Config::ConfiguredMvboxFolder);
     }
+    Ok(res)
+}
 
-    let recipients = session
-        .get_all_recipients(context)
-        .await
-        .context("could not get recipients")?;
-
-    let mut any_modified = false;
-    for recipient in recipients {
-        let recipient_addr = match ContactAddress::new(&recipient.addr) {
-            Err(err) => {
-                warn!(
-                    context,
-                    "Could not add contact for recipient with address {:?}: {:#}",
-                    recipient.addr,
-                    err
-                );
-                continue;
-            }
-            Ok(recipient_addr) => recipient_addr,
-        };
-
-        let (_, modified) = Contact::add_or_lookup(
-            context,
-            &recipient.display_name.unwrap_or_default(),
-            &recipient_addr,
-            Origin::OutgoingTo,
-        )
-        .await?;
-        if modified != Modifier::None {
-            any_modified = true;
+pub(crate) async fn get_watched_folders(context: &Context) -> Result<Vec<String>> {
+    let mut res = Vec::new();
+    for folder_config in get_watched_folder_configs(context).await? {
+        if let Some(folder) = context.get_config(folder_config).await? {
+            res.push(folder);
         }
     }
-    if any_modified {
-        context.emit_event(EventType::ContactsChanged(None));
-    }
-
-    Ok(())
+    Ok(res)
 }
 
 #[cfg(test)]

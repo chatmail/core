@@ -27,9 +27,7 @@ impl Session {
         idle_interrupt_receiver: Receiver<()>,
         folder: &str,
     ) -> Result<Self> {
-        let create = true;
-        self.select_with_uidvalidity(context, folder, create)
-            .await?;
+        self.select_with_uidvalidity(context, folder).await?;
 
         if self.drain_unsolicited_responses(context)? {
             self.new_mail = true;

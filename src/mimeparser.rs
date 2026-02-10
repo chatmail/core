@@ -519,8 +519,7 @@ impl MimeMessage {
                 // We don't decompress messages compressed multiple times.
                 None
             }
-            Some(pgp::composed::Message::SignedOnePass { reader, .. }) => reader.signature(),
-            Some(pgp::composed::Message::Signed { reader, .. }) => Some(reader.signature()),
+            Some(pgp::composed::Message::Signed { reader, .. }) => reader.signature(0),
             Some(pgp::composed::Message::Encrypted { .. }) => {
                 // The message is already decrypted once.
                 None
@@ -824,6 +823,9 @@ impl MimeMessage {
         let accepted = self
             .get_header(HeaderDef::ChatWebrtcAccepted)
             .map(|s| s.to_string());
+        let has_video = self
+            .get_header(HeaderDef::ChatWebrtcHasVideoInitially)
+            .map(|s| s.to_string());
         if let Some(part) = self.parts.first_mut() {
             if let Some(room) = room {
                 if content == "call" {
@@ -832,6 +834,9 @@ impl MimeMessage {
                 }
             } else if let Some(accepted) = accepted {
                 part.param.set(Param::WebrtcAccepted, accepted);
+            }
+            if let Some(has_video) = has_video {
+                part.param.set(Param::WebrtcHasVideoInitially, has_video);
             }
         }
     }
@@ -1653,7 +1658,7 @@ impl MimeMessage {
             }
             Ok(key) => key,
         };
-        if let Err(err) = key.verify() {
+        if let Err(err) = key.verify_bindings() {
             warn!(context, "Attached PGP key verification failed: {err:#}.");
             return Ok(false);
         }

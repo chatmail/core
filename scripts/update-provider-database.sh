@@ -6,11 +6,11 @@ set -euo pipefail
 export TZ=UTC
 
 # Provider database revision.
-REV=d041136c19a48b493823b46d472f12b9ee94ae80
+REV=996c4bc82be5a7404f70b185ff062da33bfa98d9
 
 CORE_ROOT="$PWD"
 TMP="$(mktemp -d)"
-git clone --filter=blob:none https://github.com/deltachat/provider-db.git "$TMP"
+git clone --filter=blob:none https://github.com/chatmail/provider-db.git "$TMP"
 cd "$TMP"
 git checkout "$REV"
 DATE=$(git show -s --format=%cs)

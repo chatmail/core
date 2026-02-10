@@ -15,13 +15,12 @@ use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
+use crate::stock_str;
 use crate::tools::{normalize_text, time};
 use anyhow::{Context as _, Result, ensure};
 use deltachat_derive::{FromSql, ToSql};
 use num_traits::FromPrimitive;
-use sdp::SessionDescription;
 use serde::Serialize;
-use std::io::Cursor;
 use std::str::FromStr;
 use std::time::Duration;
 use tokio::task;
@@ -104,10 +103,14 @@ impl CallInfo {
         };
 
         if self.is_incoming() {
-            self.update_text(context, &format!("Incoming call\n{duration}"))
+            let incoming_call_str =
+                stock_str::incoming_call(context, self.has_video_initially()).await;
+            self.update_text(context, &format!("{incoming_call_str}\n{duration}"))
                 .await?;
         } else {
-            self.update_text(context, &format!("Outgoing call\n{duration}"))
+            let outgoing_call_str =
+                stock_str::outgoing_call(context, self.has_video_initially()).await;
+            self.update_text(context, &format!("{outgoing_call_str}\n{duration}"))
                 .await?;
         }
         Ok(())
@@ -124,6 +127,14 @@ impl CallInfo {
     /// Returns true if the call is accepted.
     pub fn is_accepted(&self) -> bool {
         self.msg.param.exists(CALL_ACCEPTED_TIMESTAMP)
+    }
+
+    /// Returns true if the call is started as a video call.
+    pub fn has_video_initially(&self) -> bool {
+        self.msg
+            .param
+            .get_bool(Param::WebrtcHasVideoInitially)
+            .unwrap_or(false)
     }
 
     /// Returns true if the call is missed
@@ -185,6 +196,7 @@ impl Context {
         &self,
         chat_id: ChatId,
         place_call_info: String,
+        has_video_initially: bool,
     ) -> Result<MsgId> {
         let chat = Chat::load_from_db(self, chat_id).await?;
         ensure!(
@@ -193,12 +205,15 @@ impl Context {
         );
         ensure!(!chat.is_self_talk(), "Cannot call self");
 
+        let outgoing_call_str = stock_str::outgoing_call(self, has_video_initially).await;
         let mut call = Message {
             viewtype: Viewtype::Call,
-            text: "Outgoing call".into(),
+            text: outgoing_call_str,
             ..Default::default()
         };
         call.param.set(Param::WebrtcRoom, &place_call_info);
+        call.param
+            .set_int(Param::WebrtcHasVideoInitially, has_video_initially.into());
         call.id = send_msg(self, chat_id, &mut call).await?;
 
         let wait = RINGING_SECONDS;
@@ -266,10 +281,12 @@ impl Context {
         if !call.is_accepted() {
             if call.is_incoming() {
                 call.mark_as_ended(self).await?;
-                call.update_text(self, "Declined call").await?;
+                let declined_call_str = stock_str::declined_call(self).await;
+                call.update_text(self, &declined_call_str).await?;
             } else {
                 call.mark_as_canceled(self).await?;
-                call.update_text(self, "Canceled call").await?;
+                let canceled_call_str = stock_str::canceled_call(self).await;
+                call.update_text(self, &canceled_call_str).await?;
             }
         } else {
             call.mark_as_ended(self).await?;
@@ -311,10 +328,12 @@ impl Context {
         if !call.is_accepted() && !call.is_ended() {
             if call.is_incoming() {
                 call.mark_as_canceled(&context).await?;
-                call.update_text(&context, "Missed call").await?;
+                let missed_call_str = stock_str::missed_call(&context).await;
+                call.update_text(&context, &missed_call_str).await?;
             } else {
                 call.mark_as_ended(&context).await?;
-                call.update_text(&context, "Canceled call").await?;
+                let canceled_call_str = stock_str::canceled_call(&context).await;
+                call.update_text(&context, &canceled_call_str).await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
             context.emit_event(EventType::CallEnded {
@@ -339,18 +358,14 @@ impl Context {
 
             if call.is_incoming() {
                 if call.is_stale() {
-                    call.update_text(self, "Missed call").await?;
+                    let missed_call_str = stock_str::missed_call(self).await;
+                    call.update_text(self, &missed_call_str).await?;
                     self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
                 } else {
-                    call.update_text(self, "Incoming call").await?;
+                    let incoming_call_str =
+                        stock_str::incoming_call(self, call.has_video_initially()).await;
+                    call.update_text(self, &incoming_call_str).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
-                    let has_video = match sdp_has_video(&call.place_call_info) {
-                        Ok(has_video) => has_video,
-                        Err(err) => {
-                            warn!(self, "Failed to determine if SDP offer has video: {err:#}.");
-                            false
-                        }
-                    };
                     let can_call_me = match who_can_call_me(self).await? {
                         WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
                             .await?
@@ -377,7 +392,7 @@ impl Context {
                             msg_id: call.msg.id,
                             chat_id: call.msg.chat_id,
                             place_call_info: call.place_call_info.to_string(),
-                            has_video,
+                            has_video: call.has_video_initially(),
                         });
                     }
                     let wait = call.remaining_ring_seconds();
@@ -389,7 +404,9 @@ impl Context {
                     ));
                 }
             } else {
-                call.update_text(self, "Outgoing call").await?;
+                let outgoing_call_str =
+                    stock_str::outgoing_call(self, call.has_video_initially()).await;
+                call.update_text(self, &outgoing_call_str).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
             }
         } else {
@@ -439,19 +456,23 @@ impl Context {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
                                 call.mark_as_ended(self).await?;
-                                call.update_text(self, "Declined call").await?;
+                                let declined_call_str = stock_str::declined_call(self).await;
+                                call.update_text(self, &declined_call_str).await?;
                             } else {
                                 call.mark_as_canceled(self).await?;
-                                call.update_text(self, "Missed call").await?;
+                                let missed_call_str = stock_str::missed_call(self).await;
+                                call.update_text(self, &missed_call_str).await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
                                 call.mark_as_canceled(self).await?;
-                                call.update_text(self, "Canceled call").await?;
+                                let canceled_call_str = stock_str::canceled_call(self).await;
+                                call.update_text(self, &canceled_call_str).await?;
                             } else {
                                 call.mark_as_ended(self).await?;
-                                call.update_text(self, "Declined call").await?;
+                                let declined_call_str = stock_str::declined_call(self).await;
+                                call.update_text(self, &declined_call_str).await?;
                             }
                         }
                     } else {
@@ -505,19 +526,6 @@ impl Context {
             msg: call,
         })
     }
-}
-
-/// Returns true if SDP offer has a video.
-pub fn sdp_has_video(sdp: &str) -> Result<bool> {
-    let mut cursor = Cursor::new(sdp);
-    let session_description =
-        SessionDescription::unmarshal(&mut cursor).context("Failed to parse SDP")?;
-    for media_description in &session_description.media_descriptions {
-        if media_description.media_name.media == "video" {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 /// State of the call for display in the message bubble.

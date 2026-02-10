@@ -980,7 +980,7 @@ impl Message {
 
     /// Returns true if the message is a forwarded message.
     pub fn is_forwarded(&self) -> bool {
-        0 != self.param.get_int(Param::Forwarded).unwrap_or_default()
+        self.param.get_int(Param::Forwarded).is_some()
     }
 
     /// Returns true if the message is edited.
@@ -1762,12 +1762,11 @@ pub async fn delete_msgs_ex(
         modified_chat_ids.insert(msg.chat_id);
         deleted_rfc724_mid.push(msg.rfc724_mid.clone());
 
-        let target = context.get_delete_msgs_target().await?;
         let update_db = |trans: &mut rusqlite::Transaction| {
-            let mut stmt = trans.prepare("UPDATE imap SET target=? WHERE rfc724_mid=?")?;
-            stmt.execute((&target, &msg.rfc724_mid))?;
+            let mut stmt = trans.prepare("UPDATE imap SET target='' WHERE rfc724_mid=?")?;
+            stmt.execute((&msg.rfc724_mid,))?;
             if !msg.pre_rfc724_mid.is_empty() {
-                stmt.execute((&target, &msg.pre_rfc724_mid))?;
+                stmt.execute((&msg.pre_rfc724_mid,))?;
             }
             trans.execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))?;
             trans.execute(

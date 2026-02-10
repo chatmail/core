@@ -1242,9 +1242,12 @@ uint32_t        dc_init_webxdc_integration    (dc_context_t* context, uint32_t c
  *     This needs to be a one-to-one chat.
  * @param place_call_info any data that other devices receive
  *     in #DC_EVENT_INCOMING_CALL.
+ * @param has_video Whether the call has video initially.
+ *     This allows the recipient's client to adjust incoming call UX.
+ *     A call can be upgraded to include video later.
  * @return ID of the system message announcing the call.
  */
-uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id, const char* place_call_info);
+uint32_t        dc_place_outgoing_call       (dc_context_t* context, uint32_t chat_id, const char* place_call_info, int has_video);
 
 
 /**
@@ -7541,12 +7544,6 @@ void dc_event_unref(dc_event_t* event);
 /// "❤️ Seems you're enjoying Delta Chat!"… (donation request device message)
 #define DC_STR_DONATION_REQUEST 193
 
-/// "Outgoing call"
-#define DC_STR_OUTGOING_CALL 194
-
-/// "Incoming call"
-#define DC_STR_INCOMING_CALL 195
-
 /// "Declined call"
 #define DC_STR_DECLINED_CALL 196
 
@@ -7597,6 +7594,18 @@ void dc_event_unref(dc_event_t* event);
 ///
 /// Used as the first info messages in newly created classic email threads.
 #define DC_STR_CHAT_UNENCRYPTED_EXPLANATON 230
+
+/// "Outgoing audio call"
+#define DC_STR_OUTGOING_AUDIO_CALL 232
+
+/// "Outgoing video call"
+#define DC_STR_OUTGOING_VIDEO_CALL 233
+
+/// "Incoming audio call"
+#define DC_STR_INCOMING_AUDIO_CALL 234
+
+/// "Incoming video call"
+#define DC_STR_INCOMING_VIDEO_CALL 235
 
 /**
  * @}

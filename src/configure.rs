@@ -23,7 +23,7 @@ use percent_encoding::utf8_percent_encode;
 use server_params::{ServerParams, expand_param_vector};
 use tokio::task;
 
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::constants::NON_ALPHANUMERIC_WITHOUT_DOT;
 use crate::context::Context;
 use crate::imap::Imap;
@@ -284,11 +284,6 @@ impl Context {
             if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
                 bail!(
                     "To use additional relays, disable the legacy option \"Settings / Advanced / Move automatically to DeltaChat Folder\"."
-                );
-            }
-            if self.get_config(Config::ShowEmails).await?.as_deref() != Some("2") {
-                bail!(
-                    "To use additional relays, set the legacy option \"Settings / Advanced / Show Classic Emails\" to \"All\"."
                 );
             }
 
@@ -631,8 +626,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     progress!(ctx, 920);
 
-    ctx.set_config_internal(Config::FetchedExistingMsgs, config::from_bool(false))
-        .await?;
     ctx.scheduler.interrupt_inbox().await;
 
     progress!(ctx, 940);

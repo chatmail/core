@@ -32,7 +32,7 @@ use crate::contact::{
 };
 use crate::context::Context;
 use crate::events::{Event, EventEmitter, EventType, Events};
-use crate::key::{self, DcKey, DcSecretKey, self_fingerprint};
+use crate::key::{self, DcKey, self_fingerprint};
 use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MessageState, MsgId, update_msg_state};
@@ -117,6 +117,8 @@ impl TestContextManager {
             .await
     }
 
+    /// Returns new elena's "device".
+    /// Elena doesn't send Intended Recipient Fingerprint subpackets to simulate old Delta Chat.
     pub async fn elena(&mut self) -> TestContext {
         TestContext::builder()
             .configure_elena()
@@ -565,6 +567,7 @@ impl TestContext {
             .unwrap();
         ctx.set_config(Config::BccSelf, Some("1")).await.unwrap();
         ctx.set_config(Config::SyncMsgs, Some("0")).await.unwrap();
+        ctx.set_config(Config::MvboxMove, Some("0")).await.unwrap();
 
         Self {
             ctx,
@@ -1352,7 +1355,7 @@ impl SentMessage<'_> {
 pub fn alice_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1362,7 +1365,7 @@ pub fn alice_keypair() -> KeyPair {
 pub fn bob_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1373,7 +1376,7 @@ pub fn charlie_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
             .unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1383,7 +1386,7 @@ pub fn charlie_keypair() -> KeyPair {
 pub fn dom_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1393,7 +1396,7 @@ pub fn dom_keypair() -> KeyPair {
 pub fn elena_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 
@@ -1403,7 +1406,7 @@ pub fn elena_keypair() -> KeyPair {
 pub fn fiona_keypair() -> KeyPair {
     let secret =
         key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap();
-    let public = secret.split_public_key().unwrap();
+    let public = secret.to_public_key();
     KeyPair { public, secret }
 }
 

@@ -505,16 +505,10 @@ static P_FIVE_CHAT: Provider = Provider {
     overview_page: "https://providers.delta.chat/five-chat",
     server: &[],
     opt: ProviderOptions::new(),
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::BccSelf,
-            value: "1",
-        },
-        ConfigDefault {
-            key: Config::MvboxMove,
-            value: "0",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::BccSelf,
+        value: "1",
+    }]),
     oauth2_authorizer: None,
 };
 
@@ -564,7 +558,7 @@ static P_FREENET_DE: Provider = Provider {
 static P_GMAIL: Provider = Provider {
     id: "gmail",
     status: Status::Preparation,
-    before_login_hint: "For Gmail accounts, you need to have \"2-Step Verification\" enabled and create an app-password.",
+    before_login_hint: "For Gmail accounts, you need to have \"2-Step Verification\" enabled and create an app-password. Gmail limits how many messages you can send per day.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/gmail",
     server: &[
@@ -583,10 +577,7 @@ static P_GMAIL: Provider = Provider {
             username_pattern: Email,
         },
     ],
-    opt: ProviderOptions {
-        delete_to_trash: true,
-        ..ProviderOptions::new()
-    },
+    opt: ProviderOptions::new(),
     config_defaults: None,
     oauth2_authorizer: None,
 };
@@ -1081,10 +1072,6 @@ static P_NAUTA_CU: Provider = Provider {
             value: "1",
         },
         ConfigDefault {
-            key: Config::MvboxMove,
-            value: "0",
-        },
-        ConfigDefault {
             key: Config::MediaQuality,
             value: "1",
         },
@@ -1172,10 +1159,7 @@ static P_NINE_TESTRUN_ORG: Provider = Provider {
         },
     ],
     opt: ProviderOptions::new(),
-    config_defaults: Some(&[ConfigDefault {
-        key: Config::MvboxMove,
-        value: "0",
-    }]),
+    config_defaults: None,
     oauth2_authorizer: None,
 };
 
@@ -1616,16 +1600,10 @@ static P_TESTRUN: Provider = Provider {
         },
     ],
     opt: ProviderOptions::new(),
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::BccSelf,
-            value: "1",
-        },
-        ConfigDefault {
-            key: Config::MvboxMove,
-            value: "0",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::BccSelf,
+        value: "1",
+    }]),
     oauth2_authorizer: None,
 };
 
@@ -1966,10 +1944,7 @@ static P_YGGMAIL: Provider = Provider {
         },
     ],
     opt: ProviderOptions::new(),
-    config_defaults: Some(&[ConfigDefault {
-        key: Config::MvboxMove,
-        value: "0",
-    }]),
+    config_defaults: None,
     oauth2_authorizer: None,
 };
 
@@ -2647,4 +2622,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2025, 9, 10).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 28).unwrap());

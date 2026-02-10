@@ -369,12 +369,6 @@ Help keeping us to keep Delta Chat independent and make it more awesome in the f
 https://delta.chat/donate"))]
     DonationRequest = 193,
 
-    #[strum(props(fallback = "Outgoing call"))]
-    OutgoingCall = 194,
-
-    #[strum(props(fallback = "Incoming call"))]
-    IncomingCall = 195,
-
     #[strum(props(fallback = "Declined call"))]
     DeclinedCall = 196,
 
@@ -412,6 +406,23 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Messages in this chat use classic email and are not encrypted."))]
     ChatUnencryptedExplanation = 230,
+
+    #[strum(props(
+        fallback = "You are using the legacy option \"Settings → Advanced → Move automatically to DeltaChat Folder\".\n\nThis option will be removed in a few weeks and you should disable it already today.\n\nIf having chat messages mixed into your inbox is a problem, see https://delta.chat/legacy-move"
+    ))]
+    MvboxMoveDeprecation = 231,
+
+    #[strum(props(fallback = "Outgoing audio call"))]
+    OutgoingAudioCall = 232,
+
+    #[strum(props(fallback = "Outgoing video call"))]
+    OutgoingVideoCall = 233,
+
+    #[strum(props(fallback = "Incoming audio call"))]
+    IncomingAudioCall = 234,
+
+    #[strum(props(fallback = "Incoming video call"))]
+    IncomingVideoCall = 235,
 }
 
 impl StockMessage {
@@ -757,14 +768,30 @@ pub(crate) async fn donation_request(context: &Context) -> String {
     translated(context, StockMessage::DonationRequest).await
 }
 
-/// Stock string: `Outgoing call`.
-pub(crate) async fn outgoing_call(context: &Context) -> String {
-    translated(context, StockMessage::OutgoingCall).await
+/// Stock string: `Outgoing video call` or `Outgoing audio call`.
+pub(crate) async fn outgoing_call(context: &Context, has_video: bool) -> String {
+    translated(
+        context,
+        if has_video {
+            StockMessage::OutgoingVideoCall
+        } else {
+            StockMessage::OutgoingAudioCall
+        },
+    )
+    .await
 }
 
-/// Stock string: `Incoming call`.
-pub(crate) async fn incoming_call(context: &Context) -> String {
-    translated(context, StockMessage::IncomingCall).await
+/// Stock string: `Incoming video call` or `Incoming audio call`.
+pub(crate) async fn incoming_call(context: &Context, has_video: bool) -> String {
+    translated(
+        context,
+        if has_video {
+            StockMessage::IncomingVideoCall
+        } else {
+            StockMessage::IncomingAudioCall
+        },
+    )
+    .await
 }
 
 /// Stock string: `Declined call`.
@@ -1221,6 +1248,11 @@ pub(crate) async fn proxy_description(context: &Context) -> String {
 /// Stock string: `Messages in this chat use classic email and are not encrypted.`.
 pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
     translated(context, StockMessage::ChatUnencryptedExplanation).await
+}
+
+/// Stock string: `You are using the legacy option "Move automatically to DeltaChat Folder`…
+pub(crate) async fn mvbox_move_deprecation(context: &Context) -> String {
+    translated(context, StockMessage::MvboxMoveDeprecation).await
 }
 
 impl Viewtype {

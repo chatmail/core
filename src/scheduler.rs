@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 pub(crate) use self::connectivity::ConnectivityStore;
-use crate::config::{self, Config};
+use crate::config::Config;
 use crate::contact::{ContactId, RecentlySeenLoop};
 use crate::context::Context;
 use crate::download::{download_known_post_messages_without_pre_message, download_msgs};
@@ -256,14 +256,6 @@ impl SchedulerState {
         }
     }
 
-    /// Interrupt optional boxes (mvbox currently) loops.
-    pub(crate) async fn interrupt_oboxes(&self) {
-        let inner = self.inner.read().await;
-        if let InnerSchedulerState::Started(ref scheduler) = *inner {
-            scheduler.interrupt_oboxes();
-        }
-    }
-
     pub(crate) async fn interrupt_smtp(&self) {
         let inner = self.inner.read().await;
         if let InnerSchedulerState::Started(ref scheduler) = *inner {
@@ -477,29 +469,6 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
     };
 
     maybe_send_stats(ctx).await.log_err(ctx).ok();
-    match ctx.get_config_bool(Config::FetchedExistingMsgs).await {
-        Ok(fetched_existing_msgs) => {
-            if !fetched_existing_msgs {
-                // Consider it done even if we fail.
-                //
-                // This operation is not critical enough to retry,
-                // especially if the error is persistent.
-                if let Err(err) = ctx
-                    .set_config_internal(Config::FetchedExistingMsgs, config::from_bool(true))
-                    .await
-                {
-                    warn!(ctx, "Can't set Config::FetchedExistingMsgs: {:#}", err);
-                }
-
-                if let Err(err) = imap.fetch_existing_msgs(ctx, &mut session).await {
-                    warn!(ctx, "Failed to fetch existing messages: {:#}", err);
-                }
-            }
-        }
-        Err(err) => {
-            warn!(ctx, "Can't get Config::FetchedExistingMsgs: {:#}", err);
-        }
-    }
 
     session
         .update_metadata(ctx)
@@ -542,65 +511,24 @@ async fn fetch_idle(
             .context("store_seen_flags_on_imap")?;
     }
 
-    if !ctx.should_delete_to_trash().await?
-        || ctx
-            .get_config(Config::ConfiguredTrashFolder)
-            .await?
-            .is_some()
-    {
-        // Fetch the watched folder.
-        connection
-            .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
-            .await
-            .context("fetch_move_delete")?;
+    // Fetch the watched folder.
+    connection
+        .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
+        .await
+        .context("fetch_move_delete")?;
 
-        // Mark expired messages for deletion. Marked messages will be deleted from the server
-        // on the next iteration of `fetch_move_delete`. `delete_expired_imap_messages` is not
-        // called right before `fetch_move_delete` because it is not well optimized and would
-        // otherwise slow down message fetching.
-        delete_expired_imap_messages(ctx)
-            .await
-            .context("delete_expired_imap_messages")?;
+    // Mark expired messages for deletion. Marked messages will be deleted from the server
+    // on the next iteration of `fetch_move_delete`. `delete_expired_imap_messages` is not
+    // called right before `fetch_move_delete` because it is not well optimized and would
+    // otherwise slow down message fetching.
+    delete_expired_imap_messages(ctx)
+        .await
+        .context("delete_expired_imap_messages")?;
 
-        download_known_post_messages_without_pre_message(ctx, &mut session).await?;
-        download_msgs(ctx, &mut session)
-            .await
-            .context("download_msgs")?;
-    } else if folder_config == Config::ConfiguredInboxFolder {
-        session.last_full_folder_scan.lock().await.take();
-    }
-
-    // Scan additional folders only after finishing fetching the watched folder.
-    //
-    // On iOS the application has strictly limited time to work in background, so we may not
-    // be able to scan all folders before time is up if there are many of them.
-    if folder_config == Config::ConfiguredInboxFolder {
-        // Only scan on the Inbox thread in order to prevent parallel scans, which might lead to duplicate messages
-        match connection
-            .scan_folders(ctx, &mut session)
-            .await
-            .context("scan_folders")
-        {
-            Err(err) => {
-                // Don't reconnect, if there is a problem with the connection we will realize this when IDLEing
-                // but maybe just one folder can't be selected or something
-                warn!(ctx, "{:#}", err);
-            }
-            Ok(true) => {
-                // Fetch the watched folder again in case scanning other folder moved messages
-                // there.
-                //
-                // In most cases this will select the watched folder and return because there are
-                // no new messages. We want to select the watched folder anyway before going IDLE
-                // there, so this does not take additional protocol round-trip.
-                connection
-                    .fetch_move_delete(ctx, &mut session, &watch_folder, folder_meaning)
-                    .await
-                    .context("fetch_move_delete after scan_folders")?;
-            }
-            Ok(false) => {}
-        }
-    }
+    download_known_post_messages_without_pre_message(ctx, &mut session).await?;
+    download_msgs(ctx, &mut session)
+        .await
+        .context("download_msgs")?;
 
     // Synchronize Seen flags.
     session
@@ -921,12 +849,6 @@ impl Scheduler {
 
     fn interrupt_inbox(&self) {
         for b in &self.inboxes {
-            b.conn_state.interrupt();
-        }
-    }
-
-    fn interrupt_oboxes(&self) {
-        for b in &self.oboxes {
             b.conn_state.interrupt();
         }
     }

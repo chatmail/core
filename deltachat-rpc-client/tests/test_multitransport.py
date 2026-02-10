@@ -1,6 +1,7 @@
 import pytest
 
 from deltachat_rpc_client import EventType
+from deltachat_rpc_client.const import DownloadState
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -37,8 +38,8 @@ def test_add_second_address(acfactory) -> None:
         with pytest.raises(JsonRpcError):
             account.set_config(option, "1")
 
-    with pytest.raises(JsonRpcError):
-        account.set_config("show_emails", "0")
+    # show_emails does not matter for multi-relay, can be set to anything
+    account.set_config("show_emails", "0")
 
 
 @pytest.mark.parametrize("key", ["mvbox_move", "only_fetch_mvbox"])
@@ -57,8 +58,8 @@ def test_no_second_transport_with_mvbox(acfactory, key) -> None:
         account.add_transport_from_qr(qr)
 
 
-def test_no_second_transport_without_classic_emails(acfactory) -> None:
-    """Test that second transport cannot be configured if classic emails are not fetched."""
+def test_second_transport_without_classic_emails(acfactory) -> None:
+    """Test that second transport can be configured if classic emails are not fetched."""
     account = acfactory.new_configured_account()
     assert len(account.list_transports()) == 1
 
@@ -67,8 +68,7 @@ def test_no_second_transport_without_classic_emails(acfactory) -> None:
     qr = acfactory.get_account_qr()
     account.set_config("show_emails", "0")
 
-    with pytest.raises(JsonRpcError):
-        account.add_transport_from_qr(qr)
+    account.add_transport_from_qr(qr)
 
 
 def test_change_address(acfactory) -> None:
@@ -118,6 +118,33 @@ def test_change_address(acfactory) -> None:
     assert sender_addr1 != sender_addr2
     assert sender_addr1 == old_alice_addr
     assert sender_addr2 == new_alice_addr
+
+
+def test_download_on_demand(acfactory) -> None:
+    alice, bob = acfactory.get_online_accounts(2)
+    alice.set_config("download_limit", "1")
+
+    alice.stop_io()
+    qr = acfactory.get_account_qr()
+    alice.add_transport_from_qr(qr)
+    alice.start_io()
+
+    alice.create_chat(bob)
+    chat_bob_alice = bob.create_chat(alice)
+    chat_bob_alice.send_message(file="../test-data/image/screenshot.jpg")
+    msg = alice.wait_for_incoming_msg()
+    snapshot = msg.get_snapshot()
+    assert snapshot.download_state == DownloadState.AVAILABLE
+    chat_id = snapshot.chat_id
+    # Actually the message isn't available yet. Wait somehow for the post-message to arrive.
+    chat_bob_alice.send_message("Now you can download my previous message")
+    alice.wait_for_incoming_msg()
+    alice._rpc.download_full_message(alice.id, msg.id)
+    for dstate in [DownloadState.IN_PROGRESS, DownloadState.DONE]:
+        event = alice.wait_for_event(EventType.MSGS_CHANGED)
+        assert event.chat_id == chat_id
+        assert event.msg_id == msg.id
+        assert msg.get_snapshot().download_state == dstate
 
 
 @pytest.mark.parametrize("is_chatmail", ["0", "1"])
@@ -209,7 +236,7 @@ def test_transport_synchronization(acfactory, log) -> None:
 
 def test_transport_sync_new_as_primary(acfactory, log) -> None:
     """Test synchronization of new transport as primary between devices."""
-    ac1 = acfactory.get_online_account()
+    ac1, bob = acfactory.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
 
@@ -228,6 +255,15 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert ac1_clone.get_config("configured_addr") == transport2["addr"]
+
+    log.section("ac1_clone receives a message via the new primary transport")
+    ac1_chat = ac1.create_chat(bob)
+    ac1_chat.send_text("Hello!")
+    bob_chat_id = bob.wait_for_incoming_msg_event().chat_id
+    bob_chat = bob.get_chat_by_id(bob_chat_id)
+    bob_chat.accept()
+    bob_chat.send_text("hello back")
+    assert ac1_clone.wait_for_incoming_msg().get_snapshot().text == "hello back"
 
 
 def test_recognize_self_address(acfactory) -> None:

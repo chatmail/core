@@ -1,6 +1,6 @@
 use super::*;
+use crate::contact::Contact;
 use crate::test_utils::TestContext;
-use crate::transport::add_pseudo_transport;
 
 #[test]
 fn test_get_folder_meaning_by_name() {
@@ -261,31 +261,6 @@ async fn test_target_folder_setupmsg() -> Result<()> {
         )
         .await?;
     }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_get_imap_search_command() -> Result<()> {
-    let t = TestContext::new_alice().await;
-    assert_eq!(
-        get_imap_self_sent_search_command(&t.ctx).await?,
-        r#"FROM "alice@example.org""#
-    );
-
-    add_pseudo_transport(&t, "alice@another.com").await?;
-    t.ctx.set_primary_self_addr("alice@another.com").await?;
-    assert_eq!(
-        get_imap_self_sent_search_command(&t.ctx).await?,
-        r#"OR (FROM "alice@another.com") (FROM "alice@example.org")"#
-    );
-
-    add_pseudo_transport(&t, "alice@third.com").await?;
-    t.ctx.set_primary_self_addr("alice@third.com").await?;
-    assert_eq!(
-        get_imap_self_sent_search_command(&t.ctx).await?,
-        r#"OR (OR (FROM "alice@third.com") (FROM "alice@another.com")) (FROM "alice@example.org")"#
-    );
-
     Ok(())
 }
 

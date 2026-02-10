@@ -1,6 +1,6 @@
 [package]
 name = "deltachat"
-version = "2.39.0"
+version = "2.42.0"
 edition = "2024"
 license = "MPL-2.0"
 rust-version = "1.88"
@@ -56,7 +56,7 @@ chrono = { workspace = true, features = ["alloc", "clock", "std"] }
 colorutils-rs = { version = "0.7.5", default-features = false }
 data-encoding = "2.9.0"
 escaper = "0.1"
-fast-socks5 = "0.10"
+fast-socks5 = "1"
 fd-lock = "4"
 futures-lite = { workspace = true }
 futures = { workspace = true }
@@ -78,10 +78,10 @@ num-derive = "0.4"
 num-traits = { workspace = true }
 parking_lot = "0.12.4"
 percent-encoding = "2.3"
-pgp = { version = "0.18.0", default-features = false }
+pgp = { version = "0.19.0", default-features = false }
 pin-project = "1"
 qrcodegen = "1.7.0"
-quick-xml = { version = "0.38", features = ["escape-html"] }
+quick-xml = { version = "0.39", features = ["escape-html"] }
 rand-old = { package = "rand", version = "0.8" }
 rand = { workspace = true }
 regex = { workspace = true }
@@ -182,7 +182,7 @@ harness = false
 anyhow = "1"
 async-channel = "2.5.0"
 base64 = "0.22"
-chrono = { version = "0.4.42", default-features = false }
+chrono = { version = "0.4.43", default-features = false }
 deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
@@ -202,7 +202,7 @@ serde_json = "1"
 tempfile = "3.24.0"
 thiserror = "2"
 tokio = "1"
-tokio-util = "0.7.17"
+tokio-util = "0.7.18"
 tracing-subscriber = "0.3"
 yerpc = "0.6.4"
 
