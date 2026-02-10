@@ -25,11 +25,13 @@
 //! You can benchmark this by adapting the `NUM_SECRETS` variable.
 
 use std::hint::black_box;
+use std::sync::LazyLock;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use deltachat::internals_for_benches::create_broadcast_secret;
 use deltachat::internals_for_benches::create_dummy_keypair;
 use deltachat::internals_for_benches::save_broadcast_secret;
+use deltachat::securejoin::get_securejoin_qr;
 use deltachat::{
     Events,
     chat::ChatId,
@@ -44,7 +46,18 @@ use deltachat::{
 use rand::{Rng, rng};
 use tempfile::tempdir;
 
-const NUM_SECRETS: usize = 500;
+static NUM_BROADCAST_SECRETS: LazyLock<usize> = LazyLock::new(|| {
+    std::env::var("NUM_BROADCAST_SECRETS")
+        .unwrap_or("500".to_string())
+        .parse()
+        .unwrap()
+});
+static NUM_AUTH_TOKENS: LazyLock<usize> = LazyLock::new(|| {
+    std::env::var("NUM_AUTH_TOKENS")
+        .unwrap_or("5000".to_string())
+        .parse()
+        .unwrap()
+});
 
 async fn create_context() -> Context {
     let dir = tempdir().unwrap();
@@ -80,7 +93,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         let plain = generate_plaintext();
         let secrets = generate_secrets();
         let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let secret = secrets[NUM_SECRETS / 2].clone();
+            let secret = secrets[*NUM_BROADCAST_SECRETS / 2].clone();
             symm_encrypt_message(
                 plain.clone(),
                 Some(create_dummy_keypair("alice@example.org").unwrap().secret),
@@ -139,7 +152,7 @@ fn criterion_benchmark(c: &mut Criterion) {
 
     // "secret" is the shared secret that was used to encrypt text_symmetrically_encrypted.eml.
     // Put it into the middle of our secrets:
-    secrets[NUM_SECRETS / 2] = "secret".to_string();
+    secrets[*NUM_BROADCAST_SECRETS / 2] = "secret".to_string();
 
     let context = rt.block_on(async {
         let context = create_context().await;
@@ -148,6 +161,10 @@ fn criterion_benchmark(c: &mut Criterion) {
                 .await
                 .unwrap();
         }
+        for _i in 0..*NUM_AUTH_TOKENS {
+            get_securejoin_qr(&context, None).await.unwrap();
+        }
+        println!("NUM_AUTH_TOKENS={}", *NUM_AUTH_TOKENS);
         context
     });
 
@@ -185,9 +202,10 @@ fn criterion_benchmark(c: &mut Criterion) {
 }
 
 fn generate_secrets() -> Vec<String> {
-    let secrets: Vec<String> = (0..NUM_SECRETS)
+    let secrets: Vec<String> = (0..*NUM_BROADCAST_SECRETS)
         .map(|_| create_broadcast_secret())
         .collect();
+    println!("NUM_BROADCAST_SECRETS={}", *NUM_BROADCAST_SECRETS);
     secrets
 }
 
