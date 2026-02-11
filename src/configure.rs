@@ -13,6 +13,8 @@ mod auto_mozilla;
 mod auto_outlook;
 pub(crate) mod server_params;
 
+use std::net::IpAddr;
+
 use anyhow::{Context as _, Result, bail, ensure, format_err};
 use auto_mozilla::moz_autoconfigure;
 use auto_outlook::outlk_autodiscover;
@@ -551,6 +553,25 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     let ctx2 = ctx.clone();
     let update_device_chats_handle = task::spawn(async move { ctx2.update_device_chats().await });
+
+    if !param.dns_prefill.is_empty() {
+        let mut ips: Vec<IpAddr> = Vec::new();
+        for ip in &param.dns_prefill {
+            match ip.parse::<IpAddr>() {
+                Ok(ip) => ips.push(ip),
+                Err(err) => {
+                    error!(
+                        ctx,
+                        "IP address prefill failed: parsing of address '{ip}' failed: {err}"
+                    );
+                }
+            }
+        }
+        ctx.dns_memory_cache
+            .write()
+            .await
+            .insert(param.imap.server.clone(), ips);
+    }
 
     let configured_param = get_configured_param(ctx, param).await?;
     let proxy_config = ProxyConfig::load(ctx).await?;

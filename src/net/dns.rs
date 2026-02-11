@@ -860,6 +860,14 @@ pub(crate) async fn lookup_host_with_cache(
                 }
             }
         }
+        if let Some(ips) = context.dns_memory_cache.read().await.get(hostname) {
+            for ip in ips {
+                let addr = SocketAddr::new(*ip, port);
+                if !cache.contains(&addr) {
+                    cache.push(addr);
+                }
+            }
+        }
 
         merge_with_cache(resolved_addrs, cache)
     } else {
