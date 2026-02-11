@@ -125,10 +125,6 @@ impl Context {
 
     pub(crate) async fn add_transport_inner(&self, param: &mut EnteredLoginParam) -> Result<()> {
         ensure!(
-            !self.scheduler.is_running().await,
-            "cannot configure, already running"
-        );
-        ensure!(
             self.sql.is_open().await,
             "cannot configure, database not opened."
         );
