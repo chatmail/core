@@ -107,6 +107,39 @@ impl EventEmitter {
             | Ok(_)) => Ok(res?),
         }
     }
+
+    /// Waits until there is at least one event available
+    /// and then returns a vector of at least one event.
+    ///
+    /// Returns empty vector if the sender has been dropped.
+    pub async fn recv_batch(&self) -> Vec<Event> {
+        let mut lock = self.0.lock().await;
+        let mut res = match lock.recv_direct().await {
+            Err(async_broadcast::RecvError::Overflowed(n)) => vec![Event {
+                id: 0,
+                typ: EventType::EventChannelOverflow { n },
+            }],
+            Err(async_broadcast::RecvError::Closed) => return Vec::new(),
+            Ok(event) => vec![event],
+        };
+
+        // Return up to 100 events in a single batch
+        // to have a limit on used memory if events arrive too fast.
+        for _ in 0..100 {
+            match lock.try_recv() {
+                Err(async_broadcast::TryRecvError::Overflowed(n)) => res.push(Event {
+                    id: 0,
+                    typ: EventType::EventChannelOverflow { n },
+                }),
+                Ok(event) => res.push(event),
+                Err(async_broadcast::TryRecvError::Empty)
+                | Err(async_broadcast::TryRecvError::Closed) => {
+                    break;
+                }
+            }
+        }
+        res
+    }
 }
 
 /// The event emitted by a [`Context`] from an [`EventEmitter`].
