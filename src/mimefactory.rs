@@ -1587,10 +1587,7 @@ impl MimeFactory {
             }
         }
 
-        if chat.typ == Chattype::Group
-            || chat.typ == Chattype::OutBroadcast
-            || chat.typ == Chattype::InBroadcast
-        {
+        if chat.typ == Chattype::Group || chat.typ == Chattype::OutBroadcast {
             headers.push((
                 "Chat-Group-Name",
                 mail_builder::headers::text::Text::new(chat.name.to_string()).into(),
@@ -1601,7 +1598,11 @@ impl MimeFactory {
                     mail_builder::headers::text::Text::new(ts.to_string()).into(),
                 ));
             }
-
+        }
+        if chat.typ == Chattype::Group
+            || chat.typ == Chattype::OutBroadcast
+            || chat.typ == Chattype::InBroadcast
+        {
             match command {
                 SystemMessage::MemberRemovedFromGroup => {
                     let email_to_remove = msg.param.get(Param::Arg).unwrap_or_default();
@@ -2034,14 +2035,15 @@ impl MimeFactory {
                 HeaderDef::IrohGossipTopic.get_headername(),
                 mail_builder::headers::raw::Raw::new(topic).into(),
             ));
-            if let (Some(json), _) = context
-                .render_webxdc_status_update_object(
-                    msg.id,
-                    StatusUpdateSerial::MIN,
-                    StatusUpdateSerial::MAX,
-                    None,
-                )
-                .await?
+            if msg.chat_typ != Chattype::OutBroadcast
+                && let (Some(json), _) = context
+                    .render_webxdc_status_update_object(
+                        msg.id,
+                        StatusUpdateSerial::MIN,
+                        StatusUpdateSerial::MAX,
+                        None,
+                    )
+                    .await?
             {
                 parts.push(context.build_status_update_part(&json));
             }

@@ -11,7 +11,9 @@ use crate::chat::{
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::ephemeral;
+use crate::imex::{BackupProvider, get_backup};
 use crate::receive_imf::receive_imf;
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
 use crate::{message, sql};
@@ -1585,6 +1587,73 @@ async fn test_webxdc_no_internet_access() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_in_broadcast_send_status_update() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = create_broadcast(alice, "bc".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+
+    let alice_instance = send_webxdc_instance(alice, alice_chat_id).await?;
+    let sent_msg = alice.pop_sent_msg().await;
+    let bob_instance = bob.recv_msg(&sent_msg).await;
+    assert_eq!(bob_instance.chat_id, bob_chat_id);
+
+    let provider = BackupProvider::prepare(bob).await?;
+    let bob1 = &tcm.unconfigured().await;
+    get_backup(bob1, provider.qr()).await?;
+
+    bob.send_webxdc_status_update(bob_instance.id, r#"{"payload":42}"#)
+        .await?;
+    bob.flush_status_updates().await?;
+    let sent_msg = bob.pop_sent_msg_opt(Duration::ZERO).await.unwrap();
+
+    alice.recv_msg_trash(&sent_msg).await;
+    assert_eq!(
+        alice
+            .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":42,"serial":1,"max_serial":1}]"#
+    );
+
+    bob1.recv_msg_trash(&sent_msg).await;
+    assert_eq!(
+        bob1.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":42,"serial":1,"max_serial":1}]"#
+    );
+
+    // Non-subscriber's status updates are rejected.
+    let alice_bob_id = alice.add_or_lookup_contact_id(bob).await;
+    remove_contact_from_chat(alice, alice_chat_id, alice_bob_id).await?;
+    alice.pop_sent_msg().await;
+    let status =
+        helper_send_receive_status_update(bob, alice, &bob_instance, &alice_instance).await?;
+    assert_eq!(status, r#"[{"payload":42,"serial":1,"max_serial":1}]"#);
+
+    // Subscribers' status updates are confidential.
+    let fiona = &tcm.fiona().await;
+    let fiona_chat_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+    resend_msgs(alice, &[alice_instance.id]).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    alice.flush_status_updates().await?;
+    // See above for bob -- status updates are flushed immediately, no need to wait.
+    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
+    let fiona_instance = fiona.recv_msg(&sent1).await;
+    assert_eq!(fiona_instance.chat_id, fiona_chat_id);
+    assert_eq!(fiona_instance.chat_typ, Chattype::InBroadcast);
+    assert_eq!(
+        fiona
+            .get_webxdc_status_updates(fiona_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[]"#
+    );
     Ok(())
 }
 

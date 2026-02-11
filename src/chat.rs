@@ -2694,7 +2694,9 @@ async fn prepare_send_msg(
             .unwrap_or_default(),
         _ => false,
     };
-    if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
+    if msg.param.get_cmd() == SystemMessage::WebxdcStatusUpdate {
+        // Already checked in `send_webxdc_status_update_struct()`.
+    } else if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
         bail!("Cannot send to {chat_id}: {reason}");
     }
 
@@ -4670,7 +4672,7 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
         // note(treefit): only matters if it is the last message in chat (but probably to expensive to check, debounce also solves it)
         chatlist_events::emit_chatlist_item_changed(context, msg.chat_id);
 
-        if msg.viewtype == Viewtype::Webxdc {
+        if msg.viewtype == Viewtype::Webxdc && msg.chat_typ != Chattype::OutBroadcast {
             let conn_fn = |conn: &mut rusqlite::Connection| {
                 let range = conn.query_row(
                     "SELECT IFNULL(min(id), 1), IFNULL(max(id), 0) \
