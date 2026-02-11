@@ -379,17 +379,6 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     if res.is_ok() {
         res = check_backup_version(context).await;
     }
-    if res.is_ok() {
-        // All recent backups have `bcc_self` set to "1" before export.
-        //
-        // Setting `bcc_self` to "1" on export was introduced on 2024-12-17
-        // in commit 21664125d798021be75f47d5b0d5006d338b4531
-        //
-        // We additionally try to set `bcc_self` to "1" after import here
-        // for compatibility with older backups,
-        // but eventually this code can be removed.
-        res = context.set_config(Config::BccSelf, Some("1")).await;
-    }
     fs::remove_file(unpacked_database)
         .await
         .context("cannot remove unpacked database")
