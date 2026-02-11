@@ -23,6 +23,9 @@ pub struct EnteredLoginParam {
     /// Imap server port.
     pub imap_port: Option<u16>,
 
+    /// IMAP server folder.
+    pub imap_folder: Option<String>,
+
     /// Imap socket security.
     pub imap_security: Option<Socket>,
 
@@ -66,6 +69,7 @@ impl From<dc::EnteredLoginParam> for EnteredLoginParam {
             password: param.imap.password,
             imap_server: param.imap.server.into_option(),
             imap_port: param.imap.port.into_option(),
+            imap_folder: param.imap.folder.into_option(),
             imap_security: imap_security.into_option(),
             imap_user: param.imap.user.into_option(),
             smtp_server: param.smtp.server.into_option(),
@@ -85,14 +89,15 @@ impl TryFrom<EnteredLoginParam> for dc::EnteredLoginParam {
     fn try_from(param: EnteredLoginParam) -> Result<Self> {
         Ok(Self {
             addr: param.addr,
-            imap: dc::EnteredServerLoginParam {
+            imap: dc::EnteredImapLoginParam {
                 server: param.imap_server.unwrap_or_default(),
                 port: param.imap_port.unwrap_or_default(),
+                folder: param.imap_folder.unwrap_or_default(),
                 security: param.imap_security.unwrap_or_default().into(),
                 user: param.imap_user.unwrap_or_default(),
                 password: param.password,
             },
-            smtp: dc::EnteredServerLoginParam {
+            smtp: dc::EnteredSmtpLoginParam {
                 server: param.smtp_server.unwrap_or_default(),
                 port: param.smtp_port.unwrap_or_default(),
                 security: param.smtp_security.unwrap_or_default().into(),

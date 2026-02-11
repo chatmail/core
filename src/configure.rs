@@ -400,6 +400,7 @@ async fn get_configured_param(
         && param.imap.port == 0
         && param.imap.security == Socket::Automatic
         && param.imap.user.is_empty()
+        && param.imap.folder.is_empty()
         && param.smtp.server.is_empty()
         && param.smtp.port == 0
         && param.smtp.security == Socket::Automatic
@@ -505,6 +506,7 @@ async fn get_configured_param(
             .collect(),
         imap_user: param.imap.user.clone(),
         imap_password: param.imap.password.clone(),
+        imap_folder: Some(param.imap.folder.clone()),
         smtp: servers
             .iter()
             .filter_map(|params| {
@@ -755,7 +757,7 @@ pub enum Error {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::login_param::EnteredServerLoginParam;
+    use crate::login_param::EnteredImapLoginParam;
     use crate::test_utils::TestContext;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -774,7 +776,7 @@ mod tests {
         let entered_param = EnteredLoginParam {
             addr: "alice@example.org".to_string(),
 
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 user: "alice@example.net".to_string(),
                 password: "foobar".to_string(),
                 ..Default::default()
