@@ -28,9 +28,10 @@ use crate::calls::{
 use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
 use crate::chatlist_events;
 use crate::config::Config;
-use crate::constants::{self, Blocked, DC_VERSION_STR, ShowEmails};
+use crate::constants::{Blocked, DC_VERSION_STR, ShowEmails};
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::log::{LogExt, warn};
@@ -91,6 +92,9 @@ pub(crate) struct Imap {
     strict_tls: bool,
 
     oauth2: bool,
+
+    /// Watched folder.
+    pub(crate) folder: String,
 
     authentication_failed_once: bool,
 
@@ -163,7 +167,6 @@ pub enum FolderMeaning {
     /// Spam folder.
     Spam,
     Inbox,
-    Mvbox,
     Trash,
 
     /// Virtual folders.
@@ -173,19 +176,6 @@ pub enum FolderMeaning {
     /// from the real folder and the result of moving and deleting messages via
     /// virtual folder is unclear.
     Virtual,
-}
-
-impl FolderMeaning {
-    pub fn to_config(self) -> Option<Config> {
-        match self {
-            FolderMeaning::Unknown => None,
-            FolderMeaning::Spam => None,
-            FolderMeaning::Inbox => Some(Config::ConfiguredInboxFolder),
-            FolderMeaning::Mvbox => Some(Config::ConfiguredMvboxFolder),
-            FolderMeaning::Trash => None,
-            FolderMeaning::Virtual => None,
-        }
-    }
 }
 
 struct UidGrouper<T: Iterator<Item = (i64, u32, String)>> {
@@ -263,6 +253,11 @@ impl Imap {
         let addr = &param.addr;
         let strict_tls = param.strict_tls(proxy_config.is_some());
         let oauth2 = param.oauth2;
+        let folder = param
+            .imap_folder
+            .clone()
+            .unwrap_or_else(|| "INBOX".to_string());
+        ensure_and_debug_assert!(!folder.is_empty(), "Watched folder name cannot be empty");
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
         Ok(Imap {
             transport_id,
@@ -273,6 +268,7 @@ impl Imap {
             proxy_config,
             strict_tls,
             oauth2,
+            folder,
             authentication_failed_once: false,
             connectivity: Default::default(),
             conn_last_try: UNIX_EPOCH,
@@ -485,21 +481,13 @@ impl Imap {
     /// that folders are created and IMAP capabilities are determined.
     pub(crate) async fn prepare(&mut self, context: &Context) -> Result<Session> {
         let configuring = false;
-        let mut session = match self.connect(context, configuring).await {
+        let session = match self.connect(context, configuring).await {
             Ok(session) => session,
             Err(err) => {
                 self.connectivity.set_err(context, &err);
                 return Err(err);
             }
         };
-
-        let folders_configured = context
-            .sql
-            .get_raw_config_int(constants::DC_FOLDERS_CONFIGURED_KEY)
-            .await?;
-        if folders_configured.unwrap_or_default() < constants::DC_FOLDERS_CONFIGURED_VERSION {
-            self.configure_folders(context, &mut session).await?;
-        }
 
         Ok(session)
     }
@@ -513,15 +501,15 @@ impl Imap {
         context: &Context,
         session: &mut Session,
         watch_folder: &str,
-        folder_meaning: FolderMeaning,
     ) -> Result<()> {
+        ensure_and_debug_assert!(!watch_folder.is_empty(), "Watched folder cannot be empty");
         if !context.sql.is_open().await {
             // probably shutdown
             bail!("IMAP operation attempted while it is torn down");
         }
 
         let msgs_fetched = self
-            .fetch_new_messages(context, session, watch_folder, folder_meaning)
+            .fetch_new_messages(context, session, watch_folder)
             .await
             .context("fetch_new_messages")?;
         if msgs_fetched && context.get_config_delete_device_after().await?.is_some() {
@@ -548,14 +536,7 @@ impl Imap {
         context: &Context,
         session: &mut Session,
         folder: &str,
-        folder_meaning: FolderMeaning,
     ) -> Result<bool> {
-        if should_ignore_folder(context, folder, folder_meaning).await? {
-            info!(context, "Not fetching from {folder:?}.");
-            session.new_mail = false;
-            return Ok(false);
-        }
-
         let folder_exists = session
             .select_with_uidvalidity(context, folder)
             .await
@@ -572,9 +553,7 @@ impl Imap {
 
         let mut read_cnt = 0;
         loop {
-            let (n, fetch_more) = self
-                .fetch_new_msg_batch(context, session, folder, folder_meaning)
-                .await?;
+            let (n, fetch_more) = self.fetch_new_msg_batch(context, session, folder).await?;
             read_cnt += n;
             if !fetch_more {
                 return Ok(read_cnt > 0);
@@ -588,7 +567,6 @@ impl Imap {
         context: &Context,
         session: &mut Session,
         folder: &str,
-        folder_meaning: FolderMeaning,
     ) -> Result<(usize, bool)> {
         let transport_id = self.transport_id;
         let uid_validity = get_uidvalidity(context, transport_id, folder).await?;
@@ -657,13 +635,7 @@ impl Imap {
                 info!(context, "Deleting locally deleted message {message_id}.");
             }
 
-            let _target;
-            let target = if delete {
-                ""
-            } else {
-                _target = target_folder(context, folder, folder_meaning, &headers).await?;
-                &_target
-            };
+            let target = if delete { "" } else { folder };
 
             context
                 .sql
@@ -691,18 +663,9 @@ impl Imap {
             // message, move it to the movebox and then download the second message before
             // downloading the first one, if downloading from inbox before moving is allowed.
             if folder == target
-                // Never download messages directly from the spam folder.
-                // If the sender is known, the message will be moved to the Inbox or Mvbox
-                // and then we download the message from there.
-                // Also see `spam_target_folder_cfg()`.
-                && folder_meaning != FolderMeaning::Spam
-                && prefetch_should_download(
-                    context,
-                    &headers,
-                    &message_id,
-                    fetch_response.flags(),
-                )
-                .await.context("prefetch_should_download")?
+                && prefetch_should_download(context, &headers, &message_id, fetch_response.flags())
+                    .await
+                    .context("prefetch_should_download")?
             {
                 if headers
                     .get_header_value(HeaderDef::ChatIsPostMessage)
@@ -1616,13 +1579,8 @@ impl Session {
             // Store new encrypted device token on the server
             // even if it is the same as the old one.
             if let Some(encrypted_device_token) = new_encrypted_device_token {
-                let folder = context
-                    .get_config(Config::ConfiguredInboxFolder)
-                    .await?
-                    .context("INBOX is not configured")?;
-
                 self.run_command_and_check_ok(&format_setmetadata(
-                    &folder,
+                    "INBOX",
                     &encrypted_device_token,
                 ))
                 .await
@@ -1665,117 +1623,6 @@ impl Session {
         while let Some(_response) = responses.try_next().await? {
             // Read all the responses
         }
-        Ok(())
-    }
-
-    /// Attempts to configure mvbox.
-    ///
-    /// Tries to find any folder examining `folders` in the order they go.
-    /// This method does not use LIST command to ensure that
-    /// configuration works even if mailbox lookup is forbidden via Access Control List (see
-    /// <https://datatracker.ietf.org/doc/html/rfc4314>).
-    ///
-    /// Returns first found folder name.
-    async fn configure_mvbox<'a>(
-        &mut self,
-        context: &Context,
-        folders: &[&'a str],
-    ) -> Result<Option<&'a str>> {
-        // Close currently selected folder if needed.
-        // We are going to select folders using low-level EXAMINE operations below.
-        self.maybe_close_folder(context).await?;
-
-        for folder in folders {
-            info!(context, "Looking for MVBOX-folder \"{}\"...", &folder);
-            let res = self.examine(&folder).await;
-            if res.is_ok() {
-                info!(
-                    context,
-                    "MVBOX-folder {:?} successfully selected, using it.", &folder
-                );
-                self.close().await?;
-                // Before moving emails to the mvbox we need to remember its UIDVALIDITY, otherwise
-                // emails moved before that wouldn't be fetched but considered "old" instead.
-                let folder_exists = self.select_with_uidvalidity(context, folder).await?;
-                ensure!(folder_exists, "No MVBOX folder {:?}??", &folder);
-                return Ok(Some(folder));
-            }
-        }
-
-        Ok(None)
-    }
-}
-
-impl Imap {
-    pub(crate) async fn configure_folders(
-        &mut self,
-        context: &Context,
-        session: &mut Session,
-    ) -> Result<()> {
-        let mut folders = session
-            .list(Some(""), Some("*"))
-            .await
-            .context("list_folders failed")?;
-        let mut delimiter = ".".to_string();
-        let mut delimiter_is_default = true;
-        let mut folder_configs = BTreeMap::new();
-
-        while let Some(folder) = folders.try_next().await? {
-            info!(context, "Scanning folder: {:?}", folder);
-
-            // Update the delimiter iff there is a different one, but only once.
-            if let Some(d) = folder.delimiter()
-                && delimiter_is_default
-                && !d.is_empty()
-                && delimiter != d
-            {
-                delimiter = d.to_string();
-                delimiter_is_default = false;
-            }
-
-            let folder_meaning = get_folder_meaning_by_attrs(folder.attributes());
-            let folder_name_meaning = get_folder_meaning_by_name(folder.name());
-            if let Some(config) = folder_meaning.to_config() {
-                // Always takes precedence
-                folder_configs.insert(config, folder.name().to_string());
-            } else if let Some(config) = folder_name_meaning.to_config() {
-                // only set if none has been already set
-                folder_configs
-                    .entry(config)
-                    .or_insert_with(|| folder.name().to_string());
-            }
-        }
-        drop(folders);
-
-        info!(context, "Using \"{}\" as folder-delimiter.", delimiter);
-
-        let fallback_folder = format!("INBOX{delimiter}DeltaChat");
-        let mvbox_folder = session
-            .configure_mvbox(context, &["DeltaChat", &fallback_folder])
-            .await
-            .context("failed to configure mvbox")?;
-
-        context
-            .set_config_internal(Config::ConfiguredInboxFolder, Some("INBOX"))
-            .await?;
-        if let Some(mvbox_folder) = mvbox_folder {
-            info!(context, "Setting MVBOX FOLDER TO {}", &mvbox_folder);
-            context
-                .set_config_internal(Config::ConfiguredMvboxFolder, Some(mvbox_folder))
-                .await?;
-        }
-        for (config, name) in folder_configs {
-            context.set_config_internal(config, Some(&name)).await?;
-        }
-        context
-            .sql
-            .set_raw_config_int(
-                constants::DC_FOLDERS_CONFIGURED_KEY,
-                constants::DC_FOLDERS_CONFIGURED_VERSION,
-            )
-            .await?;
-
-        info!(context, "FINISHED configuring IMAP-folders.");
         Ok(())
     }
 }
@@ -1911,15 +1758,7 @@ async fn spam_target_folder_cfg(
         return Ok(None);
     }
 
-    if needs_move_to_mvbox(context, headers).await?
-        // If OnlyFetchMvbox is set, we don't want to move the message to
-        // the inbox where we wouldn't fetch it again:
-        || context.get_config_bool(Config::OnlyFetchMvbox).await?
-    {
-        Ok(Some(Config::ConfiguredMvboxFolder))
-    } else {
-        Ok(Some(Config::ConfiguredInboxFolder))
-    }
+    Ok(Some(Config::ConfiguredInboxFolder))
 }
 
 /// Returns `ConfiguredInboxFolder` or `ConfiguredMvboxFolder` if
@@ -1930,16 +1769,12 @@ pub async fn target_folder_cfg(
     folder_meaning: FolderMeaning,
     headers: &[mailparse::MailHeader<'_>],
 ) -> Result<Option<Config>> {
-    if context.is_mvbox(folder).await? {
+    if folder == "DeltaChat" {
         return Ok(None);
     }
 
     if folder_meaning == FolderMeaning::Spam {
         spam_target_folder_cfg(context, headers).await
-    } else if folder_meaning == FolderMeaning::Inbox
-        && needs_move_to_mvbox(context, headers).await?
-    {
-        Ok(Some(Config::ConfiguredMvboxFolder))
     } else {
         Ok(None)
     }
@@ -1957,36 +1792,6 @@ pub async fn target_folder(
             None => Ok(folder.to_string()),
         },
         None => Ok(folder.to_string()),
-    }
-}
-
-async fn needs_move_to_mvbox(
-    context: &Context,
-    headers: &[mailparse::MailHeader<'_>],
-) -> Result<bool> {
-    let has_chat_version = headers.get_header_value(HeaderDef::ChatVersion).is_some();
-    if !context.get_config_bool(Config::MvboxMove).await? {
-        return Ok(false);
-    }
-
-    if headers
-        .get_header_value(HeaderDef::AutocryptSetupMessage)
-        .is_some()
-    {
-        // do not move setup messages;
-        // there may be a non-delta device that wants to handle it
-        return Ok(false);
-    }
-
-    if has_chat_version {
-        Ok(true)
-    } else if let Some(parent) = get_prefetch_parent_message(context, headers).await? {
-        match parent.is_dc_message {
-            MessengerMessage::No => Ok(false),
-            MessengerMessage::Yes | MessengerMessage::Reply => Ok(true),
-        }
-    } else {
-        Ok(false)
     }
 }
 
@@ -2346,21 +2151,6 @@ async fn get_modseq(context: &Context, transport_id: u32, folder: &str) -> Resul
         .unwrap_or(0))
 }
 
-/// Whether to ignore fetching messages from a folder.
-///
-/// This caters for the [`Config::OnlyFetchMvbox`] setting which means mails from folders
-/// not explicitly watched should not be fetched.
-async fn should_ignore_folder(
-    context: &Context,
-    folder: &str,
-    folder_meaning: FolderMeaning,
-) -> Result<bool> {
-    if !context.get_config_bool(Config::OnlyFetchMvbox).await? {
-        return Ok(false);
-    }
-    Ok(!(context.is_mvbox(folder).await? || folder_meaning == FolderMeaning::Spam))
-}
-
 /// Builds a list of sequence/uid sets. The returned sets have each no more than around 1000
 /// characters because according to <https://tools.ietf.org/html/rfc2683#section-3.2.1.5>
 /// command lines should not be much more than 1000 chars (servers should allow at least 8000 chars)
@@ -2417,24 +2207,6 @@ impl std::fmt::Display for UidRange {
             write!(f, "{}:{}", self.start, self.end)
         }
     }
-}
-
-pub(crate) async fn get_watched_folder_configs(context: &Context) -> Result<Vec<Config>> {
-    let mut res = vec![Config::ConfiguredInboxFolder];
-    if context.should_watch_mvbox().await? {
-        res.push(Config::ConfiguredMvboxFolder);
-    }
-    Ok(res)
-}
-
-pub(crate) async fn get_watched_folders(context: &Context) -> Result<Vec<String>> {
-    let mut res = Vec::new();
-    for folder_config in get_watched_folder_configs(context).await? {
-        if let Some(folder) = context.get_config(folder_config).await? {
-            res.push(folder);
-        }
-    }
-    Ok(res)
 }
 
 #[cfg(test)]

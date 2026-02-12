@@ -273,31 +273,16 @@ impl Context {
                     (&param.addr,),
                 )
                 .await?
-        {
-            // Should be checked before `MvboxMove` because the latter makes no sense in presense of
-            // `OnlyFetchMvbox` and even grayed out in the UIs in this case.
-            if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
-                bail!(
-                    "To use additional relays, disable the legacy option \"Settings / Advanced / Only Fetch from DeltaChat Folder\"."
-                );
-            }
-            if self.get_config(Config::MvboxMove).await?.as_deref() != Some("0") {
-                bail!(
-                    "To use additional relays, disable the legacy option \"Settings / Advanced / Move automatically to DeltaChat Folder\"."
-                );
-            }
-
-            if self
+            && self
                 .sql
                 .count("SELECT COUNT(*) FROM transports", ())
                 .await?
                 >= MAX_TRANSPORT_RELAYS
-            {
-                bail!(
-                    "You have reached the maximum number of relays ({}).",
-                    MAX_TRANSPORT_RELAYS
-                )
-            }
+        {
+            bail!(
+                "You have reached the maximum number of relays ({}).",
+                MAX_TRANSPORT_RELAYS
+            )
         }
 
         let provider = match configure(self, param).await {
@@ -405,6 +390,7 @@ async fn get_configured_param(
         && param.imap.port == 0
         && param.imap.security == Socket::Automatic
         && param.imap.user.is_empty()
+        && param.imap.folder.is_empty()
         && param.smtp.server.is_empty()
         && param.smtp.port == 0
         && param.smtp.security == Socket::Automatic
@@ -510,6 +496,7 @@ async fn get_configured_param(
             .collect(),
         imap_user: param.imap.user.clone(),
         imap_password: param.imap.password.clone(),
+        imap_folder: Some(param.imap.folder.clone()).filter(|folder| !folder.is_empty()),
         smtp: servers
             .iter()
             .filter_map(|params| {
@@ -601,14 +588,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
 
     // Wait for SMTP configuration
     smtp_config_task.await??;
-
-    progress!(ctx, 900);
-
-    let is_configured = ctx.is_configured().await?;
-    if !is_configured {
-        ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
-        ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
-    }
 
     drop(imap);
 
@@ -760,7 +739,7 @@ pub enum Error {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::login_param::EnteredServerLoginParam;
+    use crate::login_param::EnteredImapLoginParam;
     use crate::test_utils::TestContext;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -779,7 +758,7 @@ mod tests {
         let entered_param = EnteredLoginParam {
             addr: "alice@example.org".to_string(),
 
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 user: "alice@example.net".to_string(),
                 password: "foobar".to_string(),
                 ..Default::default()

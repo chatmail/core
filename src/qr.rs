@@ -17,7 +17,7 @@ use crate::config::Config;
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::key::Fingerprint;
-use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
+use crate::login_param::{EnteredCertificateChecks, EnteredImapLoginParam, EnteredLoginParam};
 use crate::net::http::post_empty;
 use crate::net::proxy::{DEFAULT_SOCKS_PORT, ProxyConfig};
 use crate::token;
@@ -789,7 +789,7 @@ pub(crate) async fn login_param_from_account_qr(
 
         let param = EnteredLoginParam {
             addr,
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 password,
                 ..Default::default()
             },
@@ -809,7 +809,7 @@ pub(crate) async fn login_param_from_account_qr(
 
         let param = EnteredLoginParam {
             addr: email,
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 password,
                 ..Default::default()
             },

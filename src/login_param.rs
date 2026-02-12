@@ -56,9 +56,37 @@ pub enum EnteredCertificateChecks {
     AcceptInvalidCertificates2 = 3,
 }
 
-/// Login parameters for a single server, either IMAP or SMTP
+/// Login parameters for a single IMAP server.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnteredServerLoginParam {
+pub struct EnteredImapLoginParam {
+    /// Server hostname or IP address.
+    pub server: String,
+
+    /// Server port.
+    ///
+    /// 0 if not specified.
+    pub port: u16,
+
+    /// Folder to watch.
+    ///
+    /// If empty, user has not entered anything and it shuold expand to "INBOX" later.
+    pub folder: String,
+
+    /// Socket security.
+    pub security: Socket,
+
+    /// Username.
+    ///
+    /// Empty string if not specified.
+    pub user: String,
+
+    /// Password.
+    pub password: String,
+}
+
+/// Login parameters for a single SMTP server.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnteredSmtpLoginParam {
     /// Server hostname or IP address.
     pub server: String,
 
@@ -86,10 +114,10 @@ pub struct EnteredLoginParam {
     pub addr: String,
 
     /// IMAP settings.
-    pub imap: EnteredServerLoginParam,
+    pub imap: EnteredImapLoginParam,
 
     /// SMTP settings.
-    pub smtp: EnteredServerLoginParam,
+    pub smtp: EnteredSmtpLoginParam,
 
     /// TLS options: whether to allow invalid certificates and/or
     /// invalid hostnames
@@ -101,6 +129,8 @@ pub struct EnteredLoginParam {
 
 impl EnteredLoginParam {
     /// Loads entered account settings.
+    ///
+    /// This is a legacy API for loading from separate config parameters.
     pub(crate) async fn load(context: &Context) -> Result<Self> {
         let addr = context
             .get_config(Config::Addr)
@@ -117,6 +147,10 @@ impl EnteredLoginParam {
             .get_config_parsed::<u16>(Config::MailPort)
             .await?
             .unwrap_or_default();
+
+        // There is no way to set custom folder with this legacy API.
+        let mail_folder = String::new();
+
         let mail_security = context
             .get_config_parsed::<i32>(Config::MailSecurity)
             .await?
@@ -175,14 +209,15 @@ impl EnteredLoginParam {
 
         Ok(EnteredLoginParam {
             addr,
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 server: mail_server,
                 port: mail_port,
+                folder: mail_folder,
                 security: mail_security,
                 user: mail_user,
                 password: mail_pw,
             },
-            smtp: EnteredServerLoginParam {
+            smtp: EnteredSmtpLoginParam {
                 server: send_server,
                 port: send_port,
                 security: send_security,
@@ -344,14 +379,15 @@ mod tests {
         let t = TestContext::new().await;
         let param = EnteredLoginParam {
             addr: "alice@example.org".to_string(),
-            imap: EnteredServerLoginParam {
+            imap: EnteredImapLoginParam {
                 server: "".to_string(),
                 port: 0,
+                folder: "".to_string(),
                 security: Socket::Starttls,
                 user: "".to_string(),
                 password: "foobar".to_string(),
             },
-            smtp: EnteredServerLoginParam {
+            smtp: EnteredSmtpLoginParam {
                 server: "".to_string(),
                 port: 2947,
                 security: Socket::default(),

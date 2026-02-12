@@ -115,11 +115,7 @@ impl Session {
 
 impl Imap {
     /// Idle using polling.
-    pub(crate) async fn fake_idle(
-        &mut self,
-        context: &Context,
-        watch_folder: String,
-    ) -> Result<()> {
+    pub(crate) async fn fake_idle(&mut self, context: &Context, watch_folder: &str) -> Result<()> {
         let fake_idle_start_time = tools::Time::now();
 
         info!(context, "IMAP-fake-IDLEing folder={:?}", watch_folder);

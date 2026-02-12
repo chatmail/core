@@ -155,18 +155,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     MdnsEnabled,
 
-    /// True if chat messages should be moved to a separate folder. Auto-sent messages like sync
-    /// ones are moved there anyway.
-    #[strum(props(default = "1"))]
-    MvboxMove,
-
-    /// Watch for new messages in the "Mvbox" (aka DeltaChat folder) only.
-    ///
-    /// This will not entirely disable other folders, e.g. the spam folder will also still
-    /// be watched for new messages.
-    #[strum(props(default = "0"))]
-    OnlyFetchMvbox,
-
     /// Whether to show classic emails or only chat messages.
     #[strum(props(default = "2"))] // also change ShowEmails.default() on changes
     ShowEmails,
@@ -267,9 +255,6 @@ pub enum Config {
 
     /// Configured folder for incoming messages.
     ConfiguredInboxFolder,
-
-    /// Configured folder for chat messages.
-    ConfiguredMvboxFolder,
 
     /// Unix timestamp of the last successful configuration.
     ConfiguredTimestamp,
@@ -467,7 +452,6 @@ impl Config {
             self,
             Self::Displayname
                 | Self::MdnsEnabled
-                | Self::MvboxMove
                 | Self::ShowEmails
                 | Self::Selfavatar
                 | Self::Selfstatus,
@@ -476,10 +460,7 @@ impl Config {
 
     /// Whether the config option needs an IO scheduler restart to take effect.
     pub(crate) fn needs_io_restart(&self) -> bool {
-        matches!(
-            self,
-            Config::MvboxMove | Config::OnlyFetchMvbox | Config::ConfiguredAddr
-        )
+        matches!(self, Config::ConfiguredAddr)
     }
 }
 
@@ -594,13 +575,6 @@ impl Context {
             .is_some_and(|x| x != 0))
     }
 
-    /// Returns true if movebox ("DeltaChat" folder) should be watched.
-    pub(crate) async fn should_watch_mvbox(&self) -> Result<bool> {
-        Ok(self.get_config_bool(Config::MvboxMove).await?
-            || self.get_config_bool(Config::OnlyFetchMvbox).await?
-            || !self.get_config_bool(Config::IsChatmail).await?)
-    }
-
     /// Returns true if sync messages should be sent.
     pub(crate) async fn should_send_sync_msgs(&self) -> Result<bool> {
         Ok(self.get_config_bool(Config::SyncMsgs).await?
@@ -682,8 +656,6 @@ impl Context {
             | Config::ProxyEnabled
             | Config::BccSelf
             | Config::MdnsEnabled
-            | Config::MvboxMove
-            | Config::OnlyFetchMvbox
             | Config::Configured
             | Config::Bot
             | Config::NotifyAboutWrongPw
@@ -705,11 +677,6 @@ impl Context {
     /// set to the default if there is one.
     pub async fn set_config(&self, key: Config, value: Option<&str>) -> Result<()> {
         Self::check_config(key, value)?;
-
-        let n_transports = self.count_transports().await?;
-        if n_transports > 1 && matches!(key, Config::MvboxMove | Config::OnlyFetchMvbox) {
-            bail!("Cannot reconfigure {key} when multiple transports are configured");
-        }
 
         let _pause = match key.needs_io_restart() {
             true => self.scheduler.pause(self).await?,
@@ -787,12 +754,6 @@ impl Context {
             Config::Addr => {
                 self.sql
                     .set_raw_config(key.as_ref(), value.map(|s| s.to_lowercase()).as_deref())
-                    .await?;
-            }
-            Config::MvboxMove => {
-                self.sql.set_raw_config(key.as_ref(), value).await?;
-                self.sql
-                    .set_raw_config(constants::DC_FOLDERS_CONFIGURED_KEY, None)
                     .await?;
             }
             Config::ConfiguredAddr => {

@@ -5,11 +5,10 @@ use std::{iter::once, ops::Deref, sync::Arc};
 use anyhow::Result;
 use humansize::{BINARY, format_size};
 
+use crate::context::Context;
 use crate::events::EventType;
-use crate::imap::{FolderMeaning, get_watched_folder_configs};
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
-use crate::{context::Context, log::LogExt};
 
 use super::InnerSchedulerState;
 
@@ -67,40 +66,33 @@ enum DetailedConnectivity {
 
     /// Connection is established and is idle.
     Idle,
-
-    /// The folder was configured not to be watched or configured_*_folder is not set
-    NotConfigured,
 }
 
 impl DetailedConnectivity {
-    fn to_basic(&self) -> Option<Connectivity> {
+    fn to_basic(&self) -> Connectivity {
         match self {
-            DetailedConnectivity::Error(_) => Some(Connectivity::NotConnected),
-            DetailedConnectivity::Uninitialized => Some(Connectivity::NotConnected),
-            DetailedConnectivity::Connecting => Some(Connectivity::Connecting),
-            DetailedConnectivity::Working => Some(Connectivity::Working),
-            DetailedConnectivity::InterruptingIdle => Some(Connectivity::Working),
+            DetailedConnectivity::Error(_) => Connectivity::NotConnected,
+            DetailedConnectivity::Uninitialized => Connectivity::NotConnected,
+            DetailedConnectivity::Connecting => Connectivity::Connecting,
+            DetailedConnectivity::Working => Connectivity::Working,
+            DetailedConnectivity::InterruptingIdle => Connectivity::Working,
 
             // At this point IMAP has just connected,
             // but does not know yet if there are messages to download.
             // We still convert this to Working state
             // so user can see "Updating..." and not "Connected"
             // which is reserved for idle state.
-            DetailedConnectivity::Preparing => Some(Connectivity::Working),
+            DetailedConnectivity::Preparing => Connectivity::Working,
 
-            // Just don't return a connectivity, probably the folder is configured not to be
-            // watched, so we are not interested in it.
-            DetailedConnectivity::NotConfigured => None,
-
-            DetailedConnectivity::Idle => Some(Connectivity::Connected),
+            DetailedConnectivity::Idle => Connectivity::Connected,
         }
     }
 
     fn to_icon(&self) -> String {
         match self {
-            DetailedConnectivity::Error(_)
-            | DetailedConnectivity::Uninitialized
-            | DetailedConnectivity::NotConfigured => "<span class=\"red dot\"></span>".to_string(),
+            DetailedConnectivity::Error(_) | DetailedConnectivity::Uninitialized => {
+                "<span class=\"red dot\"></span>".to_string()
+            }
             DetailedConnectivity::Connecting => "<span class=\"yellow dot\"></span>".to_string(),
             DetailedConnectivity::Preparing
             | DetailedConnectivity::Working
@@ -120,7 +112,6 @@ impl DetailedConnectivity {
             DetailedConnectivity::InterruptingIdle | DetailedConnectivity::Idle => {
                 stock_str::connected(context).await
             }
-            DetailedConnectivity::NotConfigured => "Not configured".to_string(),
         }
     }
 
@@ -139,7 +130,6 @@ impl DetailedConnectivity {
             DetailedConnectivity::InterruptingIdle
             | DetailedConnectivity::Preparing
             | DetailedConnectivity::Idle => stock_str::last_msg_sent_successfully(context).await,
-            DetailedConnectivity::NotConfigured => "Not configured".to_string(),
         }
     }
 
@@ -151,7 +141,6 @@ impl DetailedConnectivity {
             DetailedConnectivity::Working => false,
             DetailedConnectivity::InterruptingIdle => false,
             DetailedConnectivity::Preparing => false, // Just connected, there may still be work to do.
-            DetailedConnectivity::NotConfigured => true,
             DetailedConnectivity::Idle => true,
         }
     }
@@ -180,9 +169,6 @@ impl ConnectivityStore {
     pub(crate) fn set_preparing(&self, context: &Context) {
         self.set(context, DetailedConnectivity::Preparing);
     }
-    pub(crate) fn set_not_configured(&self, context: &Context) {
-        self.set(context, DetailedConnectivity::NotConfigured);
-    }
     pub(crate) fn set_idle(&self, context: &Context) {
         self.set(context, DetailedConnectivity::Idle);
     }
@@ -190,7 +176,7 @@ impl ConnectivityStore {
     fn get_detailed(&self) -> DetailedConnectivity {
         self.0.lock().deref().clone()
     }
-    fn get_basic(&self) -> Option<Connectivity> {
+    fn get_basic(&self) -> Connectivity {
         self.0.lock().to_basic()
     }
     fn get_all_work_done(&self) -> bool {
@@ -201,27 +187,14 @@ impl ConnectivityStore {
 /// Set all folder states to InterruptingIdle in case they were `Idle` before.
 /// Called during `dc_maybe_network()` to make sure that `all_work_done()`
 /// returns false immediately after `dc_maybe_network()`.
-pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>, oboxes: Vec<ConnectivityStore>) {
+pub(crate) fn idle_interrupted(inboxes: Vec<ConnectivityStore>) {
     for inbox in inboxes {
         let mut connectivity_lock = inbox.0.lock();
-        // For the inbox, we also have to set the connectivity to InterruptingIdle if it was
-        // NotConfigured before: If all folders are NotConfigured, dc_get_connectivity()
-        // returns Connected. But after dc_maybe_network(), dc_get_connectivity() must not
-        // return Connected until DC is completely done with fetching folders; this also
-        // includes scan_folders() which happens on the inbox thread.
-        if *connectivity_lock == DetailedConnectivity::Idle
-            || *connectivity_lock == DetailedConnectivity::NotConfigured
-        {
-            *connectivity_lock = DetailedConnectivity::InterruptingIdle;
-        }
-    }
-
-    for state in oboxes {
-        let mut connectivity_lock = state.0.lock();
         if *connectivity_lock == DetailedConnectivity::Idle {
             *connectivity_lock = DetailedConnectivity::InterruptingIdle;
         }
     }
+
     // No need to send ConnectivityChanged, the user-facing connectivity doesn't change because
     // of what we do here.
 }
@@ -234,9 +207,7 @@ pub(crate) fn maybe_network_lost(context: &Context, stores: Vec<ConnectivityStor
         let mut connectivity_lock = store.0.lock();
         if !matches!(
             *connectivity_lock,
-            DetailedConnectivity::Uninitialized
-                | DetailedConnectivity::Error(_)
-                | DetailedConnectivity::NotConfigured,
+            DetailedConnectivity::Uninitialized | DetailedConnectivity::Error(_)
         ) {
             *connectivity_lock = DetailedConnectivity::Error("Connection lost".to_string());
         }
@@ -273,9 +244,8 @@ impl Context {
         let stores = self.connectivities.lock().clone();
         let mut connectivities = Vec::new();
         for s in stores {
-            if let Some(connectivity) = s.get_basic() {
-                connectivities.push(connectivity);
-            }
+            let connectivity = s.get_basic();
+            connectivities.push(connectivity);
         }
         connectivities
             .into_iter()
@@ -385,7 +355,7 @@ impl Context {
                     .map(|b| {
                         (
                             b.addr.clone(),
-                            b.meaning,
+                            b.folder.clone(),
                             b.conn_state.state.connectivity.clone(),
                         )
                     })
@@ -410,7 +380,6 @@ impl Context {
         //                                     [======67%=====       ]
         // =============================================================================================
 
-        let watched_folders = get_watched_folder_configs(self).await?;
         let incoming_messages = stock_str::incoming_messages(self).await;
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
 
@@ -432,41 +401,14 @@ impl Context {
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
-            for (_addr, folder, state) in folders {
-                let mut folder_added = false;
-
-                if let Some(config) = folder.to_config().filter(|c| watched_folders.contains(c)) {
-                    let f = self.get_config(config).await.log_err(self).ok().flatten();
-
-                    if let Some(foldername) = f {
-                        let detailed = &state.get_detailed();
-                        ret += &*detailed.to_icon();
-                        ret += " <b>";
-                        if folder == &FolderMeaning::Inbox {
-                            ret += &*domain_escaped;
-                        } else {
-                            ret += &*escaper::encode_minimal(&foldername);
-                        }
-                        ret += ":</b> ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                        ret += "<br />";
-
-                        folder_added = true;
-                    }
-                }
-
-                if !folder_added && folder == &FolderMeaning::Inbox {
-                    let detailed = &state.get_detailed();
-                    if let DetailedConnectivity::Error(_) = detailed {
-                        // On the inbox thread, we also do some other things like scan_folders and run jobs
-                        // so, maybe, the inbox is not watched, but something else went wrong
-
-                        ret += &*detailed.to_icon();
-                        ret += " ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                        ret += "<br />";
-                    }
-                }
+            for (_addr, _folder, state) in folders {
+                let detailed = &state.get_detailed();
+                ret += &*detailed.to_icon();
+                ret += " <b>";
+                ret += &*domain_escaped;
+                ret += ":</b> ";
+                ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                ret += "<br />";
             }
 
             let Some(quota) = quota.get(&transport_id) else {
