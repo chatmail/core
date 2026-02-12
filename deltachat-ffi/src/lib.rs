@@ -21,7 +21,7 @@ use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context as _;
-use deltachat::chat::{ChatId, ChatVisibility, MessageListOptions, MuteDuration};
+use deltachat::chat::{ChatId, ChatMsgsFilter, ChatVisibility, GetChatMsgsOptions, MuteDuration};
 use deltachat::constants::DC_MSG_ID_LAST_SPECIAL;
 use deltachat::contact::{Contact, ContactId, Origin};
 use deltachat::context::{Context, ContextBuilder};
@@ -1345,9 +1345,10 @@ pub unsafe extern "C" fn dc_get_chat_msgs(
             chat::get_chat_msgs_ex(
                 ctx,
                 ChatId::new(chat_id),
-                MessageListOptions {
-                    info_only,
+                GetChatMsgsOptions {
+                    filter: ChatMsgsFilter::info_only(info_only),
                     add_daymarker,
+                    ..Default::default()
                 },
             )
             .await

@@ -272,7 +272,7 @@ async fn test_subject_mdn() {
     chat::send_msg(&t, new_msg.chat_id, &mut new_msg)
         .await
         .unwrap();
-    let mf = MimeFactory::from_msg(&t, new_msg).await.unwrap();
+    let mf = MimeFactory::from_msg(&t, new_msg, None).await.unwrap();
     // The subject string should not be "Re: message opened"
     assert_eq!("Re: Hello, Bob", mf.subject_str(&t).await.unwrap());
 }
@@ -409,7 +409,7 @@ async fn first_subject_str(t: TestContext) -> String {
     new_msg.chat_id = chat_id;
     chat::send_msg(&t, chat_id, &mut new_msg).await.unwrap();
 
-    let mf = MimeFactory::from_msg(&t, new_msg).await.unwrap();
+    let mf = MimeFactory::from_msg(&t, new_msg, None).await.unwrap();
 
     mf.subject_str(&t).await.unwrap()
 }
@@ -497,7 +497,7 @@ async fn msg_to_subject_str_inner(
     chat::send_msg(&t, new_msg.chat_id, &mut new_msg)
         .await
         .unwrap();
-    let mf = MimeFactory::from_msg(&t, new_msg).await.unwrap();
+    let mf = MimeFactory::from_msg(&t, new_msg, None).await.unwrap();
     mf.subject_str(&t).await.unwrap()
 }
 
@@ -542,7 +542,7 @@ async fn test_render_reply() {
     .await;
     chat::send_msg(&t, msg.chat_id, &mut msg).await.unwrap();
 
-    let mimefactory = MimeFactory::from_msg(&t, msg).await.unwrap();
+    let mimefactory = MimeFactory::from_msg(&t, msg, None).await.unwrap();
 
     let recipients = mimefactory.recipients();
     assert_eq!(recipients, vec!["charlie@example.com"]);
