@@ -589,14 +589,6 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     // Wait for SMTP configuration
     smtp_config_task.await??;
 
-    progress!(ctx, 900);
-
-    let is_configured = ctx.is_configured().await?;
-    if !is_configured {
-        ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
-        ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
-    }
-
     drop(imap);
 
     progress!(ctx, 910);
