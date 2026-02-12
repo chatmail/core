@@ -20,9 +20,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
 use tokio::{fs, task};
 
-use crate::chat::{
-    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
-};
+use crate::chat::{self, Chat, ChatId, ChatIdBlocked, add_to_chat_contacts_table, create_group};
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype};
@@ -275,16 +273,17 @@ impl TestContextManager {
 
         let chat_id = join_securejoin(&joiner.ctx, qr).await.unwrap();
 
-        loop {
+        for _ in 0..2 {
             let mut something_sent = false;
-            if let Some(sent) = joiner.pop_sent_msg_opt(Duration::ZERO).await {
+            let rev_order = false;
+            if let Some(sent) = joiner.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
                 for inviter in inviters {
                     inviter.recv_msg_opt(&sent).await;
                 }
                 something_sent = true;
             }
             for inviter in inviters {
-                if let Some(sent) = inviter.pop_sent_msg_opt(Duration::ZERO).await {
+                if let Some(sent) = inviter.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
                     joiner.recv_msg_opt(&sent).await;
                     something_sent = true;
                 }
@@ -624,25 +623,35 @@ impl TestContext {
     }
 
     pub async fn pop_sent_msg_opt(&self, timeout: Duration) -> Option<SentMessage<'_>> {
+        let rev_order = true;
+        self.pop_sent_msg_ex(rev_order, timeout).await
+    }
+
+    pub async fn pop_sent_msg_ex(
+        &self,
+        rev_order: bool,
+        timeout: Duration,
+    ) -> Option<SentMessage<'_>> {
         let start = Instant::now();
+        let mut query = "
+SELECT id, msg_id, mime, recipients
+FROM smtp
+ORDER BY id"
+            .to_string();
+        if rev_order {
+            query += " DESC";
+        }
         let (rowid, msg_id, payload, recipients) = loop {
             let row = self
                 .ctx
                 .sql
-                .query_row_optional(
-                    r#"
-                    SELECT id, msg_id, mime, recipients
-                    FROM smtp
-                    ORDER BY id DESC"#,
-                    (),
-                    |row| {
-                        let rowid: i64 = row.get(0)?;
-                        let msg_id: MsgId = row.get(1)?;
-                        let mime: String = row.get(2)?;
-                        let recipients: String = row.get(3)?;
-                        Ok((rowid, msg_id, mime, recipients))
-                    },
-                )
+                .query_row_optional(&query, (), |row| {
+                    let rowid: i64 = row.get(0)?;
+                    let msg_id: MsgId = row.get(1)?;
+                    let mime: String = row.get(2)?;
+                    let recipients: String = row.get(3)?;
+                    Ok((rowid, msg_id, mime, recipients))
+                })
                 .await
                 .expect("query_row_optional failed");
             if let Some(row) = row {
@@ -1070,16 +1079,9 @@ impl TestContext {
     async fn display_chat(&self, chat_id: ChatId) -> String {
         let mut res = String::new();
 
-        let msglist = chat::get_chat_msgs_ex(
-            self,
-            chat_id,
-            MessageListOptions {
-                info_only: false,
-                add_daymarker: false,
-            },
-        )
-        .await
-        .unwrap();
+        let msglist = chat::get_chat_msgs_ex(self, chat_id, Default::default())
+            .await
+            .unwrap();
         let msglist: Vec<MsgId> = msglist
             .into_iter()
             .filter_map(|x| match x {

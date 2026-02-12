@@ -486,12 +486,16 @@ impl MimeFactory {
             };
         }
 
+        let msg_id = match msg.row_id.is_unset() {
+            false => msg.row_id,
+            true => msg.id,
+        };
         let (in_reply_to, references) = context
             .sql
             .query_row(
                 "SELECT mime_in_reply_to, IFNULL(mime_references, '')
                  FROM msgs WHERE id=?",
-                (msg.id,),
+                (msg_id,),
                 |row| {
                     let in_reply_to: String = row.get(0)?;
                     let references: String = row.get(1)?;
@@ -2155,18 +2159,18 @@ fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
 /// rather than all recipients.
 /// This function returns the fingerprint of the recipient the message should be sent to.
 fn must_have_only_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
-    if chat.typ == Chattype::OutBroadcast
-        && matches!(
-            msg.param.get_cmd(),
-            SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
-        )
-    {
-        let Some(fp) = msg.param.get(Param::Arg4) else {
-            return Some(Err(format_err!("Missing removed/added member")));
-        };
-        return Some(Ok(fp));
+    if chat.typ != Chattype::OutBroadcast {
+        None
+    } else if let Some(fp) = msg.param.get(Param::Arg4) {
+        Some(Ok(fp))
+    } else if matches!(
+        msg.param.get_cmd(),
+        SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
+    ) {
+        Some(Err(format_err!("Missing removed/added member")))
+    } else {
+        None
     }
-    None
 }
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {
