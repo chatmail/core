@@ -1535,6 +1535,7 @@ pub unsafe extern "C" fn dc_get_chat_media(
     msg_type: libc::c_int,
     or_msg_type2: libc::c_int,
     or_msg_type3: libc::c_int,
+    // limit: u32,
 ) -> *mut dc_array::dc_array_t {
     if context.is_null() {
         eprintln!("ignoring careless call to dc_get_chat_media()");
@@ -1554,7 +1555,7 @@ pub unsafe extern "C" fn dc_get_chat_media(
 
     block_on(async move {
         Box::into_raw(Box::new(
-            chat::get_chat_media(ctx, chat_id, msg_type, or_msg_type2, or_msg_type3)
+            chat::get_chat_media(ctx, chat_id, msg_type, or_msg_type2, or_msg_type3, None)
                 .await
                 .unwrap_or_log_default(ctx, "Failed get_chat_media")
                 .into(),

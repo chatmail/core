@@ -1019,6 +1019,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 Viewtype::Image,
                 Viewtype::Gif,
                 Viewtype::Video,
+                None,
             )
             .await?;
             println!("{} images or videos: ", images.len());
