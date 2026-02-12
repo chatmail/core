@@ -8,7 +8,7 @@ from deltachat_rpc_client import Contact, EventType, Message
 
 
 def test_reactions_for_a_reordering_move(acfactory, direct_imap):
-    """When a batch of messages is moved from Inbox to DeltaChat folder with a single MOVE command,
+    """When a batch of messages is moved from Inbox to another folder with a single MOVE command,
     their UIDs may be reordered (e.g. Gmail is known for that) which led to that messages were
     processed by receive_imf in the wrong order, and, particularly, reactions were processed before
     messages they refer to and thus dropped.
@@ -18,9 +18,6 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     addr, password = acfactory.get_credentials()
     ac2 = acfactory.get_unconfigured_account()
     ac2.add_or_update_transport({"addr": addr, "password": password})
-    ac2_direct_imap = direct_imap(ac2)
-    ac2_direct_imap.create_folder("DeltaChat")
-    ac2.set_config("mvbox_move", "1")
     assert ac2.is_configured()
 
     ac2.bring_online()
@@ -36,11 +33,17 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     react_str = "\N{THUMBS UP SIGN}"
     msg1.send_reaction(react_str).wait_until_delivered()
 
-    logging.info("moving messages to ac2's DeltaChat folder in the reverse order")
+    logging.info("moving messages to ac2's movebox folder in the reverse order")
     ac2_direct_imap = direct_imap(ac2)
+    ac2_direct_imap.create_folder("Movebox")
     ac2_direct_imap.connect()
     for uid in sorted([m.uid for m in ac2_direct_imap.get_all_messages()], reverse=True):
-        ac2_direct_imap.conn.move(uid, "DeltaChat")
+        ac2_direct_imap.conn.move(uid, "Movebox")
+
+    logging.info("moving messages back")
+    ac2_direct_imap.select_folder("Movebox")
+    for uid in sorted([m.uid for m in ac2_direct_imap.get_all_messages()]):
+        ac2_direct_imap.conn.move(uid, "INBOX")
 
     logging.info("receiving messages by ac2")
     ac2.start_io()
