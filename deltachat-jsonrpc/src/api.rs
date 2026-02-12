@@ -12,7 +12,7 @@ use deltachat::calls::ice_servers;
 use deltachat::chat::{
     self, add_contact_to_chat, forward_msgs, forward_msgs_2ctx, get_chat_media, get_chat_msgs,
     get_chat_msgs_ex, markfresh_chat, marknoticed_all_chats, marknoticed_chat,
-    remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
+    remove_contact_from_chat, Chat, ChatId, ChatItem, ChatMsgsFilter, GetChatMsgsOptions,
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::{get_all_ui_config_keys, Config};
@@ -1368,9 +1368,10 @@ impl CommandApi {
         let msg = get_chat_msgs_ex(
             &ctx,
             ChatId::new(chat_id),
-            MessageListOptions {
-                info_only,
+            GetChatMsgsOptions {
+                filter: ChatMsgsFilter::info_only(info_only),
                 add_daymarker,
+                ..Default::default()
             },
         )
         .await?;
@@ -1414,9 +1415,10 @@ impl CommandApi {
         let msg = get_chat_msgs_ex(
             &ctx,
             ChatId::new(chat_id),
-            MessageListOptions {
-                info_only,
+            GetChatMsgsOptions {
+                filter: ChatMsgsFilter::info_only(info_only),
                 add_daymarker,
+                ..Default::default()
             },
         )
         .await?;
