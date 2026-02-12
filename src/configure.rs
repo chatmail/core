@@ -273,18 +273,16 @@ impl Context {
                     (&param.addr,),
                 )
                 .await?
-        {
-            if self
+            && self
                 .sql
                 .count("SELECT COUNT(*) FROM transports", ())
                 .await?
                 >= MAX_TRANSPORT_RELAYS
-            {
-                bail!(
-                    "You have reached the maximum number of relays ({}).",
-                    MAX_TRANSPORT_RELAYS
-                )
-            }
+        {
+            bail!(
+                "You have reached the maximum number of relays ({}).",
+                MAX_TRANSPORT_RELAYS
+            )
         }
 
         let provider = match configure(self, param).await {
