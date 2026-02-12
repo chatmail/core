@@ -274,14 +274,6 @@ impl Context {
                 )
                 .await?
         {
-            // Should be checked before `MvboxMove` because the latter makes no sense in presense of
-            // `OnlyFetchMvbox` and even grayed out in the UIs in this case.
-            if self.get_config(Config::OnlyFetchMvbox).await?.as_deref() != Some("0") {
-                bail!(
-                    "To use additional relays, disable the legacy option \"Settings / Advanced / Only Fetch from DeltaChat Folder\"."
-                );
-            }
-
             if self
                 .sql
                 .count("SELECT COUNT(*) FROM transports", ())

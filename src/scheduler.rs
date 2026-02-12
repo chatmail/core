@@ -404,9 +404,10 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         .await?;
     }
 
+    let folder = imap.folder.clone();
     // Update quota no more than once a minute.
     if ctx.quota_needs_update(session.transport_id(), 60).await
-        && let Err(err) = ctx.update_recent_quota(&mut session).await
+        && let Err(err) = ctx.update_recent_quota(&mut session, folder).await
     {
         warn!(ctx, "Failed to update quota: {:#}.", err);
     }
@@ -444,12 +445,7 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
         .await
         .context("Failed to register push token")?;
 
-    let watch_folder = if ctx.get_config_bool(Config::OnlyFetchMvbox).await? {
-        "DeltaChat"
-    } else {
-        "INBOX"
-    };
-    let session = fetch_idle(ctx, imap, session, watch_folder).await?;
+    let session = fetch_idle(ctx, imap, session).await?;
     Ok(session)
 }
 
@@ -458,12 +454,9 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
 /// This function performs all IMAP operations on a single folder, selecting it if necessary and
 /// handling all the errors. In case of an error, an error is returned and connection is dropped,
 /// otherwise connection is returned.
-async fn fetch_idle(
-    ctx: &Context,
-    connection: &mut Imap,
-    mut session: Session,
-    watch_folder: &str,
-) -> Result<Session> {
+async fn fetch_idle(ctx: &Context, connection: &mut Imap, mut session: Session) -> Result<Session> {
+    let watch_folder = connection.folder.clone();
+
     session
         .store_seen_flags_on_imap(ctx)
         .await
@@ -471,7 +464,7 @@ async fn fetch_idle(
 
     // Fetch the watched folder.
     connection
-        .fetch_move_delete(ctx, &mut session, watch_folder)
+        .fetch_move_delete(ctx, &mut session, &watch_folder)
         .await
         .context("fetch_move_delete")?;
 
@@ -490,7 +483,7 @@ async fn fetch_idle(
 
     // Synchronize Seen flags.
     session
-        .sync_seen_flags(ctx, watch_folder)
+        .sync_seen_flags(ctx, &watch_folder)
         .await
         .context("sync_seen_flags")
         .log_err(ctx)
@@ -505,7 +498,7 @@ async fn fetch_idle(
             ctx,
             "IMAP session does not support IDLE, going to fake idle."
         );
-        connection.fake_idle(ctx, watch_folder).await?;
+        connection.fake_idle(ctx, &watch_folder).await?;
         return Ok(session);
     }
 
@@ -517,7 +510,7 @@ async fn fetch_idle(
         .unwrap_or_default()
     {
         info!(ctx, "IMAP IDLE is disabled, going to fake idle.");
-        connection.fake_idle(ctx, watch_folder).await?;
+        connection.fake_idle(ctx, &watch_folder).await?;
         return Ok(session);
     }
 
@@ -529,7 +522,7 @@ async fn fetch_idle(
         .idle(
             ctx,
             connection.idle_interrupt_receiver.clone(),
-            watch_folder,
+            &watch_folder,
         )
         .await
         .context("idle")?;
@@ -650,14 +643,12 @@ impl Scheduler {
                 task::spawn(inbox_loop(ctx, inbox_start_send, inbox_handlers))
             };
             let addr = configured_login_param.addr.clone();
-            let folder = if ctx.get_config_bool(Config::OnlyFetchMvbox).await? {
-                "DeltaChat"
-            } else {
-                "INBOX"
-            };
+            let folder = configured_login_param
+                .imap_folder
+                .unwrap_or_else(|| "INBOX".to_string());
             let inbox = SchedBox {
                 addr: addr.clone(),
-                folder: folder.to_string(),
+                folder,
                 conn_state,
                 handle,
             };

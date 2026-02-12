@@ -92,6 +92,9 @@ pub(crate) struct Imap {
 
     oauth2: bool,
 
+    /// Watched folder.
+    pub(crate) folder: String,
+
     authentication_failed_once: bool,
 
     pub(crate) connectivity: ConnectivityStore,
@@ -249,6 +252,10 @@ impl Imap {
         let addr = &param.addr;
         let strict_tls = param.strict_tls(proxy_config.is_some());
         let oauth2 = param.oauth2;
+        let folder = param
+            .imap_folder
+            .clone()
+            .unwrap_or_else(|| "INBOX".to_string());
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
         Ok(Imap {
             transport_id,
@@ -259,6 +266,7 @@ impl Imap {
             proxy_config,
             strict_tls,
             oauth2,
+            folder,
             authentication_failed_once: false,
             connectivity: Default::default(),
             conn_last_try: UNIX_EPOCH,
@@ -492,6 +500,7 @@ impl Imap {
         session: &mut Session,
         watch_folder: &str,
     ) -> Result<()> {
+        debug_assert!(!watch_folder.is_empty());
         if !context.sql.is_open().await {
             // probably shutdown
             bail!("IMAP operation attempted while it is torn down");
@@ -2195,14 +2204,6 @@ impl std::fmt::Display for UidRange {
         } else {
             write!(f, "{}:{}", self.start, self.end)
         }
-    }
-}
-
-pub(crate) async fn get_watched_folders(context: &Context) -> Result<Vec<String>> {
-    if context.get_config_bool(Config::OnlyFetchMvbox).await? {
-        Ok(vec!["DeltaChat".to_string()])
-    } else {
-        Ok(vec!["INBOX".to_string()])
     }
 }
 

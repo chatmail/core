@@ -7,7 +7,6 @@ use humansize::{BINARY, format_size};
 
 use crate::context::Context;
 use crate::events::EventType;
-use crate::imap::get_watched_folders;
 use crate::quota::{QUOTA_ERROR_THRESHOLD_PERCENTAGE, QUOTA_WARN_THRESHOLD_PERCENTAGE};
 use crate::stock_str;
 
@@ -381,7 +380,6 @@ impl Context {
         //                                     [======67%=====       ]
         // =============================================================================================
 
-        let watched_folders = get_watched_folders(self).await?;
         let incoming_messages = stock_str::incoming_messages(self).await;
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
 
@@ -403,33 +401,14 @@ impl Context {
             let folders = folders_states
                 .iter()
                 .filter(|(folder_addr, ..)| *folder_addr == transport_addr);
-            for (_addr, folder, state) in folders {
-                let mut folder_added = false;
-
-                if watched_folders.contains(folder) {
-                    let detailed = &state.get_detailed();
-                    ret += &*detailed.to_icon();
-                    ret += " <b>";
-                    ret += &*domain_escaped;
-                    ret += ":</b> ";
-                    ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                    ret += "<br />";
-
-                    folder_added = true;
-                }
-
-                if !folder_added && folder == "INBOX" {
-                    let detailed = &state.get_detailed();
-                    if let DetailedConnectivity::Error(_) = detailed {
-                        // On the inbox thread, we also do some other things like scan_folders and run jobs
-                        // so, maybe, the inbox is not watched, but something else went wrong
-
-                        ret += &*detailed.to_icon();
-                        ret += " ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
-                        ret += "<br />";
-                    }
-                }
+            for (_addr, _folder, state) in folders {
+                let detailed = &state.get_detailed();
+                ret += &*detailed.to_icon();
+                ret += " <b>";
+                ret += &*domain_escaped;
+                ret += ":</b> ";
+                ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                ret += "<br />";
             }
 
             let Some(quota) = quota.get(&transport_id) else {

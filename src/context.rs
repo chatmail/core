@@ -603,13 +603,9 @@ impl Context {
             let mut session = connection.prepare(self).await?;
 
             // Fetch IMAP folders.
-            let folder = if self.get_config_bool(Config::OnlyFetchMvbox).await? {
-                "DeltaChat"
-            } else {
-                "INBOX"
-            };
+            let folder = connection.folder.clone();
             connection
-                .fetch_move_delete(self, &mut session, folder)
+                .fetch_move_delete(self, &mut session, &folder)
                 .await?;
 
             // Update quota (to send warning if full) - but only check it once in a while.
@@ -621,7 +617,7 @@ impl Context {
                     DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT,
                 )
                 .await
-                && let Err(err) = self.update_recent_quota(&mut session).await
+                && let Err(err) = self.update_recent_quota(&mut session, folder).await
             {
                 warn!(self, "Failed to update quota: {err:#}.");
             }
@@ -861,8 +857,6 @@ impl Context {
             Err(err) => format!("<key failure: {err}>"),
         };
 
-        let only_fetch_mvbox = self.get_config_int(Config::OnlyFetchMvbox).await?;
-
         let mut res = get_info();
 
         // insert values
@@ -938,7 +932,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert("only_fetch_mvbox", only_fetch_mvbox.to_string());
         res.insert("mdns_enabled", mdns_enabled.to_string());
         res.insert("bcc_self", bcc_self.to_string());
         res.insert("sync_msgs", sync_msgs.to_string());
