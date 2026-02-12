@@ -496,7 +496,7 @@ async fn get_configured_param(
             .collect(),
         imap_user: param.imap.user.clone(),
         imap_password: param.imap.password.clone(),
-        imap_folder: Some(param.imap.folder.clone()),
+        imap_folder: Some(param.imap.folder.clone()).filter(|folder| !folder.is_empty()),
         smtp: servers
             .iter()
             .filter_map(|params| {

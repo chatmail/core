@@ -19,6 +19,7 @@ use crate::config::Config;
 use crate::configure::server_params::{ServerParams, expand_param_vector};
 use crate::constants::{DC_LP_AUTH_FLAGS, DC_LP_AUTH_OAUTH2};
 use crate::context::Context;
+use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::login_param::EnteredLoginParam;
 use crate::net::load_connection_timestamp;
@@ -177,6 +178,7 @@ pub(crate) struct ConfiguredLoginParam {
     // IMAP folder to watch.
     //
     // If not stored, should be interpreted as "INBOX".
+    // If stored, should be a folder name and not empty.
     pub imap_folder: Option<String>,
 
     /// List of SMTP candidates to try.
@@ -584,6 +586,12 @@ impl ConfiguredLoginParam {
     pub(crate) fn from_json(json: &str) -> Result<Self> {
         let json: ConfiguredLoginParamJson = serde_json::from_str(json)?;
 
+        ensure_and_debug_assert!(
+            json.imap_folder
+                .as_ref()
+                .is_none_or(|folder| !folder.is_empty()),
+            "Configured watched folder name cannot be empty"
+        );
         let provider = json.provider_id.and_then(|id| get_provider_by_id(&id));
 
         Ok(ConfiguredLoginParam {
@@ -646,9 +654,16 @@ pub(crate) async fn save_transport(
     configured: &ConfiguredLoginParamJson,
     add_timestamp: i64,
 ) -> Result<bool> {
+    ensure_and_debug_assert!(
+        configured
+            .imap_folder
+            .as_ref()
+            .is_none_or(|folder| !folder.is_empty()),
+        "Configured watched folder name cannot be empty"
+    );
+
     let addr = addr_normalize(&configured.addr);
     let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
-
     let mut modified = context
         .sql
         .execute(

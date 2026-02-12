@@ -31,6 +31,7 @@ use crate::config::Config;
 use crate::constants::{Blocked, DC_VERSION_STR, ShowEmails};
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::log::{LogExt, warn};
@@ -256,6 +257,7 @@ impl Imap {
             .imap_folder
             .clone()
             .unwrap_or_else(|| "INBOX".to_string());
+        ensure_and_debug_assert!(!folder.is_empty(), "Watched folder name cannot be empty");
         let (resync_request_sender, resync_request_receiver) = async_channel::bounded(1);
         Ok(Imap {
             transport_id,
@@ -500,7 +502,7 @@ impl Imap {
         session: &mut Session,
         watch_folder: &str,
     ) -> Result<()> {
-        debug_assert!(!watch_folder.is_empty());
+        ensure_and_debug_assert!(!watch_folder.is_empty(), "Watched folder cannot be empty");
         if !context.sql.is_open().await {
             // probably shutdown
             bail!("IMAP operation attempted while it is torn down");
