@@ -122,18 +122,11 @@ def test_download_on_demand(acfactory) -> None:
 
 
 def test_reconfigure_transport(acfactory) -> None:
-    """Test that reconfiguring the transport works
-    even if settings not supported for multi-transport
-    like mvbox_move are enabled."""
+    """Test that reconfiguring the transport works."""
     account = acfactory.get_online_account()
-    account.set_config("mvbox_move", "1")
 
     [transport] = account.list_transports()
     account.add_or_update_transport(transport)
-
-    # Reconfiguring the transport should not reset
-    # the settings as if when configuring the first transport.
-    assert account.get_config("mvbox_move") == "1"
 
 
 def test_transport_synchronization(acfactory, log) -> None:

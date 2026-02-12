@@ -2,28 +2,9 @@ import logging
 import re
 import time
 
-import pytest
 from imap_tools import AND, U
 
 from deltachat_rpc_client import Contact, EventType, Message
-
-
-def test_move_works(acfactory, direct_imap):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-    ac2_direct_imap = direct_imap(ac2)
-    ac2_direct_imap.create_folder("DeltaChat")
-    ac2.set_config("mvbox_move", "1")
-    ac2.bring_online()
-
-    chat = ac1.create_chat(ac2)
-    chat.send_text("message1")
-
-    # Message is moved to the movebox
-    ac2.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
-
-    # Message is downloaded
-    msg = ac2.wait_for_incoming_msg().get_snapshot()
-    assert msg.text == "message1"
 
 
 def test_reactions_for_a_reordering_move(acfactory, direct_imap):
@@ -72,25 +53,6 @@ def test_reactions_for_a_reordering_move(acfactory, direct_imap):
     assert list(reactions.reactions_by_contact.values())[0] == [react_str]
 
 
-def test_move_works_on_self_sent(acfactory, direct_imap):
-    ac1, ac2 = acfactory.get_online_accounts(2)
-
-    # Create and enable movebox.
-    ac1_direct_imap = direct_imap(ac1)
-    ac1_direct_imap.create_folder("DeltaChat")
-    ac1.set_config("mvbox_move", "1")
-    ac1.set_config("bcc_self", "1")
-    ac1.bring_online()
-
-    chat = ac1.create_chat(ac2)
-    chat.send_text("message1")
-    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
-    chat.send_text("message2")
-    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
-    chat.send_text("message3")
-    ac1.wait_for_event(EventType.IMAP_MESSAGE_MOVED)
-
-
 def test_moved_markseen(acfactory, direct_imap):
     """Test that message already moved to DeltaChat folder is marked as seen."""
     ac1, ac2 = acfactory.get_online_accounts(2)
@@ -131,17 +93,11 @@ def test_moved_markseen(acfactory, direct_imap):
     assert len(list(ac2_direct_imap.conn.fetch(AND(seen=True, uid=U(1, "*")), mark_seen=False))) == 1
 
 
-@pytest.mark.parametrize("mvbox_move", [True, False])
-def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
+def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
     for ac in ac1, ac2:
         ac.set_config("delete_server_after", "0")
-        if mvbox_move:
-            ac_direct_imap = direct_imap(ac)
-            ac_direct_imap.create_folder("DeltaChat")
-            ac.set_config("mvbox_move", "1")
-            ac.bring_online()
 
     # Do not send BCC to self, we only want to test MDN on ac1.
     ac1.set_config("bcc_self", "0")
@@ -150,10 +106,7 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
     msg = ac2.wait_for_incoming_msg()
     msg.mark_seen()
 
-    if mvbox_move:
-        rex = re.compile("Marked messages [0-9]+ in folder DeltaChat as seen.")
-    else:
-        rex = re.compile("Marked messages [0-9]+ in folder INBOX as seen.")
+    rex = re.compile("Marked messages [0-9]+ in folder INBOX as seen.")
 
     for ac in ac1, ac2:
         while True:
@@ -161,12 +114,11 @@ def test_markseen_message_and_mdn(acfactory, direct_imap, mvbox_move):
             if event.kind == EventType.INFO and rex.search(event.msg):
                 break
 
-    folder = "mvbox" if mvbox_move else "inbox"
     ac1_direct_imap = direct_imap(ac1)
     ac2_direct_imap = direct_imap(ac2)
 
-    ac1_direct_imap.select_config_folder(folder)
-    ac2_direct_imap.select_config_folder(folder)
+    ac1_direct_imap.select_folder("INBOX")
+    ac2_direct_imap.select_folder("INBOX")
 
     # Check that the mdn is marked as seen
     assert len(list(ac1_direct_imap.conn.fetch(AND(seen=True), mark_seen=False))) == 1
