@@ -1331,8 +1331,9 @@ impl CommandApi {
             &ctx,
             ChatId::new(chat_id),
             MessageListOptions {
-                info_only,
+                info: Some(true).filter(|_| info_only),
                 add_daymarker,
+                ..Default::default()
             },
         )
         .await?;
@@ -1377,8 +1378,9 @@ impl CommandApi {
             &ctx,
             ChatId::new(chat_id),
             MessageListOptions {
-                info_only,
+                info: Some(true).filter(|_| info_only),
                 add_daymarker,
+                ..Default::default()
             },
         )
         .await?;

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use super::*;
 use crate::Event;
 use crate::chatlist::get_archived_cnt;
-use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
+use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS, N_MSGS_TO_NEW_BROADCAST_MEMBER};
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
@@ -2901,6 +2901,46 @@ async fn test_broadcast_change_name() -> Result<()> {
         assert_eq!(chat.name, "Broadcast channel");
     }
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_resend_to_new_member() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let alice_bc_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_bc_id)).await.unwrap();
+
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    for i in 0..(N_MSGS_TO_NEW_BROADCAST_MEMBER + 1) {
+        alice.send_text(alice_bc_id, &i.to_string()).await;
+    }
+    let fiona_bc_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+    for i in 0..N_MSGS_TO_NEW_BROADCAST_MEMBER {
+        let rev_order = false;
+        let resent_msg = alice
+            .pop_sent_msg_ex(rev_order, Duration::ZERO)
+            .await
+            .unwrap();
+        let fiona_msg = fiona.recv_msg(&resent_msg).await;
+        assert_eq!(fiona_msg.chat_id, fiona_bc_id);
+        assert_eq!(fiona_msg.text, (i + 1).to_string());
+        assert!(resent_msg.recipients.contains("fiona@example.net"));
+        assert!(!resent_msg.recipients.contains("bob@"));
+        // The message is undecryptable for Bob, he mustn't be able to know yet that somebody joined
+        // the broadcast even if he is a postman in this land. E.g. Fiona may leave after fetching
+        // the news, Bob won't know about that.
+        assert!(
+            MimeMessage::from_bytes(bob, resent_msg.payload().as_bytes())
+                .await?
+                .decrypting_failed
+        );
+        bob.recv_msg_trash(&resent_msg).await;
+    }
+    assert!(alice.pop_sent_msg_opt(Duration::ZERO).await.is_none());
     Ok(())
 }
 

@@ -408,6 +408,10 @@ pub struct Message {
     /// Message ID.
     pub(crate) id: MsgId,
 
+    /// Actual Message ID, if set. This is to avoid updating the `msgs` row, in which case `id` is
+    /// fake (`u32::MAX`);
+    pub(crate) row_id: MsgId,
+
     /// `From:` contact ID.
     pub(crate) from_id: ContactId,
 
@@ -558,6 +562,7 @@ impl Message {
                     };
                     let msg = Message {
                         id: row.get("id")?,
+                        row_id: MsgId::new_unset(),
                         rfc724_mid: row.get::<_, String>("rfc724mid")?,
                         pre_rfc724_mid: row.get::<_, String>("pre_rfc724mid")?,
                         in_reply_to: row
