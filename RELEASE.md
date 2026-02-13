@@ -22,6 +22,23 @@ For example, to release version 1.116.0 of the core, do the following steps.
 
 9. Create a GitHub release: `gh release create v1.116.0 --notes ''`.
 
+10. Once the binaries are generated and [published](https://github.com/chatmail/core/releases), check Windows binaries for false positive detections at [VirusTotal]. Either upload the binaries directly or submit a direct link to the artifact. You can use [old browsers interface](https://www.virustotal.com/old-browsers/) if there are problems with using the default website. If you submit a direct link and get to the page saying "No security vendors flagged this URL as malicious", it does not mean that the file itself is not detected. You need to go to the "details" tab and click on the SHA-256 hash in the "Body SHA-256" section. If any false positive is detected, open an issue to track removing it. See <https://github.com/chatmail/core/issues/7847> for an example of false positive detection issue. If there is a false positive "Microsoft" detection, mark the issue as a blocker.
+
+[VirusTotal]: https://www.virustotal.com/
+
+## Dealing with antivirus false positives
+
+If Windows release is incorrectly detected by some antivirus, submit requests to remove detection.
+
+"Microsoft" antivirus is built in Windows and will break user setups so removing its detection should be highest priority.
+To submit false positive to Microsoft, go to <https://www.microsoft.com/en-us/wdsi/filesubmission> and select "Submit file as a ... Software developer" option.
+
+False positive contacts for other vendors can be found at <https://docs.virustotal.com/docs/false-positive-contacts>.
+Not all of them may be up to date, so check the links below first.
+Previously we successfully used the following contacts:
+- [ESET-NOD32](mailto:samples@eset.com)
+- [Symantec](https://symsubmit.symantec.com/)
+
 ## Dealing with failed releases
 
 Once you make a GitHub release,
