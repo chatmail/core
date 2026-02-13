@@ -192,7 +192,7 @@ def test_transport_synchronization(acfactory, log) -> None:
     def wait_for_io_started(ac):
         while True:
             ev = ac.wait_for_event(EventType.INFO)
-            if ev.msg == "scheduler is running":
+            if "scheduler is running" in ev.msg:
                 return
 
     ac1, ac2 = acfactory.get_online_accounts(2)
