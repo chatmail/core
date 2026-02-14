@@ -7,6 +7,7 @@ use colorutils_rs::{Oklch, Rgb, TransferFunction};
 use sha1::{Digest, Sha1};
 
 /// Converts an identifier to Hue angle.
+#[expect(clippy::arithmetic_side_effects)]
 fn str_to_angle(s: &str) -> f32 {
     let bytes = s.as_bytes();
     let result = Sha1::digest(bytes);
@@ -19,6 +20,7 @@ fn str_to_angle(s: &str) -> f32 {
 ///
 /// Returns a 24-bit number with 8 least significant bits corresponding to the blue color and 8
 /// most significant bits corresponding to the red color.
+#[expect(clippy::arithmetic_side_effects)]
 fn rgb_to_u32(rgb: Rgb<u8>) -> u32 {
     65536 * u32::from(rgb.r) + 256 * u32::from(rgb.g) + u32::from(rgb.b)
 }

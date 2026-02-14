@@ -208,6 +208,7 @@ impl<T: Iterator<Item = (i64, u32, String)>> Iterator for UidGrouper<T> {
     // Tuple of folder, row IDs, and UID range as a string.
     type Item = (String, Vec<i64>, String);
 
+    #[expect(clippy::arithmetic_side_effects)]
     fn next(&mut self) -> Option<Self::Item> {
         let (_, _, folder) = self.inner.peek().cloned()?;
 
@@ -543,6 +544,7 @@ impl Imap {
     /// Fetches new messages.
     ///
     /// Returns true if at least one message was fetched.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn fetch_new_messages(
         &mut self,
         context: &Context,
@@ -583,6 +585,7 @@ impl Imap {
     }
 
     /// Returns number of messages processed and whether the function should be called again.
+    #[expect(clippy::arithmetic_side_effects)]
     async fn fetch_new_msg_batch(
         &mut self,
         context: &Context,
@@ -1265,6 +1268,7 @@ impl Session {
     ///
     /// If the message is incorrect or there is a failure to write a message to the database,
     /// it is skipped and the error is logged.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn fetch_many_msgs(
         &mut self,
         context: &Context,
@@ -1429,6 +1433,7 @@ impl Session {
     /// We get [`/shared/comment`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.1)
     /// and [`/shared/admin`](https://www.rfc-editor.org/rfc/rfc5464#section-6.2.2)
     /// metadata.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn update_metadata(&mut self, context: &Context) -> Result<()> {
         let mut lock = context.metadata.write().await;
 
@@ -2364,6 +2369,7 @@ async fn should_ignore_folder(
 /// Builds a list of sequence/uid sets. The returned sets have each no more than around 1000
 /// characters because according to <https://tools.ietf.org/html/rfc2683#section-3.2.1.5>
 /// command lines should not be much more than 1000 chars (servers should allow at least 8000 chars)
+#[expect(clippy::arithmetic_side_effects)]
 fn build_sequence_sets(uids: &[u32]) -> Result<Vec<(Vec<u32>, String)>> {
     // first, try to find consecutive ranges:
     let mut ranges: Vec<UidRange> = vec![];

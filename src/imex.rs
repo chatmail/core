@@ -293,6 +293,7 @@ impl<R> AsyncRead for ProgressReader<R>
 where
     R: AsyncRead,
 {
+    #[expect(clippy::arithmetic_side_effects)]
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -449,6 +450,7 @@ fn get_next_backup_path(
 /// Exports the database to a separate file with the given passphrase.
 ///
 /// Set passphrase to empty string to export the database unencrypted.
+#[expect(clippy::arithmetic_side_effects)]
 async fn export_backup(context: &Context, dir: &Path, passphrase: String) -> Result<()> {
     // get a fine backup file name (the name includes the date so that multiple backup instances are possible)
     let now = time();
@@ -522,6 +524,7 @@ impl<W> AsyncWrite for ProgressWriter<W>
 where
     W: AsyncWrite,
 {
+    #[expect(clippy::arithmetic_side_effects)]
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -601,6 +604,7 @@ async fn import_secret_key(context: &Context, path: &Path) -> Result<()> {
 /// containing secret keys are imported and the last successfully
 /// imported which does not contain "legacy" in its filename
 /// is set as the default.
+#[expect(clippy::arithmetic_side_effects)]
 async fn import_self_keys(context: &Context, path: &Path) -> Result<()> {
     let attr = tokio::fs::metadata(path).await?;
 
@@ -654,6 +658,7 @@ async fn import_self_keys(context: &Context, path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
     let mut export_errors = 0;
 

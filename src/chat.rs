@@ -941,6 +941,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     /// Jaccard similarity coefficient is used to estimate similarity of chat member sets.
     ///
     /// Chat is considered active if something was posted there within the last 42 days.
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_similar_chat_ids(self, context: &Context) -> Result<Vec<(ChatId, f64)>> {
         // Count number of common members in this and other chats.
         let intersection = context
@@ -1145,6 +1146,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     /// prefer plaintext emails.
     ///
     /// To get more verbose summary for a contact, including its key fingerprint, use [`Contact::get_encrinfo`].
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_encryption_info(self, context: &Context) -> Result<String> {
         let chat = Chat::load_from_db(context, self).await?;
         if !chat.is_encrypted(context).await? {
@@ -1730,6 +1732,7 @@ impl Chat {
     ///
     /// If `update_msg_id` is set, that record is reused;
     /// if `update_msg_id` is None, a new record is created.
+    #[expect(clippy::arithmetic_side_effects)]
     async fn prepare_msg_raw(
         &mut self,
         context: &Context,
@@ -2995,6 +2998,7 @@ pub async fn send_text_msg(
 }
 
 /// Sends chat members a request to edit the given message's text.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: String) -> Result<()> {
     let mut original_msg = Message::load_from_db(context, msg_id).await?;
     ensure!(
@@ -3100,6 +3104,7 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
 }
 
 /// Returns messages belonging to the chat according to the given options.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn get_chat_msgs_ex(
     context: &Context,
     chat_id: ChatId,
@@ -3978,6 +3983,7 @@ pub(crate) async fn add_contact_to_chat_ex(
 /// This function does not check if the avatar is set.
 /// If avatar is not set and this function returns `true`,
 /// a `Chat-User-Avatar: 0` header should be sent to reset the avatar.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn shall_attach_selfavatar(context: &Context, chat_id: ChatId) -> Result<bool> {
     let timestamp_some_days_ago = time() - DC_RESEND_USER_AVATAR_DAYS * 24 * 60 * 60;
     let needs_attach = context
@@ -4433,6 +4439,7 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
 }
 
 /// Forwards multiple messages to a chat in another context.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn forward_msgs_2ctx(
     ctx_src: &Context,
     msg_ids: &[MsgId],
@@ -4563,6 +4570,7 @@ pub async fn save_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// the copy contains a reference to the original message
 /// as well as to the original chat in case the original message gets deleted.
 /// Returns data needed to add a `SaveMessage` sync item.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn save_copy_in_self_talk(
     context: &Context,
     src_msg_id: MsgId,
@@ -4741,6 +4749,7 @@ pub(crate) async fn get_chat_id_by_grpid(
 ///
 /// Optional `label` can be provided to ensure that message is added only once.
 /// If `important` is true, a notification will be sent.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn add_device_msg_with_importance(
     context: &Context,
     label: Option<&str>,

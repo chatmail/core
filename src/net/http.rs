@@ -115,6 +115,7 @@ where
 }
 
 /// Converts the URL to expiration and stale timestamps.
+#[expect(clippy::arithmetic_side_effects)]
 fn http_url_cache_timestamps(url: &str, mimetype: Option<&str>) -> (i64, i64) {
     let now = time();
 
@@ -173,6 +174,7 @@ async fn http_cache_put(context: &Context, url: &str, response: &Response) -> Re
 /// Retrieves the binary from HTTP cache.
 ///
 /// Also returns if the response is stale and should be revalidated in the background.
+#[expect(clippy::arithmetic_side_effects)]
 async fn http_cache_get(context: &Context, url: &str) -> Result<Option<(Response, bool)>> {
     let now = time();
     let Some((blob_name, mimetype, encoding, stale_timestamp)) = context

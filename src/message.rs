@@ -201,6 +201,7 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
     }
 
     /// Returns detailed message information in a multi-line text form.
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_info(self, context: &Context) -> Result<String> {
         let msg = Message::load_from_db(context, self).await?;
 
@@ -822,6 +823,7 @@ impl Message {
     ///
     /// Currently this includes `additional_text`, but this may change in future, when the UIs show
     /// the necessary info themselves.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn get_text(&self) -> String {
         self.text.clone() + &self.additional_text
     }
@@ -964,6 +966,7 @@ impl Message {
     ///
     /// A message has a deviating timestamp when it is sent on
     /// another day as received/sorted by.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn has_deviating_timestamp(&self) -> bool {
         let cnv_to_local = gm2local_offset();
         let sort_timestamp = self.get_sort_timestamp() + cnv_to_local;
@@ -2119,6 +2122,7 @@ pub async fn get_request_msg_cnt(context: &Context) -> usize {
 /// Returns the number of messages that are older than the given number of seconds.
 /// This includes e-mails downloaded due to the `show_emails` option.
 /// Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn estimate_deletion_cnt(
     context: &Context,
     from_server: bool,

@@ -127,6 +127,7 @@ impl Session {
 
     /// Prefetch `n_uids` messages starting from `uid_next`. Returns a list of fetch results in the
     /// order of ascending delivery time to the server (INTERNALDATE).
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn prefetch(
         &mut self,
         uid_next: u32,

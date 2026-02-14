@@ -96,6 +96,7 @@ pub(crate) async fn intercept_send_update(
     Ok(())
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn intercept_get_updates(
     context: &Context,
     chat_id: Option<ChatId>,

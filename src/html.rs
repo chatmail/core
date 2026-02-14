@@ -86,6 +86,7 @@ impl HtmlMsgParser {
     /// Function takes a raw mime-message string,
     /// searches for the main-text part
     /// and returns that as parser.html
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn from_bytes<'a>(
         context: &Context,
         rawmime: &'a [u8],
@@ -119,6 +120,7 @@ impl HtmlMsgParser {
     /// Usually, there is at most one plain-text and one HTML-text part,
     /// multiple plain-text parts might be used for mailinglist-footers,
     /// therefore we use the first one.
+    #[expect(clippy::arithmetic_side_effects)]
     async fn collect_texts_recursive<'a>(
         &'a mut self,
         context: &'a Context,

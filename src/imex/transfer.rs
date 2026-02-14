@@ -166,6 +166,7 @@ impl BackupProvider {
         })
     }
 
+    #[expect(clippy::arithmetic_side_effects)]
     async fn handle_connection(
         context: Context,
         conn: iroh::endpoint::Connecting,

@@ -31,6 +31,7 @@ tokio::task_local! {
     static STOP_MIGRATIONS_AT: i32;
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     let mut exists_before_update = false;
     let mut dbversion_before_update = DBVERSION;
@@ -2202,6 +2203,7 @@ fn migrate_key_contacts(
 }
 
 /// Rewrite `from_id`, `to_id` in >= 1000 messages starting from the newest ones, to key-contacts.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
     let sql = &context.sql;
     if sql

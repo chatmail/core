@@ -1185,6 +1185,7 @@ pub async fn from_field_to_contact_id(
     }
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn decide_chat_assignment(
     context: &Context,
     mime_parser: &MimeMessage,
@@ -2919,6 +2920,7 @@ async fn create_group(
     }
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn update_chats_contacts_timestamps(
     context: &Context,
     chat_id: ChatId,
@@ -3418,6 +3420,7 @@ async fn apply_chat_name_avatar_and_description_changes(
 }
 
 /// Returns a list of strings that should be shown as info messages, informing about group membership changes.
+#[expect(clippy::arithmetic_side_effects)]
 async fn group_changes_msgs(
     context: &Context,
     added_ids: &HashSet<ContactId>,

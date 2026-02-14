@@ -782,6 +782,7 @@ impl Context {
     ///                             {"payload":"another update data"}]}`
     ///
     /// * `(first, last)`: range of status update serials to send.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn render_webxdc_status_update_object(
         &self,
         instance_msg_id: MsgId,

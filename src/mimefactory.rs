@@ -195,6 +195,7 @@ fn new_address_with_name(name: &str, address: String) -> Address<'static> {
 }
 
 impl MimeFactory {
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn from_msg(context: &Context, msg: Message) -> Result<MimeFactory> {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
@@ -726,6 +727,7 @@ impl MimeFactory {
 
     /// Consumes a `MimeFactory` and renders it into a message which is then stored in
     /// `smtp`-table to be used by the SMTP loop
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn render(mut self, context: &Context) -> Result<RenderedEmail> {
         let mut headers = Vec::<(&'static str, HeaderType<'static>)>::new();
 
@@ -2069,6 +2071,7 @@ impl MimeFactory {
     }
 
     /// Render an MDN
+    #[expect(clippy::arithmetic_side_effects)]
     fn render_mdn(&mut self) -> Result<MimePart<'static>> {
         // RFC 6522, this also requires the `report-type` parameter which is equal
         // to the MIME subtype of the second body part of the multipart/report

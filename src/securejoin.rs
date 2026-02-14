@@ -410,6 +410,7 @@ pub(crate) fn get_secure_join_step(mime_message: &MimeMessage) -> Option<SecureJ
 ///
 /// When `handle_securejoin_handshake()` is called, the message is not yet filed in the
 /// database; this is done by `receive_imf()` later on as needed.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn handle_securejoin_handshake(
     context: &Context,
     mime_message: &mut MimeMessage,

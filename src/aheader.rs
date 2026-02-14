@@ -73,6 +73,7 @@ impl fmt::Display for Aheader {
         let keydata = self.public_key.to_base64().chars().enumerate().fold(
             String::new(),
             |mut res, (i, c)| {
+                #[expect(clippy::arithmetic_side_effects)]
                 if i % 78 == 78 - "keydata=".len() {
                     res.push(' ')
                 }

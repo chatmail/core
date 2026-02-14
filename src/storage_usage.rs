@@ -50,6 +50,7 @@ impl std::fmt::Display for StorageUsage {
 }
 
 /// Get storage usage information for the Context's database
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
     let context_clone = ctx.clone();
     let blobdir_size =
@@ -121,6 +122,7 @@ pub async fn get_storage_usage(ctx: &Context) -> Result<StorageUsage> {
 }
 
 /// Returns storage usage of the blob directory
+#[expect(clippy::arithmetic_side_effects)]
 pub fn get_blobdir_storage_usage(ctx: &Context) -> u64 {
     WalkDir::new(ctx.get_blobdir())
         .max_depth(2)

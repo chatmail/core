@@ -37,6 +37,7 @@ impl SmearedTimestamp {
     /// Allocates `count` unique timestamps.
     ///
     /// Returns the first allocated timestamp.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn create_n(&self, now: i64, count: i64) -> i64 {
         let mut prev = self.smeared_timestamp.load(Ordering::Relaxed);
         loop {

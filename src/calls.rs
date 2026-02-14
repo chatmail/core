@@ -79,6 +79,7 @@ impl CallInfo {
     }
 
     fn remaining_ring_seconds(&self) -> i64 {
+        #[expect(clippy::arithmetic_side_effects)]
         let remaining_seconds = self.msg.timestamp_sent + RINGING_SECONDS - time();
         remaining_seconds.clamp(0, RINGING_SECONDS)
     }
@@ -175,6 +176,7 @@ impl CallInfo {
     }
 
     /// Returns call duration in seconds.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn duration_seconds(&self) -> i64 {
         if let (Some(start), Some(end)) = (
             self.msg.param.get_i64(CALL_ACCEPTED_TIMESTAMP),

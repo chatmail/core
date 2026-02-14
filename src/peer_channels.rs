@@ -533,6 +533,7 @@ pub(crate) fn iroh_topic_from_str(topic: &str) -> Result<TopicId> {
     Ok(topic)
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn subscribe_loop(
     context: &Context,
     mut stream: iroh_gossip::net::GossipReceiver,

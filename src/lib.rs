@@ -17,6 +17,7 @@
     clippy::cloned_instead_of_copied,
     clippy::manual_is_variant_and
 )]
+#![cfg_attr(not(test), warn(clippy::arithmetic_side_effects))]
 #![cfg_attr(not(test), forbid(clippy::indexing_slicing))]
 #![cfg_attr(not(test), forbid(clippy::string_slice))]
 #![allow(

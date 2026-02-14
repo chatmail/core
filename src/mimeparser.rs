@@ -266,6 +266,7 @@ impl MimeMessage {
     ///
     /// This method has some side-effects,
     /// such as saving blobs and saving found public keys to the database.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
@@ -728,6 +729,7 @@ impl MimeMessage {
         Ok(parser)
     }
 
+    #[expect(clippy::arithmetic_side_effects)]
     fn get_timestamp_sent(
         hdrs: &[mailparse::MailHeader<'_>],
         default: i64,
@@ -1005,6 +1007,7 @@ impl MimeMessage {
         Ok(())
     }
 
+    #[expect(clippy::arithmetic_side_effects)]
     fn avatar_action_from_header(
         &mut self,
         context: &Context,
@@ -1506,6 +1509,7 @@ impl MimeMessage {
     }
 
     #[expect(clippy::too_many_arguments)]
+    #[expect(clippy::arithmetic_side_effects)]
     async fn do_add_single_file_part(
         &mut self,
         context: &Context,
@@ -2057,6 +2061,7 @@ impl MimeMessage {
     /// Returns parsed `Chat-Group-Member-Timestamps` header contents.
     ///
     /// Returns `None` if there is no such header.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn chat_group_member_timestamps(&self) -> Option<Vec<i64>> {
         let now = time() + constants::TIMESTAMP_SENT_TOLERANCE;
         self.get_header(HeaderDef::ChatGroupMemberTimestamps)

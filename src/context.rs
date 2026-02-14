@@ -342,6 +342,7 @@ enum RunningState {
 /// actual keys and their values which will be present are not
 /// guaranteed.  Calling [Context::get_info] also includes information
 /// about the context on top of the information here.
+#[expect(clippy::arithmetic_side_effects)]
 pub fn get_info() -> BTreeMap<&'static str, String> {
     let mut res = BTreeMap::new();
 

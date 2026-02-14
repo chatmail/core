@@ -321,6 +321,7 @@ impl<'a> BlobObject<'a> {
     /// then the updated user-visible filename will be returned;
     /// this may be necessary because the format may be changed to JPG,
     /// i.e. "image.png" -> "image.jpg".
+    #[expect(clippy::arithmetic_side_effects)]
     fn check_or_recode_to_size(
         &mut self,
         context: &Context,
