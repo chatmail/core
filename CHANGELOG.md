@@ -375,7 +375,7 @@ that failed to be published for 2.31.0 due to not configured "trusted publishers
 
 ### Features / Changes
 
-- Lookup_or_create_adhoc_group(): Add context to SQL errors ([#7554](https://github.com/chatmail/core/pull/7554)).
+- `lookup_or_create_adhoc_group()`: Add context to SQL errors ([#7554](https://github.com/chatmail/core/pull/7554)).
 
 ## [2.31.0] - 2025-12-04
 
