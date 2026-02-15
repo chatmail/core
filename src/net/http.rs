@@ -115,11 +115,10 @@ where
 }
 
 /// Converts the URL to expiration and stale timestamps.
-#[expect(clippy::arithmetic_side_effects)]
 fn http_url_cache_timestamps(url: &str, mimetype: Option<&str>) -> (i64, i64) {
     let now = time();
 
-    let expires = now + 3600 * 24 * 35;
+    let expires = now.saturating_add(3600 * 24 * 35);
     let stale = if url.ends_with(".xdc") {
         // WebXDCs are never stale, they just expire.
         expires
@@ -129,19 +128,19 @@ fn http_url_cache_timestamps(url: &str, mimetype: Option<&str>) -> (i64, i64) {
         // Policy at <https://operations.osmfoundation.org/policies/tiles/>
         // requires that we cache tiles for at least 7 days.
         // Do not revalidate earlier than that.
-        now + 3600 * 24 * 7
+        now.saturating_add(3600 * 24 * 7)
     } else if mimetype.is_some_and(|s| s.starts_with("image/")) {
         // Cache images for 1 day.
         //
         // As of 2024-12-12 WebXDC icons at <https://webxdc.org/apps/>
         // use the same path for all app versions,
         // so may change, but it is not critical if outdated icon is displayed.
-        now + 3600 * 24
+        now.saturating_add(3600 * 24)
     } else {
         // Revalidate everything else after 1 hour.
         //
         // This includes HTML, CSS and JS.
-        now + 3600
+        now.saturating_add(3600)
     };
     (expires, stale)
 }
