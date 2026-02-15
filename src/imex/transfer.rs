@@ -166,7 +166,6 @@ impl BackupProvider {
         })
     }
 
-    #[expect(clippy::arithmetic_side_effects)]
     async fn handle_connection(
         context: Context,
         conn: iroh::endpoint::Connecting,
@@ -190,10 +189,11 @@ impl BackupProvider {
 
         let blobdir = BlobDirContents::new(&context).await?;
 
-        let mut file_size = 0;
-        file_size += dbfile.metadata()?.len();
+        let mut file_size = dbfile.metadata()?.len();
         for blob in blobdir.iter() {
-            file_size += blob.to_abs_path().metadata()?.len()
+            file_size = file_size
+                .checked_add(blob.to_abs_path().metadata()?.len())
+                .context("File size overflow")?;
         }
 
         send_stream.write_all(&file_size.to_be_bytes()).await?;
