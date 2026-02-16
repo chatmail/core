@@ -24,6 +24,13 @@ def path_to_webxdc(request):
     return str(p)
 
 
+@pytest.fixture
+def path_to_large_webxdc(request):
+    p = request.path.parent.parent.parent.joinpath("test-data/webxdc/realtime-check.xdc")
+    assert p.exists()
+    return str(p)
+
+
 def log(msg):
     logging.info(msg)
 
@@ -223,6 +230,32 @@ def test_advertisement_after_chatting(acfactory, path_to_webxdc):
     ac2_hello_msg_snapshot = ac2_hello_msg.get_snapshot()
     assert ac2_hello_msg_snapshot.text == "Hello!"
     ac2_hello_msg_snapshot.chat.accept()
+
+    ac2_webxdc_msg.send_webxdc_realtime_advertisement()
+    event = ac1.wait_for_event(EventType.WEBXDC_REALTIME_ADVERTISEMENT_RECEIVED)
+    assert event.msg_id == ac1_webxdc_msg.id
+
+
+def test_realtime_large_webxdc(acfactory, path_to_large_webxdc):
+    """Tests initializing realtime channel on a large webxdc.
+
+    This is a regression test for a bug that existed in version 2.42.0.
+    Large webxdc is split into pre- and post- message,
+    and this previously resulted in failure to initialize realtime.
+    """
+    ac1, ac2 = acfactory.get_online_accounts(2)
+    ac1.set_config("webxdc_realtime_enabled", "1")
+    ac2.set_config("webxdc_realtime_enabled", "1")
+
+    ac2.create_chat(ac1)
+    ac1_ac2_chat = ac1.create_chat(ac2)
+    ac1_webxdc_msg = ac1_ac2_chat.send_message(text="realtime check", file=path_to_large_webxdc)
+
+    # Receive pre-message.
+    ac2_webxdc_msg = ac2.wait_for_incoming_msg()
+
+    # Receive post-message.
+    ac2_webxdc_msg = ac2.wait_for_msg(EventType.MSGS_CHANGED)
 
     ac2_webxdc_msg.send_webxdc_realtime_advertisement()
     event = ac1.wait_for_event(EventType.WEBXDC_REALTIME_ADVERTISEMENT_RECEIVED)

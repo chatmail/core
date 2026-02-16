@@ -6,12 +6,10 @@ use std::iter;
 use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, ensure};
-use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::{
     ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_bidi_characters,
     sanitize_single_line,
 };
-use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
@@ -39,7 +37,7 @@ use crate::mimeparser::{
     AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
 };
 use crate::param::{Param, Params};
-use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
+use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub, iroh_topic_from_str};
 use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{
@@ -2298,21 +2296,12 @@ RETURNING id
 
     // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
-        // check if any part contains a webxdc topic id
-        if part.typ == Viewtype::Webxdc {
-            if let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic) {
-                // default encoding of topic ids is `hex`.
-                let mut topic_raw = [0u8; 32];
-                BASE32_NOPAD
-                    .decode_mut(topic.to_ascii_uppercase().as_bytes(), &mut topic_raw)
-                    .map_err(|e| e.error)
-                    .context("Wrong gossip topic header")?;
-
-                let topic = TopicId::from_bytes(topic_raw);
-                insert_topic_stub(context, *msg_id, topic).await?;
-            } else {
-                warn!(context, "webxdc doesn't have a gossip topic")
-            }
+        if mime_parser.pre_message != PreMessageMode::Post
+            && part.typ == Viewtype::Webxdc
+            && let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic)
+        {
+            let topic = iroh_topic_from_str(topic)?;
+            insert_topic_stub(context, *msg_id, topic).await?;
         }
 
         maybe_set_logging_xdc_inner(
@@ -2515,6 +2504,13 @@ async fn handle_post_message(
             "handle_post_message: {rfc724_mid}: First mime part's message-viewtype has no file."
         );
         return Ok(());
+    }
+
+    if part.typ == Viewtype::Webxdc
+        && let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic)
+    {
+        let topic = iroh_topic_from_str(topic)?;
+        insert_topic_stub(context, msg_id, topic).await?;
     }
 
     let mut new_params = original_msg.param.clone();

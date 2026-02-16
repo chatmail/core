@@ -521,6 +521,18 @@ pub(crate) async fn create_iroh_header(ctx: &Context, msg_id: MsgId) -> Result<S
     Ok(topic_string)
 }
 
+/// Converts `Iroh-Gossip-Header` contents to iroh topic ID.
+pub(crate) fn iroh_topic_from_str(topic: &str) -> Result<TopicId> {
+    let mut topic_raw = [0u8; 32];
+    BASE32_NOPAD
+        .decode_mut(topic.to_ascii_uppercase().as_bytes(), &mut topic_raw)
+        .map_err(|e| e.error)
+        .context("Wrong gossip topic header")?;
+
+    let topic = TopicId::from_bytes(topic_raw);
+    Ok(topic)
+}
+
 async fn subscribe_loop(
     context: &Context,
     mut stream: iroh_gossip::net::GossipReceiver,
