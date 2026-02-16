@@ -794,7 +794,7 @@ async fn check_backup_version(context: &Context) -> Result<()> {
     let version = (context.sql.get_raw_config_int("backup_version").await?).unwrap_or(2);
     ensure!(
         version <= DCBACKUP_VERSION,
-        "Backup too new, please update Delta Chat"
+        "This profile is from a newer version of Delta Chat. Please update Delta Chat and try again (profile version is v{version}, the latest supported is v{DCBACKUP_VERSION})"
     );
     Ok(())
 }
