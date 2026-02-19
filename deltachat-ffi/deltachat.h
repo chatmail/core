@@ -4612,6 +4612,7 @@ int             dc_msg_is_info                (const dc_msg_t* msg);
  *   and also offer a way to fix the encryption, eg. by a button offering a QR scan
  * - DC_INFO_WEBXDC_INFO_MESSAGE (32) - Info-message created by webxdc app sending `update.info`
  * - DC_INFO_CHAT_E2EE (50) - Info-message for "Chat is end-to-end-encrypted"
+ * - DC_INFO_GROUP_NAME_CHANGED (70) - Info-message "Description changed", UI should open the profile with the description
  *
  * For the messages that refer to a CONTACT,
  * dc_msg_get_info_contact_id() returns the contact ID.
@@ -4667,6 +4668,7 @@ uint32_t        dc_msg_get_info_contact_id    (const dc_msg_t* msg);
 #define         DC_INFO_INVALID_UNENCRYPTED_MAIL  13
 #define         DC_INFO_WEBXDC_INFO_MESSAGE       32
 #define         DC_INFO_CHAT_E2EE                 50
+#define         DC_INFO_GROUP_DESCRIPTION_CHANGED 70
 
 
 /**
