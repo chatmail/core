@@ -54,13 +54,13 @@ class ACFactory:
 
     def get_credentials(self) -> (str, str):
         """Generate new credentials for chatmail account."""
-        domain = os.getenv("CHATMAIL_DOMAIN")
+        domain = os.environ["CHATMAIL_DOMAIN"]
         username = "ci-" + "".join(random.choice("2345789acdefghjkmnpqrstuvwxyz") for i in range(6))
         return f"{username}@{domain}", f"{username}${username}"
 
     def get_account_qr(self):
         """Return "dcaccount:" QR code for testing chatmail relay."""
-        domain = os.getenv("CHATMAIL_DOMAIN")
+        domain = os.environ["CHATMAIL_DOMAIN"]
         return f"dcaccount:{domain}"
 
     @futuremethod
