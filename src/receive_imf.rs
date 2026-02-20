@@ -887,7 +887,11 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
             .is_some()
         {
             can_info_msg = false;
-            Some(Message::load_from_db(context, insert_msg_id).await?)
+            Some(
+                Message::load_from_db(context, insert_msg_id)
+                    .await
+                    .context("Failed to load just created webxdc instance")?,
+            )
         } else if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(instance) =
                 message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
@@ -2137,7 +2141,9 @@ async fn add_parts(
         }
 
         if let Some(replace_msg_id) = replace_msg_id {
-            let placeholder = Message::load_from_db(context, replace_msg_id).await?;
+            let placeholder = Message::load_from_db(context, replace_msg_id)
+                .await
+                .context("Failed to load placeholder message")?;
             for key in [
                 Param::WebxdcSummary,
                 Param::WebxdcSummaryTimestamp,

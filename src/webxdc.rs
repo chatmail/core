@@ -389,7 +389,9 @@ impl Context {
             }
 
             if let Some(ref href) = status_update_item.href {
-                let mut notify_msg = Message::load_from_db(self, notify_msg_id).await?;
+                let mut notify_msg = Message::load_from_db(self, notify_msg_id)
+                    .await
+                    .context("Failed to load just created notification message")?;
                 notify_msg.param.set(Param::Arg, href);
                 notify_msg.update_param(self).await?;
             }
