@@ -363,11 +363,6 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
             }
         }
     };
-    if res.is_err() {
-        for blob in blobs {
-            fs::remove_file(&blob).await.log_err(context).ok();
-        }
-    }
 
     let unpacked_database = context.get_blobdir().join(DBFILE_BACKUP_NAME);
     if res.is_ok() {
@@ -379,6 +374,22 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     }
     if res.is_ok() {
         res = check_backup_version(context).await;
+    }
+    if res.is_err() {
+        for blob in blobs {
+            fs::remove_file(&blob).await.log_err(context).ok();
+        }
+        context.sql.close().await;
+        fs::remove_file(context.sql.dbfile.as_path())
+            .await
+            .log_err(context)
+            .ok();
+        context
+            .sql
+            .open(context, "".to_string())
+            .await
+            .log_err(context)
+            .ok();
     }
     fs::remove_file(unpacked_database)
         .await
@@ -807,7 +818,7 @@ mod tests {
 
     use super::*;
     use crate::config::Config;
-    use crate::test_utils::{TestContext, alice_keypair};
+    use crate::test_utils::{TestContext, TestContextManager, alice_keypair};
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_export_public_key_to_asc_file() {
@@ -1021,6 +1032,68 @@ mod tests {
             );
             assert_eq!(ctx.get_config_delete_server_after().await?, None);
         }
+        Ok(())
+    }
+
+    /// Tests that [`crate::qr::DCBACKUP_VERSION`] is checked correctly.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_import_backup_fails_because_of_dcbackup_version() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let context1 = tcm.alice().await;
+        let context2 = tcm.unconfigured().await;
+
+        assert!(context1.is_configured().await?);
+        assert!(!context2.is_configured().await?);
+
+        let backup_dir = tempfile::tempdir().unwrap();
+
+        tcm.section("export from context1");
+        assert!(
+            imex(&context1, ImexMode::ExportBackup, backup_dir.path(), None)
+                .await
+                .is_ok()
+        );
+        let _event = context1
+            .evtracker
+            .get_matching(|evt| matches!(evt, EventType::ImexProgress(1000)))
+            .await;
+        let backup = has_backup(&context2, backup_dir.path()).await?;
+        let modified_backup = backup_dir.path().join("modified_backup.tar");
+
+        tcm.section("Change backup_version to be higher than DCBACKUP_VERSION");
+        {
+            let unpack_dir = tempfile::tempdir().unwrap();
+            let mut ar = Archive::new(File::open(&backup).await?);
+            ar.unpack(&unpack_dir).await?;
+
+            let sql = sql::Sql::new(unpack_dir.path().join(DBFILE_BACKUP_NAME));
+            sql.open(&context2, "".to_string()).await?;
+            assert_eq!(
+                sql.get_raw_config_int("backup_version").await?.unwrap(),
+                DCBACKUP_VERSION
+            );
+            sql.set_raw_config_int("backup_version", DCBACKUP_VERSION + 1)
+                .await?;
+            sql.close().await;
+
+            let modified_backup_file = File::create(&modified_backup).await?;
+            let mut builder = tokio_tar::Builder::new(modified_backup_file);
+            builder.append_dir_all("", unpack_dir.path()).await?;
+            builder.finish().await?;
+        }
+
+        tcm.section("import to context2");
+        let err = imex(&context2, ImexMode::ImportBackup, &modified_backup, None)
+            .await
+            .unwrap_err();
+        assert!(err.to_string().starts_with("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again"));
+        let _event = context2
+            .evtracker
+            .get_matching(|evt| matches!(evt, EventType::ImexProgress(0)))
+            .await;
+
+        assert!(!context2.is_configured().await?);
+        assert_eq!(context2.get_config(Config::ConfiguredAddr).await?, None);
         Ok(())
     }
 
