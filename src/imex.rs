@@ -375,6 +375,16 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     if res.is_ok() {
         res = check_backup_version(context).await;
     }
+    fs::remove_file(unpacked_database)
+        .await
+        .context("cannot remove unpacked database")
+        .log_err(context)
+        .ok();
+    if res.is_ok() {
+        context.emit_event(EventType::ImexProgress(999));
+        res = context.sql.run_migrations(context).await;
+        context.emit_event(EventType::AccountsItemChanged);
+    }
     if res.is_err() {
         for blob in blobs {
             fs::remove_file(&blob).await.log_err(context).ok();
@@ -390,16 +400,6 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
             .await
             .log_err(context)
             .ok();
-    }
-    fs::remove_file(unpacked_database)
-        .await
-        .context("cannot remove unpacked database")
-        .log_err(context)
-        .ok();
-    if res.is_ok() {
-        context.emit_event(EventType::ImexProgress(999));
-        res = context.sql.run_migrations(context).await;
-        context.emit_event(EventType::AccountsItemChanged);
     }
     if res.is_ok() {
         delete_and_reset_all_device_msgs(context)
