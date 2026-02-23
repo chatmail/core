@@ -103,7 +103,8 @@ pub async fn imex(
 
     if let Err(err) = res.as_ref() {
         // We are using Anyhow's .context() and to show the inner error, too, we need the {:#}:
-        error!(context, "IMEX failed to complete: {:#}", err);
+        error!(context, "{:#}", err);
+        warn!(context, "IMEX failed to complete: {:#}", err);
         context.emit_event(EventType::ImexProgress(0));
     } else {
         info!(context, "IMEX successfully completed");
@@ -1087,13 +1088,26 @@ mod tests {
             .await
             .unwrap_err();
         assert!(err.to_string().starts_with("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again"));
-        let _event = context2
+
+        // Some UIs show the error from the event to the user.
+        // Therefore, it must also be a user-facing string, rather than some technical info:
+        let err_event = context2
+            .evtracker
+            .get_matching(|evt| matches!(evt, EventType::Error(_)))
+            .await;
+        let EventType::Error(err_msg) = err_event else {
+            unreachable!()
+        };
+        assert!(err_msg.starts_with("This profile is from a newer version of Delta Chat. Please update Delta Chat and try again"));
+
+        context2
             .evtracker
             .get_matching(|evt| matches!(evt, EventType::ImexProgress(0)))
             .await;
 
         assert!(!context2.is_configured().await?);
         assert_eq!(context2.get_config(Config::ConfiguredAddr).await?, None);
+
         Ok(())
     }
 
