@@ -129,6 +129,7 @@ pub async fn render_setup_file(context: &Context, passphrase: &str) -> Result<St
 }
 
 /// Creates a new setup code for Autocrypt Setup Message.
+#[expect(clippy::arithmetic_side_effects)]
 fn create_setup_code(_context: &Context) -> String {
     let mut random_val: u16;
     let mut ret = String::new();

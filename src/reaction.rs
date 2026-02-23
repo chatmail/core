@@ -122,6 +122,7 @@ impl Reactions {
     }
 
     /// Returns a map from emojis to their frequencies.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn emoji_frequencies(&self) -> BTreeMap<String, usize> {
         let mut emoji_frequencies: BTreeMap<String, usize> = BTreeMap::new();
         for reaction in self.reactions.values() {

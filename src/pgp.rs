@@ -170,6 +170,7 @@ pub enum SeipdVersion {
 
 /// Encrypts `plain` text using `public_keys_for_encryption`
 /// and signs it using `private_key_for_signing`.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn pk_encrypt(
     plain: Vec<u8>,
     public_keys_for_encryption: Vec<SignedPublicKey>,

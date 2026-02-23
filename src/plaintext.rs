@@ -24,6 +24,7 @@ pub struct PlainText {
 impl PlainText {
     /// Convert plain text to HTML.
     /// The function handles quotes, links, fixed and floating text paragraphs.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn to_html(&self) -> String {
         static LINKIFY_MAIL_RE: LazyLock<regex::Regex> =
             LazyLock::new(|| regex::Regex::new(r"\b([\w.\-+]+@[\w.\-]+)\b").unwrap());

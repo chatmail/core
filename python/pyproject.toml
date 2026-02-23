@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltachat"
-version = "2.42.0"
+version = "2.43.0"
 license = "MPL-2.0"
 description = "Python bindings for the Delta Chat Core library using CFFI against the Rust-implemented libdeltachat"
 readme = "README.rst"

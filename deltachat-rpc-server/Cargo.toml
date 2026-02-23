@@ -1,6 +1,6 @@
 [package]
 name = "deltachat-rpc-server"
-version = "2.42.0"
+version = "2.43.0"
 description = "DeltaChat JSON-RPC server"
 edition = "2021"
 readme = "README.md"

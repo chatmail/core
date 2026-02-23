@@ -303,6 +303,7 @@ impl Context {
     ///
     /// This comes as an HTML from the core so that we can easily improve it
     /// and the improvement instantly reaches all UIs.
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_connectivity_html(&self) -> Result<String> {
         let mut ret = r#"<!DOCTYPE html>
             <html>

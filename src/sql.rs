@@ -798,6 +798,7 @@ fn new_connection(path: &Path, passphrase: &str) -> Result<Connection> {
 // Tries to clear the freelist to free some space on the disk.
 //
 // This only works if auto_vacuum is enabled.
+#[expect(clippy::arithmetic_side_effects)]
 async fn incremental_vacuum(context: &Context) -> Result<()> {
     context
         .sql
@@ -956,6 +957,7 @@ pub fn row_get_vec(row: &Row, idx: usize) -> rusqlite::Result<Vec<u8>> {
 }
 
 /// Enumerates used files in the blobdir and removes unused ones.
+#[expect(clippy::arithmetic_side_effects)]
 pub async fn remove_unused_files(context: &Context) -> Result<()> {
     let mut files_in_use = HashSet::new();
     let mut unreferenced_count = 0;

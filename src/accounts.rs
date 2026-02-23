@@ -586,6 +586,7 @@ impl Config {
     }
 
     #[cfg(not(target_os = "ios"))]
+    #[expect(clippy::arithmetic_side_effects)]
     async fn create_lock_task(dir: PathBuf) -> Result<Option<JoinHandle<anyhow::Result<()>>>> {
         let lockfile = dir.join(LOCKFILE_NAME);
         let mut lock = fd_lock::RwLock::new(fs::File::create(lockfile).await?);
@@ -752,6 +753,7 @@ impl Config {
     }
 
     /// Creates a new account in the account manager directory.
+    #[expect(clippy::arithmetic_side_effects)]
     async fn new_account(&mut self) -> Result<AccountConfig> {
         let id = {
             let id = self.inner.next_id;
@@ -841,6 +843,7 @@ impl Config {
 ///
 /// Without this workaround removing account may fail on Windows with an error
 /// "The process cannot access the file because it is being used by another process. (os error 32)".
+#[expect(clippy::arithmetic_side_effects)]
 async fn try_many_times<F, Fut, T>(f: F) -> std::result::Result<(), T>
 where
     F: Fn() -> Fut,

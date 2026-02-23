@@ -593,6 +593,7 @@ async fn next_expiration_timestamp(context: &Context) -> Option<i64> {
         .min()
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiver<()>) {
     loop {
         let ephemeral_timestamp = next_expiration_timestamp(context).await;
@@ -650,6 +651,7 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 }
 
 /// Schedules expired IMAP messages for deletion.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()> {
     let now = time();
 

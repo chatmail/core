@@ -136,7 +136,7 @@ async fn connection_attempt(
         Err(err) => {
             warn!(
                 context,
-                "Failed to connect to {host} ({resolved_addr}): {err:#}."
+                "SMTP failed to connect to {host} ({resolved_addr}): {err:#}."
             );
             Err(err)
         }

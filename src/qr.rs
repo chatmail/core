@@ -702,6 +702,7 @@ fn decode_account(qr: &str) -> Result<Qr> {
 }
 
 /// scheme: `https://t.me/socks?server=foo&port=123` or `https://t.me/socks?server=1.2.3.4&port=123`
+#[expect(clippy::arithmetic_side_effects)]
 fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
     let url = url::Url::parse(qr).context("Invalid t.me/socks url")?;
 
@@ -1043,6 +1044,7 @@ async fn decode_smtp(context: &Context, qr: &str) -> Result<Qr> {
 /// Scheme: `MATMSG:TO:addr...;SUB:subject...;BODY:body...;`
 ///
 /// There may or may not be linebreaks after the fields.
+#[expect(clippy::arithmetic_side_effects)]
 async fn decode_matmsg(context: &Context, qr: &str) -> Result<Qr> {
     // Does not work when the text `TO:` is used in subject/body _and_ TO: is not the first field.
     // we ignore this case.

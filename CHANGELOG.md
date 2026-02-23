@@ -1,5 +1,33 @@
 # Changelog
 
+## [2.43.0] - 2026-02-17
+
+### Features / Changes
+
+- Group and broadcast channel descriptions ([#7829](https://github.com/chatmail/core/pull/7829)).
+
+### Fixes
+
+- Assign iroh gossip topic to pre-message when post-message is received.
+
+### Miscellaneous Tasks
+
+- Update fast-socks5 to version 1.0.
+- cargo: Update keccak from 0.1.5 to 0.1.6.
+- deps: Bump astral-sh/setup-uv from 7.1.6 to 7.3.0.
+
+### Performance
+
+- Use recv_direct() instead of recv() on the event channel.
+
+### Refactor
+
+- Enable `clippy::manual_is_variant_and`.
+
+### Tests
+
+- Fix flaky `test_transport_synchronization` ([#7850](https://github.com/chatmail/core/pull/7850)).
+
 ## [2.42.0] - 2026-02-10
 
 ### Fixes
@@ -375,7 +403,7 @@ that failed to be published for 2.31.0 due to not configured "trusted publishers
 
 ### Features / Changes
 
-- Lookup_or_create_adhoc_group(): Add context to SQL errors ([#7554](https://github.com/chatmail/core/pull/7554)).
+- `lookup_or_create_adhoc_group()`: Add context to SQL errors ([#7554](https://github.com/chatmail/core/pull/7554)).
 
 ## [2.31.0] - 2025-12-04
 
@@ -7738,3 +7766,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.40.0]: https://github.com/chatmail/core/compare/v2.39.0..v2.40.0
 [2.41.0]: https://github.com/chatmail/core/compare/v2.40.0..v2.41.0
 [2.42.0]: https://github.com/chatmail/core/compare/v2.41.0..v2.42.0
+[2.43.0]: https://github.com/chatmail/core/compare/v2.42.0..v2.43.0

@@ -66,7 +66,7 @@ body = """
     {% for commit in commits %}
         - {% if commit.breaking %}[**breaking**] {% endif %}\
 	{% if commit.scope %}{{ commit.scope }}: {% endif %}\
-	{{ commit.message | upper_first }}.\
+	{{ commit.message }}.\
 	{% if commit.footers is defined %}\
 	  {% for footer in commit.footers %}{% if 'BREAKING CHANGE' in footer.token %}
 	    {% raw %}  {% endraw %}- {{ footer.value }}\

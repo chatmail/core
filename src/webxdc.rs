@@ -389,7 +389,9 @@ impl Context {
             }
 
             if let Some(ref href) = status_update_item.href {
-                let mut notify_msg = Message::load_from_db(self, notify_msg_id).await?;
+                let mut notify_msg = Message::load_from_db(self, notify_msg_id)
+                    .await
+                    .context("Failed to load just created notification message")?;
                 notify_msg.param.set(Param::Arg, href);
                 notify_msg.update_param(self).await?;
             }
@@ -782,6 +784,7 @@ impl Context {
     ///                             {"payload":"another update data"}]}`
     ///
     /// * `(first, last)`: range of status update serials to send.
+    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn render_webxdc_status_update_object(
         &self,
         instance_msg_id: MsgId,

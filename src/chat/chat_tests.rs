@@ -3227,7 +3227,7 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
         let sent = alice.pop_sent_msg().await;
         assert_eq!(
             sent.load_from_db().await.text,
-            "You changed the chat description."
+            "[Chat description changed. To see this and other new features, please update the app]"
         );
 
         tcm.section("Bob receives the description change");

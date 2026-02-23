@@ -15,6 +15,7 @@ use crate::securejoin;
 use crate::stock_str::{self, backup_transfer_qr};
 
 /// Create a QR code from any input data.
+#[expect(clippy::arithmetic_side_effects)]
 pub fn create_qr_svg(qrcode_content: &str) -> Result<String> {
     let all_size = 512.0;
     let qr_code_size = 416.0;
@@ -175,6 +176,7 @@ async fn self_info(context: &Context) -> Result<(Option<Vec<u8>>, String, String
     Ok((avatar, displayname, addr, color))
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 fn inner_generate_secure_join_qr_code(
     qrcode_description: &str,
     qrcode_content: &str,

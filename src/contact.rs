@@ -673,6 +673,7 @@ impl Contact {
     }
 
     /// Returns `true` if this contact was seen recently.
+    #[expect(clippy::arithmetic_side_effects)]
     pub fn was_seen_recently(&self) -> bool {
         time() - self.last_seen <= SEEN_RECENTLY_SECONDS
     }
@@ -1071,6 +1072,7 @@ VALUES (?, ?, ?, ?, ?, ?)
     /// The `addr_book` is a multiline string in the format `Name one\nAddress one\nName two\nAddress two`.
     ///
     /// Returns the number of modified contacts.
+    #[expect(clippy::arithmetic_side_effects)]
     pub async fn add_address_book(context: &Context, addr_book: &str) -> Result<usize> {
         let mut modify_cnt = 0;
 
@@ -1909,6 +1911,7 @@ pub(crate) async fn set_status(
 }
 
 /// Updates last seen timestamp of the contact if it is earlier than the given `timestamp`.
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn update_last_seen(
     context: &Context,
     contact_id: ContactId,
@@ -2000,6 +2003,7 @@ pub(crate) async fn mark_contact_id_as_verified(
     Ok(())
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
     *ret += &format!("\n\n{name} ({addr}):\n{fingerprint}");
 }
@@ -2041,6 +2045,7 @@ impl RecentlySeenLoop {
         }
     }
 
+    #[expect(clippy::arithmetic_side_effects)]
     async fn run(context: Context, interrupt: Receiver<RecentlySeenInterrupt>) {
         type MyHeapElem = (Reverse<i64>, ContactId);
 

@@ -76,6 +76,7 @@ impl<S: SessionStream> LoggingStream<S> {
 }
 
 impl<S: SessionStream> AsyncRead for LoggingStream<S> {
+    #[expect(clippy::arithmetic_side_effects)]
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,

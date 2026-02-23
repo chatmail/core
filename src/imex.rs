@@ -293,6 +293,7 @@ impl<R> AsyncRead for ProgressReader<R>
 where
     R: AsyncRead,
 {
+    #[expect(clippy::arithmetic_side_effects)]
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -379,17 +380,6 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     if res.is_ok() {
         res = check_backup_version(context).await;
     }
-    if res.is_ok() {
-        // All recent backups have `bcc_self` set to "1" before export.
-        //
-        // Setting `bcc_self` to "1" on export was introduced on 2024-12-17
-        // in commit 21664125d798021be75f47d5b0d5006d338b4531
-        //
-        // We additionally try to set `bcc_self` to "1" after import here
-        // for compatibility with older backups,
-        // but eventually this code can be removed.
-        res = context.set_config(Config::BccSelf, Some("1")).await;
-    }
     fs::remove_file(unpacked_database)
         .await
         .context("cannot remove unpacked database")
@@ -449,6 +439,7 @@ fn get_next_backup_path(
 /// Exports the database to a separate file with the given passphrase.
 ///
 /// Set passphrase to empty string to export the database unencrypted.
+#[expect(clippy::arithmetic_side_effects)]
 async fn export_backup(context: &Context, dir: &Path, passphrase: String) -> Result<()> {
     // get a fine backup file name (the name includes the date so that multiple backup instances are possible)
     let now = time();
@@ -522,6 +513,7 @@ impl<W> AsyncWrite for ProgressWriter<W>
 where
     W: AsyncWrite,
 {
+    #[expect(clippy::arithmetic_side_effects)]
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -601,6 +593,7 @@ async fn import_secret_key(context: &Context, path: &Path) -> Result<()> {
 /// containing secret keys are imported and the last successfully
 /// imported which does not contain "legacy" in its filename
 /// is set as the default.
+#[expect(clippy::arithmetic_side_effects)]
 async fn import_self_keys(context: &Context, path: &Path) -> Result<()> {
     let attr = tokio::fs::metadata(path).await?;
 
@@ -654,6 +647,7 @@ async fn import_self_keys(context: &Context, path: &Path) -> Result<()> {
     Ok(())
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
     let mut export_errors = 0;
 
@@ -800,7 +794,7 @@ async fn check_backup_version(context: &Context) -> Result<()> {
     let version = (context.sql.get_raw_config_int("backup_version").await?).unwrap_or(2);
     ensure!(
         version <= DCBACKUP_VERSION,
-        "Backup too new, please update Delta Chat"
+        "This profile is from a newer version of Delta Chat. Please update Delta Chat and try again (profile version is v{version}, the latest supported is v{DCBACKUP_VERSION})"
     );
     Ok(())
 }

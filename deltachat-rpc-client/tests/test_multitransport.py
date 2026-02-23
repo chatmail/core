@@ -188,6 +188,13 @@ def test_reconfigure_transport(acfactory) -> None:
 
 def test_transport_synchronization(acfactory, log) -> None:
     """Test synchronization of transports between devices."""
+
+    def wait_for_io_started(ac):
+        while True:
+            ev = ac.wait_for_event(EventType.INFO)
+            if "scheduler is running" in ev.msg:
+                return
+
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac1_clone = ac1.clone()
     ac1_clone.bring_online()
@@ -196,11 +203,13 @@ def test_transport_synchronization(acfactory, log) -> None:
 
     ac1.add_transport_from_qr(qr)
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_for_io_started(ac1_clone)
     assert len(ac1.list_transports()) == 2
     assert len(ac1_clone.list_transports()) == 2
 
     ac1_clone.add_transport_from_qr(qr)
     ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_for_io_started(ac1)
     assert len(ac1.list_transports()) == 3
     assert len(ac1_clone.list_transports()) == 3
 
@@ -210,6 +219,7 @@ def test_transport_synchronization(acfactory, log) -> None:
     ac1_clone.delete_transport(transport2["addr"])
 
     ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_for_io_started(ac1)
     [transport1, transport3] = ac1.list_transports()
 
     log.section("ac1 changes the primary transport")
@@ -223,6 +233,7 @@ def test_transport_synchronization(acfactory, log) -> None:
     ac1.delete_transport(transport1["addr"])
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
+    wait_for_io_started(ac1_clone)
     [transport3] = ac1_clone.list_transports()
     assert transport3["addr"] == addr3
     assert ac1_clone.get_config("configured_addr") == addr3

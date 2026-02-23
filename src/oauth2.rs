@@ -67,6 +67,7 @@ pub async fn get_oauth2_url(
     }
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn get_oauth2_access_token(
     context: &Context,
     addr: &str,
@@ -256,6 +257,7 @@ pub(crate) async fn get_oauth2_addr(
 }
 
 impl Oauth2 {
+    #[expect(clippy::arithmetic_side_effects)]
     fn from_address(addr: &str) -> Option<Self> {
         let addr_normalized = normalize_addr(addr);
         if let Some(domain) = addr_normalized

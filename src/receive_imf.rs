@@ -6,12 +6,10 @@ use std::iter;
 use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, ensure};
-use data_encoding::BASE32_NOPAD;
 use deltachat_contact_tools::{
     ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_bidi_characters,
     sanitize_single_line,
 };
-use iroh_gossip::proto::TopicId;
 use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
@@ -39,7 +37,7 @@ use crate::mimeparser::{
     AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
 };
 use crate::param::{Param, Params};
-use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub};
+use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub, iroh_topic_from_str};
 use crate::reaction::{Reaction, set_msg_reaction};
 use crate::rusqlite::OptionalExtension;
 use crate::securejoin::{
@@ -873,7 +871,11 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
             .is_some()
         {
             can_info_msg = false;
-            Some(Message::load_from_db(context, insert_msg_id).await?)
+            Some(
+                Message::load_from_db(context, insert_msg_id)
+                    .await
+                    .context("Failed to load just created webxdc instance")?,
+            )
         } else if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(instance) =
                 message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
@@ -1171,6 +1173,7 @@ pub async fn from_field_to_contact_id(
     }
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn decide_chat_assignment(
     context: &Context,
     mime_parser: &MimeMessage,
@@ -2122,7 +2125,9 @@ async fn add_parts(
         }
 
         if let Some(replace_msg_id) = replace_msg_id {
-            let placeholder = Message::load_from_db(context, replace_msg_id).await?;
+            let placeholder = Message::load_from_db(context, replace_msg_id)
+                .await
+                .context("Failed to load placeholder message")?;
             for key in [
                 Param::WebxdcSummary,
                 Param::WebxdcSummaryTimestamp,
@@ -2282,21 +2287,12 @@ RETURNING id
 
     // Maybe set logging xdc and add gossip topics for webxdcs.
     for (part, msg_id) in mime_parser.parts.iter().zip(&created_db_entries) {
-        // check if any part contains a webxdc topic id
-        if part.typ == Viewtype::Webxdc {
-            if let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic) {
-                // default encoding of topic ids is `hex`.
-                let mut topic_raw = [0u8; 32];
-                BASE32_NOPAD
-                    .decode_mut(topic.to_ascii_uppercase().as_bytes(), &mut topic_raw)
-                    .map_err(|e| e.error)
-                    .context("Wrong gossip topic header")?;
-
-                let topic = TopicId::from_bytes(topic_raw);
-                insert_topic_stub(context, *msg_id, topic).await?;
-            } else {
-                warn!(context, "webxdc doesn't have a gossip topic")
-            }
+        if mime_parser.pre_message != PreMessageMode::Post
+            && part.typ == Viewtype::Webxdc
+            && let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic)
+        {
+            let topic = iroh_topic_from_str(topic)?;
+            insert_topic_stub(context, *msg_id, topic).await?;
         }
 
         maybe_set_logging_xdc_inner(
@@ -2499,6 +2495,13 @@ async fn handle_post_message(
             "handle_post_message: {rfc724_mid}: First mime part's message-viewtype has no file."
         );
         return Ok(());
+    }
+
+    if part.typ == Viewtype::Webxdc
+        && let Some(topic) = mime_parser.get_header(HeaderDef::IrohGossipTopic)
+    {
+        let topic = iroh_topic_from_str(topic)?;
+        insert_topic_stub(context, msg_id, topic).await?;
     }
 
     let mut new_params = original_msg.param.clone();
@@ -2907,6 +2910,7 @@ async fn create_group(
     }
 }
 
+#[expect(clippy::arithmetic_side_effects)]
 async fn update_chats_contacts_timestamps(
     context: &Context,
     chat_id: ChatId,
@@ -3406,6 +3410,7 @@ async fn apply_chat_name_avatar_and_description_changes(
 }
 
 /// Returns a list of strings that should be shown as info messages, informing about group membership changes.
+#[expect(clippy::arithmetic_side_effects)]
 async fn group_changes_msgs(
     context: &Context,
     added_ids: &HashSet<ContactId>,
