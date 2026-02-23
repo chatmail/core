@@ -910,7 +910,18 @@ async fn test_parallel_securejoin() -> Result<()> {
 /// Tests Bob scanning setup contact QR codes of Alice and Fiona
 /// concurrently.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_parallel_setup_contact() -> Result<()> {
+async fn test_parallel_setup_contact_basic() -> Result<()> {
+    test_parallel_setup_contact(false).await
+}
+
+/// Tests Bob scanning setup contact QR codes of Alice and Fiona
+/// concurrently, and then deleting the Fiona contact.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_parallel_setup_contact_bob_deletes_fiona() -> Result<()> {
+    test_parallel_setup_contact(true).await
+}
+
+async fn test_parallel_setup_contact(bob_deletes_fiona_contact: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
@@ -931,16 +942,25 @@ async fn test_parallel_setup_contact() -> Result<()> {
     fiona.recv_msg_trash(&sent_fiona_vc_request).await;
     let sent_fiona_vc_auth_required = fiona.pop_sent_msg().await;
 
-    bob.recv_msg_trash(&sent_fiona_vc_auth_required).await;
-    let sent_fiona_vc_request_with_auth = bob.pop_sent_msg().await;
-
-    fiona.recv_msg_trash(&sent_fiona_vc_request_with_auth).await;
-    let sent_fiona_vc_contact_confirm = fiona.pop_sent_msg().await;
-
-    bob.recv_msg_trash(&sent_fiona_vc_contact_confirm).await;
     let bob_fiona_contact_id = bob.add_or_lookup_contact_id(fiona).await;
-    let bob_fiona_contact = Contact::get_by_id(bob, bob_fiona_contact_id).await.unwrap();
-    assert_eq!(bob_fiona_contact.is_verified(bob).await.unwrap(), true);
+    if bob_deletes_fiona_contact {
+        bob.get_chat(fiona).await.id.delete(bob).await?;
+        Contact::delete(bob, bob_fiona_contact_id).await?;
+
+        bob.recv_msg_trash(&sent_fiona_vc_auth_required).await;
+        let sent = bob.pop_sent_msg_opt(Duration::ZERO).await;
+        assert!(sent.is_none());
+    } else {
+        bob.recv_msg_trash(&sent_fiona_vc_auth_required).await;
+        let sent_fiona_vc_request_with_auth = bob.pop_sent_msg().await;
+
+        fiona.recv_msg_trash(&sent_fiona_vc_request_with_auth).await;
+        let sent_fiona_vc_contact_confirm = fiona.pop_sent_msg().await;
+
+        bob.recv_msg_trash(&sent_fiona_vc_contact_confirm).await;
+        let bob_fiona_contact = Contact::get_by_id(bob, bob_fiona_contact_id).await.unwrap();
+        assert_eq!(bob_fiona_contact.is_verified(bob).await.unwrap(), true);
+    }
 
     // Alice gets online and previously started SecureJoin process finishes.
     alice.recv_msg_trash(&sent_alice_vc_request).await;
