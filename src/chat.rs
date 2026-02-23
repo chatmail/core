@@ -4248,19 +4248,18 @@ async fn set_chat_description_ex(
         bail!("Cannot set chat description; self not in group");
     }
 
-    let affected_rows = context
+    let old_description = get_chat_description(context, chat_id).await?;
+    if old_description == new_description {
+        return Ok(());
+    }
+
+    context
         .sql
         .execute(
-            "INSERT INTO chats_descriptions(chat_id, description) VALUES(?, ?)
-            ON CONFLICT(chat_id) DO UPDATE
-            SET description=excluded.description WHERE description<>excluded.description",
+            "INSERT OR REPLACE INTO chats_descriptions(chat_id, description) VALUES(?, ?)",
             (chat_id, &new_description),
         )
         .await?;
-
-    if affected_rows == 0 {
-        return Ok(());
-    }
 
     if chat.is_promoted() {
         let mut msg = Message::new(Viewtype::Text);

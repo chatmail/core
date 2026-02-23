@@ -3269,6 +3269,36 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
     Ok(())
 }
 
+/// Tests explicitly setting an empty chat description
+/// doesn't trigger sending out a message
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setting_empty_chat_description() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.section("Create a group chat, and add Bob in order to promote it");
+    let alice_chat_id = create_group(alice, "My Group").await?;
+
+    add_contact_to_chat(
+        alice,
+        alice_chat_id,
+        alice.add_or_lookup_contact_id(bob).await,
+    )
+    .await?;
+    let _hi = alice.send_text(alice_chat_id, "hi").await;
+
+    set_chat_description(alice, alice_chat_id, "").await?;
+    assert!(
+        alice
+            .pop_sent_msg_opt(Duration::from_secs(0))
+            .await
+            .is_none()
+    );
+
+    Ok(())
+}
+
 /// Tests that directly after broadcast-securejoin,
 /// the brodacast is shown correctly on both devices.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
