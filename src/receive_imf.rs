@@ -3716,6 +3716,7 @@ async fn apply_out_broadcast_changes(
 
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
+    let mut added_removed_id: Option<ContactId> = None;
 
     if from_id == ContactId::SELF {
         apply_chat_name_avatar_and_description_changes(
@@ -3748,6 +3749,7 @@ async fn apply_out_broadcast_changes(
                         stock_str::msg_add_member_local(context, added_id, ContactId::UNDEFINED)
                             .await;
                     better_msg.get_or_insert(msg);
+                    added_removed_id = Some(added_id);
                     send_event_chat_modified = true;
                 }
             } else {
@@ -3772,6 +3774,7 @@ async fn apply_out_broadcast_changes(
             better_msg.get_or_insert(
                 stock_str::msg_del_member_local(context, removed_id, ContactId::SELF).await,
             );
+            added_removed_id = Some(removed_id);
         }
     }
 
@@ -3781,7 +3784,7 @@ async fn apply_out_broadcast_changes(
     }
     Ok(GroupChangesInfo {
         better_msg,
-        added_removed_id: None,
+        added_removed_id,
         silent: false,
         extra_msgs: vec![],
     })

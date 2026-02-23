@@ -170,6 +170,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         member_added_msg = chat_msgs.pop(0).get_snapshot()
         if inviter_side:
             assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+            assert member_added_msg.info_contact_id == contact_snapshot.id
         else:
             assert member_added_msg.text == "You joined the channel."
         assert member_added_msg.is_info
