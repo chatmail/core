@@ -54,10 +54,19 @@ class RpcMethod:
 class Rpc:
     """RPC client."""
 
-    def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path="deltachat-rpc-server", **kwargs):
+    def __init__(
+        self,
+        accounts_dir: Optional[str] = None,
+        rpc_server_path="deltachat-rpc-server",
+        _skip_ready_check=False,
+        **kwargs,
+    ):
         """Initialize RPC client.
 
         The 'kwargs' arguments will be passed to subprocess.Popen().
+        '_skip_ready_check' is for debugging/testing only,
+        e.g. when using an old server that doesn't send
+        ready/init_error notifications on startup.
         """
         if accounts_dir:
             kwargs["env"] = {
@@ -67,6 +76,7 @@ class Rpc:
 
         self._kwargs = kwargs
         self.rpc_server_path = rpc_server_path
+        self._skip_ready_check = _skip_ready_check
         self.process: subprocess.Popen
         self.id_iterator: Iterator[int]
         self.event_queues: dict[int, Queue]
@@ -79,7 +89,13 @@ class Rpc:
         self.events_thread: Thread
 
     def start(self) -> None:
-        """Start RPC server subprocess."""
+        """Start RPC server subprocess and wait for successful initialization.
+
+        This method blocks until the RPC server sends a "ready" notification.
+        If the server fails to initialize
+        (e.g., due to an invalid accounts directory),
+        a JsonRpcError is raised with the error message provided by the server.
+        """
         popen_kwargs = {"stdin": subprocess.PIPE, "stdout": subprocess.PIPE}
         if sys.version_info >= (3, 11):
             # Prevent subprocess from capturing SIGINT.
@@ -90,6 +106,9 @@ class Rpc:
 
         popen_kwargs.update(self._kwargs)
         self.process = subprocess.Popen(self.rpc_server_path, **popen_kwargs)
+
+        self._wait_for_ready()
+
         self.id_iterator = itertools.count(start=1)
         self.event_queues = {}
         self.request_results = {}
@@ -101,6 +120,44 @@ class Rpc:
         self.writer_thread.start()
         self.events_thread = Thread(target=self.events_loop)
         self.events_thread.start()
+
+    def _wait_for_ready(self) -> None:
+        """Wait for "ready" or "init_error" notification from the server."""
+        if self._skip_ready_check:
+            return
+
+        # Read the first JSON-RPC notification which is
+        # "ready" (success) or "init_error" (e.g. bad accounts dir).
+        line = self.process.stdout.readline()
+        if not line:
+            return_code = self.process.wait()
+            if return_code != 0:
+                raise JsonRpcError(f"RPC server terminated with exit code {return_code}")
+            return
+
+        try:
+            status = json.loads(line)
+        except json.JSONDecodeError:
+            raise JsonRpcError(f"RPC server sent invalid initial message: {line.decode().strip()}") from None
+
+        if status.get("method") == "init_error":
+            error_msg = status.get("params", ["Unknown error"])[0]
+            raise JsonRpcError(f"RPC server initialization failed: {error_msg}")
+
+        if status.get("method") != "ready":
+            raise JsonRpcError(f"RPC server sent unexpected initial message: {line.decode().strip()}")
+
+        params = status.get("params", [{}])[0]
+        core_version = params.get("core_version", "unknown")
+        server_path = params.get("server_path", "unknown")
+        accounts_dir = params.get("accounts_dir", "unknown")
+        logging.info(
+            "RPC server ready. Core version: {}, Server path: {}, Accounts dir: {}".format(
+                core_version,
+                server_path,
+                accounts_dir,
+            ),
+        )
 
     def close(self) -> None:
         """Terminate RPC server process and wait until the reader loop finishes."""

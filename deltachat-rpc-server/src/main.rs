@@ -72,14 +72,7 @@ async fn main_impl() -> Result<()> {
     #[cfg(target_family = "unix")]
     let mut sigterm = signal_unix::signal(signal_unix::SignalKind::terminate())?;
 
-    let path = std::env::var("DC_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts".to_string());
-    log::info!("Starting with accounts directory `{path}`.");
-    let writable = true;
-    let accounts = Accounts::new(PathBuf::from(&path), writable).await?;
-
-    log::info!("Creating JSON-RPC API.");
-    let accounts = Arc::new(RwLock::new(accounts));
-    let state = CommandApi::from_arc(accounts.clone()).await;
+    let (accounts, state) = init_accounts_and_report_status().await?;
 
     let (client, mut out_receiver) = RpcClient::new();
     let session = RpcSession::new(client.clone(), state.clone());
@@ -159,4 +152,42 @@ async fn main_impl() -> Result<()> {
     recv_task.await??;
 
     Ok(())
+}
+
+async fn init_accounts_and_report_status() -> Result<(Arc<RwLock<Accounts>>, CommandApi)> {
+    let path = std::env::var("DC_ACCOUNTS_PATH").unwrap_or_else(|_| "accounts".to_string());
+    log::info!("Starting with accounts directory `{path}`.");
+    let path = PathBuf::from(&path);
+    match Accounts::new(path.clone(), true).await {
+        Ok(accounts) => {
+            log::info!("Creating JSON-RPC API.");
+            let accounts = Arc::new(RwLock::new(accounts));
+            let state = CommandApi::from_arc(accounts.clone()).await;
+            println!(
+                "{}",
+                serde_json::to_string(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "ready",
+                    "params": [{
+                        "core_version": DC_VERSION_STR,
+                        "server_path": env::current_exe()?.display().to_string(),
+                        "accounts_dir": path.display().to_string(),
+                    }]
+                }))?
+            );
+            Ok((accounts, state))
+        }
+        Err(err) => {
+            let error_msg = format!("{err:#}");
+            println!(
+                "{}",
+                serde_json::to_string(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "init_error",
+                    "params": [error_msg]
+                }))?
+            );
+            Err(err)
+        }
+    }
 }

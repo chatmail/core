@@ -8,7 +8,7 @@ from deltachat_rpc_client import DeltaChat, Rpc
 def test_install_venv_and_use_other_core(tmp_path, get_core_python_env):
     python, rpc_server_path = get_core_python_env("2.24.0")
     subprocess.check_call([python, "-m", "pip", "install", "deltachat-rpc-server==2.24.0"])
-    rpc = Rpc(accounts_dir=tmp_path.joinpath("accounts"), rpc_server_path=rpc_server_path)
+    rpc = Rpc(accounts_dir=tmp_path.joinpath("accounts"), rpc_server_path=rpc_server_path, _skip_ready_check=True)
 
     with rpc:
         dc = DeltaChat(rpc)

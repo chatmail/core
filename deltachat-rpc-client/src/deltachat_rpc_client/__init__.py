@@ -8,7 +8,7 @@ from .const import EventType, SpecialContactId
 from .contact import Contact
 from .deltachat import DeltaChat
 from .message import Message
-from .rpc import Rpc
+from .rpc import JsonRpcError, Rpc
 
 __all__ = [
     "Account",
@@ -19,6 +19,7 @@ __all__ = [
     "Contact",
     "DeltaChat",
     "EventType",
+    "JsonRpcError",
     "Message",
     "SpecialContactId",
     "Rpc",
