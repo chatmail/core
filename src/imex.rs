@@ -19,7 +19,7 @@ use crate::config::Config;
 use crate::context::Context;
 use crate::e2ee;
 use crate::events::EventType;
-use crate::key::{self, DcKey, SignedPublicKey, SignedSecretKey};
+use crate::key::{self, DcKey, SignedSecretKey};
 use crate::log::{LogExt, warn};
 use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
@@ -669,38 +669,36 @@ async fn export_self_keys(context: &Context, dir: &Path) -> Result<()> {
     let keys = context
         .sql
         .query_map_vec(
-            "SELECT id, public_key, private_key, id=(SELECT value FROM config WHERE keyname='key_id') FROM keypairs;",
+            "SELECT id, private_key, id=(SELECT value FROM config WHERE keyname='key_id') FROM keypairs;",
             (),
             |row| {
                 let id = row.get(0)?;
-                let public_key_blob: Vec<u8> = row.get(1)?;
-                let public_key = SignedPublicKey::from_slice(&public_key_blob);
-                let private_key_blob: Vec<u8> = row.get(2)?;
+                let private_key_blob: Vec<u8> = row.get(1)?;
                 let private_key = SignedSecretKey::from_slice(&private_key_blob);
-                let is_default: i32 = row.get(3)?;
+                let is_default: i32 = row.get(2)?;
 
-                Ok((id, public_key, private_key, is_default))
+                Ok((id, private_key, is_default))
             },
         )
         .await?;
     let self_addr = context.get_primary_self_addr().await?;
-    for (id, public_key, private_key, is_default) in keys {
+    for (id, private_key, is_default) in keys {
         let id = Some(id).filter(|_| is_default == 0);
 
-        if let Ok(key) = public_key {
-            if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &key).await {
-                error!(context, "Failed to export public key: {:#}.", err);
-                export_errors += 1;
-            }
-        } else {
+        let Ok(private_key) = private_key else {
+            export_errors += 1;
+            continue;
+        };
+
+        if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &private_key).await {
+            error!(context, "Failed to export private key: {:#}.", err);
             export_errors += 1;
         }
-        if let Ok(key) = private_key {
-            if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &key).await {
-                error!(context, "Failed to export private key: {:#}.", err);
-                export_errors += 1;
-            }
-        } else {
+
+        let public_key = private_key.to_public_key();
+
+        if let Err(err) = export_key_to_asc_file(context, dir, &self_addr, id, &public_key).await {
+            error!(context, "Failed to export public key: {:#}.", err);
             export_errors += 1;
         }
     }

@@ -122,10 +122,10 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 ///
 /// Returns `None` if no key is generated yet.
 pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
-    let Some(public_key_bytes) = context
+    let Some(secret_key_bytes) = context
         .sql
         .query_row_optional(
-            "SELECT public_key
+            "SELECT private_key
              FROM keypairs
              WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
             (),
@@ -138,8 +138,9 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     else {
         return Ok(None);
     };
-    let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-    Ok(Some(public_key))
+    let signed_secret_key = SignedSecretKey::from_slice(&secret_key_bytes)?;
+    let signed_public_key = signed_secret_key.to_public_key();
+    Ok(Some(signed_public_key))
 }
 
 /// Loads own public key.
@@ -325,26 +326,24 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
     let res = context
         .sql
         .query_row_optional(
-            "SELECT public_key, private_key
-             FROM keypairs
-             WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
+            "SELECT private_key
+                 FROM keypairs
+                 WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
             (),
             |row| {
-                let pub_bytes: Vec<u8> = row.get(0)?;
-                let sec_bytes: Vec<u8> = row.get(1)?;
-                Ok((pub_bytes, sec_bytes))
+                let sec_bytes: Vec<u8> = row.get(0)?;
+                Ok(sec_bytes)
             },
         )
         .await?;
 
-    Ok(if let Some((pub_bytes, sec_bytes)) = res {
-        Some(KeyPair {
-            public: SignedPublicKey::from_slice(&pub_bytes)?,
-            secret: SignedSecretKey::from_slice(&sec_bytes)?,
-        })
+    let signed_secret_key = if let Some(sec_bytes) = res {
+        Some(SignedSecretKey::from_slice(&sec_bytes)?)
     } else {
         None
-    })
+    };
+
+    Ok(signed_secret_key.map(KeyPair::new))
 }
 
 /// Store the keypair as an owned keypair for addr in the database.
