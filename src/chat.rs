@@ -3418,6 +3418,7 @@ pub async fn get_chat_media(
     msg_type: Viewtype,
     msg_type2: Viewtype,
     msg_type3: Viewtype,
+    limit: Option<u32>,
 ) -> Result<Vec<MsgId>> {
     let list = if msg_type == Viewtype::Webxdc
         && msg_type2 == Viewtype::Unknown
@@ -3432,12 +3433,14 @@ pub async fn get_chat_media(
                 AND chat_id != ?
                 AND type = ?
                 AND hidden=0
-              ORDER BY max(timestamp, timestamp_rcvd), id;",
+              ORDER BY max(timestamp, timestamp_rcvd), id
+              LIMIT ?;",
                 (
                     chat_id.is_none(),
                     chat_id.unwrap_or_else(|| ChatId::new(0)),
                     DC_CHAT_ID_TRASH,
                     Viewtype::Webxdc,
+                    limit.map(|l| l.to_string()).unwrap_or("ALL".to_string()),
                 ),
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
@@ -3455,7 +3458,8 @@ pub async fn get_chat_media(
                 AND chat_id != ?
                 AND type IN (?, ?, ?)
                 AND hidden=0
-              ORDER BY timestamp, id;",
+              ORDER BY timestamp, id
+              LIMIT ?;",
                 (
                     chat_id.is_none(),
                     chat_id.unwrap_or_else(|| ChatId::new(0)),
@@ -3471,6 +3475,7 @@ pub async fn get_chat_media(
                     } else {
                         msg_type
                     },
+                    limit.map(|l| l.to_string()).unwrap_or("ALL".to_string()),
                 ),
                 |row| {
                     let msg_id: MsgId = row.get(0)?;
