@@ -100,7 +100,7 @@ def main():
 
     today = datetime.date.today().isoformat()
 
-    if "alpha" not in newversion:
+    if not newversion.endswith("-dev"):
         found = False
         for line in Path("CHANGELOG.md").open():
             if line == f"## [{newversion}] - {today}\n":

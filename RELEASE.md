@@ -22,7 +22,28 @@ For example, to release version 1.116.0 of the core, do the following steps.
 
 9. Create a GitHub release: `gh release create v1.116.0 --notes ''`.
 
-10. Once the binaries are generated and [published](https://github.com/chatmail/core/releases), check Windows binaries for false positive detections at [VirusTotal]. Either upload the binaries directly or submit a direct link to the artifact. You can use [old browsers interface](https://www.virustotal.com/old-browsers/) if there are problems with using the default website. If you submit a direct link and get to the page saying "No security vendors flagged this URL as malicious", it does not mean that the file itself is not detected. You need to go to the "details" tab and click on the SHA-256 hash in the "Body SHA-256" section. If any false positive is detected, open an issue to track removing it. See <https://github.com/chatmail/core/issues/7847> for an example of false positive detection issue. If there is a false positive "Microsoft" detection, mark the issue as a blocker.
+10. Update the version to the next development version:
+    `scripts/set_core_version.py 1.117.0-dev`.
+
+11. Commit and push the change:
+    `git commit -m "chore: bump version to 1.117.0-dev" && git push origin main`.
+
+12. Once the binaries are generated and [published](https://github.com/chatmail/core/releases),
+    check Windows binaries for false positive detections at [VirusTotal].
+    Either upload the binaries directly or submit a direct link to the artifact.
+    You can use [old browsers interface](https://www.virustotal.com/old-browsers/)
+    if there are problems with using the default website.
+    If you submit a direct link and get to the page saying
+    "No security vendors flagged this URL as malicious",
+    it does not mean that the file itself is not detected.
+    You need to go to the "details" tab
+    and click on the SHA-256 hash in the "Body SHA-256" section.
+    If any false positive is detected,
+    open an issue to track removing it.
+    See <https://github.com/chatmail/core/issues/7847>
+    for an example of false positive detection issue.
+    If there is a false positive "Microsoft" detection,
+    mark the issue as a blocker.
 
 [VirusTotal]: https://www.virustotal.com/
 
