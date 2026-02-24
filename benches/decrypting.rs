@@ -38,7 +38,7 @@ use deltachat::{
     internals_for_benches::key_from_asc,
     internals_for_benches::parse_and_get_text,
     internals_for_benches::store_self_keypair,
-    pgp::{KeyPair, SeipdVersion, decrypt, pk_encrypt, symm_encrypt_message},
+    pgp::{SeipdVersion, decrypt, pk_encrypt, symm_encrypt_message},
     stock_str::StockStrings,
 };
 use rand::{Rng, rng};
@@ -58,9 +58,7 @@ async fn create_context() -> Context {
         .await
         .unwrap();
     let secret = key_from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    let key_pair = KeyPair { public, secret };
-    store_self_keypair(&context, &key_pair)
+    store_self_keypair(&context, &secret)
         .await
         .expect("Failed to save key");
 
@@ -83,7 +81,7 @@ fn criterion_benchmark(c: &mut Criterion) {
             let secret = secrets[NUM_SECRETS / 2].clone();
             symm_encrypt_message(
                 plain.clone(),
-                create_dummy_keypair("alice@example.org").unwrap().secret,
+                create_dummy_keypair("alice@example.org").unwrap(),
                 black_box(&secret),
                 true,
             )
@@ -107,8 +105,8 @@ fn criterion_benchmark(c: &mut Criterion) {
         let encrypted = tokio::runtime::Runtime::new().unwrap().block_on(async {
             pk_encrypt(
                 plain.clone(),
-                vec![black_box(key_pair.public.clone())],
-                key_pair.secret.clone(),
+                vec![black_box(key_pair.clone().to_public_key())],
+                key_pair.clone(),
                 true,
                 true,
                 SeipdVersion::V2,
@@ -120,7 +118,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         b.iter(|| {
             let mut msg = decrypt(
                 encrypted.clone().into_bytes(),
-                std::slice::from_ref(&key_pair.secret),
+                std::slice::from_ref(&key_pair),
                 black_box(&secrets),
             )
             .unwrap();
