@@ -88,7 +88,7 @@ impl Accounts {
         if !dir.exists() {
             fs::create_dir_all(dir)
                 .await
-                .context("failed to create folder")?;
+                .context("Failed to create folder")?;
             Config::new(dir).await?;
         } else if !dir.join(CONFIG_NAME).exists() {
             let mut rd = fs::read_dir(dir).await?;
