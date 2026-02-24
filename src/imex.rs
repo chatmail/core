@@ -210,15 +210,6 @@ async fn import_backup(
     backup_to_import: &Path,
     passphrase: String,
 ) -> Result<()> {
-    ensure!(
-        !context.is_configured().await?,
-        "Cannot import backups to accounts in use."
-    );
-    ensure!(
-        !context.scheduler.is_running().await,
-        "cannot import backup, IO is running"
-    );
-
     let backup_file = File::open(backup_to_import).await?;
     let file_size = backup_file.metadata().await?.len();
     info!(
@@ -252,6 +243,15 @@ pub(crate) async fn import_backup_stream<R: tokio::io::AsyncRead + Unpin>(
     file_size: u64,
     passphrase: String,
 ) -> Result<()> {
+    ensure!(
+        !context.is_configured().await?,
+        "Cannot import backups to accounts in use."
+    );
+    ensure!(
+        !context.scheduler.is_running().await,
+        "cannot import backup, IO is running"
+    );
+
     import_backup_stream_inner(context, backup_file, file_size, passphrase)
         .await
         .0
@@ -318,6 +318,9 @@ where
     }
 }
 
+// This function returns a tuple (Result<()>,) rather than Result<()>
+// so that we don't accidentally early-return with `?`
+// and forget to cleanup.
 async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
     context: &Context,
     backup_file: R,
