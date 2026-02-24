@@ -13,7 +13,7 @@ import pytest
 from deltachat_rpc_client import EventType, events
 from deltachat_rpc_client.const import DownloadState, MessageState
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
-from deltachat_rpc_client.rpc import JsonRpcError
+from deltachat_rpc_client.rpc import JsonRpcError, Rpc
 
 
 def test_system_info(rpc) -> None:
@@ -663,6 +663,24 @@ def test_openrpc_command_line() -> None:
     openrpc = json.loads(out)
     assert "openrpc" in openrpc
     assert "methods" in openrpc
+
+
+def test_early_failure(tmp_path) -> None:
+    """Test that Rpc.start() raises on invalid accounts directories."""
+    # A file instead of a directory.
+    file_path = tmp_path / "not_a_dir"
+    file_path.write_text("I am a file, not a directory")
+    rpc = Rpc(accounts_dir=str(file_path))
+    with pytest.raises(JsonRpcError, match="(?i)directory"):
+        rpc.start()
+
+    # A non-empty directory that is not a deltachat accounts directory.
+    non_dc_dir = tmp_path / "invalid_dir"
+    non_dc_dir.mkdir()
+    (non_dc_dir / "some_file").write_text("content")
+    rpc = Rpc(accounts_dir=str(non_dc_dir))
+    with pytest.raises(JsonRpcError, match="invalid_dir"):
+        rpc.start()
 
 
 def test_provider_info(rpc) -> None:

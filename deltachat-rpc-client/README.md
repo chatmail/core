@@ -2,6 +2,9 @@
 
 RPC client connects to standalone Delta Chat RPC server `deltachat-rpc-server`
 and provides asynchronous interface to it.
+`rpc.start()` performs a health-check RPC call to verify the server
+started successfully and will raise an error if startup fails
+(e.g. if the accounts directory could not be used).
 
 ## Getting started
 
