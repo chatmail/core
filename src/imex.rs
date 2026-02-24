@@ -387,14 +387,14 @@ async fn import_backup_stream_inner<R: tokio::io::AsyncRead + Unpin>(
         context.emit_event(EventType::AccountsItemChanged);
     }
     if res.is_err() {
-        for blob in blobs {
-            fs::remove_file(&blob).await.log_err(context).ok();
-        }
         context.sql.close().await;
         fs::remove_file(context.sql.dbfile.as_path())
             .await
             .log_err(context)
             .ok();
+        for blob in blobs {
+            fs::remove_file(&blob).await.log_err(context).ok();
+        }
         context
             .sql
             .open(context, "".to_string())
