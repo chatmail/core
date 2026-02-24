@@ -346,18 +346,11 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
     Ok(signed_secret_key.map(KeyPair::new))
 }
 
-/// Store the keypair as an owned keypair for addr in the database.
+/// Stores own keypair in the database and sets it as a default.
 ///
-/// This will save the keypair as keys for the given address.  The
-/// "self" here refers to the fact that this DC instance owns the
-/// keypair.  Usually `addr` will be [Config::ConfiguredAddr].
-///
-/// If either the public or private keys are already present in the
-/// database, this entry will be removed first regardless of the
-/// address associated with it.  Practically this means saving the
-/// same key again overwrites it.
-///
-/// [Config::ConfiguredAddr]: crate::config::Config::ConfiguredAddr
+/// Fails if we already have a key, so it is not possible to
+/// have more than one key for new setups. Existing setups
+/// may still have more than one key for compatibility.
 pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<()> {
     let mut config_cache_lock = context.sql.config_cache.write().await;
     let new_key_id = context
