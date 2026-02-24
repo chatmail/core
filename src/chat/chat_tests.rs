@@ -2641,7 +2641,7 @@ async fn test_resend_own_message() -> Result<()> {
     );
     let msg_from = Contact::get_by_id(&fiona, msg.get_from_id()).await?;
     assert_eq!(msg_from.get_addr(), "alice@example.org");
-    assert!(sent1_ts_sent < msg.timestamp_sent);
+    assert!(sent1_ts_sent == msg.timestamp_sent);
 
     Ok(())
 }

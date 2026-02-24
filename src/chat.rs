@@ -4664,7 +4664,6 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
             }
             msg_state => bail!("Unexpected message state {msg_state}"),
         }
-        msg.timestamp_sort = create_smeared_timestamp(context);
         if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             continue;
         }
