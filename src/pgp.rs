@@ -80,9 +80,9 @@ impl KeyPair {
     /// Creates new keypair from a secret key.
     ///
     /// Public key is split off the secret key.
-    pub fn new(secret: SignedSecretKey) -> Result<Self> {
+    pub fn new(secret: SignedSecretKey) -> Self {
         let public = secret.to_public_key();
-        Ok(Self { public, secret })
+        Self { public, secret }
     }
 }
 
@@ -135,7 +135,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
         .verify_bindings()
         .context("Invalid secret key generated")?;
 
-    let key_pair = KeyPair::new(secret_key)?;
+    let key_pair = KeyPair::new(secret_key);
     key_pair
         .public
         .verify_bindings()
