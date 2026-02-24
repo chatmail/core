@@ -16,7 +16,6 @@ use tokio::runtime::Handle;
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
-use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
 
 /// Convenience trait for working with keys.
@@ -150,8 +149,8 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
     match load_self_public_key_opt(context).await? {
         Some(public_key) => Ok(public_key),
         None => {
-            let keypair = generate_keypair(context).await?;
-            Ok(keypair.public)
+            let signed_secret_key = generate_keypair(context).await?;
+            Ok(signed_secret_key.to_public_key())
         }
     }
 }
@@ -216,8 +215,8 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
     match private_key {
         Some(bytes) => SignedSecretKey::from_slice(&bytes),
         None => {
-            let keypair = generate_keypair(context).await?;
-            Ok(keypair.secret)
+            let secret = generate_keypair(context).await?;
+            Ok(secret)
         }
     }
 }
@@ -296,7 +295,7 @@ impl DcKey for SignedSecretKey {
     }
 }
 
-async fn generate_keypair(context: &Context) -> Result<KeyPair> {
+async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
     let addr = context.get_primary_self_addr().await?;
     let addr = EmailAddress::new(&addr)?;
     let _guard = context.generating_key_mutex.lock().await;
@@ -322,7 +321,7 @@ async fn generate_keypair(context: &Context) -> Result<KeyPair> {
     }
 }
 
-pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
+pub(crate) async fn load_keypair(context: &Context) -> Result<Option<SignedSecretKey>> {
     let res = context
         .sql
         .query_row_optional(
@@ -343,7 +342,7 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
         None
     };
 
-    Ok(signed_secret_key.map(KeyPair::new))
+    Ok(signed_secret_key)
 }
 
 /// Stores own keypair in the database and sets it as a default.
@@ -351,13 +350,17 @@ pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
 /// Fails if we already have a key, so it is not possible to
 /// have more than one key for new setups. Existing setups
 /// may still have more than one key for compatibility.
-pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<()> {
+pub(crate) async fn store_self_keypair(
+    context: &Context,
+    signed_secret_key: &SignedSecretKey,
+) -> Result<()> {
+    let signed_public_key = signed_secret_key.to_public_key();
     let mut config_cache_lock = context.sql.config_cache.write().await;
     let new_key_id = context
         .sql
         .transaction(|transaction| {
-            let public_key = DcKey::to_bytes(&keypair.public);
-            let secret_key = DcKey::to_bytes(&keypair.secret);
+            let public_key = DcKey::to_bytes(&signed_public_key);
+            let secret_key = DcKey::to_bytes(signed_secret_key);
 
             // private_key and public_key columns
             // are UNIQUE since migration 107,
@@ -395,9 +398,7 @@ pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> 
 /// Use import/export APIs instead.
 pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Result<()> {
     let secret = SignedSecretKey::from_asc(secret_data)?;
-    let public = secret.to_public_key();
-    let keypair = KeyPair { public, secret };
-    store_self_keypair(context, &keypair).await?;
+    store_self_keypair(context, &secret).await?;
     Ok(())
 }
 
@@ -476,7 +477,7 @@ mod tests {
     use crate::config::Config;
     use crate::test_utils::{TestContext, alice_keypair};
 
-    static KEYPAIR: LazyLock<KeyPair> = LazyLock::new(alice_keypair);
+    static KEYPAIR: LazyLock<SignedSecretKey> = LazyLock::new(alice_keypair);
 
     #[test]
     fn test_from_armored_string() {
@@ -546,12 +547,12 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_asc_roundtrip() {
-        let key = KEYPAIR.public.clone();
+        let key = KEYPAIR.clone().to_public_key();
         let asc = key.to_asc(Some(("spam", "ham")));
         let key2 = SignedPublicKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
 
-        let key = KEYPAIR.secret.clone();
+        let key = KEYPAIR.clone();
         let asc = key.to_asc(Some(("spam", "ham")));
         let key2 = SignedSecretKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
@@ -559,8 +560,8 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_from_slice_roundtrip() {
-        let public_key = KEYPAIR.public.clone();
-        let private_key = KEYPAIR.secret.clone();
+        let private_key = KEYPAIR.clone();
+        let public_key = KEYPAIR.clone().to_public_key();
 
         let binary = DcKey::to_bytes(&public_key);
         let public_key2 = SignedPublicKey::from_slice(&binary).expect("invalid public key");
@@ -602,7 +603,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
             b"\x02\xfc\xaa".as_slice(),
             b"\x01\x02\x03\x04\x05".as_slice(),
         ] {
-            let private_key = KEYPAIR.secret.clone();
+            let private_key = KEYPAIR.clone();
 
             let mut binary = DcKey::to_bytes(&private_key);
             binary.extend(garbage);
@@ -616,7 +617,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_base64_roundtrip() {
-        let key = KEYPAIR.public.clone();
+        let key = KEYPAIR.clone().to_public_key();
         let base64 = key.to_base64();
         let key2 = SignedPublicKey::from_base64(&base64).unwrap();
         assert_eq!(key, key2);

@@ -63,34 +63,11 @@ pub fn split_armored_data(buf: &[u8]) -> Result<(BlockType, BTreeMap<String, Str
     Ok((typ, headers, bytes))
 }
 
-/// A PGP keypair.
-///
-/// This has it's own struct to be able to keep the public and secret
-/// keys together as they are one unit.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct KeyPair {
-    /// Public key.
-    pub public: SignedPublicKey,
-
-    /// Secret key.
-    pub secret: SignedSecretKey,
-}
-
-impl KeyPair {
-    /// Creates new keypair from a secret key.
-    ///
-    /// Public key is split off the secret key.
-    pub fn new(secret: SignedSecretKey) -> Self {
-        let public = secret.to_public_key();
-        Self { public, secret }
-    }
-}
-
 /// Create a new key pair.
 ///
 /// Both secret and public key consist of signing primary key and encryption subkey
 /// as [described in the Autocrypt standard](https://autocrypt.org/level1.html#openpgp-based-key-data).
-pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
+pub(crate) fn create_keypair(addr: EmailAddress) -> Result<SignedSecretKey> {
     let signing_key_type = PgpKeyType::Ed25519Legacy;
     let encryption_key_type = PgpKeyType::ECDH(ECCCurve::Curve25519);
 
@@ -135,12 +112,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
         .verify_bindings()
         .context("Invalid secret key generated")?;
 
-    let key_pair = KeyPair::new(secret_key);
-    key_pair
-        .public
-        .verify_bindings()
-        .context("Invalid public key generated")?;
-    Ok(key_pair)
+    Ok(secret_key)
 }
 
 /// Selects a subkey of the public key to use for encryption.
@@ -596,7 +568,7 @@ mod tests {
     fn test_create_keypair() {
         let keypair0 = create_keypair(EmailAddress::new("foo@bar.de").unwrap()).unwrap();
         let keypair1 = create_keypair(EmailAddress::new("two@zwo.de").unwrap()).unwrap();
-        assert_ne!(keypair0.public, keypair1.public);
+        assert_ne!(keypair0.public_key(), keypair1.public_key());
     }
 
     /// [SignedSecretKey] and [SignedPublicKey] objects
@@ -613,10 +585,10 @@ mod tests {
             let alice = alice_keypair();
             let bob = bob_keypair();
             TestKeys {
-                alice_secret: alice.secret.clone(),
-                alice_public: alice.public,
-                bob_secret: bob.secret.clone(),
-                bob_public: bob.public,
+                alice_secret: alice.clone(),
+                alice_public: alice.to_public_key(),
+                bob_secret: bob.clone(),
+                bob_public: bob.to_public_key(),
             }
         }
     }

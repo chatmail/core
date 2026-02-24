@@ -21,7 +21,6 @@ use crate::e2ee;
 use crate::events::EventType;
 use crate::key::{self, DcKey, SignedSecretKey};
 use crate::log::{LogExt, warn};
-use crate::pgp;
 use crate::qr::DCBACKUP_VERSION;
 use crate::sql;
 use crate::tools::{
@@ -142,19 +141,13 @@ pub async fn has_backup(_context: &Context, dir_name: &Path) -> Result<String> {
 }
 
 async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
-    let private_key = SignedSecretKey::from_asc(armored)?;
-    let public_key = private_key.to_public_key();
-
-    let keypair = pgp::KeyPair {
-        public: public_key,
-        secret: private_key,
-    };
-    key::store_self_keypair(context, &keypair).await?;
+    let secret_key = SignedSecretKey::from_asc(armored)?;
+    key::store_self_keypair(context, &secret_key).await?;
 
     info!(
         context,
         "stored self key: {:?}",
-        keypair.secret.public_key().legacy_key_id()
+        secret_key.public_key().legacy_key_id()
     );
     Ok(())
 }
@@ -825,7 +818,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_export_public_key_to_asc_file() {
         let context = TestContext::new().await;
-        let key = alice_keypair().public;
+        let key = alice_keypair().to_public_key();
         let blobdir = Path::new("$BLOBDIR");
         let filename = export_key_to_asc_file(&context.ctx, blobdir, "a@b", None, &key)
             .await
@@ -842,7 +835,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_import_private_key_exported_to_asc_file() {
         let context = TestContext::new().await;
-        let key = alice_keypair().secret;
+        let key = alice_keypair();
         let blobdir = Path::new("$BLOBDIR");
         let filename = export_key_to_asc_file(&context.ctx, blobdir, "a@b", None, &key)
             .await

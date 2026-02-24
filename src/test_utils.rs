@@ -15,6 +15,7 @@ use async_channel::{self as channel, Receiver, Sender};
 use chat::ChatItem;
 use deltachat_contact_tools::{ContactAddress, EmailAddress};
 use nu_ansi_term::Color;
+use pgp::composed::SignedSecretKey;
 use pretty_assertions::assert_eq;
 use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
@@ -37,7 +38,6 @@ use crate::log::warn;
 use crate::login_param::EnteredLoginParam;
 use crate::message::{Message, MessageState, MsgId, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
-use crate::pgp::KeyPair;
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::stock_str::StockStrings;
@@ -301,7 +301,7 @@ impl TestContextManager {
 /// Builder for the [TestContext].
 #[derive(Debug, Clone, Default)]
 pub struct TestContextBuilder {
-    key_pair: Option<KeyPair>,
+    key_pair: Option<SignedSecretKey>,
 
     /// Log sink if set.
     ///
@@ -364,11 +364,11 @@ impl TestContextBuilder {
         self.with_key_pair(fiona_keypair())
     }
 
-    /// Configures the new [`TestContext`] with the provided [`KeyPair`].
+    /// Configures the new [`TestContext`] with the provided [`SignedSecretKey`].
     ///
     /// This will extract the email address from the key and configure the context with the
     /// given identity.
-    pub fn with_key_pair(mut self, key_pair: KeyPair) -> Self {
+    pub fn with_key_pair(mut self, key_pair: SignedSecretKey) -> Self {
         self.key_pair = Some(key_pair);
         self
     }
@@ -396,7 +396,7 @@ impl TestContextBuilder {
     pub async fn build(self, used_names: Option<&mut BTreeSet<String>>) -> TestContext {
         if let Some(key_pair) = self.key_pair {
             let userid = {
-                let public_key = &key_pair.public;
+                let public_key = key_pair.to_public_key();
                 let id_bstr = public_key.details.users.first().unwrap().id.id();
                 String::from_utf8(id_bstr.to_vec()).unwrap()
             };
@@ -1352,62 +1352,43 @@ impl SentMessage<'_> {
 /// This saves CPU cycles by avoiding having to generate a key.
 ///
 /// The keypair was created using the crate::key::tests::gen_key test.
-pub fn alice_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn alice_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/alice-secret.asc")).unwrap()
 }
 
 /// Load a pre-generated keypair for bob@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
-pub fn bob_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn bob_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap()
 }
 
 /// Load a pre-generated keypair for charlie@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
-pub fn charlie_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc"))
-            .unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn charlie_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/charlie-secret.asc")).unwrap()
 }
 
 /// Load a pre-generated keypair for dom@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
-pub fn dom_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn dom_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/dom-secret.asc")).unwrap()
 }
 
 /// Load a pre-generated keypair for elena@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
-pub fn elena_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn elena_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/elena-secret.asc")).unwrap()
 }
 
 /// Load a pre-generated keypair for fiona@example.net from disk.
 ///
 /// Like [alice_keypair] but a different key and identity.
-pub fn fiona_keypair() -> KeyPair {
-    let secret =
-        key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    KeyPair { public, secret }
+pub fn fiona_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap()
 }
 
 /// Utility to help wait for and retrieve events.
