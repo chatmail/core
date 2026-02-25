@@ -1574,14 +1574,13 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         sql.execute_migration(
             "CREATE TABLE tokens_new (
                 id INTEGER PRIMARY KEY,
-                namespc INTEGER DEFAULT 0,
-                foreign_key TEXT DEFAULT '',
-                token TEXT DEFAULT '' UNIQUE,
-                timestamp INTEGER DEFAULT 0,
-                foreign_id INTEGER NOT NULL DEFAULT 0
+                namespc INTEGER DEFAULT 0 NOT NULL,
+                foreign_key TEXT DEFAULT '' NOT NULL,
+                token TEXT NOT NULL UNIQUE,
+                timestamp INTEGER DEFAULT 0 NOT NULL
             ) STRICT;
             INSERT OR IGNORE INTO tokens_new
-                SELECT id, namespc, foreign_key, token, timestamp, foreign_id FROM tokens;
+                SELECT id, namespc, foreign_key, token, timestamp FROM tokens;
             DROP TABLE tokens;
             ALTER TABLE tokens_new RENAME TO tokens;",
             migration_version,
