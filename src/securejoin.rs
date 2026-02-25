@@ -519,10 +519,10 @@ pub(crate) async fn handle_securejoin_handshake(
             ====   Bob requests our public key (Securejoin v3)   =====
             ========================================================*/
 
-            if mime_message.signature.is_some() {
-                warn!(context, "RequestPubkey is not supposed to be signed");
-                return Ok(HandshakeMessage::Ignore);
-            }
+            debug_assert!(
+                mime_message.signature.is_none(),
+                "RequestPubkey is not supposed to be signed"
+            );
             let Some(auth) = mime_message.get_header(HeaderDef::SecureJoinAuth) else {
                 warn!(
                     context,

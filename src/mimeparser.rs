@@ -359,7 +359,8 @@ impl MimeMessage {
 
         // Remove headers that are allowed _only_ in the encrypted+signed part. It's ok to leave
         // them in signed-only emails, but has no value currently.
-        Self::remove_secured_headers(&mut headers, &mut headers_removed, false);
+        let encrypted = false;
+        Self::remove_secured_headers(&mut headers, &mut headers_removed, encrypted);
 
         let mut from = from.context("No from in message")?;
         let private_keyring = load_self_secret_keyring(context).await?;
@@ -392,7 +393,6 @@ impl MimeMessage {
         {
             secrets = load_shared_secrets(context).await?;
         } else {
-            // No need to load all the secrets if the message isn't symmetrically encrypted
             secrets = vec![];
         }
 
@@ -2121,7 +2121,6 @@ async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
         })
         .await?;
     // Then, try decrypting using broadcast secrets
-    // Usually, the user won't be in more than ~10 broadcast channels
     secrets.extend(
         context
             .sql
