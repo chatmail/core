@@ -99,6 +99,7 @@ pub(crate) fn create_keypair(addr: EmailAddress) -> Result<KeyPair> {
         .key_type(signing_key_type)
         .can_certify(true)
         .can_sign(true)
+        .feature_seipd_v2(true)
         .primary_user_id(user_id)
         .passphrase(None)
         .preferred_symmetric_algorithms(smallvec![
