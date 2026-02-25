@@ -146,8 +146,8 @@ async fn set_self_key(context: &Context, armored: &str) -> Result<()> {
 
     info!(
         context,
-        "stored self key: {:?}",
-        secret_key.public_key().legacy_key_id()
+        "Stored self key: {:?}.",
+        secret_key.public_key().fingerprint()
     );
     Ok(())
 }
@@ -721,12 +721,7 @@ where
         format!("{kind}-key-{addr}-{id}-{fp}.asc")
     };
     let path = dir.join(&file_name);
-    info!(
-        context,
-        "Exporting key {:?} to {}.",
-        key.key_id(),
-        path.display()
-    );
+    info!(context, "Exporting key to {}.", path.display());
 
     // Delete the file if it already exists.
     delete_file(context, &path).await.ok();

@@ -10,7 +10,7 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{KeyDetails, KeyId};
+use pgp::types::KeyDetails;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
@@ -112,9 +112,6 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 
     /// Whether the key is private (or public).
     fn is_private() -> bool;
-
-    /// Returns the OpenPGP Key ID.
-    fn key_id(&self) -> KeyId;
 }
 
 /// Attempts to load own public key.
@@ -262,10 +259,6 @@ impl DcKey for SignedPublicKey {
     fn dc_fingerprint(&self) -> Fingerprint {
         self.fingerprint().into()
     }
-
-    fn key_id(&self) -> KeyId {
-        KeyDetails::legacy_key_id(self)
-    }
 }
 
 impl DcKey for SignedSecretKey {
@@ -288,10 +281,6 @@ impl DcKey for SignedSecretKey {
 
     fn dc_fingerprint(&self) -> Fingerprint {
         self.fingerprint().into()
-    }
-
-    fn key_id(&self) -> KeyId {
-        KeyDetails::legacy_key_id(&**self)
     }
 }
 
