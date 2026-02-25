@@ -2115,8 +2115,8 @@ async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
     // so, it should be fast
     let mut secrets: Vec<String> = context
         .sql
-        .query_map_vec("SELECT id, invite FROM bobstate", (), |row| {
-            let invite: crate::securejoin::QrInvite = row.get(1)?;
+        .query_map_vec("SELECT invite FROM bobstate", (), |row| {
+            let invite: crate::securejoin::QrInvite = row.get(0)?;
             Ok(invite.authcode().to_string())
         })
         .await?;
