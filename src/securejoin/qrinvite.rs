@@ -20,6 +20,7 @@ pub enum QrInvite {
         fingerprint: Fingerprint,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
         is_v3: bool,
     },
     Group {
@@ -29,6 +30,7 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
         is_v3: bool,
     },
     Broadcast {
@@ -38,6 +40,7 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
         is_v3: bool,
     },
 }
