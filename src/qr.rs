@@ -62,7 +62,7 @@ pub enum Qr {
         /// Authentication code.
         authcode: String,
 
-        /// Whether the sender supports the new Securejoin v3 protocol
+        /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
 
@@ -86,7 +86,7 @@ pub enum Qr {
         /// Authentication code.
         authcode: String,
 
-        /// Whether the sender supports the new Securejoin v3 protocol
+        /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
 
@@ -113,7 +113,7 @@ pub enum Qr {
         /// Authentication code.
         authcode: String,
 
-        /// Whether the sender supports the new Securejoin v3 protocol
+        /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
 

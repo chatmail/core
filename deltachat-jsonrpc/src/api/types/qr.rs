@@ -36,7 +36,7 @@ pub enum QrObject {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
-        /// Whether the sender supports the new Securejoin v3 protocol
+        /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
     /// Ask the user whether to join the broadcast channel.
@@ -58,7 +58,7 @@ pub enum QrObject {
         invitenumber: String,
         /// Authentication code.
         authcode: String,
-        /// Whether the sender supports the new Securejoin v3 protocol
+        /// Whether the inviter supports the new Securejoin v3 protocol
         is_v3: bool,
     },
     /// Contact fingerprint is verified.
