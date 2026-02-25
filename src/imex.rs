@@ -249,7 +249,7 @@ pub(crate) async fn import_backup_stream<R: tokio::io::AsyncRead + Unpin>(
     );
     ensure!(
         !context.scheduler.is_running().await,
-        "cannot import backup, IO is running"
+        "Cannot import backup, IO is running"
     );
 
     import_backup_stream_inner(context, backup_file, file_size, passphrase)
