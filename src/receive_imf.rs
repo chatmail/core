@@ -31,7 +31,8 @@ use crate::key::{
 };
 use crate::log::{LogExt as _, warn};
 use crate::message::{
-    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
+    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, insert_tombstone,
+    rfc724_mid_exists,
 };
 use crate::mimeparser::{
     AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
@@ -478,7 +479,7 @@ pub(crate) async fn receive_imf_inner(
     }
 
     let trash = || async {
-        let msg_ids = vec![message::insert_tombstone(context, rfc724_mid).await?];
+        let msg_ids = vec![insert_tombstone(context, rfc724_mid).await?];
         Ok(Some(ReceivedMsg {
             chat_id: DC_CHAT_ID_TRASH,
             state: MessageState::Undefined,
@@ -675,7 +676,7 @@ pub(crate) async fn receive_imf_inner(
 
         match res {
             securejoin::HandshakeMessage::Done | securejoin::HandshakeMessage::Ignore => {
-                let msg_id = message::insert_tombstone(context, rfc724_mid).await?;
+                let msg_id = insert_tombstone(context, rfc724_mid).await?;
                 received_msg = Some(ReceivedMsg {
                     chat_id: DC_CHAT_ID_TRASH,
                     state: MessageState::InSeen,
