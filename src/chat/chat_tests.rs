@@ -3833,6 +3833,7 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
     tcm.section("Now, Alice's fingerprint changes");
 
     alice.sql.execute("DELETE FROM keypairs", ()).await?;
+    *alice.self_public_key.lock().await = None;
     alice
         .sql
         .execute("DELETE FROM config WHERE keyname='key_id'", ())
