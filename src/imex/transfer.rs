@@ -476,10 +476,10 @@ mod tests {
         let ctx1 = &tcm.bob().await;
 
         // Prepare to transfer backup.
-        let provider = BackupProvider::prepare(&ctx0).await?;
+        let provider = BackupProvider::prepare(ctx0).await?;
 
         // Try to overwrite an existing profile.
-        let err = get_backup(&ctx1, provider.qr()).await.unwrap_err();
+        let err = get_backup(ctx1, provider.qr()).await.unwrap_err();
         assert!(format!("{err:#}").contains("Cannot import backups to accounts in use"));
 
         // ctx0 is supposed to also finish, and emit an error:
