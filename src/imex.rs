@@ -245,7 +245,7 @@ pub(crate) async fn import_backup_stream<R: tokio::io::AsyncRead + Unpin>(
 ) -> Result<()> {
     ensure!(
         !context.is_configured().await?,
-        "Cannot import backups to accounts in use."
+        "Cannot import backups to accounts in use"
     );
     ensure!(
         !context.scheduler.is_running().await,
