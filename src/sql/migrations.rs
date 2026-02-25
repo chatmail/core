@@ -31,6 +31,761 @@ tokio::task_local! {
     static STOP_MIGRATIONS_AT: i32;
 }
 
+fn migrate_key_contacts(
+    context: &Context,
+    transaction: &mut rusqlite::Transaction<'_>,
+) -> std::result::Result<(), anyhow::Error> {
+    info!(context, "Starting key-contact transition.");
+
+    // =============================== Step 1: ===============================
+    //                              Alter tables
+    transaction.execute_batch(
+        "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+
+        -- Verifier is an ID of the verifier contact.
+        -- 0 if the contact is not verified.
+        ALTER TABLE contacts ADD COLUMN verifier INTEGER NOT NULL DEFAULT 0;
+
+        CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
+
+        CREATE TABLE public_keys (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        fingerprint TEXT NOT NULL UNIQUE, -- Upper-case fingerprint of the key.
+        public_key BLOB NOT NULL -- Binary key, not ASCII-armored
+        ) STRICT;
+        CREATE INDEX public_key_index ON public_keys (fingerprint);
+
+        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+        SELECT public_key_fingerprint, public_key FROM acpeerstates
+         WHERE public_key_fingerprint IS NOT NULL AND public_key IS NOT NULL;
+
+        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+        SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates
+         WHERE gossip_key_fingerprint IS NOT NULL AND gossip_key IS NOT NULL;
+
+        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+        SELECT verified_key_fingerprint, verified_key FROM acpeerstates
+         WHERE verified_key_fingerprint IS NOT NULL AND verified_key IS NOT NULL;
+
+        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
+        SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates
+         WHERE secondary_verified_key_fingerprint IS NOT NULL AND secondary_verified_key IS NOT NULL;",
+    )
+    .context("Creating key-contact tables")?;
+
+    let Some(self_addr): Option<String> = transaction
+        .query_row(
+            "SELECT value FROM config WHERE keyname='configured_addr'",
+            (),
+            |row| row.get(0),
+        )
+        .optional()
+        .context("Step 0")?
+    else {
+        info!(
+            context,
+            "Not yet configured, no need to migrate key-contacts"
+        );
+        return Ok(());
+    };
+
+    // =============================== Step 2: ===============================
+    // Create up to 3 new contacts for every contact that has a peerstate:
+    // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
+    // one from the secondary verified key fingerprint.
+    // In the process, build maps from old contact id to new contact id:
+    // one that maps to Autocrypt key-contact, one that maps to verified key-contact.
+    let mut autocrypt_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut autocrypt_key_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
+    let mut verified_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
+    {
+        // This maps from the verified contact to the original contact id of the verifier.
+        // It can't map to the verified key contact id, because at the time of constructing
+        // this map, not all key-contacts are in the database.
+        let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
+
+        let mut load_contacts_stmt = transaction
+            .prepare(
+                "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
+                c.authname, c.param, c.status, c.is_bot, c.selfavatar_sent,
+                IFNULL(p.public_key, p.gossip_key),
+                p.verified_key, IFNULL(p.verifier, ''),
+                p.secondary_verified_key, p.secondary_verifier, p.prefer_encrypted
+                FROM contacts c
+                INNER JOIN acpeerstates p ON c.addr=p.addr
+                WHERE c.id > 9
+                ORDER BY p.last_seen DESC",
+            )
+            .context("Step 2")?;
+
+        let all_address_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
+            .query_map((), |row| {
+                let id: i64 = row.get(0)?;
+                let name: String = row.get(1)?;
+                let addr: String = row.get(2)?;
+                let origin: i64 = row.get(3)?;
+                let blocked: Option<bool> = row.get(4)?;
+                let last_seen: i64 = row.get(5)?;
+                let authname: String = row.get(6)?;
+                let param: String = row.get(7)?;
+                let status: Option<String> = row.get(8)?;
+                let is_bot: bool = row.get(9)?;
+                let selfavatar_sent: i64 = row.get(10)?;
+                let autocrypt_key = row
+                    .get(11)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let verified_key = row
+                    .get(12)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let verifier: String = row.get(13)?;
+                let secondary_verified_key = row
+                    .get(12)
+                    .ok()
+                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
+                let secondary_verifier: String = row.get(15)?;
+                let prefer_encrypt: u8 = row.get(16)?;
+                Ok((
+                    id,
+                    name,
+                    addr,
+                    origin,
+                    blocked,
+                    last_seen,
+                    authname,
+                    param,
+                    status,
+                    is_bot,
+                    selfavatar_sent,
+                    autocrypt_key,
+                    verified_key,
+                    verifier,
+                    secondary_verified_key,
+                    secondary_verifier,
+                    prefer_encrypt,
+                ))
+            })
+            .context("Step 3")?
+            .collect();
+
+        let mut insert_contact_stmt = transaction
+            .prepare(
+                "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
+                authname, param, status, is_bot, selfavatar_sent, fingerprint)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+            )
+            .context("Step 4")?;
+        let mut fingerprint_to_id_stmt = transaction
+            .prepare("SELECT id FROM contacts WHERE fingerprint=? AND id>9")
+            .context("Step 5")?;
+        let mut original_contact_id_from_addr_stmt = transaction
+            .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")
+            .context("Step 6")?;
+
+        for row in all_address_contacts? {
+            let (
+                original_id,
+                name,
+                addr,
+                origin,
+                blocked,
+                last_seen,
+                authname,
+                param,
+                status,
+                is_bot,
+                selfavatar_sent,
+                autocrypt_key,
+                verified_key,
+                verifier,
+                secondary_verified_key,
+                secondary_verifier,
+                prefer_encrypt,
+            ) = row;
+            let mut insert_contact = |key: SignedPublicKey| -> Result<u32> {
+                let fingerprint = key.dc_fingerprint().hex();
+                let existing_contact_id: Option<u32> = fingerprint_to_id_stmt
+                    .query_row((&fingerprint,), |row| row.get(0))
+                    .optional()
+                    .context("Step 7")?;
+                if let Some(existing_contact_id) = existing_contact_id {
+                    return Ok(existing_contact_id);
+                }
+                insert_contact_stmt
+                    .execute((
+                        &name,
+                        &addr,
+                        origin,
+                        blocked,
+                        last_seen,
+                        &authname,
+                        &param,
+                        &status,
+                        is_bot,
+                        selfavatar_sent,
+                        fingerprint.clone(),
+                    ))
+                    .context("Step 8")?;
+                let id = transaction
+                    .last_insert_rowid()
+                    .try_into()
+                    .context("Step 9")?;
+                info!(
+                    context,
+                    "Inserted new contact id={id} name='{name}' addr='{addr}' fingerprint={fingerprint}"
+                );
+                Ok(id)
+            };
+            let mut original_contact_id_from_addr = |addr: &str, default: u32| -> Result<u32> {
+                if addr_cmp(addr, &self_addr) {
+                    Ok(1) // ContactId::SELF
+                } else if addr.is_empty() {
+                    Ok(default)
+                } else {
+                    Ok(original_contact_id_from_addr_stmt
+                        .query_row((addr,), |row| row.get(0))
+                        .optional()
+                        .with_context(|| format!("Original contact '{addr}' not found"))?
+                        .unwrap_or(default))
+                }
+            };
+
+            let Some(autocrypt_key) = autocrypt_key else {
+                continue;
+            };
+            let new_id = insert_contact(autocrypt_key).context("Step 10")?;
+
+            // prefer_encrypt == 20 would mean EncryptPreference::Reset,
+            // i.e. we shouldn't encrypt if possible.
+            if prefer_encrypt != 20 {
+                autocrypt_key_contacts.insert(original_id.try_into().context("Step 11")?, new_id);
+            } else {
+                autocrypt_key_contacts_with_reset_peerstate
+                    .insert(original_id.try_into().context("Step 12")?, new_id);
+            }
+
+            let Some(verified_key) = verified_key else {
+                continue;
+            };
+            let new_id = insert_contact(verified_key).context("Step 13")?;
+            verified_key_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
+
+            let verifier_id = if addr_cmp(&verifier, &addr) {
+                // Earlier versions of Delta Chat signalled a direct verification
+                // by putting the contact's own address into the verifier column
+                1 // 1=ContactId::SELF
+            } else {
+                // If the original verifier is unknown, we represent this in the database
+                // by putting `new_id` into the place of the verifier,
+                // i.e. we say that this contact verified itself.
+                original_contact_id_from_addr(&verifier, new_id).context("Step 15")?
+            };
+            verifications.insert(new_id, verifier_id);
+
+            let Some(secondary_verified_key) = secondary_verified_key else {
+                continue;
+            };
+            let new_id = insert_contact(secondary_verified_key).context("Step 16")?;
+            let verifier_id: u32 = if addr_cmp(&secondary_verifier, &addr) {
+                1 // 1=ContactId::SELF
+            } else {
+                original_contact_id_from_addr(&secondary_verifier, new_id).context("Step 17")?
+            };
+            // Only use secondary verification if there is no primary verification:
+            verifications.entry(new_id).or_insert(verifier_id);
+        }
+        info!(
+            context,
+            "Created key-contacts identified by autocrypt key: {autocrypt_key_contacts:?}"
+        );
+        info!(
+            context,
+            "Created key-contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_key_contacts_with_reset_peerstate:?}"
+        );
+        info!(
+            context,
+            "Created key-contacts identified by verified key: {verified_key_contacts:?}"
+        );
+
+        for (&new_contact, &verifier_original_contact) in &verifications {
+            let verifier = if verifier_original_contact == 1 {
+                1 // Verified by ContactId::SELF
+            } else if verifier_original_contact == new_contact {
+                new_contact // unkwnown verifier
+            } else {
+                // `verifications` contains the original contact id.
+                // We need to get the new, verified-pgp-identified contact id.
+                match verified_key_contacts.get(&verifier_original_contact) {
+                    Some(v) => *v,
+                    None => {
+                        warn!(
+                            context,
+                            "Couldn't find key-contact for {verifier_original_contact} who verified {new_contact}"
+                        );
+                        continue;
+                    }
+                }
+            };
+            transaction
+                .execute(
+                    "UPDATE contacts SET verifier=? WHERE id=?",
+                    (verifier, new_contact),
+                )
+                .context("Step 18")?;
+        }
+        info!(context, "Migrated verifications: {verifications:?}");
+    }
+
+    // ======================= Step 3: =======================
+    // For each chat, modify the memberlist to retain the correct contacts
+    // In the process, track the set of contacts which remained no any chat at all
+    // in a `BTreeSet<u32>`, which initially contains all contact ids
+    let mut orphaned_contacts: BTreeSet<u32> = transaction
+        .prepare("SELECT id FROM contacts WHERE id>9")
+        .context("Step 19")?
+        .query_map((), |row| row.get::<usize, u32>(0))
+        .context("Step 20")?
+        .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
+        .context("Step 21")?;
+
+    {
+        let mut stmt = transaction
+            .prepare(
+                "SELECT c.id, c.type, c.grpid, c.protected
+            FROM chats c
+            WHERE id>9",
+            )
+            .context("Step 22")?;
+        let all_chats = stmt
+            .query_map((), |row| {
+                let id: u32 = row.get(0)?;
+                let typ: u32 = row.get(1)?;
+                let grpid: String = row.get(2)?;
+                let protected: u32 = row.get(3)?;
+                Ok((id, typ, grpid, protected))
+            })
+            .context("Step 23")?;
+        let mut load_chat_contacts_stmt = transaction.prepare(
+            "SELECT contact_id, add_timestamp>=remove_timestamp FROM chats_contacts
+             WHERE chat_id=? AND contact_id>9",
+        )?;
+        let is_chatmail: Option<String> = transaction
+            .query_row(
+                "SELECT value FROM config WHERE keyname='is_chatmail'",
+                (),
+                |row| row.get(0),
+            )
+            .optional()
+            .context("Step 23.1")?;
+        let is_chatmail = is_chatmail
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or_default()
+            != 0;
+        let map_to_key_contact = |old_member: &u32| {
+            autocrypt_key_contacts
+                .get(old_member)
+                .or_else(|| {
+                    // For chatmail servers,
+                    // we send encrypted even if the peerstate is reset,
+                    // because an unencrypted message likely won't arrive.
+                    // This is the same behavior as before key-contacts migration.
+                    if is_chatmail {
+                        autocrypt_key_contacts_with_reset_peerstate.get(old_member)
+                    } else {
+                        None
+                    }
+                })
+                .copied()
+        };
+
+        let mut update_member_stmt = transaction
+            .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
+        let mut addr_cmp_stmt = transaction
+            .prepare("SELECT c.addr=d.addr FROM contacts c, contacts d WHERE c.id=? AND d.id=?")?;
+        for chat in all_chats {
+            let (chat_id, typ, grpid, protected) = chat.context("Step 24")?;
+            // In groups, this also contains past members, i.e. `(_, false)` entries.
+            let old_members: Vec<(u32, bool)> = load_chat_contacts_stmt
+                .query_map((chat_id,), |row| {
+                    let id: u32 = row.get(0)?;
+                    let present: bool = row.get(1)?;
+                    Ok((id, present))
+                })
+                .context("Step 25")?
+                .collect::<Result<Vec<_>, _>>()
+                .context("Step 26")?;
+
+            let mut keep_address_contacts = |reason: &str| -> Result<()> {
+                info!(
+                    context,
+                    "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}."
+                );
+                for (m, _) in &old_members {
+                    orphaned_contacts.remove(m);
+                }
+
+                // Unprotect this chat if it was protected.
+                //
+                // Otherwise we get protected chat with address-contact(s).
+                transaction
+                    .execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))
+                    .context("Step 26.0")?;
+
+                Ok(())
+            };
+            let old_and_new_members: Vec<(u32, bool, Option<u32>)> = match typ {
+                // 1:1 chats retain:
+                // - address-contact if peerstate is in the "reset" state,
+                //   or if there is no key-contact that has the right email address.
+                // - key-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
+                // - key-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
+                //   Since the autocrypt and verified key-contact are identital in this case, we can add the Autocrypt key-contact,
+                //   and the effect will be the same.
+                100 => {
+                    let Some((old_member, _)) = old_members.first() else {
+                        info!(
+                            context,
+                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat."
+                        );
+                        continue;
+                    };
+
+                    let Some(new_contact) = map_to_key_contact(old_member) else {
+                        keep_address_contacts("No peerstate, or peerstate in 'reset' state")?;
+                        continue;
+                    };
+                    if !addr_cmp_stmt
+                        .query_row((old_member, new_contact), |row| row.get::<_, bool>(0))?
+                    {
+                        keep_address_contacts("key contact has different email")?;
+                        continue;
+                    }
+                    vec![(*old_member, true, Some(new_contact))]
+                }
+
+                // Group
+                120 => {
+                    if grpid.is_empty() {
+                        // Ad-hoc group that has empty Chat-Group-ID
+                        // because it was created in response to receiving a non-chat email.
+                        keep_address_contacts("Empty chat-Group-ID")?;
+                        continue;
+                    } else if protected == 1 {
+                        old_members
+                            .iter()
+                            .map(|&(id, present)| {
+                                (id, present, verified_key_contacts.get(&id).copied())
+                            })
+                            .collect()
+                    } else {
+                        old_members
+                            .iter()
+                            .map(|&(id, present)| (id, present, map_to_key_contact(&id)))
+                            .collect::<Vec<(u32, bool, Option<u32>)>>()
+                    }
+                }
+
+                // Mailinglist
+                140 => {
+                    keep_address_contacts("Mailinglist")?;
+                    continue;
+                }
+
+                // Broadcast channel
+                160 => old_members
+                    .iter()
+                    .map(|(original, _)| {
+                        (
+                            *original,
+                            true,
+                            autocrypt_key_contacts
+                                .get(original)
+                                // There will be no unencrypted broadcast lists anymore,
+                                // so, if a peerstate is reset,
+                                // the best we can do is encrypting to this key regardless.
+                                .or_else(|| {
+                                    autocrypt_key_contacts_with_reset_peerstate.get(original)
+                                })
+                                .copied(),
+                        )
+                    })
+                    .collect::<Vec<(u32, bool, Option<u32>)>>(),
+                _ => {
+                    warn!(context, "Invalid chat type {typ}");
+                    continue;
+                }
+            };
+
+            // If a group contains a contact without a key or with 'reset' peerstate,
+            // downgrade to unencrypted Ad-Hoc group.
+            if typ == 120
+                && old_and_new_members
+                    .iter()
+                    .any(|&(_old, present, new)| present && new.is_none())
+            {
+                transaction
+                    .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
+                    .context("Step 26.1")?;
+                keep_address_contacts("Group contains contact without peerstate")?;
+                continue;
+            }
+
+            let human_readable_transitions = old_and_new_members
+                .iter()
+                .map(|(old, _, new)| format!("{old}->{}", new.unwrap_or_default()))
+                .collect::<Vec<String>>()
+                .join(" ");
+            info!(
+                context,
+                "Migrating chat {chat_id} to key-contacts: {human_readable_transitions}"
+            );
+
+            for (old_member, _, new_member) in old_and_new_members {
+                if let Some(new_member) = new_member {
+                    orphaned_contacts.remove(&new_member);
+                    let res = update_member_stmt.execute((new_member, old_member, chat_id));
+                    if res.is_err() {
+                        // The same chat partner exists multiple times in the chat,
+                        // with mutliple profiles which have different email addresses
+                        // but the same key.
+                        // We can only keep one of them.
+                        // So, if one of them is not in the chat anymore, delete it,
+                        // otherwise delete the one that was added least recently.
+                        let member_to_delete: u32 = transaction
+                            .query_row(
+                                "SELECT contact_id
+                               FROM chats_contacts
+                              WHERE chat_id=? AND contact_id IN (?,?)
+                           ORDER BY add_timestamp>=remove_timestamp, add_timestamp LIMIT 1",
+                                (chat_id, new_member, old_member),
+                                |row| row.get(0),
+                            )
+                            .context("Step 27")?;
+                        info!(
+                            context,
+                            "Chat partner is in the chat {chat_id} multiple times. \
+                            Deleting {member_to_delete}, then trying to update \
+                            {old_member}->{new_member} again"
+                        );
+                        transaction
+                            .execute(
+                                "DELETE FROM chats_contacts WHERE chat_id=? AND contact_id=?",
+                                (chat_id, member_to_delete),
+                            )
+                            .context("Step 28")?;
+                        // If we removed `old_member`, then this will be a no-op,
+                        // which is exactly what we want in this case:
+                        update_member_stmt.execute((new_member, old_member, chat_id))?;
+                    }
+                } else {
+                    info!(
+                        context,
+                        "Old member {old_member} in chat {chat_id} can't be upgraded to key-contact, removing them"
+                    );
+                    transaction
+                        .execute(
+                            "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
+                            (old_member, chat_id),
+                        )
+                        .context("Step 29")?;
+                }
+            }
+        }
+    }
+
+    // ======================= Step 4: =======================
+    {
+        info!(
+            context,
+            "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
+        );
+        let mut mark_as_hidden_stmt = transaction
+            .prepare("UPDATE contacts SET origin=? WHERE id=?")
+            .context("Step 30")?;
+        for contact in orphaned_contacts {
+            mark_as_hidden_stmt
+                .execute((0x8, contact))
+                .context("Step 31")?;
+        }
+    }
+
+    // ======================= Step 5: =======================
+    // Prepare for rewriting `from_id`, `to_id` in messages
+    {
+        let mut contacts_map = autocrypt_key_contacts_with_reset_peerstate;
+        for (old, new) in autocrypt_key_contacts {
+            contacts_map.insert(old, new);
+        }
+        transaction
+            .execute(
+                "CREATE TABLE key_contacts_map (
+                    old_id INTEGER PRIMARY KEY NOT NULL,
+                    new_id INTEGER NOT NULL
+                ) STRICT",
+                (),
+            )
+            .context("Step 32")?;
+        {
+            let mut stmt = transaction
+                .prepare("INSERT INTO key_contacts_map (old_id, new_id) VALUES (?, ?)")
+                .context("Step 33")?;
+            for ids in contacts_map {
+                stmt.execute(ids).context("Step 34")?;
+            }
+        }
+        transaction
+            .execute(
+                "INSERT INTO config (keyname, value) VALUES (
+                    'first_key_contacts_msg_id',
+                    IFNULL((SELECT MAX(id)+1 FROM msgs), 0)
+                )",
+                (),
+            )
+            .context("Step 35")?;
+    }
+
+    Ok(())
+}
+
+/// Rewrite `from_id`, `to_id` in >= 1000 messages starting from the newest ones, to key-contacts.
+#[expect(clippy::arithmetic_side_effects)]
+pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
+    let sql = &context.sql;
+    if sql
+        .get_raw_config_int64("first_key_contacts_msg_id")
+        .await?
+        <= Some(0)
+    {
+        return Ok(());
+    }
+    let trans_fn = |t: &mut rusqlite::Transaction| {
+        let mut first_key_contacts_msg_id: u64 = t
+            .query_one(
+                "SELECT CAST(value AS INTEGER) FROM config WHERE keyname='first_key_contacts_msg_id'",
+                (),
+                |row| row.get(0),
+            )
+            .context("Get first_key_contacts_msg_id")?;
+        let mut stmt = t
+            .prepare(
+                "UPDATE msgs SET
+                    from_id=IFNULL(
+                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.from_id),
+                        from_id
+                    ),
+                    to_id=IFNULL(
+                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.to_id),
+                        to_id
+                    )
+                WHERE id>=? AND id<?
+                AND chat_id>9
+                AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')",
+            )
+            .context("Prepare stmt")?;
+        let msgs_to_migrate = 1000;
+        let mut msgs_migrated: u64 = 0;
+        while first_key_contacts_msg_id > 0 && msgs_migrated < msgs_to_migrate {
+            let start_msg_id = first_key_contacts_msg_id.saturating_sub(msgs_to_migrate);
+            let cnt: u64 = stmt
+                .execute((start_msg_id, first_key_contacts_msg_id))
+                .context("UPDATE msgs")?
+                .try_into()?;
+            msgs_migrated += cnt;
+            first_key_contacts_msg_id = start_msg_id;
+        }
+        t.execute(
+            "UPDATE config SET value=? WHERE keyname='first_key_contacts_msg_id'",
+            (first_key_contacts_msg_id,),
+        )
+        .context("Update first_key_contacts_msg_id")?;
+        Ok((msgs_migrated, first_key_contacts_msg_id))
+    };
+    let start = Time::now();
+    let mut msgs_migrated = 0;
+    loop {
+        let (n, first_key_contacts_msg_id) = sql.transaction(trans_fn).await?;
+        msgs_migrated += n;
+        if first_key_contacts_msg_id == 0 || time_elapsed(&start) >= Duration::from_millis(500) {
+            break;
+        }
+    }
+    sql.uncache_raw_config("first_key_contacts_msg_id").await;
+    info!(
+        context,
+        "Rewriting {msgs_migrated} msgs to key-contacts took {:?}.",
+        time_elapsed(&start),
+    );
+    Ok(())
+}
+
+impl Sql {
+    async fn set_db_version(&self, version: i32) -> Result<()> {
+        self.set_raw_config_int(VERSION_CFG, version).await?;
+        Ok(())
+    }
+
+    // Sets db `version` in the `transaction`.
+    fn set_db_version_trans(transaction: &mut rusqlite::Transaction, version: i32) -> Result<()> {
+        transaction.execute(
+            "UPDATE config SET value=? WHERE keyname=?;",
+            (format!("{version}"), VERSION_CFG),
+        )?;
+        Ok(())
+    }
+
+    async fn set_db_version_in_cache(&self, version: i32) -> Result<()> {
+        let mut lock = self.config_cache.write().await;
+        lock.insert(VERSION_CFG.to_string(), Some(format!("{version}")));
+        Ok(())
+    }
+
+    async fn execute_migration(&self, query: &str, version: i32) -> Result<()> {
+        self.execute_migration_transaction(
+            |transaction| {
+                transaction.execute_batch(query)?;
+                Ok(())
+            },
+            version,
+        )
+        .await
+    }
+
+    async fn execute_migration_transaction(
+        &self,
+        migration: impl Send + FnOnce(&mut rusqlite::Transaction) -> Result<()>,
+        version: i32,
+    ) -> Result<()> {
+        #[cfg(test)]
+        if STOP_MIGRATIONS_AT.try_with(|stop_migrations_at| version > *stop_migrations_at)
+            == Ok(true)
+        {
+            println!("Not running migration {version}, because STOP_MIGRATIONS_AT is set");
+            return Ok(());
+        }
+
+        self.transaction(move |transaction| {
+            let curr_version: String = transaction.query_row(
+                "SELECT IFNULL(value, ?) FROM config WHERE keyname=?;",
+                ("0", VERSION_CFG),
+                |row| row.get(0),
+            )?;
+            let curr_version: i32 = curr_version.parse()?;
+            ensure!(curr_version < version, "Db version must be increased");
+            Self::set_db_version_trans(transaction, version)?;
+            migration(transaction)?;
+
+            Ok(())
+        })
+        .await
+        .with_context(|| format!("execute_migration failed for version {version}"))?;
+
+        self.config_cache.write().await.clear();
+
+        Ok(())
+    }
+}
+
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn run(context: &Context, sql: &Sql) -> Result<bool> {
     let mut exists_before_update = false;
@@ -1583,761 +2338,6 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
     info!(context, "Database version: v{new_version}.");
 
     Ok(recode_avatar)
-}
-
-fn migrate_key_contacts(
-    context: &Context,
-    transaction: &mut rusqlite::Transaction<'_>,
-) -> std::result::Result<(), anyhow::Error> {
-    info!(context, "Starting key-contact transition.");
-
-    // =============================== Step 1: ===============================
-    //                              Alter tables
-    transaction.execute_batch(
-        "ALTER TABLE contacts ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
-
-        -- Verifier is an ID of the verifier contact.
-        -- 0 if the contact is not verified.
-        ALTER TABLE contacts ADD COLUMN verifier INTEGER NOT NULL DEFAULT 0;
-
-        CREATE INDEX contacts_fingerprint_index ON contacts (fingerprint);
-
-        CREATE TABLE public_keys (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        fingerprint TEXT NOT NULL UNIQUE, -- Upper-case fingerprint of the key.
-        public_key BLOB NOT NULL -- Binary key, not ASCII-armored
-        ) STRICT;
-        CREATE INDEX public_key_index ON public_keys (fingerprint);
-
-        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT public_key_fingerprint, public_key FROM acpeerstates
-         WHERE public_key_fingerprint IS NOT NULL AND public_key IS NOT NULL;
-
-        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT gossip_key_fingerprint, gossip_key FROM acpeerstates
-         WHERE gossip_key_fingerprint IS NOT NULL AND gossip_key IS NOT NULL;
-
-        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT verified_key_fingerprint, verified_key FROM acpeerstates
-         WHERE verified_key_fingerprint IS NOT NULL AND verified_key IS NOT NULL;
-
-        INSERT OR IGNORE INTO public_keys (fingerprint, public_key)
-        SELECT secondary_verified_key_fingerprint, secondary_verified_key FROM acpeerstates
-         WHERE secondary_verified_key_fingerprint IS NOT NULL AND secondary_verified_key IS NOT NULL;",
-    )
-    .context("Creating key-contact tables")?;
-
-    let Some(self_addr): Option<String> = transaction
-        .query_row(
-            "SELECT value FROM config WHERE keyname='configured_addr'",
-            (),
-            |row| row.get(0),
-        )
-        .optional()
-        .context("Step 0")?
-    else {
-        info!(
-            context,
-            "Not yet configured, no need to migrate key-contacts"
-        );
-        return Ok(());
-    };
-
-    // =============================== Step 2: ===============================
-    // Create up to 3 new contacts for every contact that has a peerstate:
-    // one from the Autocrypt key fingerprint, one from the verified key fingerprint,
-    // one from the secondary verified key fingerprint.
-    // In the process, build maps from old contact id to new contact id:
-    // one that maps to Autocrypt key-contact, one that maps to verified key-contact.
-    let mut autocrypt_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
-    let mut autocrypt_key_contacts_with_reset_peerstate: BTreeMap<u32, u32> = BTreeMap::new();
-    let mut verified_key_contacts: BTreeMap<u32, u32> = BTreeMap::new();
-    {
-        // This maps from the verified contact to the original contact id of the verifier.
-        // It can't map to the verified key contact id, because at the time of constructing
-        // this map, not all key-contacts are in the database.
-        let mut verifications: BTreeMap<u32, u32> = BTreeMap::new();
-
-        let mut load_contacts_stmt = transaction
-            .prepare(
-                "SELECT c.id, c.name, c.addr, c.origin, c.blocked, c.last_seen,
-                c.authname, c.param, c.status, c.is_bot, c.selfavatar_sent,
-                IFNULL(p.public_key, p.gossip_key),
-                p.verified_key, IFNULL(p.verifier, ''),
-                p.secondary_verified_key, p.secondary_verifier, p.prefer_encrypted
-                FROM contacts c
-                INNER JOIN acpeerstates p ON c.addr=p.addr
-                WHERE c.id > 9
-                ORDER BY p.last_seen DESC",
-            )
-            .context("Step 2")?;
-
-        let all_address_contacts: rusqlite::Result<Vec<_>> = load_contacts_stmt
-            .query_map((), |row| {
-                let id: i64 = row.get(0)?;
-                let name: String = row.get(1)?;
-                let addr: String = row.get(2)?;
-                let origin: i64 = row.get(3)?;
-                let blocked: Option<bool> = row.get(4)?;
-                let last_seen: i64 = row.get(5)?;
-                let authname: String = row.get(6)?;
-                let param: String = row.get(7)?;
-                let status: Option<String> = row.get(8)?;
-                let is_bot: bool = row.get(9)?;
-                let selfavatar_sent: i64 = row.get(10)?;
-                let autocrypt_key = row
-                    .get(11)
-                    .ok()
-                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-                let verified_key = row
-                    .get(12)
-                    .ok()
-                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-                let verifier: String = row.get(13)?;
-                let secondary_verified_key = row
-                    .get(12)
-                    .ok()
-                    .and_then(|blob: Vec<u8>| SignedPublicKey::from_slice(&blob).ok());
-                let secondary_verifier: String = row.get(15)?;
-                let prefer_encrypt: u8 = row.get(16)?;
-                Ok((
-                    id,
-                    name,
-                    addr,
-                    origin,
-                    blocked,
-                    last_seen,
-                    authname,
-                    param,
-                    status,
-                    is_bot,
-                    selfavatar_sent,
-                    autocrypt_key,
-                    verified_key,
-                    verifier,
-                    secondary_verified_key,
-                    secondary_verifier,
-                    prefer_encrypt,
-                ))
-            })
-            .context("Step 3")?
-            .collect();
-
-        let mut insert_contact_stmt = transaction
-            .prepare(
-                "INSERT INTO contacts (name, addr, origin, blocked, last_seen,
-                authname, param, status, is_bot, selfavatar_sent, fingerprint)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            )
-            .context("Step 4")?;
-        let mut fingerprint_to_id_stmt = transaction
-            .prepare("SELECT id FROM contacts WHERE fingerprint=? AND id>9")
-            .context("Step 5")?;
-        let mut original_contact_id_from_addr_stmt = transaction
-            .prepare("SELECT id FROM contacts WHERE addr=? AND fingerprint='' AND id>9")
-            .context("Step 6")?;
-
-        for row in all_address_contacts? {
-            let (
-                original_id,
-                name,
-                addr,
-                origin,
-                blocked,
-                last_seen,
-                authname,
-                param,
-                status,
-                is_bot,
-                selfavatar_sent,
-                autocrypt_key,
-                verified_key,
-                verifier,
-                secondary_verified_key,
-                secondary_verifier,
-                prefer_encrypt,
-            ) = row;
-            let mut insert_contact = |key: SignedPublicKey| -> Result<u32> {
-                let fingerprint = key.dc_fingerprint().hex();
-                let existing_contact_id: Option<u32> = fingerprint_to_id_stmt
-                    .query_row((&fingerprint,), |row| row.get(0))
-                    .optional()
-                    .context("Step 7")?;
-                if let Some(existing_contact_id) = existing_contact_id {
-                    return Ok(existing_contact_id);
-                }
-                insert_contact_stmt
-                    .execute((
-                        &name,
-                        &addr,
-                        origin,
-                        blocked,
-                        last_seen,
-                        &authname,
-                        &param,
-                        &status,
-                        is_bot,
-                        selfavatar_sent,
-                        fingerprint.clone(),
-                    ))
-                    .context("Step 8")?;
-                let id = transaction
-                    .last_insert_rowid()
-                    .try_into()
-                    .context("Step 9")?;
-                info!(
-                    context,
-                    "Inserted new contact id={id} name='{name}' addr='{addr}' fingerprint={fingerprint}"
-                );
-                Ok(id)
-            };
-            let mut original_contact_id_from_addr = |addr: &str, default: u32| -> Result<u32> {
-                if addr_cmp(addr, &self_addr) {
-                    Ok(1) // ContactId::SELF
-                } else if addr.is_empty() {
-                    Ok(default)
-                } else {
-                    Ok(original_contact_id_from_addr_stmt
-                        .query_row((addr,), |row| row.get(0))
-                        .optional()
-                        .with_context(|| format!("Original contact '{addr}' not found"))?
-                        .unwrap_or(default))
-                }
-            };
-
-            let Some(autocrypt_key) = autocrypt_key else {
-                continue;
-            };
-            let new_id = insert_contact(autocrypt_key).context("Step 10")?;
-
-            // prefer_encrypt == 20 would mean EncryptPreference::Reset,
-            // i.e. we shouldn't encrypt if possible.
-            if prefer_encrypt != 20 {
-                autocrypt_key_contacts.insert(original_id.try_into().context("Step 11")?, new_id);
-            } else {
-                autocrypt_key_contacts_with_reset_peerstate
-                    .insert(original_id.try_into().context("Step 12")?, new_id);
-            }
-
-            let Some(verified_key) = verified_key else {
-                continue;
-            };
-            let new_id = insert_contact(verified_key).context("Step 13")?;
-            verified_key_contacts.insert(original_id.try_into().context("Step 14")?, new_id);
-
-            let verifier_id = if addr_cmp(&verifier, &addr) {
-                // Earlier versions of Delta Chat signalled a direct verification
-                // by putting the contact's own address into the verifier column
-                1 // 1=ContactId::SELF
-            } else {
-                // If the original verifier is unknown, we represent this in the database
-                // by putting `new_id` into the place of the verifier,
-                // i.e. we say that this contact verified itself.
-                original_contact_id_from_addr(&verifier, new_id).context("Step 15")?
-            };
-            verifications.insert(new_id, verifier_id);
-
-            let Some(secondary_verified_key) = secondary_verified_key else {
-                continue;
-            };
-            let new_id = insert_contact(secondary_verified_key).context("Step 16")?;
-            let verifier_id: u32 = if addr_cmp(&secondary_verifier, &addr) {
-                1 // 1=ContactId::SELF
-            } else {
-                original_contact_id_from_addr(&secondary_verifier, new_id).context("Step 17")?
-            };
-            // Only use secondary verification if there is no primary verification:
-            verifications.entry(new_id).or_insert(verifier_id);
-        }
-        info!(
-            context,
-            "Created key-contacts identified by autocrypt key: {autocrypt_key_contacts:?}"
-        );
-        info!(
-            context,
-            "Created key-contacts  with 'reset' peerstate identified by autocrypt key: {autocrypt_key_contacts_with_reset_peerstate:?}"
-        );
-        info!(
-            context,
-            "Created key-contacts identified by verified key: {verified_key_contacts:?}"
-        );
-
-        for (&new_contact, &verifier_original_contact) in &verifications {
-            let verifier = if verifier_original_contact == 1 {
-                1 // Verified by ContactId::SELF
-            } else if verifier_original_contact == new_contact {
-                new_contact // unkwnown verifier
-            } else {
-                // `verifications` contains the original contact id.
-                // We need to get the new, verified-pgp-identified contact id.
-                match verified_key_contacts.get(&verifier_original_contact) {
-                    Some(v) => *v,
-                    None => {
-                        warn!(
-                            context,
-                            "Couldn't find key-contact for {verifier_original_contact} who verified {new_contact}"
-                        );
-                        continue;
-                    }
-                }
-            };
-            transaction
-                .execute(
-                    "UPDATE contacts SET verifier=? WHERE id=?",
-                    (verifier, new_contact),
-                )
-                .context("Step 18")?;
-        }
-        info!(context, "Migrated verifications: {verifications:?}");
-    }
-
-    // ======================= Step 3: =======================
-    // For each chat, modify the memberlist to retain the correct contacts
-    // In the process, track the set of contacts which remained no any chat at all
-    // in a `BTreeSet<u32>`, which initially contains all contact ids
-    let mut orphaned_contacts: BTreeSet<u32> = transaction
-        .prepare("SELECT id FROM contacts WHERE id>9")
-        .context("Step 19")?
-        .query_map((), |row| row.get::<usize, u32>(0))
-        .context("Step 20")?
-        .collect::<Result<BTreeSet<u32>, rusqlite::Error>>()
-        .context("Step 21")?;
-
-    {
-        let mut stmt = transaction
-            .prepare(
-                "SELECT c.id, c.type, c.grpid, c.protected
-            FROM chats c
-            WHERE id>9",
-            )
-            .context("Step 22")?;
-        let all_chats = stmt
-            .query_map((), |row| {
-                let id: u32 = row.get(0)?;
-                let typ: u32 = row.get(1)?;
-                let grpid: String = row.get(2)?;
-                let protected: u32 = row.get(3)?;
-                Ok((id, typ, grpid, protected))
-            })
-            .context("Step 23")?;
-        let mut load_chat_contacts_stmt = transaction.prepare(
-            "SELECT contact_id, add_timestamp>=remove_timestamp FROM chats_contacts
-             WHERE chat_id=? AND contact_id>9",
-        )?;
-        let is_chatmail: Option<String> = transaction
-            .query_row(
-                "SELECT value FROM config WHERE keyname='is_chatmail'",
-                (),
-                |row| row.get(0),
-            )
-            .optional()
-            .context("Step 23.1")?;
-        let is_chatmail = is_chatmail
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or_default()
-            != 0;
-        let map_to_key_contact = |old_member: &u32| {
-            autocrypt_key_contacts
-                .get(old_member)
-                .or_else(|| {
-                    // For chatmail servers,
-                    // we send encrypted even if the peerstate is reset,
-                    // because an unencrypted message likely won't arrive.
-                    // This is the same behavior as before key-contacts migration.
-                    if is_chatmail {
-                        autocrypt_key_contacts_with_reset_peerstate.get(old_member)
-                    } else {
-                        None
-                    }
-                })
-                .copied()
-        };
-
-        let mut update_member_stmt = transaction
-            .prepare("UPDATE chats_contacts SET contact_id=? WHERE contact_id=? AND chat_id=?")?;
-        let mut addr_cmp_stmt = transaction
-            .prepare("SELECT c.addr=d.addr FROM contacts c, contacts d WHERE c.id=? AND d.id=?")?;
-        for chat in all_chats {
-            let (chat_id, typ, grpid, protected) = chat.context("Step 24")?;
-            // In groups, this also contains past members, i.e. `(_, false)` entries.
-            let old_members: Vec<(u32, bool)> = load_chat_contacts_stmt
-                .query_map((chat_id,), |row| {
-                    let id: u32 = row.get(0)?;
-                    let present: bool = row.get(1)?;
-                    Ok((id, present))
-                })
-                .context("Step 25")?
-                .collect::<Result<Vec<_>, _>>()
-                .context("Step 26")?;
-
-            let mut keep_address_contacts = |reason: &str| -> Result<()> {
-                info!(
-                    context,
-                    "Chat {chat_id} will be an unencrypted chat with contacts identified by email address: {reason}."
-                );
-                for (m, _) in &old_members {
-                    orphaned_contacts.remove(m);
-                }
-
-                // Unprotect this chat if it was protected.
-                //
-                // Otherwise we get protected chat with address-contact(s).
-                transaction
-                    .execute("UPDATE chats SET protected=0 WHERE id=?", (chat_id,))
-                    .context("Step 26.0")?;
-
-                Ok(())
-            };
-            let old_and_new_members: Vec<(u32, bool, Option<u32>)> = match typ {
-                // 1:1 chats retain:
-                // - address-contact if peerstate is in the "reset" state,
-                //   or if there is no key-contact that has the right email address.
-                // - key-contact identified by the Autocrypt key if Autocrypt key does not match the verified key.
-                // - key-contact identified by the verified key if peerstate Autocrypt key matches the Verified key.
-                //   Since the autocrypt and verified key-contact are identital in this case, we can add the Autocrypt key-contact,
-                //   and the effect will be the same.
-                100 => {
-                    let Some((old_member, _)) = old_members.first() else {
-                        info!(
-                            context,
-                            "1:1 chat {chat_id} doesn't contain contact, probably it's self or device chat."
-                        );
-                        continue;
-                    };
-
-                    let Some(new_contact) = map_to_key_contact(old_member) else {
-                        keep_address_contacts("No peerstate, or peerstate in 'reset' state")?;
-                        continue;
-                    };
-                    if !addr_cmp_stmt
-                        .query_row((old_member, new_contact), |row| row.get::<_, bool>(0))?
-                    {
-                        keep_address_contacts("key contact has different email")?;
-                        continue;
-                    }
-                    vec![(*old_member, true, Some(new_contact))]
-                }
-
-                // Group
-                120 => {
-                    if grpid.is_empty() {
-                        // Ad-hoc group that has empty Chat-Group-ID
-                        // because it was created in response to receiving a non-chat email.
-                        keep_address_contacts("Empty chat-Group-ID")?;
-                        continue;
-                    } else if protected == 1 {
-                        old_members
-                            .iter()
-                            .map(|&(id, present)| {
-                                (id, present, verified_key_contacts.get(&id).copied())
-                            })
-                            .collect()
-                    } else {
-                        old_members
-                            .iter()
-                            .map(|&(id, present)| (id, present, map_to_key_contact(&id)))
-                            .collect::<Vec<(u32, bool, Option<u32>)>>()
-                    }
-                }
-
-                // Mailinglist
-                140 => {
-                    keep_address_contacts("Mailinglist")?;
-                    continue;
-                }
-
-                // Broadcast channel
-                160 => old_members
-                    .iter()
-                    .map(|(original, _)| {
-                        (
-                            *original,
-                            true,
-                            autocrypt_key_contacts
-                                .get(original)
-                                // There will be no unencrypted broadcast lists anymore,
-                                // so, if a peerstate is reset,
-                                // the best we can do is encrypting to this key regardless.
-                                .or_else(|| {
-                                    autocrypt_key_contacts_with_reset_peerstate.get(original)
-                                })
-                                .copied(),
-                        )
-                    })
-                    .collect::<Vec<(u32, bool, Option<u32>)>>(),
-                _ => {
-                    warn!(context, "Invalid chat type {typ}");
-                    continue;
-                }
-            };
-
-            // If a group contains a contact without a key or with 'reset' peerstate,
-            // downgrade to unencrypted Ad-Hoc group.
-            if typ == 120
-                && old_and_new_members
-                    .iter()
-                    .any(|&(_old, present, new)| present && new.is_none())
-            {
-                transaction
-                    .execute("UPDATE chats SET grpid='' WHERE id=?", (chat_id,))
-                    .context("Step 26.1")?;
-                keep_address_contacts("Group contains contact without peerstate")?;
-                continue;
-            }
-
-            let human_readable_transitions = old_and_new_members
-                .iter()
-                .map(|(old, _, new)| format!("{old}->{}", new.unwrap_or_default()))
-                .collect::<Vec<String>>()
-                .join(" ");
-            info!(
-                context,
-                "Migrating chat {chat_id} to key-contacts: {human_readable_transitions}"
-            );
-
-            for (old_member, _, new_member) in old_and_new_members {
-                if let Some(new_member) = new_member {
-                    orphaned_contacts.remove(&new_member);
-                    let res = update_member_stmt.execute((new_member, old_member, chat_id));
-                    if res.is_err() {
-                        // The same chat partner exists multiple times in the chat,
-                        // with mutliple profiles which have different email addresses
-                        // but the same key.
-                        // We can only keep one of them.
-                        // So, if one of them is not in the chat anymore, delete it,
-                        // otherwise delete the one that was added least recently.
-                        let member_to_delete: u32 = transaction
-                            .query_row(
-                                "SELECT contact_id
-                               FROM chats_contacts
-                              WHERE chat_id=? AND contact_id IN (?,?)
-                           ORDER BY add_timestamp>=remove_timestamp, add_timestamp LIMIT 1",
-                                (chat_id, new_member, old_member),
-                                |row| row.get(0),
-                            )
-                            .context("Step 27")?;
-                        info!(
-                            context,
-                            "Chat partner is in the chat {chat_id} multiple times. \
-                            Deleting {member_to_delete}, then trying to update \
-                            {old_member}->{new_member} again"
-                        );
-                        transaction
-                            .execute(
-                                "DELETE FROM chats_contacts WHERE chat_id=? AND contact_id=?",
-                                (chat_id, member_to_delete),
-                            )
-                            .context("Step 28")?;
-                        // If we removed `old_member`, then this will be a no-op,
-                        // which is exactly what we want in this case:
-                        update_member_stmt.execute((new_member, old_member, chat_id))?;
-                    }
-                } else {
-                    info!(
-                        context,
-                        "Old member {old_member} in chat {chat_id} can't be upgraded to key-contact, removing them"
-                    );
-                    transaction
-                        .execute(
-                            "DELETE FROM chats_contacts WHERE contact_id=? AND chat_id=?",
-                            (old_member, chat_id),
-                        )
-                        .context("Step 29")?;
-                }
-            }
-        }
-    }
-
-    // ======================= Step 4: =======================
-    {
-        info!(
-            context,
-            "Marking contacts which remained in no chat at all as hidden: {orphaned_contacts:?}"
-        );
-        let mut mark_as_hidden_stmt = transaction
-            .prepare("UPDATE contacts SET origin=? WHERE id=?")
-            .context("Step 30")?;
-        for contact in orphaned_contacts {
-            mark_as_hidden_stmt
-                .execute((0x8, contact))
-                .context("Step 31")?;
-        }
-    }
-
-    // ======================= Step 5: =======================
-    // Prepare for rewriting `from_id`, `to_id` in messages
-    {
-        let mut contacts_map = autocrypt_key_contacts_with_reset_peerstate;
-        for (old, new) in autocrypt_key_contacts {
-            contacts_map.insert(old, new);
-        }
-        transaction
-            .execute(
-                "CREATE TABLE key_contacts_map (
-                    old_id INTEGER PRIMARY KEY NOT NULL,
-                    new_id INTEGER NOT NULL
-                ) STRICT",
-                (),
-            )
-            .context("Step 32")?;
-        {
-            let mut stmt = transaction
-                .prepare("INSERT INTO key_contacts_map (old_id, new_id) VALUES (?, ?)")
-                .context("Step 33")?;
-            for ids in contacts_map {
-                stmt.execute(ids).context("Step 34")?;
-            }
-        }
-        transaction
-            .execute(
-                "INSERT INTO config (keyname, value) VALUES (
-                    'first_key_contacts_msg_id',
-                    IFNULL((SELECT MAX(id)+1 FROM msgs), 0)
-                )",
-                (),
-            )
-            .context("Step 35")?;
-    }
-
-    Ok(())
-}
-
-/// Rewrite `from_id`, `to_id` in >= 1000 messages starting from the newest ones, to key-contacts.
-#[expect(clippy::arithmetic_side_effects)]
-pub(crate) async fn msgs_to_key_contacts(context: &Context) -> Result<()> {
-    let sql = &context.sql;
-    if sql
-        .get_raw_config_int64("first_key_contacts_msg_id")
-        .await?
-        <= Some(0)
-    {
-        return Ok(());
-    }
-    let trans_fn = |t: &mut rusqlite::Transaction| {
-        let mut first_key_contacts_msg_id: u64 = t
-            .query_one(
-                "SELECT CAST(value AS INTEGER) FROM config WHERE keyname='first_key_contacts_msg_id'",
-                (),
-                |row| row.get(0),
-            )
-            .context("Get first_key_contacts_msg_id")?;
-        let mut stmt = t
-            .prepare(
-                "UPDATE msgs SET
-                    from_id=IFNULL(
-                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.from_id),
-                        from_id
-                    ),
-                    to_id=IFNULL(
-                        (SELECT new_id FROM key_contacts_map WHERE old_id=msgs.to_id),
-                        to_id
-                    )
-                WHERE id>=? AND id<?
-                AND chat_id>9
-                AND (param GLOB '*\nc=1*' OR param GLOB 'c=1*')",
-            )
-            .context("Prepare stmt")?;
-        let msgs_to_migrate = 1000;
-        let mut msgs_migrated: u64 = 0;
-        while first_key_contacts_msg_id > 0 && msgs_migrated < msgs_to_migrate {
-            let start_msg_id = first_key_contacts_msg_id.saturating_sub(msgs_to_migrate);
-            let cnt: u64 = stmt
-                .execute((start_msg_id, first_key_contacts_msg_id))
-                .context("UPDATE msgs")?
-                .try_into()?;
-            msgs_migrated += cnt;
-            first_key_contacts_msg_id = start_msg_id;
-        }
-        t.execute(
-            "UPDATE config SET value=? WHERE keyname='first_key_contacts_msg_id'",
-            (first_key_contacts_msg_id,),
-        )
-        .context("Update first_key_contacts_msg_id")?;
-        Ok((msgs_migrated, first_key_contacts_msg_id))
-    };
-    let start = Time::now();
-    let mut msgs_migrated = 0;
-    loop {
-        let (n, first_key_contacts_msg_id) = sql.transaction(trans_fn).await?;
-        msgs_migrated += n;
-        if first_key_contacts_msg_id == 0 || time_elapsed(&start) >= Duration::from_millis(500) {
-            break;
-        }
-    }
-    sql.uncache_raw_config("first_key_contacts_msg_id").await;
-    info!(
-        context,
-        "Rewriting {msgs_migrated} msgs to key-contacts took {:?}.",
-        time_elapsed(&start),
-    );
-    Ok(())
-}
-
-impl Sql {
-    async fn set_db_version(&self, version: i32) -> Result<()> {
-        self.set_raw_config_int(VERSION_CFG, version).await?;
-        Ok(())
-    }
-
-    // Sets db `version` in the `transaction`.
-    fn set_db_version_trans(transaction: &mut rusqlite::Transaction, version: i32) -> Result<()> {
-        transaction.execute(
-            "UPDATE config SET value=? WHERE keyname=?;",
-            (format!("{version}"), VERSION_CFG),
-        )?;
-        Ok(())
-    }
-
-    async fn set_db_version_in_cache(&self, version: i32) -> Result<()> {
-        let mut lock = self.config_cache.write().await;
-        lock.insert(VERSION_CFG.to_string(), Some(format!("{version}")));
-        Ok(())
-    }
-
-    async fn execute_migration(&self, query: &str, version: i32) -> Result<()> {
-        self.execute_migration_transaction(
-            |transaction| {
-                transaction.execute_batch(query)?;
-                Ok(())
-            },
-            version,
-        )
-        .await
-    }
-
-    async fn execute_migration_transaction(
-        &self,
-        migration: impl Send + FnOnce(&mut rusqlite::Transaction) -> Result<()>,
-        version: i32,
-    ) -> Result<()> {
-        #[cfg(test)]
-        if STOP_MIGRATIONS_AT.try_with(|stop_migrations_at| version > *stop_migrations_at)
-            == Ok(true)
-        {
-            println!("Not running migration {version}, because STOP_MIGRATIONS_AT is set");
-            return Ok(());
-        }
-
-        self.transaction(move |transaction| {
-            let curr_version: String = transaction.query_row(
-                "SELECT IFNULL(value, ?) FROM config WHERE keyname=?;",
-                ("0", VERSION_CFG),
-                |row| row.get(0),
-            )?;
-            let curr_version: i32 = curr_version.parse()?;
-            ensure!(curr_version < version, "Db version must be increased");
-            Self::set_db_version_trans(transaction, version)?;
-            migration(transaction)?;
-
-            Ok(())
-        })
-        .await
-        .with_context(|| format!("execute_migration failed for version {version}"))?;
-
-        self.config_cache.write().await.clear();
-
-        Ok(())
-    }
 }
 
 #[cfg(test)]
