@@ -8,7 +8,6 @@ use anyhow::Result;
 use deltachat_derive::{FromSql, ToSql};
 
 use crate::context::Context;
-use crate::ensure_and_debug_assert;
 use crate::tools::{create_id, time};
 
 /// Token namespace
@@ -31,7 +30,10 @@ pub async fn save(
     token: &str,
     timestamp: i64,
 ) -> Result<()> {
-    ensure_and_debug_assert!(!token.is_empty(), "Got empty {namespace} token");
+    if token.is_empty() {
+        info!(context, "Not saving empty {namespace} token");
+        return Ok(());
+    }
     context
         .sql
         .execute(
