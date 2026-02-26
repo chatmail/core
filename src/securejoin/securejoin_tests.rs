@@ -457,7 +457,7 @@ async fn test_secure_join() -> Result<()> {
     );
     let msg = alice.parse_msg(&sent).await;
     assert!(!msg.was_encrypted());
-    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vg-request");
+    assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-request");
     assert!(msg.get_header(HeaderDef::SecureJoinInvitenumber).is_some());
     assert!(!msg.header_exists(HeaderDef::AutoSubmitted));
 
@@ -478,7 +478,7 @@ async fn test_secure_join() -> Result<()> {
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-auth-required"
+        "vc-auth-required"
     );
 
     tcm.section("Step 4: Bob receives vg-auth-required, sends vg-request-with-auth");
@@ -516,7 +516,7 @@ async fn test_secure_join() -> Result<()> {
     assert!(msg.was_encrypted());
     assert_eq!(
         msg.get_header(HeaderDef::SecureJoin).unwrap(),
-        "vg-request-with-auth"
+        "vc-request-with-auth"
     );
     assert!(msg.get_header(HeaderDef::SecureJoinAuth).is_some());
     let bob_fp = self_fingerprint(&bob).await?;
