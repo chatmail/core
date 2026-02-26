@@ -549,9 +549,6 @@ async fn get_configured_param(
 async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'static Provider>> {
     progress!(ctx, 1);
 
-    let ctx2 = ctx.clone();
-    let update_device_chats_handle = task::spawn(async move { ctx2.update_device_chats().await });
-
     let configured_param = get_configured_param(ctx, param).await?;
     let proxy_config = ProxyConfig::load(ctx).await?;
     let strict_tls = configured_param.strict_tls(proxy_config.is_some());
@@ -642,7 +639,9 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     ctx.scheduler.interrupt_inbox().await;
 
     progress!(ctx, 940);
-    update_device_chats_handle.await??;
+    ctx.update_device_chats()
+        .await
+        .context("Failed to update device chats")?;
 
     ctx.sql.set_raw_config_bool("configured", true).await?;
     ctx.emit_event(EventType::AccountsItemChanged);
