@@ -367,7 +367,7 @@ impl MimeFactory {
                                             } else if id == ContactId::SELF {
                                                 member_fingerprints.push(self_fingerprint.to_string());
                                             } else {
-                                                ensure_and_debug_assert!(member_fingerprints.is_empty(), "If some past member is a key-contact, all other past members should be key-contacts too");
+                                                ensure_and_debug_assert!(member_fingerprints.is_empty(), "If some member is a key-contact, all other members should be key-contacts too");
                                             }
                                         }
                                         member_timestamps.push(add_timestamp);
