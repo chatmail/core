@@ -97,6 +97,9 @@ pub struct EnteredLoginParam {
 
     /// If true, login via OAUTH2 (not recommended anymore)
     pub oauth2: bool,
+
+    /// IP addresses for prefilling DNS
+    pub dns_prefill: Vec<String>,
 }
 
 impl EnteredLoginParam {
@@ -191,6 +194,7 @@ impl EnteredLoginParam {
             },
             certificate_checks,
             oauth2,
+            dns_prefill: Default::default(),
         })
     }
 
@@ -360,6 +364,7 @@ mod tests {
             },
             certificate_checks: Default::default(),
             oauth2: false,
+            dns_prefill: Default::default(),
         };
         param.save(&t).await?;
         assert_eq!(
