@@ -1,5 +1,5 @@
 //! Tests about receiving Pre-Messages and Post-Message
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 use pretty_assertions::assert_eq;
 
 use crate::EventType;
@@ -165,6 +165,44 @@ async fn test_receive_pre_message_and_dl_post_message() -> Result<()> {
     assert!(msg.param.exists(Param::PostMessageViewtype));
     assert!(msg.param.exists(Param::PostMessageFileBytes));
     assert_eq!(msg.text, "test".to_owned());
+    let _ = bob.recv_msg_trash(&post_message).await;
+    let msg = Message::load_from_db(bob, msg.id).await?;
+    assert_eq!(msg.download_state(), DownloadState::Done);
+    assert_eq!(msg.viewtype, Viewtype::File);
+    assert_eq!(msg.param.exists(Param::PostMessageViewtype), false);
+    assert_eq!(msg.param.exists(Param::PostMessageFileBytes), false);
+    assert_eq!(msg.text, "test".to_owned());
+    Ok(())
+}
+
+/// Test receiving the Post-Message after receiving the pre-message twice.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_receive_pre_message_twice() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_group_id = alice.create_group_with_members("test group", &[bob]).await;
+
+    let (pre_message, post_message, _alice_msg_id) =
+        send_large_file_message(alice, alice_group_id, Viewtype::File, &vec![0u8; 1_000_000])
+            .await?;
+
+    let msg = bob.recv_msg(&pre_message).await;
+    assert!(bob.recv_msg_opt(&pre_message).await.is_none());
+
+    // Pre-message should still be there.
+    // Due to a bug receiving pre-message second time
+    // deleted it in 2.44.0.
+    // This is a regression test.
+    let msg = Message::load_from_db(bob, msg.id)
+        .await
+        .context("Pre-message should still exist after receiving it twice")?;
+    assert_eq!(msg.download_state(), DownloadState::Available);
+    assert_eq!(msg.viewtype, Viewtype::Text);
+    assert!(msg.param.exists(Param::PostMessageViewtype));
+    assert!(msg.param.exists(Param::PostMessageFileBytes));
+    assert_eq!(msg.text, "test".to_owned());
+
     let _ = bob.recv_msg_trash(&post_message).await;
     let msg = Message::load_from_db(bob, msg.id).await?;
     assert_eq!(msg.download_state(), DownloadState::Done);

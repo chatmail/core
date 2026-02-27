@@ -554,9 +554,17 @@ pub(crate) async fn receive_imf_inner(
             .await?
             .filter(|msg| msg.download_state() != DownloadState::Done)
         {
-            // the message was partially downloaded before and is fully downloaded now.
-            info!(context, "Message already partly in DB, replacing.");
-            Some(msg.chat_id)
+            // The message was partially downloaded before.
+            match mime_parser.pre_message {
+                PreMessageMode::Post | PreMessageMode::None => {
+                    info!(context, "Message already partly in DB, replacing.");
+                    Some(msg.chat_id)
+                }
+                PreMessageMode::Pre { .. } => {
+                    info!(context, "Cannot replace pre-message with a pre-message");
+                    None
+                }
+            }
         } else {
             // The message was already fully downloaded
             // or cannot be loaded because it is deleted.
