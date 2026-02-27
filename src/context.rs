@@ -242,6 +242,14 @@ pub struct InnerContext {
     /// Mutex to prevent running housekeeping from multiple threads at once.
     pub(crate) housekeeping_mutex: Mutex<()>,
 
+    /// Mutex to prevent multiple IMAP loops from fetching the messages at once.
+    ///
+    /// Without this mutex IMAP loops may waste traffic downloading the same message
+    /// from multiple IMAP servers and create multiple copies of the same message
+    /// in the database if the check for duplicates and creating a message
+    /// happens in separate database transactions.
+    pub(crate) fetch_msgs_mutex: Mutex<()>,
+
     pub(crate) translated_stockstrings: StockStrings,
     pub(crate) events: Events,
 
@@ -482,6 +490,7 @@ impl Context {
             oauth2_mutex: Mutex::new(()),
             wrong_pw_warning_mutex: Mutex::new(()),
             housekeeping_mutex: Mutex::new(()),
+            fetch_msgs_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,
             events,
             scheduler: SchedulerState::new(),
