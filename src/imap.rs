@@ -606,6 +606,7 @@ impl Imap {
             .await
             .context("prefetch")?;
         let read_cnt = msgs.len();
+        let _fetch_msgs_lock_guard = context.fetch_msgs_mutex.lock().await;
 
         let mut uids_fetch: Vec<u32> = Vec::new();
         let mut available_post_msgs: Vec<String> = Vec::new();
