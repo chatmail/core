@@ -150,7 +150,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
         assert snapshot1.chat_id == chat.id
         assert snapshot2.chat_id == chat.id
 
-    def check_account(ac, contact, inviter_side, please_wait_info_msg=False):
+    def check_account(ac, contact, inviter_side, please_wait_info_msg=False, resent_msg=False):
         # Check that the chat partner is verified.
         contact_snapshot = contact.get_snapshot()
         assert contact_snapshot.is_verified
@@ -167,10 +167,12 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
             assert "invited you to join this channel" in first_msg.text
             assert first_msg.is_info
 
-        member_added_msg = chat_msgs.pop(0).get_snapshot()
         if inviter_side:
+            member_added_msg = chat_msgs.pop(0).get_snapshot()
             assert member_added_msg.text == f"Member {contact_snapshot.display_name} added."
+            assert member_added_msg.info_contact_id == contact_snapshot.id
         else:
+            member_added_msg = chat_msgs.pop(1 if resent_msg else 0).get_snapshot()
             assert member_added_msg.text == "You joined the channel."
         assert member_added_msg.is_info
 
@@ -241,7 +243,7 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
     snapshot = fiona.wait_for_incoming_msg().get_snapshot()
     assert snapshot.text == "Hello everyone!"
 
-    check_account(fiona, fiona.create_contact(alice), inviter_side=False, please_wait_info_msg=True)
+    check_account(fiona, fiona.create_contact(alice), inviter_side=False, please_wait_info_msg=True, resent_msg=True)
 
     # For Bob, the channel must not have changed:
     check_account(bob, bob.create_contact(alice), inviter_side=False, please_wait_info_msg=True)

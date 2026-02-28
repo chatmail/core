@@ -33,7 +33,7 @@ use deltachat::securejoin::get_securejoin_qr;
 use deltachat::{
     Events, chat::ChatId, config::Config, context::Context, internals_for_benches::key_from_asc,
     internals_for_benches::parse_and_get_text, internals_for_benches::store_self_keypair,
-    pgp::KeyPair, stock_str::StockStrings,
+    stock_str::StockStrings,
 };
 use tempfile::tempdir;
 
@@ -62,9 +62,7 @@ async fn create_context() -> Context {
         .await
         .unwrap();
     let secret = key_from_asc(include_str!("../test-data/key/bob-secret.asc")).unwrap();
-    let public = secret.to_public_key();
-    let key_pair = KeyPair { public, secret };
-    store_self_keypair(&context, &key_pair)
+    store_self_keypair(&context, &secret)
         .await
         .expect("Failed to save key");
 

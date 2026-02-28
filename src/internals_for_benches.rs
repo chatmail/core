@@ -10,13 +10,12 @@ use crate::key;
 use crate::key::DcKey;
 use crate::mimeparser::MimeMessage;
 use crate::pgp;
-use crate::pgp::KeyPair;
 
 pub fn key_from_asc(data: &str) -> Result<key::SignedSecretKey> {
     key::SignedSecretKey::from_asc(data)
 }
 
-pub async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<()> {
+pub async fn store_self_keypair(context: &Context, keypair: &key::SignedSecretKey) -> Result<()> {
     key::store_self_keypair(context, keypair).await
 }
 
@@ -29,7 +28,7 @@ pub async fn save_broadcast_secret(context: &Context, chat_id: ChatId, secret: &
     crate::chat::save_broadcast_secret(context, chat_id, secret).await
 }
 
-pub fn create_dummy_keypair(addr: &str) -> Result<KeyPair> {
+pub fn create_dummy_keypair(addr: &str) -> Result<key::SignedSecretKey> {
     pgp::create_keypair(EmailAddress::new(addr)?)
 }
 

@@ -54,7 +54,12 @@ class RpcMethod:
 class Rpc:
     """RPC client."""
 
-    def __init__(self, accounts_dir: Optional[str] = None, rpc_server_path="deltachat-rpc-server", **kwargs):
+    def __init__(
+        self,
+        accounts_dir: Optional[str] = None,
+        rpc_server_path="deltachat-rpc-server",
+        **kwargs,
+    ):
         """Initialize RPC client.
 
         The 'kwargs' arguments will be passed to subprocess.Popen().
@@ -79,8 +84,15 @@ class Rpc:
         self.events_thread: Thread
 
     def start(self) -> None:
-        """Start RPC server subprocess."""
-        popen_kwargs = {"stdin": subprocess.PIPE, "stdout": subprocess.PIPE}
+        """Start RPC server subprocess and wait for successful initialization.
+
+        This method blocks until the RPC server responds to an initial
+        health-check RPC call (get_system_info).
+        If the server fails to start
+        (e.g., due to an invalid accounts directory),
+        a JsonRpcError is raised.
+        """
+        popen_kwargs = {"stdin": subprocess.PIPE, "stdout": subprocess.PIPE, "stderr": subprocess.PIPE}
         if sys.version_info >= (3, 11):
             # Prevent subprocess from capturing SIGINT.
             popen_kwargs["process_group"] = 0
@@ -90,6 +102,7 @@ class Rpc:
 
         popen_kwargs.update(self._kwargs)
         self.process = subprocess.Popen(self.rpc_server_path, **popen_kwargs)
+
         self.id_iterator = itertools.count(start=1)
         self.event_queues = {}
         self.request_results = {}
@@ -101,6 +114,22 @@ class Rpc:
         self.writer_thread.start()
         self.events_thread = Thread(target=self.events_loop)
         self.events_thread.start()
+
+        # Perform a health-check RPC call to ensure the server started
+        # successfully and the accounts directory is usable.
+        try:
+            system_info = self.get_system_info()
+        except (JsonRpcError, Exception) as e:
+            # The reader_loop already saw EOF on stdout, so the process
+            # has exited and stderr is available.
+            stderr = self.process.stderr.read().decode(errors="replace").strip()
+            if stderr:
+                raise JsonRpcError(f"RPC server failed to start: {stderr}") from e
+            raise JsonRpcError(f"RPC server startup check failed: {e}") from e
+        logging.info(
+            "RPC server ready. Core version: %s",
+            system_info.get("deltachat_core_version", "unknown"),
+        )
 
     def close(self) -> None:
         """Terminate RPC server process and wait until the reader loop finishes."""
@@ -132,6 +161,10 @@ class Rpc:
         except Exception:
             # Log an exception if the reader loop dies.
             logging.exception("Exception in the reader loop")
+        finally:
+            # Unblock any pending requests when the server closes stdout.
+            for _request_id, queue in self.request_results.items():
+                queue.put({"error": {"code": -32000, "message": "RPC server closed"}})
 
     def writer_loop(self) -> None:
         """Writer loop ensuring only a single thread writes requests."""
@@ -140,7 +173,6 @@ class Rpc:
                 data = (json.dumps(request) + "\n").encode()
                 self.process.stdin.write(data)
                 self.process.stdin.flush()
-
         except Exception:
             # Log an exception if the writer loop dies.
             logging.exception("Exception in the writer loop")
@@ -154,15 +186,15 @@ class Rpc:
     def events_loop(self) -> None:
         """Request new events and distributes them between queues."""
         try:
-            while True:
+            while events := self.get_next_event_batch():
+                for event in events:
+                    account_id = event["contextId"]
+                    queue = self.get_queue(account_id)
+                    payload = event["event"]
+                    logging.debug("account_id=%d got an event %s", account_id, payload)
+                    queue.put(payload)
                 if self.closing:
                     return
-                event = self.get_next_event()
-                account_id = event["contextId"]
-                queue = self.get_queue(account_id)
-                event = event["event"]
-                logging.debug("account_id=%d got an event %s", account_id, event)
-                queue.put(event)
         except Exception:
             # Log an exception if the event loop dies.
             logging.exception("Exception in the event loop")

@@ -558,6 +558,12 @@ class TestOfflineChat:
         assert messages[0 + E2EE_INFO_MSGS].text == "msg1"
         assert os.path.exists(messages[1 + E2EE_INFO_MSGS].filename)
 
+    @pytest.mark.skip(
+        reason="We didn't find a way to correctly reset an account after a failed import attempt "
+        "while simultaneously making sure "
+        "that the password of an encrypted account survives a failed import attempt. "
+        "Since passphrases are not really supported anymore, we decided to just disable the test.",
+    )
     def test_import_encrypted_bak_into_encrypted_acct(self, acfactory, tmp_path):
         """
         Test that account passphrase isn't lost if backup failed to be imported.

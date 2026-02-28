@@ -10,13 +10,12 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::composed::Deserializable;
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
 use pgp::ser::Serialize;
-use pgp::types::{KeyDetails, KeyId};
+use pgp::types::KeyDetails;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
-use crate::pgp::KeyPair;
 use crate::tools::{self, time_elapsed};
 
 /// Convenience trait for working with keys.
@@ -113,19 +112,16 @@ pub trait DcKey: Serialize + Deserializable + Clone {
 
     /// Whether the key is private (or public).
     fn is_private() -> bool;
-
-    /// Returns the OpenPGP Key ID.
-    fn key_id(&self) -> KeyId;
 }
 
 /// Attempts to load own public key.
 ///
 /// Returns `None` if no key is generated yet.
 pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
-    let Some(public_key_bytes) = context
+    let Some(secret_key_bytes) = context
         .sql
         .query_row_optional(
-            "SELECT public_key
+            "SELECT private_key
              FROM keypairs
              WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
             (),
@@ -138,8 +134,9 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
     else {
         return Ok(None);
     };
-    let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
-    Ok(Some(public_key))
+    let signed_secret_key = SignedSecretKey::from_slice(&secret_key_bytes)?;
+    let signed_public_key = signed_secret_key.to_public_key();
+    Ok(Some(signed_public_key))
 }
 
 /// Loads own public key.
@@ -149,8 +146,8 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
     match load_self_public_key_opt(context).await? {
         Some(public_key) => Ok(public_key),
         None => {
-            let keypair = generate_keypair(context).await?;
-            Ok(keypair.public)
+            let signed_secret_key = generate_keypair(context).await?;
+            Ok(signed_secret_key.to_public_key())
         }
     }
 }
@@ -215,8 +212,8 @@ pub(crate) async fn load_self_secret_key(context: &Context) -> Result<SignedSecr
     match private_key {
         Some(bytes) => SignedSecretKey::from_slice(&bytes),
         None => {
-            let keypair = generate_keypair(context).await?;
-            Ok(keypair.secret)
+            let secret = generate_keypair(context).await?;
+            Ok(secret)
         }
     }
 }
@@ -262,10 +259,6 @@ impl DcKey for SignedPublicKey {
     fn dc_fingerprint(&self) -> Fingerprint {
         self.fingerprint().into()
     }
-
-    fn key_id(&self) -> KeyId {
-        KeyDetails::legacy_key_id(self)
-    }
 }
 
 impl DcKey for SignedSecretKey {
@@ -289,13 +282,9 @@ impl DcKey for SignedSecretKey {
     fn dc_fingerprint(&self) -> Fingerprint {
         self.fingerprint().into()
     }
-
-    fn key_id(&self) -> KeyId {
-        KeyDetails::legacy_key_id(&**self)
-    }
 }
 
-async fn generate_keypair(context: &Context) -> Result<KeyPair> {
+async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
     let addr = context.get_primary_self_addr().await?;
     let addr = EmailAddress::new(&addr)?;
     let _guard = context.generating_key_mutex.lock().await;
@@ -321,51 +310,46 @@ async fn generate_keypair(context: &Context) -> Result<KeyPair> {
     }
 }
 
-pub(crate) async fn load_keypair(context: &Context) -> Result<Option<KeyPair>> {
+pub(crate) async fn load_keypair(context: &Context) -> Result<Option<SignedSecretKey>> {
     let res = context
         .sql
         .query_row_optional(
-            "SELECT public_key, private_key
-             FROM keypairs
-             WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
+            "SELECT private_key
+                 FROM keypairs
+                 WHERE id=(SELECT value FROM config WHERE keyname='key_id')",
             (),
             |row| {
-                let pub_bytes: Vec<u8> = row.get(0)?;
-                let sec_bytes: Vec<u8> = row.get(1)?;
-                Ok((pub_bytes, sec_bytes))
+                let sec_bytes: Vec<u8> = row.get(0)?;
+                Ok(sec_bytes)
             },
         )
         .await?;
 
-    Ok(if let Some((pub_bytes, sec_bytes)) = res {
-        Some(KeyPair {
-            public: SignedPublicKey::from_slice(&pub_bytes)?,
-            secret: SignedSecretKey::from_slice(&sec_bytes)?,
-        })
+    let signed_secret_key = if let Some(sec_bytes) = res {
+        Some(SignedSecretKey::from_slice(&sec_bytes)?)
     } else {
         None
-    })
+    };
+
+    Ok(signed_secret_key)
 }
 
-/// Store the keypair as an owned keypair for addr in the database.
+/// Stores own keypair in the database and sets it as a default.
 ///
-/// This will save the keypair as keys for the given address.  The
-/// "self" here refers to the fact that this DC instance owns the
-/// keypair.  Usually `addr` will be [Config::ConfiguredAddr].
-///
-/// If either the public or private keys are already present in the
-/// database, this entry will be removed first regardless of the
-/// address associated with it.  Practically this means saving the
-/// same key again overwrites it.
-///
-/// [Config::ConfiguredAddr]: crate::config::Config::ConfiguredAddr
-pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> Result<()> {
+/// Fails if we already have a key, so it is not possible to
+/// have more than one key for new setups. Existing setups
+/// may still have more than one key for compatibility.
+pub(crate) async fn store_self_keypair(
+    context: &Context,
+    signed_secret_key: &SignedSecretKey,
+) -> Result<()> {
+    let signed_public_key = signed_secret_key.to_public_key();
     let mut config_cache_lock = context.sql.config_cache.write().await;
     let new_key_id = context
         .sql
         .transaction(|transaction| {
-            let public_key = DcKey::to_bytes(&keypair.public);
-            let secret_key = DcKey::to_bytes(&keypair.secret);
+            let public_key = DcKey::to_bytes(&signed_public_key);
+            let secret_key = DcKey::to_bytes(signed_secret_key);
 
             // private_key and public_key columns
             // are UNIQUE since migration 107,
@@ -403,9 +387,7 @@ pub(crate) async fn store_self_keypair(context: &Context, keypair: &KeyPair) -> 
 /// Use import/export APIs instead.
 pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Result<()> {
     let secret = SignedSecretKey::from_asc(secret_data)?;
-    let public = secret.to_public_key();
-    let keypair = KeyPair { public, secret };
-    store_self_keypair(context, &keypair).await?;
+    store_self_keypair(context, &secret).await?;
     Ok(())
 }
 
@@ -484,7 +466,7 @@ mod tests {
     use crate::config::Config;
     use crate::test_utils::{TestContext, alice_keypair};
 
-    static KEYPAIR: LazyLock<KeyPair> = LazyLock::new(alice_keypair);
+    static KEYPAIR: LazyLock<SignedSecretKey> = LazyLock::new(alice_keypair);
 
     #[test]
     fn test_from_armored_string() {
@@ -554,12 +536,12 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_asc_roundtrip() {
-        let key = KEYPAIR.public.clone();
+        let key = KEYPAIR.clone().to_public_key();
         let asc = key.to_asc(Some(("spam", "ham")));
         let key2 = SignedPublicKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
 
-        let key = KEYPAIR.secret.clone();
+        let key = KEYPAIR.clone();
         let asc = key.to_asc(Some(("spam", "ham")));
         let key2 = SignedSecretKey::from_asc(&asc).unwrap();
         assert_eq!(key, key2);
@@ -567,8 +549,8 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_from_slice_roundtrip() {
-        let public_key = KEYPAIR.public.clone();
-        let private_key = KEYPAIR.secret.clone();
+        let private_key = KEYPAIR.clone();
+        let public_key = KEYPAIR.clone().to_public_key();
 
         let binary = DcKey::to_bytes(&public_key);
         let public_key2 = SignedPublicKey::from_slice(&binary).expect("invalid public key");
@@ -610,7 +592,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
             b"\x02\xfc\xaa".as_slice(),
             b"\x01\x02\x03\x04\x05".as_slice(),
         ] {
-            let private_key = KEYPAIR.secret.clone();
+            let private_key = KEYPAIR.clone();
 
             let mut binary = DcKey::to_bytes(&private_key);
             binary.extend(garbage);
@@ -624,7 +606,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
 
     #[test]
     fn test_base64_roundtrip() {
-        let key = KEYPAIR.public.clone();
+        let key = KEYPAIR.clone().to_public_key();
         let base64 = key.to_base64();
         let key2 = SignedPublicKey::from_base64(&base64).unwrap();
         assert_eq!(key, key2);

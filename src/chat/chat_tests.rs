@@ -2641,7 +2641,7 @@ async fn test_resend_own_message() -> Result<()> {
     );
     let msg_from = Contact::get_by_id(&fiona, msg.get_from_id()).await?;
     assert_eq!(msg_from.get_addr(), "alice@example.org");
-    assert!(sent1_ts_sent < msg.timestamp_sent);
+    assert!(sent1_ts_sent == msg.timestamp_sent);
 
     Ok(())
 }
@@ -3255,6 +3255,36 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
 
     tcm.section("Alice calls set_chat_description() without actually changing the description");
     set_chat_description(alice, alice_chat_id, "ä ẟ 😂").await?;
+    assert!(
+        alice
+            .pop_sent_msg_opt(Duration::from_secs(0))
+            .await
+            .is_none()
+    );
+
+    Ok(())
+}
+
+/// Tests explicitly setting an empty chat description
+/// doesn't trigger sending out a message
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_setting_empty_chat_description() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    tcm.section("Create a group chat, and add Bob in order to promote it");
+    let alice_chat_id = create_group(alice, "My Group").await?;
+
+    add_contact_to_chat(
+        alice,
+        alice_chat_id,
+        alice.add_or_lookup_contact_id(bob).await,
+    )
+    .await?;
+    let _hi = alice.send_text(alice_chat_id, "hi").await;
+
+    set_chat_description(alice, alice_chat_id, "").await?;
     assert!(
         alice
             .pop_sent_msg_opt(Duration::from_secs(0))

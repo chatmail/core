@@ -57,8 +57,8 @@ pub struct Accounts {
 impl Accounts {
     /// Loads or creates an accounts folder at the given `dir`.
     pub async fn new(dir: PathBuf, writable: bool) -> Result<Self> {
-        if writable && !dir.exists() {
-            Accounts::create(&dir).await?;
+        if writable {
+            Self::ensure_accounts_dir(&dir).await?;
         }
         let events = Events::new();
         Accounts::open(events, dir, writable).await
@@ -67,10 +67,9 @@ impl Accounts {
     /// Loads or creates an accounts folder at the given `dir`.
     /// Uses an existing events channel.
     pub async fn new_with_events(dir: PathBuf, writable: bool, events: Events) -> Result<Self> {
-        if writable && !dir.exists() {
-            Accounts::create(&dir).await?;
+        if writable {
+            Self::ensure_accounts_dir(&dir).await?;
         }
-
         Accounts::open(events, dir, writable).await
     }
 
@@ -82,14 +81,20 @@ impl Accounts {
         0
     }
 
-    /// Creates a new default structure.
-    async fn create(dir: &Path) -> Result<()> {
-        fs::create_dir_all(dir)
-            .await
-            .context("failed to create folder")?;
-
-        Config::new(dir).await?;
-
+    /// Ensures the accounts directory and config file exist.
+    /// Creates them if the directory doesn't exist, or if it exists but is empty.
+    /// Errors if the directory exists with files but no config.
+    async fn ensure_accounts_dir(dir: &Path) -> Result<()> {
+        if !dir.exists() {
+            fs::create_dir_all(dir)
+                .await
+                .context("Failed to create folder")?;
+            Config::new(dir).await?;
+        } else if !dir.join(CONFIG_NAME).exists() {
+            let mut rd = fs::read_dir(dir).await?;
+            ensure!(rd.next_entry().await?.is_none(), "{dir:?} is not empty");
+            Config::new(dir).await?;
+        }
         Ok(())
     }
 
@@ -913,6 +918,26 @@ mod tests {
             assert_eq!(accounts.accounts.len(), 1);
             assert_eq!(accounts.config.get_selected_account(), 1);
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_account_new_empty_existing_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let p: PathBuf = dir.path().join("accounts");
+
+        // A non-empty directory without accounts.toml should fail.
+        fs::create_dir_all(&p).await.unwrap();
+        fs::write(p.join("stray_file.txt"), b"hello").await.unwrap();
+        assert!(Accounts::new(p.clone(), true).await.is_err());
+
+        // Clean up to an empty directory.
+        fs::remove_file(p.join("stray_file.txt")).await.unwrap();
+
+        // An empty directory without accounts.toml should succeed.
+        let mut accounts = Accounts::new(p.clone(), true).await.unwrap();
+        assert_eq!(accounts.accounts.len(), 0);
+        let id = accounts.add_account().await.unwrap();
+        assert_eq!(id, 1);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

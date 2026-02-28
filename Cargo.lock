@@ -308,12 +308,12 @@ dependencies = [
 
 [[package]]
 name = "async-native-tls"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9343dc5acf07e79ff82d0c37899f079db3534d99f189a1837c8e549c99405bec"
+checksum = "37dd6b179962fe4048a6f81d4c0d7ed419a21fdf49204b4c6b04971693358e79"
 dependencies = [
  "native-tls",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "url",
 ]
@@ -1303,7 +1303,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat"
-version = "2.43.0"
+version = "2.44.0-dev"
 dependencies = [
  "anyhow",
  "astral-tokio-tar",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-jsonrpc"
-version = "2.43.0"
+version = "2.44.0-dev"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1434,7 +1434,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-repl"
-version = "2.43.0"
+version = "2.44.0-dev"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1450,7 +1450,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat-rpc-server"
-version = "2.43.0"
+version = "2.44.0-dev"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1479,7 +1479,7 @@ dependencies = [
 
 [[package]]
 name = "deltachat_ffi"
-version = "2.43.0"
+version = "2.44.0-dev"
 dependencies = [
  "anyhow",
  "deltachat",

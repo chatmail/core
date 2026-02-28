@@ -1,5 +1,58 @@
 # Changelog
 
+## [2.44.0] - 2026-02-27
+
+### Build system
+
+- git-cliff: do not capitalize the first letter of commit message.
+
+### Documentation
+
+- RELEASE.md: add section about dealing with antivirus false positives.
+
+### Features / Changes
+
+- improve logging of connection failures.
+- add backup versions to the importing error message.
+- add context to message loading failures.
+- Add 📱 to all webxdc summaries ([#7790](https://github.com/chatmail/core/pull/7790)).
+- Send webxdc name instead of raw file name in pre-messages. Display it in summary ([#7790](https://github.com/chatmail/core/pull/7790)).
+- rpc: add startup health-check and propagate server errors.
+
+### Fixes
+
+- imex: do not call `set_config` before running SQL migrations ([#7851](https://github.com/chatmail/core/pull/7851)).
+- add missing group description strings to cffi.
+- chat-description-changed text in old clients ([#7870](https://github.com/chatmail/core/pull/7870)).
+- add cffi type for "Description changed" info message.
+- If there was no chat description, and it's set to be an empty string, don't send out a "chat description changed" message ([#7879](https://github.com/chatmail/core/pull/7879)).
+- Make clicking on broadcast member-added messages work always ([#7882](https://github.com/chatmail/core/pull/7882)).
+- tolerate empty existing directory in Accounts::new() ([#7886](https://github.com/chatmail/core/pull/7886)).
+- If importing a backup fails, delete the partially-imported profile ([#7885](https://github.com/chatmail/core/pull/7885)).
+- Don't generate new timestamp for re-sent messages ([#7889](https://github.com/chatmail/core/pull/7889)).
+
+### Miscellaneous Tasks
+
+- cargo: update async-native-tls from 0.5.0 to 0.6.0.
+- add dev-version bump instructions to RELEASE.md (bumping to 2.44.0-dev).
+- deps: bump cachix/install-nix-action from 31.9.0 to 31.9.1.
+
+### Performance
+
+- batched event reception.
+
+### Refactor
+
+- enable clippy::arithmetic_side_effects lint.
+- imex: check for overflow when adding blob size.
+- http: saturating addition to calculate cache expiration timestamp.
+- Move migrations to the end of the file ([#7895](https://github.com/chatmail/core/pull/7895)).
+- do not chain Autocrypt key verification to parsing.
+
+### Tests
+
+- fail fast when CHATMAIL_DOMAIN is unset.
+
 ## [2.43.0] - 2026-02-17
 
 ### Features / Changes
@@ -7767,3 +7820,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.41.0]: https://github.com/chatmail/core/compare/v2.40.0..v2.41.0
 [2.42.0]: https://github.com/chatmail/core/compare/v2.41.0..v2.42.0
 [2.43.0]: https://github.com/chatmail/core/compare/v2.42.0..v2.43.0
+[2.44.0]: https://github.com/chatmail/core/compare/v2.43.0..v2.44.0

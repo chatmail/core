@@ -467,6 +467,32 @@ mod tests {
         }
     }
 
+    /// Tests that trying to accidentally overwrite a profile
+    /// that is in use will fail.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_cant_overwrite_profile_in_use() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let ctx0 = &tcm.alice().await;
+        let ctx1 = &tcm.bob().await;
+
+        // Prepare to transfer backup.
+        let provider = BackupProvider::prepare(ctx0).await?;
+
+        // Try to overwrite an existing profile.
+        let err = get_backup(ctx1, provider.qr()).await.unwrap_err();
+        assert!(format!("{err:#}").contains("Cannot import backups to accounts in use"));
+
+        // ctx0 is supposed to also finish, and emit an error:
+        provider.await.unwrap();
+        ctx0.evtracker
+            .get_matching(|e| matches!(e, EventType::Error(_)))
+            .await;
+
+        assert_eq!(ctx1.get_primary_self_addr().await?, "bob@example.net");
+
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_drop_provider() {
         let mut tcm = TestContextManager::new();

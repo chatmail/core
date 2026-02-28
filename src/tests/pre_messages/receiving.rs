@@ -79,17 +79,22 @@ async fn test_receive_pre_message() -> Result<()> {
     assert_eq!(msg.get_filename(), Some("test.bin".to_owned()));
     assert_summary_texts(&msg, bob, "📎 test.bin – test").await;
 
-    // Some viewtypes are displayed unwell currently, still test them.
-
+    // Webxdc w/o manifest.
     let (pre_message, ..) = send_large_webxdc_message(alice, alice_group_id).await?;
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.download_state, DownloadState::Available);
-    assert_summary_texts(
-        &msg,
-        bob,
-        &format!("📱 {} – test", Viewtype::Webxdc.to_locale_string(bob).await),
+    assert_summary_texts(&msg, bob, "📱 test.xdc – test").await;
+
+    let (pre_message, ..) = send_large_file_message(
+        alice,
+        alice_group_id,
+        Viewtype::Webxdc,
+        include_bytes!("../../../test-data/webxdc/timetracking-v0.10.1.xdc"),
     )
-    .await;
+    .await?;
+    let msg = bob.recv_msg(&pre_message).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_summary_texts(&msg, bob, "📱 TimeTracking – test").await;
 
     let (pre_message, ..) = send_large_file_message(
         alice,
@@ -111,6 +116,33 @@ async fn test_receive_pre_message() -> Result<()> {
     assert_eq!(msg.download_state, DownloadState::Available);
     assert_summary_texts(&msg, bob, "👤 test").await;
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_receive_webxdc() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_group_id = alice.create_group_with_members("", &[bob]).await;
+
+    let (pre_msg, post_msg, _) = send_large_file_message(
+        alice,
+        alice_group_id,
+        Viewtype::Webxdc,
+        include_bytes!("../../../test-data/webxdc/timetracking-v0.10.1.xdc"),
+    )
+    .await?;
+    let msg = bob.recv_msg(&pre_msg).await;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_summary_texts(&msg, bob, "📱 TimeTracking – test").await;
+    assert_eq!(msg.get_filename().unwrap(), "TimeTracking");
+
+    bob.recv_msg_trash(&post_msg).await;
+    let msg = Message::load_from_db(bob, msg.id).await?;
+    assert_eq!(msg.download_state, DownloadState::Done);
+    assert_summary_texts(&msg, bob, "📱 TimeTracking – test").await;
+    assert_eq!(msg.get_filename().unwrap(), "test.xdc");
     Ok(())
 }
 
