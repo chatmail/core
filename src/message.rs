@@ -1829,7 +1829,7 @@ pub async fn delete_msgs_ex(
     Ok(())
 }
 
-/// Marks requested messages as seen.
+/// Marks requested messages and reactions to them as seen.
 pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()> {
     if msg_ids.is_empty() {
         return Ok(());
@@ -1843,10 +1843,18 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
 
     let mut msgs = Vec::with_capacity(msg_ids.len());
     for &id in &msg_ids {
-        if let Some(msg) = context
+        let Some(rfc724_mid): Option<String> = context
             .sql
-            .query_row_optional(
+            .query_get_value("SELECT rfc724_mid FROM msgs WHERE id=?", (id,))
+            .await?
+        else {
+            continue;
+        };
+        context
+            .sql
+            .query_map(
                 "SELECT
+                    m.id AS id,
                     m.chat_id AS chat_id,
                     m.state AS state,
                     m.ephemeral_timer AS ephemeral_timer,
@@ -1857,9 +1865,11 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                     c.archived AS archived,
                     c.blocked AS blocked
                  FROM msgs m LEFT JOIN chats c ON c.id=m.chat_id
-                 WHERE m.id=? AND m.chat_id>9",
-                (id,),
+                WHERE (m.id=? OR m.mime_in_reply_to=? AND m.hidden=1)
+                    AND m.chat_id>9 AND ?<=m.state AND m.state<?",
+                (id, rfc724_mid, MessageState::InFresh, MessageState::InSeen),
                 |row| {
+                    let id: MsgId = row.get("id")?;
                     let chat_id: ChatId = row.get("chat_id")?;
                     let state: MessageState = row.get("state")?;
                     let param: Params = row.get::<_, String>("param")?.parse().unwrap_or_default();
@@ -1884,11 +1894,14 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                         ephemeral_timer,
                     ))
                 },
+                |rows| {
+                    for row in rows {
+                        msgs.push(row?);
+                    }
+                    Ok(())
+                },
             )
-            .await?
-        {
-            msgs.push(msg);
-        }
+            .await?;
     }
 
     if msgs
@@ -1917,47 +1930,44 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
         _curr_ephemeral_timer,
     ) in msgs
     {
-        if curr_state == MessageState::InFresh || curr_state == MessageState::InNoticed {
-            update_msg_state(context, id, MessageState::InSeen).await?;
-            info!(context, "Seen message {}.", id);
+        update_msg_state(context, id, MessageState::InSeen).await?;
+        info!(context, "Seen message {}.", id);
 
-            markseen_on_imap_table(context, &curr_rfc724_mid).await?;
+        markseen_on_imap_table(context, &curr_rfc724_mid).await?;
 
-            // Read receipts for system messages are never sent to contacts.
-            // These messages have no place to display received read receipt
-            // anyway. And since their text is locally generated,
-            // quoting them is dangerous as it may contain contact names. E.g., for original message
-            // "Group left by me", a read receipt will quote "Group left by <name>", and the name can
-            // be a display name stored in address book rather than the name sent in the From field by
-            // the user.
-            //
-            // We also don't send read receipts for contact requests.
-            // Read receipts will not be sent even after accepting the chat.
-            let to_id = if curr_blocked == Blocked::Not
-                && curr_param.get_bool(Param::WantsMdn).unwrap_or_default()
-                && curr_param.get_cmd() == SystemMessage::Unknown
-                && context.should_send_mdns().await?
-            {
-                Some(curr_from_id)
-            } else if context.get_config_bool(Config::BccSelf).await? {
-                Some(ContactId::SELF)
-            } else {
-                None
-            };
-            if let Some(to_id) = to_id {
-                context
-                    .sql
-                    .execute(
-                        "INSERT INTO smtp_mdns (msg_id, from_id, rfc724_mid) VALUES(?, ?, ?)",
-                        (id, to_id, curr_rfc724_mid),
-                    )
-                    .await
-                    .context("failed to insert into smtp_mdns")?;
-                context.scheduler.interrupt_smtp().await;
-            }
-            if !curr_hidden {
-                updated_chat_ids.insert(curr_chat_id);
-            }
+        // Read receipts for system messages are never sent to contacts. These messages have no
+        // place to display received read receipt anyway. And since their text is locally generated,
+        // quoting them is dangerous as it may contain contact names. E.g., for original message
+        // "Group left by me", a read receipt will quote "Group left by <name>", and the name can be
+        // a display name stored in address book rather than the name sent in the From field by the
+        // user.
+        //
+        // We also don't send read receipts for contact requests. Read receipts will not be sent
+        // even after accepting the chat.
+        let to_id = if curr_blocked == Blocked::Not
+            && curr_param.get_bool(Param::WantsMdn).unwrap_or_default()
+            && curr_param.get_cmd() == SystemMessage::Unknown
+            && context.should_send_mdns().await?
+        {
+            Some(curr_from_id)
+        } else if context.get_config_bool(Config::BccSelf).await? {
+            Some(ContactId::SELF)
+        } else {
+            None
+        };
+        if let Some(to_id) = to_id {
+            context
+                .sql
+                .execute(
+                    "INSERT INTO smtp_mdns (msg_id, from_id, rfc724_mid) VALUES(?, ?, ?)",
+                    (id, to_id, curr_rfc724_mid),
+                )
+                .await
+                .context("failed to insert into smtp_mdns")?;
+            context.scheduler.interrupt_smtp().await;
+        }
+        if !curr_hidden {
+            updated_chat_ids.insert(curr_chat_id);
         }
         archived_chats_maybe_noticed |= curr_state == MessageState::InFresh
             && !curr_hidden

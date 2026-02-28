@@ -413,27 +413,32 @@ def test_dont_move_sync_msgs(acfactory, direct_imap):
         time.sleep(1)
 
 
-def test_reaction_seen_on_another_dev(acfactory) -> None:
+@pytest.mark.parametrize("chat_noticed", [False, True])
+def test_reaction_seen_on_another_dev(acfactory, chat_noticed) -> None:
     alice, bob = acfactory.get_online_accounts(2)
     alice2 = alice.clone()
     alice2.start_io()
 
     alice_contact_bob = alice.create_contact(bob, "Bob")
     alice_chat_bob = alice_contact_bob.create_chat()
-    alice_chat_bob.send_text("Hello!")
+    alice_msg = alice_chat_bob.send_text("Hello!")
 
     event = bob.wait_for_incoming_msg_event()
     msg_id = event.msg_id
 
-    message = bob.get_message_by_id(msg_id)
-    snapshot = message.get_snapshot()
+    bob_msg = bob.get_message_by_id(msg_id)
+    snapshot = bob_msg.get_snapshot()
     snapshot.chat.accept()
-    message.send_reaction("😎")
+    bob_msg.send_reaction("😎")
     for a in [alice, alice2]:
         a.wait_for_event(EventType.INCOMING_REACTION)
 
     alice2.clear_all_events()
-    alice_chat_bob.mark_noticed()
+    if chat_noticed:
+        alice_chat_bob.mark_noticed()
+    else:
+        # UIs are supposed to mark messages being in view as seen, not reactions themselves.
+        alice_msg.mark_seen()
     chat_id = alice2.wait_for_event(EventType.MSGS_NOTICED).chat_id
     alice2_chat_bob = alice2.create_chat(bob)
     assert chat_id == alice2_chat_bob.id
