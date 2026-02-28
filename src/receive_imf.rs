@@ -37,7 +37,8 @@ use crate::message::{
     rfc724_mid_exists,
 };
 use crate::mimeparser::{
-    AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
+    AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_id,
+    parse_message_ids,
 };
 use crate::param::{Param, Params};
 use crate::peer_channels::{add_gossip_peer_from_header, insert_topic_stub, iroh_topic_from_str};
@@ -984,10 +985,14 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                 context
                     .sql
                     .execute(
+                        // Employ `msgs_index7 ON msgs (state, hidden, chat_id)` by explicit
+                        // enumeration of `hidden` values, otherwise SQLite would iterate over all
+                        // messages having `state` specified before, i.e. it would use the index
+                        // only partly.
                         "
 UPDATE msgs SET state=? WHERE
     state=? AND
-    hidden=0 AND
+    hidden IN (0,1) AND
     chat_id=? AND
     (timestamp,id)<(?,?)",
                         (
@@ -1000,7 +1005,18 @@ UPDATE msgs SET state=? WHERE
                     )
                     .await
                     .context("UPDATE msgs.state")?;
-                if chat_id.get_fresh_msg_cnt(context).await? == 0 {
+                let n_fresh_msgs = context
+                    .sql
+                    .count(
+                        "
+SELECT COUNT(*) FROM msgs WHERE
+    state=? AND
+    hidden IN (0,1) AND
+    chat_id=?",
+                        (MessageState::InFresh, chat_id),
+                    )
+                    .await?;
+                if n_fresh_msgs == 0 {
                     // Removes all notifications for the chat in UIs.
                     context.emit_event(EventType::MsgsNoticed(chat_id));
                 } else {
@@ -1988,9 +2004,13 @@ async fn add_parts(
     )
     .await?;
 
-    let mime_in_reply_to = mime_parser
-        .get_header(HeaderDef::InReplyTo)
-        .unwrap_or_default();
+    let mime_in_reply_to = match mime_parser.get_header(HeaderDef::InReplyTo) {
+        Some(in_reply_to) => parse_message_id(in_reply_to)
+            .log_err(context)
+            .ok()
+            .unwrap_or_default(),
+        None => "".to_string(),
+    };
     let mime_references = mime_parser
         .get_header(HeaderDef::References)
         .unwrap_or_default();
@@ -2124,7 +2144,7 @@ async fn add_parts(
             let is_incoming_fresh = mime_parser.incoming && !seen;
             set_msg_reaction(
                 context,
-                mime_in_reply_to,
+                &mime_in_reply_to,
                 chat_id,
                 from_id,
                 sort_timestamp,
@@ -2258,7 +2278,7 @@ INSERT INTO msgs
                     } else {
                         Vec::new()
                     },
-                    if trash { "" } else { mime_in_reply_to },
+                    if trash { "" } else { &mime_in_reply_to },
                     if trash { "" } else { mime_references },
                     !trash && save_mime_modified,
                     if trash {
