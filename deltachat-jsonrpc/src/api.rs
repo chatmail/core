@@ -1327,6 +1327,11 @@ impl CommandApi {
     /// Mark messages as presented to the user.
     /// Typically, UIs call this function on scrolling through the message list,
     /// when the messages are presented at least for a little moment.
+    /// UIs should pass all messages to this function, incl. outgoing and info ones, as this is used
+    /// also for synchronization and to track last position.
+    /// This should also be called when a reaction for a message being in view arrives.
+    /// If this is called for already presented messages, unless they have new reactions, nothing
+    /// happens.
     /// The concrete action depends on the type of the chat and on the users settings
     /// (dc_msgs_presented() may be a better name therefore, but well. :)
     ///
