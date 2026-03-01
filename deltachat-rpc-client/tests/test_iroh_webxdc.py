@@ -17,6 +17,15 @@ import pytest
 
 from deltachat_rpc_client import EventType
 
+# Relays on underscore domains advertise themselves as iroh relay
+# but serve a self-signed certificate that iroh's TLS stack rejects.
+# Skipping instead of xfailing keeps the run fast:
+# these tests only fail after waiting for realtime connections to time out.
+pytestmark = pytest.mark.skipif(
+    os.environ.get("CHATMAIL_DOMAIN", "").startswith("_"),
+    reason="iroh does not accept the self-signed certificate of an underscore domain",
+)
+
 
 @pytest.fixture
 def path_to_webxdc(request):
