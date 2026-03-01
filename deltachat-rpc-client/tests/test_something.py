@@ -105,8 +105,11 @@ def test_lowercase_address(acfactory) -> None:
 
 def test_configure_ip(acfactory) -> None:
     addr, password = acfactory.get_credentials()
+    domain = addr.rsplit("@")[-1]
+    if domain.startswith("_"):
+        pytest.skip("Underscore domains accept invalid certificates")
     account = acfactory.get_unconfigured_account()
-    ip_address = socket.gethostbyname(addr.rsplit("@")[-1])
+    ip_address = socket.gethostbyname(domain)
 
     with pytest.raises(JsonRpcError):
         account.add_or_update_transport(

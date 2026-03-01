@@ -37,7 +37,11 @@ class DirectImap:
         host = user.rsplit("@")[-1]
         pw = self.account.get_config("mail_pw")
 
-        self.conn = MailBox(host, port, ssl_context=ssl.create_default_context())
+        ssl_context = ssl.create_default_context()
+        if host.startswith("_"):
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+        self.conn = MailBox(host, port, ssl_context=ssl_context)
         self.conn.login(user, pw)
 
         self.select_folder("INBOX")
