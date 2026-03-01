@@ -1407,7 +1407,7 @@ def test_synchronize_member_list_on_group_rejoin(acfactory, log):
     assert msg.get_snapshot().chat.num_contacts() == 2
 
 
-def test_large_message(acfactory) -> None:
+def test_large_message(acfactory, data) -> None:
     """
     Test sending large message without download limit set,
     so it is sent with pre-message but downloaded without user interaction.
@@ -1417,7 +1417,7 @@ def test_large_message(acfactory) -> None:
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_message(
         "Hello World, this message is bigger than 5 bytes",
-        file="../test-data/image/screenshot.jpg",
+        file=data.get_path("image/screenshot.jpg"),
     )
 
     msg = bob.wait_for_incoming_msg()
