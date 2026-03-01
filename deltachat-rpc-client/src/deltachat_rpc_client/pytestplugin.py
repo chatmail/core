@@ -9,6 +9,7 @@ import platform
 import random
 import subprocess
 import sys
+import urllib.parse
 from typing import AsyncGenerator, Optional
 
 import execnet
@@ -283,8 +284,16 @@ def alice_and_remote_bob(tmp_path, acfactory, get_core_python_env):
         channel = gw.remote_exec(remote_bob_loop)
         cm = os.environ.get("CHATMAIL_DOMAIN")
 
+        # Build a dclogin QR code for the remote bob account.
+        # Using dclogin scheme with ic=3&sc=3 allows old cores
+        # to accept invalid certificates for underscore-prefixed domains.
+        addr, password = acfactory.get_credentials()
+        dclogin_qr = f"dclogin://{urllib.parse.quote(addr, safe='@')}?p={urllib.parse.quote(password)}&v=1"
+        if cm and cm.startswith("_"):
+            dclogin_qr += "&ic=3&sc=3"
+
         # trigger getting an online account on bob's side
-        channel.send((accounts_dir, str(rpc_server_path), cm))
+        channel.send((accounts_dir, str(rpc_server_path), dclogin_qr))
 
         # meanwhile get a local alice account
         alice = acfactory.get_online_account()
@@ -316,10 +325,8 @@ def remote_bob_loop(channel):
     import os
 
     from deltachat_rpc_client import DeltaChat, Rpc
-    from deltachat_rpc_client.pytestplugin import ACFactory
 
-    accounts_dir, rpc_server_path, chatmail_domain = channel.receive()
-    os.environ["CHATMAIL_DOMAIN"] = chatmail_domain
+    accounts_dir, rpc_server_path, dclogin_qr = channel.receive()
 
     # older core versions don't support specifying rpc_server_path
     # so we can't just pass `rpc_server_path` argument to Rpc constructor
@@ -330,8 +337,14 @@ def remote_bob_loop(channel):
     with rpc:
         dc = DeltaChat(rpc)
         channel.send(dc.rpc.get_system_info()["deltachat_core_version"])
-        acfactory = ACFactory(dc)
-        bob = acfactory.get_online_account()
+
+        # Configure account using dclogin scheme directly,
+        # avoiding the old ACFactory which doesn't handle
+        # underscore-prefixed domains' TLS on older cores.
+        bob = dc.add_account()
+        bob.set_config_from_qr(dclogin_qr)
+        bob.bring_online()
+
         alice_vcard = channel.receive()
         [alice_contact] = bob.import_vcard(alice_vcard)
         ns = {"bob": bob, "bob_contact_alice": alice_contact}
@@ -345,3 +358,4 @@ def remote_bob_loop(channel):
             except Exception:
                 # some unserializable result
                 channel.send(None)
+

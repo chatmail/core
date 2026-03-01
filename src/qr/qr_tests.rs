@@ -738,6 +738,35 @@ async fn test_decode_account() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_decode_account_underscore_domain() -> Result<()> {
+    let ctx = TestContext::new().await;
+
+    // Underscore domain is kept as-is.
+    let qr = check_qr(&ctx.ctx, "dcaccount:_example.org").await?;
+    assert_eq!(
+        qr,
+        Qr::Account {
+            domain: "_example.org".to_string()
+        }
+    );
+
+    // Verify login params use AcceptInvalidCertificates for underscore domain.
+    let param = login_param_from_account_qr(&ctx.ctx, "dcaccount:_example.org").await?;
+    assert!(param.addr.ends_with("@_example.org"));
+    assert_eq!(
+        param.certificate_checks,
+        EnteredCertificateChecks::AcceptInvalidCertificates
+    );
+
+    // Regular domain still uses Strict.
+    let param = login_param_from_account_qr(&ctx.ctx, "dcaccount:example.org").await?;
+    assert!(param.addr.ends_with("@example.org"));
+    assert_eq!(param.certificate_checks, EnteredCertificateChecks::Strict);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_tg_socks_proxy() -> Result<()> {
     let t = TestContext::new().await;
 

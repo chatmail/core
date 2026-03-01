@@ -120,7 +120,7 @@ def test_change_address(acfactory) -> None:
     assert sender_addr2 == new_alice_addr
 
 
-def test_download_on_demand(acfactory) -> None:
+def test_download_on_demand(acfactory, data) -> None:
     alice, bob = acfactory.get_online_accounts(2)
     alice.set_config("download_limit", "1")
 
@@ -131,7 +131,7 @@ def test_download_on_demand(acfactory) -> None:
 
     alice.create_chat(bob)
     chat_bob_alice = bob.create_chat(alice)
-    chat_bob_alice.send_message(file="../test-data/image/screenshot.jpg")
+    chat_bob_alice.send_message(file=data.get_path("image/screenshot.jpg"))
     msg = alice.wait_for_incoming_msg()
     snapshot = msg.get_snapshot()
     assert snapshot.download_state == DownloadState.AVAILABLE
