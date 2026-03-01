@@ -97,8 +97,11 @@ def test_lowercase_address(acfactory) -> None:
 
 def test_configure_ip(acfactory) -> None:
     addr, password = acfactory.get_credentials()
+    domain = addr.rsplit("@")[-1]
+    if domain.startswith("_"):
+        pytest.skip("Underscore domains accept invalid certificates")
     account = acfactory.get_unconfigured_account()
-    ip_address = socket.gethostbyname(addr.rsplit("@")[-1])
+    ip_address = socket.gethostbyname(domain)
 
     with pytest.raises(JsonRpcError):
         account.add_or_update_transport(
@@ -1012,7 +1015,12 @@ def test_configured_imap_certificate_checks(acfactory):
     alice = acfactory.new_configured_account()
 
     # Certificate checks should be configured (not None)
-    assert "cert_strict" in alice.get_info().used_transport_settings
+    info = alice.get_info()
+    domain = alice.get_config("addr").split("@")[-1]
+    if domain.startswith("_"):
+        assert "cert_accept_invalid_certificates" in info.used_transport_settings
+    else:
+        assert "cert_strict" in info.used_transport_settings
 
     # "cert_old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)
@@ -1361,7 +1369,7 @@ def test_synchronize_member_list_on_group_rejoin(acfactory, log):
     assert msg.get_snapshot().chat.num_contacts() == 2
 
 
-def test_large_message(acfactory) -> None:
+def test_large_message(acfactory, data) -> None:
     """
     Test sending large message without download limit set,
     so it is sent with pre-message but downloaded without user interaction.
@@ -1371,7 +1379,7 @@ def test_large_message(acfactory) -> None:
     alice_chat_bob = alice.create_chat(bob)
     alice_chat_bob.send_message(
         "Hello World, this message is bigger than 5 bytes",
-        file="../test-data/image/screenshot.jpg",
+        file=data.get_path("image/screenshot.jpg"),
     )
 
     msg = bob.wait_for_incoming_msg()
