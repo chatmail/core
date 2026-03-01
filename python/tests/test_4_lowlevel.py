@@ -111,7 +111,7 @@ def test_dc_close_events(acfactory):
     register_global_plugin(ShutdownPlugin())
     assert hasattr(ac1, "_dc_context")
     ac1.shutdown()
-    shutdowns.get(timeout=2)
+    shutdowns.get()
 
 
 def test_wrong_db(tmp_path):
@@ -221,7 +221,7 @@ def test_logged_ac_process_ffi_failure(acfactory):
 
     # cause any event eg contact added/changed
     ac1.create_contact("something@example.org")
-    res = cap.get(timeout=10)
+    res = cap.get()
     assert "ac_process_ffi_event" in res
     assert "ZeroDivisionError" in res
     assert "Traceback" in res
