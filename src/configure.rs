@@ -590,11 +590,14 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
     let (_s, r) = async_channel::bounded(1);
     let mut imap = Imap::new(ctx, transport_id, configured_param.clone(), r).await?;
     let configuring = true;
-    if let Err(err) = imap.connect(ctx, configuring).await {
-        bail!(
-            "{}",
-            nicer_configuration_error(ctx, format!("{err:#}")).await
-        );
+    let imap_session = match imap.connect(ctx, configuring).await {
+        Ok(imap_session) => imap_session,
+        Err(err) => {
+            bail!(
+                "{}",
+                nicer_configuration_error(ctx, format!("{err:#}")).await
+            );
+        }
     };
 
     progress!(ctx, 850);
@@ -609,7 +612,17 @@ async fn configure(ctx: &Context, param: &EnteredLoginParam) -> Result<Option<&'
         ctx.sql.set_raw_config("mvbox_move", Some("0")).await?;
         ctx.sql.set_raw_config("only_fetch_mvbox", None).await?;
     }
+    if !ctx.get_config_bool(Config::FixIsChatmail).await? {
+        if imap_session.is_chatmail() {
+            ctx.sql.set_raw_config("is_chatmail", Some("1")).await?;
+        } else if !is_configured {
+            // Reset the setting that may have been set
+            // during failed configuration.
+            ctx.sql.set_raw_config("is_chatmail", Some("0")).await?;
+        }
+    }
 
+    drop(imap_session);
     drop(imap);
 
     progress!(ctx, 910);
