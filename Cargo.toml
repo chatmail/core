@@ -186,7 +186,7 @@ chrono = { version = "0.4.43", default-features = false }
 deltachat-contact-tools = { path = "deltachat-contact-tools" }
 deltachat-jsonrpc = { path = "deltachat-jsonrpc", default-features = false }
 deltachat = { path = ".", default-features = false }
-futures = "0.3.31"
+futures = "0.3.32"
 futures-lite = "2.6.1"
 libc = "0.2"
 log = "0.4"
