@@ -124,7 +124,7 @@ pub async fn wrap_rustls<'a>(
     config.enable_sni = use_sni;
 
     let tls = tokio_rustls::TlsConnector::from(Arc::new(config));
-    let name = rustls_pki_types::ServerName::try_from(hostname)?.to_owned();
+    let name = tokio_rustls::rustls::pki_types::ServerName::try_from(hostname)?.to_owned();
     let tls_stream = tls.connect(name, stream).await?;
     Ok(tls_stream)
 }

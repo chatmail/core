@@ -1358,7 +1358,6 @@ dependencies = [
  "ratelimit",
  "regex",
  "rusqlite",
- "rustls-pki-types",
  "sanitize-filename",
  "sdp",
  "serde",
