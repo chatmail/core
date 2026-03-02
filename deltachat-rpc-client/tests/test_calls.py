@@ -77,7 +77,7 @@ def test_ice_servers(acfactory) -> None:
     alice = acfactory.get_online_account()
 
     ice_servers = alice.ice_servers()
-    assert len(ice_servers) >= 1
+    assert len(ice_servers) == 1
 
 
 def test_no_contact_request_call(acfactory) -> None:
