@@ -1145,8 +1145,11 @@ async fn test_make_n_import_vcard() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     bob.set_config(Config::Displayname, Some("Bob")).await?;
-    bob.set_config(Config::Selfstatus, Some("It's me, bob"))
-        .await?;
+    bob.set_config(
+        Config::Selfstatus,
+        Some("It's me,\nbob; and here's a backslash: \\"),
+    )
+    .await?;
     let avatar_path = bob.dir.path().join("avatar.png");
     let avatar_bytes = include_bytes!("../../test-data/image/avatar64x64.png");
     let avatar_base64 = base64::engine::general_purpose::STANDARD.encode(avatar_bytes);

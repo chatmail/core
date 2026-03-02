@@ -91,7 +91,7 @@ fn test_make_and_parse_vcard() {
             authname: "Alice Wonderland".to_string(),
             key: Some("[base64-data]".to_string()),
             profile_image: Some("image in Base64".to_string()),
-            biography: Some("Hi, I'm Alice".to_string()),
+            biography: Some("Hi,\nI'm Alice; and this is a backslash: \\".to_string()),
             timestamp: Ok(1713465762),
         },
         VcardContact {
@@ -110,7 +110,7 @@ fn test_make_and_parse_vcard() {
              FN:Alice Wonderland\r\n\
              KEY:data:application/pgp-keys;base64\\,[base64-data]\r\n\
              PHOTO:data:image/jpeg;base64\\,image in Base64\r\n\
-             NOTE:Hi\\, I'm Alice\r\n\
+             NOTE:Hi\\,\\nI'm Alice\\; and this is a backslash: \\\\\r\n\
              REV:20240418T184242Z\r\n\
              END:VCARD\r\n",
         "BEGIN:VCARD\r\n\
@@ -275,4 +275,15 @@ END:VCARD",
     assert_eq!(contacts[0].key.as_ref().unwrap(), "xsaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa==");
     assert!(contacts[0].timestamp.is_err());
     assert_eq!(contacts[0].profile_image.as_ref().unwrap(), "/9aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/Z");
+}
+
+#[test]
+fn test_vcard_value_escape_unescape() {
+    let original = "Text, with; chars and a \\ and a newline\nand a literal newline \\n";
+    let expected_escaped = r"Text\, with\; chars and a \\ and a newline\nand a literal newline \\n";
+
+    let escaped = escape(original);
+    assert_eq!(escaped, expected_escaped);
+    let unescaped = unescape(&escaped);
+    assert_eq!(original, unescaped);
 }
