@@ -358,4 +358,3 @@ def remote_bob_loop(channel):
             except Exception:
                 # some unserializable result
                 channel.send(None)
-

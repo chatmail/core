@@ -1018,7 +1018,7 @@ def test_configured_imap_certificate_checks(acfactory):
     info = alice.get_info()
     domain = alice.get_config("addr").split("@")[-1]
     if domain.startswith("_"):
-        assert "cert_accept_invalid_certificates" in info.used_transport_settings
+        assert "cert_automatic" in info.used_transport_settings
     else:
         assert "cert_strict" in info.used_transport_settings
 
