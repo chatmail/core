@@ -86,7 +86,6 @@ rand-old = { package = "rand", version = "0.8" }
 rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
-rustls-pki-types = "1.12.0"
 sanitize-filename = { workspace = true }
 sdp = "0.10.0"
 serde_json = { workspace = true }
