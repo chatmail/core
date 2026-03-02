@@ -19,7 +19,7 @@ use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
 use crate::constants;
-use crate::contact::ContactId;
+use crate::contact::{ContactId, import_public_key};
 use crate::context::Context;
 use crate::decrypt::{self, validate_detached_signature};
 use crate::dehtml::dehtml;
@@ -458,22 +458,9 @@ impl MimeMessage {
 
         let autocrypt_fingerprint = if let Some(autocrypt_header) = &autocrypt_header {
             let fingerprint = autocrypt_header.public_key.dc_fingerprint().hex();
-            let inserted = context
-                .sql
-                .execute(
-                    "INSERT INTO public_keys (fingerprint, public_key)
-                                 VALUES (?, ?)
-                                 ON CONFLICT (fingerprint)
-                                 DO NOTHING",
-                    (&fingerprint, autocrypt_header.public_key.to_bytes()),
-                )
-                .await?;
-            if inserted > 0 {
-                info!(
-                    context,
-                    "Saved key with fingerprint {fingerprint} from the Autocrypt header"
-                );
-            }
+            import_public_key(context, &autocrypt_header.public_key)
+                .await
+                .context("Failed to import public key from the Autocrypt header")?;
             Some(fingerprint)
         } else {
             None
@@ -1659,24 +1646,12 @@ impl MimeMessage {
             }
             Ok(key) => key,
         };
-        if let Err(err) = key.verify_bindings() {
-            warn!(context, "Attached PGP key verification failed: {err:#}.");
+        if let Err(err) = import_public_key(context, &key).await {
+            warn!(context, "Attached PGP key import failed: {err:#}.");
             return Ok(false);
         }
 
-        let fingerprint = key.dc_fingerprint().hex();
-        context
-            .sql
-            .execute(
-                "INSERT INTO public_keys (fingerprint, public_key)
-                 VALUES (?, ?)
-                 ON CONFLICT (fingerprint)
-                 DO NOTHING",
-                (&fingerprint, key.to_bytes()),
-            )
-            .await?;
-
-        info!(context, "Imported PGP key {fingerprint} from attachment.");
+        info!(context, "Imported PGP key from attachment.");
         Ok(true)
     }
 
@@ -2185,17 +2160,9 @@ async fn parse_gossip_headers(
             continue;
         }
 
-        let fingerprint = header.public_key.dc_fingerprint().hex();
-        context
-            .sql
-            .execute(
-                "INSERT INTO public_keys (fingerprint, public_key)
-                             VALUES (?, ?)
-                             ON CONFLICT (fingerprint)
-                             DO NOTHING",
-                (&fingerprint, header.public_key.to_bytes()),
-            )
-            .await?;
+        import_public_key(context, &header.public_key)
+            .await
+            .context("Failed to import Autocrypt-Gossip key")?;
 
         let gossiped_key = GossipedKey {
             public_key: header.public_key,

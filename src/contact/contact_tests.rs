@@ -841,7 +841,10 @@ Me (alice@example.org):
 
 bob@example.net (bob@example.net):
 CCCB 5AA9 F6E1 141C 9431
-65F1 DB18 B18C BCF7 0487"
+65F1 DB18 B18C BCF7 0487
+
+Relays:
+bob@example.net"
     );
     let contact = Contact::get_by_id(alice, contact_bob_id).await?;
     assert!(contact.e2ee_avail(alice).await?);

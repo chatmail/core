@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use anyhow::{Result, bail, ensure};
 use async_channel::{self as channel, Receiver, Sender};
+use pgp::composed::SignedPublicKey;
 use ratelimit::Ratelimit;
 use tokio::sync::{Mutex, Notify, RwLock};
 
@@ -233,8 +234,6 @@ pub struct InnerContext {
     /// This is a global mutex-like state for operations which should be modal in the
     /// clients.
     running_state: RwLock<RunningState>,
-    /// Mutex to avoid generating the key for the user more than once.
-    pub(crate) generating_key_mutex: Mutex<()>,
     /// Mutex to enforce only a single running oauth2 is running.
     pub(crate) oauth2_mutex: Mutex<()>,
     /// Mutex to prevent a race condition when a "your pw is wrong" warning is sent, resulting in multiple messages being sent.
@@ -316,6 +315,13 @@ pub struct InnerContext {
     /// tokio::sync::OnceCell would be possible to use, but overkill for our usecase;
     /// the standard library's OnceLock is enough, and it's a lot smaller in memory.
     pub(crate) self_fingerprint: OnceLock<String>,
+
+    /// OpenPGP certificate aka Transferrable Public Key.
+    ///
+    /// It is generated on first use from the secret key stored in the database.
+    ///
+    /// Mutex is also held while generating the key to avoid generating the key twice.
+    pub(crate) self_public_key: Mutex<Option<SignedPublicKey>>,
 
     /// `Connectivity` values for mailboxes, unordered. Used to compute the aggregate connectivity,
     /// see [`Context::get_connectivity()`].
@@ -486,7 +492,6 @@ impl Context {
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
             smeared_timestamp: SmearedTimestamp::new(),
-            generating_key_mutex: Mutex::new(()),
             oauth2_mutex: Mutex::new(()),
             wrong_pw_warning_mutex: Mutex::new(()),
             housekeeping_mutex: Mutex::new(()),
@@ -508,6 +513,7 @@ impl Context {
             tls_session_store: TlsSessionStore::new(),
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
+            self_public_key: Mutex::new(None),
             connectivities: parking_lot::Mutex::new(Vec::new()),
             pre_encrypt_mime_hook: None.into(),
         };

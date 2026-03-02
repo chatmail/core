@@ -861,6 +861,10 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                 if transport_changed {
                     info!(context, "Primary transport changed to {from_addr:?}.");
                     context.sql.uncache_raw_config("configured_addr").await;
+
+                    // Regenerate User ID in V4 keys.
+                    context.self_public_key.lock().await.take();
+
                     context.emit_event(EventType::TransportsModified);
                 }
             } else {
