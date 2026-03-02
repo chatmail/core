@@ -5,7 +5,9 @@ use anyhow::{Context as _, Result, bail};
 use deltachat_contact_tools::may_be_valid_addr;
 
 use super::{DCLOGIN_SCHEME, Qr};
-use crate::login_param::{EnteredCertificateChecks, EnteredLoginParam, EnteredServerLoginParam};
+use crate::login_param::{
+    EnteredCertificateChecks, EnteredImapLoginParam, EnteredLoginParam, EnteredSmtpLoginParam,
+};
 use crate::provider::Socket;
 
 /// Options for `dclogin:` scheme.
@@ -173,14 +175,15 @@ pub(crate) fn login_param_from_login_qr(
         } => {
             let param = EnteredLoginParam {
                 addr: addr.to_string(),
-                imap: EnteredServerLoginParam {
+                imap: EnteredImapLoginParam {
                     server: imap_host.unwrap_or_default(),
                     port: imap_port.unwrap_or_default(),
+                    folder: "INBOX".to_string(),
                     security: imap_security.unwrap_or_default(),
                     user: imap_username.unwrap_or_default(),
                     password: imap_password.unwrap_or(mail_pw),
                 },
-                smtp: EnteredServerLoginParam {
+                smtp: EnteredSmtpLoginParam {
                     server: smtp_host.unwrap_or_default(),
                     port: smtp_port.unwrap_or_default(),
                     security: smtp_security.unwrap_or_default(),

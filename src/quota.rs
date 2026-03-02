@@ -9,7 +9,6 @@ use async_imap::types::{Quota, QuotaResource};
 use crate::chat::add_device_msg_with_importance;
 use crate::config::Config;
 use crate::context::Context;
-use crate::imap::get_watched_folders;
 use crate::imap::session::Session as ImapSession;
 use crate::log::warn;
 use crate::message::Message;
@@ -48,26 +47,24 @@ pub struct QuotaInfo {
 
 async fn get_unique_quota_roots_and_usage(
     session: &mut ImapSession,
-    folders: Vec<String>,
+    folder: String,
 ) -> Result<BTreeMap<String, Vec<QuotaResource>>> {
     let mut unique_quota_roots: BTreeMap<String, Vec<QuotaResource>> = BTreeMap::new();
-    for folder in folders {
-        let (quota_roots, quotas) = &session.get_quota_root(&folder).await?;
-        // if there are new quota roots found in this imap folder, add them to the list
-        for qr_entries in quota_roots {
-            for quota_root_name in &qr_entries.quota_root_names {
-                // the quota for that quota root
-                let quota: Quota = quotas
-                    .iter()
-                    .find(|q| &q.root_name == quota_root_name)
-                    .cloned()
-                    .context("quota_root should have a quota")?;
-                // replace old quotas, because between fetching quotaroots for folders,
-                // messages could be received and so the usage could have been changed
-                *unique_quota_roots
-                    .entry(quota_root_name.clone())
-                    .or_default() = quota.resources;
-            }
+    let (quota_roots, quotas) = &session.get_quota_root(&folder).await?;
+    // if there are new quota roots found in this imap folder, add them to the list
+    for qr_entries in quota_roots {
+        for quota_root_name in &qr_entries.quota_root_names {
+            // the quota for that quota root
+            let quota: Quota = quotas
+                .iter()
+                .find(|q| &q.root_name == quota_root_name)
+                .cloned()
+                .context("quota_root should have a quota")?;
+            // replace old quotas, because between fetching quotaroots for folders,
+            // messages could be received and so the usage could have been changed
+            *unique_quota_roots
+                .entry(quota_root_name.clone())
+                .or_default() = quota.resources;
         }
     }
     Ok(unique_quota_roots)
@@ -123,10 +120,13 @@ impl Context {
     /// As the message is added only once, the user is not spammed
     /// in case for some providers the quota is always at ~100%
     /// and new space is allocated as needed.
-    pub(crate) async fn update_recent_quota(&self, session: &mut ImapSession) -> Result<()> {
+    pub(crate) async fn update_recent_quota(
+        &self,
+        session: &mut ImapSession,
+        folder: String,
+    ) -> Result<()> {
         let quota = if session.can_check_quota() {
-            let folders = get_watched_folders(self).await?;
-            get_unique_quota_roots_and_usage(session, folders).await
+            get_unique_quota_roots_and_usage(session, folder).await
         } else {
             Err(anyhow!(stock_str::not_supported_by_provider(self).await))
         };
