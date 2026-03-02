@@ -5,20 +5,22 @@ use anyhow::{Context as _, Result};
 use super::HandshakeMessage;
 use super::qrinvite::QrInvite;
 use crate::chat::{self, ChatId, is_contact_in_chat};
-use crate::chatlist_events;
 use crate::constants::{Blocked, Chattype};
-use crate::contact::Origin;
+use crate::contact::{Contact, Origin};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
 use crate::log::LogExt;
-use crate::message::{Message, MsgId, Viewtype};
+use crate::message::{self, Message, MsgId, Viewtype};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::param::{Param, Params};
-use crate::securejoin::{ContactId, encrypted_and_signed, verify_sender_by_fingerprint};
+use crate::securejoin::{
+    ContactId, encrypted_and_signed, insert_into_smtp, verify_sender_by_fingerprint,
+};
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{smeared_time, time};
+use crate::tools::{create_outgoing_rfc724_mid, smeared_time, time};
+use crate::{chatlist_events, mimefactory};
 
 /// Starts the securejoin protocol with the QR `invite`.
 ///
@@ -213,11 +215,11 @@ LIMIT 1
     Ok(())
 }
 
-/// Handles `vc-auth-required` and `vg-auth-required` handshake messages.
+/// Handles `vc-auth-required`, `vg-auth-required`, and `vc-pubkey` handshake messages.
 ///
 /// # Bob - the joiner's side
 /// ## Step 4 in the "Setup Contact protocol"
-pub(super) async fn handle_auth_required(
+pub(super) async fn handle_auth_required_or_pubkey(
     context: &Context,
     message: &MimeMessage,
 ) -> Result<HandshakeMessage> {
@@ -299,47 +301,68 @@ pub(crate) async fn send_handshake_message(
     chat_id: ChatId,
     step: BobHandshakeMsg,
 ) -> Result<()> {
-    let mut msg = Message {
-        viewtype: Viewtype::Text,
-        text: step.body_text(invite),
-        hidden: true,
-        ..Default::default()
-    };
-    msg.param.set_cmd(SystemMessage::SecurejoinMessage);
+    if invite.is_v3() && matches!(step, BobHandshakeMsg::Request) {
+        // Send a minimal symmetrically-encrypted vc-request-pubkey message
+        let rfc724_mid = create_outgoing_rfc724_mid();
+        let contact = Contact::get_by_id(context, invite.contact_id()).await?;
+        let recipient = contact.get_addr();
+        let attach_self_pubkey = false;
+        let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
+            context,
+            "vc-request-pubkey",
+            &rfc724_mid,
+            attach_self_pubkey,
+            invite.authcode(),
+        )
+        .await?;
 
-    // Sends the step in Secure-Join header.
-    msg.param.set(Param::Arg, step.securejoin_header(invite));
+        let msg_id = message::insert_tombstone(context, &rfc724_mid).await?;
+        insert_into_smtp(context, &rfc724_mid, recipient, rendered_message, msg_id).await?;
+        context.scheduler.interrupt_smtp().await;
+    } else {
+        let mut msg = Message {
+            viewtype: Viewtype::Text,
+            text: step.body_text(invite),
+            hidden: true,
+            ..Default::default()
+        };
 
-    match step {
-        BobHandshakeMsg::Request => {
-            // Sends the Secure-Join-Invitenumber header in mimefactory.rs.
-            msg.param.set(Param::Arg2, invite.invitenumber());
-            msg.force_plaintext();
-        }
-        BobHandshakeMsg::RequestWithAuth => {
-            // Sends the Secure-Join-Auth header in mimefactory.rs.
-            msg.param.set(Param::Arg2, invite.authcode());
-            msg.param.set_int(Param::GuaranteeE2ee, 1);
+        msg.param.set_cmd(SystemMessage::SecurejoinMessage);
 
-            // Sends our own fingerprint in the Secure-Join-Fingerprint header.
-            let bob_fp = self_fingerprint(context).await?;
-            msg.param.set(Param::Arg3, bob_fp);
+        // Sends the step in Secure-Join header.
+        msg.param.set(Param::Arg, step.securejoin_header(invite));
 
-            // Sends the grpid in the Secure-Join-Group header.
-            //
-            // `Secure-Join-Group` header is deprecated,
-            // but old Delta Chat core requires that Alice receives it.
-            //
-            // Previous Delta Chat core also sent `Secure-Join-Group` header
-            // in `vg-request` messages,
-            // but it was not used on the receiver.
-            if let QrInvite::Group { grpid, .. } = invite {
-                msg.param.set(Param::Arg4, grpid);
+        match step {
+            BobHandshakeMsg::Request => {
+                // Sends the Secure-Join-Invitenumber header in mimefactory.rs.
+                msg.param.set(Param::Arg2, invite.invitenumber());
+                msg.force_plaintext();
             }
-        }
-    };
+            BobHandshakeMsg::RequestWithAuth => {
+                // Sends the Secure-Join-Auth header in mimefactory.rs.
+                msg.param.set(Param::Arg2, invite.authcode());
+                msg.param.set_int(Param::GuaranteeE2ee, 1);
 
-    chat::send_msg(context, chat_id, &mut msg).await?;
+                // Sends our own fingerprint in the Secure-Join-Fingerprint header.
+                let bob_fp = self_fingerprint(context).await?;
+                msg.param.set(Param::Arg3, bob_fp);
+
+                // Sends the grpid in the Secure-Join-Group header.
+                //
+                // `Secure-Join-Group` header is deprecated,
+                // but old Delta Chat core requires that Alice receives it.
+                //
+                // Previous Delta Chat core also sent `Secure-Join-Group` header
+                // in `vg-request` messages,
+                // but it was not used on the receiver.
+                if let QrInvite::Group { grpid, .. } = invite {
+                    msg.param.set(Param::Arg4, grpid);
+                }
+            }
+        };
+
+        chat::send_msg(context, chat_id, &mut msg).await?;
+    }
     Ok(())
 }
 

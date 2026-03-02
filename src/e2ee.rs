@@ -70,8 +70,13 @@ impl EncryptHelper {
         shared_secret: &str,
         mail_to_encrypt: MimePart<'static>,
         compress: bool,
+        sign: bool,
     ) -> Result<String> {
-        let sign_key = load_self_secret_key(context).await?;
+        let sign_key = if sign {
+            Some(load_self_secret_key(context).await?)
+        } else {
+            None
+        };
 
         let mut raw_message = Vec::new();
         let cursor = Cursor::new(&mut raw_message);

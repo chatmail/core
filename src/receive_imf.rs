@@ -31,7 +31,8 @@ use crate::key::{
 };
 use crate::log::{LogExt as _, warn};
 use crate::message::{
-    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, rfc724_mid_exists,
+    self, Message, MessageState, MessengerMessage, MsgId, Viewtype, insert_tombstone,
+    rfc724_mid_exists,
 };
 use crate::mimeparser::{
     AvatarAction, GossipedKey, MimeMessage, PreMessageMode, SystemMessage, parse_message_ids,
@@ -176,22 +177,6 @@ pub(crate) async fn receive_imf_from_inbox(
     seen: bool,
 ) -> Result<Option<ReceivedMsg>> {
     receive_imf_inner(context, rfc724_mid, imf_raw, seen).await
-}
-
-/// Inserts a tombstone into `msgs` table
-/// to prevent downloading the same message in the future.
-///
-/// Returns tombstone database row ID.
-async fn insert_tombstone(context: &Context, rfc724_mid: &str) -> Result<MsgId> {
-    let row_id = context
-        .sql
-        .insert(
-            "INSERT INTO msgs(rfc724_mid, chat_id) VALUES (?,?)",
-            (rfc724_mid, DC_CHAT_ID_TRASH),
-        )
-        .await?;
-    let msg_id = MsgId::new(u32::try_from(row_id)?);
-    Ok(msg_id)
 }
 
 async fn get_to_and_past_contact_ids(

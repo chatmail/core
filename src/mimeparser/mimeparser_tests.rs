@@ -10,6 +10,7 @@ use crate::{
     key,
     message::{MessageState, MessengerMessage},
     receive_imf::receive_imf,
+    securejoin::QrInvite,
     test_utils::{TestContext, TestContextManager},
     tools::time,
 };
@@ -2155,4 +2156,31 @@ Third alternative.
     assert_eq!(message.parts.len(), 1);
     assert_eq!(message.parts[0].typ, Viewtype::Text);
     assert_eq!(message.parts[0].msg, "Third alternative.");
+}
+
+/// Tests that loading a bobstate from an old version of Delta Chat
+/// (that doesn't have the is_v3 attribute)
+/// doesn't fail
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_load_shared_secrets_with_legacy_state() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    alice.sql.execute(
+        r#"INSERT INTO bobstate (invite, next_step, chat_id)
+        VALUES ('{"Contact":{"contact_id":10,"fingerprint":[111,111,111,11,111,11,111,111,111,11,11,111,11,111,111,111,111,111,11,111],"invitenumber":"xxxxxxxxxxxxxxxxxxxxxxxx","authcode":"yyyyyyyyyyyyyyyyyyyyyyyy"}}', 0, 10)"#,
+        ()
+    ).await?;
+
+    // This call must not fail:
+    load_shared_secrets(alice).await.unwrap();
+
+    let qr: QrInvite = alice
+        .sql
+        .query_get_value("SELECT invite FROM bobstate", ())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(qr.is_v3(), false);
+
+    Ok(())
 }

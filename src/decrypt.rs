@@ -1,34 +1,28 @@
-//! End-to-end decryption support.
+//! Helper functions for decryption.
+//! The actual decryption is done in the [`crate::pgp`] module.
 
 use std::collections::HashSet;
+use std::io::Cursor;
 
+use ::pgp::composed::Message;
 use anyhow::Result;
 use mailparse::ParsedMail;
 
-use crate::key::{Fingerprint, SignedPublicKey, SignedSecretKey};
+use crate::key::{Fingerprint, SignedPublicKey};
 use crate::pgp;
 
-/// Tries to decrypt a message, but only if it is structured as an Autocrypt message.
-///
-/// If successful and the message was encrypted,
-/// returns the decrypted and decompressed message.
-pub fn try_decrypt<'a>(
-    mail: &'a ParsedMail<'a>,
-    private_keyring: &'a [SignedSecretKey],
-    shared_secrets: &[String],
-) -> Result<Option<::pgp::composed::Message<'static>>> {
+pub fn get_encrypted_pgp_message<'a>(mail: &'a ParsedMail<'a>) -> Result<Option<Message<'static>>> {
     let Some(encrypted_data_part) = get_encrypted_mime(mail) else {
         return Ok(None);
     };
-
     let data = encrypted_data_part.get_body_raw()?;
-    let msg = pgp::decrypt(data, private_keyring, shared_secrets)?;
-
+    let cursor = Cursor::new(data);
+    let (msg, _headers) = Message::from_armor(cursor)?;
     Ok(Some(msg))
 }
 
 /// Returns a reference to the encrypted payload of a message.
-pub(crate) fn get_encrypted_mime<'a, 'b>(mail: &'a ParsedMail<'b>) -> Option<&'a ParsedMail<'b>> {
+pub fn get_encrypted_mime<'a, 'b>(mail: &'a ParsedMail<'b>) -> Option<&'a ParsedMail<'b>> {
     get_autocrypt_mime(mail)
         .or_else(|| get_mixed_up_mime(mail))
         .or_else(|| get_attachment_mime(mail))

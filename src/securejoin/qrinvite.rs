@@ -12,7 +12,7 @@ use crate::qr::Qr;
 
 /// Represents the data from a QR-code scan.
 ///
-/// There are methods to conveniently access fields present in both variants.
+/// There are methods to conveniently access fields present in all three variants.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum QrInvite {
     Contact {
@@ -20,6 +20,8 @@ pub enum QrInvite {
         fingerprint: Fingerprint,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
+        is_v3: bool,
     },
     Group {
         contact_id: ContactId,
@@ -28,6 +30,8 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
+        is_v3: bool,
     },
     Broadcast {
         contact_id: ContactId,
@@ -36,6 +40,8 @@ pub enum QrInvite {
         grpid: String,
         invitenumber: String,
         authcode: String,
+        #[serde(default)]
+        is_v3: bool,
     },
 }
 
@@ -78,6 +84,14 @@ impl QrInvite {
             | Self::Broadcast { authcode, .. } => authcode,
         }
     }
+
+    pub fn is_v3(&self) -> bool {
+        match *self {
+            QrInvite::Contact { is_v3, .. } => is_v3,
+            QrInvite::Group { is_v3, .. } => is_v3,
+            QrInvite::Broadcast { is_v3, .. } => is_v3,
+        }
+    }
 }
 
 impl TryFrom<Qr> for QrInvite {
@@ -90,11 +104,13 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => Ok(QrInvite::Contact {
                 contact_id,
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             }),
             Qr::AskVerifyGroup {
                 grpname,
@@ -103,6 +119,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 invitenumber,
                 authcode,
+                is_v3,
             } => Ok(QrInvite::Group {
                 contact_id,
                 fingerprint,
@@ -110,6 +127,7 @@ impl TryFrom<Qr> for QrInvite {
                 grpid,
                 invitenumber,
                 authcode,
+                is_v3,
             }),
             Qr::AskJoinBroadcast {
                 name,
@@ -118,6 +136,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 authcode,
                 invitenumber,
+                is_v3,
             } => Ok(QrInvite::Broadcast {
                 name,
                 grpid,
@@ -125,6 +144,7 @@ impl TryFrom<Qr> for QrInvite {
                 fingerprint,
                 authcode,
                 invitenumber,
+                is_v3,
             }),
             _ => bail!("Unsupported QR type"),
         }
