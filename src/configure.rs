@@ -534,13 +534,7 @@ async fn get_configured_param(
         smtp_password,
         provider,
         certificate_checks: match param.certificate_checks {
-            EnteredCertificateChecks::Automatic => {
-                if param_domain.starts_with('_') {
-                    ConfiguredCertificateChecks::AcceptInvalidCertificates
-                } else {
-                    ConfiguredCertificateChecks::Automatic
-                }
-            }
+            EnteredCertificateChecks::Automatic => ConfiguredCertificateChecks::Automatic,
             EnteredCertificateChecks::Strict => ConfiguredCertificateChecks::Strict,
             EnteredCertificateChecks::AcceptInvalidCertificates
             | EnteredCertificateChecks::AcceptInvalidCertificates2 => {

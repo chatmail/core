@@ -805,11 +805,6 @@ pub(crate) async fn login_param_from_account_qr(
         .context("Invalid DCACCOUNT scheme")?;
 
     if !payload.starts_with(HTTPS_SCHEME) {
-        let certificate_checks = if payload.starts_with('_') {
-            EnteredCertificateChecks::AcceptInvalidCertificates
-        } else {
-            EnteredCertificateChecks::Strict
-        };
         let rng = &mut rand::rngs::OsRng.unwrap_err();
         let username = Alphanumeric.sample_string(rng, 9);
         let addr = username + "@" + payload;
@@ -822,7 +817,7 @@ pub(crate) async fn login_param_from_account_qr(
                 ..Default::default()
             },
             smtp: Default::default(),
-            certificate_checks,
+            certificate_checks: EnteredCertificateChecks::Automatic,
             oauth2: false,
         };
         return Ok(param);

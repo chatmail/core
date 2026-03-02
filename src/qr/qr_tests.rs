@@ -750,18 +750,22 @@ async fn test_decode_account_underscore_domain() -> Result<()> {
         }
     );
 
-    // Verify login params use AcceptInvalidCertificates for underscore domain.
+    // Verify login params use Automatic for underscore domain.
+    // The TLS layer handles underscore domains via NoCertificateVerification in Rustls.
     let param = login_param_from_account_qr(&ctx.ctx, "dcaccount:_example.org").await?;
     assert!(param.addr.ends_with("@_example.org"));
     assert_eq!(
         param.certificate_checks,
-        EnteredCertificateChecks::AcceptInvalidCertificates
+        EnteredCertificateChecks::Automatic
     );
 
-    // Regular domain still uses Strict.
+    // Regular domain also uses Automatic.
     let param = login_param_from_account_qr(&ctx.ctx, "dcaccount:example.org").await?;
     assert!(param.addr.ends_with("@example.org"));
-    assert_eq!(param.certificate_checks, EnteredCertificateChecks::Strict);
+    assert_eq!(
+        param.certificate_checks,
+        EnteredCertificateChecks::Automatic
+    );
 
     Ok(())
 }

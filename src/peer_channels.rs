@@ -247,7 +247,7 @@ impl Context {
         {
             // Underscore-prefixed domains use self-signed TLS certificates,
             // so we need to skip relay certificate verification for them.
-            let skip = relay_url.host_str().map_or(false, |h| h.starts_with('_'));
+            let skip = relay_url.host_str().is_some_and(|h| h.starts_with('_'));
             (RelayMode::Custom(RelayUrl::from(relay_url).into()), skip)
         } else {
             // FIXME: this should be RelayMode::Disabled instead.
