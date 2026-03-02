@@ -33,7 +33,7 @@ use crate::message::{Message, MsgId, Viewtype};
 use crate::mimeparser::{SystemMessage, is_hidden};
 use crate::param::Param;
 use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
-use crate::pgp::SeipdVersion;
+use crate::pgp::{SeipdVersion, addresses_from_public_key};
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
 use crate::tools::{
@@ -274,10 +274,13 @@ impl MimeFactory {
                 .await?
                 .context("Can't send member addition/removal: missing key")?;
 
-            recipients.push(addr.clone());
+            let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+
+            let relays =
+                addresses_from_public_key(&public_key).unwrap_or_else(|| vec![addr.clone()]);
+            recipients.extend(relays);
             to.push((authname, addr.clone()));
 
-            let public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
             encryption_pubkeys = Some(vec![(addr, public_key)]);
         } else {
             let email_to_remove = if msg.param.get_cmd() == SystemMessage::MemberRemovedFromGroup {
@@ -354,9 +357,23 @@ impl MimeFactory {
                                 false => "".to_string(),
                             };
                             if add_timestamp >= remove_timestamp {
+                                let relays = if let Some(public_key) = public_key_opt {
+                                    let addrs = addresses_from_public_key(&public_key);
+                                    keys.push((addr.clone(), public_key));
+                                    addrs
+                                } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
+                                    missing_key_addresses.insert(addr.clone());
+                                    if is_encrypted {
+                                        warn!(context, "Missing key for {addr}");
+                                    }
+                                    None
+                                } else {
+                                    None
+                                }.unwrap_or_else(|| vec![addr.clone()]);
+
                                 if !recipients_contain_addr(&to, &addr) {
                                     if id != ContactId::SELF {
-                                        recipients.push(addr.clone());
+                                        recipients.extend(relays);
                                     }
                                     if !undisclosed_recipients {
                                         to.push((name, addr.clone()));
@@ -374,35 +391,31 @@ impl MimeFactory {
                                     }
                                 }
                                 recipient_ids.insert(id);
-
-                                if let Some(public_key) = public_key_opt {
-                                    keys.push((addr.clone(), public_key))
-                                } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat) {
-                                    missing_key_addresses.insert(addr.clone());
-                                    if is_encrypted {
-                                        warn!(context, "Missing key for {addr}");
-                                    }
-                                }
                             } else if remove_timestamp.saturating_add(60 * 24 * 3600) > now {
                                 // Row is a tombstone,
                                 // member is not actually part of the group.
                                 if !recipients_contain_addr(&past_members, &addr) {
                                     if let Some(email_to_remove) = email_to_remove
                                         && email_to_remove == addr {
-                                            // This is a "member removed" message,
-                                            // we need to notify removed member
-                                            // that it was removed.
-                                            if id != ContactId::SELF {
-                                                recipients.push(addr.clone());
-                                            }
-
-                                            if let Some(public_key) = public_key_opt {
-                                                keys.push((addr.clone(), public_key))
+                                            let relays = if let Some(public_key) = public_key_opt {
+                                                let addrs = addresses_from_public_key(&public_key);
+                                                keys.push((addr.clone(), public_key));
+                                                addrs
                                             } else if id != ContactId::SELF && !should_encrypt_symmetrically(&msg, &chat)  {
                                                 missing_key_addresses.insert(addr.clone());
                                                 if is_encrypted {
                                                     warn!(context, "Missing key for {addr}");
                                                 }
+                                                None
+                                            } else {
+                                                None
+                                            }.unwrap_or_else(|| vec![addr.clone()]);
+
+                                            // This is a "member removed" message,
+                                            // we need to notify removed member
+                                            // that it was removed.
+                                            if id != ContactId::SELF {
+                                                recipients.extend(relays);
                                             }
                                         }
                                     if !undisclosed_recipients {

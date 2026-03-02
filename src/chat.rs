@@ -42,6 +42,7 @@ use crate::message::{self, Message, MessageState, MsgId, Viewtype};
 use crate::mimefactory::{MimeFactory, RenderedEmail};
 use crate::mimeparser::SystemMessage;
 use crate::param::{Param, Params};
+use crate::pgp::addresses_from_public_key;
 use crate::receive_imf::ReceivedMsg;
 use crate::smtp::{self, send_msg_to_smtp};
 use crate::stock_str;
@@ -1174,8 +1175,13 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             let fingerprint = contact
                 .fingerprint()
                 .context("Contact does not have a fingerprint in encrypted chat")?;
-            if contact.public_key(context).await?.is_some() {
-                ret += &format!("\n{addr}\n{fingerprint}\n");
+            if let Some(public_key) = contact.public_key(context).await? {
+                if let Some(relay_addrs) = addresses_from_public_key(&public_key) {
+                    let relays = relay_addrs.join(",");
+                    ret += &format!("\n{addr}({relays})\n{fingerprint}\n");
+                } else {
+                    ret += &format!("\n{addr}\n{fingerprint}\n");
+                }
             } else {
                 ret += &format!("\n{addr}\n(key missing)\n{fingerprint}\n");
             }
