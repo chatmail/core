@@ -10,6 +10,9 @@ use crate::net::session::SessionStream;
 use tokio_rustls::rustls;
 use tokio_rustls::rustls::client::ClientSessionStore;
 
+mod danger;
+use danger::NoCertificateVerification;
+
 pub async fn wrap_tls<'a>(
     strict_tls: bool,
     hostname: &str,
@@ -123,6 +126,18 @@ pub async fn wrap_rustls<'a>(
         .tls12_resumption(rustls::client::Tls12Resumption::Disabled);
     config.resumption = resumption;
     config.enable_sni = use_sni;
+
+    // Do not verify certificates for hostnames starting with `_`.
+    // They are used for servers with self-signed certificates, e.g. for local testing.
+    // Hostnames starting with `_` can have only self-signed TLS certificates or wildcard certificates.
+    // It is not possible to get valid non-wildcard TLS certificates because CA/Browser Forum requirements
+    // explicitly state that domains should start with a letter, digit or hyphen:
+    // https://github.com/cabforum/servercert/blob/24f38fd4765e019db8bb1a8c56bf63c7115ce0b0/docs/BR.md
+    if hostname.starts_with("_") {
+        config
+            .dangerous()
+            .set_certificate_verifier(Arc::new(NoCertificateVerification::new()));
+    }
 
     let tls = tokio_rustls::TlsConnector::from(Arc::new(config));
     let name = tokio_rustls::rustls::pki_types::ServerName::try_from(hostname)?.to_owned();
