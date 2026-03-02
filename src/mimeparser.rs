@@ -1728,11 +1728,14 @@ impl MimeMessage {
             .and_then(|msgid| parse_message_id(msgid).ok())
     }
 
-    /// Remove headers that are only allowed to be present in an encrypted-and-signed message
+    /// Remove headers that are not allowed in unsigned / unencrypted messages.
+    ///
+    /// Pass `encrypted=true` parameter for an encrypted, but unsigned message.
+    /// Pass `encrypted=false` parameter for an unencrypted message.
+    /// Don't call this function if the message was encrypted and signed.
     fn remove_secured_headers(
         headers: &mut HashMap<String, String>,
         removed: &mut HashSet<String>,
-        // Whether the message was encrypted (but not signed):
         encrypted: bool,
     ) {
         remove_header(headers, "secure-join-fingerprint", removed);
