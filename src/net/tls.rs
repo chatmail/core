@@ -7,6 +7,7 @@ use anyhow::Result;
 
 use crate::net::session::SessionStream;
 
+use tokio_rustls::rustls;
 use tokio_rustls::rustls::client::ClientSessionStore;
 
 pub async fn wrap_tls<'a>(
@@ -82,7 +83,7 @@ impl TlsSessionStore {
                 .lock()
                 .entry((port, alpn.to_string()))
                 .or_insert_with(|| {
-                    Arc::new(tokio_rustls::rustls::client::ClientSessionMemoryCache::new(
+                    Arc::new(rustls::client::ClientSessionMemoryCache::new(
                         TLS_CACHE_SIZE,
                     ))
                 }),
@@ -98,10 +99,10 @@ pub async fn wrap_rustls<'a>(
     stream: impl SessionStream + 'a,
     tls_session_store: &TlsSessionStore,
 ) -> Result<impl SessionStream + 'a> {
-    let mut root_cert_store = tokio_rustls::rustls::RootCertStore::empty();
+    let mut root_cert_store = rustls::RootCertStore::empty();
     root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
 
-    let mut config = tokio_rustls::rustls::ClientConfig::builder()
+    let mut config = rustls::ClientConfig::builder()
         .with_root_certificates(root_cert_store)
         .with_no_client_auth();
     config.alpn_protocols = if alpn.is_empty() {
@@ -118,8 +119,8 @@ pub async fn wrap_rustls<'a>(
     // and are not worth increasing
     // attack surface: <https://words.filippo.io/we-need-to-talk-about-session-tickets/>.
     let resumption_store = tls_session_store.get(port, alpn);
-    let resumption = tokio_rustls::rustls::client::Resumption::store(resumption_store)
-        .tls12_resumption(tokio_rustls::rustls::client::Tls12Resumption::Disabled);
+    let resumption = rustls::client::Resumption::store(resumption_store)
+        .tls12_resumption(rustls::client::Tls12Resumption::Disabled);
     config.resumption = resumption;
     config.enable_sni = use_sni;
 
