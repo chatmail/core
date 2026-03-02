@@ -10,6 +10,9 @@ use crate::net::session::SessionStream;
 use tokio_rustls::rustls;
 use tokio_rustls::rustls::client::ClientSessionStore;
 
+mod danger;
+use danger::NoCertificateVerification;
+
 pub async fn wrap_tls<'a>(
     strict_tls: bool,
     hostname: &str,
@@ -90,7 +93,6 @@ impl TlsSessionStore {
         )
     }
 }
-
 pub async fn wrap_rustls<'a>(
     hostname: &str,
     port: u16,
@@ -123,6 +125,12 @@ pub async fn wrap_rustls<'a>(
         .tls12_resumption(rustls::client::Tls12Resumption::Disabled);
     config.resumption = resumption;
     config.enable_sni = use_sni;
+
+    if hostname.starts_with("_") {
+        config
+            .dangerous()
+            .set_certificate_verifier(Arc::new(NoCertificateVerification::new()));
+    }
 
     let tls = tokio_rustls::TlsConnector::from(Arc::new(config));
     let name = tokio_rustls::rustls::pki_types::ServerName::try_from(hostname)?.to_owned();
