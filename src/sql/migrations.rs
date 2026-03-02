@@ -2329,7 +2329,7 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         sql.execute_migration(
             "CREATE TABLE tokens_new (
                 id INTEGER PRIMARY KEY,
-                namespc INTEGER DEFAULT 0 NOT NULL,
+                namespc INTEGER NOT NULL,
                 foreign_key TEXT DEFAULT '' NOT NULL,
                 token TEXT NOT NULL UNIQUE,
                 timestamp INTEGER DEFAULT 0 NOT NULL
