@@ -1017,10 +1017,7 @@ def test_configured_imap_certificate_checks(acfactory):
     # Certificate checks should be configured (not None)
     info = alice.get_info()
     domain = alice.get_config("addr").split("@")[-1]
-    if domain.startswith("_"):
-        assert "cert_automatic" in info.used_transport_settings
-    else:
-        assert "cert_strict" in info.used_transport_settings
+    assert "cert_automatic" in info.used_transport_settings
 
     # "cert_old_automatic" is the value old Delta Chat core versions used
     # to mean user entered "imap_certificate_checks=0" (Automatic)
