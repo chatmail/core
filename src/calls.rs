@@ -11,7 +11,7 @@ use crate::context::{Context, WeakContext};
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
 use crate::log::warn;
-use crate::message::{Message, MsgId, Viewtype};
+use crate::message::{Message, MsgId, Viewtype, markseen_msgs};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::net::dns::lookup_host_with_cache;
 use crate::param::Param;
@@ -249,6 +249,7 @@ impl Context {
         if chat.is_contact_request() {
             chat.id.accept(self).await?;
         }
+        markseen_msgs(self, vec![call_id]).await?;
 
         // send an acceptance message around: to the caller as well as to the other devices of the callee
         let mut msg = Message {
@@ -283,6 +284,7 @@ impl Context {
         if !call.is_accepted() {
             if call.is_incoming() {
                 call.mark_as_ended(self).await?;
+                markseen_msgs(self, vec![call_id]).await?;
                 let declined_call_str = stock_str::declined_call(self).await;
                 call.update_text(self, &declined_call_str).await?;
             } else {
