@@ -2,6 +2,7 @@ use super::*;
 use crate::chat::forward_msgs;
 use crate::config::Config;
 use crate::constants::DC_CHAT_ID_TRASH;
+use crate::message::MessageState;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager};
 
@@ -115,6 +116,17 @@ async fn accept_call() -> Result<CallSetup> {
     // Bob accepts the incoming call
     bob.accept_incoming_call(bob_call.id, ACCEPT_INFO.to_string())
         .await?;
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
+    // Bob sends an MDN to Alice.
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
+                (bob_call.id, bob_call.from_id)
+            )
+            .await?,
+        1
+    );
     assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
@@ -200,9 +212,20 @@ async fn test_accept_call_callee_ends() -> Result<()> {
         bob2_call,
         ..
     } = accept_call().await?;
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
 
     // Bob has accepted the call and also ends it
     bob.end_call(bob_call.id).await?;
+    // Bob sends an MDN to Alice.
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
+                (bob_call.id, bob_call.from_id)
+            )
+            .await?,
+        1
+    );
     assert_text(&bob, bob_call.id, "Incoming video call\n<1 minute").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -328,8 +351,18 @@ async fn test_callee_rejects_call() -> Result<()> {
     } = setup_call().await?;
 
     // Bob has accepted Alice before, but does not want to talk with Alice
-    bob_call.chat_id.accept(&bob).await?;
     bob.end_call(bob_call.id).await?;
+    assert_eq!(bob_call.id.get_state(&bob).await?, MessageState::InSeen);
+    // Bob sends an MDN to Alice.
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
+                (bob_call.id, bob_call.from_id)
+            )
+            .await?,
+        1
+    );
     assert_text(&bob, bob_call.id, "Declined call").await?;
     bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
@@ -367,6 +400,35 @@ async fn test_callee_rejects_call() -> Result<()> {
         CallState::Declined
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_callee_sees_contact_request_call() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat = alice.create_chat(bob).await;
+    alice
+        .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string(), true)
+        .await?;
+    let sent1 = alice.pop_sent_msg().await;
+    let bob_call = bob.recv_msg(&sent1).await;
+    // Bob can't end_call() because the contact request isn't accepted, but he can mark the call as
+    // seen.
+    markseen_msgs(bob, vec![bob_call.id]).await?;
+    assert_eq!(bob_call.id.get_state(bob).await?, MessageState::InSeen);
+    // Bob sends an MDN only to self so that an unaccepted contact can't know anything.
+    assert_eq!(
+        bob.sql
+            .count(
+                "SELECT COUNT(*) FROM smtp_mdns WHERE msg_id=? AND from_id=?",
+                (bob_call.id, ContactId::SELF)
+            )
+            .await?,
+        1
+    );
     Ok(())
 }
 
