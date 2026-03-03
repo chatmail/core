@@ -1466,6 +1466,9 @@ impl MimeFactory {
                     ));
                 }
                 SystemMessage::GroupDescriptionChanged => {
+                    placeholdertext = Some(
+                        "[Chat description changed. To see this and other new features, please update the app]".to_string(),
+                    );
                     headers.push((
                         "Chat-Group-Description-Changed",
                         mail_builder::headers::text::Text::new("").into(),

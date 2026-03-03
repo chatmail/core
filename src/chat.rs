@@ -4263,9 +4263,7 @@ async fn set_chat_description_ex(
 
     if chat.is_promoted() {
         let mut msg = Message::new(Viewtype::Text);
-        msg.text =
-            "[Chat description changed. To see this and other new features, please update the app]"
-                .to_string();
+        msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
         msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
 
         msg.id = send_msg(context, chat_id, &mut msg).await?;

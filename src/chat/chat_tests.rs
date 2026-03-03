@@ -3154,29 +3154,59 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_basic() {
-    test_chat_description("", false).await.unwrap()
+    test_chat_description("", false, Chattype::Group)
+        .await
+        .unwrap();
+    // Don't test with broadcast channels,
+    // because broadcast channels can only be joined via a QR code
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_unpromoted_description() {
-    test_chat_description("Unpromoted description in the beginning", false)
-        .await
-        .unwrap()
+    test_chat_description(
+        "Unpromoted description in the beginning",
+        false,
+        Chattype::Group,
+    )
+    .await
+    .unwrap();
+    // Don't test with broadcast channels,
+    // because broadcast channels can only be joined via a QR code
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_qr() {
-    test_chat_description("", true).await.unwrap()
+    test_chat_description("", true, Chattype::Group)
+        .await
+        .unwrap();
+    test_chat_description("", true, Chattype::OutBroadcast)
+        .await
+        .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_chat_description_unpromoted_description_qr() {
-    test_chat_description("Unpromoted description in the beginning", true)
-        .await
-        .unwrap()
+    test_chat_description(
+        "Unpromoted description in the beginning",
+        true,
+        Chattype::Group,
+    )
+    .await
+    .unwrap();
+    test_chat_description(
+        "Unpromoted description in the beginning",
+        true,
+        Chattype::OutBroadcast,
+    )
+    .await
+    .unwrap();
 }
 
-async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> Result<()> {
+async fn test_chat_description(
+    initial_description: &str,
+    join_via_qr: bool,
+    chattype: Chattype,
+) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
@@ -3186,12 +3216,29 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
     alice2.set_config_bool(Config::SyncMsgs, true).await?;
 
     tcm.section("Create a group chat, and add Bob");
-    let alice_chat_id = create_group(alice, "My Group").await?;
+    let alice_chat_id = if chattype == Chattype::Group {
+        create_group(alice, "My Group").await?
+    } else {
+        create_broadcast(alice, "My Channel".to_string()).await?
+    };
+    sync(alice, alice2).await;
 
     if !initial_description.is_empty() {
         set_chat_description(alice, alice_chat_id, initial_description).await?;
+
+        if chattype == Chattype::OutBroadcast {
+            // Broadcast channels are always promoted, so, a message is sent:
+            let sent = alice.pop_sent_msg().await;
+            assert_eq!(
+                sent.load_from_db().await.text,
+                "You changed the chat description."
+            );
+            let rcvd = alice2.recv_msg(&sent).await;
+            assert_eq!(rcvd.text, "You changed the chat description.");
+        } else {
+            sync(alice, alice2).await;
+        }
     }
-    sync(alice, alice2).await;
 
     let alice2_chat_id = get_chat_id_by_grpid(
         alice2,
@@ -3219,7 +3266,7 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
         initial_description
     );
 
-    for description in ["This is a cool group", "", "ä ẟ 😂"] {
+    for description in ["This is a cool chat", "", "ä ẟ 😂"] {
         tcm.section(&format!(
             "Alice sets the chat description to '{description}'"
         ));
@@ -3227,10 +3274,15 @@ async fn test_chat_description(initial_description: &str, join_via_qr: bool) -> 
         let sent = alice.pop_sent_msg().await;
         assert_eq!(
             sent.load_from_db().await.text,
-            "[Chat description changed. To see this and other new features, please update the app]"
+            "You changed the chat description."
         );
 
         tcm.section("Bob receives the description change");
+        let parsed = MimeMessage::from_bytes(bob, sent.payload().as_bytes()).await?;
+        assert_eq!(
+            parsed.parts[0].msg,
+            "[Chat description changed. To see this and other new features, please update the app]"
+        );
         let rcvd = bob.recv_msg(&sent).await;
         assert_eq!(rcvd.get_info_type(), SystemMessage::GroupDescriptionChanged);
         assert_eq!(rcvd.text, "Chat description changed by alice@example.org.");
