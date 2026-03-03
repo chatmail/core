@@ -2506,7 +2506,10 @@ impl CommandApi {
                     continue;
                 }
                 let sticker_name = sticker_entry.file_name().into_string().unwrap_or_default();
-                if sticker_name.ends_with(".png") || sticker_name.ends_with(".webp") {
+                if sticker_name.ends_with(".png")
+                    || sticker_name.ends_with(".webp")
+                    || sticker_name.ends_with(".gif")
+                {
                     sticker_paths.push(
                         sticker_entry
                             .path()
