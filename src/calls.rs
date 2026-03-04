@@ -220,10 +220,11 @@ impl Context {
 
         let wait = RINGING_SECONDS;
         let context = self.get_weak_context();
-        task::spawn(Context::emit_end_call_if_unaccepted(
+        task::spawn(Context::finalize_call_if_unaccepted(
             context,
             wait.try_into()?,
             call.id,
+            true, // Doesn't matter for outgoing calls
         ));
 
         Ok(call.id)
@@ -313,37 +314,65 @@ impl Context {
         Ok(())
     }
 
-    async fn emit_end_call_if_unaccepted(
+    async fn finalize_call_if_unaccepted(
         context: WeakContext,
         wait: u64,
         call_id: MsgId,
+        can_call_me: bool,
     ) -> Result<()> {
         sleep(Duration::from_secs(wait)).await;
         let context = context.upgrade()?;
         let Some(mut call) = context.load_call_by_id(call_id).await? else {
             warn!(
                 context,
-                "emit_end_call_if_unaccepted is called with {call_id} which does not refer to a call."
+                "finalize_call_if_unaccepted is called with {call_id} which does not refer to a call."
             );
             return Ok(());
         };
         if !call.is_accepted() && !call.is_ended() {
+            let (msg_id, chat_id) = (call_id, call.msg.chat_id);
             if call.is_incoming() {
                 call.mark_as_canceled(&context).await?;
                 let missed_call_str = stock_str::missed_call(&context).await;
                 call.update_text(&context, &missed_call_str).await?;
+                if can_call_me {
+                    context.emit_event(EventType::CallMissed { msg_id, chat_id });
+                }
             } else {
                 call.mark_as_ended(&context).await?;
                 let canceled_call_str = stock_str::canceled_call(&context).await;
                 call.update_text(&context, &canceled_call_str).await?;
             }
+            if can_call_me {
+                context.emit_event(EventType::CallEnded { msg_id, chat_id });
+            }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
-            context.emit_event(EventType::CallEnded {
-                msg_id: call.msg.id,
-                chat_id: call.msg.chat_id,
-            });
         }
         Ok(())
+    }
+
+    async fn can_call_me(&self, from_id: ContactId) -> Result<bool> {
+        Ok(match who_can_call_me(self).await? {
+            WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
+                .await?
+                .is_some_and(|chat_id_blocked| {
+                    match chat_id_blocked.blocked {
+                        Blocked::Not => true,
+                        Blocked::Yes | Blocked::Request => {
+                            // Do not notify about incoming calls
+                            // from contact requests and blocked contacts.
+                            //
+                            // User can still access the call and accept it
+                            // via the chat in case of contact requests.
+                            false
+                        }
+                    }
+                }),
+            WhoCanCallMe::Everybody => ChatIdBlocked::lookup_by_contact(self, from_id)
+                .await?
+                .is_none_or(|chat_id_blocked| chat_id_blocked.blocked != Blocked::Yes),
+            WhoCanCallMe::Nobody => false,
+        })
     }
 
     pub(crate) async fn handle_call_msg(
@@ -359,50 +388,33 @@ impl Context {
             };
 
             if call.is_incoming() {
-                if call.is_stale() {
-                    let missed_call_str = stock_str::missed_call(self).await;
-                    call.update_text(self, &missed_call_str).await?;
-                    self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
+                let call_str = match call.is_stale() {
+                    true => stock_str::missed_call(self).await,
+                    false => stock_str::incoming_call(self, call.has_video_initially()).await,
+                };
+                call.update_text(self, &call_str).await?;
+                let (msg_id, chat_id) = (call_id, call.msg.chat_id);
+                let can_call_me = self.can_call_me(from_id).await?;
+                if !can_call_me {
+                } else if call.is_stale() {
+                    self.emit_event(EventType::CallMissed { msg_id, chat_id });
                 } else {
-                    let incoming_call_str =
-                        stock_str::incoming_call(self, call.has_video_initially()).await;
-                    call.update_text(self, &incoming_call_str).await?;
-                    self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
-                    let can_call_me = match who_can_call_me(self).await? {
-                        WhoCanCallMe::Contacts => ChatIdBlocked::lookup_by_contact(self, from_id)
-                            .await?
-                            .is_some_and(|chat_id_blocked| {
-                                match chat_id_blocked.blocked {
-                                    Blocked::Not => true,
-                                    Blocked::Yes | Blocked::Request => {
-                                        // Do not notify about incoming calls
-                                        // from contact requests and blocked contacts.
-                                        //
-                                        // User can still access the call and accept it
-                                        // via the chat in case of contact requests.
-                                        false
-                                    }
-                                }
-                            }),
-                        WhoCanCallMe::Everybody => ChatIdBlocked::lookup_by_contact(self, from_id)
-                            .await?
-                            .is_none_or(|chat_id_blocked| chat_id_blocked.blocked != Blocked::Yes),
-                        WhoCanCallMe::Nobody => false,
-                    };
-                    if can_call_me {
-                        self.emit_event(EventType::IncomingCall {
-                            msg_id: call.msg.id,
-                            chat_id: call.msg.chat_id,
-                            place_call_info: call.place_call_info.to_string(),
-                            has_video: call.has_video_initially(),
-                        });
-                    }
+                    self.emit_event(EventType::IncomingCall {
+                        msg_id,
+                        chat_id,
+                        place_call_info: call.place_call_info.to_string(),
+                        has_video: call.has_video_initially(),
+                    });
+                }
+                self.emit_msgs_changed(chat_id, msg_id);
+                if !call.is_stale() {
                     let wait = call.remaining_ring_seconds();
                     let context = self.get_weak_context();
-                    task::spawn(Context::emit_end_call_if_unaccepted(
+                    task::spawn(Context::finalize_call_if_unaccepted(
                         context,
                         wait.try_into()?,
                         call.msg.id,
+                        can_call_me,
                     ));
                 }
             } else {
@@ -454,6 +466,7 @@ impl Context {
                         return Ok(());
                     }
 
+                    let (msg_id, chat_id) = (call_id, call.msg.chat_id);
                     if !call.is_accepted() {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
@@ -464,6 +477,9 @@ impl Context {
                                 call.mark_as_canceled(self).await?;
                                 let missed_call_str = stock_str::missed_call(self).await;
                                 call.update_text(self, &missed_call_str).await?;
+                                if self.can_call_me(from_id).await? {
+                                    self.emit_event(EventType::CallMissed { msg_id, chat_id });
+                                }
                             }
                         } else {
                             // outgoing
@@ -481,12 +497,8 @@ impl Context {
                         call.mark_as_ended(self).await?;
                         call.update_text_duration(self).await?;
                     }
-
+                    self.emit_event(EventType::CallEnded { msg_id, chat_id });
                     self.emit_msgs_changed(call.msg.chat_id, call_id);
-                    self.emit_event(EventType::CallEnded {
-                        msg_id: call.msg.id,
-                        chat_id: call.msg.chat_id,
-                    });
                 }
                 _ => {}
             }
