@@ -81,9 +81,14 @@ pub(super) fn decode_login(qr: &str) -> Result<Qr> {
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
             .collect();
 
+        let addr = percent_encoding::percent_decode_str(addr)
+            .decode_utf8()
+            .context("Address must be UTF-8")?
+            .to_string();
+
         // check if username is there
-        if !may_be_valid_addr(addr) {
-            bail!("invalid DCLOGIN payload: invalid username E5");
+        if !may_be_valid_addr(&addr) {
+            bail!("Invalid DCLOGIN payload: invalid username {addr:?}.");
         }
 
         // apply to result struct
@@ -327,6 +332,18 @@ mod test {
                     certificate_checks: Some(EnteredCertificateChecks::Strict),
                 }
             );
+        } else {
+            bail!("wrong type")
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn uri_encoded_login() -> Result<()> {
+        let result = decode_login("dclogin:username@%5b192.168.1.1%5d?p=1234&v=1")?;
+        if let Qr::Login { address, options } = result {
+            assert_eq!(address, "username@[192.168.1.1]".to_owned());
+            assert_eq!(options, login_options_just_pw!("1234".to_owned()));
         } else {
             bail!("wrong type")
         }
