@@ -2164,9 +2164,7 @@ fn group_headers_by_confidentiality(
                         mail_builder::headers::raw::Raw::new("[...]").into(),
                     ));
                 }
-                "in-reply-to"
-                | "references"
-                | "auto-submitted"
+                "auto-submitted"
                 | "chat-version"
                 | "autocrypt-setup-message"
                 | "chat-is-post-message" => {
