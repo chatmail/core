@@ -238,21 +238,18 @@ impl Context {
         let secret_key = SecretKey::generate(rand_old::rngs::OsRng);
         let public_key = secret_key.public();
 
-        let (relay_mode, skip_relay_tls) = if let Some(relay_url) = self
+        let relay_mode = if let Some(relay_url) = self
             .metadata
             .read()
             .await
             .as_ref()
             .and_then(|conf| conf.iroh_relay.clone())
         {
-            // Underscore-prefixed domains use self-signed TLS certificates,
-            // so we need to skip relay certificate verification for them.
-            let skip = relay_url.host_str().is_some_and(|h| h.starts_with('_'));
-            (RelayMode::Custom(RelayUrl::from(relay_url).into()), skip)
+            RelayMode::Custom(RelayUrl::from(relay_url).into())
         } else {
             // FIXME: this should be RelayMode::Disabled instead.
             // Currently using default relays because otherwise Rust tests fail.
-            (RelayMode::Default, false)
+            RelayMode::Default
         };
 
         let endpoint = Endpoint::builder()
@@ -260,7 +257,6 @@ impl Context {
             .secret_key(secret_key)
             .alpns(vec![GOSSIP_ALPN.to_vec()])
             .relay_mode(relay_mode)
-            .insecure_skip_relay_cert_verify(skip_relay_tls)
             .bind()
             .await?;
 
