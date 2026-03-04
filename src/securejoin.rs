@@ -641,15 +641,12 @@ pub(crate) async fn handle_securejoin_handshake(
                 mark_contact_id_as_verified(context, contact_id, Some(ContactId::SELF)).await?;
             }
             contact_id.regossip_keys(context).await?;
-            ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited).await?;
             // for setup-contact, make Alice's one-to-one chat with Bob visible
             // (secure-join-information are shown in the group chat)
             if grpid.is_empty() {
                 ChatId::create_for_contact(context, contact_id).await?;
             }
-            context.emit_event(EventType::ContactsChanged(Some(contact_id)));
             if let Some(joining_chat_id) = joining_chat_id {
-                // Join group.
                 chat::add_contact_to_chat_ex(context, Nosync, joining_chat_id, contact_id, true)
                     .await?;
 
@@ -659,6 +656,10 @@ pub(crate) async fn handle_securejoin_handshake(
                     // We don't use the membership consistency algorithm for broadcast channels,
                     // so, sync the memberlist when adding a contact
                     chat.sync_contacts(context).await.log_err(context).ok();
+                } else {
+                    ContactId::scaleup_origin(context, &[contact_id], Origin::SecurejoinInvited)
+                        .await?;
+                    context.emit_event(EventType::ContactsChanged(Some(contact_id)));
                 }
 
                 inviter_progress(context, contact_id, joining_chat_id, chat.typ)?;

@@ -257,7 +257,11 @@ impl ChatId {
                         ChatIdBlocked::get_for_contact(context, contact_id, create_blocked)
                             .await
                             .map(|chat| chat.id)?;
-                    ContactId::scaleup_origin(context, &[contact_id], Origin::CreateChat).await?;
+                    if create_blocked != Blocked::Yes {
+                        info!(context, "Scale up origin of {contact_id} to CreateChat.");
+                        ContactId::scaleup_origin(context, &[contact_id], Origin::CreateChat)
+                            .await?;
+                    }
                     chat_id
                 } else {
                     warn!(
