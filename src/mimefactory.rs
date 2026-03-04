@@ -456,9 +456,16 @@ impl MimeFactory {
                 .filter(|id| *id != ContactId::SELF)
                 .collect();
             if recipient_ids.len() == 1
-                && msg.param.get_cmd() != SystemMessage::MemberRemovedFromGroup
-                && chat.typ != Chattype::OutBroadcast
+                && !matches!(
+                    msg.param.get_cmd(),
+                    SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+                )
+                && !matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
             {
+                info!(
+                    context,
+                    "Scale up origin of {} recipients to OutgoingTo.", chat.id
+                );
                 ContactId::scaleup_origin(context, &recipient_ids, Origin::OutgoingTo).await?;
             }
 

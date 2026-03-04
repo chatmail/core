@@ -4835,6 +4835,22 @@ async fn test_sync_create_group() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_contacts_are_hidden() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    send_text_msg(alice, alice_chat_id, "hello".to_string()).await?;
+    bob.recv_msg(&alice.pop_sent_msg().await).await;
+    assert_eq!(Contact::get_all(alice, 0, None).await?.len(), 0);
+    assert_eq!(Contact::get_all(bob, 0, None).await?.len(), 0);
+    Ok(())
+}
+
 /// Tests sending JPEG image with .png extension.
 ///
 /// This is a regression test, previously sending failed

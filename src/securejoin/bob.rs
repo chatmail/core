@@ -49,8 +49,14 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
     // receive_imf.
     let private_chat_id = private_chat_id(context, &invite).await?;
 
-    ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined).await?;
-    context.emit_event(EventType::ContactsChanged(None));
+    match invite {
+        QrInvite::Group { .. } | QrInvite::Contact { .. } => {
+            ContactId::scaleup_origin(context, &[invite.contact_id()], Origin::SecurejoinJoined)
+                .await?;
+            context.emit_event(EventType::ContactsChanged(None));
+        }
+        QrInvite::Broadcast { .. } => {}
+    }
 
     let has_key = context
         .sql
