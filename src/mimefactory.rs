@@ -1527,13 +1527,10 @@ impl MimeFactory {
             | SystemMessage::MultiDeviceSync
             | SystemMessage::WebxdcStatusUpdate => {
                 // This should prevent automatic replies,
-                // such as non-delivery reports.
+                // such as non-delivery reports,
+                // if the message is unencrypted.
                 //
                 // See <https://tools.ietf.org/html/rfc3834>
-                //
-                // Adding this header without encryption leaks some
-                // information about the message contents, but it can
-                // already be easily guessed from message timing and size.
                 headers.push((
                     "Auto-Submitted",
                     mail_builder::headers::raw::Raw::new("auto-generated").into(),
