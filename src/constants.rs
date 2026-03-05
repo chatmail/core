@@ -262,6 +262,9 @@ Here is what to do:
 
 If you have any questions, please send an email to delta@merlinux.eu or ask at https://support.delta.chat/."#;
 
+/// How many recent messages should be re-sent to a new broadcast member.
+pub(crate) const N_MSGS_TO_NEW_BROADCAST_MEMBER: usize = 10;
+
 #[cfg(test)]
 mod tests {
     use num_traits::FromPrimitive;
