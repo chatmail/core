@@ -145,7 +145,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
     assert_eq!(
         msg.get_header(HeaderDef::AutoSubmitted),
-        alice_auto_submitted_hdr.then(|| "auto-generated")
+        alice_auto_submitted_hdr.then_some("auto-generated")
     );
 
     let bob_chat = bob.get_chat(&alice).await;
