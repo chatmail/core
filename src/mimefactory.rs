@@ -1409,9 +1409,9 @@ impl MimeFactory {
                             .await?
                             .unwrap_or_default()
                     {
-                        placeholdertext = Some("I left the group.".to_string());
+                        placeholdertext = Some(format!("{email_to_remove} left the group."));
                     } else {
-                        placeholdertext = Some(format!("I removed member {email_to_remove}."));
+                        placeholdertext = Some(format!("Member {email_to_remove} was removed."));
                     };
 
                     if !email_to_remove.is_empty() {
@@ -1434,7 +1434,7 @@ impl MimeFactory {
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     let fingerprint_to_add = msg.param.get(Param::Arg4).unwrap_or_default();
 
-                    placeholdertext = Some(format!("I added member {email_to_add}."));
+                    placeholdertext = Some(format!("Member {email_to_add} was added."));
 
                     if !email_to_add.is_empty() {
                         headers.push((
@@ -1459,6 +1459,7 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::GroupNameChanged => {
+                    placeholdertext = Some("Group name changed.".to_string());
                     let old_name = msg.param.get(Param::Arg).unwrap_or_default().to_string();
                     headers.push((
                         "Chat-Group-Name-Changed",
@@ -1475,6 +1476,7 @@ impl MimeFactory {
                     ));
                 }
                 SystemMessage::GroupImageChanged => {
+                    placeholdertext = Some("Group image changed.".to_string());
                     headers.push((
                         "Chat-Content",
                         mail_builder::headers::text::Text::new("group-avatar-changed").into(),
@@ -1486,7 +1488,24 @@ impl MimeFactory {
                         ));
                     }
                 }
-                _ => {}
+                SystemMessage::Unknown => {}
+                SystemMessage::AutocryptSetupMessage => {}
+                SystemMessage::SecurejoinMessage => {}
+                SystemMessage::LocationStreamingEnabled => {}
+                SystemMessage::LocationOnly => {}
+                SystemMessage::EphemeralTimerChanged => {}
+                SystemMessage::ChatProtectionEnabled => {}
+                SystemMessage::ChatProtectionDisabled => {}
+                SystemMessage::InvalidUnencryptedMail => {}
+                SystemMessage::SecurejoinWait => {}
+                SystemMessage::SecurejoinWaitTimeout => {}
+                SystemMessage::MultiDeviceSync => {}
+                SystemMessage::WebxdcStatusUpdate => {}
+                SystemMessage::WebxdcInfoMessage => {}
+                SystemMessage::IrohNodeAddr => {}
+                SystemMessage::ChatE2ee => {}
+                SystemMessage::CallAccepted => {}
+                SystemMessage::CallEnded => {}
             }
 
             if command == SystemMessage::GroupDescriptionChanged

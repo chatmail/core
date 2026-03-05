@@ -3716,7 +3716,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
 
     let leave_msg = bob0.pop_sent_msg().await;
     let parsed = MimeMessage::from_bytes(bob1, leave_msg.payload().as_bytes()).await?;
-    assert_eq!(parsed.parts[0].msg, "I left the group.");
+    assert_eq!(parsed.parts[0].msg, "bob@example.net left the group.");
 
     let rcvd = bob1.recv_msg(&leave_msg).await;
 
@@ -3783,7 +3783,7 @@ async fn test_only_broadcast_owner_can_send_1() -> Result<()> {
         "Bob receives an answer, but shows it in 1:1 chat because of a fingerprint mismatch",
     );
     let rcvd = bob.recv_msg(&member_added).await;
-    assert_eq!(rcvd.text, "I added member bob@example.net.");
+    assert_eq!(rcvd.text, "Member bob@example.net was added.");
 
     let bob_alice_chat_id = bob.get_chat(alice).await.id;
     assert_eq!(rcvd.chat_id, bob_alice_chat_id);
