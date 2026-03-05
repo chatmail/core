@@ -620,10 +620,10 @@ pub(crate) async fn msg_chat_description_changed(
     }
 }
 
-/// Stock string: `You added member %1$s.` or `Member %1$s added by %2$s.`.
+/// Stock string: `Member %1$s added.`, `You added member %1$s.` or `Member %1$s added by %2$s.`.
 ///
-/// The `added_member_addr` parameter should be an email address and is looked up in the
-/// contacts to combine with the display name.
+/// The `added_member` and `by_contact` contacts
+/// are looked up in the database to get the display names.
 pub(crate) async fn msg_add_member_local(
     context: &Context,
     added_member: ContactId,
@@ -646,10 +646,10 @@ pub(crate) async fn msg_add_member_local(
     }
 }
 
-/// Stock string: `I added member %1$s.` or `Member %1$s removed by %2$s.`.
+/// Stock string: `Member %1$s removed.` or `You removed member %1$s.` or `Member %1$s removed by %2$s.`
 ///
-/// The `removed_member_addr` parameter should be an email address and is looked up in
-/// the contacts to combine with the display name.
+/// The `removed_member` and `by_contact` contacts
+/// are looked up in the database to get the display names.
 pub(crate) async fn msg_del_member_local(
     context: &Context,
     removed_member: ContactId,
