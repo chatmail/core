@@ -2164,10 +2164,7 @@ fn group_headers_by_confidentiality(
                         mail_builder::headers::raw::Raw::new("[...]").into(),
                     ));
                 }
-                "auto-submitted"
-                | "chat-version"
-                | "autocrypt-setup-message"
-                | "chat-is-post-message" => {
+                "chat-version" | "autocrypt-setup-message" | "chat-is-post-message" => {
                     unprotected_headers.push(header.clone());
                 }
                 _ => {

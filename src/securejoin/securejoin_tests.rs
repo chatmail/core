@@ -138,14 +138,15 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     );
 
     let sent = alice.pop_sent_msg().await;
-    assert_eq!(
-        sent.payload.contains("Auto-Submitted: auto-generated"),
-        alice_auto_submitted_hdr
-    );
+    assert_eq!(sent.payload.contains("Auto-Submitted:"), false);
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
     assert!(msg.was_encrypted());
     assert_eq!(msg.get_header(HeaderDef::SecureJoin).unwrap(), "vc-pubkey");
+    assert_eq!(
+        msg.get_header(HeaderDef::AutoSubmitted),
+        alice_auto_submitted_hdr.then(|| "auto-generated")
+    );
 
     let bob_chat = bob.get_chat(&alice).await;
     assert_eq!(bob_chat.can_send(&bob).await.unwrap(), true);
@@ -266,7 +267,7 @@ async fn test_setup_contact_ex(case: SetupContactCase) {
     let sent = alice.pop_sent_msg().await;
     assert_eq!(
         sent.payload.contains("Auto-Submitted: auto-generated"),
-        alice_auto_submitted_hdr
+        false
     );
     assert!(!sent.payload.contains("Alice Exampleorg"));
     let msg = bob.parse_msg(&sent).await;
