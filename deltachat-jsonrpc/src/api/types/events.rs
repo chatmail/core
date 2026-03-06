@@ -461,6 +461,14 @@ pub enum EventType {
         chat_id: u32,
     },
 
+    /// Call missed.
+    CallMissed {
+        /// ID of the info message referring to the call.
+        msg_id: u32,
+        /// ID of the chat which the message belongs to.
+        chat_id: u32,
+    },
+
     /// One or more transports has changed.
     ///
     /// UI should update the list.
@@ -648,6 +656,10 @@ impl From<CoreEventType> for EventType {
                 accept_call_info,
             },
             CoreEventType::CallEnded { msg_id, chat_id } => CallEnded {
+                msg_id: msg_id.to_u32(),
+                chat_id: chat_id.to_u32(),
+            },
+            CoreEventType::CallMissed { msg_id, chat_id } => CallMissed {
                 msg_id: msg_id.to_u32(),
                 chat_id: chat_id.to_u32(),
             },

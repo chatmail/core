@@ -417,6 +417,14 @@ pub enum EventType {
         chat_id: ChatId,
     },
 
+    /// Call missed.
+    CallMissed {
+        /// ID of the message referring to the call.
+        msg_id: MsgId,
+        /// ID of the chat which the message belongs to.
+        chat_id: ChatId,
+    },
+
     /// One or more transports has changed or another transport is primary now.
     ///
     /// UI should update the list.

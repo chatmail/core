@@ -6779,6 +6779,16 @@ void dc_event_unref(dc_event_t* event);
 #define DC_EVENT_CALL_ENDED                               2580
 
 /**
+ * An incoming call was missed. Only emitted if the caller is allowed to call us. This happens when:
+ * - A call timed out (not accepted by us on time).
+ * - A call was canceled by the caller.
+ * - A stale call message was received, i.e. it is older than the timeout.
+ *
+ * This should trigger a UI notification.
+ */
+#define DC_EVENT_CALL_MISSED                              2590
+
+/**
  * Transport relay added/deleted or default has changed.
  * UI should update the list.
  *
