@@ -239,6 +239,9 @@ pub struct InnerContext {
     pub(crate) oauth2_mutex: Mutex<()>,
     /// Mutex to prevent a race condition when a "your pw is wrong" warning is sent, resulting in multiple messages being sent.
     pub(crate) wrong_pw_warning_mutex: Mutex<()>,
+    /// Mutex to prevent running housekeeping from multiple threads at once.
+    pub(crate) housekeeping_mutex: Mutex<()>,
+
     pub(crate) translated_stockstrings: StockStrings,
     pub(crate) events: Events,
 
@@ -478,6 +481,7 @@ impl Context {
             generating_key_mutex: Mutex::new(()),
             oauth2_mutex: Mutex::new(()),
             wrong_pw_warning_mutex: Mutex::new(()),
+            housekeeping_mutex: Mutex::new(()),
             translated_stockstrings: stockstrings,
             events,
             scheduler: SchedulerState::new(),
