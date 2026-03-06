@@ -828,6 +828,10 @@ async fn incremental_vacuum(context: &Context) -> Result<()> {
 
 /// Cleanup the account to restore some storage and optimize the database.
 pub async fn housekeeping(context: &Context) -> Result<()> {
+    let Ok(_housekeeping_lock) = context.housekeeping_mutex.try_lock() else {
+        // Housekeeping is already running in another thread, do nothing.
+        return Ok(());
+    };
     // Setting `Config::LastHousekeeping` at the beginning avoids endless loops when things do not
     // work out for whatever reason or are interrupted by the OS.
     if let Err(e) = context
