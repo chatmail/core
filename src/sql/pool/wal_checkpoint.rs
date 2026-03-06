@@ -34,6 +34,7 @@ pub(crate) struct WalCheckpointStats {
 
 /// Runs a checkpoint operation in TRUNCATE mode, so the WAL file is truncated to 0 bytes.
 pub(super) async fn wal_checkpoint(pool: &Pool) -> Result<WalCheckpointStats> {
+    let _guard = pool.inner.wal_checkpoint_mutex.lock().await;
     let t_start = Time::now();
 
     // Do as much work as possible without blocking anybody.
