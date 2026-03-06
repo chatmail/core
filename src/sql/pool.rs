@@ -51,6 +51,9 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 use tokio::sync::{Mutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
 
+mod wal_checkpoint;
+pub(crate) use wal_checkpoint::WalCheckpointStats;
+
 /// Inner connection pool.
 #[derive(Debug)]
 struct InnerPool {
@@ -196,11 +199,8 @@ impl Pool {
         Arc::clone(&self.inner).get(query_only).await
     }
 
-    /// Returns a mutex guard guaranteeing that there are no concurrent write connections.
-    ///
-    /// NB: Make sure you're not holding all connections when calling this, otherwise it deadlocks
-    /// if there is a concurrent writer waiting for available connection.
-    pub(crate) async fn write_lock(&self) -> OwnedMutexGuard<()> {
-        Arc::clone(&self.inner.write_mutex).lock_owned().await
+    /// Truncates the WAL file.
+    pub(crate) async fn wal_checkpoint(&self) -> Result<WalCheckpointStats> {
+        wal_checkpoint::wal_checkpoint(self).await
     }
 }
