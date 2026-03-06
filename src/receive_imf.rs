@@ -3332,8 +3332,13 @@ async fn apply_chat_name_avatar_and_description_changes(
             .is_some()
         {
             let old_name = &sanitize_single_line(old_name);
-            better_msg
-                .get_or_insert(stock_str::msg_grp_name(context, old_name, grpname, from_id).await);
+            better_msg.get_or_insert(
+                if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
+                    stock_str::msg_broadcast_name_changed(context, old_name, grpname).await
+                } else {
+                    stock_str::msg_grp_name(context, old_name, grpname, from_id).await
+                },
+            );
         }
     }
 
@@ -3392,7 +3397,13 @@ async fn apply_chat_name_avatar_and_description_changes(
         // apart from that, the group-avatar is send along with various other messages
         better_msg.get_or_insert(match avatar_action {
             AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
-            AvatarAction::Change(_) => stock_str::msg_grp_img_changed(context, from_id).await,
+            AvatarAction::Change(_) => {
+                if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
+                    stock_str::msg_broadcast_img_changed(context).await
+                } else {
+                    stock_str::msg_grp_img_changed(context, from_id).await
+                }
+            }
         });
     }
 

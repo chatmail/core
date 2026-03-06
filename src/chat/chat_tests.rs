@@ -3114,7 +3114,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupNameChanged);
     assert_eq!(
         rcvd.text,
-        r#"Group name changed from "My Channel" to "New Channel name" by Alice."#
+        r#"Channel name changed from "My Channel" to "New Channel name"."#
     );
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
     assert_eq!(bob_chat.name, "New Channel name");
@@ -3131,7 +3131,7 @@ async fn test_broadcasts_name_and_avatar() -> Result<()> {
     let rcvd = bob.recv_msg(&sent).await;
     assert!(rcvd.get_override_sender_name().is_none());
     assert_eq!(rcvd.get_info_type(), SystemMessage::GroupImageChanged);
-    assert_eq!(rcvd.text, "Group image changed by Alice.");
+    assert_eq!(rcvd.text, "Channel image changed.");
     assert_eq!(rcvd.chat_id, bob_chat.id);
 
     let bob_chat = Chat::load_from_db(bob, bob_chat.id).await?;
@@ -3885,7 +3885,7 @@ async fn test_sync_broadcast_avatar_and_name() -> Result<()> {
     assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupNameChanged);
     assert_eq!(
         rcvd.text,
-        r#"You changed group name from "foo" to "New name"."#
+        r#"Channel name changed from "foo" to "New name"."#
     );
 
     let a2_broadcast_chat = Chat::load_from_db(alice2, a2_broadcast_id).await?;
@@ -3899,7 +3899,7 @@ async fn test_sync_broadcast_avatar_and_name() -> Result<()> {
     let rcvd = alice1.recv_msg(&sent).await;
     assert_eq!(rcvd.chat_id, a1_broadcast_id);
     assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupImageChanged);
-    assert_eq!(rcvd.text, "You changed the group image.");
+    assert_eq!(rcvd.text, "Channel image changed.");
 
     let a1_broadcast_chat = Chat::load_from_db(alice1, a1_broadcast_id).await?;
     let avatar = a1_broadcast_chat.get_profile_image(alice1).await?.unwrap();
@@ -4765,7 +4765,7 @@ async fn test_sync_name() -> Result<()> {
     assert_eq!(rcvd.to_id, ContactId::SELF);
     assert_eq!(
         rcvd.text,
-        "You changed group name from \"Channel\" to \"Broadcast channel 42\"."
+        "Channel name changed from \"Channel\" to \"Broadcast channel 42\"."
     );
     assert_eq!(rcvd.param.get_cmd(), SystemMessage::GroupNameChanged);
     let a1_broadcast_id = get_chat_id_by_grpid(alice1, &a0_broadcast_chat.grpid)

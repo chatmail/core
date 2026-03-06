@@ -4322,8 +4322,11 @@ async fn rename_ex(
                 && sanitize_single_line(&chat.name) != new_name
             {
                 msg.viewtype = Viewtype::Text;
-                msg.text =
-                    stock_str::msg_grp_name(context, &chat.name, &new_name, ContactId::SELF).await;
+                msg.text = if chat.typ == Chattype::OutBroadcast {
+                    stock_str::msg_broadcast_name_changed(context, &chat.name, &new_name).await
+                } else {
+                    stock_str::msg_grp_name(context, &chat.name, &new_name, ContactId::SELF).await
+                };
                 msg.param.set_cmd(SystemMessage::GroupNameChanged);
                 if !chat.name.is_empty() {
                     msg.param.set(Param::Arg, &chat.name);
@@ -4394,7 +4397,11 @@ pub async fn set_chat_profile_image(
         image_blob.recode_to_avatar_size(context).await?;
         chat.param.set(Param::ProfileImage, image_blob.as_name());
         msg.param.set(Param::Arg, image_blob.as_name());
-        msg.text = stock_str::msg_grp_img_changed(context, ContactId::SELF).await;
+        msg.text = if chat.typ == Chattype::OutBroadcast {
+            stock_str::msg_broadcast_img_changed(context).await
+        } else {
+            stock_str::msg_grp_img_changed(context, ContactId::SELF).await
+        };
     }
     chat.update_param(context).await?;
     if chat.is_promoted() {

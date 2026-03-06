@@ -7579,6 +7579,19 @@ void dc_event_unref(dc_event_t* event);
 /// `%1$s` and `%2$s` will both be replaced by the name of the inviter.
 #define DC_STR_SECURE_JOIN_CHANNEL_STARTED 203
 
+/// "Channel name changed from %1$s to %2$s."
+///
+/// Used in status messages.
+///
+/// `%1$s` will be replaced by the old channel name.
+/// `%2$s` will be replaced by the new channel name.
+#define DC_STR_CHANNEL_NAME_CHANGED 204
+
+/// "Channel image changed."
+///
+/// Used in status messages.
+#define DC_STR_CHANNEL_IMAGE_CHANGED 205
+
 /// "The attachment contains anonymous usage statistics, which help us improve Delta Chat. Thank you!"
 ///
 /// Used as the message body for statistics sent out.
