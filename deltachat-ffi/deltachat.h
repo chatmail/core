@@ -6037,7 +6037,7 @@ char* dc_jsonrpc_blocking_call(dc_jsonrpc_instance_t* jsonrpc_instance, const ch
   * @memberof dc_event_channel_t
   * @return An event channel wrapper object (dc_event_channel_t).
   */
- dc_event_channel_t* dc_event_channel_new();
+ dc_event_channel_t* dc_event_channel_new(void);
  
  /**
   * Release/free the events channel structure.
