@@ -669,6 +669,9 @@ pub(crate) async fn save_transport(
 pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
     info!(context, "Sending transport synchronization message.");
 
+    // Regenerate public key to include all transports.
+    context.self_public_key.lock().await.take();
+
     // Synchronize all transport configurations.
     //
     // Transport with ID 1 is never synchronized

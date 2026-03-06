@@ -3,23 +3,26 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Cursor};
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, ensure};
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
     ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, EncryptionCaps,
-    KeyType as PgpKeyType, Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey,
-    SignedPublicSubKey, SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig, TheRing,
+    KeyType as PgpKeyType, Message, MessageBuilder, SecretKeyParamsBuilder, SignedKeyDetails,
+    SignedPublicKey, SignedPublicSubKey, SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig,
+    TheRing,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::packet::{SignatureConfig, SignatureType, Subpacket, SubpacketData};
+use pgp::packet::{Signature, SignatureConfig, SignatureType, Subpacket, SubpacketData};
 use pgp::types::{
-    CompressionAlgorithm, KeyDetails, KeyVersion, Password, SigningKey as _, StringToKey,
+    CompressionAlgorithm, Imprint, KeyDetails, KeyVersion, Password, SignedUser, SigningKey as _,
+    StringToKey,
 };
 use rand_old::{Rng as _, thread_rng};
+use sha2::Sha256;
 use tokio::runtime::Handle;
 
 use crate::key::{DcKey, Fingerprint};
@@ -508,6 +511,126 @@ pub async fn symm_decrypt<T: BufRead + std::fmt::Debug + 'static + Send>(
     .await?
 }
 
+/// Merges and minimized OpenPGP certificates.
+///
+/// Keeps at most one direct key signature and
+/// at most one User ID with exactly one signature.
+///
+/// See <https://openpgp.dev/book/adv/certificates.html#merging>
+/// and <https://openpgp.dev/book/adv/certificates.html#certificate-minimization>.
+pub fn merge_openpgp_certificates(
+    old_certificate: SignedPublicKey,
+    new_certificate: SignedPublicKey,
+) -> Result<SignedPublicKey> {
+    old_certificate
+        .verify_bindings()
+        .context("First key cannot be verified")?;
+    new_certificate
+        .verify_bindings()
+        .context("Second key cannot be verified")?;
+
+    // Decompose certificates.
+    let SignedPublicKey {
+        primary_key: old_primary_key,
+        details: old_details,
+        public_subkeys: old_public_subkeys,
+    } = old_certificate;
+    let SignedPublicKey {
+        primary_key: new_primary_key,
+        details: new_details,
+        public_subkeys: _new_public_subkeys,
+    } = new_certificate;
+
+    // Public keys may be serialized differently, e.g. using old and new packet type,
+    // so we compare imprints instead, which are calculated over normalized packets.
+    // On error we print fingerprints as this is what is used in the database
+    // and what most tools show.
+    let old_imprint = old_primary_key.imprint::<Sha256>()?;
+    let new_imprint = new_primary_key.imprint::<Sha256>()?;
+    ensure!(
+        old_imprint == new_imprint,
+        "Cannot merge certificates with different primary keys {} and {}",
+        old_primary_key.fingerprint(),
+        new_primary_key.fingerprint()
+    );
+
+    // Decompose old and the new key details.
+    //
+    // Revocation signatures are currently ignored so we do not store them.
+    //
+    // User attributes are thrown away on purpose,
+    // the only defined in RFC 9580 attribute is the Image Attribute
+    // (<https://www.rfc-editor.org/rfc/rfc9580.html#section-5.12.1>
+    // which we do not use and do not want to gossip.
+    let SignedKeyDetails {
+        revocation_signatures: _old_revocation_signatures,
+        direct_signatures: old_direct_signatures,
+        users: old_users,
+        user_attributes: _old_user_attributes,
+    } = old_details;
+    let SignedKeyDetails {
+        revocation_signatures: _new_revocation_signatures,
+        direct_signatures: new_direct_signatures,
+        users: new_users,
+        user_attributes: _new_user_attributes,
+    } = new_details;
+
+    // Select at most one direct key signature, the newest one.
+    let best_direct_key_signature: Option<Signature> = old_direct_signatures
+        .into_iter()
+        .chain(new_direct_signatures)
+        .filter(|x: &Signature| x.verify_key(&old_primary_key).is_ok())
+        .max_by_key(|x: &Signature|
+            // Converting to seconds because `Ord` is not derived for `Timestamp`:
+            // <https://github.com/rpgp/rpgp/issues/737>
+            x.created().map_or(0, |ts| ts.as_secs()));
+    let direct_signatures: Vec<Signature> = best_direct_key_signature.into_iter().collect();
+
+    // Select at most one User ID.
+    //
+    // We prefer User IDs marked as primary,
+    // but will select non-primary otherwise
+    // because sometimes keys have no primary User ID,
+    // such as Alice's key in `test-data/key/alice-secret.asc`.
+    let best_user: Option<SignedUser> = old_users
+        .into_iter()
+        .chain(new_users.clone())
+        .filter_map(|SignedUser { id, signatures }| {
+            // Select the best signature for each User ID.
+            // If User ID has no valid signatures, it is filtered out.
+            let best_user_signature: Option<Signature> = signatures
+                .into_iter()
+                .filter(|signature: &Signature| {
+                    signature
+                        .verify_certification(&old_primary_key, pgp::types::Tag::UserId, &id)
+                        .is_ok()
+                })
+                .max_by_key(|signature: &Signature| {
+                    signature.created().map_or(0, |ts| ts.as_secs())
+                });
+            best_user_signature.map(|signature| (id, signature))
+        })
+        .max_by_key(|(_id, signature)| signature.created().map_or(0, |ts| ts.as_secs()))
+        .map(|(id, signature)| SignedUser {
+            id,
+            signatures: vec![signature],
+        });
+    let users: Vec<SignedUser> = best_user.into_iter().collect();
+
+    let public_subkeys = old_public_subkeys;
+
+    Ok(SignedPublicKey {
+        primary_key: old_primary_key,
+        details: SignedKeyDetails {
+            revocation_signatures: vec![],
+            direct_signatures,
+            users,
+            user_attributes: vec![],
+        },
+        public_subkeys,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::LazyLock;
@@ -847,5 +970,25 @@ mod tests {
             }
         }
         Ok(())
+    }
+
+    #[test]
+    fn test_merge_openpgp_certificates() {
+        let alice = alice_keypair().to_public_key();
+        let bob = bob_keypair().to_public_key();
+
+        // Merging certificate with itself does not change it.
+        assert_eq!(
+            merge_openpgp_certificates(alice.clone(), alice.clone()).unwrap(),
+            alice
+        );
+        assert_eq!(
+            merge_openpgp_certificates(bob.clone(), bob.clone()).unwrap(),
+            bob
+        );
+
+        // Cannot merge certificates with different primary key.
+        assert!(merge_openpgp_certificates(alice.clone(), bob.clone()).is_err());
+        assert!(merge_openpgp_certificates(bob.clone(), alice.clone()).is_err());
     }
 }

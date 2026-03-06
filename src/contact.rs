@@ -35,6 +35,7 @@ use crate::log::{LogExt, warn};
 use crate::message::MessageState;
 use crate::mimeparser::AvatarAction;
 use crate::param::{Param, Params};
+use crate::pgp::merge_openpgp_certificates;
 use crate::sync::{self, Sync::*};
 use crate::tools::{SystemTime, duration_to_str, get_abs_path, normalize_text, time, to_lowercase};
 use crate::{chat, chatlist_events, ensure_and_debug_assert_ne, stock_str};
@@ -314,6 +315,67 @@ pub async fn make_vcard(context: &Context, contacts: &[ContactId]) -> Result<Str
         .to_string())
 }
 
+/// Imports public key into the public key store.
+///
+/// They key may come from Autocrypt header,
+/// Autocrypt-Gossip header or a vCard.
+///
+/// If the key with the same fingerprint already exists,
+/// it is updated by merging the new key.
+pub(crate) async fn import_public_key(
+    context: &Context,
+    public_key: &SignedPublicKey,
+) -> Result<()> {
+    public_key
+        .verify_bindings()
+        .context("Attempt to import broken public key")?;
+
+    let fingerprint = public_key.dc_fingerprint().hex();
+
+    let merged_public_key;
+    let merged_public_key_ref = if let Some(public_key_bytes) = context
+        .sql
+        .query_row_optional(
+            "SELECT public_key
+             FROM public_keys
+             WHERE fingerprint=?",
+            (&fingerprint,),
+            |row| {
+                let bytes: Vec<u8> = row.get(0)?;
+                Ok(bytes)
+            },
+        )
+        .await?
+    {
+        let old_public_key = SignedPublicKey::from_slice(&public_key_bytes)?;
+        merged_public_key = merge_openpgp_certificates(public_key.clone(), old_public_key)
+            .context("Failed to merge public keys")?;
+        &merged_public_key
+    } else {
+        public_key
+    };
+
+    let inserted = context
+        .sql
+        .execute(
+            "INSERT INTO public_keys (fingerprint, public_key)
+             VALUES (?, ?)
+             ON CONFLICT (fingerprint)
+             DO UPDATE SET public_key=excluded.public_key
+                WHERE public_key!=excluded.public_key",
+            (&fingerprint, merged_public_key_ref.to_bytes()),
+        )
+        .await?;
+    if inserted > 0 {
+        info!(
+            context,
+            "Saved key with fingerprint {fingerprint} from the Autocrypt header"
+        );
+    }
+
+    Ok(())
+}
+
 /// Imports contacts from the given vCard.
 ///
 /// Returns the ids of successfully processed contacts in the order they appear in `vcard`,
@@ -352,23 +414,14 @@ async fn import_vcard_contact(context: &Context, contact: &VcardContact) -> Resu
             .ok()
     });
 
-    let fingerprint;
-    if let Some(public_key) = key {
-        fingerprint = public_key.dc_fingerprint().hex();
-
-        context
-            .sql
-            .execute(
-                "INSERT INTO public_keys (fingerprint, public_key)
-                 VALUES (?, ?)
-                 ON CONFLICT (fingerprint)
-                 DO NOTHING",
-                (&fingerprint, public_key.to_bytes()),
-            )
-            .await?;
+    let fingerprint = if let Some(public_key) = key {
+        import_public_key(context, &public_key)
+            .await
+            .context("Failed to import public key from vCard")?;
+        public_key.dc_fingerprint().hex()
     } else {
-        fingerprint = String::new();
-    }
+        String::new()
+    };
 
     let (id, modified) =
         match Contact::add_or_lookup_ex(context, &contact.authname, &addr, &fingerprint, origin)

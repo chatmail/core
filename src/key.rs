@@ -7,10 +7,18 @@ use std::io::Cursor;
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use deltachat_contact_tools::EmailAddress;
-use pgp::composed::Deserializable;
+use pgp::composed::{Deserializable, SignedKeyDetails};
 pub use pgp::composed::{SignedPublicKey, SignedSecretKey};
+use pgp::crypto::aead::AeadAlgorithm;
+use pgp::crypto::hash::HashAlgorithm;
+use pgp::crypto::sym::SymmetricKeyAlgorithm;
+use pgp::packet::{
+    Features, KeyFlags, Notation, PacketTrait as _, SignatureConfig, SignatureType, Subpacket,
+    SubpacketData,
+};
 use pgp::ser::Serialize;
-use pgp::types::KeyDetails;
+use pgp::types::{CompressionAlgorithm, KeyDetails, KeyVersion};
+use rand_old::thread_rng;
 use tokio::runtime::Handle;
 
 use crate::context::Context;
@@ -114,10 +122,136 @@ pub trait DcKey: Serialize + Deserializable + Clone {
     fn is_private() -> bool;
 }
 
+/// Converts secret key to public key.
+pub(crate) async fn secret_key_to_public_key(
+    context: &Context,
+    mut signed_secret_key: SignedSecretKey,
+) -> Result<SignedPublicKey> {
+    info!(context, "Converting secret key to public key.");
+
+    // TODO: update the timestamp only when there are changes.
+    let now = pgp::types::Timestamp::now();
+
+    // Subpackets that we want to share between DKS and User ID signature.
+    let common_subpackets = || -> Result<Vec<Subpacket>> {
+        let keyflags = {
+            let mut keyflags = KeyFlags::default();
+            keyflags.set_certify(true);
+            keyflags.set_sign(true);
+            keyflags
+        };
+        let features = {
+            let mut features = Features::default();
+            features.set_seipd_v1(true);
+            features.set_seipd_v2(true);
+            features
+        };
+
+        Ok(vec![
+            Subpacket::regular(SubpacketData::SignatureCreationTime(now))?,
+            Subpacket::regular(SubpacketData::IssuerFingerprint(
+                signed_secret_key.fingerprint(),
+            ))?,
+            Subpacket::regular(SubpacketData::KeyFlags(keyflags))?,
+            Subpacket::regular(SubpacketData::Features(features))?,
+            Subpacket::regular(SubpacketData::PreferredSymmetricAlgorithms(smallvec![
+                SymmetricKeyAlgorithm::AES256,
+                SymmetricKeyAlgorithm::AES192,
+                SymmetricKeyAlgorithm::AES128
+            ]))?,
+            Subpacket::regular(SubpacketData::PreferredHashAlgorithms(smallvec![
+                HashAlgorithm::Sha256,
+                HashAlgorithm::Sha384,
+                HashAlgorithm::Sha512,
+                HashAlgorithm::Sha224,
+            ]))?,
+            Subpacket::regular(SubpacketData::PreferredCompressionAlgorithms(smallvec![
+                CompressionAlgorithm::ZLIB,
+                CompressionAlgorithm::ZIP,
+            ]))?,
+            Subpacket::regular(SubpacketData::PreferredAeadAlgorithms(smallvec![(
+                SymmetricKeyAlgorithm::AES256,
+                AeadAlgorithm::Ocb
+            )]))?,
+            Subpacket::regular(SubpacketData::IsPrimary(true))?,
+        ])
+    };
+
+    let users = if signed_secret_key.version() == KeyVersion::V4 {
+        let addr = context.get_primary_self_addr().await?;
+        let user_id = format!("<{addr}>");
+
+        let mut rng = thread_rng();
+        // Self-signature is a "positive certification",
+        // see <https://www.ietf.org/archive/id/draft-gallagher-openpgp-signatures-02.html#name-certification-signature-typ>.
+        let mut user_id_signature_config = SignatureConfig::from_key(
+            &mut rng,
+            &signed_secret_key.primary_key,
+            SignatureType::CertPositive,
+        )?;
+        user_id_signature_config.hashed_subpackets = common_subpackets()?;
+        user_id_signature_config.unhashed_subpackets = vec![Subpacket::regular(
+            SubpacketData::IssuerKeyId(signed_secret_key.legacy_key_id()),
+        )?];
+        let user_id_packet =
+            pgp::packet::UserId::from_str(pgp::types::PacketHeaderVersion::New, &user_id)?;
+        let signature = user_id_signature_config.sign_certification(
+            &signed_secret_key.primary_key,
+            &signed_secret_key.primary_key.public_key(),
+            &pgp::types::Password::empty(),
+            user_id_packet.tag(),
+            &user_id_packet,
+        )?;
+        vec![user_id_packet.into_signed(signature)]
+    } else {
+        vec![]
+    };
+
+    let direct_signatures = {
+        let all_addrs = context.get_all_self_addrs().await?.join(",");
+        let mut rng = thread_rng();
+        let mut direct_key_signature_config = SignatureConfig::from_key(
+            &mut rng,
+            &signed_secret_key.primary_key,
+            SignatureType::Key,
+        )?;
+        direct_key_signature_config.hashed_subpackets = common_subpackets()?;
+        let notation = Notation {
+            readable: true,
+            name: "relays@chatmail.at".into(),
+            value: all_addrs.into(),
+        };
+        direct_key_signature_config
+            .hashed_subpackets
+            .push(Subpacket::regular(SubpacketData::Notation(notation))?);
+        let direct_key_signature = direct_key_signature_config.sign_key(
+            &signed_secret_key.primary_key,
+            &pgp::types::Password::empty(),
+            signed_secret_key.primary_key.public_key(),
+        )?;
+        vec![direct_key_signature]
+    };
+
+    signed_secret_key.details = SignedKeyDetails {
+        revocation_signatures: vec![],
+        direct_signatures,
+        users,
+        user_attributes: vec![],
+    };
+
+    Ok(signed_secret_key.to_public_key())
+}
+
 /// Attempts to load own public key.
 ///
-/// Returns `None` if no key is generated yet.
+/// Returns `None` if no secret key is generated yet.
 pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option<SignedPublicKey>> {
+    let mut lock = context.self_public_key.lock().await;
+
+    if let Some(ref public_key) = *lock {
+        return Ok(Some(public_key.clone()));
+    }
+
     let Some(secret_key_bytes) = context
         .sql
         .query_row_optional(
@@ -135,7 +269,9 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
         return Ok(None);
     };
     let signed_secret_key = SignedSecretKey::from_slice(&secret_key_bytes)?;
-    let signed_public_key = signed_secret_key.to_public_key();
+    let signed_public_key = secret_key_to_public_key(context, signed_secret_key).await?;
+    *lock = Some(signed_public_key.clone());
+
     Ok(Some(signed_public_key))
 }
 
@@ -146,8 +282,11 @@ pub(crate) async fn load_self_public_key(context: &Context) -> Result<SignedPubl
     match load_self_public_key_opt(context).await? {
         Some(public_key) => Ok(public_key),
         None => {
-            let signed_secret_key = generate_keypair(context).await?;
-            Ok(signed_secret_key.to_public_key())
+            generate_keypair(context).await?;
+            let public_key = load_self_public_key_opt(context)
+                .await?
+                .context("Secret key generated, but public key cannot be created")?;
+            Ok(public_key)
         }
     }
 }
@@ -287,7 +426,7 @@ impl DcKey for SignedSecretKey {
 async fn generate_keypair(context: &Context) -> Result<SignedSecretKey> {
     let addr = context.get_primary_self_addr().await?;
     let addr = EmailAddress::new(&addr)?;
-    let _guard = context.generating_key_mutex.lock().await;
+    let _public_key_guard = context.self_public_key.lock().await;
 
     // Check if the key appeared while we were waiting on the lock.
     match load_keypair(context).await? {
@@ -343,6 +482,12 @@ pub(crate) async fn store_self_keypair(
     context: &Context,
     signed_secret_key: &SignedSecretKey,
 ) -> Result<()> {
+    // This public key is stored in the database
+    // only for backwards compatibility.
+    //
+    // It should not be used e.g. in Autocrypt headers or vCards.
+    // Use `secret_key_to_public_key()` function instead,
+    // which adds relay list to the signature.
     let signed_public_key = signed_secret_key.to_public_key();
     let mut config_cache_lock = context.sql.config_cache.write().await;
     let new_key_id = context
