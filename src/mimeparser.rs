@@ -12,6 +12,8 @@ use deltachat_derive::{FromSql, ToSql};
 use format_flowed::unformat_flowed;
 use mailparse::{DispositionType, MailHeader, MailHeaderMap, SingleInfo, addrparse_header};
 use mime::Mime;
+use pgp::composed::PlainSessionKey;
+use pgp::packet::SymKeyEncryptedSessionKey;
 
 use crate::aheader::Aheader;
 use crate::authres::handle_authres;
@@ -363,7 +365,6 @@ impl MimeMessage {
         Self::remove_secured_headers(&mut headers, &mut headers_removed, encrypted);
 
         let mut from = from.context("No from in message")?;
-        let private_keyring = load_self_secret_keyring(context).await?;
 
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
@@ -385,24 +386,12 @@ impl MimeMessage {
             PreMessageMode::None
         };
 
-        let encrypted_pgp_message = get_encrypted_pgp_message(&mail)?;
-
-        let secrets: Vec<String>;
-        if let Some(e) = &encrypted_pgp_message
-            && crate::pgp::check_symmetric_encryption(e).is_ok()
-        {
-            secrets = load_shared_secrets(context).await?;
-        } else {
-            secrets = vec![];
-        }
-
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
 
-        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
-            encrypted_pgp_message.map(|e| crate::pgp::decrypt(e, &private_keyring, &secrets))
-        }) {
-            Some(Ok(mut msg)) => {
+        let (mail, is_encrypted) = match decrypt(context, &mail).await {
+            Ok(Some(mut msg)) => {
+                // success
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 
                 let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
@@ -431,12 +420,14 @@ impl MimeMessage {
 
                 (Ok(decrypted_mail), true)
             }
-            None => {
+            Ok(None) => {
+                // unencrypted
                 mail_raw = Vec::new();
                 decrypted_msg = None;
                 (Ok(mail), false)
             }
-            Some(Err(err)) => {
+            Err(err) => {
+                // Error
                 mail_raw = Vec::new();
                 decrypted_msg = None;
                 warn!(context, "decryption failed: {:#}", err);
@@ -2108,6 +2099,131 @@ impl MimeMessage {
             Vec::new()
         }
     }
+}
+
+async fn decrypt(
+    context: &Context,
+    mail: &mailparse::ParsedMail<'_>,
+) -> Result<Option<pgp::composed::Message<'static>>> {
+    let Some(mail) = get_encrypted_pgp_message(mail)? else {
+        return Ok(None);
+    };
+    let pgp::composed::Message::Encrypted { esk, .. } = &mail else {
+        return Ok(None);
+    };
+    if let [pgp::composed::Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] {
+        let (psk, sender_fingerprint) = decrypt_session_key_symmetrically(context, esk).await?;
+        let plain = mail.decrypt_with_session_key(psk)?;
+        return Ok(Some(plain)); // TODO also return the sender_fingerprint
+    };
+
+    let private_keyring = load_self_secret_keyring(context).await?;
+
+    todo!()
+}
+
+async fn decrypt_session_key_symmetrically(
+    context: &Context,
+    esk: &SymKeyEncryptedSessionKey,
+) -> Result<(PlainSessionKey, Option<String>)> {
+    context
+        .sql
+        .call(true, |conn| {
+            // First, try decrypting using the bobstate,
+            // because usually there will only be 1 or 2 of it,
+            // so, it should be fast
+            let res: Option<(PlainSessionKey, String)> = try_decrypt_with_bobstate(esk, conn)?;
+            if let Some((plain_session_key, fingerprint)) = res {
+                return Ok((plain_session_key, Some(fingerprint)));
+            }
+
+            // Then, try decrypting using broadcast secrets
+            let res: Option<(PlainSessionKey, String)> =
+                try_decrypt_with_broadcast_secret(esk, conn)?;
+            if let Some((plain_session_key, fingerprint)) = res {
+                return Ok((plain_session_key, Some(fingerprint)));
+            }
+
+            // Finally, try decrypting using AUTH tokens
+            // There can be a lot of AUTH tokens, because a new one is generated every time a QR code is shown
+            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn)?;
+            if let Some(plain_session_key) = res {
+                return Ok((plain_session_key, None));
+            }
+
+            bail!("Could not find symmetric secret for session key")
+        })
+        .await
+}
+
+fn try_decrypt_with_auth_token(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<PlainSessionKey>> {
+    let mut stmt = conn.prepare("SELECT token FROM tokens WHERE namespc=? ORDER BY id DESC")?;
+    let mut rows = stmt.query((token::Namespace::Auth,))?;
+    while let Some(row) = rows.next()? {
+        let token: String = row.get(0)?;
+        match esk.decrypt(token) {
+            Ok(psk) => {
+                return Ok(Some(psk));
+            }
+            Err(_) => {}
+        }
+    }
+    Ok(None)
+}
+
+fn try_decrypt_with_broadcast_secret(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, String)>> {
+    let (psk, chat_id) = 'get_psk_and_chat_id: {
+        let mut stmt = conn.prepare("SELECT secret, chat_id FROM broadcast_secrets")?;
+        let mut rows = stmt.query(())?;
+        while let Some(row) = rows.next()? {
+            let secret: String = row.get(0)?;
+            match esk.decrypt(secret) {
+                Ok(psk) => {
+                    let chat_id: ChatId = row.get(1)?;
+                    break 'get_psk_and_chat_id (psk, chat_id);
+                }
+                Err(_) => {}
+            }
+        }
+        return Ok(None);
+    };
+    let contact_id: ContactId = conn.query_one(
+        "SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9",
+        (chat_id,),
+        |row| row.get(0),
+    )?;
+    let fp = conn.query_one(
+        "SELECT fingerprint FROM contacts WHERE id=?",
+        (contact_id,),
+        |row| row.get(0),
+    )?;
+    Ok(Some((psk, fp)))
+}
+
+fn try_decrypt_with_bobstate(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, String)>> {
+    let mut stmt = conn.prepare("SELECT invite FROM bobstate")?;
+    let mut rows = stmt.query(())?;
+    while let Some(row) = rows.next()? {
+        let invite: crate::securejoin::QrInvite = row.get(0)?;
+        let authcode = invite.authcode().to_string();
+        match esk.decrypt(authcode) {
+            Ok(psk) => {
+                let fingerprint = invite.fingerprint().hex();
+                return Ok(Some((psk, fingerprint)));
+            }
+            Err(_) => {}
+        }
+    }
+    Ok(None)
 }
 
 /// Loads all the shared secrets

@@ -302,7 +302,7 @@ impl Sql {
     /// otherwise allocates write connection.
     ///
     /// Returns the result of the function.
-    async fn call<'a, F, R>(&'a self, query_only: bool, function: F) -> Result<R>
+    pub async fn call<'a, F, R>(&'a self, query_only: bool, function: F) -> Result<R>
     where
         F: 'a + FnOnce(&mut Connection) -> Result<R> + Send,
         R: Send + 'static,
