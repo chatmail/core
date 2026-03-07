@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::future::Future;
+use std::mem::ManuallyDrop;
 use std::ptr;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock, Mutex};
@@ -5150,10 +5151,10 @@ pub unsafe extern "C" fn dc_jsonrpc_init(
         return ptr::null_mut();
     }
 
-    let account_manager = Arc::from_raw(account_manager);
-    let cmd_api = block_on(deltachat_jsonrpc::api::CommandApi::from_arc(
-        account_manager.clone(),
-    ));
+    let account_manager = ManuallyDrop::new(Arc::from_raw(account_manager));
+    let cmd_api = block_on(deltachat_jsonrpc::api::CommandApi::from_arc(Arc::clone(
+        &account_manager,
+    )));
 
     let (request_handle, receiver) = RpcClient::new();
     let handle = RpcSession::new(request_handle, cmd_api);
