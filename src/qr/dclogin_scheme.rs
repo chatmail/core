@@ -81,9 +81,14 @@ pub(super) fn decode_login(qr: &str) -> Result<Qr> {
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
             .collect();
 
+        let addr = percent_encoding::percent_decode_str(addr)
+            .decode_utf8()
+            .context("Address must be UTF-8")?
+            .to_string();
+
         // check if username is there
-        if !may_be_valid_addr(addr) {
-            bail!("invalid DCLOGIN payload: invalid username E5");
+        if !may_be_valid_addr(&addr) {
+            bail!("Invalid DCLOGIN payload: invalid username {addr:?}.");
         }
 
         // apply to result struct
@@ -200,9 +205,7 @@ pub(crate) fn login_param_from_login_qr(
 
 #[cfg(test)]
 mod test {
-    use anyhow::bail;
-
-    use super::{LoginOptions, decode_login};
+    use super::*;
     use crate::{login_param::EnteredCertificateChecks, provider::Socket, qr::Qr};
 
     macro_rules! login_options_just_pw {
@@ -225,7 +228,7 @@ mod test {
     }
 
     #[test]
-    fn minimal_no_options() -> anyhow::Result<()> {
+    fn minimal_no_options() -> Result<()> {
         let result = decode_login("dclogin://email@host.tld?p=123&v=1")?;
         if let Qr::Login { address, options } = result {
             assert_eq!(address, "email@host.tld".to_owned());
@@ -250,7 +253,7 @@ mod test {
         Ok(())
     }
     #[test]
-    fn minimal_no_options_no_double_slash() -> anyhow::Result<()> {
+    fn minimal_no_options_no_double_slash() -> Result<()> {
         let result = decode_login("dclogin:email@host.tld?p=123&v=1")?;
         if let Qr::Login { address, options } = result {
             assert_eq!(address, "email@host.tld".to_owned());
@@ -289,7 +292,7 @@ mod test {
     }
 
     #[test]
-    fn version_too_new() -> anyhow::Result<()> {
+    fn version_too_new() -> Result<()> {
         let result = decode_login("dclogin:email@host.tld/?p=123456&v=2")?;
         if let Qr::Login { options, .. } = result {
             assert_eq!(options, LoginOptions::UnsuportedVersion(2));
@@ -306,7 +309,7 @@ mod test {
     }
 
     #[test]
-    fn all_advanced_options() -> anyhow::Result<()> {
+    fn all_advanced_options() -> Result<()> {
         let result = decode_login(
             "dclogin:email@host.tld?p=secret&v=1&ih=imap.host.tld&ip=4000&iu=max&ipw=87654&is=ssl&ic=1&sh=mail.host.tld&sp=3000&su=max@host.tld&spw=3242HS&ss=plain&sc=3",
         )?;
@@ -336,7 +339,19 @@ mod test {
     }
 
     #[test]
-    fn uri_encoded_password() -> anyhow::Result<()> {
+    fn uri_encoded_login() -> Result<()> {
+        let result = decode_login("dclogin:username@%5b192.168.1.1%5d?p=1234&v=1")?;
+        if let Qr::Login { address, options } = result {
+            assert_eq!(address, "username@[192.168.1.1]".to_owned());
+            assert_eq!(options, login_options_just_pw!("1234".to_owned()));
+        } else {
+            bail!("wrong type")
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn uri_encoded_password() -> Result<()> {
         let result = decode_login(
             "dclogin:email@host.tld?p=%7BDaehFl%3B%22as%40%21fhdodn5%24234%22%7B%7Dfg&v=1",
         )?;
@@ -353,7 +368,7 @@ mod test {
     }
 
     #[test]
-    fn email_with_plus_extension() -> anyhow::Result<()> {
+    fn email_with_plus_extension() -> Result<()> {
         let result = decode_login("dclogin:usename+extension@host?p=1234&v=1")?;
         if let Qr::Login { address, options } = result {
             assert_eq!(address, "usename+extension@host".to_owned());
@@ -365,7 +380,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_decode_dclogin_ipv4() -> anyhow::Result<()> {
+    async fn test_decode_dclogin_ipv4() -> Result<()> {
         let result = decode_login("dclogin://test@[127.0.0.1]?p=1234&v=1")?;
         if let Qr::Login { address, options } = result {
             assert_eq!(address, "test@[127.0.0.1]".to_owned());
@@ -377,7 +392,7 @@ mod test {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_decode_dclogin_ipv6() -> anyhow::Result<()> {
+    async fn test_decode_dclogin_ipv6() -> Result<()> {
         let result =
             decode_login("dclogin://test@[2001:0db8:85a3:0000:0000:8a2e:0370:7334]?p=1234&v=1")?;
         if let Qr::Login { address, options } = result {

@@ -817,7 +817,7 @@ pub(crate) async fn login_param_from_account_qr(
                 ..Default::default()
             },
             smtp: Default::default(),
-            certificate_checks: EnteredCertificateChecks::Strict,
+            certificate_checks: EnteredCertificateChecks::Automatic,
             oauth2: false,
         };
         return Ok(param);

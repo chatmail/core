@@ -31,7 +31,7 @@ use deltachat::peer_channels::{
 };
 use deltachat::provider::get_provider_info;
 use deltachat::qr::{self, Qr};
-use deltachat::qr_code_generator::{generate_backup_qr, get_securejoin_qr_svg};
+use deltachat::qr_code_generator::{create_qr_svg, generate_backup_qr, get_securejoin_qr_svg};
 use deltachat::reaction::{get_msg_reactions, send_reaction};
 use deltachat::securejoin;
 use deltachat::stock_str::StockMessage;
@@ -863,6 +863,8 @@ impl CommandApi {
     /// The scanning device will pass the scanned content to `checkQr()` then;
     /// if `checkQr()` returns `askVerifyContact` or `askVerifyGroup`
     /// an out-of-band-verification can be joined using `secure_join()`
+    ///
+    /// @deprecated as of 2026-03; use create_qr_svg(get_chat_securejoin_qr_code()) instead.
     ///
     /// chat_id: If set to a group-chat-id,
     ///     the Verified-Group-Invite protocol is offered in the QR code;
@@ -1980,6 +1982,8 @@ impl CommandApi {
     /// even if there is no concurrent call to [`CommandApi::provide_backup`],
     /// but will fail after 60 seconds to avoid deadlocks.
     ///
+    /// @deprecated as of 2026-03; use `create_qr_svg(get_backup_qr())` instead.
+    ///
     /// Returns the QR code rendered as an SVG image.
     async fn get_backup_qr_svg(&self, account_id: u32) -> Result<String> {
         let ctx = self.get_context(account_id).await?;
@@ -1991,6 +1995,11 @@ impl CommandApi {
         .context("Backup provider did not start in time")?
         .context("Failed to get backup QR code")?;
         generate_backup_qr(&ctx, &qr).await
+    }
+
+    /// Renders the given text as a QR code SVG image.
+    async fn create_qr_svg(&self, text: String) -> Result<String> {
+        create_qr_svg(&text)
     }
 
     /// Gets a backup from a remote provider.
@@ -2506,7 +2515,10 @@ impl CommandApi {
                     continue;
                 }
                 let sticker_name = sticker_entry.file_name().into_string().unwrap_or_default();
-                if sticker_name.ends_with(".png") || sticker_name.ends_with(".webp") {
+                if sticker_name.ends_with(".png")
+                    || sticker_name.ends_with(".webp")
+                    || sticker_name.ends_with(".gif")
+                {
                     sticker_paths.push(
                         sticker_entry
                             .path()

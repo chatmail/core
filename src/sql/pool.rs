@@ -51,6 +51,9 @@ use anyhow::{Context, Result};
 use rusqlite::Connection;
 use tokio::sync::{Mutex, OwnedMutexGuard, OwnedSemaphorePermit, Semaphore};
 
+mod wal_checkpoint;
+pub(crate) use wal_checkpoint::WalCheckpointStats;
+
 /// Inner connection pool.
 #[derive(Debug)]
 struct InnerPool {
@@ -68,6 +71,24 @@ struct InnerPool {
     /// This mutex is locked when write connection
     /// is outside the pool.
     pub(crate) write_mutex: Arc<Mutex<()>>,
+
+    /// WAL checkpointing mutex.
+    ///
+    /// This mutex ensures that no more than one thread
+    /// runs WAL checkpointing at the same time.
+    ///
+    /// Normal procedures acquire either one read connection
+    /// or one write connection with a write mutex,
+    /// and return the resources without trying to acquire
+    /// more connections or trying to acquire write mutex
+    /// without returning the read connection first.
+    /// WAL checkpointing is special, it tries to acquire all
+    /// connections and the write mutex,
+    /// so two threads doing this at the same time
+    /// may result in a deadlock with one thread
+    /// waiting for a write lock and the other thread
+    /// waiting for a connection.
+    wal_checkpoint_mutex: Mutex<()>,
 }
 
 impl InnerPool {
@@ -188,6 +209,7 @@ impl Pool {
             connections: parking_lot::Mutex::new(connections),
             semaphore,
             write_mutex: Default::default(),
+            wal_checkpoint_mutex: Default::default(),
         });
         Pool { inner }
     }
@@ -196,11 +218,8 @@ impl Pool {
         Arc::clone(&self.inner).get(query_only).await
     }
 
-    /// Returns a mutex guard guaranteeing that there are no concurrent write connections.
-    ///
-    /// NB: Make sure you're not holding all connections when calling this, otherwise it deadlocks
-    /// if there is a concurrent writer waiting for available connection.
-    pub(crate) async fn write_lock(&self) -> OwnedMutexGuard<()> {
-        Arc::clone(&self.inner.write_mutex).lock_owned().await
+    /// Truncates the WAL file.
+    pub(crate) async fn wal_checkpoint(&self) -> Result<WalCheckpointStats> {
+        wal_checkpoint::wal_checkpoint(self).await
     }
 }

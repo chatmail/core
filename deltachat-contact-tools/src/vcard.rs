@@ -36,6 +36,45 @@ impl VcardContact {
     }
 }
 
+fn escape(s: &str) -> String {
+    // https://www.rfc-editor.org/rfc/rfc6350.html#section-3.4
+    s
+        // backslash must be first!
+        .replace(r"\", r"\\")
+        .replace(',', r"\,")
+        .replace(';', r"\;")
+        .replace('\n', r"\n")
+}
+
+fn unescape(s: &str) -> String {
+    // https://www.rfc-editor.org/rfc/rfc6350.html#section-3.4
+    let mut out = String::new();
+
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                match next {
+                    '\\' | ',' | ';' => out.push(next),
+                    'n' | 'N' => out.push('\n'),
+                    _ => {
+                        // Invalid escape sequence (keep unchanged)
+                        out.push('\\');
+                        out.push(next);
+                    }
+                }
+            } else {
+                // Invalid escape sequence (keep unchanged)
+                out.push('\\');
+            }
+        } else {
+            out.push(c);
+        }
+    }
+
+    out
+}
+
 /// Returns a vCard containing given contacts.
 ///
 /// Calling [`parse_vcard()`] on the returned result is a reverse operation.
@@ -44,10 +83,6 @@ pub fn make_vcard(contacts: &[VcardContact]) -> String {
         let timestamp = *c.timestamp.as_ref().ok()?;
         let datetime = DateTime::from_timestamp(timestamp, 0)?;
         Some(datetime.format("%Y%m%dT%H%M%SZ").to_string())
-    }
-
-    fn escape(s: &str) -> String {
-        s.replace(',', "\\,")
     }
 
     let mut res = "".to_string();
@@ -124,7 +159,7 @@ pub fn parse_vcard(vcard: &str) -> Vec<VcardContact> {
     fn vcard_property<'a>(line: &'a str, property: &str) -> Option<(&'a str, String)> {
         let (params, value) = vcard_property_raw(line, property)?;
         // Some fields can't contain commas, but unescape them everywhere for safety.
-        Some((params, value.replace("\\,", ",")))
+        Some((params, unescape(value)))
     }
     fn base64_key(line: &str) -> Option<&str> {
         let (params, value) = vcard_property_raw(line, "key")?;

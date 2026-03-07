@@ -257,7 +257,11 @@ impl ChatId {
                         ChatIdBlocked::get_for_contact(context, contact_id, create_blocked)
                             .await
                             .map(|chat| chat.id)?;
-                    ContactId::scaleup_origin(context, &[contact_id], Origin::CreateChat).await?;
+                    if create_blocked != Blocked::Yes {
+                        info!(context, "Scale up origin of {contact_id} to CreateChat.");
+                        ContactId::scaleup_origin(context, &[contact_id], Origin::CreateChat)
+                            .await?;
+                    }
                     chat_id
                 } else {
                     warn!(
@@ -1772,16 +1776,6 @@ impl Chat {
                 .set_i64(Param::GroupNameTimestamp, msg.timestamp_sort)
                 .set_i64(Param::GroupDescriptionTimestamp, msg.timestamp_sort);
             self.update_param(context).await?;
-            // TODO: Remove this compat code needed because Core <= v1.143:
-            // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also
-            //   send them when the group is promoted.
-            // - doesn't sync QR code tokens for unpromoted groups and the group might be created
-            //   before an upgrade.
-            context
-                .sync_qr_code_tokens(Some(self.grpid.as_str()))
-                .await
-                .log_err(context)
-                .ok();
         }
 
         let is_bot = context.get_config_bool(Config::Bot).await?;
@@ -3894,8 +3888,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         );
         return Ok(false);
     }
-
-    let sync_qr_code_tokens;
     if from_handshake && chat.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
         let smeared_time = smeared_time(context);
         chat.param
@@ -3903,11 +3895,7 @@ pub(crate) async fn add_contact_to_chat_ex(
             .set_i64(Param::GroupNameTimestamp, smeared_time)
             .set_i64(Param::GroupDescriptionTimestamp, smeared_time);
         chat.update_param(context).await?;
-        sync_qr_code_tokens = true;
-    } else {
-        sync_qr_code_tokens = false;
     }
-
     if context.is_self_addr(contact.get_addr()).await? {
         // ourself is added using ContactId::SELF, do not add this address explicitly.
         // if SELF is not in the group, members cannot be added at all.
@@ -3956,20 +3944,6 @@ pub(crate) async fn add_contact_to_chat_ex(
         send_msg(context, chat_id, &mut msg).await?;
 
         sync = Nosync;
-        // TODO: Remove this compat code needed because Core <= v1.143:
-        // - doesn't accept synchronization of QR code tokens for unpromoted groups, so we also send
-        //   them when the group is promoted.
-        // - doesn't sync QR code tokens for unpromoted groups and the group might be created before
-        //   an upgrade.
-        if sync_qr_code_tokens
-            && context
-                .sync_qr_code_tokens(Some(chat.grpid.as_str()))
-                .await
-                .log_err(context)
-                .is_ok()
-        {
-            context.scheduler.interrupt_smtp().await;
-        }
     }
     context.emit_event(EventType::ChatModified(chat_id));
     if sync.into() {
@@ -4263,9 +4237,7 @@ async fn set_chat_description_ex(
 
     if chat.is_promoted() {
         let mut msg = Message::new(Viewtype::Text);
-        msg.text =
-            "[Chat description changed. To see this and other new features, please update the app]"
-                .to_string();
+        msg.text = stock_str::msg_chat_description_changed(context, ContactId::SELF).await;
         msg.param.set_cmd(SystemMessage::GroupDescriptionChanged);
 
         msg.id = send_msg(context, chat_id, &mut msg).await?;

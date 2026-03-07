@@ -456,9 +456,16 @@ impl MimeFactory {
                 .filter(|id| *id != ContactId::SELF)
                 .collect();
             if recipient_ids.len() == 1
-                && msg.param.get_cmd() != SystemMessage::MemberRemovedFromGroup
-                && chat.typ != Chattype::OutBroadcast
+                && !matches!(
+                    msg.param.get_cmd(),
+                    SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+                )
+                && !matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
             {
+                info!(
+                    context,
+                    "Scale up origin of {} recipients to OutgoingTo.", chat.id
+                );
                 ContactId::scaleup_origin(context, &recipient_ids, Origin::OutgoingTo).await?;
             }
 
@@ -1409,9 +1416,9 @@ impl MimeFactory {
                             .await?
                             .unwrap_or_default()
                     {
-                        placeholdertext = Some("I left the group.".to_string());
+                        placeholdertext = Some(format!("{email_to_remove} left the group."));
                     } else {
-                        placeholdertext = Some(format!("I removed member {email_to_remove}."));
+                        placeholdertext = Some(format!("Member {email_to_remove} was removed."));
                     };
 
                     if !email_to_remove.is_empty() {
@@ -1434,7 +1441,7 @@ impl MimeFactory {
                     let email_to_add = msg.param.get(Param::Arg).unwrap_or_default();
                     let fingerprint_to_add = msg.param.get(Param::Arg4).unwrap_or_default();
 
-                    placeholdertext = Some(format!("I added member {email_to_add}."));
+                    placeholdertext = Some(format!("Member {email_to_add} was added."));
 
                     if !email_to_add.is_empty() {
                         headers.push((
@@ -1459,6 +1466,7 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::GroupNameChanged => {
+                    placeholdertext = Some("Group name changed.".to_string());
                     let old_name = msg.param.get(Param::Arg).unwrap_or_default().to_string();
                     headers.push((
                         "Chat-Group-Name-Changed",
@@ -1466,12 +1474,16 @@ impl MimeFactory {
                     ));
                 }
                 SystemMessage::GroupDescriptionChanged => {
+                    placeholdertext = Some(
+                        "[Chat description changed. To see this and other new features, please update the app]".to_string(),
+                    );
                     headers.push((
                         "Chat-Group-Description-Changed",
                         mail_builder::headers::text::Text::new("").into(),
                     ));
                 }
                 SystemMessage::GroupImageChanged => {
+                    placeholdertext = Some("Group image changed.".to_string());
                     headers.push((
                         "Chat-Content",
                         mail_builder::headers::text::Text::new("group-avatar-changed").into(),
@@ -1483,7 +1495,24 @@ impl MimeFactory {
                         ));
                     }
                 }
-                _ => {}
+                SystemMessage::Unknown => {}
+                SystemMessage::AutocryptSetupMessage => {}
+                SystemMessage::SecurejoinMessage => {}
+                SystemMessage::LocationStreamingEnabled => {}
+                SystemMessage::LocationOnly => {}
+                SystemMessage::EphemeralTimerChanged => {}
+                SystemMessage::ChatProtectionEnabled => {}
+                SystemMessage::ChatProtectionDisabled => {}
+                SystemMessage::InvalidUnencryptedMail => {}
+                SystemMessage::SecurejoinWait => {}
+                SystemMessage::SecurejoinWaitTimeout => {}
+                SystemMessage::MultiDeviceSync => {}
+                SystemMessage::WebxdcStatusUpdate => {}
+                SystemMessage::WebxdcInfoMessage => {}
+                SystemMessage::IrohNodeAddr => {}
+                SystemMessage::ChatE2ee => {}
+                SystemMessage::CallAccepted => {}
+                SystemMessage::CallEnded => {}
             }
 
             if command == SystemMessage::GroupDescriptionChanged
@@ -1524,13 +1553,10 @@ impl MimeFactory {
             | SystemMessage::MultiDeviceSync
             | SystemMessage::WebxdcStatusUpdate => {
                 // This should prevent automatic replies,
-                // such as non-delivery reports.
+                // such as non-delivery reports,
+                // if the message is unencrypted.
                 //
                 // See <https://tools.ietf.org/html/rfc3834>
-                //
-                // Adding this header without encryption leaks some
-                // information about the message contents, but it can
-                // already be easily guessed from message timing and size.
                 headers.push((
                     "Auto-Submitted",
                     mail_builder::headers::raw::Raw::new("auto-generated").into(),
@@ -2161,12 +2187,7 @@ fn group_headers_by_confidentiality(
                         mail_builder::headers::raw::Raw::new("[...]").into(),
                     ));
                 }
-                "in-reply-to"
-                | "references"
-                | "auto-submitted"
-                | "chat-version"
-                | "autocrypt-setup-message"
-                | "chat-is-post-message" => {
+                "chat-version" | "autocrypt-setup-message" | "chat-is-post-message" => {
                     unprotected_headers.push(header.clone());
                 }
                 _ => {
