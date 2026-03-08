@@ -1958,7 +1958,7 @@ impl MimeFactory {
 }
 
 /// Stores the unprotected headers on the outer message, and renders it.
-fn render_outer_message(
+pub(crate) fn render_outer_message(
     unprotected_headers: Vec<(&'static str, HeaderType<'static>)>,
     outer_message: MimePart<'static>,
 ) -> String {
@@ -1976,7 +1976,7 @@ fn render_outer_message(
 
 /// Takes the encrypted part, wraps it in a MimePart,
 /// and sets the appropriate Content-Type for the outer message
-fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
+pub(crate) fn wrap_encrypted_part(encrypted: String) -> MimePart<'static> {
     // XXX: additional newline is needed
     // to pass filtermail at
     // <https://github.com/deltachat/chatmail/blob/4d915f9800435bf13057d41af8d708abd34dbfa8/chatmaild/src/chatmaild/filtermail.py#L84-L86>:

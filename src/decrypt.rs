@@ -26,7 +26,7 @@ pub(crate) async fn decrypt(
     context: &Context,
     mail: &mailparse::ParsedMail<'_>,
 ) -> Result<Option<Message<'static>>> {
-    // `pgp::composed::Message` is huge (>4kb), so, make sure that it is in a Box when held over an await point.
+    // `pgp::composed::Message` is huge (>4kb), so, make sure that it is in a Box when held over an await point
     let Some(msg) = get_encrypted_pgp_message(mail)? else {
         return Ok(None);
     };
@@ -45,6 +45,7 @@ pub(crate) async fn decrypt(
         let secret_keys: Vec<SignedSecretKey> = load_self_secret_keyring(context).await?;
         let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
         let empty_pw = Password::empty();
+        // TODO need to leave the executor
         msg.decrypt_with_keys(vec![&empty_pw], secret_keys)
             .context("decrypt_with_keys")?
     };

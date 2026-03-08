@@ -7,9 +7,9 @@ use anyhow::{Context as _, Result};
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
-    ArmorOptions, DecryptionOptions, Deserializable, DetachedSignature, EncryptionCaps,
-    KeyType as PgpKeyType, Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey,
-    SignedPublicSubKey, SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig, TheRing,
+    ArmorOptions, Deserializable, DetachedSignature, EncryptionCaps, KeyType as PgpKeyType,
+    Message, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
+    SubkeyParamsBuilder, SubpacketConfig,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
@@ -427,25 +427,40 @@ mod tests {
 
     use super::*;
     use crate::{
+        chat::save_broadcast_secret,
         decrypt,
-        key::{load_self_public_key, load_self_secret_key},
-        test_utils::{TestContextManager, alice_keypair, bob_keypair},
+        key::{load_self_public_key, load_self_secret_key, store_self_keypair},
+        mimefactory::{render_outer_message, wrap_encrypted_part},
+        test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
+        token,
     };
     use pgp::composed::Esk;
     use pgp::packet::PublicKeyEncryptedSessionKey;
 
-    fn decrypt_bytes(
+    async fn decrypt_bytes(
         bytes: Vec<u8>,
         private_keys_for_decryption: &[SignedSecretKey],
         shared_secrets: &[String],
     ) -> Result<pgp::composed::Message<'static>> {
-        let cursor = Cursor::new(bytes);
-        let (msg, _headers) = Message::from_armor(cursor).unwrap();
-        decrypt::decrypt(msg, private_keys_for_decryption, shared_secrets)
+        let t = &TestContext::new().await;
+
+        for secret in shared_secrets {
+            token::save(t, token::Namespace::Auth, None, secret, 0).await?;
+        }
+        let [secret_key] = &private_keys_for_decryption[..] else {
+            panic!("Only one private key is allowed anymore");
+        };
+        store_self_keypair(t, secret_key).await?;
+
+        let mime_message = wrap_encrypted_part(bytes.try_into().unwrap());
+        let rendered = render_outer_message(vec![], mime_message);
+        let parsed = mailparse::parse_mail(rendered.as_bytes())?;
+        let decrypted = decrypt::decrypt(t, &parsed).await?.unwrap();
+        Ok(decrypted)
     }
 
     #[expect(clippy::type_complexity)]
-    fn pk_decrypt_and_validate<'a>(
+    async fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
         private_keys_for_decryption: &'a [SignedSecretKey],
         public_keys_for_validation: &[SignedPublicKey],
@@ -454,7 +469,7 @@ mod tests {
         HashMap<Fingerprint, Vec<Fingerprint>>,
         Vec<u8>,
     )> {
-        let mut msg = decrypt_bytes(ctext.to_vec(), private_keys_for_decryption, &[])?;
+        let mut msg = decrypt_bytes(ctext.to_vec(), private_keys_for_decryption, &[]).await?;
         let content = msg.as_data_vec()?;
         let ret_signature_fingerprints =
             valid_signature_fingerprints(&msg, public_keys_for_validation);
@@ -568,6 +583,7 @@ mod tests {
             &decrypt_keyring,
             &sig_check_keyring,
         )
+        .await
         .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
@@ -583,6 +599,7 @@ mod tests {
             &decrypt_keyring,
             &sig_check_keyring,
         )
+        .await
         .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 1);
@@ -595,7 +612,9 @@ mod tests {
     async fn test_decrypt_no_sig_check() {
         let keyring = vec![KEYS.alice_secret.clone()];
         let (_msg, valid_signatures, content) =
-            pk_decrypt_and_validate(ctext_signed().await.as_bytes(), &keyring, &[]).unwrap();
+            pk_decrypt_and_validate(ctext_signed().await.as_bytes(), &keyring, &[])
+                .await
+                .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
     }
@@ -610,6 +629,7 @@ mod tests {
             &decrypt_keyring,
             &sig_check_keyring,
         )
+        .await
         .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
@@ -620,7 +640,9 @@ mod tests {
         let decrypt_keyring = vec![KEYS.bob_secret.clone()];
         let ctext_unsigned = include_bytes!("../test-data/message/ctext_unsigned.asc");
         let (_msg, valid_signatures, content) =
-            pk_decrypt_and_validate(ctext_unsigned, &decrypt_keyring, &[]).unwrap();
+            pk_decrypt_and_validate(ctext_unsigned, &decrypt_keyring, &[])
+                .await
+                .unwrap();
         assert_eq!(content, CLEARTEXT);
         assert_eq!(valid_signatures.len(), 0);
     }
@@ -646,7 +668,9 @@ mod tests {
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
-        )?;
+        )
+        .await
+        .unwrap();
 
         assert_eq!(decrypted.as_data_vec()?, plain);
 
@@ -690,12 +714,10 @@ mod tests {
             &bob_private_keyring,
             &[shared_secret.to_string()],
         )
+        .await
         .unwrap_err();
 
-        assert_eq!(
-            error.to_string(),
-            "missing key (Note: symmetric decryption was not tried: unsupported string2key algorithm)"
-        );
+        assert_eq!(format!("{error:#}"), "unsupported string2key algorithm");
 
         Ok(())
     }
@@ -722,12 +744,11 @@ mod tests {
 
         // Trying to decrypt it should fail with an OK error message:
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let error = decrypt_bytes(ctext.into(), &bob_private_keyring, &[]).unwrap_err();
+        let error = decrypt_bytes(ctext.into(), &bob_private_keyring, &[])
+            .await
+            .unwrap_err();
 
-        assert_eq!(
-            error.to_string(),
-            "missing key (Note: symmetric decryption was not tried: not symmetrically encrypted)"
-        );
+        assert_eq!(format!("{error:#}"), "decrypt_with_keys: missing key");
 
         Ok(())
     }

@@ -3919,6 +3919,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     let grpid = "grpid";
 
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let bob_alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
 
     tcm.section("Create a broadcast channel with Bob, and send a message");
     let alice_chat_id = create_out_broadcast_ex(
@@ -3942,6 +3943,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     )
     .await?;
     save_broadcast_secret(bob, bob_chat_id, secret).await?;
+    add_to_chat_contacts_table(bob, time(), bob_chat_id, &[bob_alice_contact_id]).await?;
 
     let sent = alice
         .send_text(alice_chat_id, "Symmetrically encrypted message")
