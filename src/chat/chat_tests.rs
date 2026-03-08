@@ -3843,14 +3843,20 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
         .self_fingerprint
         .take();
 
-    tcm.section(
-        "Alice sends a message, which is not put into the broadcast chat but into a 1:1 chat",
-    );
+    tcm.section("Alice sends a message, which is trashed");
     let sent = alice.send_text(alice_broadcast_id, "Hi").await;
-    let rcvd = bob.recv_msg(&sent).await;
-    assert_eq!(rcvd.text, "Hi");
-    let bob_alice_chat_id = bob.get_chat(alice).await.id;
-    assert_eq!(rcvd.chat_id, bob_alice_chat_id);
+    bob.recv_msg_trash(&sent).await;
+    let EventType::Warning(warning) = bob
+        .evtracker
+        .get_matching(|ev| matches!(ev, EventType::Warning(_)))
+        .await
+    else {
+        unreachable!()
+    };
+    assert!(
+        warning.contains("This sender is not allowed to encrypt with this secret key"),
+        "Wrong warning: {warning}"
+    );
 
     Ok(())
 }

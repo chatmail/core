@@ -8,8 +8,8 @@ use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
     ArmorOptions, Deserializable, DetachedSignature, EncryptionCaps, KeyType as PgpKeyType,
-    Message, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
-    SubkeyParamsBuilder, SubpacketConfig,
+    Message, MessageBuilder, SecretKeyParamsBuilder, SignedPublicKey, SignedPublicSubKey,
+    SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
@@ -455,7 +455,7 @@ mod tests {
         let mime_message = wrap_encrypted_part(bytes.try_into().unwrap());
         let rendered = render_outer_message(vec![], mime_message);
         let parsed = mailparse::parse_mail(rendered.as_bytes())?;
-        let decrypted = decrypt::decrypt(t, &parsed).await?.unwrap();
+        let (decrypted, _fp) = decrypt::decrypt(t, &parsed).await?.unwrap();
         Ok(decrypted)
     }
 

@@ -22,36 +22,55 @@ use crate::context::Context;
 use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
 use crate::token::Namespace;
 
+/// Tries to decrypt the message,
+/// returning a tuple of `(decrypted message, fingerprint)`.
+///
+/// If the message wasn't encrypted, returns `Ok(None)`.
+///
+/// If the message was asymmetrically encrypted, returns `Ok((decrypted message, None))`.
+///
+/// If the message was symmetrically encrypted, returns `Ok((decrypted message, Some(fingerprint)))`,
+/// where `fingerprint` denotes which contact is expected to send encrypted with this symmetric secret.
+/// If the message is not signed by `fingerprint`, it must be dropped.
+///
+/// Otherwise, Eve could send a message to Alice
+/// encrypted with the symmetric secret of someone else's broadcast channel.
+/// If Alice sends an answer (or read receipt),
+/// then Eve would know that Alice is in the broadcast channel.
 pub(crate) async fn decrypt(
     context: &Context,
     mail: &mailparse::ParsedMail<'_>,
-) -> Result<Option<Message<'static>>> {
+) -> Result<Option<(Message<'static>, Option<String>)>> {
     // `pgp::composed::Message` is huge (>4kb), so, make sure that it is in a Box when held over an await point
     let Some(msg) = get_encrypted_pgp_message(mail)? else {
         return Ok(None);
     };
+    let expected_sender_fingerprint: Option<String>;
+    let plain: Message<'static>;
 
-    let plain = if let Message::Encrypted { esk, .. } = &*msg
+    if let Message::Encrypted { esk, .. } = &*msg
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
         check_symmetric_encryption(&msg).map_err(|e| anyhow::Error::msg(e))?;
-        let (psk, sender_fingerprint) = decrypt_session_key_symmetrically(context, esk)
+        let (psk, fingerprint) = decrypt_session_key_symmetrically(context, esk)
             .await
             .context("decrypt_session_key_symmetrically")?;
-        let plain = msg.decrypt_with_session_key(psk)?;
-        plain
+        expected_sender_fingerprint = fingerprint;
+        plain = msg.decrypt_with_session_key(psk)?;
     } else {
         // Message is asymmetrically encrypted
         let secret_keys: Vec<SignedSecretKey> = load_self_secret_keyring(context).await?;
         let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
         let empty_pw = Password::empty();
+        expected_sender_fingerprint = None;
         // TODO need to leave the executor
-        msg.decrypt_with_keys(vec![&empty_pw], secret_keys)
+        plain = msg
+            .decrypt_with_keys(vec![&empty_pw], secret_keys)
             .context("decrypt_with_keys")?
     };
 
     let plain = plain.decompress()?;
-    Ok(Some(plain))
+    Ok(Some((plain, expected_sender_fingerprint)))
 }
 
 async fn decrypt_session_key_symmetrically(

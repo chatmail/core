@@ -6,7 +6,7 @@ use std::path::Path;
 use std::str;
 use std::str::FromStr;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, ensure};
 use deltachat_contact_tools::{addr_cmp, addr_normalize, sanitize_bidi_characters};
 use deltachat_derive::{FromSql, ToSql};
 use format_flowed::unformat_flowed;
@@ -26,6 +26,7 @@ use crate::download::PostMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey};
+use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
 use crate::param::{Param, Params};
 use crate::simplify::{SimplifiedText, simplify};
@@ -385,9 +386,10 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let expected_sender_fingerprint;
 
         let (mail, is_encrypted) = match decrypt::decrypt(context, &mail).await {
-            Ok(Some(mut msg)) => {
+            Ok(Some((mut msg, expected_sender_fp))) => {
                 // success
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 
@@ -415,18 +417,21 @@ impl MimeMessage {
                     aheader_values = protected_aheader_values;
                 }
 
+                expected_sender_fingerprint = expected_sender_fp;
                 (Ok(decrypted_mail), true)
             }
             Ok(None) => {
                 // unencrypted
                 mail_raw = Vec::new();
                 decrypted_msg = None;
+                expected_sender_fingerprint = None;
                 (Ok(mail), false)
             }
             Err(err) => {
                 // Error
                 mail_raw = Vec::new();
                 decrypted_msg = None;
+                expected_sender_fingerprint = None;
                 warn!(context, "decryption failed: {:#}", err);
                 (Err(err), false)
             }
@@ -540,6 +545,18 @@ impl MimeMessage {
             signatures.extend(signatures_detached);
             content
         });
+
+        if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
+            ensure!(
+                signatures.contains_key(&expected_sender_fingerprint.parse()?),
+                "This sender is not allowed to encrypt with this secret key"
+            );
+            ensure!(
+                signatures.len() == 1,
+                "Too many signatures on symm-encrypted message"
+            );
+        }
+
         if let (Ok(mail), true) = (mail, is_encrypted) {
             if !signatures.is_empty() {
                 // Unsigned "Subject" mustn't be prepended to messages shown as encrypted
