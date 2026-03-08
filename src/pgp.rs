@@ -293,35 +293,6 @@ pub fn pk_calc_signature(
     Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
-/// TODO inline this function
-pub fn decrypt(
-    msg: Message<'static>,
-    private_keys_for_decryption: &[SignedSecretKey],
-    mut shared_secrets: &[String],
-) -> Result<pgp::composed::Message<'static>> {
-    let skeys: Vec<&SignedSecretKey> = private_keys_for_decryption.iter().collect();
-    let empty_pw = Password::empty();
-
-    let decrypt_options = DecryptionOptions::new();
-
-    let ring = TheRing {
-        secret_keys: skeys,
-        key_passwords: vec![&empty_pw],
-        message_password: vec![],
-        session_keys: vec![],
-        decrypt_options,
-    };
-
-    let res = msg.decrypt_the_ring(ring, true);
-
-    let (msg, _ring_result) = res?;
-
-    // remove one layer of compression
-    let msg = msg.decompress()?;
-
-    Ok(msg)
-}
-
 /// Returns fingerprints
 /// of all keys from the `public_keys_for_validation` keyring that
 /// have valid signatures in `msg` and corresponding intended recipient fingerprints
@@ -456,6 +427,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        decrypt,
         key::{load_self_public_key, load_self_secret_key},
         test_utils::{TestContextManager, alice_keypair, bob_keypair},
     };
@@ -469,7 +441,7 @@ mod tests {
     ) -> Result<pgp::composed::Message<'static>> {
         let cursor = Cursor::new(bytes);
         let (msg, _headers) = Message::from_armor(cursor).unwrap();
-        decrypt(msg, private_keys_for_decryption, shared_secrets)
+        decrypt::decrypt(msg, private_keys_for_decryption, shared_secrets)
     }
 
     #[expect(clippy::type_complexity)]

@@ -26,7 +26,7 @@ pub(crate) async fn decrypt(
     context: &Context,
     mail: &mailparse::ParsedMail<'_>,
 ) -> Result<Option<Message<'static>>> {
-    // `pgp::composed::Message` is huge, so, make sure that it is in a Box when held over an await point.
+    // `pgp::composed::Message` is huge (>4kb), so, make sure that it is in a Box when held over an await point.
     let Some(msg) = get_encrypted_pgp_message(mail)? else {
         return Ok(None);
     };
@@ -111,19 +111,7 @@ fn try_decrypt_with_broadcast_secret(
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
 ) -> Result<Option<(PlainSessionKey, Option<String>)>> {
-    let (psk, chat_id) = 'get_psk_and_chat_id: {
-        let mut stmt = conn.prepare("SELECT secret, chat_id FROM broadcast_secrets")?;
-        let mut rows = stmt.query(())?;
-        while let Some(row) = rows.next()? {
-            let secret: String = row.get(0)?;
-            match decrypt_session_key_with_password(esk, &Password::from(secret)) {
-                Ok(psk) => {
-                    let chat_id: ChatId = row.get(1)?;
-                    break 'get_psk_and_chat_id (psk, chat_id);
-                }
-                Err(_) => {}
-            }
-        }
+    let Some((psk, chat_id)) = try_decrypt_with_broadcast_secret_inner(esk, conn)? else {
         return Ok(None);
     };
     let chat_type: Chattype =
@@ -156,6 +144,25 @@ fn try_decrypt_with_broadcast_secret(
     Ok(Some((psk, fp)))
 }
 
+fn try_decrypt_with_broadcast_secret_inner(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, ChatId)>> {
+    let mut stmt = conn.prepare("SELECT secret, chat_id FROM broadcast_secrets")?;
+    let mut rows = stmt.query(())?;
+    while let Some(row) = rows.next()? {
+        let secret: String = row.get(0)?;
+        match decrypt_session_key_with_password(esk, &Password::from(secret)) {
+            Ok(psk) => {
+                let chat_id: ChatId = row.get(1)?;
+                return Ok(Some((psk, chat_id)));
+            }
+            Err(_) => {}
+        }
+    }
+    Ok(None)
+}
+
 fn try_decrypt_with_auth_token(
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
@@ -170,9 +177,7 @@ fn try_decrypt_with_auth_token(
             Ok(psk) => {
                 return Ok(Some(psk));
             }
-            Err(e) => {
-                println!("{:#}", e);
-            }
+            Err(_) => {}
         }
     }
     Ok(None)
