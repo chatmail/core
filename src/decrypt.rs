@@ -51,7 +51,7 @@ pub(crate) async fn decrypt(
     if let Message::Encrypted { esk, .. } = &*msg
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
-        check_symmetric_encryption(&msg).map_err(|e| anyhow::Error::msg(e))?;
+        check_symmetric_encryption(&msg).map_err(anyhow::Error::msg)?;
         let (psk, fingerprint) = decrypt_session_key_symmetrically(context, esk)
             .await
             .context("decrypt_session_key_symmetrically")?;
@@ -116,12 +116,9 @@ fn try_decrypt_with_bobstate(
     while let Some(row) = rows.next()? {
         let invite: crate::securejoin::QrInvite = row.get(0)?;
         let authcode = invite.authcode().to_string();
-        match decrypt_session_key_with_password(esk, &Password::from(authcode)) {
-            Ok(psk) => {
-                let fingerprint = invite.fingerprint().hex();
-                return Ok(Some((psk, fingerprint)));
-            }
-            Err(_) => {}
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(authcode)) {
+            let fingerprint = invite.fingerprint().hex();
+            return Ok(Some((psk, fingerprint)));
         }
     }
     Ok(None)
@@ -172,12 +169,9 @@ fn try_decrypt_with_broadcast_secret_inner(
     let mut rows = stmt.query(())?;
     while let Some(row) = rows.next()? {
         let secret: String = row.get(0)?;
-        match decrypt_session_key_with_password(esk, &Password::from(secret)) {
-            Ok(psk) => {
-                let chat_id: ChatId = row.get(1)?;
-                return Ok(Some((psk, chat_id)));
-            }
-            Err(_) => {}
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(secret)) {
+            let chat_id: ChatId = row.get(1)?;
+            return Ok(Some((psk, chat_id)));
         }
     }
     Ok(None)
@@ -193,11 +187,8 @@ fn try_decrypt_with_auth_token(
     let mut rows = stmt.query((Namespace::Auth,))?;
     while let Some(row) = rows.next()? {
         let token: String = row.get(0)?;
-        match decrypt_session_key_with_password(esk, &Password::from(token)) {
-            Ok(psk) => {
-                return Ok(Some(psk));
-            }
-            Err(_) => {}
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(token)) {
+            return Ok(Some(psk));
         }
     }
     Ok(None)

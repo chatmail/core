@@ -18,6 +18,7 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
+use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
 use crate::decrypt::{self, validate_detached_signature};
@@ -35,7 +36,6 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, tools};
-use crate::{constants, token};
 
 /// Public key extracted from `Autocrypt-Gossip`
 /// header with associated information.

@@ -446,7 +446,7 @@ mod tests {
         for secret in shared_secrets {
             token::save(t, token::Namespace::Auth, None, secret, 0).await?;
         }
-        let [secret_key] = &private_keys_for_decryption[..] else {
+        let [secret_key] = private_keys_for_decryption else {
             panic!("Only one private key is allowed anymore");
         };
         store_self_keypair(t, secret_key).await?;
@@ -458,7 +458,6 @@ mod tests {
         Ok(decrypted)
     }
 
-    #[expect(clippy::type_complexity)]
     async fn pk_decrypt_and_validate<'a>(
         ctext: &'a [u8],
         private_keys_for_decryption: &'a [SignedSecretKey],
