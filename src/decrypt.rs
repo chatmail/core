@@ -46,9 +46,8 @@ pub(crate) async fn decrypt(
         return Ok(None);
     };
     let expected_sender_fingerprint: Option<String>;
-    let plain: Message<'static>;
 
-    if let Message::Encrypted { esk, .. } = &*msg
+    let plain = if let Message::Encrypted { esk, .. } = &*msg
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
         check_symmetric_encryption(&msg).map_err(anyhow::Error::msg)?;
@@ -56,20 +55,34 @@ pub(crate) async fn decrypt(
             .await
             .context("decrypt_session_key_symmetrically")?;
         expected_sender_fingerprint = fingerprint;
-        plain = msg.decrypt_with_session_key(psk)?;
+
+        tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
+            let plain = msg
+                .decrypt_with_session_key(psk)
+                .context("decrypt_with_keys")?;
+
+            let plain: Message<'static> = plain.decompress()?;
+            Ok(plain)
+        })
+        .await??
     } else {
         // Message is asymmetrically encrypted
         let secret_keys: Vec<SignedSecretKey> = load_self_secret_keyring(context).await?;
-        let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
-        let empty_pw = Password::empty();
         expected_sender_fingerprint = None;
-        // TODO need to leave the executor
-        plain = msg
-            .decrypt_with_keys(vec![&empty_pw], secret_keys)
-            .context("decrypt_with_keys")?
+
+        tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
+            let empty_pw = Password::empty();
+            let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
+            let plain = msg
+                .decrypt_with_keys(vec![&empty_pw], secret_keys)
+                .context("decrypt_with_keys")?;
+
+            let plain: Message<'static> = plain.decompress()?;
+            Ok(plain)
+        })
+        .await??
     };
 
-    let plain = plain.decompress()?;
     Ok(Some((plain, expected_sender_fingerprint)))
 }
 
