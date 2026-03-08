@@ -322,36 +322,6 @@ pub fn decrypt(
     Ok(msg)
 }
 
-/// Returns Ok(()) if we want to try symmetrically decrypting the message,
-/// and Err with a reason if symmetric decryption should not be tried.
-///
-/// A DOS attacker could send a message with a lot of encrypted session keys,
-/// all of which use a very hard-to-compute string2key algorithm.
-/// We would then try to decrypt all of the encrypted session keys
-/// with all of the known shared secrets.
-/// In order to prevent this, we do not try to symmetrically decrypt messages
-/// that use a string2key algorithm other than 'Salted'.
-pub(crate) fn check_symmetric_encryption(
-    msg: &Message<'_>,
-) -> std::result::Result<(), &'static str> {
-    let Message::Encrypted { esk, .. } = msg else {
-        return Err("not encrypted");
-    };
-
-    if esk.len() > 1 {
-        return Err("too many esks");
-    }
-
-    let [pgp::composed::Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] else {
-        return Err("not symmetrically encrypted");
-    };
-
-    match esk.s2k() {
-        Some(StringToKey::Salted { .. }) => Ok(()),
-        _ => Err("unsupported string2key algorithm"),
-    }
-}
-
 /// Returns fingerprints
 /// of all keys from the `public_keys_for_validation` keyring that
 /// have valid signatures in `msg` and corresponding intended recipient fingerprints

@@ -4,21 +4,223 @@
 use std::collections::HashSet;
 use std::io::Cursor;
 
-use ::pgp::composed::Message;
-use anyhow::Result;
+use anyhow::{Context as _, Result, bail};
 use mailparse::ParsedMail;
+use pgp::composed::Esk;
+use pgp::composed::Message;
+use pgp::composed::PlainSessionKey;
+use pgp::composed::SignedSecretKey;
+use pgp::composed::decrypt_session_key_with_password;
+use pgp::packet::SymKeyEncryptedSessionKey;
+use pgp::types::Password;
+use pgp::types::StringToKey;
 
-use crate::key::{Fingerprint, SignedPublicKey};
-use crate::pgp;
+use crate::chat::ChatId;
+use crate::constants::Chattype;
+use crate::contact::ContactId;
+use crate::context::Context;
+use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
+use crate::token::Namespace;
 
-pub fn get_encrypted_pgp_message<'a>(mail: &'a ParsedMail<'a>) -> Result<Option<Message<'static>>> {
+pub(crate) async fn decrypt(
+    context: &Context,
+    mail: &mailparse::ParsedMail<'_>,
+) -> Result<Option<Message<'static>>> {
+    // `pgp::composed::Message` is huge, so, make sure that it is in a Box when held over an await point.
+    let Some(msg) = get_encrypted_pgp_message(mail)? else {
+        return Ok(None);
+    };
+
+    let plain = if let Message::Encrypted { esk, .. } = &*msg
+        && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
+    {
+        check_symmetric_encryption(&msg).map_err(|e| anyhow::Error::msg(e))?;
+        let (psk, sender_fingerprint) = decrypt_session_key_symmetrically(context, esk)
+            .await
+            .context("decrypt_session_key_symmetrically")?;
+        let plain = msg.decrypt_with_session_key(psk)?;
+        plain
+    } else {
+        // Message is asymmetrically encrypted
+        let secret_keys: Vec<SignedSecretKey> = load_self_secret_keyring(context).await?;
+        let secret_keys: Vec<&SignedSecretKey> = secret_keys.iter().collect();
+        let empty_pw = Password::empty();
+        msg.decrypt_with_keys(vec![&empty_pw], secret_keys)
+            .context("decrypt_with_keys")?
+    };
+
+    let plain = plain.decompress()?;
+    Ok(Some(plain))
+}
+
+async fn decrypt_session_key_symmetrically(
+    context: &Context,
+    esk: &SymKeyEncryptedSessionKey,
+) -> Result<(PlainSessionKey, Option<String>)> {
+    context
+        .sql
+        .call(true, |conn| {
+            // First, try decrypting using AUTH tokens from scanned QR codes, stored in the bobstate,
+            // because usually there will only be 1 or 2 of it, so, it should be fast
+            let res: Option<(PlainSessionKey, String)> = try_decrypt_with_bobstate(esk, conn)?;
+            if let Some((plain_session_key, fingerprint)) = res {
+                return Ok((plain_session_key, Some(fingerprint)));
+            }
+
+            // Then, try decrypting using broadcast secrets
+            let res: Option<(PlainSessionKey, Option<String>)> =
+                try_decrypt_with_broadcast_secret(esk, conn)?;
+            if let Some((plain_session_key, fingerprint)) = res {
+                return Ok((plain_session_key, fingerprint));
+            }
+
+            // Finally, try decrypting using own AUTH tokels
+            // There can be a lot of AUTH tokens,
+            // because a new one is generated every time a QR code is shown
+            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn)?;
+            if let Some(plain_session_key) = res {
+                return Ok((plain_session_key, None));
+            }
+
+            bail!("Could not find symmetric secret for session key")
+        })
+        .await
+}
+
+fn try_decrypt_with_bobstate(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, String)>> {
+    let mut stmt = conn.prepare("SELECT invite FROM bobstate")?;
+    let mut rows = stmt.query(())?;
+    while let Some(row) = rows.next()? {
+        let invite: crate::securejoin::QrInvite = row.get(0)?;
+        let authcode = invite.authcode().to_string();
+        match decrypt_session_key_with_password(esk, &Password::from(authcode)) {
+            Ok(psk) => {
+                let fingerprint = invite.fingerprint().hex();
+                return Ok(Some((psk, fingerprint)));
+            }
+            Err(_) => {}
+        }
+    }
+    Ok(None)
+}
+
+fn try_decrypt_with_broadcast_secret(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<(PlainSessionKey, Option<String>)>> {
+    let (psk, chat_id) = 'get_psk_and_chat_id: {
+        let mut stmt = conn.prepare("SELECT secret, chat_id FROM broadcast_secrets")?;
+        let mut rows = stmt.query(())?;
+        while let Some(row) = rows.next()? {
+            let secret: String = row.get(0)?;
+            match decrypt_session_key_with_password(esk, &Password::from(secret)) {
+                Ok(psk) => {
+                    let chat_id: ChatId = row.get(1)?;
+                    break 'get_psk_and_chat_id (psk, chat_id);
+                }
+                Err(_) => {}
+            }
+        }
+        return Ok(None);
+    };
+    let chat_type: Chattype =
+        conn.query_one("SELECT type FROM chats WHERE id=?", (chat_id,), |row| {
+            row.get(0)
+        })?;
+    let fp: Option<String> = if chat_type == Chattype::OutBroadcast {
+        // Just allow everyone to send encrypted to OutBroadcast secret
+        // An attacker who knows the secret will also know who owns it
+        None
+    } else if chat_type == Chattype::InBroadcast {
+        let contact_id: ContactId = conn
+            .query_one(
+                "SELECT contact_id FROM chats_contacts WHERE chat_id=? AND contact_id>9",
+                (chat_id,),
+                |row| row.get(0),
+            )
+            .context("find InBroadcast owner")?;
+        let fp = conn
+            .query_one(
+                "SELECT fingerprint FROM contacts WHERE id=?",
+                (contact_id,),
+                |row| row.get(0),
+            )
+            .context("find owner fingerprint")?;
+        Some(fp)
+    } else {
+        bail!("Chat {chat_id} is not a broadcast but {chat_type}")
+    };
+    Ok(Some((psk, fp)))
+}
+
+fn try_decrypt_with_auth_token(
+    esk: &SymKeyEncryptedSessionKey,
+    conn: &mut rusqlite::Connection,
+) -> Result<Option<PlainSessionKey>> {
+    // ORDER BY id DESC to query the most-recently saved tokens are returned first.
+    // This improves performance when Bob scans a QR code that was just created.
+    let mut stmt = conn.prepare("SELECT token FROM tokens WHERE namespc=? ORDER BY id DESC")?;
+    let mut rows = stmt.query((Namespace::Auth,))?;
+    while let Some(row) = rows.next()? {
+        let token: String = row.get(0)?;
+        match decrypt_session_key_with_password(esk, &Password::from(token)) {
+            Ok(psk) => {
+                return Ok(Some(psk));
+            }
+            Err(e) => {
+                println!("{:#}", e);
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Returns Ok(()) if we want to try symmetrically decrypting the message,
+/// and Err with a reason if symmetric decryption should not be tried.
+///
+/// A DOS attacker could send a message with a lot of encrypted session keys,
+/// all of which use a very hard-to-compute string2key algorithm.
+/// We would then try to decrypt all of the encrypted session keys
+/// with all of the known shared secrets.
+/// In order to prevent this, we do not try to symmetrically decrypt messages
+/// that use a string2key algorithm other than 'Salted'.
+pub(crate) fn check_symmetric_encryption(
+    msg: &Message<'_>,
+) -> std::result::Result<(), &'static str> {
+    let Message::Encrypted { esk, .. } = msg else {
+        return Err("not encrypted");
+    };
+
+    if esk.len() > 1 {
+        return Err("too many esks");
+    }
+
+    let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] else {
+        return Err("not symmetrically encrypted");
+    };
+
+    match esk.s2k() {
+        Some(StringToKey::Salted { .. }) => Ok(()),
+        _ => Err("unsupported string2key algorithm"),
+    }
+}
+
+/// Turns a [`ParsedMail`] into [`pgp::composed::Message`].
+/// [`pgp::composed::Message`] is huge (over 4kb),
+/// so, it is put on the heap using [`Box`].
+pub fn get_encrypted_pgp_message<'a>(
+    mail: &'a ParsedMail<'a>,
+) -> Result<Option<Box<Message<'static>>>> {
     let Some(encrypted_data_part) = get_encrypted_mime(mail) else {
         return Ok(None);
     };
     let data = encrypted_data_part.get_body_raw()?;
     let cursor = Cursor::new(data);
     let (msg, _headers) = Message::from_armor(cursor)?;
-    Ok(Some(msg))
+    Ok(Some(Box::new(msg)))
 }
 
 /// Returns a reference to the encrypted payload of a message.
@@ -125,8 +327,10 @@ pub(crate) fn validate_detached_signature<'a, 'b>(
         // First part is the content, second part is the signature.
         let content = first_part.raw_bytes;
         let ret_valid_signatures = match second_part.get_body_raw() {
-            Ok(signature) => pgp::pk_validate(content, &signature, public_keyring_for_validate)
-                .unwrap_or_default(),
+            Ok(signature) => {
+                crate::pgp::pk_validate(content, &signature, public_keyring_for_validate)
+                    .unwrap_or_default()
+            }
             Err(_) => Default::default(),
         };
         Some((first_part, ret_valid_signatures))
