@@ -547,6 +547,8 @@ impl MimeMessage {
         });
 
         if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
+            info!(context, "CHECKING signatures for expected_sender_fingerprint={}", expected_sender_fingerprint);
+            info!(context, "Signatures found: {:?}", signatures.keys().collect::<Vec<_>>());
             ensure!(
                 signatures.contains_key(&expected_sender_fingerprint.parse()?),
                 "This sender is not allowed to encrypt with this secret key"
@@ -555,6 +557,8 @@ impl MimeMessage {
                 signatures.len() == 1,
                 "Too many signatures on symm-encrypted message"
             );
+        } else {
+            info!(context, "NO expected_sender_fingerprint set");
         }
 
         if let (Ok(mail), true) = (mail, is_encrypted) {
@@ -2632,3 +2636,5 @@ async fn handle_ndn(
 
 #[cfg(test)]
 mod mimeparser_tests;
+#[cfg(test)]
+mod security_tests;

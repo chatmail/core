@@ -82,14 +82,14 @@ async fn decrypt_session_key_symmetrically(
         .call(true, |conn| {
             // First, try decrypting using AUTH tokens from scanned QR codes, stored in the bobstate,
             // because usually there will only be 1 or 2 of it, so, it should be fast
-            let res: Option<(PlainSessionKey, String)> = try_decrypt_with_bobstate(esk, conn)?;
+            let res: Option<(PlainSessionKey, String)> = try_decrypt_with_bobstate(context, esk, conn)?;
             if let Some((plain_session_key, fingerprint)) = res {
                 return Ok((plain_session_key, Some(fingerprint)));
             }
 
             // Then, try decrypting using broadcast secrets
             let res: Option<(PlainSessionKey, Option<String>)> =
-                try_decrypt_with_broadcast_secret(esk, conn)?;
+                try_decrypt_with_broadcast_secret(context, esk, conn)?;
             if let Some((plain_session_key, fingerprint)) = res {
                 return Ok((plain_session_key, fingerprint));
             }
@@ -97,7 +97,7 @@ async fn decrypt_session_key_symmetrically(
             // Finally, try decrypting using own AUTH tokels
             // There can be a lot of AUTH tokens,
             // because a new one is generated every time a QR code is shown
-            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn)?;
+            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(context, esk, conn)?;
             if let Some(plain_session_key) = res {
                 return Ok((plain_session_key, None));
             }
@@ -108,6 +108,7 @@ async fn decrypt_session_key_symmetrically(
 }
 
 fn try_decrypt_with_bobstate(
+    context: &Context,
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
 ) -> Result<Option<(PlainSessionKey, String)>> {
@@ -125,6 +126,7 @@ fn try_decrypt_with_bobstate(
 }
 
 fn try_decrypt_with_broadcast_secret(
+    context: &Context,
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
 ) -> Result<Option<(PlainSessionKey, Option<String>)>> {
@@ -135,6 +137,7 @@ fn try_decrypt_with_broadcast_secret(
         conn.query_one("SELECT type FROM chats WHERE id=?", (chat_id,), |row| {
             row.get(0)
         })?;
+    info!(context, "try_decrypt_with_broadcast_secret: chat_id={}, type={:?}", chat_id, chat_type);
     let fp: Option<String> = if chat_type == Chattype::OutBroadcast {
         // Just allow everyone to send encrypted to OutBroadcast secret
         // An attacker who knows the secret will also know who owns it
@@ -158,6 +161,7 @@ fn try_decrypt_with_broadcast_secret(
     } else {
         bail!("Chat {chat_id} is not a broadcast but {chat_type}")
     };
+    info!(context, "try_decrypt_with_broadcast_secret: returning fp={:?}", fp);
     Ok(Some((psk, fp)))
 }
 
@@ -178,6 +182,7 @@ fn try_decrypt_with_broadcast_secret_inner(
 }
 
 fn try_decrypt_with_auth_token(
+    context: &Context,
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
 ) -> Result<Option<PlainSessionKey>> {
@@ -188,6 +193,7 @@ fn try_decrypt_with_auth_token(
     while let Some(row) = rows.next()? {
         let token: String = row.get(0)?;
         if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(token)) {
+            info!(context, "try_decrypt_with_auth_token: SUCCESS");
             return Ok(Some(psk));
         }
     }
