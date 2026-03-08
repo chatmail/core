@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{BufRead, Cursor};
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result};
 use deltachat_contact_tools::EmailAddress;
 use pgp::armor::BlockType;
 use pgp::composed::{
@@ -293,13 +293,7 @@ pub fn pk_calc_signature(
     Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
-/// Decrypts the message:
-/// - with keys from the private key keyring (passed in `private_keys_for_decryption`)
-///   if the message was asymmetrically encrypted,
-/// - with a shared secret/password (passed in `shared_secrets`),
-///   if the message was symmetrically encrypted.
-///
-/// Returns the decrypted and decompressed message.
+/// TODO inline this function
 pub fn decrypt(
     msg: Message<'static>,
     private_keys_for_decryption: &[SignedSecretKey],
@@ -309,41 +303,18 @@ pub fn decrypt(
     let empty_pw = Password::empty();
 
     let decrypt_options = DecryptionOptions::new();
-    let symmetric_encryption_res = check_symmetric_encryption(&msg);
-    if symmetric_encryption_res.is_err() {
-        shared_secrets = &[];
-    }
-
-    // We always try out all passwords here,
-    // but benchmarking (see `benches/decrypting.rs`)
-    // showed that the performance impact is negligible.
-    // We can improve this in the future if necessary.
-    let message_password: Vec<Password> = shared_secrets
-        .iter()
-        .map(|p| Password::from(p.as_str()))
-        .collect();
-    let message_password: Vec<&Password> = message_password.iter().collect();
 
     let ring = TheRing {
         secret_keys: skeys,
         key_passwords: vec![&empty_pw],
-        message_password,
+        message_password: vec![],
         session_keys: vec![],
         decrypt_options,
     };
 
     let res = msg.decrypt_the_ring(ring, true);
 
-    let (msg, _ring_result) = match res {
-        Ok(it) => it,
-        Err(err) => {
-            if let Err(reason) = symmetric_encryption_res {
-                bail!("{err:#} (Note: symmetric decryption was not tried: {reason})")
-            } else {
-                bail!("{err:#}");
-            }
-        }
-    };
+    let (msg, _ring_result) = res?;
 
     // remove one layer of compression
     let msg = msg.decompress()?;

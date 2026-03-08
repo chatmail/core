@@ -253,7 +253,7 @@ async fn securejoin(context: &Context, qr: &str) -> Result<ChatId> {
     ========================================================*/
 
     info!(context, "Requesting secure-join ...",);
-    let qr_scan = check_qr(context, qr).await?;
+    let qr_scan = check_qr(context, dbg!(qr)).await?;
 
     let invite = QrInvite::try_from(qr_scan)?;
 
