@@ -2115,35 +2115,6 @@ impl MimeMessage {
     }
 }
 
-/// Loads all the shared secrets
-/// that will be tried to decrypt a symmetrically-encrypted message
-async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
-    // First, try decrypting using the bobstate,
-    // because usually there will only be 1 or 2 of it,
-    // so, it should be fast
-    let mut secrets: Vec<String> = context
-        .sql
-        .query_map_vec("SELECT invite FROM bobstate", (), |row| {
-            let invite: crate::securejoin::QrInvite = row.get(0)?;
-            Ok(invite.authcode().to_string())
-        })
-        .await?;
-    // Then, try decrypting using broadcast secrets
-    secrets.extend(
-        context
-            .sql
-            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
-                let secret: String = row.get(0)?;
-                Ok(secret)
-            })
-            .await?,
-    );
-    // Finally, try decrypting using AUTH tokens
-    // There can be a lot of AUTH tokens, because a new one is generated every time a QR code is shown
-    secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
-    Ok(secrets)
-}
-
 fn rm_legacy_display_elements(text: &str) -> String {
     let mut res = None;
     for l in text.lines() {

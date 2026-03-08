@@ -427,7 +427,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        chat::save_broadcast_secret,
         decrypt,
         key::{load_self_public_key, load_self_secret_key, store_self_keypair},
         mimefactory::{render_outer_message, wrap_encrypted_part},
