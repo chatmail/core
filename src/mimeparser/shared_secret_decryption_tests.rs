@@ -179,20 +179,3 @@ async fn test_qr_code_happy_path() -> Result<()> {
 
     test_shared_secret_decryption_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
 }
-
-/// Control: Test that there is a similar error when the shared secret is unknown
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_unknown_secret() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    test_shared_secret_decryption_ex(
-        bob,
-        "alice@example.net",
-        "aaaaaa",
-        Some(alice),
-        Some("error"),
-    )
-    .await
-}

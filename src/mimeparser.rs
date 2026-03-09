@@ -390,7 +390,6 @@ impl MimeMessage {
 
         let (mail, is_encrypted) = match decrypt::decrypt(context, &mail).await {
             Ok(Some((mut msg, expected_sender_fp))) => {
-                // success
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 
                 let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
@@ -421,14 +420,12 @@ impl MimeMessage {
                 (Ok(decrypted_mail), true)
             }
             Ok(None) => {
-                // unencrypted
                 mail_raw = Vec::new();
                 decrypted_msg = None;
                 expected_sender_fingerprint = None;
                 (Ok(mail), false)
             }
             Err(err) => {
-                // Error
                 mail_raw = Vec::new();
                 decrypted_msg = None;
                 expected_sender_fingerprint = None;
@@ -552,7 +549,6 @@ impl MimeMessage {
                 "Unsigned message is not allowed to be encrypted with this shared secret"
             );
             ensure!(
-                // TODO make sure that this is the same behavior as failing to decrypt
                 signatures.contains_key(&expected_sender_fingerprint.parse()?),
                 "This sender is not allowed to encrypt with this secret key"
             );
