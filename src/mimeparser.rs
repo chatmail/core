@@ -547,15 +547,9 @@ impl MimeMessage {
         });
 
         if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
-            info!(
-                context,
-                "CHECKING signatures for expected_sender_fingerprint={}",
-                expected_sender_fingerprint
-            );
-            info!(
-                context,
-                "Signatures found: {:?}",
-                signatures.keys().collect::<Vec<_>>()
+            ensure!(
+                !signatures.is_empty(),
+                "Unsigned message is not allowed to be encrypted with this shared secret"
             );
             ensure!(
                 // TODO make sure that this is the same behavior as failing to decrypt
@@ -566,8 +560,6 @@ impl MimeMessage {
                 signatures.len() == 1,
                 "Too many signatures on symm-encrypted message"
             );
-        } else {
-            info!(context, "NO expected_sender_fingerprint set");
         }
 
         if let (Ok(mail), true) = (mail, is_encrypted) {

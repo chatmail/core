@@ -1,10 +1,10 @@
 use super::*;
 use crate::chat::{create_broadcast, load_broadcast_secret};
-use crate::key::{Fingerprint, load_self_secret_keyring};
+use crate::key::load_self_secret_keyring;
+use crate::pgp;
 use crate::qr::{Qr, check_qr};
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils::{TestContext, TestContextManager};
-use crate::{pgp, securejoin};
 use anyhow::Result;
 
 async fn test_security_ex(
@@ -17,11 +17,16 @@ async fn test_security_ex(
     let plain_body = "Hello, this is a secure message.";
     let plain_text = format!("Content-Type: text/plain; charset=utf-8\r\n\r\n{plain_body}");
 
-    let signer_key = if let Some(ctx) = signer_ctx {
-        Some(load_self_secret_keyring(ctx).await?.remove(0))
+    let signer_key = if let Some(signer_ctx) = signer_ctx {
+        Some(load_self_secret_keyring(signer_ctx).await?.remove(0))
     } else {
         None
     };
+    if let Some(signer_ctx) = signer_ctx {
+        // The recipient needs to know the signer's pubkey
+        // in order to be able to validate the pubkey:
+        recipient_ctx.add_or_lookup_contact(signer_ctx).await;
+    }
 
     let encrypted_msg =
         pgp::symm_encrypt_message(plain_text.as_bytes().to_vec(), signer_key, secret, true).await?;
@@ -108,7 +113,7 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
         "attacker@example.org",
         &secret,
         None,
-        Some("This sender is not allowed to encrypt with this secret key"),
+        Some("Unsigned message is not allowed to be encrypted with this shared secret"),
     )
     .await
 }
@@ -173,4 +178,19 @@ async fn test_qr_code_happy_path() -> Result<()> {
     test_security_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
 }
 
-// TODO test that it fails in the same way when secret isn't known
+/// Control: Test that there is a similar error when the shared secret is unknown
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unknown_secret() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    test_security_ex(
+        bob,
+        "alice@example.net",
+        "aaaaaa",
+        Some(alice),
+        Some("error"),
+    )
+    .await
+}
