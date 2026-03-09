@@ -59,7 +59,7 @@ pub(crate) async fn decrypt(
         tokio::task::spawn_blocking(move || -> Result<Message<'_>> {
             let plain = msg
                 .decrypt_with_session_key(psk)
-                .context("decrypt_with_keys")?;
+                .context("decrypt_with_session_key")?;
 
             let plain: Message<'static> = plain.decompress()?;
             Ok(plain)

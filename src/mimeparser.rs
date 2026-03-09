@@ -2638,4 +2638,4 @@ async fn handle_ndn(
 #[cfg(test)]
 mod mimeparser_tests;
 #[cfg(test)]
-mod security_tests;
+mod shared_secret_decryption_tests;

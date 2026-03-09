@@ -7,7 +7,7 @@ use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils::{TestContext, TestContextManager};
 use anyhow::Result;
 
-async fn test_security_ex(
+async fn test_shared_secret_decryption_ex(
     recipient_ctx: &TestContext,
     from_addr: &str,
     secret: &str,
@@ -33,11 +33,11 @@ async fn test_security_ex(
 
     let boundary = "boundary123";
     let rcvd_mail = format!(
-        "From: {from}\n\
-         To: recipient@example.net\n\
-         Subject: Hi\n\
+        "Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"{boundary}\"\n\
+         From: {from}\n\
+         To: \"hidden-recipients\": ;\n\
+         Subject: [...]\n\
          MIME-Version: 1.0\n\
-         Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\"; boundary=\"{boundary}\"\n\
          \n\
          --{boundary}\n\
          Content-Type: application/pgp-encrypted\n\
@@ -58,7 +58,7 @@ async fn test_security_ex(
     let res = MimeMessage::from_bytes(recipient_ctx, rcvd_mail.as_bytes()).await;
 
     if let Some(error_pattern) = expected_error {
-        let err_msg = res.unwrap_err().to_string();
+        let err_msg = format!("{:#}", res.unwrap_err());
         assert!(
             err_msg.contains(error_pattern),
             "Error '{error_pattern}' not found in '{err_msg}'",
@@ -86,7 +86,7 @@ async fn test_broadcast_security_attacker_signature() -> Result<()> {
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
-    test_security_ex(
+    test_shared_secret_decryption_ex(
         bob,
         &charlie_addr,
         &secret,
@@ -108,7 +108,7 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
 
-    test_security_ex(
+    test_shared_secret_decryption_ex(
         bob,
         "attacker@example.org",
         &secret,
@@ -126,7 +126,7 @@ async fn test_broadcast_security_happy_path() -> Result<()> {
 
     let alice_chat_id = crate::chat::create_broadcast(alice, "Channel".to_string()).await?;
     let qr = crate::securejoin::get_securejoin_qr(alice, Some(alice_chat_id)).await?;
-    let _bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
 
@@ -135,7 +135,7 @@ async fn test_broadcast_security_happy_path() -> Result<()> {
         .await?
         .unwrap();
 
-    test_security_ex(bob, &alice_addr, &secret, Some(alice), None).await
+    test_shared_secret_decryption_ex(bob, &alice_addr, &secret, Some(alice), None).await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -149,11 +149,12 @@ async fn test_qr_code_security() -> Result<()> {
     let Qr::AskVerifyContact { authcode, .. } = check_qr(alice, &qr).await? else {
         unreachable!()
     };
+    // Start a securejoin process, but don't finish it:
     join_securejoin(alice, &qr).await?;
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
-    test_security_ex(
+    test_shared_secret_decryption_ex(
         alice,
         &charlie_addr,
         &authcode,
@@ -173,9 +174,10 @@ async fn test_qr_code_happy_path() -> Result<()> {
     let Qr::AskVerifyContact { authcode, .. } = check_qr(bob, &qr).await? else {
         unreachable!()
     };
+    // Start a securejoin process, but don't finish it:
     join_securejoin(bob, &qr).await?;
 
-    test_security_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
+    test_shared_secret_decryption_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
 }
 
 /// Control: Test that there is a similar error when the shared secret is unknown
@@ -185,7 +187,7 @@ async fn test_unknown_secret() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    test_security_ex(
+    test_shared_secret_decryption_ex(
         bob,
         "alice@example.net",
         "aaaaaa",
