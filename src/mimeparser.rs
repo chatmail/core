@@ -547,9 +547,18 @@ impl MimeMessage {
         });
 
         if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
-            info!(context, "CHECKING signatures for expected_sender_fingerprint={}", expected_sender_fingerprint);
-            info!(context, "Signatures found: {:?}", signatures.keys().collect::<Vec<_>>());
+            info!(
+                context,
+                "CHECKING signatures for expected_sender_fingerprint={}",
+                expected_sender_fingerprint
+            );
+            info!(
+                context,
+                "Signatures found: {:?}",
+                signatures.keys().collect::<Vec<_>>()
+            );
             ensure!(
+                // TODO make sure that this is the same behavior as failing to decrypt
                 signatures.contains_key(&expected_sender_fingerprint.parse()?),
                 "This sender is not allowed to encrypt with this secret key"
             );
