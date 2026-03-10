@@ -386,7 +386,7 @@ impl MimeMessage {
 
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
-        let expected_sender_fingerprint;
+        let expected_sender_fingerprint: Option<String>;
 
         let (mail, is_encrypted) = match decrypt::decrypt(context, &mail).await {
             Ok(Some((mut msg, expected_sender_fp))) => {
@@ -549,12 +549,12 @@ impl MimeMessage {
                 "Unsigned message is not allowed to be encrypted with this shared secret"
             );
             ensure!(
-                signatures.contains_key(&expected_sender_fingerprint.parse()?),
-                "This sender is not allowed to encrypt with this secret key"
-            );
-            ensure!(
                 signatures.len() == 1,
                 "Too many signatures on symm-encrypted message"
+            );
+            ensure!(
+                signatures.contains_key(&expected_sender_fingerprint.parse()?),
+                "This sender is not allowed to encrypt with this secret key"
             );
         }
 

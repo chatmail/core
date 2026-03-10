@@ -107,7 +107,7 @@ async fn decrypt_session_key_symmetrically(
                 return Ok((plain_session_key, fingerprint));
             }
 
-            // Finally, try decrypting using own AUTH tokels
+            // Finally, try decrypting using own AUTH tokens
             // There can be a lot of AUTH tokens,
             // because a new one is generated every time a QR code is shown
             let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn)?;
