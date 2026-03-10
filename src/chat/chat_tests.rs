@@ -4701,9 +4701,10 @@ async fn test_sync_broadcast_and_send_message() -> Result<()> {
         vec![a2b_contact_id]
     );
 
-    // alice2's smeared clock may be behind alice's one, so "hi" from alice2 may appear before "You
-    // joined the channel." for bob.
-    SystemTime::shift(Duration::from_secs(1));
+    // alice2's smeared clock may be behind alice1's one, so we need to work around "hi" appearing
+    // before "You joined the channel." for bob. alice1 makes 3 more calls of
+    // create_smeared_timestamp() than alice2 does as of 2026-03-10.
+    SystemTime::shift(Duration::from_secs(3));
     tcm.section("Alice's second device sends a message to the channel");
     let sent_msg = alice2.send_text(a2_broadcast_id, "hi").await;
     let msg = bob.recv_msg(&sent_msg).await;
