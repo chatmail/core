@@ -1,7 +1,7 @@
 //! # Chat module.
 
 use std::cmp;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
 use std::io::Cursor;
 use std::marker::Sync;
@@ -5031,18 +5031,18 @@ async fn set_contacts_by_fingerprints(
         matches!(chat.typ, Chattype::Group | Chattype::OutBroadcast),
         "{id} is not a group or broadcast",
     );
-    let mut contacts = HashSet::new();
+    let mut contacts = BTreeSet::new();
     for (fingerprint, addr) in fingerprint_addrs {
         let contact = Contact::add_or_lookup_ex(context, "", addr, fingerprint, Origin::Hidden)
             .await?
             .0;
         contacts.insert(contact);
     }
-    let contacts_old = HashSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
+    let contacts_old = BTreeSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
     if contacts == contacts_old {
         return Ok(());
     }
-    context
+    let broadcast_contacts_added = context
         .sql
         .transaction(move |transaction| {
             // For broadcast channels, we only add members,
@@ -5059,12 +5059,31 @@ async fn set_contacts_by_fingerprints(
             let mut statement = transaction.prepare(
                 "INSERT OR IGNORE INTO chats_contacts (chat_id, contact_id) VALUES (?, ?)",
             )?;
+            let mut broadcast_contacts_added = Vec::new();
             for contact_id in &contacts {
-                statement.execute((id, contact_id))?;
+                if statement.execute((id, contact_id))? > 0 && chat.typ == Chattype::OutBroadcast {
+                    broadcast_contacts_added.push(*contact_id);
+                }
             }
-            Ok(())
+            Ok(broadcast_contacts_added)
         })
         .await?;
+    let timestamp = smeared_time(context);
+    for added_id in broadcast_contacts_added {
+        let msg = stock_str::msg_add_member_local(context, added_id, ContactId::UNDEFINED).await;
+        add_info_msg_with_cmd(
+            context,
+            id,
+            &msg,
+            SystemMessage::MemberAddedToGroup,
+            Some(timestamp),
+            timestamp,
+            None,
+            Some(ContactId::SELF),
+            Some(added_id),
+        )
+        .await?;
+    }
     context.emit_event(EventType::ChatModified(id));
     Ok(())
 }
