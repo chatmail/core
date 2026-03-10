@@ -675,24 +675,56 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_dont_decrypt_expensive_message_happy_path() -> Result<()> {
+        let s2k = StringToKey::Salted {
+            hash_alg: HashAlgorithm::default(),
+            salt: [1; 8],
+        };
+
+        test_dont_decrypt_expensive_message_ex(s2k, false, None).await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_dont_decrypt_expensive_message_bad_s2k() -> Result<()> {
+        let s2k = StringToKey::new_default(&mut thread_rng()); // Default is IteratedAndSalted
+
+        test_dont_decrypt_expensive_message_ex(s2k, false, Some("unsupported string2key algorithm"))
+            .await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_dont_decrypt_expensive_message_multiple_secrets() -> Result<()> {
+        let s2k = StringToKey::Salted {
+            hash_alg: HashAlgorithm::default(),
+            salt: [1; 8],
+        };
+
+        // This error message is actually not great,
+        // but grepping for it will lead to the correct code
+        test_dont_decrypt_expensive_message_ex(s2k, true, Some("decrypt_with_keys: missing key"))
+            .await
+    }
+
     /// Test that we don't try to decrypt a message
     /// that is symmetrically encrypted
     /// with an expensive string2key algorithm
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_dont_decrypt_expensive_message() -> Result<()> {
+    /// or multiple shared secrets.
+    /// This is to prevent possible DOS attacks on the app.
+    async fn test_dont_decrypt_expensive_message_ex(
+        s2k: StringToKey,
+        encrypt_twice: bool,
+        expected_error_msg: Option<&str>,
+    ) -> Result<()> {
         let mut tcm = TestContextManager::new();
         let bob = &tcm.bob().await;
 
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
 
-        // Create a symmetrically encrypted message
-        // with an IteratedAndSalted string2key algorithm:
-
         let shared_secret_pw = Password::from(shared_secret.to_string());
         let msg = MessageBuilder::from_bytes("", plain);
         let mut rng = thread_rng();
-        let s2k = StringToKey::new_default(&mut rng); // Default is IteratedAndSalted
 
         let mut msg = msg.seipd_v2(
             &mut rng,
@@ -700,22 +732,28 @@ mod tests {
             AeadAlgorithm::Ocb,
             ChunkSize::C8KiB,
         );
-        msg.encrypt_with_password(&mut rng, s2k, &shared_secret_pw)?;
+        msg.encrypt_with_password(&mut rng, s2k.clone(), &shared_secret_pw)?;
+        if encrypt_twice {
+            msg.encrypt_with_password(&mut rng, s2k, &shared_secret_pw)?;
+        }
 
         let ctext = msg.to_armored_string(&mut rng, Default::default())?;
 
         // Trying to decrypt it should fail with a helpful error message:
 
         let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let error = decrypt_bytes(
+        let res = decrypt_bytes(
             ctext.into(),
             &bob_private_keyring,
             &[shared_secret.to_string()],
         )
-        .await
-        .unwrap_err();
+        .await;
 
-        assert_eq!(format!("{error:#}"), "unsupported string2key algorithm");
+        if let Some(expected_error_msg) = expected_error_msg {
+            assert_eq!(format!("{:#}", res.unwrap_err()), expected_error_msg);
+        } else {
+            res.unwrap();
+        }
 
         Ok(())
     }

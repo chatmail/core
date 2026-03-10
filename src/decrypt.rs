@@ -50,7 +50,7 @@ pub(crate) async fn decrypt(
     let plain = if let Message::Encrypted { esk, .. } = &*msg
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
-        check_symmetric_encryption(&esk).map_err(anyhow::Error::msg)?;
+        check_symmetric_encryption(esk).map_err(anyhow::Error::msg)?;
         let (psk, fingerprint) = decrypt_session_key_symmetrically(context, esk)
             .await
             .context("decrypt_session_key_symmetrically")?;
