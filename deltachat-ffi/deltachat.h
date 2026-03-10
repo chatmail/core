@@ -6755,6 +6755,7 @@ void dc_event_unref(dc_event_t* event);
  * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
+ * @param data2 (int) 1 if the call was accepted from this device (process).
  */
  #define DC_EVENT_INCOMING_CALL_ACCEPTED                  2560
 

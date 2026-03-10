@@ -397,6 +397,8 @@ pub enum EventType {
         msg_id: MsgId,
         /// ID of the chat which the message belongs to.
         chat_id: ChatId,
+        /// The call was accepted from this device (process).
+        from_this_device: bool,
     },
 
     /// Outgoing call accepted.

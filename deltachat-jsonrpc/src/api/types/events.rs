@@ -441,6 +441,8 @@ pub enum EventType {
         msg_id: u32,
         /// ID of the chat which the message belongs to.
         chat_id: u32,
+        /// The call was accepted from this device (process).
+        from_this_device: bool,
     },
 
     /// Outgoing call accepted.
@@ -634,9 +636,14 @@ impl From<CoreEventType> for EventType {
                 place_call_info,
                 has_video,
             },
-            CoreEventType::IncomingCallAccepted { msg_id, chat_id } => IncomingCallAccepted {
+            CoreEventType::IncomingCallAccepted {
+                msg_id,
+                chat_id,
+                from_this_device,
+            } => IncomingCallAccepted {
                 msg_id: msg_id.to_u32(),
                 chat_id: chat_id.to_u32(),
+                from_this_device,
             },
             CoreEventType::OutgoingCallAccepted {
                 msg_id,
