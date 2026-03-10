@@ -30,7 +30,7 @@ use crate::token::Namespace;
 /// If the message was asymmetrically encrypted, returns `Ok((decrypted message, None))`.
 ///
 /// If the message was symmetrically encrypted, returns `Ok((decrypted message, Some(fingerprint)))`,
-/// where `fingerprint` denotes which contact is expected to send encrypted with this symmetric secret.
+/// where `fingerprint` denotes which contact is allowed to send encrypted with this symmetric secret.
 /// If the message is not signed by `fingerprint`, it must be dropped.
 ///
 /// Otherwise, Eve could send a message to Alice

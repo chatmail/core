@@ -7,6 +7,20 @@ use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils::{TestContext, TestContextManager};
 use anyhow::Result;
 
+/// Tests that the following attack isn't possible:
+///
+/// Eve is subscribed to a channel and wants to know whether Alice is also subscribed to it.
+/// To achieve this, Eve sends a message to Alice
+/// encrypted with the symmetric secret of this broadcast channel.
+///
+/// If Alice sends an answer (or read receipt),
+/// then Eve knows that Alice is in the broadcast channel.
+///
+/// A similar attack would be possible with auth tokens
+/// that are also used to symmetrically encrypt messages.
+///
+/// To defeat this, a message that was unexpectedly
+/// encrypted with a symmetric secret must be dropped.
 async fn test_shared_secret_decryption_ex(
     recipient_ctx: &TestContext,
     from_addr: &str,
@@ -102,7 +116,7 @@ async fn test_broadcast_security_no_signature() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = crate::chat::create_broadcast(alice, "Channel".to_string()).await?;
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
     let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
@@ -124,8 +138,8 @@ async fn test_broadcast_security_happy_path() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let alice_chat_id = crate::chat::create_broadcast(alice, "Channel".to_string()).await?;
-    let qr = crate::securejoin::get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
     tcm.exec_securejoin_qr(bob, alice, &qr).await;
 
     let secret = load_broadcast_secret(alice, alice_chat_id).await?.unwrap();
@@ -145,7 +159,7 @@ async fn test_qr_code_security() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await; // Attacker
 
-    let qr = crate::securejoin::get_securejoin_qr(bob, None).await?;
+    let qr = get_securejoin_qr(bob, None).await?;
     let Qr::AskVerifyContact { authcode, .. } = check_qr(alice, &qr).await? else {
         unreachable!()
     };
@@ -170,7 +184,7 @@ async fn test_qr_code_happy_path() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
 
-    let qr = crate::securejoin::get_securejoin_qr(alice, None).await?;
+    let qr = get_securejoin_qr(alice, None).await?;
     let Qr::AskVerifyContact { authcode, .. } = check_qr(bob, &qr).await? else {
         unreachable!()
     };
