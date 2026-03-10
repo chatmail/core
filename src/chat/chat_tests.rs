@@ -2997,18 +2997,41 @@ async fn test_broadcast_recipients_sync1() -> Result<()> {
     alice2.recv_msg_trash(&request_with_auth).await;
 
     let member_added = alice1.pop_sent_msg().await;
-    let a2_member_added = alice2.recv_msg(&member_added).await;
+    let a2_charlie_added = alice2.recv_msg(&member_added).await;
     let _c_member_added = charlie.recv_msg(&member_added).await;
+    let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
+    assert_eq!(a2_chatlist.get_msg_id(0)?.unwrap(), a2_charlie_added.id);
 
     // Alice1 will now sync the full member list to Alice2:
     sync(alice1, alice2).await;
-    let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
-    assert_eq!(a2_chatlist.get_msg_id(0)?.unwrap(), a2_member_added.id);
-
     let a2_bob_contact = alice2.add_or_lookup_contact_id(bob).await;
     let a2_charlie_contact = alice2.add_or_lookup_contact_id(charlie).await;
+    let a2_chatlist = Chatlist::try_load(alice2, 0, Some("Channel"), None).await?;
+    let msg_id = a2_chatlist.get_msg_id(0)?.unwrap();
+    let a2_bob_added = Message::load_from_db(alice2, msg_id).await?;
+    assert_ne!(a2_bob_added.id, a2_charlie_added.id);
+    assert_eq!(
+        a2_bob_added.text,
+        stock_str::msg_add_member_local(alice2, a2_bob_contact, ContactId::UNDEFINED).await
+    );
+    assert_eq!(a2_bob_added.from_id, ContactId::SELF);
+    assert_eq!(
+        a2_bob_added.param.get_cmd(),
+        SystemMessage::MemberAddedToGroup
+    );
+    assert_eq!(
+        ContactId::new(
+            a2_bob_added
+                .param
+                .get_int(Param::ContactAddedRemoved)
+                .unwrap()
+                .try_into()
+                .unwrap()
+        ),
+        a2_bob_contact
+    );
 
-    let a2_chat_members = get_chat_contacts(alice2, a2_member_added.chat_id).await?;
+    let a2_chat_members = get_chat_contacts(alice2, a2_charlie_added.chat_id).await?;
     assert!(a2_chat_members.contains(&a2_bob_contact));
     assert!(a2_chat_members.contains(&a2_charlie_contact));
     assert_eq!(a2_chat_members.len(), 2);
