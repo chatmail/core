@@ -129,7 +129,15 @@ async fn accept_call() -> Result<CallSetup> {
     );
     assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob.evtracker
-        .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
+        .get_matching(|evt| {
+            matches!(
+                evt,
+                EventType::IncomingCallAccepted {
+                    from_this_device: true,
+                    ..
+                }
+            )
+        })
         .await;
     let sent2 = bob.pop_sent_msg().await;
     let info = bob
@@ -143,7 +151,15 @@ async fn accept_call() -> Result<CallSetup> {
     bob2.recv_msg_trash(&sent2).await;
     assert_text(&bob, bob_call.id, "Incoming video call").await?;
     bob2.evtracker
-        .get_matching(|evt| matches!(evt, EventType::IncomingCallAccepted { .. }))
+        .get_matching(|evt| {
+            matches!(
+                evt,
+                EventType::IncomingCallAccepted {
+                    from_this_device: false,
+                    ..
+                }
+            )
+        })
         .await;
     let info = bob2
         .load_call_by_id(bob2_call.id)

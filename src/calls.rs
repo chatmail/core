@@ -266,6 +266,7 @@ impl Context {
         self.emit_event(EventType::IncomingCallAccepted {
             msg_id: call.msg.id,
             chat_id: call.msg.chat_id,
+            from_this_device: true,
         });
         self.emit_msgs_changed(call.msg.chat_id, call_id);
         Ok(())
@@ -432,6 +433,7 @@ impl Context {
                         self.emit_event(EventType::IncomingCallAccepted {
                             msg_id: call.msg.id,
                             chat_id: call.msg.chat_id,
+                            from_this_device: false,
                         });
                     } else {
                         let accept_call_info = mime_message
