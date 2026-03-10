@@ -50,7 +50,7 @@ pub(crate) async fn decrypt(
     let plain = if let Message::Encrypted { esk, .. } = &*msg
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
-        check_symmetric_encryption(&msg).map_err(anyhow::Error::msg)?;
+        check_symmetric_encryption(&esk).map_err(anyhow::Error::msg)?;
         let (psk, fingerprint) = decrypt_session_key_symmetrically(context, esk)
             .await
             .context("decrypt_session_key_symmetrically")?;
@@ -217,20 +217,8 @@ fn try_decrypt_with_auth_token(
 /// In order to prevent this, we do not try to symmetrically decrypt messages
 /// that use a string2key algorithm other than 'Salted'.
 pub(crate) fn check_symmetric_encryption(
-    msg: &Message<'_>,
+    esk: &SymKeyEncryptedSessionKey,
 ) -> std::result::Result<(), &'static str> {
-    let Message::Encrypted { esk, .. } = msg else {
-        return Err("not encrypted");
-    };
-
-    if esk.len() > 1 {
-        return Err("too many esks");
-    }
-
-    let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..] else {
-        return Err("not symmetrically encrypted");
-    };
-
     match esk.s2k() {
         Some(StringToKey::Salted { .. }) => Ok(()),
         _ => Err("unsupported string2key algorithm"),
