@@ -435,6 +435,9 @@ https://delta.chat/donate"))]
 
     #[strum(props(fallback = "Chat description changed by %1$s."))]
     MsgChatDescriptionChangedBy = 241,
+
+    #[strum(props(fallback = "Messages are end-to-end encrypted."))]
+    MessagesAreE2ee = 242,
 }
 
 impl StockMessage {
@@ -1068,9 +1071,14 @@ pub(crate) async fn error_no_network(context: &Context) -> String {
     translated(context, StockMessage::ErrorNoNetwork).await
 }
 
-/// Stock string: `Messages are end-to-end encrypted.`
-pub(crate) async fn messages_e2e_encrypted(context: &Context) -> String {
+/// Stock string: `Messages are end-to-end encrypted.`, used in info-messages, UI may add smth. as `Tap to learn more.`
+pub(crate) async fn messages_e2ee_info_msg(context: &Context) -> String {
     translated(context, StockMessage::ChatProtectionEnabled).await
+}
+
+/// Stock string: `Messages are end-to-end encrypted.`
+pub(crate) async fn messages_are_e2ee(context: &Context) -> String {
+    translated(context, StockMessage::MessagesAreE2ee).await
 }
 
 /// Stock string: `Reply`.

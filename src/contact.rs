@@ -1344,7 +1344,7 @@ WHERE addr=?
         let fingerprint_other = fingerprint_other.to_string();
 
         let stock_message = if contact.public_key(context).await?.is_some() {
-            stock_str::messages_e2e_encrypted(context).await
+            stock_str::messages_are_e2ee(context).await
         } else {
             stock_str::encr_none(context).await
         };

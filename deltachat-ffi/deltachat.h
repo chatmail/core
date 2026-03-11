@@ -7496,7 +7496,7 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Messages are end-to-end encrypted."
 ///
-/// Used in info messages.
+/// Used in info-messages, UI may add smth. as "Tap to learn more."
 #define DC_STR_CHAT_PROTECTION_ENABLED 170
 
 /// "Others will only see this group after you sent a first message."
@@ -7629,6 +7629,11 @@ void dc_event_unref(dc_event_t* event);
 
 /// "Chat description changed by %1$s."
 #define DC_STR_GROUP_DESCRIPTION_CHANGED_BY_OTHER 241
+
+/// "Messages are end-to-end encrypted."
+///
+/// Used when creating text for the "Encryption Info" dialogs.
+#define DC_STR_MESSAGES_ARE_E2EE 242
 
 /**
  * @}

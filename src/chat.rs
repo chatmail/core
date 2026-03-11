@@ -475,7 +475,7 @@ impl ChatId {
 
     /// Adds message "Messages are end-to-end encrypted".
     pub(crate) async fn add_e2ee_notice(self, context: &Context, timestamp: i64) -> Result<()> {
-        let text = stock_str::messages_e2e_encrypted(context).await;
+        let text = stock_str::messages_e2ee_info_msg(context).await;
         add_info_msg_with_cmd(
             context,
             self,
@@ -1157,7 +1157,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             return Ok(stock_str::encr_none(context).await);
         }
 
-        let mut ret = stock_str::messages_e2e_encrypted(context).await + "\n";
+        let mut ret = stock_str::messages_are_e2ee(context).await + "\n";
 
         for &contact_id in get_chat_contacts(context, self)
             .await?
