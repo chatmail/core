@@ -391,6 +391,12 @@ https://delta.chat/donate"))]
                              Waiting for the device of %2$s to reply…"))]
     SecureJoinBroadcastStarted = 203,
 
+    #[strum(props(fallback = "Channel name changed from \"%1$s\" to \"%2$s\"."))]
+    MsgBroadcastNameChanged = 204,
+
+    #[strum(props(fallback = "Channel image changed."))]
+    MsgBroadcastImgChanged = 205,
+
     #[strum(props(
         fallback = "The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!"
     ))]
@@ -706,6 +712,19 @@ pub(crate) async fn secure_join_broadcast_started(
     } else {
         format!("secure_join_started: unknown contact {inviter_contact_id}")
     }
+}
+
+/// Stock string: `Channel name changed from "1%s" to "2$s".`
+pub(crate) async fn msg_broadcast_name_changed(context: &Context, from: &str, to: &str) -> String {
+    translated(context, StockMessage::MsgBroadcastNameChanged)
+        .await
+        .replace1(from)
+        .replace2(to)
+}
+
+/// Stock string `Channel image changed.`
+pub(crate) async fn msg_broadcast_img_changed(context: &Context) -> String {
+    translated(context, StockMessage::MsgBroadcastImgChanged).await
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.

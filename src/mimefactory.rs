@@ -1466,7 +1466,7 @@ impl MimeFactory {
                     }
                 }
                 SystemMessage::GroupNameChanged => {
-                    placeholdertext = Some("Group name changed.".to_string());
+                    placeholdertext = Some("Chat name changed.".to_string());
                     let old_name = msg.param.get(Param::Arg).unwrap_or_default().to_string();
                     headers.push((
                         "Chat-Group-Name-Changed",
@@ -1483,7 +1483,7 @@ impl MimeFactory {
                     ));
                 }
                 SystemMessage::GroupImageChanged => {
-                    placeholdertext = Some("Group image changed.".to_string());
+                    placeholdertext = Some("Chat image changed.".to_string());
                     headers.push((
                         "Chat-Content",
                         mail_builder::headers::text::Text::new("group-avatar-changed").into(),
