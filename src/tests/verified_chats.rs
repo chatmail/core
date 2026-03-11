@@ -195,7 +195,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     .await?;
 
     let msg0 = get_chat_msg(&alice, alice_chat.id, 0, 1).await;
-    let enabled = stock_str::messages_e2e_encrypted(&alice).await;
+    let enabled = stock_str::messages_e2ee_info_msg(&alice).await;
     assert_eq!(msg0.text, enabled);
     assert_eq!(msg0.param.get_cmd(), SystemMessage::ChatE2ee);
 
