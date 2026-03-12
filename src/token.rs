@@ -66,22 +66,6 @@ pub async fn lookup(
         .await
 }
 
-/// Looks up all tokens from the given namespace,
-/// so that they can be used for decrypting a symmetrically-encrypted message.
-///
-/// The most-recently saved tokens are returned first.
-/// This improves performance when Bob scans a QR code that was just created.
-pub async fn lookup_all(context: &Context, namespace: Namespace) -> Result<Vec<String>> {
-    context
-        .sql
-        .query_map_vec(
-            "SELECT token FROM tokens WHERE namespc=? ORDER BY id DESC",
-            (namespace,),
-            |row| Ok(row.get(0)?),
-        )
-        .await
-}
-
 pub async fn lookup_or_new(
     context: &Context,
     namespace: Namespace,

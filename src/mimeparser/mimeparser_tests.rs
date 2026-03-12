@@ -2171,9 +2171,6 @@ async fn test_load_shared_secrets_with_legacy_state() -> Result<()> {
         ()
     ).await?;
 
-    // This call must not fail:
-    load_shared_secrets(alice).await.unwrap();
-
     let qr: QrInvite = alice
         .sql
         .query_get_value("SELECT invite FROM bobstate", ())

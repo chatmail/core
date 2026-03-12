@@ -6,7 +6,7 @@ use std::path::Path;
 use std::str;
 use std::str::FromStr;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, ensure};
 use deltachat_contact_tools::{addr_cmp, addr_normalize, sanitize_bidi_characters};
 use deltachat_derive::{FromSql, ToSql};
 use format_flowed::unformat_flowed;
@@ -18,14 +18,15 @@ use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::ChatId;
 use crate::config::Config;
+use crate::constants;
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::decrypt::{get_encrypted_pgp_message, validate_detached_signature};
+use crate::decrypt::{self, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::download::PostMsgMetadata;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
-use crate::key::{self, DcKey, Fingerprint, SignedPublicKey, load_self_secret_keyring};
+use crate::key::{self, DcKey, Fingerprint, SignedPublicKey};
 use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_failed};
 use crate::param::{Param, Params};
@@ -35,7 +36,6 @@ use crate::tools::{
     get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
 };
 use crate::{chatlist_events, location, tools};
-use crate::{constants, token};
 
 /// Public key extracted from `Autocrypt-Gossip`
 /// header with associated information.
@@ -363,7 +363,6 @@ impl MimeMessage {
         Self::remove_secured_headers(&mut headers, &mut headers_removed, encrypted);
 
         let mut from = from.context("No from in message")?;
-        let private_keyring = load_self_secret_keyring(context).await?;
 
         let dkim_results = handle_authres(context, &mail, &from.addr).await?;
 
@@ -385,24 +384,12 @@ impl MimeMessage {
             PreMessageMode::None
         };
 
-        let encrypted_pgp_message = get_encrypted_pgp_message(&mail)?;
-
-        let secrets: Vec<String>;
-        if let Some(e) = &encrypted_pgp_message
-            && crate::pgp::check_symmetric_encryption(e).is_ok()
-        {
-            secrets = load_shared_secrets(context).await?;
-        } else {
-            secrets = vec![];
-        }
-
         let mail_raw; // Memory location for a possible decrypted message.
         let decrypted_msg; // Decrypted signed OpenPGP message.
+        let expected_sender_fingerprint: Option<String>;
 
-        let (mail, is_encrypted) = match tokio::task::block_in_place(|| {
-            encrypted_pgp_message.map(|e| crate::pgp::decrypt(e, &private_keyring, &secrets))
-        }) {
-            Some(Ok(mut msg)) => {
+        let (mail, is_encrypted) = match decrypt::decrypt(context, &mail).await {
+            Ok(Some((mut msg, expected_sender_fp))) => {
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 
                 let decrypted_mail = mailparse::parse_mail(&mail_raw)?;
@@ -429,16 +416,19 @@ impl MimeMessage {
                     aheader_values = protected_aheader_values;
                 }
 
+                expected_sender_fingerprint = expected_sender_fp;
                 (Ok(decrypted_mail), true)
             }
-            None => {
+            Ok(None) => {
                 mail_raw = Vec::new();
                 decrypted_msg = None;
+                expected_sender_fingerprint = None;
                 (Ok(mail), false)
             }
-            Some(Err(err)) => {
+            Err(err) => {
                 mail_raw = Vec::new();
                 decrypted_msg = None;
+                expected_sender_fingerprint = None;
                 warn!(context, "decryption failed: {:#}", err);
                 (Err(err), false)
             }
@@ -552,6 +542,22 @@ impl MimeMessage {
             signatures.extend(signatures_detached);
             content
         });
+
+        if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
+            ensure!(
+                !signatures.is_empty(),
+                "Unsigned message is not allowed to be encrypted with this shared secret"
+            );
+            ensure!(
+                signatures.len() == 1,
+                "Too many signatures on symm-encrypted message"
+            );
+            ensure!(
+                signatures.contains_key(&expected_sender_fingerprint.parse()?),
+                "This sender is not allowed to encrypt with this secret key"
+            );
+        }
+
         if let (Ok(mail), true) = (mail, is_encrypted) {
             if !signatures.is_empty() {
                 // Unsigned "Subject" mustn't be prepended to messages shown as encrypted
@@ -2110,35 +2116,6 @@ impl MimeMessage {
     }
 }
 
-/// Loads all the shared secrets
-/// that will be tried to decrypt a symmetrically-encrypted message
-async fn load_shared_secrets(context: &Context) -> Result<Vec<String>> {
-    // First, try decrypting using the bobstate,
-    // because usually there will only be 1 or 2 of it,
-    // so, it should be fast
-    let mut secrets: Vec<String> = context
-        .sql
-        .query_map_vec("SELECT invite FROM bobstate", (), |row| {
-            let invite: crate::securejoin::QrInvite = row.get(0)?;
-            Ok(invite.authcode().to_string())
-        })
-        .await?;
-    // Then, try decrypting using broadcast secrets
-    secrets.extend(
-        context
-            .sql
-            .query_map_vec("SELECT secret FROM broadcast_secrets", (), |row| {
-                let secret: String = row.get(0)?;
-                Ok(secret)
-            })
-            .await?,
-    );
-    // Finally, try decrypting using AUTH tokens
-    // There can be a lot of AUTH tokens, because a new one is generated every time a QR code is shown
-    secrets.extend(token::lookup_all(context, token::Namespace::Auth).await?);
-    Ok(secrets)
-}
-
 fn rm_legacy_display_elements(text: &str) -> String {
     let mut res = None;
     for l in text.lines() {
@@ -2656,3 +2633,5 @@ async fn handle_ndn(
 
 #[cfg(test)]
 mod mimeparser_tests;
+#[cfg(test)]
+mod shared_secret_decryption_tests;

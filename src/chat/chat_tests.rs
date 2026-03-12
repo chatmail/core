@@ -3866,14 +3866,20 @@ async fn test_only_broadcast_owner_can_send_2() -> Result<()> {
         .self_fingerprint
         .take();
 
-    tcm.section(
-        "Alice sends a message, which is not put into the broadcast chat but into a 1:1 chat",
-    );
+    tcm.section("Alice sends a message, which is trashed");
     let sent = alice.send_text(alice_broadcast_id, "Hi").await;
-    let rcvd = bob.recv_msg(&sent).await;
-    assert_eq!(rcvd.text, "Hi");
-    let bob_alice_chat_id = bob.get_chat(alice).await.id;
-    assert_eq!(rcvd.chat_id, bob_alice_chat_id);
+    bob.recv_msg_trash(&sent).await;
+    let EventType::Warning(warning) = bob
+        .evtracker
+        .get_matching(|ev| matches!(ev, EventType::Warning(_)))
+        .await
+    else {
+        unreachable!()
+    };
+    assert!(
+        warning.contains("This sender is not allowed to encrypt with this secret key"),
+        "Wrong warning: {warning}"
+    );
 
     Ok(())
 }
@@ -3942,6 +3948,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     let grpid = "grpid";
 
     let alice_bob_contact_id = alice.add_or_lookup_contact_id(bob).await;
+    let bob_alice_contact_id = bob.add_or_lookup_contact_id(alice).await;
 
     tcm.section("Create a broadcast channel with Bob, and send a message");
     let alice_chat_id = create_out_broadcast_ex(
@@ -3965,6 +3972,7 @@ async fn test_encrypt_decrypt_broadcast() -> Result<()> {
     )
     .await?;
     save_broadcast_secret(bob, bob_chat_id, secret).await?;
+    add_to_chat_contacts_table(bob, time(), bob_chat_id, &[bob_alice_contact_id]).await?;
 
     let sent = alice
         .send_text(alice_chat_id, "Symmetrically encrypted message")
