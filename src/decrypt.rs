@@ -42,7 +42,7 @@ pub(crate) async fn decrypt(
     mail: &mailparse::ParsedMail<'_>,
 ) -> Result<Option<(Message<'static>, Option<String>)>> {
     // `pgp::composed::Message` is huge (>4kb), so, make sure that it is in a Box when held over an await point
-    let Some(msg) = get_encrypted_pgp_message(mail)? else {
+    let Some(msg) = get_encrypted_pgp_message_boxed(mail)? else {
         return Ok(None);
     };
     let expected_sender_fingerprint: Option<String>;
@@ -90,9 +90,10 @@ async fn decrypt_session_key_symmetrically(
     context: &Context,
     esk: &SymKeyEncryptedSessionKey,
 ) -> Result<(PlainSessionKey, Option<String>)> {
+    let query_only = true;
     context
         .sql
-        .call(true, |conn| {
+        .call(query_only, |conn| {
             // First, try decrypting using AUTH tokens from scanned QR codes, stored in the bobstate,
             // because usually there will only be 1 or 2 of it, so, it should be fast
             let res: Option<(PlainSessionKey, String)> = try_decrypt_with_bobstate(esk, conn)?;
@@ -149,8 +150,9 @@ fn try_decrypt_with_broadcast_secret(
             row.get(0)
         })?;
     let fp: Option<String> = if chat_type == Chattype::OutBroadcast {
-        // Just allow everyone to send encrypted to OutBroadcast secret
-        // An attacker who knows the secret will also know who owns it
+        // An attacker who knows the secret will also know who owns it,
+        // and it's easiest code-wise to just return None here.
+        // But we could alternatively return the self fingerprint here
         None
     } else if chat_type == Chattype::InBroadcast {
         let contact_id: ContactId = conn
@@ -210,7 +212,7 @@ fn try_decrypt_with_auth_token(
 /// Returns Ok(()) if we want to try symmetrically decrypting the message,
 /// and Err with a reason if symmetric decryption should not be tried.
 ///
-/// A DOS attacker could send a message with a lot of encrypted session keys,
+/// A DoS attacker could send a message with a lot of encrypted session keys,
 /// all of which use a very hard-to-compute string2key algorithm.
 /// We would then try to decrypt all of the encrypted session keys
 /// with all of the known shared secrets.
@@ -228,7 +230,7 @@ pub(crate) fn check_symmetric_encryption(
 /// Turns a [`ParsedMail`] into [`pgp::composed::Message`].
 /// [`pgp::composed::Message`] is huge (over 4kb),
 /// so, it is put on the heap using [`Box`].
-pub fn get_encrypted_pgp_message<'a>(
+pub fn get_encrypted_pgp_message_boxed<'a>(
     mail: &'a ParsedMail<'a>,
 ) -> Result<Option<Box<Message<'static>>>> {
     let Some(encrypted_data_part) = get_encrypted_mime(mail) else {
