@@ -2596,8 +2596,12 @@ async fn handle_mdn(
             (msg_id, from_id, timestamp_sent),
         )
         .await?;
+    context.emit_event(EventType::MsgRead {
+        chat_id,
+        msg_id,
+        first_time: !has_mdns,
+    });
     if !has_mdns {
-        context.emit_event(EventType::MsgRead { chat_id, msg_id });
         // note(treefit): only matters if it is the last message in chat (but probably too expensive to check, debounce also solves it)
         chatlist_events::emit_chatlist_item_changed(context, chat_id);
     }
