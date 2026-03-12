@@ -225,6 +225,9 @@ def test_transport_synchronization(acfactory, log) -> None:
     log.section("ac1 changes the primary transport")
     ac1.set_config("configured_addr", transport3["addr"])
 
+    # One event for updated `add_timestamp` of the new primary transport,
+    # one event for the `configured_addr` update.
+    ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     [transport1, transport3] = ac1_clone.list_transports()
     assert ac1_clone.get_config("configured_addr") == addr3

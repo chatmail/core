@@ -19,7 +19,7 @@ use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::provider::Provider;
 use crate::sync::{self, Sync::*, SyncData};
-use crate::tools::get_abs_path;
+use crate::tools::{get_abs_path, time};
 use crate::transport::{ConfiguredLoginParam, add_pseudo_transport, send_sync_transports};
 use crate::{constants, stats};
 
@@ -827,6 +827,22 @@ impl Context {
                                 "UPDATE config SET value=? WHERE keyname='configured_addr'",
                                 (addr,),
                             )?;
+
+                            // Update the timestamp for the primary transport
+                            // so it becomes the first in `get_all_self_addrs()` list
+                            // and the list of relays distributed in the public key.
+                            // This ensures that messages will be sent
+                            // to the primary relay by the contacts
+                            // and will be fetched in background_fetch()
+                            // which only fetches from the primary transport.
+                            transaction
+                                .execute(
+                                    "UPDATE transports SET add_timestamp=? WHERE addr=?",
+                                    (time(), addr),
+                                )
+                                .context(
+                                    "Failed to update add_timestamp for the new primary transport",
+                                )?;
 
                             // Clean up SMTP and IMAP APPEND queue.
                             //
