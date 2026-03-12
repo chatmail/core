@@ -72,14 +72,16 @@ async fn test_shared_secret_decryption_ex(
         encrypted_msg = encrypted_msg
     );
 
-    let res = receive_imf(recipient_ctx, rcvd_mail.as_bytes(), false).await?;
+    let res = receive_imf(recipient_ctx, rcvd_mail.as_bytes(), false)
+        .await
+        .expect("If receive_imf() adds an error here, then Bob may be notified about the error and tell the attacker, leaking that he knows the secret");
 
     if let Some(error_pattern) = expected_error {
         assert!(res.is_none_or(|msg| msg.chat_id == DC_CHAT_ID_TRASH));
         assert_eq!(
             previous_highest_msg_id,
             get_highest_msg_id(recipient_ctx).await,
-            "receive_imf() must not add any message. Otherwise, Bob may send something about an error to the attacker and leak that he is in the channel this way"
+            "receive_imf() must not add any message. Otherwise, Bob may send something about an error to the attacker, leaking that he knows the secret"
         );
         let EventType::Warning(warning) = recipient_ctx
             .evtracker
