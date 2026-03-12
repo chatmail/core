@@ -2413,8 +2413,9 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         let compress = false;
         // Only sign the message if we attach the pubkey.
         let sign = attach_self_pubkey;
+        let shared_secret = format!("securejoin/{auth}");
         let encrypted = encrypt_helper
-            .encrypt_symmetrically(context, auth, message, compress, sign)
+            .encrypt_symmetrically(context, &shared_secret, message, compress, sign)
             .await?;
 
         wrap_encrypted_part(encrypted)

@@ -133,7 +133,8 @@ fn try_decrypt_with_bobstate(
     while let Some(row) = rows.next()? {
         let invite: crate::securejoin::QrInvite = row.get(0)?;
         let authcode = invite.authcode().to_string();
-        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(authcode)) {
+        let shared_secret = format!("securejoin/{authcode}");
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(shared_secret)) {
             let fingerprint = invite.fingerprint().hex();
             return Ok(Some((psk, fingerprint)));
         }
@@ -205,7 +206,8 @@ fn try_decrypt_with_auth_token(
     let mut rows = stmt.query((Namespace::Auth,))?;
     while let Some(row) = rows.next()? {
         let token: String = row.get(0)?;
-        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(token)) {
+        let shared_secret = format!("securejoin/{token}");
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(shared_secret)) {
             return Ok(Some(psk));
         }
     }
