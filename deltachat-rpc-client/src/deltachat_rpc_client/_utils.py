@@ -1,4 +1,5 @@
 import argparse
+import functools
 import os
 import re
 import sys
@@ -186,6 +187,7 @@ class futuremethod:  # noqa: N801
     """Decorator for async methods."""
 
     def __init__(self, func):
+        functools.update_wrapper(self, func)
         self._func = func
 
     def __get__(self, instance, owner=None):
