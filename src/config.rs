@@ -944,12 +944,18 @@ impl Context {
         Ok(())
     }
 
-    /// Returns the primary self address followed by all secondary ones.
+    /// Returns all self addresses, newest first.
     pub(crate) async fn get_all_self_addrs(&self) -> Result<Vec<String>> {
-        let primary_addrs = self.get_config(Config::ConfiguredAddr).await?.into_iter();
-        let secondary_addrs = self.get_secondary_self_addrs().await?.into_iter();
-
-        Ok(primary_addrs.chain(secondary_addrs).collect())
+        self.sql
+            .query_map_vec(
+                "SELECT addr FROM transports ORDER BY add_timestamp DESC",
+                (),
+                |row| {
+                    let addr: String = row.get(0)?;
+                    Ok(addr)
+                },
+            )
+            .await
     }
 
     /// Returns all secondary self addresses.
