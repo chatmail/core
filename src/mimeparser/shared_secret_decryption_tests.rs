@@ -1,8 +1,10 @@
 use super::*;
 use crate::chat::{create_broadcast, load_broadcast_secret};
-use crate::key::load_self_secret_keyring;
+use crate::constants::DC_CHAT_ID_TRASH;
+use crate::key::load_self_secret_key;
 use crate::pgp;
 use crate::qr::{Qr, check_qr};
+use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
 use crate::test_utils::{TestContext, TestContextManager};
 use anyhow::Result;
@@ -30,9 +32,10 @@ async fn test_shared_secret_decryption_ex(
 ) -> Result<()> {
     let plain_body = "Hello, this is a secure message.";
     let plain_text = format!("Content-Type: text/plain; charset=utf-8\r\n\r\n{plain_body}");
+    let previous_highest_msg_id = get_highest_msg_id(recipient_ctx).await;
 
     let signer_key = if let Some(signer_ctx) = signer_ctx {
-        Some(load_self_secret_keyring(signer_ctx).await?.remove(0))
+        Some(load_self_secret_key(signer_ctx).await?)
     } else {
         None
     };
@@ -69,20 +72,43 @@ async fn test_shared_secret_decryption_ex(
         encrypted_msg = encrypted_msg
     );
 
-    let res = MimeMessage::from_bytes(recipient_ctx, rcvd_mail.as_bytes()).await;
+    let res = receive_imf(recipient_ctx, rcvd_mail.as_bytes(), false).await?;
 
     if let Some(error_pattern) = expected_error {
-        let err_msg = format!("{:#}", res.unwrap_err());
-        assert!(
-            err_msg.contains(error_pattern),
-            "Error '{error_pattern}' not found in '{err_msg}'",
+        assert!(res.is_none_or(|msg| msg.chat_id == DC_CHAT_ID_TRASH));
+        assert_eq!(
+            previous_highest_msg_id,
+            get_highest_msg_id(recipient_ctx).await,
+            "receive_imf() must not add any message. Otherwise, Bob may send something about an error to the attacker and leak that he is in the channel this way"
         );
+        let EventType::Warning(warning) = recipient_ctx
+            .evtracker
+            .get_matching(|ev| matches!(ev, EventType::Warning(_)))
+            .await
+        else {
+            unreachable!()
+        };
+        assert!(warning.contains(error_pattern), "Wrong warning: {warning}");
     } else {
-        let mime = res.unwrap();
-        assert_eq!(mime.parts[0].msg, plain_body);
+        let rcvd = res.unwrap();
+        let msg = recipient_ctx.get_last_msg().await;
+        assert_eq!(&[msg.id], rcvd.msg_ids.as_slice());
+        assert_eq!(msg.text, plain_body);
     }
 
     Ok(())
+}
+
+async fn get_highest_msg_id(context: &Context) -> MsgId {
+    context
+        .sql
+        .query_get_value(
+            "SELECT MAX(id) FROM msgs WHERE chat_id!=?",
+            (DC_CHAT_ID_TRASH,),
+        )
+        .await
+        .unwrap()
+        .unwrap_or_default()
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -192,4 +218,21 @@ async fn test_qr_code_happy_path() -> Result<()> {
     join_securejoin(bob, &qr).await?;
 
     test_shared_secret_decryption_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
+}
+
+/// Control: Test that the behavior is the same when the shared secret is unknown
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unknown_secret() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    test_shared_secret_decryption_ex(
+        bob,
+        "alice@example.net",
+        "Some secret unknown to Bob",
+        Some(alice),
+        Some("Could not find symmetric secret for session key"),
+    )
+    .await
 }
