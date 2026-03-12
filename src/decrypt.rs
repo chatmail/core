@@ -48,9 +48,12 @@ pub(crate) async fn decrypt(
     let expected_sender_fingerprint: Option<String>;
 
     let plain = if let Message::Encrypted { esk, .. } = &*msg
+        // We only allow one ESK for symmetrically encrypted messages
+        // to avoid dealing with messages that are encrypted to multiple symmetric keys
+        // or a mix of symmetric and asymmetric keys:
         && let [Esk::SymKeyEncryptedSessionKey(esk)] = &esk[..]
     {
-        check_symmetric_encryption(esk).map_err(anyhow::Error::msg)?;
+        check_symmetric_encryption(esk)?;
         let (psk, fingerprint) = decrypt_session_key_symmetrically(context, esk)
             .await
             .context("decrypt_session_key_symmetrically")?;
@@ -161,14 +164,14 @@ fn try_decrypt_with_broadcast_secret(
                 (chat_id,),
                 |row| row.get(0),
             )
-            .context("find InBroadcast owner")?;
+            .context("Find InBroadcast owner")?;
         let fp = conn
             .query_one(
                 "SELECT fingerprint FROM contacts WHERE id=?",
                 (contact_id,),
                 |row| row.get(0),
             )
-            .context("find owner fingerprint")?;
+            .context("Find owner fingerprint")?;
         Some(fp)
     } else {
         bail!("Chat {chat_id} is not a broadcast but {chat_type}")
@@ -218,12 +221,10 @@ fn try_decrypt_with_auth_token(
 /// with all of the known shared secrets.
 /// In order to prevent this, we do not try to symmetrically decrypt messages
 /// that use a string2key algorithm other than 'Salted'.
-pub(crate) fn check_symmetric_encryption(
-    esk: &SymKeyEncryptedSessionKey,
-) -> std::result::Result<(), &'static str> {
+pub(crate) fn check_symmetric_encryption(esk: &SymKeyEncryptedSessionKey) -> Result<()> {
     match esk.s2k() {
         Some(StringToKey::Salted { .. }) => Ok(()),
-        _ => Err("unsupported string2key algorithm"),
+        _ => bail!("unsupported string2key algorithm"),
     }
 }
 
