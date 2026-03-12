@@ -55,6 +55,7 @@ async fn test_shared_secret_decryption_ex(
          To: \"hidden-recipients\": ;\n\
          Subject: [...]\n\
          MIME-Version: 1.0\n\
+         Message-ID: <12345@example.org>\n\
          \n\
          --{boundary}\n\
          Content-Type: application/pgp-encrypted\n\
@@ -72,12 +73,13 @@ async fn test_shared_secret_decryption_ex(
         encrypted_msg = encrypted_msg
     );
 
-    let res = receive_imf(recipient_ctx, rcvd_mail.as_bytes(), false)
+    let rcvd = receive_imf(recipient_ctx, rcvd_mail.as_bytes(), false)
         .await
-        .expect("If receive_imf() adds an error here, then Bob may be notified about the error and tell the attacker, leaking that he knows the secret");
+        .expect("If receive_imf() adds an error here, then Bob may be notified about the error and tell the attacker, leaking that he knows the secret")
+        .expect("A trashed message should be created, otherwise we'll unnecessarily download it again");
 
     if let Some(error_pattern) = expected_error {
-        assert!(res.is_none_or(|msg| msg.chat_id == DC_CHAT_ID_TRASH));
+        assert!(rcvd.chat_id == DC_CHAT_ID_TRASH);
         assert_eq!(
             previous_highest_msg_id,
             get_highest_msg_id(recipient_ctx).await,
@@ -92,10 +94,10 @@ async fn test_shared_secret_decryption_ex(
         };
         assert!(warning.contains(error_pattern), "Wrong warning: {warning}");
     } else {
-        let rcvd = res.unwrap();
         let msg = recipient_ctx.get_last_msg().await;
         assert_eq!(&[msg.id], rcvd.msg_ids.as_slice());
         assert_eq!(msg.text, plain_body);
+        assert_eq!(rcvd.chat_id.is_special(), false);
     }
 
     Ok(())
