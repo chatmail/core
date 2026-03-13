@@ -115,10 +115,23 @@ impl Chatlist {
             ChatId::new(0)
         };
 
-        // select with left join and minimum:
-        //
-        // - the inner select must use `hidden` and _not_ `m.hidden`
-        //   which would refer the outer select and take a lot of time
+        macro_rules! last_visible_msg_id_in {
+            ($chat_id:expr) => {
+                concat!(
+                    "
+(SELECT id FROM msgs WHERE
+    -- state=`OutDraft`.
+    state=19 AND hidden=1 AND chat_id=",
+                    $chat_id,
+                    " OR
+    -- `InFresh`...`OutDelivered` inclusive, except `OutDraft`.
+    state IN (10,13,16,20,24,26) AND hidden=0 AND chat_id=",
+                    $chat_id,
+                    "
+ORDER BY timestamp DESC, id DESC LIMIT 1)"
+                )
+            };
+        }
         // - `GROUP BY` is needed several messages may have the same
         //   timestamp
         // - the list starts with the newest chats
@@ -127,23 +140,18 @@ impl Chatlist {
         // groups. Otherwise it would be hard to follow conversations.
         let ids = if let Some(query_contact_id) = query_contact_id {
             // show chats shared with a given contact
-            context.sql.query_map_vec(
+            context.sql.query_map_vec(concat!(
                 "SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
                         ON c.id=m.chat_id
-                       AND m.id=(
-                               SELECT id
-                                 FROM msgs
-                                WHERE chat_id=c.id
-                                  AND (hidden=0 OR state=?1)
-                                  ORDER BY timestamp DESC, id DESC LIMIT 1)
+                       AND m.id=", last_visible_msg_id_in!("c.id"), "
                  WHERE c.id>9
                    AND c.blocked!=1
-                   AND c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=?2 AND add_timestamp >= remove_timestamp)
+                   AND c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=? AND add_timestamp >= remove_timestamp)
                  GROUP BY c.id
-                 ORDER BY c.archived=?3 DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
-                (MessageState::OutDraft, query_contact_id, ChatVisibility::Pinned),
+                 ORDER BY c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
+                (query_contact_id, ChatVisibility::Pinned),
                 process_row,
             ).await?
         } else if flag_archived_only {
@@ -154,22 +162,22 @@ impl Chatlist {
             context
                 .sql
                 .query_map_vec(
-                    "SELECT c.id, m.id
+                    concat!(
+                        "
+                 SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
                         ON c.id=m.chat_id
-                       AND m.id=(
-                               SELECT id
-                                 FROM msgs
-                                WHERE chat_id=c.id
-                                  AND (hidden=0 OR state=?)
-                                  ORDER BY timestamp DESC, id DESC LIMIT 1)
+                       AND m.id=",
+                        last_visible_msg_id_in!("c.id"),
+                        "
                  WHERE c.id>9
                    AND c.blocked!=1
                    AND c.archived=1
                  GROUP BY c.id
-                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
-                    (MessageState::OutDraft,),
+                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"
+                    ),
+                    (),
                     process_row,
                 )
                 .await?
@@ -188,24 +196,19 @@ impl Chatlist {
             let str_like_cmd = format!("%{}%", query.to_lowercase());
             context
                 .sql
-                .query_map_vec(
+                .query_map_vec(concat!(
                     "SELECT c.id, m.id
                  FROM chats c
                  LEFT JOIN msgs m
                         ON c.id=m.chat_id
-                       AND m.id=(
-                               SELECT id
-                                 FROM msgs
-                                WHERE chat_id=c.id
-                                  AND (hidden=0 OR state=?1)
-                                  ORDER BY timestamp DESC, id DESC LIMIT 1)
-                 WHERE c.id>9 AND c.id!=?2
+                       AND m.id=", last_visible_msg_id_in!("c.id"), "
+                 WHERE c.id>9 AND c.id!=?
                    AND c.blocked!=1
-                   AND IFNULL(c.name_normalized,c.name) LIKE ?3
-                   AND (NOT ?4 OR EXISTS (SELECT 1 FROM msgs m WHERE m.chat_id = c.id AND m.state == ?5 AND hidden=0))
+                   AND IFNULL(c.name_normalized,c.name) LIKE ?
+                   AND (NOT ? OR EXISTS (SELECT 1 FROM msgs m WHERE m.chat_id = c.id AND m.state == ? AND hidden=0))
                  GROUP BY c.id
-                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
-                    (MessageState::OutDraft, skip_id, str_like_cmd, only_unread, MessageState::InFresh),
+                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
+                    (skip_id, str_like_cmd, only_unread, MessageState::InFresh),
                     process_row,
                 )
                 .await?
@@ -237,25 +240,20 @@ impl Chatlist {
                     })
                     .collect::<std::result::Result<Vec<_>, _>>()
                 };
-                context.sql.query_map(
+                context.sql.query_map(concat!(
                     "SELECT c.id, c.type, c.param, m.id
                      FROM chats c
                      LEFT JOIN msgs m
                             ON c.id=m.chat_id
-                           AND m.id=(
-                                   SELECT id
-                                     FROM msgs
-                                    WHERE chat_id=c.id
-                                      AND (hidden=0 OR state=?)
-                                      ORDER BY timestamp DESC, id DESC LIMIT 1)
+                           AND m.id=", last_visible_msg_id_in!("c.id"), "
                      WHERE c.id>9 AND c.id!=?
                        AND c.blocked=0
                        AND NOT c.archived=?
                        AND (c.type!=? OR c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=? AND add_timestamp >= remove_timestamp))
                      GROUP BY c.id
-                     ORDER BY c.id=? DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
+                     ORDER BY c.id=? DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
                     (
-                        MessageState::OutDraft, skip_id, ChatVisibility::Archived,
+                        skip_id, ChatVisibility::Archived,
                         Chattype::Group, ContactId::SELF,
                         sort_id_up, ChatVisibility::Pinned,
                     ),
@@ -264,23 +262,18 @@ impl Chatlist {
                 ).await?
             } else {
                 //  show normal chatlist
-                context.sql.query_map_vec(
+                context.sql.query_map_vec(concat!(
                     "SELECT c.id, m.id
                      FROM chats c
                      LEFT JOIN msgs m
                             ON c.id=m.chat_id
-                           AND m.id=(
-                                   SELECT id
-                                     FROM msgs
-                                    WHERE chat_id=c.id
-                                      AND (hidden=0 OR state=?)
-                                      ORDER BY timestamp DESC, id DESC LIMIT 1)
+                           AND m.id=", last_visible_msg_id_in!("c.id"), "
                      WHERE c.id>9 AND c.id!=?
                        AND (c.blocked=0 OR c.blocked=2)
                        AND NOT c.archived=?
                      GROUP BY c.id
-                     ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
-                    (MessageState::OutDraft, skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
+                     ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC"),
+                    (skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
                 ).await?
             };
