@@ -312,13 +312,17 @@ pub(crate) async fn send_handshake_message(
         let rfc724_mid = create_outgoing_rfc724_mid();
         let contact = Contact::get_by_id(context, invite.contact_id()).await?;
         let recipient = contact.get_addr();
+        let alice_fp = invite.fingerprint().hex();
+        let auth = invite.authcode();
+        let shared_secret = format!("securejoin/{alice_fp}/{auth}");
         let attach_self_pubkey = false;
         let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
             context,
             "vc-request-pubkey",
             &rfc724_mid,
             attach_self_pubkey,
-            invite.authcode(),
+            auth,
+            &shared_secret,
         )
         .await?;
 

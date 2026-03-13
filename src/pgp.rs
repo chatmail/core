@@ -428,7 +428,7 @@ mod tests {
     use super::*;
     use crate::{
         decrypt,
-        key::{load_self_public_key, store_self_keypair},
+        key::{load_self_public_key, self_fingerprint, store_self_keypair},
         mimefactory::{render_outer_message, wrap_encrypted_part},
         test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
         token,
@@ -691,8 +691,9 @@ mod tests {
 
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
+        let bob_fp = self_fingerprint(bob).await?;
 
-        let shared_secret_pw = Password::from(format!("securejoin/{shared_secret}"));
+        let shared_secret_pw = Password::from(format!("securejoin/{bob_fp}/{shared_secret}"));
         let msg = MessageBuilder::from_bytes("", plain);
         let mut rng = thread_rng();
 

@@ -1,7 +1,7 @@
 use super::*;
 use crate::chat::{create_broadcast, load_broadcast_secret};
 use crate::constants::DC_CHAT_ID_TRASH;
-use crate::key::load_self_secret_key;
+use crate::key::{load_self_secret_key, self_fingerprint};
 use crate::pgp;
 use crate::qr::{Qr, check_qr};
 use crate::receive_imf::receive_imf;
@@ -194,18 +194,19 @@ async fn test_qr_code_security() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await; // Attacker
 
-    let qr = get_securejoin_qr(bob, None).await?;
-    let Qr::AskVerifyContact { authcode, .. } = check_qr(alice, &qr).await? else {
+    let qr = get_securejoin_qr(alice, None).await?;
+    let Qr::AskVerifyContact { authcode, .. } = check_qr(bob, &qr).await? else {
         unreachable!()
     };
     // Start a securejoin process, but don't finish it:
-    join_securejoin(alice, &qr).await?;
+    join_securejoin(bob, &qr).await?;
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
-    let secret_for_encryption = format!("securejoin/{authcode}");
+    let alice_fp = self_fingerprint(alice).await?;
+    let secret_for_encryption = dbg!(format!("securejoin/{alice_fp}/{authcode}"));
     test_shared_secret_decryption_ex(
-        alice,
+        bob,
         &charlie_addr,
         &secret_for_encryption,
         Some(charlie),
@@ -227,7 +228,8 @@ async fn test_qr_code_happy_path() -> Result<()> {
     // Start a securejoin process, but don't finish it:
     join_securejoin(bob, &qr).await?;
 
-    let secret_for_encryption = format!("securejoin/{authcode}");
+    let alice_fp = self_fingerprint(alice).await?;
+    let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
     test_shared_secret_decryption_ex(
         bob,
         "alice@example.net",
