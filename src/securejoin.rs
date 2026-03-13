@@ -17,7 +17,7 @@ use crate::context::Context;
 use crate::e2ee::ensure_secret_key_exists;
 use crate::events::EventType;
 use crate::headerdef::HeaderDef;
-use crate::key::{DcKey, Fingerprint, load_self_public_key};
+use crate::key::{DcKey, Fingerprint, load_self_public_key, self_fingerprint};
 use crate::log::LogExt as _;
 use crate::log::warn;
 use crate::message::{self, Message, MsgId, Viewtype};
@@ -540,12 +540,15 @@ pub(crate) async fn handle_securejoin_handshake(
             let rfc724_mid = create_outgoing_rfc724_mid();
             let addr = ContactAddress::new(&mime_message.from.addr)?;
             let attach_self_pubkey = true;
+            let self_fp = self_fingerprint(context).await?;
+            let shared_secret = format!("securejoin/{self_fp}/{auth}");
             let rendered_message = mimefactory::render_symm_encrypted_securejoin_message(
                 context,
                 "vc-pubkey",
                 &rfc724_mid,
                 attach_self_pubkey,
                 auth,
+                &shared_secret,
             )
             .await?;
 

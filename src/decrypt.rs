@@ -19,6 +19,7 @@ use crate::chat::ChatId;
 use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::key::self_fingerprint;
 use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
 use crate::token::Namespace;
 
@@ -93,6 +94,7 @@ async fn decrypt_session_key_symmetrically(
     context: &Context,
     esk: &SymKeyEncryptedSessionKey,
 ) -> Result<(PlainSessionKey, Option<String>)> {
+    let self_fp = self_fingerprint(context).await?;
     let query_only = true;
     context
         .sql
@@ -114,7 +116,7 @@ async fn decrypt_session_key_symmetrically(
             // Finally, try decrypting using own AUTH tokens
             // There can be a lot of AUTH tokens,
             // because a new one is generated every time a QR code is shown
-            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn)?;
+            let res: Option<PlainSessionKey> = try_decrypt_with_auth_token(esk, conn, self_fp)?;
             if let Some(plain_session_key) = res {
                 return Ok((plain_session_key, None));
             }
@@ -133,7 +135,9 @@ fn try_decrypt_with_bobstate(
     while let Some(row) = rows.next()? {
         let invite: crate::securejoin::QrInvite = row.get(0)?;
         let authcode = invite.authcode().to_string();
-        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(authcode)) {
+        let alice_fp = invite.fingerprint().hex();
+        let shared_secret = format!("securejoin/{alice_fp}/{authcode}");
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(shared_secret)) {
             let fingerprint = invite.fingerprint().hex();
             return Ok(Some((psk, fingerprint)));
         }
@@ -198,6 +202,7 @@ fn try_decrypt_with_broadcast_secret_inner(
 fn try_decrypt_with_auth_token(
     esk: &SymKeyEncryptedSessionKey,
     conn: &mut rusqlite::Connection,
+    self_fingerprint: &str,
 ) -> Result<Option<PlainSessionKey>> {
     // ORDER BY id DESC to query the most-recently saved tokens are returned first.
     // This improves performance when Bob scans a QR code that was just created.
@@ -205,7 +210,8 @@ fn try_decrypt_with_auth_token(
     let mut rows = stmt.query((Namespace::Auth,))?;
     while let Some(row) = rows.next()? {
         let token: String = row.get(0)?;
-        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(token)) {
+        let shared_secret = format!("securejoin/{self_fingerprint}/{token}");
+        if let Ok(psk) = decrypt_session_key_with_password(esk, &Password::from(shared_secret)) {
             return Ok(Some(psk));
         }
     }

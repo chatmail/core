@@ -1,7 +1,7 @@
 use super::*;
 use crate::chat::{create_broadcast, load_broadcast_secret};
 use crate::constants::DC_CHAT_ID_TRASH;
-use crate::key::load_self_secret_key;
+use crate::key::{load_self_secret_key, self_fingerprint};
 use crate::pgp;
 use crate::qr::{Qr, check_qr};
 use crate::receive_imf::receive_imf;
@@ -26,7 +26,7 @@ use anyhow::Result;
 async fn test_shared_secret_decryption_ex(
     recipient_ctx: &TestContext,
     from_addr: &str,
-    secret: &str,
+    secret_for_encryption: &str,
     signer_ctx: Option<&TestContext>,
     expected_error: Option<&str>,
 ) -> Result<()> {
@@ -45,8 +45,13 @@ async fn test_shared_secret_decryption_ex(
         recipient_ctx.add_or_lookup_contact(signer_ctx).await;
     }
 
-    let encrypted_msg =
-        pgp::symm_encrypt_message(plain_text.as_bytes().to_vec(), signer_key, secret, true).await?;
+    let encrypted_msg = pgp::symm_encrypt_message(
+        plain_text.as_bytes().to_vec(),
+        signer_key,
+        secret_for_encryption,
+        true,
+    )
+    .await?;
 
     let boundary = "boundary123";
     let rcvd_mail = format!(
@@ -189,19 +194,21 @@ async fn test_qr_code_security() -> Result<()> {
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await; // Attacker
 
-    let qr = get_securejoin_qr(bob, None).await?;
-    let Qr::AskVerifyContact { authcode, .. } = check_qr(alice, &qr).await? else {
+    let qr = get_securejoin_qr(alice, None).await?;
+    let Qr::AskVerifyContact { authcode, .. } = check_qr(bob, &qr).await? else {
         unreachable!()
     };
     // Start a securejoin process, but don't finish it:
-    join_securejoin(alice, &qr).await?;
+    join_securejoin(bob, &qr).await?;
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
+    let alice_fp = self_fingerprint(alice).await?;
+    let secret_for_encryption = dbg!(format!("securejoin/{alice_fp}/{authcode}"));
     test_shared_secret_decryption_ex(
-        alice,
+        bob,
         &charlie_addr,
-        &authcode,
+        &secret_for_encryption,
         Some(charlie),
         Some("This sender is not allowed to encrypt with this secret key"),
     )
@@ -221,7 +228,16 @@ async fn test_qr_code_happy_path() -> Result<()> {
     // Start a securejoin process, but don't finish it:
     join_securejoin(bob, &qr).await?;
 
-    test_shared_secret_decryption_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
+    let alice_fp = self_fingerprint(alice).await?;
+    let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
+    test_shared_secret_decryption_ex(
+        bob,
+        "alice@example.net",
+        &secret_for_encryption,
+        Some(alice),
+        None,
+    )
+    .await
 }
 
 /// Control: Test that the behavior is the same when the shared secret is unknown
