@@ -272,15 +272,19 @@ impl Chatlist {
                            AND m.id=(
                                    SELECT id
                                      FROM msgs
-                                    WHERE chat_id=c.id
-                                      AND (hidden=0 OR state=?)
+                                   -- state=`OutDraft`.
+                                   WHERE state=19 AND hidden=1 AND chat_id=c.id
+                                        -- `InFresh`...`OutDelivered` inclusive except `OutDraft`.
+                                        OR state IN (10,13,16,18,20,24,26)
+                                            AND hidden=0
+                                            AND chat_id=c.id
                                       ORDER BY timestamp DESC, id DESC LIMIT 1)
                      WHERE c.id>9 AND c.id!=?
                        AND (c.blocked=0 OR c.blocked=2)
                        AND NOT c.archived=?
                      GROUP BY c.id
                      ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
-                    (MessageState::OutDraft, skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
+                    (skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
                 ).await?
             };
