@@ -26,7 +26,7 @@ use anyhow::Result;
 async fn test_shared_secret_decryption_ex(
     recipient_ctx: &TestContext,
     from_addr: &str,
-    secret: &str,
+    secret_for_encryption: &str,
     signer_ctx: Option<&TestContext>,
     expected_error: Option<&str>,
 ) -> Result<()> {
@@ -45,8 +45,13 @@ async fn test_shared_secret_decryption_ex(
         recipient_ctx.add_or_lookup_contact(signer_ctx).await;
     }
 
-    let encrypted_msg =
-        pgp::symm_encrypt_message(plain_text.as_bytes().to_vec(), signer_key, secret, true).await?;
+    let encrypted_msg = pgp::symm_encrypt_message(
+        plain_text.as_bytes().to_vec(),
+        signer_key,
+        secret_for_encryption,
+        true,
+    )
+    .await?;
 
     let boundary = "boundary123";
     let rcvd_mail = format!(
@@ -198,10 +203,11 @@ async fn test_qr_code_security() -> Result<()> {
 
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
+    let secret_for_encryption = format!("securejoin/{authcode}");
     test_shared_secret_decryption_ex(
         alice,
         &charlie_addr,
-        &authcode,
+        &secret_for_encryption,
         Some(charlie),
         Some("This sender is not allowed to encrypt with this secret key"),
     )
@@ -221,7 +227,15 @@ async fn test_qr_code_happy_path() -> Result<()> {
     // Start a securejoin process, but don't finish it:
     join_securejoin(bob, &qr).await?;
 
-    test_shared_secret_decryption_ex(bob, "alice@example.net", &authcode, Some(alice), None).await
+    let secret_for_encryption = format!("securejoin/{authcode}");
+    test_shared_secret_decryption_ex(
+        bob,
+        "alice@example.net",
+        &secret_for_encryption,
+        Some(alice),
+        None,
+    )
+    .await
 }
 
 /// Control: Test that the behavior is the same when the shared secret is unknown

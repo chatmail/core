@@ -428,7 +428,7 @@ mod tests {
     use super::*;
     use crate::{
         decrypt,
-        key::{load_self_public_key, load_self_secret_key, store_self_keypair},
+        key::{load_self_public_key, store_self_keypair},
         mimefactory::{render_outer_message, wrap_encrypted_part},
         test_utils::{TestContext, TestContextManager, alice_keypair, bob_keypair},
         token,
@@ -439,11 +439,11 @@ mod tests {
     async fn decrypt_bytes(
         bytes: Vec<u8>,
         private_keys_for_decryption: &[SignedSecretKey],
-        shared_secrets: &[String],
+        auth_tokens_for_decryption: &[String],
     ) -> Result<pgp::composed::Message<'static>> {
         let t = &TestContext::new().await;
 
-        for secret in shared_secrets {
+        for secret in auth_tokens_for_decryption {
             token::save(t, token::Namespace::Auth, None, secret, 0).await?;
         }
         let [secret_key] = private_keys_for_decryption else {
@@ -722,7 +722,7 @@ mod tests {
         let plain = Vec::from(b"this is the secret message");
         let shared_secret = "shared secret";
 
-        let shared_secret_pw = Password::from(shared_secret.to_string());
+        let shared_secret_pw = Password::from(format!("securejoin/{shared_secret}"));
         let msg = MessageBuilder::from_bytes("", plain);
         let mut rng = thread_rng();
 
