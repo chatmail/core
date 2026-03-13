@@ -2363,6 +2363,17 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 150)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "UPDATE msgs SET state=26 WHERE state=28;
+            DROP INDEX IF EXISTS msgs_index7;
+            CREATE INDEX msgs_index7 ON msgs (state, hidden, chat_id, timestamp);",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
