@@ -15,7 +15,7 @@ use crate::message::{Message, MessageState, MsgId};
 use crate::param::{Param, Params};
 use crate::stock_str;
 use crate::summary::Summary;
-use crate::tools::IsNoneOrEmpty;
+use crate::tools::{IsNoneOrEmpty, Time, time_elapsed};
 
 /// Regex to find out if a query should filter by unread messages.
 pub static IS_UNREAD_FILTER: LazyLock<regex::Regex> =
@@ -264,7 +264,8 @@ impl Chatlist {
                 ).await?
             } else {
                 //  show normal chatlist
-                context.sql.query_map_vec(
+                let start = Time::now();
+                let items = context.sql.query_map_vec(
                     "SELECT c.id, m.id
                      FROM chats c
                      LEFT JOIN msgs m
@@ -272,17 +273,25 @@ impl Chatlist {
                            AND m.id=(
                                    SELECT id
                                      FROM msgs
-                                    WHERE chat_id=c.id
-                                      AND (hidden=0 OR state=?)
+                                    WHERE state=19 AND hidden IN (0,1) AND chat_id=c.id
+                                        OR state IN (10,13,16,18,20,24,26)
+                                            AND hidden=0
+                                            AND chat_id=c.id
                                       ORDER BY timestamp DESC, id DESC LIMIT 1)
                      WHERE c.id>9 AND c.id!=?
                        AND (c.blocked=0 OR c.blocked=2)
                        AND NOT c.archived=?
                      GROUP BY c.id
                      ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
-                    (MessageState::OutDraft, skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
+                    (skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
-                ).await?
+                ).await?;
+                info!(
+                    context,
+                    "chatlist built in {:?}.",
+                    time_elapsed(&start),
+                );
+                items
             };
             if !flag_no_specials && get_archived_cnt(context).await? > 0 {
                 if ids.is_empty() && flag_add_alldone_hint {
