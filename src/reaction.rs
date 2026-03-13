@@ -393,7 +393,9 @@ mod tests {
     use crate::chatlist::Chatlist;
     use crate::config::Config;
     use crate::contact::{Contact, Origin};
-    use crate::message::{MessageState, Viewtype, delete_msgs};
+    use crate::key::{load_self_public_key, load_self_secret_key};
+    use crate::message::{MessageState, Viewtype, delete_msgs, markseen_msgs};
+    use crate::pgp::{SeipdVersion, pk_encrypt};
     use crate::receive_imf::receive_imf;
     use crate::sql::housekeeping;
     use crate::test_utils::E2EE_INFO_MSGS;
@@ -954,6 +956,156 @@ Content-Disposition: reaction\n\
         for a in [&alice0, &alice1] {
             expect_no_unwanted_events(a).await;
         }
+        Ok(())
+    }
+
+    /// Tests that if reaction requests a read receipt,
+    /// no read receipt is sent when the chat is marked as noticed.
+    ///
+    /// Reactions create hidden messages in the chat,
+    /// and when marking the chat as noticed marks
+    /// such messages as seen, read receipts should never be sent
+    /// to avoid the sender of reaction from learning
+    /// that receiver opened the chat.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_reaction_request_mdn() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        let alice_chat_id = alice.create_chat_id(bob).await;
+        let alice_sent_msg = alice.send_text(alice_chat_id, "Hello!").await;
+
+        let bob_msg = bob.recv_msg(&alice_sent_msg).await;
+        bob_msg.chat_id.accept(bob).await?;
+        assert_eq!(bob_msg.state, MessageState::InFresh);
+        let bob_chat_id = bob_msg.chat_id;
+        bob_chat_id.accept(bob).await?;
+
+        markseen_msgs(bob, vec![bob_msg.id]).await?;
+        assert_eq!(
+            bob.sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp_mdns WHERE from_id!=?",
+                    (ContactId::SELF,)
+                )
+                .await?,
+            1
+        );
+        bob.sql.execute("DELETE FROM smtp_mdns", ()).await?;
+
+        // Construct reaction with an MDN request.
+        // Note the `Chat-Disposition-Notification-To` header.
+        let known_id = bob_msg.rfc724_mid;
+        let new_id = "e2b6e69e-4124-4e2a-b79f-e4f1be667165@localhost";
+
+        let plain_text = format!(
+            "Content-Type: text/plain; charset=\"utf-8\"; protected-headers=\"v1\"; \r
+        hp=\"cipher\"\r
+Content-Disposition: reaction\r
+From: \"Alice\" <alice@example.org>\r
+To: \"Bob\" <bob@example.net>\r
+Subject: Message from Alice\r
+Date: Sat, 14 Mar 2026 01:02:03 +0000\r
+In-Reply-To: <{known_id}>\r
+References: <{known_id}>\r
+Chat-Version: 1.0\r
+Chat-Disposition-Notification-To: alice@example.org\r
+Message-ID: <{new_id}>\r
+HP-Outer: From: <alice@example.org>\r
+HP-Outer: To: \"hidden-recipients\": ;\r
+HP-Outer: Subject: [...]\r
+HP-Outer: Date: Sat, 14 Mar 2026 01:02:03 +0000\r
+HP-Outer: Message-ID: <{new_id}>\r
+HP-Outer: In-Reply-To: <{known_id}>\r
+HP-Outer: References: <{known_id}>\r
+HP-Outer: Chat-Version: 1.0\r
+Content-Transfer-Encoding: base64\r
+\r
+8J+RgA==\r
+"
+        );
+
+        let alice_public_key = load_self_public_key(alice).await?;
+        let bob_public_key = load_self_public_key(bob).await?;
+        let alice_secret_key = load_self_secret_key(alice).await?;
+        let public_keys_for_encryption = vec![alice_public_key, bob_public_key];
+        let compress = true;
+        let anonymous_recipients = true;
+        let encrypted_payload = pk_encrypt(
+            plain_text.as_bytes().to_vec(),
+            public_keys_for_encryption,
+            alice_secret_key,
+            compress,
+            anonymous_recipients,
+            SeipdVersion::V2,
+        )
+        .await?;
+
+        let boundary = "boundary123";
+        let rcvd_mail = format!(
+            "From: <alice@example.org>\r
+To: \"hidden-recipients\": ;\r
+Subject: [...]\r
+Date: Sat, 14 Mar 2026 01:02:03 +0000\r
+Message-ID: <{new_id}>\r
+In-Reply-To: <{known_id}>\r
+References: <{known_id}>\r
+Content-Type: multipart/encrypted; protocol=\"application/pgp-encrypted\";\r
+        boundary=\"{boundary}\"\r
+MIME-Version: 1.0\r
+\r
+--{boundary}\r
+Content-Type: application/pgp-encrypted; charset=\"utf-8\"\r
+Content-Description: PGP/MIME version identification\r
+Content-Transfer-Encoding: 7bit\r
+\r
+Version: 1\r
+\r
+--{boundary}\r
+Content-Type: application/octet-stream; name=\"encrypted.asc\";\r
+        charset=\"utf-8\"\r
+Content-Description: OpenPGP encrypted message\r
+Content-Disposition: inline; filename=\"encrypted.asc\";\r
+Content-Transfer-Encoding: 7bit\r
+\r
+{encrypted_payload}
+--{boundary}--\r
+"
+        );
+
+        let received = receive_imf(bob, rcvd_mail.as_bytes(), false)
+            .await?
+            .unwrap();
+        let bob_hidden_msg = Message::load_from_db(bob, *received.msg_ids.last().unwrap())
+            .await
+            .unwrap();
+        assert!(bob_hidden_msg.hidden);
+        assert_eq!(bob_hidden_msg.chat_id, bob_chat_id);
+
+        // Bob does not see new message and cannot mark it as seen directly,
+        // but can mark the chat as noticed when opening it.
+        marknoticed_chat(bob, bob_chat_id).await?;
+
+        assert_eq!(
+            bob.sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp_mdns WHERE from_id!=?",
+                    (ContactId::SELF,)
+                )
+                .await?,
+            0,
+            "Bob should not send MDN to Alice"
+        );
+
+        // MDN request was ignored, but reaction was not.
+        let reactions = get_msg_reactions(bob, bob_msg.id).await?;
+        assert_eq!(reactions.reactions.len(), 1);
+        assert_eq!(
+            reactions.emoji_sorted_by_frequency(),
+            vec![("👀".to_string(), 1)]
+        );
+
         Ok(())
     }
 }
