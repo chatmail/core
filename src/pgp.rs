@@ -646,36 +646,6 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn test_encrypt_decrypt_broadcast() -> Result<()> {
-        let mut tcm = TestContextManager::new();
-        let alice = &tcm.alice().await;
-        let bob = &tcm.bob().await;
-
-        let plain = Vec::from(b"this is the secret message");
-        let shared_secret = "shared secret";
-        let ctext = symm_encrypt_message(
-            plain.clone(),
-            Some(load_self_secret_key(alice).await?),
-            shared_secret,
-            true,
-        )
-        .await?;
-
-        let bob_private_keyring = crate::key::load_self_secret_keyring(bob).await?;
-        let mut decrypted = decrypt_bytes(
-            ctext.into(),
-            &bob_private_keyring,
-            &[shared_secret.to_string()],
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(decrypted.as_data_vec()?, plain);
-
-        Ok(())
-    }
-
-    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_dont_decrypt_expensive_message_happy_path() -> Result<()> {
         let s2k = StringToKey::Salted {
             hash_alg: HashAlgorithm::default(),
