@@ -589,6 +589,7 @@ mod tests {
 
     use super::*;
     use crate::{
+        config::Config,
         decrypt,
         key::{load_self_public_key, self_fingerprint, store_self_keypair},
         mimefactory::{render_outer_message, wrap_encrypted_part},
@@ -604,6 +605,9 @@ mod tests {
         auth_tokens_for_decryption: &[String],
     ) -> Result<pgp::composed::Message<'static>> {
         let t = &TestContext::new().await;
+        t.set_config(Config::ConfiguredAddr, Some("alice@example.org"))
+            .await
+            .expect("Failed to configure address");
 
         for secret in auth_tokens_for_decryption {
             token::save(t, token::Namespace::Auth, None, secret, 0).await?;
