@@ -699,6 +699,14 @@ impl Config {
         fs::rename(&tmp_path, &self.file)
             .await
             .context("failed to rename config")?;
+        // Sync the rename().
+        #[cfg(not(windows))]
+        {
+            let parent = self.file.parent().context("No parent directory")?;
+            let parent_file = fs::File::open(parent).await?;
+            parent_file.sync_all().await?;
+        }
+
         Ok(())
     }
 
