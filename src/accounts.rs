@@ -686,7 +686,13 @@ impl Config {
         file.write_all(toml::to_string_pretty(&self.inner)?.as_bytes())
             .await
             .context("failed to write a tmp config")?;
-        file.sync_data()
+
+        // We use `sync_all()` and not `sync_data()` here.
+        // This translates to `fsync()` instead of `fdatasync()`.
+        // `fdatasync()` may be insufficient for newely created files
+        // and may not even synchronize the file size on some operating systems,
+        // resulting in a truncated file.
+        file.sync_all()
             .await
             .context("failed to sync a tmp config")?;
         drop(file);
