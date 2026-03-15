@@ -682,6 +682,12 @@ fn decode_account(qr: &str) -> Result<Qr> {
     let payload = qr
         .get(DCACCOUNT_SCHEME.len()..)
         .context("Invalid DCACCOUNT payload")?;
+
+    // Handle `dcaccount://...` URLs.
+    let payload = payload.strip_prefix("//").unwrap_or(payload);
+    if payload.is_empty() {
+        bail!("dcaccount payload is empty");
+    }
     if payload.starts_with("https://") {
         let url = url::Url::parse(payload).context("Invalid account URL")?;
         if url.scheme() == "https" {
@@ -695,6 +701,12 @@ fn decode_account(qr: &str) -> Result<Qr> {
             bail!("Bad scheme for account URL: {:?}.", url.scheme());
         }
     } else {
+        if payload.starts_with("/") {
+            // Handle `dcaccount:///` URL reported to have been created
+            // by Telegram link parser at
+            // <https://support.delta.chat/t/could-not-find-dns-resolutions-for-imap-993-when-adding-a-relay/4907>
+            bail!("Hostname in dcaccount URL cannot start with /");
+        }
         Ok(Qr::Account {
             domain: payload.to_string(),
         })

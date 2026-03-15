@@ -721,7 +721,9 @@ async fn test_decode_account() -> Result<()> {
 
     for text in [
         "DCACCOUNT:example.org",
+        "DCACCOUNT://example.org",
         "dcaccount:example.org",
+        "dcaccount://example.org",
         "DCACCOUNT:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
         "dcaccount:https://example.org/new_email?t=1w_7wDjgjelxeX884x96v3",
     ] {
@@ -732,6 +734,21 @@ async fn test_decode_account() -> Result<()> {
                 domain: "example.org".to_string()
             }
         );
+    }
+
+    Ok(())
+}
+
+/// Tests that decoding empty `dcaccount://` URL results in an error.
+/// We should not suggest trying to configure an account in this case.
+/// Such links may be created by copy-paste error or because of incorrect parsing.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_decode_empty_account() -> Result<()> {
+    let ctx = TestContext::new().await;
+
+    for text in ["DCACCOUNT:", "dcaccount:", "dcaccount://", "dcaccount:///"] {
+        let qr = check_qr(&ctx.ctx, text).await;
+        assert!(qr.is_err(), "Invalid {text:?} is parsed as dcaccount URL");
     }
 
     Ok(())
