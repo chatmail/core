@@ -57,7 +57,7 @@ pub enum EventType {
     /// should not be disturbed by a dialog or so.  Instead, use a bubble or so.
     ///
     /// However, for ongoing processes (eg. configure())
-    /// or for functions that are expected to fail (eg. dc_continue_key_transfer())
+    /// or for functions that are expected to fail
     /// it might be better to delay showing these events until the function has really
     /// failed (returned false). It should be sufficient to report only the *last* error
     /// in a message box then.

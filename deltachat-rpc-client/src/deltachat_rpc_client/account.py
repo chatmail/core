@@ -483,10 +483,6 @@ class Account:
         passphrase = ""  # Importing passphrase-protected keys is currently not supported.
         self._rpc.import_self_keys(self.id, str(path), passphrase)
 
-    def initiate_autocrypt_key_transfer(self) -> None:
-        """Send Autocrypt Setup Message."""
-        return self._rpc.initiate_autocrypt_key_transfer(self.id)
-
     def ice_servers(self) -> list:
         """Return ICE servers for WebRTC configuration."""
         ice_servers_json = self._rpc.ice_servers(self.id)

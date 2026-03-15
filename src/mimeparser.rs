@@ -199,6 +199,9 @@ pub enum SystemMessage {
     MemberRemovedFromGroup = 5,
 
     /// Autocrypt Setup Message.
+    ///
+    /// Deprecated as of 2026-03-15, such messages should not be created
+    /// but may exist in the database.
     AutocryptSetupMessage = 6,
 
     /// Secure-join message.

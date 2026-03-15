@@ -490,12 +490,5 @@ mod tests {
             msg.get_summary_text_without_prefix(ctx).await,
             "📎 foo.bar \u{2013} bla bla"
         ); // skipping prefix used for reactions summaries
-
-        let mut msg = Message::new(Viewtype::File);
-        msg.set_file_from_bytes(ctx, "autocrypt-setup-message.html", b"data", None)
-            .unwrap();
-        msg.param.set_cmd(SystemMessage::AutocryptSetupMessage);
-        assert_summary_texts(&msg, ctx, "📎 autocrypt-setup-message.html").await;
-        // no special handling of ASM
     }
 }

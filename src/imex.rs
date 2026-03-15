@@ -28,11 +28,9 @@ use crate::tools::{
     write_file,
 };
 
-mod key_transfer;
 mod transfer;
 
 use ::pgp::types::KeyDetails;
-pub use key_transfer::{continue_key_transfer, initiate_key_transfer};
 pub use transfer::{BackupProvider, get_backup};
 
 // Name of the database file in the backup.

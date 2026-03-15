@@ -234,19 +234,6 @@ pub(crate) const TIMESTAMP_SENT_TOLERANCE: i64 = 60;
 // Newer Delta Chats will remove the prefix as needed.
 pub(crate) const EDITED_PREFIX: &str = "✏️";
 
-// Strings needed to render the Autocrypt Setup Message.
-// Left untranslated as not being supported/recommended workflow and as translations would require deep knowledge.
-pub(crate) const ASM_SUBJECT: &str = "Autocrypt Setup Message";
-pub(crate) const ASM_BODY: &str = "This is the Autocrypt Setup Message \
-    used to transfer your end-to-end setup between clients.
-
-    To decrypt and use your setup, \
-    open the message in an Autocrypt-compliant client \
-    and enter the setup code presented on the generating device.
-
-    If you see this message in a chatmail client (Delta Chat, Arcane Chat, Delta Touch ...), \
-    use \"Settings / Add Second Device\" instead.";
-
 /// Period between `sql::housekeeping()` runs.
 pub(crate) const HOUSEKEEPING_PERIOD: i64 = 24 * 60 * 60;
 

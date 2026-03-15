@@ -68,7 +68,6 @@ pub struct MessageObject {
     /// if `show_padlock` is `false`,
     /// and nothing if it is `true`.
     show_padlock: bool,
-    is_setupmessage: bool,
     is_info: bool,
     is_forwarded: bool,
 
@@ -87,8 +86,6 @@ pub struct MessageObject {
 
     override_sender_name: Option<String>,
     sender: ContactObject,
-
-    setup_code_begin: Option<String>,
 
     file: Option<String>,
     file_mime: Option<String>,
@@ -226,7 +223,6 @@ impl MessageObject {
 
             subject: message.get_subject().to_owned(),
             show_padlock: message.get_showpadlock(),
-            is_setupmessage: message.is_setupmessage(),
             is_info: message.is_info(),
             is_forwarded: message.is_forwarded(),
             is_bot: message.is_bot(),
@@ -242,8 +238,6 @@ impl MessageObject {
 
             override_sender_name,
             sender,
-
-            setup_code_begin: message.get_setupcodebegin(context).await,
 
             file: match message.get_file(context) {
                 Some(path_buf) => path_buf.to_str().map(|s| s.to_owned()),

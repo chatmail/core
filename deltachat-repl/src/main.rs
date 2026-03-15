@@ -149,10 +149,7 @@ impl Completer for DcHelper {
     }
 }
 
-const IMEX_COMMANDS: [&str; 13] = [
-    "initiate-key-transfer",
-    "get-setupcodebegin",
-    "continue-key-transfer",
+const IMEX_COMMANDS: [&str; 10] = [
     "has-backup",
     "export-backup",
     "import-backup",

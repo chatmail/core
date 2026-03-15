@@ -302,9 +302,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             // TODO: reuse commands definition in main.rs.
             "imex" => println!(
                 "====================Import/Export commands==\n\
-                 initiate-key-transfer\n\
-                 get-setupcodebegin <msg-id>\n\
-                 continue-key-transfer <msg-id> <setup-code>\n\
                  has-backup\n\
                  export-backup\n\
                  import-backup <backup-file>\n\
@@ -408,34 +405,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  ============================================="
             ),
         },
-        "initiate-key-transfer" => match initiate_key_transfer(&context).await {
-            Ok(setup_code) => {
-                println!("Setup code for the transferred setup message: {setup_code}",)
-            }
-            Err(err) => bail!("Failed to generate setup code: {err}"),
-        },
-        "get-setupcodebegin" => {
-            ensure!(!arg1.is_empty(), "Argument <msg-id> missing.");
-            let msg_id: MsgId = MsgId::new(arg1.parse()?);
-            let msg = Message::load_from_db(&context, msg_id).await?;
-            if msg.is_setupmessage() {
-                let setupcodebegin = msg.get_setupcodebegin(&context).await;
-                println!(
-                    "The setup code for setup message {} starts with: {}",
-                    msg_id,
-                    setupcodebegin.unwrap_or_default(),
-                );
-            } else {
-                bail!("{msg_id} is no setup message.",);
-            }
-        }
-        "continue-key-transfer" => {
-            ensure!(
-                !arg1.is_empty() && !arg2.is_empty(),
-                "Arguments <msg-id> <setup-code> expected"
-            );
-            continue_key_transfer(&context, MsgId::new(arg1.parse()?), arg2).await?;
-        }
         "has-backup" => {
             has_backup(&context, blobdir).await?;
         }

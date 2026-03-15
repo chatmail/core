@@ -756,8 +756,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
     /// this resulted in various number of garbage
     /// octets at the end of the key, starting from 3 octets,
     /// but possibly 4 or 5 and maybe more octets
-    /// if the key is imported or transferred
-    /// using Autocrypt Setup Message multiple times.
+    /// if the key is imported multiple times.
     #[test]
     fn test_ignore_trailing_garbage() {
         // Test several variants of garbage.

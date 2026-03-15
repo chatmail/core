@@ -700,25 +700,6 @@ impl CommandApi {
     }
 
     // ---------------------------------------------
-    //  autocrypt
-    // ---------------------------------------------
-
-    async fn initiate_autocrypt_key_transfer(&self, account_id: u32) -> Result<String> {
-        let ctx = self.get_context(account_id).await?;
-        deltachat::imex::initiate_key_transfer(&ctx).await
-    }
-
-    async fn continue_autocrypt_key_transfer(
-        &self,
-        account_id: u32,
-        message_id: u32,
-        setup_code: String,
-    ) -> Result<()> {
-        let ctx = self.get_context(account_id).await?;
-        deltachat::imex::continue_key_transfer(&ctx, MsgId::new(message_id), &setup_code).await
-    }
-
-    // ---------------------------------------------
     //   chat list
     // ---------------------------------------------
 

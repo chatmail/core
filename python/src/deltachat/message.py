@@ -167,14 +167,6 @@ class Message:
         """return True if this message is a system/info message."""
         return bool(lib.dc_msg_is_info(self._dc_msg))
 
-    def is_setup_message(self):
-        """return True if this message is a setup message."""
-        return lib.dc_msg_is_setupmessage(self._dc_msg)
-
-    def get_setupcodebegin(self) -> str:
-        """return the first characters of a setup code in a setup message."""
-        return from_dc_charpointer(lib.dc_msg_get_setupcodebegin(self._dc_msg))
-
     def is_encrypted(self):
         """return True if this message was encrypted."""
         return bool(lib.dc_msg_get_showpadlock(self._dc_msg))
@@ -197,12 +189,6 @@ class Message:
     def get_summarytext(self, width: int) -> str:
         """Get a message summary as a single line of text. Typically used for notifications."""
         return from_dc_charpointer(lib.dc_msg_get_summarytext(self._dc_msg, width))
-
-    def continue_key_transfer(self, setup_code):
-        """extract key and use it as primary key for this account."""
-        res = lib.dc_continue_key_transfer(self.account._dc_context, self.id, as_dc_charpointer(setup_code))
-        if res == 0:
-            raise ValueError("Importing the key from Autocrypt Setup Message failed")
 
     @props.with_doc
     def time_sent(self):
