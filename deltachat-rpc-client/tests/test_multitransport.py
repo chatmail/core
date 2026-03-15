@@ -1,7 +1,7 @@
 import pytest
 
 from deltachat_rpc_client import EventType
-from deltachat_rpc_client.const import DownloadState
+from deltachat_rpc_client.const import ChatType, DownloadState
 from deltachat_rpc_client.rpc import JsonRpcError
 
 
@@ -357,7 +357,7 @@ def test_message_info_imap_urls(acfactory) -> None:
     assert f"{new_alice_addr}/INBOX" in msg_info
 
 
-def test_remove_primary_transport(acfactory) -> None:
+def test_remove_primary_transport(acfactory, log) -> None:
     """Test that after removing the primary relay, Alice can still receive messages."""
     alice, bob = acfactory.get_online_accounts(2)
     qr = acfactory.get_account_qr()
@@ -368,7 +368,7 @@ def test_remove_primary_transport(acfactory) -> None:
     bob_chat = bob.create_chat(alice)
     alice.create_chat(bob)
 
-    # Alice changes the transport.
+    log.section("Alice sets up second transport")
     [transport1, transport2] = alice.list_transports()
     alice.set_config("configured_addr", transport2["addr"])
 
@@ -376,7 +376,7 @@ def test_remove_primary_transport(acfactory) -> None:
     msg1 = alice.wait_for_incoming_msg().get_snapshot()
     assert msg1.text == "Hello!"
 
-    # Alice deletes the first transport.
+    log.section("Alice removes the primary relay")
     alice.delete_transport(transport1["addr"])
     alice.stop_io()
     alice.start_io()
@@ -384,3 +384,5 @@ def test_remove_primary_transport(acfactory) -> None:
     bob_chat.send_text("Hello again!")
     msg2 = alice.wait_for_incoming_msg().get_snapshot()
     assert msg2.text == "Hello again!"
+    assert msg2.chat.get_basic_snapshot().chat_type == ChatType.SINGLE
+    assert msg2.chat == alice.create_chat(bob)
