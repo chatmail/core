@@ -1974,15 +1974,6 @@ async fn needs_move_to_mvbox(
         return Ok(false);
     }
 
-    if headers
-        .get_header_value(HeaderDef::AutocryptSetupMessage)
-        .is_some()
-    {
-        // do not move setup messages;
-        // there may be a non-delta device that wants to handle it
-        return Ok(false);
-    }
-
     if has_chat_version {
         Ok(true)
     } else if let Some(parent) = get_prefetch_parent_message(context, headers).await? {

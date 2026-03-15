@@ -30,7 +30,6 @@ use crate::location::delete_poi_location;
 use crate::log::warn;
 use crate::mimeparser::{SystemMessage, parse_message_id};
 use crate::param::{Param, Params};
-use crate::pgp::split_armored_data;
 use crate::reaction::get_msg_reactions;
 use crate::sql;
 use crate::summary::Summary;
@@ -1057,34 +1056,6 @@ impl Message {
     pub fn is_system_message(&self) -> bool {
         let cmd = self.param.get_cmd();
         cmd != SystemMessage::Unknown
-    }
-
-    /// Returns true if the message is an Autocrypt Setup Message.
-    pub fn is_setupmessage(&self) -> bool {
-        if self.viewtype != Viewtype::File {
-            return false;
-        }
-
-        self.param.get_cmd() == SystemMessage::AutocryptSetupMessage
-    }
-
-    /// Returns the first characters of the setup code.
-    ///
-    /// This is used to pre-fill the first entry field of the setup code.
-    pub async fn get_setupcodebegin(&self, context: &Context) -> Option<String> {
-        if !self.is_setupmessage() {
-            return None;
-        }
-
-        if let Some(filename) = self.get_file(context)
-            && let Ok(ref buf) = read_file(context, &filename).await
-            && let Ok((typ, headers, _)) = split_armored_data(buf)
-            && typ == pgp::armor::BlockType::Message
-        {
-            return headers.get(crate::pgp::HEADER_SETUPCODE).cloned();
-        }
-
-        None
     }
 
     /// Sets or unsets message text.

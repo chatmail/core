@@ -729,8 +729,7 @@ pub(crate) async fn receive_imf_inner(
 
         let allow_creation = if mime_parser.decrypting_failed {
             false
-        } else if mime_parser.is_system_message != SystemMessage::AutocryptSetupMessage
-            && is_dc_message == MessengerMessage::No
+        } else if is_dc_message == MessengerMessage::No
             && !context.get_config_bool(Config::IsChatmail).await?
         {
             // the message is a classic email in a classic profile

@@ -105,10 +105,9 @@ async fn check_target_folder_combination(
     expected_destination: &str,
     accepted_chat: bool,
     outgoing: bool,
-    setupmessage: bool,
 ) -> Result<()> {
     println!(
-        "Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}"
+        "Testing: For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}"
     );
 
     let t = TestContext::new_alice().await;
@@ -125,9 +124,7 @@ async fn check_target_folder_combination(
     }
     let temp;
 
-    let bytes = if setupmessage {
-        include_bytes!("../../test-data/message/AutocryptSetupMessage.eml")
-    } else {
+    let bytes = {
         temp = format!(
             "Received: (Postfix, from userid 1000); Mon, 4 Dec 2006 14:51:39 +0100 (CET)\n\
                     {}\
@@ -164,7 +161,7 @@ async fn check_target_folder_combination(
     assert_eq!(
         expected,
         actual.as_deref(),
-        "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}, setupmessage {setupmessage}: expected {expected:?}, got {actual:?}"
+        "For folder {folder}, mvbox_move {mvbox_move}, chat_msg {chat_msg}, accepted {accepted_chat}, outgoing {outgoing}: expected {expected:?}, got {actual:?}"
     );
     Ok(())
 }
@@ -204,7 +201,6 @@ async fn test_target_folder_incoming_accepted() -> Result<()> {
             expected_destination,
             true,
             false,
-            false,
         )
         .await?;
     }
@@ -219,7 +215,6 @@ async fn test_target_folder_incoming_request() -> Result<()> {
             *mvbox_move,
             *chat_msg,
             expected_destination,
-            false,
             false,
             false,
         )
@@ -237,25 +232,6 @@ async fn test_target_folder_outgoing() -> Result<()> {
             *mvbox_move,
             *chat_msg,
             expected_destination,
-            true,
-            true,
-            false,
-        )
-        .await?;
-    }
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_target_folder_setupmsg() -> Result<()> {
-    // Test setupmessages
-    for (folder, mvbox_move, chat_msg, _expected_destination) in COMBINATIONS_ACCEPTED_CHAT {
-        check_target_folder_combination(
-            folder,
-            *mvbox_move,
-            *chat_msg,
-            if folder == &"Spam" { "INBOX" } else { folder }, // Never move setup messages, except if they are in "Spam"
-            false,
             true,
             true,
         )

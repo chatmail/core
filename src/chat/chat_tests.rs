@@ -866,7 +866,6 @@ async fn test_add_device_msg_unlabelled() {
     assert_eq!(msg1.from_id, ContactId::DEVICE);
     assert_eq!(msg1.to_id, ContactId::SELF);
     assert!(!msg1.is_info());
-    assert!(!msg1.is_setupmessage());
 
     let msg2 = message::Message::load_from_db(&t, msg2_id.unwrap()).await;
     assert!(msg2.is_ok());
@@ -899,7 +898,6 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     assert_eq!(msg1.from_id, ContactId::DEVICE);
     assert_eq!(msg1.to_id, ContactId::SELF);
     assert!(!msg1.is_info());
-    assert!(!msg1.is_setupmessage());
 
     // check device chat
     let chat_id = msg1.chat_id;

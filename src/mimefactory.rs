@@ -17,8 +17,7 @@ use crate::aheader::{Aheader, EncryptPreference};
 use crate::blob::BlobObject;
 use crate::chat::{self, Chat, PARAM_BROADCAST_SECRET, load_broadcast_secret};
 use crate::config::Config;
-use crate::constants::{ASM_SUBJECT, BROADCAST_INCOMPATIBILITY_MSG};
-use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
+use crate::constants::{BROADCAST_INCOMPATIBILITY_MSG, Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::{Contact, ContactId, Origin};
 use crate::context::Context;
 use crate::download::PostMsgMetadata;
@@ -1574,14 +1573,6 @@ impl MimeFactory {
                     "Auto-Submitted",
                     mail_builder::headers::raw::Raw::new("auto-generated").into(),
                 ));
-            }
-            SystemMessage::AutocryptSetupMessage => {
-                headers.push((
-                    "Autocrypt-Setup-Message",
-                    mail_builder::headers::raw::Raw::new("v1").into(),
-                ));
-
-                placeholdertext = Some(ASM_SUBJECT.to_string());
             }
             SystemMessage::SecurejoinMessage => {
                 let step = msg.param.get(Param::Arg).unwrap_or_default();

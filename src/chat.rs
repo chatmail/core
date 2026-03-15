@@ -2844,9 +2844,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     let lowercase_from = from.to_lowercase();
 
     recipients.retain(|x| x.to_lowercase() != lowercase_from);
-    if context.get_config_bool(Config::BccSelf).await?
-        || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage
-    {
+    if context.get_config_bool(Config::BccSelf).await? {
         smtp::add_self_recipients(context, &mut recipients, needs_encryption).await?;
     }
 

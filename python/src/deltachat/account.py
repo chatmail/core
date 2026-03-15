@@ -553,17 +553,6 @@ class Account:
     def imex(self, path: str, imex_cmd: int, passphrase: Optional[str] = None) -> None:
         lib.dc_imex(self._dc_context, imex_cmd, as_dc_charpointer(path), as_dc_charpointer(passphrase))
 
-    def initiate_key_transfer(self) -> str:
-        """return setup code after a Autocrypt setup message
-        has been successfully sent to our own e-mail address ("self-sent message").
-        If sending out was unsuccessful, a RuntimeError is raised.
-        """
-        self.check_is_configured()
-        res = lib.dc_initiate_key_transfer(self._dc_context)
-        if res == ffi.NULL:
-            raise RuntimeError("could not send out autocrypt setup message")
-        return from_dc_charpointer(res)
-
     def get_setup_contact_qr(self) -> str:
         """get/create Setup-Contact QR Code as ascii-string.
 
