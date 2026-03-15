@@ -296,7 +296,7 @@ pub(crate) async fn load_self_public_key_opt(context: &Context) -> Result<Option
         .await?
         .context("No transports configured")?;
     let addr = context.get_primary_self_addr().await?;
-    let all_addrs = context.get_all_self_addrs().await?.join(",");
+    let all_addrs = context.get_published_self_addrs().await?.join(",");
     let signed_public_key =
         secret_key_to_public_key(context, signed_secret_key, timestamp, &addr, &all_addrs)?;
     *lock = Some(signed_public_key.clone());

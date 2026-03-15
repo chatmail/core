@@ -65,6 +65,10 @@ pub(crate) struct TransportData {
 
     /// Timestamp of when the transport was last time (re)configured.
     pub(crate) timestamp: i64,
+
+    /// Whether the transport is published.
+    /// See [`Context::set_transport_unpublished`] for details.
+    pub(crate) is_published: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

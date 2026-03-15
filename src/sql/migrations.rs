@@ -2343,6 +2343,26 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    // Add an `is_published` flag to transports.
+    // Unpublished transports are not advertised to contacts,
+    // and self-sent messages are not sent there,
+    // so that we don't cause extra messages to the corresponding inbox,
+    // but can still receive messages from contacts who don't know our new transport addresses yet.
+    // The default is true, but when when the user updates the app,
+    // existing secondary transports are set to unpublished,
+    // so that an existing transport address doesn't suddenly get spammed with a lot of messages.
+    inc_and_check(&mut migration_version, 149)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "ALTER TABLE transports ADD COLUMN is_published INTEGER DEFAULT 1 NOT NULL;
+            UPDATE transports SET is_published=0 WHERE addr!=(
+                SELECT value FROM config WHERE keyname='configured_addr'
+            )",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?
