@@ -2844,17 +2844,12 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     let lowercase_from = from.to_lowercase();
 
     recipients.retain(|x| x.to_lowercase() != lowercase_from);
-    if context.get_config_bool(Config::BccSelf).await? {
-        smtp::add_self_recipients(context, &mut recipients, needs_encryption).await?;
-    }
 
-    // Default Webxdc integrations are hidden messages and must not be sent out
-    if msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden {
-        recipients.clear();
-    }
-
-    if recipients.is_empty() {
-        // may happen eg. for groups with only SELF and bcc_self disabled
+    // Default Webxdc integrations are hidden messages and must not be sent out:
+    if (msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden)
+        // This may happen eg. for groups with only SELF and bcc_self disabled:
+        || (!context.get_config_bool(Config::BccSelf).await? && recipients.is_empty())
+    {
         info!(
             context,
             "Message {} has no recipient, skipping smtp-send.", msg.id
@@ -2891,6 +2886,10 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             msg.id,
             format_size(rendered_msg.message.len(), BINARY),
         );
+    }
+
+    if context.get_config_bool(Config::BccSelf).await? {
+        smtp::add_self_recipients(context, &mut recipients, rendered_msg.is_encrypted).await?;
     }
 
     if needs_encryption && !rendered_msg.is_encrypted {

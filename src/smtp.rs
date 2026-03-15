@@ -706,7 +706,7 @@ pub(crate) async fn add_self_recipients(
         // them. Normally the user should have a non-chatmail primary transport to send unencrypted
         // messages.
         if encrypted {
-            for addr in context.get_secondary_self_addrs().await? {
+            for addr in context.get_published_secondary_self_addrs().await? {
                 recipients.push(addr);
             }
         }

@@ -837,7 +837,7 @@ impl Context {
                             // which only fetches from the primary transport.
                             transaction
                                 .execute(
-                                    "UPDATE transports SET add_timestamp=? WHERE addr=?",
+                                    "UPDATE transports SET add_timestamp=?, is_published=1 WHERE addr=?",
                                     (time(), addr),
                                 )
                                 .context(
@@ -964,7 +964,22 @@ impl Context {
     pub(crate) async fn get_all_self_addrs(&self) -> Result<Vec<String>> {
         self.sql
             .query_map_vec(
-                "SELECT addr FROM transports ORDER BY add_timestamp DESC",
+                "SELECT addr FROM transports ORDER BY add_timestamp DESC, id DESC",
+                (),
+                |row| {
+                    let addr: String = row.get(0)?;
+                    Ok(addr)
+                },
+            )
+            .await
+    }
+
+    /// Returns all published self addresses, newest first.
+    /// See `[Context::set_transport_unpublished]`
+    pub(crate) async fn get_published_self_addrs(&self) -> Result<Vec<String>> {
+        self.sql
+            .query_map_vec(
+                "SELECT addr FROM transports WHERE is_published=1 ORDER BY add_timestamp DESC, id DESC",
                 (),
                 |row| {
                     let addr: String = row.get(0)?;
@@ -980,6 +995,24 @@ impl Context {
             let addr: String = row.get(0)?;
             Ok(addr)
         }).await
+    }
+
+    /// Returns all published secondary self addresses.
+    /// See `[Context::set_transport_unpublished]`
+    pub(crate) async fn get_published_secondary_self_addrs(&self) -> Result<Vec<String>> {
+        self.sql
+            .query_map_vec(
+                "SELECT addr FROM transports
+                WHERE is_published
+                AND addr NOT IN (SELECT value FROM config WHERE keyname='configured_addr')
+                ORDER BY add_timestamp DESC, id DESC",
+                (),
+                |row| {
+                    let addr: String = row.get(0)?;
+                    Ok(addr)
+                },
+            )
+            .await
     }
 
     /// Returns the primary self address.

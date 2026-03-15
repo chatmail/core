@@ -204,7 +204,7 @@ async fn test_qr_code_security() -> Result<()> {
     let charlie_addr = charlie.get_config(Config::Addr).await?.unwrap();
 
     let alice_fp = self_fingerprint(alice).await?;
-    let secret_for_encryption = dbg!(format!("securejoin/{alice_fp}/{authcode}"));
+    let secret_for_encryption = format!("securejoin/{alice_fp}/{authcode}");
     test_shared_secret_decryption_ex(
         bob,
         &charlie_addr,

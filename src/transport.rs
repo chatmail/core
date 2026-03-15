@@ -562,7 +562,15 @@ impl ConfiguredLoginParam {
         entered_param: &EnteredLoginParam,
         timestamp: i64,
     ) -> Result<()> {
-        save_transport(context, entered_param, &self.into(), timestamp).await?;
+        let is_published = true;
+        save_transport(
+            context,
+            entered_param,
+            &self.into(),
+            timestamp,
+            is_published,
+        )
+        .await?;
         Ok(())
     }
 
@@ -628,6 +636,7 @@ pub(crate) async fn save_transport(
     entered_param: &EnteredLoginParam,
     configured: &ConfiguredLoginParamJson,
     add_timestamp: i64,
+    is_published: bool,
 ) -> Result<bool> {
     let addr = addr_normalize(&configured.addr);
     let configured_addr = context.get_config(Config::ConfiguredAddr).await?;
@@ -635,20 +644,23 @@ pub(crate) async fn save_transport(
     let mut modified = context
         .sql
         .execute(
-            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp)
-             VALUES (?, ?, ?, ?)
+            "INSERT INTO transports (addr, entered_param, configured_param, add_timestamp, is_published)
+             VALUES (?, ?, ?, ?, ?)
              ON CONFLICT (addr)
              DO UPDATE SET entered_param=excluded.entered_param,
                            configured_param=excluded.configured_param,
-                           add_timestamp=excluded.add_timestamp
+                           add_timestamp=excluded.add_timestamp,
+                           is_published=excluded.is_published
              WHERE entered_param != excluded.entered_param
                  OR configured_param != excluded.configured_param
-                 OR add_timestamp < excluded.add_timestamp",
+                 OR add_timestamp < excluded.add_timestamp
+                 OR is_published != excluded.is_published",
             (
                 &addr,
                 serde_json::to_string(entered_param)?,
                 serde_json::to_string(configured)?,
                 add_timestamp,
+                is_published,
             ),
         )
         .await?
@@ -685,7 +697,7 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
     let transports = context
         .sql
         .query_map_vec(
-            "SELECT entered_param, configured_param, add_timestamp
+            "SELECT entered_param, configured_param, add_timestamp, is_published
              FROM transports WHERE id>1",
             (),
             |row| {
@@ -694,10 +706,12 @@ pub(crate) async fn send_sync_transports(context: &Context) -> Result<()> {
                 let configured_json: String = row.get(1)?;
                 let configured: ConfiguredLoginParamJson = serde_json::from_str(&configured_json)?;
                 let timestamp: i64 = row.get(2)?;
+                let is_published: bool = row.get(3)?;
                 Ok(TransportData {
                     configured,
                     entered,
                     timestamp,
+                    is_published,
                 })
             },
         )
@@ -736,9 +750,10 @@ pub(crate) async fn sync_transports(
         configured,
         entered,
         timestamp,
+        is_published,
     } in transports
     {
-        modified |= save_transport(context, entered, configured, *timestamp).await?;
+        modified |= save_transport(context, entered, configured, *timestamp, *is_published).await?;
     }
 
     context
@@ -784,7 +799,7 @@ pub(crate) async fn add_pseudo_transport(context: &Context, addr: &str) -> Resul
             "INSERT INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
             (
                 addr,
-                serde_json::to_string(&EnteredLoginParam::default())?,
+                serde_json::to_string(&EnteredLoginParam{addr: addr.to_string(), ..Default::default()})?,
                 format!(r#"{{"addr":"{addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
             ),
         )
