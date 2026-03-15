@@ -2737,7 +2737,6 @@ async fn prepare_send_msg(
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
     }
     chat.prepare_msg_raw(context, msg, update_msg_id).await?;
-
     let row_ids = create_send_msg_jobs(context, msg)
         .await
         .context("Failed to create send jobs")?;
@@ -2844,19 +2843,12 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     let lowercase_from = from.to_lowercase();
 
     recipients.retain(|x| x.to_lowercase() != lowercase_from);
-    if context.get_config_bool(Config::BccSelf).await?
-        || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage
+
+    // Default Webxdc integrations are hidden messages and must not be sent out:
+    if (msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden)
+        // This may happen eg. for groups with only SELF and bcc_self disabled:
+        || (!context.get_config_bool(Config::BccSelf).await? && recipients.is_empty())
     {
-        smtp::add_self_recipients(context, &mut recipients, needs_encryption).await?;
-    }
-
-    // Default Webxdc integrations are hidden messages and must not be sent out
-    if msg.param.get_int(Param::WebxdcIntegration).is_some() && msg.hidden {
-        recipients.clear();
-    }
-
-    if recipients.is_empty() {
-        // may happen eg. for groups with only SELF and bcc_self disabled
         info!(
             context,
             "Message {} has no recipient, skipping smtp-send.", msg.id
@@ -2893,6 +2885,12 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             msg.id,
             format_size(rendered_msg.message.len(), BINARY),
         );
+    }
+
+    if context.get_config_bool(Config::BccSelf).await?
+        || msg.param.get_cmd() == SystemMessage::AutocryptSetupMessage
+    {
+        smtp::add_self_recipients(context, &mut recipients, rendered_msg.is_encrypted).await?;
     }
 
     if needs_encryption && !rendered_msg.is_encrypted {

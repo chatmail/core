@@ -4,6 +4,16 @@ use serde::Deserialize;
 use serde::Serialize;
 use yerpc::TypeDef;
 
+#[derive(Serialize, TypeDef, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Transport {
+    /// The login data entered by the user.
+    pub param: EnteredLoginParam,
+    /// Whether this transport is set to 'unpublished'.
+    /// See `set_transport_unpublished` / `setTransportUnpublished` for details.
+    pub is_unpublished: bool,
+}
+
 /// Login parameters entered by the user.
 ///
 /// Usually it will be enough to only set `addr` and `password`,
@@ -54,6 +64,15 @@ pub struct EnteredLoginParam {
     /// If true, login via OAUTH2 (not recommended anymore).
     /// Default: false
     pub oauth2: Option<bool>,
+}
+
+impl From<dc::Transport> for Transport {
+    fn from(transport: dc::Transport) -> Self {
+        Transport {
+            param: transport.param.into(),
+            is_unpublished: transport.is_unpublished,
+        }
+    }
 }
 
 impl From<dc::EnteredLoginParam> for EnteredLoginParam {

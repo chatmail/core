@@ -701,12 +701,12 @@ pub(crate) async fn add_self_recipients(
     // and connection is frequently lost
     // before receiving status line. NB: This is not a problem for chatmail servers, so `BccSelf`
     // disabled by default is fine.
-    if context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty() {
+    if (context.get_config_delete_server_after().await? != Some(0)) || !recipients.is_empty() {
         // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
         // them. Normally the user should have a non-chatmail primary transport to send unencrypted
         // messages.
         if encrypted {
-            for addr in context.get_secondary_self_addrs().await? {
+            for addr in context.get_published_secondary_self_addrs().await? {
                 recipients.push(addr);
             }
         }

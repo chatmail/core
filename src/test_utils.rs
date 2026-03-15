@@ -211,7 +211,7 @@ impl TestContextManager {
             "INSERT OR IGNORE INTO transports (addr, entered_param, configured_param) VALUES (?, ?, ?)",
                (
                    new_addr,
-                   serde_json::to_string(&EnteredLoginParam::default()).unwrap(),
+                   serde_json::to_string(&EnteredLoginParam{addr: new_addr.to_string(), ..Default::default()}).unwrap(),
                    format!(r#"{{"addr":"{new_addr}","imap":[],"imap_user":"","imap_password":"","smtp":[],"smtp_user":"","smtp_password":"","certificate_checks":"Automatic","oauth2":false}}"#)
               ),
           ).await.unwrap();
