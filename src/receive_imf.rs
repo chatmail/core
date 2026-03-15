@@ -1322,15 +1322,35 @@ async fn decide_chat_assignment(
     // no database row and ChatId yet.
     let mut num_recipients = 0;
     let mut has_self_addr = false;
-    for recipient in &mime_parser.recipients {
-        has_self_addr |= context.is_self_addr(&recipient.addr).await?;
-        if addr_cmp(&recipient.addr, &mime_parser.from.addr) {
-            continue;
+
+    if let Some((sender_fingerprint, intended_recipient_fingerprints)) = mime_parser
+        .signature
+        .as_ref()
+        .filter(|(_sender_fingerprint, fps)| !fps.is_empty())
+    {
+        // The message is signed and has intended recipient fingerprints.
+
+        // If the message has intended recipient fingerprint and is not trashed already,
+        // then it is intended for us.
+        has_self_addr = true;
+
+        num_recipients = intended_recipient_fingerprints
+            .iter()
+            .filter(|fp| *fp != sender_fingerprint)
+            .count();
+    } else {
+        // Message has no intended recipient fingerprints
+        // or is not signed, count the `To` field recipients.
+        for recipient in &mime_parser.recipients {
+            has_self_addr |= context.is_self_addr(&recipient.addr).await?;
+            if addr_cmp(&recipient.addr, &mime_parser.from.addr) {
+                continue;
+            }
+            num_recipients += 1;
         }
-        num_recipients += 1;
-    }
-    if from_id != ContactId::SELF && !has_self_addr {
-        num_recipients += 1;
+        if from_id != ContactId::SELF && !has_self_addr {
+            num_recipients += 1;
+        }
     }
     let mut can_be_11_chat_log = String::new();
     let mut l = |cond: bool, s: String| {
