@@ -450,7 +450,9 @@ impl<'a> BlobObject<'a> {
                     max_wh
                 };
 
-                if target_wh > n_px_longest_side {
+                if target_wh > n_px_longest_side
+                    || !is_avatar && target_wh > (f64::from(n_px_longest_side) * 0.98) as u32
+                {
                     target_wh = n_px_longest_side;
                 };
 
