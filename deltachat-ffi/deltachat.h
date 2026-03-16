@@ -1595,7 +1595,7 @@ void            dc_marknoticed_chat          (dc_context_t* context, uint32_t ch
  *
  * @memberof dc_context_t
  * @param context The context object as returned from dc_context_new().
- * @param chat_id The chat ID of which messages should be marked as fresh.
+ * @param chat_id The chat ID of which the last incoming message should be marked as fresh.
  *     If the chat does not have incoming messages, nothing happens.
  */
 void            dc_markfresh_chat            (dc_context_t* context, uint32_t chat_id);
