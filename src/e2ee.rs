@@ -40,7 +40,6 @@ impl EncryptHelper {
         keyring: Vec<SignedPublicKey>,
         mail_to_encrypt: MimePart<'static>,
         compress: bool,
-        anonymous_recipients: bool,
         seipd_version: SeipdVersion,
     ) -> Result<String> {
         let sign_key = load_self_secret_key(context).await?;
@@ -49,15 +48,8 @@ impl EncryptHelper {
         let cursor = Cursor::new(&mut raw_message);
         mail_to_encrypt.clone().write_part(cursor).ok();
 
-        let ctext = pgp::pk_encrypt(
-            raw_message,
-            keyring,
-            sign_key,
-            compress,
-            anonymous_recipients,
-            seipd_version,
-        )
-        .await?;
+        let ctext =
+            pgp::pk_encrypt(raw_message, keyring, sign_key, compress, seipd_version).await?;
 
         Ok(ctext)
     }
