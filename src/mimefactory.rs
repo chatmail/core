@@ -1163,17 +1163,6 @@ impl MimeFactory {
                 _ => None,
             };
 
-            // Do not anonymize OpenPGP recipients.
-            //
-            // This is disabled to avoid interoperability problems
-            // with old core versions <1.160.0 that do not support
-            // receiving messages with wildcard Key IDs:
-            // <https://github.com/chatmail/core/issues/7378>
-            //
-            // The option should be changed to true
-            // once new core versions are sufficiently deployed.
-            let anonymous_recipients = false;
-
             if context.get_config_bool(Config::TestHooks).await?
                 && let Some(hook) = &*context.pre_encrypt_mime_hook.lock()
             {
@@ -1211,7 +1200,6 @@ impl MimeFactory {
                         encryption_keyring,
                         message,
                         compress,
-                        anonymous_recipients,
                         seipd_version,
                     )
                     .await?

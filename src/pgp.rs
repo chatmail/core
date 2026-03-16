@@ -151,7 +151,6 @@ pub async fn pk_encrypt(
     public_keys_for_encryption: Vec<SignedPublicKey>,
     private_key_for_signing: SignedSecretKey,
     compress: bool,
-    anonymous_recipients: bool,
     seipd_version: SeipdVersion,
 ) -> Result<String> {
     Handle::current()
@@ -198,11 +197,7 @@ pub async fn pk_encrypt(
                     let mut msg = msg.seipd_v1(&mut rng, SYMMETRIC_KEY_ALGORITHM);
 
                     for pkey in pkeys {
-                        if anonymous_recipients {
-                            msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
-                        } else {
-                            msg.encrypt_to_key(&mut rng, &pkey)?;
-                        }
+                        msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                     }
 
                     let hash_algorithm = private_key_for_signing.hash_alg();
@@ -227,11 +222,7 @@ pub async fn pk_encrypt(
                     );
 
                     for pkey in pkeys {
-                        if anonymous_recipients {
-                            msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
-                        } else {
-                            msg.encrypt_to_key(&mut rng, &pkey)?;
-                        }
+                        msg.encrypt_to_key_anonymous(&mut rng, &pkey)?;
                     }
 
                     let hash_algorithm = private_key_for_signing.hash_alg();
@@ -707,7 +698,6 @@ mod tests {
 
     /// A ciphertext encrypted to Alice & Bob, signed by Alice.
     async fn ctext_signed() -> &'static String {
-        let anonymous_recipients = true;
         CTEXT_SIGNED
             .get_or_init(|| async {
                 let keyring = vec![KEYS.alice_public.clone(), KEYS.bob_public.clone()];
@@ -718,7 +708,6 @@ mod tests {
                     keyring,
                     KEYS.alice_secret.clone(),
                     compress,
-                    anonymous_recipients,
                     SeipdVersion::V2,
                 )
                 .await
@@ -905,12 +894,12 @@ mod tests {
         let pk_for_encryption = load_self_public_key(alice).await?;
 
         // Encrypt a message, but only to self, not to Bob:
+        let compress = true;
         let ctext = pk_encrypt(
             plain,
             vec![pk_for_encryption],
             KEYS.alice_secret.clone(),
-            true,
-            true,
+            compress,
             SeipdVersion::V2,
         )
         .await?;
