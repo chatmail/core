@@ -1332,6 +1332,54 @@ async fn test_marknoticed_all_chats() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_markfresh_chat() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // alice sends a message to Bob
+    let alice_chat = alice.create_chat(bob).await;
+    let sent_msg1 = alice.send_text(alice_chat.id, "hi bob!").await;
+
+    // bob received the message, fresh count is 1
+    let bob_msg1 = bob.recv_msg(&sent_msg1).await;
+    let bob_chat_id = bob_msg1.chat_id;
+    bob_chat_id.accept(bob).await?;
+    assert_eq!(bob_msg1.state, MessageState::InFresh);
+    assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 1);
+    assert_eq!(bob.get_fresh_msgs().await?.len(), 1);
+
+    // alice sends another message to bob, fresh count is 2
+    let sent_msg2 = alice.send_text(alice_chat.id, "howdy?").await;
+    let bob_msg2 = bob.recv_msg(&sent_msg2).await;
+    let bob_msg1 = Message::load_from_db(bob, bob_msg1.id).await?;
+    assert_eq!(bob_msg1.state, MessageState::InFresh);
+    assert_eq!(bob_msg2.state, MessageState::InFresh);
+    assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 2);
+    assert_eq!(bob.get_fresh_msgs().await?.len(), 2);
+
+    // bob marks the chat as noticed, messages are no longer fresh, fresh count is 0
+    marknoticed_chat(bob, bob_chat_id).await?;
+    let bob_msg1 = Message::load_from_db(bob, bob_msg1.id).await?;
+    let bob_msg2 = Message::load_from_db(bob, bob_msg2.id).await?;
+    assert_ne!(bob_msg1.state, MessageState::InFresh);
+    assert_ne!(bob_msg2.state, MessageState::InFresh);
+    assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 0);
+    assert_eq!(bob.get_fresh_msgs().await?.len(), 0);
+
+    // bob marks the chat as fresh again, fresh count is 1 again
+    markfresh_chat(bob, bob_chat_id).await?;
+    let bob_msg1 = Message::load_from_db(bob, bob_msg1.id).await?;
+    let bob_msg2 = Message::load_from_db(bob, bob_msg2.id).await?;
+    assert_ne!(bob_msg1.state, MessageState::InFresh);
+    assert_eq!(bob_msg2.state, MessageState::InFresh);
+    assert_eq!(bob_chat_id.get_fresh_msg_cnt(bob).await?, 1);
+    assert_eq!(bob.get_fresh_msgs().await?.len(), 1);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive_fresh_msgs() -> Result<()> {
     let t = TestContext::new_alice().await;
 
