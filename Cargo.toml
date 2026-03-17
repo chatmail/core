@@ -87,7 +87,7 @@ rand = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true, features = ["sqlcipher"] }
 sanitize-filename = { workspace = true }
-sdp = "0.10.0"
+sdp = "0.17.1"
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 serde = { workspace = true, features = ["derive"] }
