@@ -1,4 +1,6 @@
 //! Tests about receiving Pre-Messages and Post-Message
+use std::time::Duration;
+
 use anyhow::{Context as _, Result};
 use pretty_assertions::assert_eq;
 
@@ -8,16 +10,18 @@ use crate::chat::send_msg;
 use crate::config::Config;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
-use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
+use crate::message::{self, Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
 use crate::receive_imf::receive_imf;
+use crate::smtp;
 use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
     big_webxdc_app, send_large_file_message, send_large_image_message, send_large_webxdc_message,
 };
+use crate::tools::{SystemTime, time};
 use crate::webxdc::StatusUpdateSerial;
 
 /// Test that mimeparser can correctly detect and parse pre-messages and Post-Messages
@@ -709,7 +713,7 @@ async fn test_markseen_pre_msg() -> Result<()> {
     alice.create_chat(bob).await; // Make sure the chat is accepted.
 
     tcm.section("Bob sends a large message to Alice");
-    let (pre_message, post_message, _bob_msg_id) =
+    let (pre_message, post_message, bob_msg_id) =
         send_large_file_message(bob, bob_chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
 
     tcm.section("Alice receives a pre-message message from Bob");
@@ -728,6 +732,16 @@ async fn test_markseen_pre_msg() -> Result<()> {
             .await?,
         1
     );
+    smtp::queue_mdn(alice).await;
+    SystemTime::shift(Duration::from_secs(3600));
+    bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+    let bob_msg = Message::load_from_db(bob, bob_msg_id).await?;
+    assert_eq!(bob_msg.get_state(), MessageState::OutMdnRcvd);
+    let read_receipts = message::get_msg_read_receipts(bob, bob_msg_id).await?;
+    assert_eq!(read_receipts.len(), 1);
+    let (contact_id, ts) = read_receipts[0];
+    assert_eq!(contact_id, bob.add_or_lookup_contact_id(alice).await);
+    assert!(ts + 3600 - 60 < time());
 
     tcm.section("Alice downloads message");
     alice.recv_msg_trash(&post_message).await;
