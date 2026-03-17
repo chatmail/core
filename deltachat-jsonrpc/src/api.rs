@@ -553,25 +553,10 @@ impl CommandApi {
     }
 
     /// Returns the list of all email accounts that are used as a transport in the current profile.
-    /// Use [Self::add_or_update_transport()] to add or change a transport
+    /// Use [Self::add_or_update_transport()] to add or change a transport,
+    /// [Self::set_transport_unpublished()] to publish or unpublish a transport,
     /// and [Self::delete_transport()] to delete a transport.
-    /// Use [Self::list_transports_ex()] to additionally query
-    /// whether the transports are marked as 'unpublished'.
-    async fn list_transports(&self, account_id: u32) -> Result<Vec<EnteredLoginParam>> {
-        let ctx = self.get_context(account_id).await?;
-        let res = ctx
-            .list_transports()
-            .await?
-            .into_iter()
-            .map(|t| t.param.into())
-            .collect();
-        Ok(res)
-    }
-
-    /// Returns the list of all email accounts that are used as a transport in the current profile.
-    /// Use [Self::add_or_update_transport()] to add or change a transport
-    /// and [Self::delete_transport()] to delete a transport.
-    async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<Transport>> {
+    async fn list_transports(&self, account_id: u32) -> Result<Vec<Transport>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
             .list_transports()

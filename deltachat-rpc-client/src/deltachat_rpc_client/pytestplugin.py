@@ -99,7 +99,7 @@ class ACFactory:
         ac.remove()
         ac_clone = self.get_unconfigured_account()
         for transport in transports:
-            ac_clone.add_or_update_transport(transport)
+            ac_clone.add_or_update_transport(transport["param"])
         ac_clone.bring_online()
         return ac_clone
 

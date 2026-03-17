@@ -22,8 +22,8 @@ def test_add_second_address(acfactory) -> None:
     account.add_transport_from_qr(qr)
     assert len(account.list_transports()) == 3
 
-    first_addr = account.list_transports()[0]["addr"]
-    second_addr = account.list_transports()[1]["addr"]
+    first_addr = account.list_transports()[0]["param"]["addr"]
+    second_addr = account.list_transports()[1]["param"]["addr"]
 
     # Cannot delete the first address.
     with pytest.raises(JsonRpcError):
@@ -90,7 +90,7 @@ def test_change_address(acfactory) -> None:
     assert old_alice_addr in alice_vcard
     qr = acfactory.get_account_qr()
     alice.add_transport_from_qr(qr)
-    new_alice_addr = alice.list_transports()[1]["addr"]
+    new_alice_addr = alice.list_transports()[1]["param"]["addr"]
     with pytest.raises(JsonRpcError):
         # Cannot use the address that is not
         # configured for any transport.
@@ -179,7 +179,7 @@ def test_reconfigure_transport(acfactory) -> None:
     account.set_config("mvbox_move", "1")
 
     [transport] = account.list_transports()
-    account.add_or_update_transport(transport)
+    account.add_or_update_transport(transport["param"])
 
     # Reconfiguring the transport should not reset
     # the settings as if when configuring the first transport.
@@ -215,15 +215,15 @@ def test_transport_synchronization(acfactory, log) -> None:
 
     log.section("ac1 clone removes second transport")
     [transport1, transport2, transport3] = ac1_clone.list_transports()
-    addr3 = transport3["addr"]
-    ac1_clone.delete_transport(transport2["addr"])
+    addr3 = transport3["param"]["addr"]
+    ac1_clone.delete_transport(transport2["param"]["addr"])
 
     ac1.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     wait_for_io_started(ac1)
     [transport1, transport3] = ac1.list_transports()
 
     log.section("ac1 changes the primary transport")
-    ac1.set_config("configured_addr", transport3["addr"])
+    ac1.set_config("configured_addr", transport3["param"]["addr"])
 
     # One event for updated `add_timestamp` of the new primary transport,
     # one event for the `configured_addr` update.
@@ -233,12 +233,12 @@ def test_transport_synchronization(acfactory, log) -> None:
     assert ac1_clone.get_config("configured_addr") == addr3
 
     log.section("ac1 removes the first transport")
-    ac1.delete_transport(transport1["addr"])
+    ac1.delete_transport(transport1["param"]["addr"])
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     wait_for_io_started(ac1_clone)
     [transport3] = ac1_clone.list_transports()
-    assert transport3["addr"] == addr3
+    assert transport3["param"]["addr"] == addr3
     assert ac1_clone.get_config("configured_addr") == addr3
 
     ac2_chat = ac2.create_chat(ac1)
@@ -262,13 +262,13 @@ def test_transport_sync_new_as_primary(acfactory, log) -> None:
     [transport1, transport2] = ac1_transports
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
     assert len(ac1_clone.list_transports()) == 2
-    assert ac1_clone.get_config("configured_addr") == transport1["addr"]
+    assert ac1_clone.get_config("configured_addr") == transport1["param"]["addr"]
 
     log.section("ac1 changes the primary transport")
-    ac1.set_config("configured_addr", transport2["addr"])
+    ac1.set_config("configured_addr", transport2["param"]["addr"])
 
     ac1_clone.wait_for_event(EventType.TRANSPORTS_MODIFIED)
-    assert ac1_clone.get_config("configured_addr") == transport2["addr"]
+    assert ac1_clone.get_config("configured_addr") == transport2["param"]["addr"]
 
     log.section("ac1_clone receives a message via the new primary transport")
     ac1_chat = ac1.create_chat(bob)
@@ -288,7 +288,7 @@ def test_recognize_self_address(acfactory) -> None:
     qr = acfactory.get_account_qr()
     alice.add_transport_from_qr(qr)
 
-    new_alice_addr = alice.list_transports()[1]["addr"]
+    new_alice_addr = alice.list_transports()[1]["param"]["addr"]
     alice.set_config("configured_addr", new_alice_addr)
 
     bob_chat.send_text("Hello!")
@@ -311,7 +311,7 @@ def test_transport_limit(acfactory) -> None:
     with pytest.raises(JsonRpcError):
         account.add_transport_from_qr(qr)
 
-    second_addr = account.list_transports()[1]["addr"]
+    second_addr = account.list_transports()[1]["param"]["addr"]
     account.delete_transport(second_addr)
 
     # test that adding a transport after deleting one works again
@@ -337,13 +337,13 @@ def test_message_info_imap_urls(acfactory) -> None:
     bob_chat = bob.create_chat(alice)
 
     # Alice switches to another transport and removes the rest of the transports.
-    new_alice_addr = alice.list_transports()[1]["addr"]
+    new_alice_addr = alice.list_transports()[1]["param"]["addr"]
     alice.set_config("configured_addr", new_alice_addr)
     removed_addrs = []
     for transport in alice.list_transports():
-        if transport["addr"] != new_alice_addr:
-            alice.delete_transport(transport["addr"])
-            removed_addrs.append(transport["addr"])
+        if transport["param"]["addr"] != new_alice_addr:
+            alice.delete_transport(transport["param"]["addr"])
+            removed_addrs.append(transport["param"]["addr"])
     alice.stop_io()
     alice.start_io()
 
@@ -370,14 +370,14 @@ def test_remove_primary_transport(acfactory) -> None:
 
     # Alice changes the transport.
     [transport1, transport2] = alice.list_transports()
-    alice.set_config("configured_addr", transport2["addr"])
+    alice.set_config("configured_addr", transport2["param"]["addr"])
 
     bob_chat.send_text("Hello!")
     msg1 = alice.wait_for_incoming_msg().get_snapshot()
     assert msg1.text == "Hello!"
 
     # Alice deletes the first transport.
-    alice.delete_transport(transport1["addr"])
+    alice.delete_transport(transport1["param"]["addr"])
     alice.stop_io()
     alice.start_io()
 

@@ -88,7 +88,7 @@ def test_lowercase_address(acfactory) -> None:
     assert account.is_configured()
     assert addr_upper != addr
     assert account.get_config("configured_addr") == addr
-    assert account.list_transports()[0]["addr"] == addr
+    assert account.list_transports()[0]["param"]["addr"] == addr
 
     param = account.get_info()["used_transport_settings"]
     assert addr in param
@@ -138,7 +138,7 @@ def test_list_transports(acfactory) -> None:
     )
     transports = account.list_transports()
     assert len(transports) == 1
-    params = transports[0]
+    params = transports[0]["param"]
     assert params["addr"] == addr
     assert params["password"] == password
     assert params["imapUser"] == addr
