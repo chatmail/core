@@ -259,6 +259,26 @@ async fn test_selfavatar_copy_without_recode() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_image_long_narrow() {
+    let bytes = include_bytes!("../../test-data/image/screenshot.png");
+    SendImageCheckMediaquality {
+        viewtype: Viewtype::Image,
+        media_quality_config: "0",
+        bytes,
+        extension: "jpg",
+        original_width: 1920,
+        original_height: 1080,
+        compressed_width: 1872,
+        compressed_height: 1053,
+        ..Default::default()
+    }
+    .test()
+    .await
+    .unwrap();
+    assert!(false);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_recode_image_1() {
     let bytes = include_bytes!("../../test-data/image/avatar1000x1000.jpg");
     SendImageCheckMediaquality {

@@ -193,7 +193,7 @@ pub const DC_LP_AUTH_NORMAL: i32 = 0x4;
 pub const DC_LP_AUTH_FLAGS: i32 = DC_LP_AUTH_OAUTH2 | DC_LP_AUTH_NORMAL;
 
 // max. weight of images to send w/o recoding
-pub const BALANCED_IMAGE_BYTES: usize = 500_000;
+pub const BALANCED_IMAGE_BYTES: usize = 1;
 pub const WORSE_IMAGE_BYTES: usize = 130_000;
 
 // max. width/height and bytes of an avatar
@@ -203,7 +203,7 @@ pub(crate) const WORSE_AVATAR_SIZE: u32 = 256;
 pub(crate) const WORSE_AVATAR_BYTES: usize = 20_000; // this also fits to Outlook servers don't allowing headers larger than 32k.
 
 // max. width/height of images scaled down because of being too huge
-pub const BALANCED_IMAGE_SIZE: u32 = 1280;
+pub const BALANCED_IMAGE_SIZE: u32 = 1408;
 pub const WORSE_IMAGE_SIZE: u32 = 640;
 
 /// Limit for received images size. Bigger images become `Viewtype::File` to avoid excessive memory
