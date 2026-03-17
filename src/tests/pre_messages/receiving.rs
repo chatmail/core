@@ -10,6 +10,7 @@ use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
+use crate::smtp;
 use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
@@ -523,7 +524,7 @@ async fn test_markseen_pre_msg() -> Result<()> {
     alice.create_chat(bob).await; // Make sure the chat is accepted.
 
     tcm.section("Bob sends a large message to Alice");
-    let (pre_message, post_message, _bob_msg_id) =
+    let (pre_message, post_message, bob_msg_id) =
         send_large_file_message(bob, bob_chat_id, Viewtype::File, &vec![0u8; 1_000_000]).await?;
 
     tcm.section("Alice receives a pre-message message from Bob");
@@ -542,6 +543,10 @@ async fn test_markseen_pre_msg() -> Result<()> {
             .await?,
         1
     );
+    smtp::queue_mdn(alice).await?;
+    bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+    let bob_msg = Message::load_from_db(bob, bob_msg_id).await?;
+    assert_eq!(bob_msg.get_state(), MessageState::OutMdnRcvd);
 
     tcm.section("Alice downloads message");
     alice.recv_msg_trash(&post_message).await;
