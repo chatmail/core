@@ -3063,11 +3063,7 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
         assert_eq!(msg_id.get_state(alice).await?, MessageState::OutDelivered);
     }
     for i in 0..N_MSGS_TO_NEW_BROADCAST_MEMBER {
-        let rev_order = false;
-        let resent_msg = alice
-            .pop_sent_msg_ex(rev_order, Duration::ZERO)
-            .await
-            .unwrap();
+        let resent_msg = alice.pop_sent_msg_ex(Default::default()).await.unwrap();
         let fiona_msg = fiona.recv_msg(&resent_msg).await;
         assert_eq!(fiona_msg.chat_id, fiona_bc_id);
         assert_eq!(fiona_msg.text, (i + 1).to_string());

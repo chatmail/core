@@ -291,15 +291,14 @@ impl TestContextManager {
 
         for _ in 0..2 {
             let mut something_sent = false;
-            let rev_order = false;
-            if let Some(sent) = joiner.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
+            if let Some(sent) = joiner.pop_sent_msg_ex(Default::default()).await {
                 for inviter in inviters {
                     inviter.recv_msg_opt(&sent).await;
                 }
                 something_sent = true;
             }
             for inviter in inviters {
-                if let Some(sent) = inviter.pop_sent_msg_ex(rev_order, Duration::ZERO).await {
+                if let Some(sent) = inviter.pop_sent_msg_ex(Default::default()).await {
                     joiner.recv_msg_opt(&sent).await;
                     something_sent = true;
                 }
@@ -489,6 +488,19 @@ pub struct TestContext {
     _log_sink: Option<LogSink>,
 }
 
+pub mod test_context {
+    use super::*;
+
+    /// [`TestContext::pop_sent_msg_ex`] arguments.
+    #[derive(Default)]
+    pub struct PopSentMsgArgs {
+        pub rev_order: bool,
+        pub timeout: Duration,
+    }
+}
+
+use test_context::PopSentMsgArgs;
+
 impl TestContext {
     /// Returns the builder to have more control over creating the context.
     pub fn builder() -> TestContextBuilder {
@@ -644,15 +656,15 @@ impl TestContext {
     }
 
     pub async fn pop_sent_msg_opt(&self, timeout: Duration) -> Option<SentMessage<'_>> {
-        let rev_order = true;
-        self.pop_sent_msg_ex(rev_order, timeout).await
+        self.pop_sent_msg_ex(PopSentMsgArgs {
+            rev_order: true,
+            timeout,
+        })
+        .await
     }
 
-    pub async fn pop_sent_msg_ex(
-        &self,
-        rev_order: bool,
-        timeout: Duration,
-    ) -> Option<SentMessage<'_>> {
+    pub async fn pop_sent_msg_ex(&self, args: PopSentMsgArgs) -> Option<SentMessage<'_>> {
+        let PopSentMsgArgs { rev_order, timeout } = args;
         let start = Instant::now();
         let mut query = "
 SELECT id, msg_id, mime, recipients
