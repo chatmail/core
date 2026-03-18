@@ -29,7 +29,7 @@ use crate::context::Context;
 use crate::imap::Imap;
 use crate::log::warn;
 pub use crate::login_param::EnteredLoginParam;
-use crate::login_param::{EnteredCertificateChecks, Transport};
+use crate::login_param::{EnteredCertificateChecks, TransportListEntry};
 use crate::message::Message;
 use crate::net::proxy::ProxyConfig;
 use crate::oauth2::get_oauth2_addr;
@@ -189,7 +189,7 @@ impl Context {
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
-    pub async fn list_transports(&self) -> Result<Vec<Transport>> {
+    pub async fn list_transports(&self) -> Result<Vec<TransportListEntry>> {
         let transports = self
             .sql
             .query_map_vec(
@@ -199,7 +199,7 @@ impl Context {
                     let param: String = row.get(0)?;
                     let param: EnteredLoginParam = serde_json::from_str(&param)?;
                     let is_published: bool = row.get(1)?;
-                    Ok(Transport {
+                    Ok(TransportListEntry {
                         param,
                         is_unpublished: !is_published,
                     })

@@ -68,7 +68,7 @@ use self::types::{
     },
 };
 use crate::api::types::chat_list::{get_chat_list_item_by_id, ChatListItemFetchResult};
-use crate::api::types::login_param::Transport;
+use crate::api::types::login_param::TransportListEntry;
 use crate::api::types::qr::{QrObject, SecurejoinSource, SecurejoinUiPath};
 
 #[derive(Debug)]
@@ -571,7 +571,7 @@ impl CommandApi {
     /// Returns the list of all email accounts that are used as a transport in the current profile.
     /// Use [Self::add_or_update_transport()] to add or change a transport
     /// and [Self::delete_transport()] to delete a transport.
-    async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<Transport>> {
+    async fn list_transports_ex(&self, account_id: u32) -> Result<Vec<TransportListEntry>> {
         let ctx = self.get_context(account_id).await?;
         let res = ctx
             .list_transports()
