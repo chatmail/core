@@ -81,7 +81,7 @@ pub struct EnteredServerLoginParam {
 
 /// A transport, as shown in the "relays" list in the UI.
 #[derive(Debug)]
-pub struct Transport {
+pub struct TransportListEntry {
     /// The login data entered by the user.
     pub param: EnteredLoginParam,
     /// Whether this transport is set to 'unpublished'.

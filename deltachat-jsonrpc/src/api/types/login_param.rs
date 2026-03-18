@@ -6,7 +6,7 @@ use yerpc::TypeDef;
 
 #[derive(Serialize, TypeDef, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct Transport {
+pub struct TransportListEntry {
     /// The login data entered by the user.
     pub param: EnteredLoginParam,
     /// Whether this transport is set to 'unpublished'.
@@ -66,9 +66,9 @@ pub struct EnteredLoginParam {
     pub oauth2: Option<bool>,
 }
 
-impl From<dc::Transport> for Transport {
-    fn from(transport: dc::Transport) -> Self {
-        Transport {
+impl From<dc::TransportListEntry> for TransportListEntry {
+    fn from(transport: dc::TransportListEntry) -> Self {
+        TransportListEntry {
             param: transport.param.into(),
             is_unpublished: transport.is_unpublished,
         }
