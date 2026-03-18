@@ -1085,6 +1085,13 @@ impl Context {
                 .to_string(),
         );
         res.insert(
+            "pop_sent_msg_from_head",
+            self.sql
+                .get_raw_config("pop_sent_msg_from_head")
+                .await?
+                .unwrap_or_default(),
+        );
+        res.insert(
             "test_hooks",
             self.sql
                 .get_raw_config("test_hooks")

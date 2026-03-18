@@ -2489,6 +2489,8 @@ async fn handle_mdn(
     let Some((msg_id, chat_id, has_mdns, is_dup)) = context
         .sql
         .query_row_optional(
+            // MDN on a pre-message references the post-message, see `receive_imf`. So we can't tell
+            // which one was seen, but this is on purpose.
             "SELECT
                 m.id AS msg_id,
                 c.id AS chat_id,
