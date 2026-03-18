@@ -427,6 +427,10 @@ pub enum Config {
     /// storing the same token multiple times on the server.
     EncryptedDeviceToken,
 
+    /// Make `TestContext::pop_sent_msg_opt()` and related functions pop messages from the `smtp`
+    /// head, i.e. make it a queue. For historical reasons the default is a stack.
+    PopSentMsgFromHead,
+
     /// Enables running test hooks, e.g. see `InnerContext::pre_encrypt_mime_hook`.
     /// This way is better than conditional compilation, i.e. `#[cfg(test)]`, because tests not
     /// using this still run unmodified code.

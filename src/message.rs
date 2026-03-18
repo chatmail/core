@@ -1904,9 +1904,10 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
             //
             // We also don't send read receipts for contact requests.
             // Read receipts will not be sent even after accepting the chat.
+            let wants_mdn = curr_param.get_bool(Param::WantsMdn).unwrap_or_default();
             let to_id = if curr_blocked == Blocked::Not
                 && !curr_hidden
-                && curr_param.get_bool(Param::WantsMdn).unwrap_or_default()
+                && wants_mdn
                 && curr_param.get_cmd() == SystemMessage::Unknown
                 && context.should_send_mdns().await?
             {
@@ -1928,6 +1929,11 @@ pub async fn markseen_msgs(context: &Context, msg_ids: Vec<MsgId>) -> Result<()>
                 None
             };
             if let Some(to_id) = to_id {
+                info!(
+                    context,
+                    "Queuing MDN to {to_id} for {id} from {curr_from_id}, wants_mdn={wants_mdn}, cmd={}.",
+                    curr_param.get_cmd()
+                );
                 context
                     .sql
                     .execute(
