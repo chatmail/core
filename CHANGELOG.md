@@ -1,5 +1,47 @@
 # Changelog
 
+## [2.46.0] - 2026-03-19
+
+### API-Changes
+
+- [**breaking**] remove functions for sending and receiving Autocrypt Setup Message.
+- Add `list_transports_ex()` and `set_transport_unpublished()` functions.
+
+### Features / Changes
+
+- add `IncomingCallAccepted.from_this_device`.
+- mark messages as "fresh".
+- decode `dcaccount://` URLs and error out on empty URLs early.
+- enable anonymous OpenPGP key IDs.
+- tls: do not verify TLS certificates for hostnames starting with `_`.
+
+### Fixes
+
+- Mark call message as seen when accepting/declining a call ([#7842](https://github.com/chatmail/core/pull/7842)).
+- do not send MDNs for hidden messages.
+- call sync_all() instead of sync_data() when writing accounts.toml.
+- fsync() the rename() of accounts.toml.
+- count recipients by Intended Recipient Fingerprints.
+
+### Miscellaneous Tasks
+
+- deps: bump zizmorcore/zizmor-action from 0.5.0 to 0.5.2.
+- cargo: bump astral-tokio-tar from 0.5.6 to 0.6.0.
+- deps: bump actions/upload-artifact from 6 to 7.
+- cargo: bump blake3 from 1.8.2 to 1.8.3.
+- add constant_time_eq 0.3.1 to deny.toml.
+
+### Refactor
+
+- use re-exported rustls::pki_types.
+- import tokio_rustls::rustls.
+- Move transport_tests to their own file.
+
+### Tests
+
+- Shift time even more in flaky test_sync_broadcast_and_send_message.
+- test markfresh_chat()
+
 ## [2.45.0] - 2026-03-14
 
 ### API-Changes
@@ -7907,3 +7949,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.43.0]: https://github.com/chatmail/core/compare/v2.42.0..v2.43.0
 [2.44.0]: https://github.com/chatmail/core/compare/v2.43.0..v2.44.0
 [2.45.0]: https://github.com/chatmail/core/compare/v2.44.0..v2.45.0
+[2.46.0]: https://github.com/chatmail/core/compare/v2.45.0..v2.46.0
