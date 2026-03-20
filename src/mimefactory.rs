@@ -1525,7 +1525,7 @@ impl MimeFactory {
                 let description = chat::get_chat_description(context, chat.id).await?;
                 headers.push((
                     "Chat-Group-Description",
-                    mail_builder::headers::text::Text::new(description.clone()).into(),
+                    mail_builder::headers::raw::Raw::new(b_encode(&description)).into(),
                 ));
                 if let Some(ts) = chat.param.get_i64(Param::GroupDescriptionTimestamp) {
                     headers.push((

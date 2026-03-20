@@ -3335,7 +3335,12 @@ async fn test_chat_description(
         initial_description
     );
 
-    for description in ["This is a cool chat", "", "ä ẟ 😂"] {
+    for description in [
+        &"This<>is 'a' \"cool\" chat:/\\|?*".repeat(50),
+        "multiple\nline\n\nbreaks\n\n\r\n.",
+        "",
+        "ä ẟ 😂",
+    ] {
         tcm.section(&format!(
             "Alice sets the chat description to '{description}'"
         ));
