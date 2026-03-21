@@ -71,24 +71,6 @@ struct InnerPool {
     /// This mutex is locked when write connection
     /// is outside the pool.
     pub(crate) write_mutex: Arc<Mutex<()>>,
-
-    /// WAL checkpointing mutex.
-    ///
-    /// This mutex ensures that no more than one thread
-    /// runs WAL checkpointing at the same time.
-    ///
-    /// Normal procedures acquire either one read connection
-    /// or one write connection with a write mutex,
-    /// and return the resources without trying to acquire
-    /// more connections or trying to acquire write mutex
-    /// without returning the read connection first.
-    /// WAL checkpointing is special, it tries to acquire all
-    /// connections and the write mutex,
-    /// so two threads doing this at the same time
-    /// may result in a deadlock with one thread
-    /// waiting for a write lock and the other thread
-    /// waiting for a connection.
-    wal_checkpoint_mutex: Mutex<()>,
 }
 
 impl InnerPool {
@@ -209,7 +191,6 @@ impl Pool {
             connections: parking_lot::Mutex::new(connections),
             semaphore,
             write_mutex: Default::default(),
-            wal_checkpoint_mutex: Default::default(),
         });
         Pool { inner }
     }
