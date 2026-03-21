@@ -960,14 +960,16 @@ impl MimeMessage {
         self.parse_attachments();
 
         // See if an MDN is requested from the other side
+        let mut wants_mdn = false;
         if !self.decrypting_failed
-            && !self.parts.is_empty()
+            && (!self.parts.is_empty() || matches!(&self.pre_message, PreMessageMode::Pre { .. }))
             && let Some(ref dn_to) = self.chat_disposition_notification_to
         {
             // Check that the message is not outgoing.
             let from = &self.from.addr;
             if !context.is_self_addr(from).await? {
                 if from.to_lowercase() == dn_to.addr.to_lowercase() {
+                    wants_mdn = true;
                     if let Some(part) = self.parts.last_mut() {
                         part.param.set_int(Param::WantsMdn, 1);
                     }
@@ -989,7 +991,9 @@ impl MimeMessage {
                 typ: Viewtype::Text,
                 ..Default::default()
             };
-
+            if wants_mdn {
+                part.param.set_int(Param::WantsMdn, 1);
+            }
             if let Some(ref subject) = self.get_subject()
                 && !self.has_chat_version()
                 && self.webxdc_status_update.is_none()
