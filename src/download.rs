@@ -326,22 +326,25 @@ pub(crate) async fn download_known_post_messages_without_pre_message(
         })
         .await?;
     for rfc724_mid in &rfc724_mids {
-        if !msg_is_downloaded_for(context, rfc724_mid).await? {
-            // Download the Post-Message unconditionally,
-            // because the Pre-Message got lost.
-            // The message may be in the wrong order,
-            // but at least we have it at all.
-            let res = download_msg(context, rfc724_mid.clone(), session).await;
-            if let Ok(Some(())) = res {
-                delete_from_available_post_msgs(context, rfc724_mid).await?;
-            }
-            if let Err(err) = res {
-                warn!(
-                    context,
-                    "download_known_post_messages_without_pre_message: Failed to download message rfc724_mid={rfc724_mid}: {:#}.",
-                    err
-                );
-            }
+        if msg_is_downloaded_for(context, rfc724_mid).await? {
+            delete_from_available_post_msgs(context, rfc724_mid).await?;
+            continue;
+        }
+
+        // Download the Post-Message unconditionally,
+        // because the Pre-Message got lost.
+        // The message may be in the wrong order,
+        // but at least we have it at all.
+        let res = download_msg(context, rfc724_mid.clone(), session).await;
+        if let Ok(Some(())) = res {
+            delete_from_available_post_msgs(context, rfc724_mid).await?;
+        }
+        if let Err(err) = res {
+            warn!(
+                context,
+                "download_known_post_messages_without_pre_message: Failed to download message rfc724_mid={rfc724_mid}: {:#}.",
+                err
+            );
         }
     }
     Ok(())
