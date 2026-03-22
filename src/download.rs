@@ -165,6 +165,7 @@ pub(crate) async fn download_msg(
 
     let Some((server_uid, server_folder, msg_transport_id)) = row else {
         // No IMAP record found, we don't know the UID and folder.
+        delete_from_available_post_msgs(context, &rfc724_mid).await?;
         return Err(anyhow!(
             "IMAP location for {rfc724_mid:?} post-message is unknown"
         ));
