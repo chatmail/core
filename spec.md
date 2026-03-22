@@ -39,9 +39,24 @@ Messages SHOULD be encrypted by the
 [Autocrypt](https://autocrypt.org/level1.html) standard;
 `prefer-encrypt=mutual` MAY be set by default.
 
-Meta data (at least the subject and all chat-headers) SHOULD be encrypted
-by the [Protected Headers](https://tools.ietf.org/id/draft-autocrypt-lamps-protected-headers-02.html) standard.
-
+Meta data SHOULD be encrypted
+by the [Header Protection](https://www.rfc-editor.org/rfc/rfc9788.html) standard
+with the following [Header Confidentiality Policy](https://www.rfc-editor.org/rfc/rfc9788.html#name-header-confidentiality-poli):
+```
+hcp_chat(name, val_in) → val_out:
+    if lower(name) is 'from':
+        assert that val_in is an RFC 5322 mailbox
+        return the RFC 5322 addr-spec part of val_in
+    else if lower(name) is 'to':
+        return '"hidden-recipients": ;'
+    else if lower(name) is 'date':
+        return the UTC form of a random date within the last 7 days
+    else if lower(name) is 'subject':
+        return '[...]'
+    else if lower(name) is in ['message-id', 'chat-is-post-message']:
+        return val_in
+    return null
+```
 
 # Outgoing messages
 
