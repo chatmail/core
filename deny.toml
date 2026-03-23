@@ -49,6 +49,7 @@ skip = [
      { name = "rand_core", version = "0.6.4" },
      { name = "rand", version = "0.8.5" },
      { name = "rustix", version = "0.38.44" },
+     { name = "rustls-webpki", version = "0.102.8" },
      { name = "serdect", version = "0.2.0" },
      { name = "socket2", version = "0.5.9" },
      { name = "spin", version = "0.9.8" },
