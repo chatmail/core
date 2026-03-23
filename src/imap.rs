@@ -561,15 +561,18 @@ impl Imap {
             .select_with_uidvalidity(context, folder)
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
-        if !folder_exists {
-            return Ok(false);
-        }
 
         if !session.new_mail {
             info!(context, "No new emails in folder {folder:?}.");
             return Ok(false);
         }
+        // Make sure not to return before setting new_mail to false
+        // Otherwise, we will skip IDLE and go into an infinite loop
         session.new_mail = false;
+
+        if !folder_exists {
+            return Ok(false);
+        }
 
         let mut read_cnt = 0;
         loop {
@@ -1237,6 +1240,7 @@ impl Session {
             // have been modified while our request was in progress.
             // We may or may not have these new flags as a part of the response,
             // so better skip next IDLE and do another round of flag synchronization.
+            info!(context, "Got unsolicited fetch, will skip idle");
             self.new_mail = true;
         }
 
