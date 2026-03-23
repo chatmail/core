@@ -569,6 +569,7 @@ impl Imap {
             info!(context, "No new emails in folder {folder:?}.");
             return Ok(false);
         }
+        info!(context, "Setting new_mail to False");
         session.new_mail = false;
 
         let mut read_cnt = 0;
@@ -1237,6 +1238,7 @@ impl Session {
             // have been modified while our request was in progress.
             // We may or may not have these new flags as a part of the response,
             // so better skip next IDLE and do another round of flag synchronization.
+            info!(context, "got unsolicited fetch in folder");
             self.new_mail = true;
         }
 
