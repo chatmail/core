@@ -567,6 +567,7 @@ async fn fetch_idle(
         )
         .await
         .context("idle")?;
+    info!(ctx, "dbg 1");
 
     Ok(session)
 }

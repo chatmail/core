@@ -515,6 +515,7 @@ impl Imap {
         watch_folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<()> {
+        info!(context, "dbg 2");
         if !context.sql.is_open().await {
             // probably shutdown
             bail!("IMAP operation attempted while it is torn down");
@@ -551,6 +552,7 @@ impl Imap {
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<bool> {
+        info!(context, "dbg 3");
         if should_ignore_folder(context, folder, folder_meaning).await? {
             info!(context, "Not fetching from {folder:?}.");
             session.new_mail = false;
@@ -562,6 +564,7 @@ impl Imap {
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
         if !folder_exists {
+            info!(context, "dbg 4");
             return Ok(false);
         }
 
