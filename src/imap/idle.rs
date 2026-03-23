@@ -30,17 +30,13 @@ impl Session {
         self.select_with_uidvalidity(context, folder).await?;
 
         if self.drain_unsolicited_responses(context)? {
-            info!(
-                context,
-                "Setting new_mail to True"
-            );
             self.new_mail = true;
         }
 
         if self.new_mail {
             info!(
                 context,
-                "YES YES YES Skipping IDLE in {folder:?} because there may be new mail."
+                "Skipping IDLE in {folder:?} because there may be new mail."
             );
             return Ok(self);
         }

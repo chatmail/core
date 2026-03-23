@@ -515,7 +515,6 @@ impl Imap {
         watch_folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<()> {
-        info!(context, "dbg 2");
         if !context.sql.is_open().await {
             // probably shutdown
             bail!("IMAP operation attempted while it is torn down");
@@ -552,7 +551,6 @@ impl Imap {
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<bool> {
-        info!(context, "dbg 3");
         if should_ignore_folder(context, folder, folder_meaning).await? {
             info!(context, "Not fetching from {folder:?}.");
             session.new_mail = false;
@@ -568,11 +566,9 @@ impl Imap {
             info!(context, "No new emails in folder {folder:?}.");
             return Ok(false);
         }
-        info!(context, "Setting new_mail to False");
         session.new_mail = false;
 
         if !folder_exists {
-            info!(context, "dbg 4");
             return Ok(false);
         }
 
@@ -1242,7 +1238,7 @@ impl Session {
             // have been modified while our request was in progress.
             // We may or may not have these new flags as a part of the response,
             // so better skip next IDLE and do another round of flag synchronization.
-            info!(context, "got unsolicited fetch in folder");
+            info!(context, "Got unsolicited fetch, will skip idle");
             self.new_mail = true;
         }
 
