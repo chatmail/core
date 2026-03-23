@@ -563,10 +563,6 @@ impl Imap {
             .select_with_uidvalidity(context, folder)
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
-        if !folder_exists {
-            info!(context, "dbg 4");
-            return Ok(false);
-        }
 
         if !session.new_mail {
             info!(context, "No new emails in folder {folder:?}.");
@@ -574,6 +570,11 @@ impl Imap {
         }
         info!(context, "Setting new_mail to False");
         session.new_mail = false;
+
+        if !folder_exists {
+            info!(context, "dbg 4");
+            return Ok(false);
+        }
 
         let mut read_cnt = 0;
         loop {
