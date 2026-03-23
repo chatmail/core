@@ -1,6 +1,9 @@
 use deltachat_contact_tools::ContactAddress;
 use mail_builder::headers::Header;
 use mailparse::{MailHeaderMap, addrparse_header};
+use pgp::armor;
+use pgp::packet::{Packet, PacketParser};
+use std::io::BufReader;
 use std::str;
 use std::time::Duration;
 
@@ -11,7 +14,7 @@ use crate::chat::{
 };
 use crate::chatlist::Chatlist;
 use crate::constants;
-use crate::contact::Origin;
+use crate::contact::{Origin, import_vcard};
 use crate::headerdef::HeaderDef;
 use crate::message;
 use crate::mimeparser::MimeMessage;
@@ -874,6 +877,88 @@ async fn test_no_empty_to_header() -> Result<()> {
         payload.contains("To: \"hidden-recipients\": ;"),
         "Payload doesn't contain correct To: header: {payload}"
     );
+
+    Ok(())
+}
+
+/// Parses ASCII-armored message and checks that it only has PKESK and SEIPD packets.
+///
+/// Panics if SEIPD packets are not of expected version.
+fn assert_seipd_version(payload: &str, version: usize) {
+    let cursor = Cursor::new(payload);
+    let dearmor = armor::Dearmor::new(cursor);
+    let packet_parser = PacketParser::new(BufReader::new(dearmor));
+    for packet in packet_parser {
+        match packet.unwrap() {
+            Packet::PublicKeyEncryptedSessionKey(_pkesk) => {}
+            Packet::SymEncryptedProtectedData(seipd) => {
+                assert_eq!(seipd.version(), version);
+            }
+            packet => {
+                panic!("Unexpected packet {:?}", packet);
+            }
+        }
+    }
+}
+
+/// Tests that messages between two test accounts use SEIPDv2 and not SEIPDv1.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_use_seipdv2() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice.create_chat_id(bob).await;
+    let sent = alice.send_text(alice_chat_id, "Hello!").await;
+    assert_seipd_version(&sent.payload, 2);
+
+    Ok(())
+}
+
+/// Tests that messages to keys that don't advertise SEIPDv2 support
+/// are sent using SEIPDv1.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_fallback_to_seipdv1() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    // vCard of Alice with no SEIPDv2 feature advertised in the key.
+    let alice_vcard = "BEGIN:VCARD
+VERSION:4.0
+EMAIL:alice@example.org
+FN:Alice
+KEY:data:application/pgp-keys;base64,mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5C0GUFsaWNlIDxhbGljZUBleGFtcGxlLm9yZz6IkAQTFggAOBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsDBQsJCAcCBhUKCQgLAgQWAgMBAh4BAheAAAoJEGSwj2Gp7ZRDE3oA/i4MCyDMTsjWqDZoQwX/A/GoTO2/V0wKPhjJJy/8m2pMAPkBjOnGOtx2SZpQvJGTa9h804RY6iDrRuI8A/8tEEXAA7g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeIeAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8GnsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp3jsMAg==
+REV:20250412T195751Z
+END:VCARD";
+    let contact_ids = import_vcard(bob, alice_vcard).await.unwrap();
+    let alice_contact_id = contact_ids[0];
+    let chat_id = ChatId::create_for_contact(bob, alice_contact_id)
+        .await
+        .unwrap();
+
+    // Bob sends a message to Alice with SEIPDv1 packet.
+    let sent = bob.send_text(chat_id, "Hello!").await;
+    assert_seipd_version(&sent.payload, 1);
+
+    // Bob creates a group with Alice and Charlie.
+    // Sending a message there should also use SEIPDv1
+    // because for Bob it looks like Alice does not support SEIPDv2.
+    let charlie_contact_id = bob.add_or_lookup_contact_id(charlie).await;
+    let group_id = create_group(bob, "groupname").await.unwrap();
+    chat::add_contact_to_chat(bob, group_id, alice_contact_id).await?;
+    chat::add_contact_to_chat(bob, group_id, charlie_contact_id).await?;
+
+    let sent = bob.send_text(group_id, "Hello!").await;
+    assert_seipd_version(&sent.payload, 1);
+
+    // Bob gets a new key of Alice via new vCard
+    // and learns that Alice supports SEIPDv2.
+    assert_eq!(bob.add_or_lookup_contact_id(alice).await, alice_contact_id);
+
+    let sent = bob.send_text(group_id, "Hello again with SEIPDv2!").await;
+    assert_seipd_version(&sent.payload, 2);
 
     Ok(())
 }
