@@ -566,6 +566,8 @@ impl Imap {
             info!(context, "No new emails in folder {folder:?}.");
             return Ok(false);
         }
+        // Make sure not to return before setting new_mail to false
+        // Otherwise, we will skip IDLE and go into an infinite loop
         session.new_mail = false;
 
         if !folder_exists {
