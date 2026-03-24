@@ -136,6 +136,7 @@ impl PushSubscriber {
             return Ok(());
         };
 
+        info!(context, "Subscribing for heartbeat notifications.");
         if http::post_string(
             context,
             "https://notifications.delta.chat/register",
@@ -143,6 +144,7 @@ impl PushSubscriber {
         )
         .await?
         {
+            info!(context, "Subscribed for heartbeat notifications.");
             state.heartbeat_subscribed = true;
         }
         Ok(())

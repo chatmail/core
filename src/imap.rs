@@ -296,6 +296,11 @@ impl Imap {
         Ok(imap)
     }
 
+    /// Returns transport ID of the IMAP client.
+    pub fn transport_id(&self) -> u32 {
+        self.transport_id
+    }
+
     /// Connects to IMAP server and returns a new IMAP session.
     ///
     /// Calling this function is not enough to perform IMAP operations. Use [`Imap::prepare`]
@@ -551,8 +556,13 @@ impl Imap {
         folder: &str,
         folder_meaning: FolderMeaning,
     ) -> Result<bool> {
+        let transport_id = session.transport_id();
+
         if should_ignore_folder(context, folder, folder_meaning).await? {
-            info!(context, "Not fetching from {folder:?}.");
+            info!(
+                context,
+                "Transport {transport_id}: Not fetching from {folder:?}."
+            );
             session.new_mail = false;
             return Ok(false);
         }
@@ -563,7 +573,10 @@ impl Imap {
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
 
         if !session.new_mail {
-            info!(context, "No new emails in folder {folder:?}.");
+            info!(
+                context,
+                "Transport {transport_id}: No new emails in folder {folder:?}."
+            );
             return Ok(false);
         }
         // Make sure not to return before setting new_mail to false
@@ -1566,11 +1579,18 @@ impl Session {
             return Ok(());
         }
 
+        let transport_id = self.transport_id();
+
         let Some(device_token) = context.push_subscriber.device_token().await else {
             return Ok(());
         };
 
         if self.can_metadata() && self.can_push() {
+            info!(
+                context,
+                "Transport {transport_id}: Subscribing for push notifications."
+            );
+
             let old_encrypted_device_token =
                 context.get_config(Config::EncryptedDeviceToken).await?;
 
