@@ -124,6 +124,10 @@ impl Context {
     /// in case for some providers the quota is always at ~100%
     /// and new space is allocated as needed.
     pub(crate) async fn update_recent_quota(&self, session: &mut ImapSession) -> Result<()> {
+        let transport_id = session.transport_id();
+
+        info!(self, "Transport {transport_id}: Updating quota.");
+
         let quota = if session.can_check_quota() {
             let folders = get_watched_folders(self).await?;
             get_unique_quota_roots_and_usage(session, folders).await
@@ -151,18 +155,22 @@ impl Context {
                             .await?;
                     }
                 }
-                Err(err) => warn!(self, "cannot get highest quota usage: {:#}", err),
+                Err(err) => warn!(
+                    self,
+                    "Transport {transport_id}: Cannot get highest quota usage: {err:#}"
+                ),
             }
         }
 
         self.quota.write().await.insert(
-            session.transport_id(),
+            transport_id,
             QuotaInfo {
                 recent: quota,
                 modified: tools::Time::now(),
             },
         );
 
+        info!(self, "Transport {transport_id}: Updated quota.");
         self.emit_event(EventType::ConnectivityChanged);
         Ok(())
     }

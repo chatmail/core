@@ -355,6 +355,7 @@ async fn inbox_loop(
         stop_token,
     } = inbox_handlers;
 
+    let transport_id = connection.transport_id();
     let ctx1 = ctx.clone();
     let fut = async move {
         let ctx = ctx1;
@@ -368,23 +369,34 @@ async fn inbox_loop(
             let session = if let Some(session) = old_session.take() {
                 session
             } else {
-                info!(ctx, "Preparing new IMAP session for inbox.");
+                info!(
+                    ctx,
+                    "Transport {transport_id}: Preparing new IMAP session for inbox."
+                );
                 match connection.prepare(&ctx).await {
                     Err(err) => {
-                        warn!(ctx, "Failed to prepare inbox connection: {err:#}.");
+                        warn!(
+                            ctx,
+                            "Transport {transport_id}: Failed to prepare inbox connection: {err:#}."
+                        );
                         continue;
                     }
-                    Ok(session) => session,
+                    Ok(session) => {
+                        info!(
+                            ctx,
+                            "Transport {transport_id}: Prepared new IMAP session for inbox."
+                        );
+                        session
+                    }
                 }
             };
 
             match inbox_fetch_idle(&ctx, &mut connection, session).await {
-                Err(err) => warn!(ctx, "Failed inbox fetch_idle: {err:#}."),
+                Err(err) => warn!(
+                    ctx,
+                    "Transport {transport_id}: Failed inbox fetch_idle: {err:#}."
+                ),
                 Ok(session) => {
-                    info!(
-                        ctx,
-                        "IMAP loop iteration for inbox finished, keeping the session."
-                    );
                     old_session = Some(session);
                 }
             }
@@ -394,7 +406,7 @@ async fn inbox_loop(
     stop_token
         .cancelled()
         .map(|_| {
-            info!(ctx, "Shutting down inbox loop.");
+            info!(ctx, "Transport {transport_id}: Shutting down inbox loop.");
         })
         .race(fut)
         .await;
@@ -431,17 +443,25 @@ pub async fn convert_folder_meaning(
 }
 
 async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) -> Result<Session> {
+    let transport_id = session.transport_id();
+
     // Update quota no more than once a minute.
     if ctx.quota_needs_update(session.transport_id(), 60).await
         && let Err(err) = ctx.update_recent_quota(&mut session).await
     {
-        warn!(ctx, "Failed to update quota: {:#}.", err);
+        warn!(
+            ctx,
+            "Transport {transport_id}: Failed to update quota: {err:#}."
+        );
     }
 
     if let Ok(()) = imap.resync_request_receiver.try_recv()
         && let Err(err) = session.resync_folders(ctx).await
     {
-        warn!(ctx, "Failed to resync folders: {:#}.", err);
+        warn!(
+            ctx,
+            "Transport {transport_id}: Failed to resync folders: {err:#}."
+        );
         imap.resync_request_sender.try_send(()).ok();
     }
 
@@ -456,7 +476,10 @@ async fn inbox_fetch_idle(ctx: &Context, imap: &mut Imap, mut session: Session) 
             }
         }
         Err(err) => {
-            warn!(ctx, "Failed to get last housekeeping time: {}", err);
+            warn!(
+                ctx,
+                "Transport {transport_id}: Failed to get last housekeeping time: {err:#}"
+            );
         }
     };
 
@@ -486,6 +509,8 @@ async fn fetch_idle(
     mut session: Session,
     folder_meaning: FolderMeaning,
 ) -> Result<Session> {
+    let transport_id = session.transport_id();
+
     let Some((folder_config, watch_folder)) = convert_folder_meaning(ctx, folder_meaning).await?
     else {
         // The folder is not configured.
@@ -537,7 +562,7 @@ async fn fetch_idle(
     if !session.can_idle() {
         info!(
             ctx,
-            "IMAP session does not support IDLE, going to fake idle."
+            "Transport {transport_id}: IMAP session does not support IDLE, going to fake idle."
         );
         connection.fake_idle(ctx, watch_folder).await?;
         return Ok(session);
@@ -550,15 +575,14 @@ async fn fetch_idle(
         .log_err(ctx)
         .unwrap_or_default()
     {
-        info!(ctx, "IMAP IDLE is disabled, going to fake idle.");
+        info!(
+            ctx,
+            "Transport {transport_id}: IMAP IDLE is disabled, going to fake idle."
+        );
         connection.fake_idle(ctx, watch_folder).await?;
         return Ok(session);
     }
 
-    info!(
-        ctx,
-        "IMAP session in folder {watch_folder:?} supports IDLE, using it."
-    );
     let session = session
         .idle(
             ctx,
@@ -619,10 +643,6 @@ async fn simple_imap_loop(
             match fetch_idle(&ctx, &mut connection, session, folder_meaning).await {
                 Err(err) => warn!(ctx, "Failed fetch_idle: {err:#}"),
                 Ok(session) => {
-                    info!(
-                        ctx,
-                        "IMAP loop iteration for {folder_meaning} finished, keeping the session"
-                    );
                     old_session = Some(session);
                 }
             }

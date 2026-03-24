@@ -27,6 +27,8 @@ impl Session {
         idle_interrupt_receiver: Receiver<()>,
         folder: &str,
     ) -> Result<Self> {
+        let transport_id = self.transport_id();
+
         self.select_with_uidvalidity(context, folder).await?;
 
         if self.drain_unsolicited_responses(context)? {
@@ -36,13 +38,16 @@ impl Session {
         if self.new_mail {
             info!(
                 context,
-                "Skipping IDLE in {folder:?} because there may be new mail."
+                "Transport {transport_id}: Skipping IDLE in {folder:?} because there may be new mail."
             );
             return Ok(self);
         }
 
         if let Ok(()) = idle_interrupt_receiver.try_recv() {
-            info!(context, "Skip IDLE in {folder:?} because we got interrupt.");
+            info!(
+                context,
+                "Transport {transport_id}: Skip IDLE in {folder:?} because we got interrupt."
+            );
             return Ok(self);
         }
 
@@ -61,7 +66,7 @@ impl Session {
 
         info!(
             context,
-            "IDLE entering wait-on-remote state in folder {folder:?}."
+            "Transport {transport_id}: IDLE entering wait-on-remote state in folder {folder:?}."
         );
 
         // Spawn a task to relay interrupts from `idle_interrupt_receiver`

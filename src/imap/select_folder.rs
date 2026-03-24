@@ -71,13 +71,18 @@ impl ImapSession {
             self.select(folder).await
         };
 
+        let transport_id = self.transport_id();
+
         // <https://tools.ietf.org/html/rfc3501#section-6.3.1>
         // says that if the server reports select failure we are in
         // authenticated (not-select) state.
 
         match res {
             Ok(mailbox) => {
-                info!(context, "Selected folder {folder:?}.");
+                info!(
+                    context,
+                    "Transport {transport_id}: Selected folder {folder:?}."
+                );
                 self.selected_folder = Some(folder.to_string());
                 self.selected_mailbox = Some(mailbox);
                 Ok(NewlySelected::Yes)
