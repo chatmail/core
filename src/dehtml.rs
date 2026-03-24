@@ -266,15 +266,11 @@ fn dehtml_endtag_cb(event: &BytesEnd, dehtml: &mut Dehtml) {
                 }
             }
         }
-        "b" | "strong" => {
-            if dehtml.get_add_text() != AddText::No {
-                *dehtml.get_buf() += "*";
-            }
+        "b" | "strong" if dehtml.get_add_text() != AddText::No => {
+            *dehtml.get_buf() += "*";
         }
-        "i" | "em" => {
-            if dehtml.get_add_text() != AddText::No {
-                *dehtml.get_buf() += "_";
-            }
+        "i" | "em" if dehtml.get_add_text() != AddText::No => {
+            *dehtml.get_buf() += "_";
         }
         "blockquote" => pop_tag(&mut dehtml.blockquotes_since_blockquote),
         _ => {}
@@ -341,15 +337,11 @@ fn dehtml_starttag_cb<B: std::io::BufRead>(
                 }
             }
         }
-        "b" | "strong" => {
-            if dehtml.get_add_text() != AddText::No {
-                *dehtml.get_buf() += "*";
-            }
+        "b" | "strong" if dehtml.get_add_text() != AddText::No => {
+            *dehtml.get_buf() += "*";
         }
-        "i" | "em" => {
-            if dehtml.get_add_text() != AddText::No {
-                *dehtml.get_buf() += "_";
-            }
+        "i" | "em" if dehtml.get_add_text() != AddText::No => {
+            *dehtml.get_buf() += "_";
         }
         "blockquote" => dehtml.blockquotes_since_blockquote += 1,
         _ => {}

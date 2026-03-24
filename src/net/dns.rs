@@ -881,7 +881,7 @@ fn merge_with_cache(
 ) -> Vec<SocketAddr> {
     let rest = resolved_addrs.split_off(std::cmp::min(resolved_addrs.len(), 2));
 
-    for addr in cache.into_iter().chain(rest.into_iter()) {
+    for addr in cache.into_iter().chain(rest) {
         if !resolved_addrs.contains(&addr) {
             resolved_addrs.push(addr);
             if resolved_addrs.len() >= 10 {
