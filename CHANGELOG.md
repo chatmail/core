@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.47.0] - 2026-03-24
+
+### Fixes
+
+- Don't fall into infinite loop if the folder is missing ([#8021](https://github.com/chatmail/core/pull/8021)).
+- Delete `available_post_msgs` row if the message is already downloaded.
+- Delete `available_post_msgs` row if there is no corresponding IMAP entry.
+- Make newlines work in chat descriptions ([#8012](https://github.com/chatmail/core/pull/8012)).
+
+### Features / Changes
+
+- use SEIPDv2 if all recipients support it.
+
+### Documentation
+
+- Add shadowsocks spec to standards.md.
+- Document Header Confidentiality Policy.
+- `deltachat_rpc_client`: make sphinx documentation display method parameters.
+- Remove `draft/aeap-mvp.md` which is superseded by key-contacts and multi-relay.
+
+### Refactor
+
+- Remove code to send messages without intended recipient fingerprint.
+
+### Tests
+
+- Make `add_or_lookup_contact_id_no_key` public.
+
+### Miscellaneous Tasks
+
+- cargo: bump sdp from 0.10.0 to 0.17.1.
+- Add RUSTSEC-2026-0049 exception to deny.toml.
+
 ## [2.46.0] - 2026-03-19
 
 ### API-Changes
@@ -7950,3 +7983,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.44.0]: https://github.com/chatmail/core/compare/v2.43.0..v2.44.0
 [2.45.0]: https://github.com/chatmail/core/compare/v2.44.0..v2.45.0
 [2.46.0]: https://github.com/chatmail/core/compare/v2.45.0..v2.46.0
+[2.47.0]: https://github.com/chatmail/core/compare/v2.46.0..v2.47.0
