@@ -876,7 +876,7 @@ impl Scheduler {
         let timeout_duration = std::time::Duration::from_secs(30);
 
         let tracker = TaskTracker::new();
-        for b in self.inboxes.into_iter().chain(self.oboxes.into_iter()) {
+        for b in self.inboxes.into_iter().chain(self.oboxes) {
             let context = context.clone();
             tracker.spawn(async move {
                 tokio::time::timeout(timeout_duration, b.handle)

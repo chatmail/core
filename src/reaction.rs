@@ -347,8 +347,7 @@ impl Chat {
         if self
             .param
             .get_i64(Param::LastReactionTimestamp)
-            .filter(|&reaction_timestamp| reaction_timestamp > timestamp)
-            .is_none()
+            .is_none_or(|reaction_timestamp| reaction_timestamp <= timestamp)
         {
             return Ok(None);
         };

@@ -34,12 +34,10 @@ pub(crate) fn remove_message_footer<'a>(
             // some providers encode `-- ` to `=2D-` which results in only `--`;
             // use that only when no other footer is found
             // and if the line before is empty and the line after is not empty
-            "--" => {
-                if (ix == 0 || lines.get(ix.saturating_sub(1)).is_none_or_empty())
-                    && !lines.get(ix + 1).is_none_or_empty()
-                {
-                    nearly_standard_footer = Some(ix);
-                }
+            "--" if (ix == 0 || lines.get(ix.saturating_sub(1)).is_none_or_empty())
+                && !lines.get(ix + 1).is_none_or_empty() =>
+            {
+                nearly_standard_footer = Some(ix);
             }
             _ => (),
         }

@@ -109,10 +109,9 @@ impl Context {
     /// called.
     pub(crate) async fn quota_needs_update(&self, transport_id: u32, ratelimit_secs: u64) -> bool {
         let quota = self.quota.read().await;
-        quota
-            .get(&transport_id)
-            .filter(|quota| time_elapsed(&quota.modified) < Duration::from_secs(ratelimit_secs))
-            .is_none()
+        quota.get(&transport_id).is_none_or(|quota| {
+            time_elapsed(&quota.modified) >= Duration::from_secs(ratelimit_secs)
+        })
     }
 
     /// Updates `quota.recent`, sets `quota.modified` to the current time

@@ -879,8 +879,7 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
         let instance = if mime_parser
             .parts
             .first()
-            .filter(|part| part.typ == Viewtype::Webxdc)
-            .is_some()
+            .is_some_and(|part| part.typ == Viewtype::Webxdc)
         {
             can_info_msg = false;
             Some(

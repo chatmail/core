@@ -246,8 +246,7 @@ async fn test_sync() -> Result<()> {
         alice1
             .get_config(Config::Selfavatar)
             .await?
-            .filter(|path| path.ends_with(".png"))
-            .is_some()
+            .is_some_and(|path| path.ends_with(".png"))
     );
     alice0.set_config(Config::Selfavatar, None).await?;
     sync(&alice0, &alice1).await;
@@ -305,16 +304,14 @@ async fn test_no_sync_on_self_sent_msg() -> Result<()> {
         alice1
             .get_config(Config::Selfavatar)
             .await?
-            .filter(|path| path.ends_with(".jpg"))
-            .is_some()
+            .is_some_and(|path| path.ends_with(".jpg"))
     );
     sync(alice1, alice0).await;
     assert!(
         alice0
             .get_config(Config::Selfavatar)
             .await?
-            .filter(|path| path.ends_with(".jpg"))
-            .is_some()
+            .is_some_and(|path| path.ends_with(".jpg"))
     );
 
     Ok(())
