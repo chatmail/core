@@ -262,8 +262,6 @@ pub enum SystemMessage {
     GroupDescriptionChanged = 70,
 }
 
-const MIME_AC_SETUP_FILE: &str = "application/autocrypt-setup";
-
 impl MimeMessage {
     /// Parse a mime message.
     ///
@@ -745,20 +743,8 @@ impl MimeMessage {
     }
 
     /// Parses system messages.
-    fn parse_system_message_headers(&mut self, context: &Context) {
-        if self.get_header(HeaderDef::AutocryptSetupMessage).is_some() && !self.incoming {
-            self.parts.retain(|part| {
-                part.mimetype
-                    .as_ref()
-                    .is_none_or(|mimetype| mimetype.as_ref() == MIME_AC_SETUP_FILE)
-            });
-
-            if self.parts.len() == 1 {
-                self.is_system_message = SystemMessage::AutocryptSetupMessage;
-            } else {
-                warn!(context, "could not determine ASM mime-part");
-            }
-        } else if let Some(value) = self.get_header(HeaderDef::ChatContent) {
+    fn parse_system_message_headers(&mut self) {
+        if let Some(value) = self.get_header(HeaderDef::ChatContent) {
             if value == "location-streaming-enabled" {
                 self.is_system_message = SystemMessage::LocationStreamingEnabled;
             } else if value == "ephemeral-timer-changed" {
@@ -908,7 +894,7 @@ impl MimeMessage {
     }
 
     async fn parse_headers(&mut self, context: &Context) -> Result<()> {
-        self.parse_system_message_headers(context);
+        self.parse_system_message_headers();
         self.parse_avatar_headers(context)?;
         self.parse_videochat_headers();
         if self.delivery_report.is_none() {
