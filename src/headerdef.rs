@@ -125,7 +125,6 @@ pub enum HeaderDef {
     /// [Autocrypt](https://autocrypt.org/) header.
     Autocrypt,
     AutocryptGossip,
-    AutocryptSetupMessage,
     SecureJoin,
 
     /// Deprecated header containing Group-ID in `vg-request-with-auth` message.
