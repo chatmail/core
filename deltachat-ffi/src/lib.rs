@@ -559,6 +559,7 @@ pub unsafe extern "C" fn dc_event_get_id(event: *mut dc_event_t) -> libc::c_int 
         EventType::IncomingCallAccepted { .. } => 2560,
         EventType::OutgoingCallAccepted { .. } => 2570,
         EventType::CallEnded { .. } => 2580,
+        EventType::CallMissed { .. } => 2590,
         EventType::TransportsModified => 2600,
         #[allow(unreachable_patterns)]
         #[cfg(test)]
@@ -629,6 +630,7 @@ pub unsafe extern "C" fn dc_event_get_data1_int(event: *mut dc_event_t) -> libc:
         | EventType::IncomingCallAccepted { msg_id, .. }
         | EventType::OutgoingCallAccepted { msg_id, .. }
         | EventType::CallEnded { msg_id, .. } => msg_id.to_u32() as libc::c_int,
+        EventType::CallMissed { msg_id, .. } => msg_id.to_u32() as libc::c_int,
         EventType::ChatlistItemChanged { chat_id } => {
             chat_id.unwrap_or_default().to_u32() as libc::c_int
         }
@@ -682,6 +684,7 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
         | EventType::OutgoingCallAccepted { .. }
         | EventType::CallEnded { .. }
+        | EventType::CallMissed { .. }
         | EventType::EventChannelOverflow { .. }
         | EventType::TransportsModified => 0,
         EventType::MsgsChanged { msg_id, .. }
@@ -799,7 +802,9 @@ pub unsafe extern "C" fn dc_event_get_data2_str(event: *mut dc_event_t) -> *mut 
             let data2 = accept_call_info.to_c_string().unwrap_or_default();
             data2.into_raw()
         }
-        EventType::CallEnded { .. } | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
+        EventType::CallEnded { .. }
+        | EventType::CallMissed { .. }
+        | EventType::EventChannelOverflow { .. } => ptr::null_mut(),
         EventType::ConfigureProgress { comment, .. } => {
             if let Some(comment) = comment {
                 comment.to_c_string().unwrap_or_default().into_raw()

@@ -5,6 +5,7 @@ use crate::constants::DC_CHAT_ID_TRASH;
 use crate::message::MessageState;
 use crate::receive_imf::receive_imf;
 use crate::test_utils::{TestContext, TestContextManager};
+use crate::tools::SystemTime;
 
 struct CallSetup {
     pub alice: TestContext,
@@ -491,6 +492,9 @@ async fn test_caller_cancels_call() -> Result<()> {
     bob.recv_msg_trash(&sent3).await;
     assert_text(&bob, bob_call.id, "Missed call").await?;
     bob.evtracker
+        .get_matching(|evt| matches!(evt, EventType::CallMissed { .. }))
+        .await;
+    bob.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     assert_eq!(call_state(&bob, bob_call.id).await?, CallState::Missed);
@@ -503,10 +507,102 @@ async fn test_caller_cancels_call() -> Result<()> {
     bob2.recv_msg_trash(&sent3).await;
     assert_text(&bob2, bob2_call.id, "Missed call").await?;
     bob2.evtracker
+        .get_matching(|evt| matches!(evt, EventType::CallMissed { .. }))
+        .await;
+    bob2.evtracker
         .get_matching(|evt| matches!(evt, EventType::CallEnded { .. }))
         .await;
     assert_eq!(call_state(&bob2, bob2_call.id).await?, CallState::Missed);
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_stale_call() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    for accepted in [false, true] {
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+
+        info!(bob, "Alice is accepted: {accepted}.");
+        if accepted {
+            bob.create_chat(alice).await;
+        }
+        let alice_chat = alice.create_chat(bob).await;
+        alice
+            .place_outgoing_call(alice_chat.id, PLACE_INFO.to_string(), true)
+            .await?;
+        let sent1 = alice.pop_sent_msg().await;
+
+        SystemTime::shift(Duration::from_secs(3600));
+        let bob_call = bob.recv_msg(&sent1).await;
+        let EventType::MsgsChanged { msg_id, chat_id } = bob
+            .evtracker
+            .get_matching(|evt| {
+                matches!(
+                    evt,
+                    EventType::MsgsChanged { .. }
+                        | EventType::CallMissed { .. }
+                        | EventType::CallEnded { .. }
+                )
+            })
+            .await
+        else {
+            unreachable!();
+        };
+        assert_eq!(chat_id, bob_call.chat_id);
+        let msg = Message::load_from_db(bob, msg_id).await?;
+        assert_eq!(msg.text, stock_str::messages_e2e_encrypted(bob).await);
+        if accepted {
+            let EventType::CallMissed { msg_id, chat_id } = bob
+                .evtracker
+                .get_matching(|evt| {
+                    matches!(
+                        evt,
+                        EventType::CallMissed { .. } | EventType::CallEnded { .. }
+                    )
+                })
+                .await
+            else {
+                unreachable!();
+            };
+            assert_eq!(msg_id, bob_call.id);
+            assert_eq!(chat_id, bob_call.chat_id);
+        }
+        let EventType::MsgsChanged { msg_id, chat_id } = bob
+            .evtracker
+            .get_matching(|evt| {
+                matches!(
+                    evt,
+                    EventType::MsgsChanged { .. }
+                        | EventType::CallMissed { .. }
+                        | EventType::CallEnded { .. }
+                )
+            })
+            .await
+        else {
+            unreachable!();
+        };
+        assert_eq!(msg_id, bob_call.id);
+        assert_eq!(chat_id, bob_call.chat_id);
+        let evt = bob
+            .evtracker
+            .get_matching_opt(bob, |evt| {
+                matches!(
+                    evt,
+                    EventType::CallMissed { .. } | EventType::CallEnded { .. }
+                )
+            })
+            .await;
+        assert!(evt.is_none());
+        assert_text(bob, bob_call.id, "Missed call").await?;
+        assert_eq!(call_state(bob, bob_call.id).await?, CallState::Missed);
+
+        // Test that message summary says it is a missed call.
+        let bob_call_msg = Message::load_from_db(bob, bob_call.id).await?;
+        let summary = bob_call_msg.get_summary(bob, None).await?;
+        assert_eq!(summary.text, "🎥 Missed call");
+    }
     Ok(())
 }
 
