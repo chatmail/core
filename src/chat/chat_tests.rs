@@ -806,7 +806,7 @@ async fn test_self_talk() -> Result<()> {
     assert!(chat.visibility == ChatVisibility::Normal);
     assert!(!chat.is_device_talk());
     assert!(chat.can_send(&t).await?);
-    assert_eq!(chat.name, stock_str::saved_messages(&t).await);
+    assert_eq!(chat.name, stock_str::saved_messages(&t));
     assert!(chat.get_profile_image(&t).await?.is_some());
 
     let msg_id = send_text_msg(&t, chat.id, "foo self".to_string()).await?;
@@ -911,7 +911,7 @@ async fn test_add_device_msg_labelled() -> Result<()> {
     assert!(!chat.can_send(&t).await?);
     assert!(chat.why_cant_send(&t).await? == Some(CantSendReason::DeviceChat));
 
-    assert_eq!(chat.name, stock_str::device_messages(&t).await);
+    assert_eq!(chat.name, stock_str::device_messages(&t));
     let device_msg_icon = chat.get_profile_image(&t).await?.unwrap();
     assert_eq!(
         device_msg_icon.metadata()?.len(),
@@ -3797,7 +3797,7 @@ async fn test_leave_broadcast_multidevice() -> Result<()> {
     assert_eq!(rcvd.chat_id, bob1_hello.chat_id);
     assert!(rcvd.is_info());
     assert_eq!(rcvd.get_info_type(), SystemMessage::MemberRemovedFromGroup);
-    assert_eq!(rcvd.text, stock_str::msg_you_left_broadcast(bob1).await);
+    assert_eq!(rcvd.text, stock_str::msg_you_left_broadcast(bob1));
 
     Ok(())
 }

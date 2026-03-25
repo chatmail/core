@@ -229,9 +229,9 @@ impl Context {
             let mut msg = Message {
                 chat_id,
                 viewtype: Viewtype::Text,
-                text: stock_str::sync_msg_body(self).await,
+                text: stock_str::sync_msg_body(self),
                 hidden: true,
-                subject: stock_str::sync_msg_subject(self).await,
+                subject: stock_str::sync_msg_subject(self),
                 ..Default::default()
             };
             msg.param.set_cmd(SystemMessage::MultiDeviceSync);

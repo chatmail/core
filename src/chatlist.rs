@@ -417,7 +417,7 @@ impl Chatlist {
             Summary::new_with_reaction_details(context, &lastmsg, chat, lastcontact.as_ref()).await
         } else {
             Ok(Summary {
-                text: stock_str::no_messages(context).await,
+                text: stock_str::no_messages(context),
                 ..Default::default()
             })
         }
@@ -648,7 +648,6 @@ mod tests {
         assert_eq!(chats.len(), 0);
 
         t.set_stock_translation(StockMessage::SavedMessages, "test-1234-save".to_string())
-            .await
             .unwrap();
         let chats = Chatlist::try_load(&t, 0, Some("t-1234-s"), None)
             .await
@@ -656,7 +655,6 @@ mod tests {
         assert_eq!(chats.len(), 1);
 
         t.set_stock_translation(StockMessage::DeviceMessages, "test-5678-babbel".to_string())
-            .await
             .unwrap();
         let chats = Chatlist::try_load(&t, 0, Some("t-5678-b"), None)
             .await

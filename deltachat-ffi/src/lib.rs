@@ -306,20 +306,17 @@ pub unsafe extern "C" fn dc_set_stock_translation(
     let msg = to_string_lossy(stock_msg);
     let ctx = &*context;
 
-    block_on(async move {
-        match StockMessage::from_u32(stock_id)
-            .with_context(|| format!("Invalid stock message ID {stock_id}"))
+    match StockMessage::from_u32(stock_id)
+        .with_context(|| format!("Invalid stock message ID {stock_id}"))
+        .log_err(ctx)
+    {
+        Ok(id) => ctx
+            .set_stock_translation(id, msg)
+            .context("set_stock_translation failed")
             .log_err(ctx)
-        {
-            Ok(id) => ctx
-                .set_stock_translation(id, msg)
-                .await
-                .context("set_stock_translation failed")
-                .log_err(ctx)
-                .is_ok() as libc::c_int,
-            Err(_) => 0,
-        }
-    })
+            .is_ok() as libc::c_int,
+        Err(_) => 0,
+    }
 }
 
 #[no_mangle]

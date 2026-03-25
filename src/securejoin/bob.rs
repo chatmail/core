@@ -158,7 +158,7 @@ pub(super) async fn start_protocol(context: &Context, invite: QrInvite) -> Resul
                 chat::add_info_msg_with_cmd(
                     context,
                     private_chat_id,
-                    &stock_str::securejoin_wait(context).await,
+                    &stock_str::securejoin_wait(context),
                     SystemMessage::SecurejoinWait,
                     None,
                     time(),

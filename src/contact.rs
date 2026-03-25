@@ -688,7 +688,7 @@ impl Contact {
             .await?
         {
             if contact_id == ContactId::SELF {
-                contact.name = stock_str::self_msg(context).await;
+                contact.name = stock_str::self_msg(context);
                 contact.authname = context
                     .get_config(Config::Displayname)
                     .await?
@@ -705,9 +705,9 @@ impl Contact {
                     .await?
                     .unwrap_or_default();
             } else if contact_id == ContactId::DEVICE {
-                contact.name = stock_str::device_messages(context).await;
+                contact.name = stock_str::device_messages(context);
                 contact.addr = ContactId::DEVICE_ADDR.to_string();
-                contact.status = stock_str::device_messages_hint(context).await;
+                contact.status = stock_str::device_messages_hint(context);
             }
             Ok(Some(contact))
         } else {
@@ -1240,7 +1240,7 @@ ORDER BY c.origin>=? DESC, c.last_seen DESC, c.id DESC
 
                 if self_addr.contains(query)
                     || self_name.contains(query)
-                    || self_name2.await.contains(query)
+                    || self_name2.contains(query)
                 {
                     add_self = true;
                 }
@@ -1392,17 +1392,17 @@ WHERE addr=?
             .unwrap_or_default();
 
         let Some(fingerprint_other) = contact.fingerprint() else {
-            return Ok(stock_str::encr_none(context).await);
+            return Ok(stock_str::encr_none(context));
         };
         let fingerprint_other = fingerprint_other.to_string();
 
         let stock_message = if contact.public_key(context).await?.is_some() {
-            stock_str::messages_are_e2ee(context).await
+            stock_str::messages_are_e2ee(context)
         } else {
-            stock_str::encr_none(context).await
+            stock_str::encr_none(context)
         };
 
-        let finger_prints = stock_str::finger_prints(context).await;
+        let finger_prints = stock_str::finger_prints(context);
         let mut ret = format!("{stock_message}\n{finger_prints}:");
 
         let fingerprint_self = load_self_public_key(context)
@@ -1412,7 +1412,7 @@ WHERE addr=?
         if addr < contact.addr {
             cat_fingerprint(
                 &mut ret,
-                &stock_str::self_msg(context).await,
+                &stock_str::self_msg(context),
                 &addr,
                 &fingerprint_self,
             );
@@ -1431,7 +1431,7 @@ WHERE addr=?
             );
             cat_fingerprint(
                 &mut ret,
-                &stock_str::self_msg(context).await,
+                &stock_str::self_msg(context),
                 &addr,
                 &fingerprint_self,
             );

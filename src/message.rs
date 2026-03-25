@@ -598,7 +598,7 @@ impl Message {
 
         if let Some(msg) = &mut msg {
             msg.additional_text =
-                Self::get_additional_text(context, msg.download_state, &msg.param).await?;
+                Self::get_additional_text(context, msg.download_state, &msg.param)?;
         }
 
         Ok(msg)
@@ -607,7 +607,7 @@ impl Message {
     /// Returns additional text which is appended to the message's text field
     /// when it is loaded from the database.
     /// Currently this is used to add infomation to pre-messages of what the download will be and how large it is
-    async fn get_additional_text(
+    fn get_additional_text(
         context: &Context,
         download_state: DownloadState,
         param: &Params,
@@ -630,7 +630,7 @@ impl Message {
             return match viewtype {
                 Viewtype::File => Ok(format!(" [{file_name} – {file_size}]")),
                 _ => {
-                    let translated_viewtype = viewtype.to_locale_string(context).await;
+                    let translated_viewtype = viewtype.to_locale_string(context);
                     Ok(format!(" [{translated_viewtype} – {file_size}]"))
                 }
             };

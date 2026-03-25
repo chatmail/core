@@ -208,7 +208,7 @@ impl BackupProvider {
         info!(context, "Received backup reception acknowledgement.");
         context.emit_event(EventType::ImexProgress(1000));
 
-        let mut msg = Message::new_text(backup_transfer_msg_body(&context).await);
+        let mut msg = Message::new_text(backup_transfer_msg_body(&context));
         add_device_msg(&context, None, Some(&mut msg)).await?;
 
         Ok(())

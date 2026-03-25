@@ -233,8 +233,7 @@ async fn maybe_warn_on_bad_time(context: &Context, now: i64, known_past_timestam
                 || "YY-MM-DD hh:mm:ss".to_string(),
                 |ts| ts.format("%Y-%m-%d %H:%M:%S").to_string(),
             ),
-        )
-        .await;
+        );
         if let Some(timestamp) = chrono::DateTime::<chrono::Utc>::from_timestamp(now, 0) {
             add_device_msg_with_importance(
                 context,
@@ -261,7 +260,7 @@ async fn maybe_warn_on_bad_time(context: &Context, now: i64, known_past_timestam
 #[expect(clippy::arithmetic_side_effects)]
 async fn maybe_warn_on_outdated(context: &Context, now: i64, approx_compile_time: i64) {
     if now > approx_compile_time + DC_OUTDATED_WARNING_DAYS * 24 * 60 * 60 {
-        let mut msg = Message::new_text(stock_str::update_reminder_msg_body(context).await);
+        let mut msg = Message::new_text(stock_str::update_reminder_msg_body(context));
         if let Some(timestamp) = chrono::DateTime::<chrono::Utc>::from_timestamp(now, 0) {
             add_device_msg(
                 context,

@@ -288,13 +288,13 @@ pub async fn send_locations_to_chat(
         )
         .await?;
     if 0 != seconds && !is_sending_locations_before {
-        let mut msg = Message::new_text(stock_str::msg_location_enabled(context).await);
+        let mut msg = Message::new_text(stock_str::msg_location_enabled(context));
         msg.param.set_cmd(SystemMessage::LocationStreamingEnabled);
         chat::send_msg(context, chat_id, &mut msg)
             .await
             .unwrap_or_default();
     } else if 0 == seconds && is_sending_locations_before {
-        let stock_str = stock_str::msg_location_disabled(context).await;
+        let stock_str = stock_str::msg_location_disabled(context);
         chat::add_info_msg(context, chat_id, &stock_str).await?;
     }
     context.emit_event(EventType::ChatModified(chat_id));
@@ -852,7 +852,7 @@ async fn maybe_send_locations(context: &Context) -> Result<Option<u64>> {
                 .await
                 .context("failed to disable location streaming")?;
 
-            let stock_str = stock_str::msg_location_disabled(context).await;
+            let stock_str = stock_str::msg_location_disabled(context);
             chat::add_info_msg(context, chat_id, &stock_str).await?;
             context.emit_event(EventType::ChatModified(chat_id));
             chatlist_events::emit_chatlist_item_changed(context, chat_id);

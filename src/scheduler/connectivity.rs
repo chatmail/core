@@ -109,36 +109,36 @@ impl DetailedConnectivity {
         }
     }
 
-    async fn to_string_imap(&self, context: &Context) -> String {
+    fn to_string_imap(&self, context: &Context) -> String {
         match self {
-            DetailedConnectivity::Error(e) => stock_str::error(context, e).await,
+            DetailedConnectivity::Error(e) => stock_str::error(context, e),
             DetailedConnectivity::Uninitialized => "Not started".to_string(),
-            DetailedConnectivity::Connecting => stock_str::connecting(context).await,
+            DetailedConnectivity::Connecting => stock_str::connecting(context),
             DetailedConnectivity::Preparing | DetailedConnectivity::Working => {
-                stock_str::updating(context).await
+                stock_str::updating(context)
             }
             DetailedConnectivity::InterruptingIdle | DetailedConnectivity::Idle => {
-                stock_str::connected(context).await
+                stock_str::connected(context)
             }
             DetailedConnectivity::NotConfigured => "Not configured".to_string(),
         }
     }
 
-    async fn to_string_smtp(&self, context: &Context) -> String {
+    fn to_string_smtp(&self, context: &Context) -> String {
         match self {
-            DetailedConnectivity::Error(e) => stock_str::error(context, e).await,
+            DetailedConnectivity::Error(e) => stock_str::error(context, e),
             DetailedConnectivity::Uninitialized => {
                 "You did not try to send a message recently.".to_string()
             }
-            DetailedConnectivity::Connecting => stock_str::connecting(context).await,
-            DetailedConnectivity::Working => stock_str::sending(context).await,
+            DetailedConnectivity::Connecting => stock_str::connecting(context),
+            DetailedConnectivity::Working => stock_str::sending(context),
 
             // We don't know any more than that the last message was sent successfully;
             // since sending the last message, connectivity could have changed, which we don't notice
             // until another message is sent
             DetailedConnectivity::InterruptingIdle
             | DetailedConnectivity::Preparing
-            | DetailedConnectivity::Idle => stock_str::last_msg_sent_successfully(context).await,
+            | DetailedConnectivity::Idle => stock_str::last_msg_sent_successfully(context),
             DetailedConnectivity::NotConfigured => "Not configured".to_string(),
         }
     }
@@ -369,8 +369,8 @@ impl Context {
             .get_config_bool(crate::config::Config::ProxyEnabled)
             .await?
         {
-            let proxy_enabled = stock_str::proxy_enabled(self).await;
-            let proxy_description = stock_str::proxy_description(self).await;
+            let proxy_enabled = stock_str::proxy_enabled(self);
+            let proxy_description = stock_str::proxy_description(self);
             ret += &format!("<h3>{proxy_enabled}</h3><ul><li>{proxy_description}</li></ul>");
         }
 
@@ -396,7 +396,7 @@ impl Context {
             _ => {
                 ret += &format!(
                     "<h3>{}</h3>\n</body></html>\n",
-                    stock_str::not_connected(self).await
+                    stock_str::not_connected(self)
                 );
                 return Ok(ret);
             }
@@ -412,7 +412,7 @@ impl Context {
         // =============================================================================================
 
         let watched_folders = get_watched_folder_configs(self).await?;
-        let incoming_messages = stock_str::incoming_messages(self).await;
+        let incoming_messages = stock_str::incoming_messages(self);
         ret += &format!("<h3>{incoming_messages}</h3><ul>");
 
         let transports = self
@@ -449,7 +449,7 @@ impl Context {
                             ret += &*escaper::encode_minimal(&foldername);
                         }
                         ret += ":</b> ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
                         ret += "<br />";
 
                         folder_added = true;
@@ -464,7 +464,7 @@ impl Context {
 
                         ret += &*detailed.to_icon();
                         ret += " ";
-                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self).await);
+                        ret += &*escaper::encode_minimal(&detailed.to_string_imap(self));
                         ret += "<br />";
                     }
                 }
@@ -504,13 +504,12 @@ impl Context {
                                     );
                                 }
 
-                                let messages = stock_str::messages(self).await;
+                                let messages = stock_str::messages(self);
                                 let part_of_total_used = stock_str::part_of_total_used(
                                     self,
                                     &resource.usage.to_string(),
                                     &resource.limit.to_string(),
-                                )
-                                .await;
+                                );
                                 ret += &match &resource.name {
                                     Atom(resource_name) => {
                                         format!(
@@ -531,7 +530,7 @@ impl Context {
                                         // - most times, this is the only item anyway
                                         let usage = &format_size(resource.usage * 1024, BINARY);
                                         let limit = &format_size(resource.limit * 1024, BINARY);
-                                        stock_str::part_of_total_used(self, usage, limit).await
+                                        stock_str::part_of_total_used(self, usage, limit)
                                     }
                                 };
 
@@ -565,12 +564,12 @@ impl Context {
         //                                Your last message was sent successfully
         // =============================================================================================
 
-        let outgoing_messages = stock_str::outgoing_messages(self).await;
+        let outgoing_messages = stock_str::outgoing_messages(self);
         ret += &format!("<h3>{outgoing_messages}</h3><ul><li>");
         let detailed = smtp.get_detailed();
         ret += &*detailed.to_icon();
         ret += " ";
-        ret += &*escaper::encode_minimal(&detailed.to_string_smtp(self).await);
+        ret += &*escaper::encode_minimal(&detailed.to_string_smtp(self));
         ret += "</li></ul>";
 
         // =============================================================================================

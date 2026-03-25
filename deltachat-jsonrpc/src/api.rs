@@ -473,9 +473,7 @@ impl CommandApi {
         let accounts = self.accounts.read().await;
         for (stock_id, stock_message) in strings {
             if let Some(stock_id) = StockMessage::from_u32(stock_id) {
-                accounts
-                    .set_stock_translation(stock_id, stock_message)
-                    .await?;
+                accounts.set_stock_translation(stock_id, stock_message)?;
             }
         }
         Ok(())
