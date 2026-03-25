@@ -64,9 +64,11 @@ DKIM Results: Passed=true";
 
 async fn check_parse_receive_headers_integration(raw: &[u8], expected: &str) {
     let t = TestContext::new_alice().await;
-    receive_imf(&t, raw, false).await.unwrap();
-    let msg = t.get_last_msg().await;
-    let msg_info = msg.id.get_info(&t).await.unwrap();
+    let received = receive_imf(&t, raw, false).await.unwrap().unwrap();
+
+    assert_eq!(received.msg_ids.len(), 1);
+    let msg_id = received.msg_ids[0];
+    let msg_info = msg_id.get_info(&t).await.unwrap();
 
     // Ignore the first rows of the msg_info because they contain a
     // received time that depends on the test time which makes it impossible to
