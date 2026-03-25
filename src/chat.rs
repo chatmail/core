@@ -1228,15 +1228,11 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     /// corresponding event in case of a system message (usually the current system time).
     /// `always_sort_to_bottom` makes this adjust the returned timestamp up so that the message goes
     /// to the chat bottom.
-    /// `received` -- whether the message is received. Otherwise being sent.
-    /// `incoming` -- whether the message is incoming.
     pub(crate) async fn calc_sort_timestamp(
         self,
         context: &Context,
         message_timestamp: i64,
         always_sort_to_bottom: bool,
-        received: bool,
-        incoming: bool,
     ) -> Result<i64> {
         let mut sort_timestamp = cmp::min(message_timestamp, smeared_time(context));
 
@@ -1256,38 +1252,6 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
                     (self, MessageState::OutDraft),
                 )
                 .await?
-        } else if received {
-            // Received messages shouldn't mingle with just sent ones and appear somewhere in the
-            // middle of the chat, so we go after the newest non fresh message.
-            //
-            // But if a received outgoing message is older than some seen message, better sort the
-            // received message purely by timestamp. We could place it just before that seen
-            // message, but anyway the user may not notice it.
-            //
-            // NB: Received outgoing messages may break sorting of fresh incoming ones, but this
-            // shouldn't happen frequently. Seen incoming messages don't really break sorting of
-            // fresh ones, they rather mean that older incoming messages are actually seen as well.
-            context
-                .sql
-                .query_row_optional(
-                    "SELECT MAX(timestamp), MAX(IIF(state=?,timestamp_sent,0))
-                     FROM msgs
-                     WHERE chat_id=? AND hidden=0 AND state>?
-                     HAVING COUNT(*) > 0",
-                    (MessageState::InSeen, self, MessageState::InFresh),
-                    |row| {
-                        let ts: i64 = row.get(0)?;
-                        let ts_sent_seen: i64 = row.get(1)?;
-                        Ok((ts, ts_sent_seen))
-                    },
-                )
-                .await?
-                .and_then(|(ts, ts_sent_seen)| {
-                    match incoming || ts_sent_seen <= message_timestamp {
-                        true => Some(ts),
-                        false => None,
-                    }
-                })
         } else {
             None
         };
@@ -4963,15 +4927,8 @@ pub(crate) async fn add_info_msg_with_cmd(
         ts
     } else {
         let sort_to_bottom = true;
-        let (received, incoming) = (false, false);
         chat_id
-            .calc_sort_timestamp(
-                context,
-                smeared_time(context),
-                sort_to_bottom,
-                received,
-                incoming,
-            )
+            .calc_sort_timestamp(context, smeared_time(context), sort_to_bottom)
             .await?
     };
 
