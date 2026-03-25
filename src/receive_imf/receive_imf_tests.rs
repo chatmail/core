@@ -819,9 +819,12 @@ async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
         .set_config(Config::ShowEmails, Some("2"))
         .await
         .unwrap();
-    receive_imf(context, imf_raw, false).await.unwrap();
-    let chats = Chatlist::try_load(context, 0, None, None).await.unwrap();
-    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    let received_msg = receive_imf(context, imf_raw, false)
+        .await
+        .expect("receive_imf failure")
+        .expect("No message received");
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
     Message::load_from_db(context, msg_id).await.unwrap()
 }
 
