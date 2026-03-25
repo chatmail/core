@@ -11,8 +11,8 @@ use deltachat::blob::BlobObject;
 use deltachat::calls::ice_servers;
 use deltachat::chat::{
     self, add_contact_to_chat, forward_msgs, forward_msgs_2ctx, get_chat_media, get_chat_msgs,
-    get_chat_msgs_ex, marknoticed_all_chats, marknoticed_chat, remove_contact_from_chat, Chat,
-    ChatId, ChatItem, MessageListOptions,
+    get_chat_msgs_ex, markfresh_chat, marknoticed_all_chats, marknoticed_chat,
+    remove_contact_from_chat, Chat, ChatId, ChatItem, MessageListOptions,
 };
 use deltachat::chatlist::Chatlist;
 use deltachat::config::{get_all_ui_config_keys, Config};
@@ -1249,6 +1249,15 @@ impl CommandApi {
     async fn marknoticed_chat(&self, account_id: u32, chat_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         marknoticed_chat(&ctx, ChatId::new(chat_id)).await
+    }
+
+    /// Marks the last incoming message in the chat as _fresh_.
+    ///
+    /// UI can use this to offer a "mark unread" option,
+    /// so that already noticed chats get a badge counter again.
+    async fn markfresh_chat(&self, account_id: u32, chat_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        markfresh_chat(&ctx, ChatId::new(chat_id)).await
     }
 
     /// Returns the message that is immediately followed by the last seen
