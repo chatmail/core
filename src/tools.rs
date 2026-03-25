@@ -21,6 +21,7 @@ pub use std::time::SystemTime as Time;
 #[cfg(not(test))]
 pub use std::time::SystemTime;
 
+use crate::log::LogExt as _;
 use anyhow::{Context as _, Result, bail, ensure};
 use base64::Engine as _;
 use chrono::{Local, NaiveDateTime, NaiveTime, TimeZone};
@@ -248,6 +249,8 @@ async fn maybe_warn_on_bad_time(context: &Context, now: i64, known_past_timestam
                 true,
             )
             .await
+            .context("Failed to add bad time warning")
+            .log_err(context)
             .ok();
         } else {
             warn!(context, "Can't convert current timestamp");

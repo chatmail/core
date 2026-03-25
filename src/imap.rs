@@ -323,7 +323,8 @@ impl Imap {
         if !ratelimit_duration.is_zero() {
             warn!(
                 context,
-                "IMAP got rate limited, waiting for {} until can connect.",
+                "Transport {}: IMAP got rate limited, waiting for {} until can connect.",
+                self.transport_id,
                 duration_to_str(ratelimit_duration),
             );
             let interrupted = async {
@@ -335,12 +336,16 @@ impl Imap {
             if interrupted {
                 info!(
                     context,
-                    "Connecting to IMAP without waiting for ratelimit due to interrupt."
+                    "Transport {}: Connecting to IMAP without waiting for ratelimit due to interrupt.",
+                    self.transport_id
                 );
             }
         }
 
-        info!(context, "Connecting to IMAP server.");
+        info!(
+            context,
+            "Transport {}: Connecting to IMAP server.", self.transport_id
+        );
         self.connectivity.set_connecting(context);
 
         self.conn_last_try = tools::Time::now();
@@ -355,7 +360,10 @@ impl Imap {
         let login_params = prioritize_server_login_params(&context.sql, &self.lp, "imap").await?;
         let mut first_error = None;
         for lp in login_params {
-            info!(context, "IMAP trying to connect to {}.", &lp.connection);
+            info!(
+                context,
+                "Transport {}: IMAP trying to connect to {}.", self.transport_id, &lp.connection
+            );
             let connection_candidate = lp.connection.clone();
             let client = match Client::connect(
                 context,
@@ -403,7 +411,10 @@ impl Imap {
                     let resync_request_sender = self.resync_request_sender.clone();
 
                     let session = if capabilities.can_compress {
-                        info!(context, "Enabling IMAP compression.");
+                        info!(
+                            context,
+                            "Transport {}: Enabling IMAP compression.", self.transport_id
+                        );
                         let compressed_session = session
                             .compress(|s| {
                                 let session_stream: Box<dyn SessionStream> = Box::new(s);
@@ -436,7 +447,10 @@ impl Imap {
                         lp.user
                     )));
                     self.connectivity.set_preparing(context);
-                    info!(context, "Successfully logged into IMAP server.");
+                    info!(
+                        context,
+                        "Transport {}: Successfully logged into IMAP server.", self.transport_id
+                    );
                     return Ok(session);
                 }
 
@@ -444,7 +458,10 @@ impl Imap {
                     let imap_user = lp.user.to_owned();
                     let message = stock_str::cannot_login(context, &imap_user);
 
-                    warn!(context, "IMAP failed to login: {err:#}.");
+                    warn!(
+                        context,
+                        "Transport {}: IMAP failed to login: {err:#}.", self.transport_id
+                    );
                     first_error.get_or_insert(format_err!("{message} ({err:#})"));
 
                     // If it looks like the password is wrong, send a notification:
@@ -463,7 +480,11 @@ impl Imap {
                             )
                             .await
                             {
-                                warn!(context, "Failed to add device message: {e:#}.");
+                                warn!(
+                                    context,
+                                    "Transport {}: Failed to add device message: {e:#}.",
+                                    self.transport_id
+                                );
                             } else {
                                 context
                                     .set_config_internal(Config::NotifyAboutWrongPw, None)
@@ -1138,13 +1159,15 @@ impl Session {
             } else if let Err(err) = self.add_flag_finalized_with_set(&uid_set, "\\Seen").await {
                 warn!(
                     context,
-                    "Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}."
+                    "Transport {transport_id}: Cannot mark messages {uid_set} in {folder} as seen, will retry later: {err:#}."
                 );
                 continue;
             } else {
                 info!(
                     context,
-                    "Marked messages {} in folder {} as seen.", uid_set, folder
+                    "Transport {transport_id}: Marked messages {} in folder {} as seen.",
+                    uid_set,
+                    folder
                 );
             }
             context
@@ -1499,9 +1522,10 @@ impl Session {
             return Ok(());
         }
 
+        let transport_id = self.transport_id();
         info!(
             context,
-            "Server supports metadata, retrieving server comment and admin contact."
+            "Transport {transport_id}: Server supports metadata, retrieving server comment and admin contact."
         );
 
         let mut comment = None;
@@ -1534,7 +1558,8 @@ impl Session {
                         } else {
                             warn!(
                                 context,
-                                "Got invalid URL from iroh relay metadata: {:?}.", value
+                                "Transport {transport_id}: Got invalid URL from iroh relay metadata: {:?}.",
+                                value
                             );
                         }
                     }
@@ -1563,6 +1588,7 @@ impl Session {
             create_fallback_ice_servers()
         };
 
+        info!(context, "Transport {transport_id}: Got IMAP metadata.");
         *lock = Some(ServerMetadata {
             comment,
             admin,

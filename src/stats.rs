@@ -554,6 +554,7 @@ async fn get_message_stats(context: &Context) -> Result<BTreeMap<Chattype, Messa
 }
 
 pub(crate) async fn update_message_stats(context: &Context) -> Result<()> {
+    info!(context, "Updating message statistics.");
     for chattype in [Chattype::Single, Chattype::Group, Chattype::OutBroadcast] {
         update_message_stats_inner(context, chattype).await?;
     }
