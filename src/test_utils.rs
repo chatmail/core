@@ -715,7 +715,8 @@ impl TestContext {
     }
 
     pub async fn get_smtp_rows_for_msg<'a>(&'a self, msg_id: MsgId) -> Vec<SentMessage<'a>> {
-        self.ctx
+        let sent_msgs = self
+            .ctx
             .sql
             .query_map_vec(
                 "SELECT id, msg_id, mime, recipients FROM smtp WHERE msg_id=?",
@@ -737,7 +738,23 @@ impl TestContext {
                 sender_context: &self.ctx,
                 recipients,
             })
-            .collect()
+            .collect();
+        self.ctx
+            .sql
+            .execute("DELETE FROM smtp WHERE msg_id=?", (msg_id,))
+            .await
+            .expect("Delete smtp jobs");
+        update_msg_state(&self.ctx, msg_id, MessageState::OutDelivered)
+            .await
+            .expect("Update message state");
+        self.sql
+            .execute(
+                "UPDATE msgs SET timestamp_sent=? WHERE id=?",
+                (time(), msg_id),
+            )
+            .await
+            .expect("Update timestamp_sent");
+        sent_msgs
     }
 
     /// Parses a message.
