@@ -39,11 +39,11 @@
 
 - [**breaking**] remove functions for sending and receiving Autocrypt Setup Message.
 - Add `list_transports_ex()` and `set_transport_unpublished()` functions.
+- Add API `dc_markfresh_chat` to mark messages as "fresh".
 
 ### Features / Changes
 
 - add `IncomingCallAccepted.from_this_device`.
-- mark messages as "fresh".
 - decode `dcaccount://` URLs and error out on empty URLs early.
 - enable anonymous OpenPGP key IDs.
 - tls: do not verify TLS certificates for hostnames starting with `_`.
