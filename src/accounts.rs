@@ -1249,13 +1249,11 @@ mod tests {
         let account1 = accounts.get_account(1).context("failed to get account 1")?;
         let account2 = accounts.get_account(2).context("failed to get account 2")?;
 
-        assert_eq!(stock_str::no_messages(&account1).await, "No messages.");
-        assert_eq!(stock_str::no_messages(&account2).await, "No messages.");
-        account1
-            .set_stock_translation(StockMessage::NoMessages, "foobar".to_string())
-            .await?;
-        assert_eq!(stock_str::no_messages(&account1).await, "foobar");
-        assert_eq!(stock_str::no_messages(&account2).await, "foobar");
+        assert_eq!(stock_str::no_messages(&account1), "No messages.");
+        assert_eq!(stock_str::no_messages(&account2), "No messages.");
+        account1.set_stock_translation(StockMessage::NoMessages, "foobar".to_string())?;
+        assert_eq!(stock_str::no_messages(&account1), "foobar");
+        assert_eq!(stock_str::no_messages(&account2), "foobar");
 
         Ok(())
     }

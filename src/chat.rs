@@ -476,7 +476,7 @@ impl ChatId {
 
     /// Adds message "Messages are end-to-end encrypted".
     pub(crate) async fn add_e2ee_notice(self, context: &Context, timestamp: i64) -> Result<()> {
-        let text = stock_str::messages_e2ee_info_msg(context).await;
+        let text = stock_str::messages_e2ee_info_msg(context);
         add_info_msg_with_cmd(
             context,
             self,
@@ -669,7 +669,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         }
 
         if chat.is_self_talk() {
-            let mut msg = Message::new_text(stock_str::self_deleted_msg_body(context).await);
+            let mut msg = Message::new_text(stock_str::self_deleted_msg_body(context));
             add_device_msg(context, None, Some(&mut msg)).await?;
         }
         chatlist_events::emit_chatlist_changed(context);
@@ -1155,10 +1155,10 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     pub async fn get_encryption_info(self, context: &Context) -> Result<String> {
         let chat = Chat::load_from_db(context, self).await?;
         if !chat.is_encrypted(context).await? {
-            return Ok(stock_str::encr_none(context).await);
+            return Ok(stock_str::encr_none(context));
         }
 
-        let mut ret = stock_str::messages_are_e2ee(context).await + "\n";
+        let mut ret = stock_str::messages_are_e2ee(context) + "\n";
 
         for &contact_id in get_chat_contacts(context, self)
             .await?
@@ -1392,7 +1392,7 @@ impl Chat {
             .context(format!("Failed loading chat {chat_id} from database"))?;
 
         if chat.id.is_archived_link() {
-            chat.name = stock_str::archived_chats(context).await;
+            chat.name = stock_str::archived_chats(context);
         } else {
             if chat.typ == Chattype::Single && chat.name.is_empty() {
                 // chat.name is set to contact.display_name on changes,
@@ -1416,9 +1416,9 @@ impl Chat {
                 chat.name = chat_name;
             }
             if chat.param.exists(Param::Selftalk) {
-                chat.name = stock_str::saved_messages(context).await;
+                chat.name = stock_str::saved_messages(context);
             } else if chat.param.exists(Param::Devicetalk) {
-                chat.name = stock_str::device_messages(context).await;
+                chat.name = stock_str::device_messages(context);
             }
         }
 
@@ -2306,15 +2306,10 @@ pub(crate) async fn update_special_chat_names(context: &Context) -> Result<()> {
     update_special_chat_name(
         context,
         ContactId::DEVICE,
-        stock_str::device_messages(context).await,
+        stock_str::device_messages(context),
     )
     .await?;
-    update_special_chat_name(
-        context,
-        ContactId::SELF,
-        stock_str::saved_messages(context).await,
-    )
-    .await?;
+    update_special_chat_name(context, ContactId::SELF, stock_str::saved_messages(context)).await?;
     Ok(())
 }
 
@@ -3068,7 +3063,7 @@ async fn donation_request_maybe(context: &Context) -> Result<()> {
     let ts = if ts == 0 || msg_cnt.await? < 100 {
         now.saturating_add(secs_between_checks)
     } else {
-        let mut msg = Message::new_text(stock_str::donation_request(context).await);
+        let mut msg = Message::new_text(stock_str::donation_request(context));
         add_device_msg(context, None, Some(&mut msg)).await?;
         i64::MAX
     };
@@ -3622,10 +3617,10 @@ pub(crate) async fn create_group_ex(
     {
         let text = if !grpid.is_empty() {
             // Add "Others will only see this group after you sent a first message." message.
-            stock_str::new_group_send_first_message(context).await
+            stock_str::new_group_send_first_message(context)
         } else {
             // Add "Messages in this chat use classic email and are not encrypted." message.
-            stock_str::chat_unencrypted_explanation(context).await
+            stock_str::chat_unencrypted_explanation(context)
         };
         add_info_msg(context, chat_id, &text).await?;
     }
@@ -4197,7 +4192,7 @@ async fn send_member_removal_msg(
 
     if contact_id == ContactId::SELF {
         if chat.typ == Chattype::InBroadcast {
-            msg.text = stock_str::msg_you_left_broadcast(context).await;
+            msg.text = stock_str::msg_you_left_broadcast(context);
         } else {
             msg.text = stock_str::msg_group_left_local(context, ContactId::SELF).await;
         }
@@ -4358,7 +4353,7 @@ async fn rename_ex(
             {
                 msg.viewtype = Viewtype::Text;
                 msg.text = if chat.typ == Chattype::OutBroadcast {
-                    stock_str::msg_broadcast_name_changed(context, &chat.name, &new_name).await
+                    stock_str::msg_broadcast_name_changed(context, &chat.name, &new_name)
                 } else {
                     stock_str::msg_grp_name(context, &chat.name, &new_name, ContactId::SELF).await
                 };
@@ -4423,7 +4418,7 @@ pub async fn set_chat_profile_image(
         chat.param.remove(Param::ProfileImage);
         msg.param.remove(Param::Arg);
         msg.text = if chat.typ == Chattype::OutBroadcast {
-            stock_str::msg_broadcast_img_changed(context).await
+            stock_str::msg_broadcast_img_changed(context)
         } else {
             stock_str::msg_grp_img_deleted(context, ContactId::SELF).await
         };
@@ -4437,7 +4432,7 @@ pub async fn set_chat_profile_image(
         chat.param.set(Param::ProfileImage, image_blob.as_name());
         msg.param.set(Param::Arg, image_blob.as_name());
         msg.text = if chat.typ == Chattype::OutBroadcast {
-            stock_str::msg_broadcast_img_changed(context).await
+            stock_str::msg_broadcast_img_changed(context)
         } else {
             stock_str::msg_grp_img_changed(context, ContactId::SELF).await
         };

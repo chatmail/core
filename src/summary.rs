@@ -98,13 +98,13 @@ impl Summary {
         contact: Option<&Contact>,
     ) -> Result<Summary> {
         let prefix = if msg.state == MessageState::OutDraft {
-            Some(SummaryPrefix::Draft(stock_str::draft(context).await))
+            Some(SummaryPrefix::Draft(stock_str::draft(context)))
         } else if msg.from_id == ContactId::SELF {
             if msg.is_info() || msg.viewtype == Viewtype::Call || chat.typ == Chattype::OutBroadcast
             {
                 None
             } else {
-                Some(SummaryPrefix::Me(stock_str::self_msg(context).await))
+                Some(SummaryPrefix::Me(stock_str::self_msg(context)))
             }
         } else if chat.typ == Chattype::Group
             || chat.typ == Chattype::Mailinglist
@@ -124,7 +124,7 @@ impl Summary {
         let mut text = msg.get_summary_text(context).await;
 
         if text.is_empty() && msg.quoted_text().is_some() {
-            text = stock_str::reply_noun(context).await
+            text = stock_str::reply_noun(context)
         }
 
         let thumbnail_path = if msg.viewtype == Viewtype::Image
@@ -160,7 +160,7 @@ impl Message {
         let summary = self.get_summary_text_without_prefix(context).await;
 
         if self.is_forwarded() {
-            format!("{}: {}", stock_str::forwarded(context).await, summary)
+            format!("{}: {}", stock_str::forwarded(context), summary)
         } else {
             summary
         }
@@ -180,43 +180,43 @@ impl Message {
         match viewtype {
             Viewtype::Image => {
                 emoji = Some("📷");
-                type_name = Some(stock_str::image(context).await);
+                type_name = Some(stock_str::image(context));
                 type_file = None;
                 append_text = true;
             }
             Viewtype::Gif => {
                 emoji = None;
-                type_name = Some(stock_str::gif(context).await);
+                type_name = Some(stock_str::gif(context));
                 type_file = None;
                 append_text = true;
             }
             Viewtype::Sticker => {
                 emoji = None;
-                type_name = Some(stock_str::sticker(context).await);
+                type_name = Some(stock_str::sticker(context));
                 type_file = None;
                 append_text = true;
             }
             Viewtype::Video => {
                 emoji = Some("🎥");
-                type_name = Some(stock_str::video(context).await);
+                type_name = Some(stock_str::video(context));
                 type_file = None;
                 append_text = true;
             }
             Viewtype::Voice => {
                 emoji = Some("🎤");
-                type_name = Some(stock_str::voice_message(context).await);
+                type_name = Some(stock_str::voice_message(context));
                 type_file = None;
                 append_text = true;
             }
             Viewtype::Audio => {
                 emoji = Some("🎵");
-                type_name = Some(stock_str::audio(context).await);
+                type_name = Some(stock_str::audio(context));
                 type_file = self.get_filename();
                 append_text = true
             }
             Viewtype::File => {
                 emoji = Some("📎");
-                type_name = Some(stock_str::file(context).await);
+                type_name = Some(stock_str::file(context));
                 type_file = self.get_filename();
                 append_text = true
             }
@@ -255,14 +255,14 @@ impl Message {
                 type_name = Some(match call_state {
                     CallState::Alerting | CallState::Active | CallState::Completed { .. } => {
                         if self.from_id == ContactId::SELF {
-                            stock_str::outgoing_call(context, has_video).await
+                            stock_str::outgoing_call(context, has_video)
                         } else {
-                            stock_str::incoming_call(context, has_video).await
+                            stock_str::incoming_call(context, has_video)
                         }
                     }
-                    CallState::Missed => stock_str::missed_call(context).await,
-                    CallState::Declined => stock_str::declined_call(context).await,
-                    CallState::Canceled => stock_str::canceled_call(context).await,
+                    CallState::Missed => stock_str::missed_call(context),
+                    CallState::Declined => stock_str::declined_call(context),
+                    CallState::Canceled => stock_str::canceled_call(context),
                 });
                 type_file = None;
                 append_text = false
@@ -270,7 +270,7 @@ impl Message {
             Viewtype::Text | Viewtype::Unknown => {
                 emoji = None;
                 if self.param.get_cmd() == SystemMessage::LocationOnly {
-                    type_name = Some(stock_str::location(context).await);
+                    type_name = Some(stock_str::location(context));
                     type_file = None;
                     append_text = false;
                 } else {

@@ -4,9 +4,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Result, bail};
+use parking_lot::RwLock;
 use strum::EnumProperty as EnumPropertyTrait;
 use strum_macros::EnumProperty;
-use tokio::sync::RwLock;
 
 use crate::accounts::Accounts;
 use crate::blob::BlobObject;
@@ -463,17 +463,16 @@ impl StockStrings {
         }
     }
 
-    async fn translated(&self, id: StockMessage) -> String {
+    fn translated(&self, id: StockMessage) -> String {
         self.translated_stockstrings
             .read()
-            .await
             .get(&(id as usize))
             .map(AsRef::as_ref)
             .unwrap_or_else(|| id.fallback())
             .to_string()
     }
 
-    async fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
+    fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
         if stockstring.contains("%1") && !id.fallback().contains("%1") {
             bail!(
                 "translation {} contains invalid %1 placeholder, default is {}",
@@ -490,14 +489,13 @@ impl StockStrings {
         }
         self.translated_stockstrings
             .write()
-            .await
             .insert(id as usize, stockstring);
         Ok(())
     }
 }
 
-async fn translated(context: &Context, id: StockMessage) -> String {
-    context.translated_stockstrings.translated(id).await
+fn translated(context: &Context, id: StockMessage) -> String {
+    context.translated_stockstrings.translated(id)
 }
 
 /// Helper trait only meant to be implemented for [`String`].
@@ -546,43 +544,43 @@ impl ContactId {
 impl StockStringMods for String {}
 
 /// Stock string: `No messages.`.
-pub(crate) async fn no_messages(context: &Context) -> String {
-    translated(context, StockMessage::NoMessages).await
+pub(crate) fn no_messages(context: &Context) -> String {
+    translated(context, StockMessage::NoMessages)
 }
 
 /// Stock string: `Me`.
-pub(crate) async fn self_msg(context: &Context) -> String {
-    translated(context, StockMessage::SelfMsg).await
+pub(crate) fn self_msg(context: &Context) -> String {
+    translated(context, StockMessage::SelfMsg)
 }
 
 /// Stock string: `Draft`.
-pub(crate) async fn draft(context: &Context) -> String {
-    translated(context, StockMessage::Draft).await
+pub(crate) fn draft(context: &Context) -> String {
+    translated(context, StockMessage::Draft)
 }
 
 /// Stock string: `Voice message`.
-pub(crate) async fn voice_message(context: &Context) -> String {
-    translated(context, StockMessage::VoiceMessage).await
+pub(crate) fn voice_message(context: &Context) -> String {
+    translated(context, StockMessage::VoiceMessage)
 }
 
 /// Stock string: `Image`.
-pub(crate) async fn image(context: &Context) -> String {
-    translated(context, StockMessage::Image).await
+pub(crate) fn image(context: &Context) -> String {
+    translated(context, StockMessage::Image)
 }
 
 /// Stock string: `Video`.
-pub(crate) async fn video(context: &Context) -> String {
-    translated(context, StockMessage::Video).await
+pub(crate) fn video(context: &Context) -> String {
+    translated(context, StockMessage::Video)
 }
 
 /// Stock string: `Audio`.
-pub(crate) async fn audio(context: &Context) -> String {
-    translated(context, StockMessage::Audio).await
+pub(crate) fn audio(context: &Context) -> String {
+    translated(context, StockMessage::Audio)
 }
 
 /// Stock string: `File`.
-pub(crate) async fn file(context: &Context) -> String {
-    translated(context, StockMessage::File).await
+pub(crate) fn file(context: &Context) -> String {
+    translated(context, StockMessage::File)
 }
 
 /// Stock string: `Group name changed from "%1$s" to "%2$s".`.
@@ -594,12 +592,10 @@ pub(crate) async fn msg_grp_name(
 ) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouChangedGrpName)
-            .await
             .replace1(from_group)
             .replace2(to_group)
     } else {
         translated(context, StockMessage::MsgGrpNameChangedBy)
-            .await
             .replace1(from_group)
             .replace2(to_group)
             .replace3(&by_contact.get_stock_name(context).await)
@@ -608,10 +604,9 @@ pub(crate) async fn msg_grp_name(
 
 pub(crate) async fn msg_grp_img_changed(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouChangedGrpImg).await
+        translated(context, StockMessage::MsgYouChangedGrpImg)
     } else {
         translated(context, StockMessage::MsgGrpImgChangedBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -621,10 +616,9 @@ pub(crate) async fn msg_chat_description_changed(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouChangedDescription).await
+        translated(context, StockMessage::MsgYouChangedDescription)
     } else {
         translated(context, StockMessage::MsgChatDescriptionChangedBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -640,16 +634,11 @@ pub(crate) async fn msg_add_member_local(
 ) -> String {
     let whom = added_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
-        translated(context, StockMessage::MsgAddMember)
-            .await
-            .replace1(&whom)
+        translated(context, StockMessage::MsgAddMember).replace1(&whom)
     } else if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouAddMember)
-            .await
-            .replace1(&whom)
+        translated(context, StockMessage::MsgYouAddMember).replace1(&whom)
     } else {
         translated(context, StockMessage::MsgAddMemberBy)
-            .await
             .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -666,16 +655,11 @@ pub(crate) async fn msg_del_member_local(
 ) -> String {
     let whom = removed_member.get_stock_name(context).await;
     if by_contact == ContactId::UNDEFINED {
-        translated(context, StockMessage::MsgDelMember)
-            .await
-            .replace1(&whom)
+        translated(context, StockMessage::MsgDelMember).replace1(&whom)
     } else if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouDelMember)
-            .await
-            .replace1(&whom)
+        translated(context, StockMessage::MsgYouDelMember).replace1(&whom)
     } else {
         translated(context, StockMessage::MsgDelMemberBy)
-            .await
             .replace1(&whom)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -684,22 +668,21 @@ pub(crate) async fn msg_del_member_local(
 /// Stock string: `You left the group.` or `Group left by %1$s.`.
 pub(crate) async fn msg_group_left_local(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouLeftGroup).await
+        translated(context, StockMessage::MsgYouLeftGroup)
     } else {
         translated(context, StockMessage::MsgGroupLeftBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
 
 /// Stock string: `You left the channel.`
-pub(crate) async fn msg_you_left_broadcast(context: &Context) -> String {
-    translated(context, StockMessage::MsgYouLeftBroadcast).await
+pub(crate) fn msg_you_left_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouLeftBroadcast)
 }
 
 /// Stock string: `You joined the channel.`
-pub(crate) async fn msg_you_joined_broadcast(context: &Context) -> String {
-    translated(context, StockMessage::MsgYouJoinedBroadcast).await
+pub(crate) fn msg_you_joined_broadcast(context: &Context) -> String {
+    translated(context, StockMessage::MsgYouJoinedBroadcast)
 }
 
 /// Stock string: `%1$s invited you to join this channel. Waiting for the device of %2$s to reply…`.
@@ -709,7 +692,6 @@ pub(crate) async fn secure_join_broadcast_started(
 ) -> String {
     if let Ok(contact) = Contact::get_by_id(context, inviter_contact_id).await {
         translated(context, StockMessage::SecureJoinBroadcastStarted)
-            .await
             .replace1(contact.get_display_name())
             .replace2(contact.get_display_name())
     } else {
@@ -718,16 +700,15 @@ pub(crate) async fn secure_join_broadcast_started(
 }
 
 /// Stock string: `Channel name changed from "1%s" to "2$s".`
-pub(crate) async fn msg_broadcast_name_changed(context: &Context, from: &str, to: &str) -> String {
+pub(crate) fn msg_broadcast_name_changed(context: &Context, from: &str, to: &str) -> String {
     translated(context, StockMessage::MsgBroadcastNameChanged)
-        .await
         .replace1(from)
         .replace2(to)
 }
 
 /// Stock string `Channel image changed.`
-pub(crate) async fn msg_broadcast_img_changed(context: &Context) -> String {
-    translated(context, StockMessage::MsgBroadcastImgChanged).await
+pub(crate) fn msg_broadcast_img_changed(context: &Context) -> String {
+    translated(context, StockMessage::MsgBroadcastImgChanged)
 }
 
 /// Stock string: `You reacted %1$s to "%2$s"` or `%1$s reacted %2$s to "%3$s"`.
@@ -739,12 +720,10 @@ pub(crate) async fn msg_reacted(
 ) -> String {
     if by_contact == ContactId::SELF {
         translated(context, StockMessage::MsgYouReacted)
-            .await
             .replace1(reaction)
             .replace2(summary)
     } else {
         translated(context, StockMessage::MsgReactedBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
             .replace2(reaction)
             .replace3(summary)
@@ -752,27 +731,26 @@ pub(crate) async fn msg_reacted(
 }
 
 /// Stock string: `GIF`.
-pub(crate) async fn gif(context: &Context) -> String {
-    translated(context, StockMessage::Gif).await
+pub(crate) fn gif(context: &Context) -> String {
+    translated(context, StockMessage::Gif)
 }
 
 /// Stock string: `No encryption.`.
-pub(crate) async fn encr_none(context: &Context) -> String {
-    translated(context, StockMessage::EncrNone).await
+pub(crate) fn encr_none(context: &Context) -> String {
+    translated(context, StockMessage::EncrNone)
 }
 
 /// Stock string: `Fingerprints`.
-pub(crate) async fn finger_prints(context: &Context) -> String {
-    translated(context, StockMessage::FingerPrints).await
+pub(crate) fn finger_prints(context: &Context) -> String {
+    translated(context, StockMessage::FingerPrints)
 }
 
 /// Stock string: `Group image deleted.`.
 pub(crate) async fn msg_grp_img_deleted(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouDeletedGrpImg).await
+        translated(context, StockMessage::MsgYouDeletedGrpImg)
     } else {
         translated(context, StockMessage::MsgGrpImgDeletedBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -784,7 +762,6 @@ pub(crate) async fn secure_join_started(
 ) -> String {
     if let Ok(contact) = Contact::get_by_id(context, inviter_contact_id).await {
         translated(context, StockMessage::SecureJoinStarted)
-            .await
             .replace1(contact.get_display_name())
             .replace2(contact.get_display_name())
     } else {
@@ -795,22 +772,21 @@ pub(crate) async fn secure_join_started(
 /// Stock string: `%1$s replied, waiting for being added to the group…`.
 pub(crate) async fn secure_join_replies(context: &Context, contact_id: ContactId) -> String {
     translated(context, StockMessage::SecureJoinReplies)
-        .await
         .replace1(&contact_id.get_stock_name(context).await)
 }
 
 /// Stock string: `Establishing connection, please wait…`.
-pub(crate) async fn securejoin_wait(context: &Context) -> String {
-    translated(context, StockMessage::SecurejoinWait).await
+pub(crate) fn securejoin_wait(context: &Context) -> String {
+    translated(context, StockMessage::SecurejoinWait)
 }
 
 /// Stock string: `❤️ Seems you're enjoying Delta Chat!`…
-pub(crate) async fn donation_request(context: &Context) -> String {
-    translated(context, StockMessage::DonationRequest).await
+pub(crate) fn donation_request(context: &Context) -> String {
+    translated(context, StockMessage::DonationRequest)
 }
 
 /// Stock string: `Outgoing video call` or `Outgoing audio call`.
-pub(crate) async fn outgoing_call(context: &Context, has_video: bool) -> String {
+pub(crate) fn outgoing_call(context: &Context, has_video: bool) -> String {
     translated(
         context,
         if has_video {
@@ -819,11 +795,10 @@ pub(crate) async fn outgoing_call(context: &Context, has_video: bool) -> String 
             StockMessage::OutgoingAudioCall
         },
     )
-    .await
 }
 
 /// Stock string: `Incoming video call` or `Incoming audio call`.
-pub(crate) async fn incoming_call(context: &Context, has_video: bool) -> String {
+pub(crate) fn incoming_call(context: &Context, has_video: bool) -> String {
     translated(
         context,
         if has_video {
@@ -832,26 +807,25 @@ pub(crate) async fn incoming_call(context: &Context, has_video: bool) -> String 
             StockMessage::IncomingAudioCall
         },
     )
-    .await
 }
 
 /// Stock string: `Declined call`.
-pub(crate) async fn declined_call(context: &Context) -> String {
-    translated(context, StockMessage::DeclinedCall).await
+pub(crate) fn declined_call(context: &Context) -> String {
+    translated(context, StockMessage::DeclinedCall)
 }
 
 /// Stock string: `Canceled call`.
-pub(crate) async fn canceled_call(context: &Context) -> String {
-    translated(context, StockMessage::CanceledCall).await
+pub(crate) fn canceled_call(context: &Context) -> String {
+    translated(context, StockMessage::CanceledCall)
 }
 
 /// Stock string: `Missed call`.
-pub(crate) async fn missed_call(context: &Context) -> String {
-    translated(context, StockMessage::MissedCall).await
+pub(crate) fn missed_call(context: &Context) -> String {
+    translated(context, StockMessage::MissedCall)
 }
 
 /// Stock string: `Scan to chat with %1$s`.
-pub(crate) async fn setup_contact_qr_description(
+pub(crate) fn setup_contact_qr_description(
     context: &Context,
     display_name: &str,
     addr: &str,
@@ -861,113 +835,100 @@ pub(crate) async fn setup_contact_qr_description(
     } else {
         display_name.to_owned()
     };
-    translated(context, StockMessage::SetupContactQRDescription)
-        .await
-        .replace1(&name)
+    translated(context, StockMessage::SetupContactQRDescription).replace1(&name)
 }
 
 /// Stock string: `Scan to join group %1$s`.
-pub(crate) async fn secure_join_group_qr_description(context: &Context, chat: &Chat) -> String {
-    translated(context, StockMessage::SecureJoinGroupQRDescription)
-        .await
-        .replace1(chat.get_name())
+pub(crate) fn secure_join_group_qr_description(context: &Context, chat: &Chat) -> String {
+    translated(context, StockMessage::SecureJoinGroupQRDescription).replace1(chat.get_name())
 }
 
 /// Stock string: `Scan to join channel %1$s`.
-pub(crate) async fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
-    translated(context, StockMessage::SecureJoinBrodcastQRDescription)
-        .await
-        .replace1(chat.get_name())
+pub(crate) fn secure_join_broadcast_qr_description(context: &Context, chat: &Chat) -> String {
+    translated(context, StockMessage::SecureJoinBrodcastQRDescription).replace1(chat.get_name())
 }
 
 /// Stock string: `%1$s verified.`.
 #[allow(dead_code)]
-pub(crate) async fn contact_verified(context: &Context, contact: &Contact) -> String {
+pub(crate) fn contact_verified(context: &Context, contact: &Contact) -> String {
     let addr = contact.get_display_name();
-    translated(context, StockMessage::ContactVerified)
-        .await
-        .replace1(addr)
+    translated(context, StockMessage::ContactVerified).replace1(addr)
 }
 
 /// Stock string: `Archived chats`.
-pub(crate) async fn archived_chats(context: &Context) -> String {
-    translated(context, StockMessage::ArchivedChats).await
+pub(crate) fn archived_chats(context: &Context) -> String {
+    translated(context, StockMessage::ArchivedChats)
 }
 
 /// Stock string: `Multi Device Synchronization`.
-pub(crate) async fn sync_msg_subject(context: &Context) -> String {
-    translated(context, StockMessage::SyncMsgSubject).await
+pub(crate) fn sync_msg_subject(context: &Context) -> String {
+    translated(context, StockMessage::SyncMsgSubject)
 }
 
 /// Stock string: `This message is used to synchronize data between your devices.`.
-pub(crate) async fn sync_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::SyncMsgBody).await
+pub(crate) fn sync_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::SyncMsgBody)
 }
 
 /// Stock string: `Cannot login as \"%1$s\". Please check...`.
-pub(crate) async fn cannot_login(context: &Context, user: &str) -> String {
-    translated(context, StockMessage::CannotLogin)
-        .await
-        .replace1(user)
+pub(crate) fn cannot_login(context: &Context, user: &str) -> String {
+    translated(context, StockMessage::CannotLogin).replace1(user)
 }
 
 /// Stock string: `Location streaming enabled.`.
-pub(crate) async fn msg_location_enabled(context: &Context) -> String {
-    translated(context, StockMessage::MsgLocationEnabled).await
+pub(crate) fn msg_location_enabled(context: &Context) -> String {
+    translated(context, StockMessage::MsgLocationEnabled)
 }
 
 /// Stock string: `Location streaming enabled by ...`.
 pub(crate) async fn msg_location_enabled_by(context: &Context, contact: ContactId) -> String {
     if contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEnabledLocation).await
+        translated(context, StockMessage::MsgYouEnabledLocation)
     } else {
         translated(context, StockMessage::MsgLocationEnabledBy)
-            .await
             .replace1(&contact.get_stock_name(context).await)
     }
 }
 
 /// Stock string: `Location streaming disabled.`.
-pub(crate) async fn msg_location_disabled(context: &Context) -> String {
-    translated(context, StockMessage::MsgLocationDisabled).await
+pub(crate) fn msg_location_disabled(context: &Context) -> String {
+    translated(context, StockMessage::MsgLocationDisabled)
 }
 
 /// Stock string: `Location`.
-pub(crate) async fn location(context: &Context) -> String {
-    translated(context, StockMessage::Location).await
+pub(crate) fn location(context: &Context) -> String {
+    translated(context, StockMessage::Location)
 }
 
 /// Stock string: `Sticker`.
-pub(crate) async fn sticker(context: &Context) -> String {
-    translated(context, StockMessage::Sticker).await
+pub(crate) fn sticker(context: &Context) -> String {
+    translated(context, StockMessage::Sticker)
 }
 
 /// Stock string: `Device messages`.
-pub(crate) async fn device_messages(context: &Context) -> String {
-    translated(context, StockMessage::DeviceMessages).await
+pub(crate) fn device_messages(context: &Context) -> String {
+    translated(context, StockMessage::DeviceMessages)
 }
 
 /// Stock string: `Saved messages`.
-pub(crate) async fn saved_messages(context: &Context) -> String {
-    translated(context, StockMessage::SavedMessages).await
+pub(crate) fn saved_messages(context: &Context) -> String {
+    translated(context, StockMessage::SavedMessages)
 }
 
 /// Stock string: `Messages in this chat are generated locally by...`.
-pub(crate) async fn device_messages_hint(context: &Context) -> String {
-    translated(context, StockMessage::DeviceMessagesHint).await
+pub(crate) fn device_messages_hint(context: &Context) -> String {
+    translated(context, StockMessage::DeviceMessagesHint)
 }
 
 /// Stock string: `Welcome to Delta Chat! – ...`.
-pub(crate) async fn welcome_message(context: &Context) -> String {
-    translated(context, StockMessage::WelcomeMessage).await
+pub(crate) fn welcome_message(context: &Context) -> String {
+    translated(context, StockMessage::WelcomeMessage)
 }
 
 /// Stock string: `Message from %1$s`.
 // TODO: This can compute `self_name` itself instead of asking the caller to do this.
-pub(crate) async fn subject_for_new_contact(context: &Context, self_name: &str) -> String {
-    translated(context, StockMessage::SubjectForNewContact)
-        .await
-        .replace1(self_name)
+pub(crate) fn subject_for_new_contact(context: &Context, self_name: &str) -> String {
+    translated(context, StockMessage::SubjectForNewContact).replace1(self_name)
 }
 
 /// Stock string: `Message deletion timer is disabled.`.
@@ -976,10 +937,9 @@ pub(crate) async fn msg_ephemeral_timer_disabled(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouDisabledEphemeralTimer).await
+        translated(context, StockMessage::MsgYouDisabledEphemeralTimer)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerDisabledBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -991,12 +951,9 @@ pub(crate) async fn msg_ephemeral_timer_enabled(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEnabledEphemeralTimer)
-            .await
-            .replace1(timer)
+        translated(context, StockMessage::MsgYouEnabledEphemeralTimer).replace1(timer)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerEnabledBy)
-            .await
             .replace1(timer)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -1005,10 +962,9 @@ pub(crate) async fn msg_ephemeral_timer_enabled(
 /// Stock string: `Message deletion timer is set to 1 hour.`.
 pub(crate) async fn msg_ephemeral_timer_hour(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerHour).await
+        translated(context, StockMessage::MsgYouEphemeralTimerHour)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerHourBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -1016,10 +972,9 @@ pub(crate) async fn msg_ephemeral_timer_hour(context: &Context, by_contact: Cont
 /// Stock string: `Message deletion timer is set to 1 day.`.
 pub(crate) async fn msg_ephemeral_timer_day(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerDay).await
+        translated(context, StockMessage::MsgYouEphemeralTimerDay)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerDayBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -1027,10 +982,9 @@ pub(crate) async fn msg_ephemeral_timer_day(context: &Context, by_contact: Conta
 /// Stock string: `Message deletion timer is set to 1 week.`.
 pub(crate) async fn msg_ephemeral_timer_week(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerWeek).await
+        translated(context, StockMessage::MsgYouEphemeralTimerWeek)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerWeekBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
@@ -1038,57 +992,52 @@ pub(crate) async fn msg_ephemeral_timer_week(context: &Context, by_contact: Cont
 /// Stock string: `Message deletion timer is set to 1 year.`.
 pub(crate) async fn msg_ephemeral_timer_year(context: &Context, by_contact: ContactId) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerYear).await
+        translated(context, StockMessage::MsgYouEphemeralTimerYear)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerYearBy)
-            .await
             .replace1(&by_contact.get_stock_name(context).await)
     }
 }
 
 /// Stock string: `Error:\n\n“%1$s”`.
-pub(crate) async fn configuration_failed(context: &Context, details: &str) -> String {
-    translated(context, StockMessage::ConfigurationFailed)
-        .await
-        .replace1(details)
+pub(crate) fn configuration_failed(context: &Context, details: &str) -> String {
+    translated(context, StockMessage::ConfigurationFailed).replace1(details)
 }
 
 /// Stock string: `⚠️ Date or time of your device seem to be inaccurate (%1$s)...`.
 // TODO: This could compute now itself.
-pub(crate) async fn bad_time_msg_body(context: &Context, now: &str) -> String {
-    translated(context, StockMessage::BadTimeMsgBody)
-        .await
-        .replace1(now)
+pub(crate) fn bad_time_msg_body(context: &Context, now: &str) -> String {
+    translated(context, StockMessage::BadTimeMsgBody).replace1(now)
 }
 
 /// Stock string: `⚠️ Your Delta Chat version might be outdated...`.
-pub(crate) async fn update_reminder_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::UpdateReminderMsgBody).await
+pub(crate) fn update_reminder_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::UpdateReminderMsgBody)
 }
 
 /// Stock string: `Could not find your mail server...`.
-pub(crate) async fn error_no_network(context: &Context) -> String {
-    translated(context, StockMessage::ErrorNoNetwork).await
+pub(crate) fn error_no_network(context: &Context) -> String {
+    translated(context, StockMessage::ErrorNoNetwork)
 }
 
 /// Stock string: `Messages are end-to-end encrypted.`, used in info-messages, UI may add smth. as `Tap to learn more.`
-pub(crate) async fn messages_e2ee_info_msg(context: &Context) -> String {
-    translated(context, StockMessage::ChatProtectionEnabled).await
+pub(crate) fn messages_e2ee_info_msg(context: &Context) -> String {
+    translated(context, StockMessage::ChatProtectionEnabled)
 }
 
 /// Stock string: `Messages are end-to-end encrypted.`
-pub(crate) async fn messages_are_e2ee(context: &Context) -> String {
-    translated(context, StockMessage::MessagesAreE2ee).await
+pub(crate) fn messages_are_e2ee(context: &Context) -> String {
+    translated(context, StockMessage::MessagesAreE2ee)
 }
 
 /// Stock string: `Reply`.
-pub(crate) async fn reply_noun(context: &Context) -> String {
-    translated(context, StockMessage::ReplyNoun).await
+pub(crate) fn reply_noun(context: &Context) -> String {
+    translated(context, StockMessage::ReplyNoun)
 }
 
 /// Stock string: `You deleted the \"Saved messages\" chat...`.
-pub(crate) async fn self_deleted_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::SelfDeletedMsgBody).await
+pub(crate) fn self_deleted_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::SelfDeletedMsgBody)
 }
 
 /// Stock string: `Message deletion timer is set to %1$s minutes.`.
@@ -1098,12 +1047,9 @@ pub(crate) async fn msg_ephemeral_timer_minutes(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerMinutes)
-            .await
-            .replace1(minutes)
+        translated(context, StockMessage::MsgYouEphemeralTimerMinutes).replace1(minutes)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerMinutesBy)
-            .await
             .replace1(minutes)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -1116,12 +1062,9 @@ pub(crate) async fn msg_ephemeral_timer_hours(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerHours)
-            .await
-            .replace1(hours)
+        translated(context, StockMessage::MsgYouEphemeralTimerHours).replace1(hours)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerHoursBy)
-            .await
             .replace1(hours)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -1134,12 +1077,9 @@ pub(crate) async fn msg_ephemeral_timer_days(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerDays)
-            .await
-            .replace1(days)
+        translated(context, StockMessage::MsgYouEphemeralTimerDays).replace1(days)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerDaysBy)
-            .await
             .replace1(days)
             .replace2(&by_contact.get_stock_name(context).await)
     }
@@ -1152,112 +1092,103 @@ pub(crate) async fn msg_ephemeral_timer_weeks(
     by_contact: ContactId,
 ) -> String {
     if by_contact == ContactId::SELF {
-        translated(context, StockMessage::MsgYouEphemeralTimerWeeks)
-            .await
-            .replace1(weeks)
+        translated(context, StockMessage::MsgYouEphemeralTimerWeeks).replace1(weeks)
     } else {
         translated(context, StockMessage::MsgEphemeralTimerWeeksBy)
-            .await
             .replace1(weeks)
             .replace2(&by_contact.get_stock_name(context).await)
     }
 }
 
 /// Stock string: `Forwarded`.
-pub(crate) async fn forwarded(context: &Context) -> String {
-    translated(context, StockMessage::Forwarded).await
+pub(crate) fn forwarded(context: &Context) -> String {
+    translated(context, StockMessage::Forwarded)
 }
 
 /// Stock string: `⚠️ Your provider's storage is about to exceed...`.
-pub(crate) async fn quota_exceeding(context: &Context, highest_usage: u64) -> String {
+pub(crate) fn quota_exceeding(context: &Context, highest_usage: u64) -> String {
     translated(context, StockMessage::QuotaExceedingMsgBody)
-        .await
         .replace1(&format!("{highest_usage}"))
         .replace("%%", "%")
 }
 
 /// Stock string: `Incoming Messages`.
-pub(crate) async fn incoming_messages(context: &Context) -> String {
-    translated(context, StockMessage::IncomingMessages).await
+pub(crate) fn incoming_messages(context: &Context) -> String {
+    translated(context, StockMessage::IncomingMessages)
 }
 
 /// Stock string: `Outgoing Messages`.
-pub(crate) async fn outgoing_messages(context: &Context) -> String {
-    translated(context, StockMessage::OutgoingMessages).await
+pub(crate) fn outgoing_messages(context: &Context) -> String {
+    translated(context, StockMessage::OutgoingMessages)
 }
 
 /// Stock string: `Not connected`.
-pub(crate) async fn not_connected(context: &Context) -> String {
-    translated(context, StockMessage::NotConnected).await
+pub(crate) fn not_connected(context: &Context) -> String {
+    translated(context, StockMessage::NotConnected)
 }
 
 /// Stock string: `Connected`.
-pub(crate) async fn connected(context: &Context) -> String {
-    translated(context, StockMessage::Connected).await
+pub(crate) fn connected(context: &Context) -> String {
+    translated(context, StockMessage::Connected)
 }
 
 /// Stock string: `Connecting…`.
-pub(crate) async fn connecting(context: &Context) -> String {
-    translated(context, StockMessage::Connecting).await
+pub(crate) fn connecting(context: &Context) -> String {
+    translated(context, StockMessage::Connecting)
 }
 
 /// Stock string: `Updating…`.
-pub(crate) async fn updating(context: &Context) -> String {
-    translated(context, StockMessage::Updating).await
+pub(crate) fn updating(context: &Context) -> String {
+    translated(context, StockMessage::Updating)
 }
 
 /// Stock string: `Sending…`.
-pub(crate) async fn sending(context: &Context) -> String {
-    translated(context, StockMessage::Sending).await
+pub(crate) fn sending(context: &Context) -> String {
+    translated(context, StockMessage::Sending)
 }
 
 /// Stock string: `Your last message was sent successfully.`.
-pub(crate) async fn last_msg_sent_successfully(context: &Context) -> String {
-    translated(context, StockMessage::LastMsgSentSuccessfully).await
+pub(crate) fn last_msg_sent_successfully(context: &Context) -> String {
+    translated(context, StockMessage::LastMsgSentSuccessfully)
 }
 
 /// Stock string: `Error: %1$s…`.
 /// `%1$s` will be replaced by a possibly more detailed, typically english, error description.
-pub(crate) async fn error(context: &Context, error: &str) -> String {
-    translated(context, StockMessage::Error)
-        .await
-        .replace1(error)
+pub(crate) fn error(context: &Context, error: &str) -> String {
+    translated(context, StockMessage::Error).replace1(error)
 }
 
 /// Stock string: `Not supported by your provider.`.
-pub(crate) async fn not_supported_by_provider(context: &Context) -> String {
-    translated(context, StockMessage::NotSupportedByProvider).await
+pub(crate) fn not_supported_by_provider(context: &Context) -> String {
+    translated(context, StockMessage::NotSupportedByProvider)
 }
 
 /// Stock string: `Messages`.
 /// Used as a subtitle in quota context; can be plural always.
-pub(crate) async fn messages(context: &Context) -> String {
-    translated(context, StockMessage::Messages).await
+pub(crate) fn messages(context: &Context) -> String {
+    translated(context, StockMessage::Messages)
 }
 
 /// Stock string: `%1$s of %2$s used`.
-pub(crate) async fn part_of_total_used(context: &Context, part: &str, total: &str) -> String {
+pub(crate) fn part_of_total_used(context: &Context, part: &str, total: &str) -> String {
     translated(context, StockMessage::PartOfTotallUsed)
-        .await
         .replace1(part)
         .replace2(total)
 }
 
 /// Stock string: `⚠️ Your email provider %1$s requires end-to-end encryption which is not setup yet. Tap to learn more.`.
 pub(crate) async fn unencrypted_email(context: &Context, provider: &str) -> String {
-    translated(context, StockMessage::InvalidUnencryptedMail)
-        .await
-        .replace1(provider)
+    translated(context, StockMessage::InvalidUnencryptedMail).replace1(provider)
 }
 
 /// Stock string: `The attachment contains anonymous usage statistics, which helps us improve Delta Chat. Thank you!`
-pub(crate) async fn stats_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::StatsMsgBody).await
+pub(crate) fn stats_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::StatsMsgBody)
 }
 
 /// Stock string: `Others will only see this group after you sent a first message.`.
-pub(crate) async fn new_group_send_first_message(context: &Context) -> String {
-    translated(context, StockMessage::NewGroupSendFirstMessage).await
+pub(crate) fn new_group_send_first_message(context: &Context) -> String {
+    translated(context, StockMessage::NewGroupSendFirstMessage)
 }
 
 /// Text to put in the [`Qr::Backup2`] rendered SVG image.
@@ -1272,46 +1203,44 @@ pub(crate) async fn backup_transfer_qr(context: &Context) -> Result<String> {
     } else {
         context.get_primary_self_addr().await?
     };
-    Ok(translated(context, StockMessage::BackupTransferQr)
-        .await
-        .replace1(&name))
+    Ok(translated(context, StockMessage::BackupTransferQr).replace1(&name))
 }
 
-pub(crate) async fn backup_transfer_msg_body(context: &Context) -> String {
-    translated(context, StockMessage::BackupTransferMsgBody).await
+pub(crate) fn backup_transfer_msg_body(context: &Context) -> String {
+    translated(context, StockMessage::BackupTransferMsgBody)
 }
 
 /// Stock string: `Proxy Enabled`.
-pub(crate) async fn proxy_enabled(context: &Context) -> String {
-    translated(context, StockMessage::ProxyEnabled).await
+pub(crate) fn proxy_enabled(context: &Context) -> String {
+    translated(context, StockMessage::ProxyEnabled)
 }
 
 /// Stock string: `You are using a proxy. If you're having trouble connecting, try a different proxy.`.
-pub(crate) async fn proxy_description(context: &Context) -> String {
-    translated(context, StockMessage::ProxyEnabledDescription).await
+pub(crate) fn proxy_description(context: &Context) -> String {
+    translated(context, StockMessage::ProxyEnabledDescription)
 }
 
 /// Stock string: `Messages in this chat use classic email and are not encrypted.`.
-pub(crate) async fn chat_unencrypted_explanation(context: &Context) -> String {
-    translated(context, StockMessage::ChatUnencryptedExplanation).await
+pub(crate) fn chat_unencrypted_explanation(context: &Context) -> String {
+    translated(context, StockMessage::ChatUnencryptedExplanation)
 }
 
 /// Stock string: `You are using the legacy option "Move automatically to DeltaChat Folder`…
-pub(crate) async fn mvbox_move_deprecation(context: &Context) -> String {
-    translated(context, StockMessage::MvboxMoveDeprecation).await
+pub(crate) fn mvbox_move_deprecation(context: &Context) -> String {
+    translated(context, StockMessage::MvboxMoveDeprecation)
 }
 
 impl Viewtype {
     /// returns Localized name for message viewtype
-    pub async fn to_locale_string(&self, context: &Context) -> String {
+    pub fn to_locale_string(&self, context: &Context) -> String {
         match self {
-            Viewtype::Image => image(context).await,
-            Viewtype::Gif => gif(context).await,
-            Viewtype::Sticker => sticker(context).await,
-            Viewtype::Audio => audio(context).await,
-            Viewtype::Voice => voice_message(context).await,
-            Viewtype::Video => video(context).await,
-            Viewtype::File => file(context).await,
+            Viewtype::Image => image(context),
+            Viewtype::Gif => gif(context),
+            Viewtype::Sticker => sticker(context),
+            Viewtype::Audio => audio(context),
+            Viewtype::Voice => voice_message(context),
+            Viewtype::Video => video(context),
+            Viewtype::File => file(context),
             Viewtype::Webxdc => "Mini App".to_owned(),
             Viewtype::Vcard => "👤".to_string(),
             // The following shouldn't normally be shown to users, so translations aren't needed.
@@ -1323,10 +1252,9 @@ impl Viewtype {
 impl Context {
     /// Set the stock string for the [StockMessage].
     ///
-    pub async fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
+    pub fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
         self.translated_stockstrings
-            .set_stock_translation(id, stockstring)
-            .await?;
+            .set_stock_translation(id, stockstring)?;
         Ok(())
     }
 
@@ -1353,7 +1281,7 @@ impl Context {
         msg.param.set(Param::Filename, "welcome-image.jpg");
         chat::add_device_msg(self, Some("core-welcome-image"), Some(&mut msg)).await?;
 
-        let mut msg = Message::new_text(welcome_message(self).await);
+        let mut msg = Message::new_text(welcome_message(self));
         chat::add_device_msg(self, Some("core-welcome"), Some(&mut msg)).await?;
         Ok(())
     }
@@ -1362,10 +1290,8 @@ impl Context {
 impl Accounts {
     /// Set the stock string for the [StockMessage].
     ///
-    pub async fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
-        self.stockstrings
-            .set_stock_translation(id, stockstring)
-            .await?;
+    pub fn set_stock_translation(&self, id: StockMessage, stockstring: String) -> Result<()> {
+        self.stockstrings.set_stock_translation(id, stockstring)?;
         Ok(())
     }
 }

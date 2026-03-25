@@ -20,9 +20,8 @@ fn test_fallback() {
 async fn test_set_stock_translation() {
     let t = TestContext::new().await;
     t.set_stock_translation(StockMessage::NoMessages, "xyz".to_string())
-        .await
         .unwrap();
-    assert_eq!(no_messages(&t).await, "xyz")
+    assert_eq!(no_messages(&t), "xyz")
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -31,13 +30,11 @@ async fn test_set_stock_translation_wrong_replacements() {
     assert!(
         t.ctx
             .set_stock_translation(StockMessage::NoMessages, "xyz %1$s ".to_string())
-            .await
             .is_err()
     );
     assert!(
         t.ctx
             .set_stock_translation(StockMessage::NoMessages, "xyz %2$s ".to_string())
-            .await
             .is_err()
     );
 }
@@ -45,7 +42,7 @@ async fn test_set_stock_translation_wrong_replacements() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stock_str() {
     let t = TestContext::new().await;
-    assert_eq!(no_messages(&t).await, "No messages.");
+    assert_eq!(no_messages(&t), "No messages.");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -56,17 +53,14 @@ async fn test_stock_string_repl_str() {
         .unwrap();
     let contact = Contact::get_by_id(&t.ctx, contact_id).await.unwrap();
     // uses %1$s substitution
-    assert_eq!(contact_verified(&t, &contact).await, "Someone verified.");
+    assert_eq!(contact_verified(&t, &contact), "Someone verified.");
     // We have no string using %1$d to test...
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_stock_system_msg_simple() {
     let t = TestContext::new().await;
-    assert_eq!(
-        msg_location_enabled(&t).await,
-        "Location streaming enabled."
-    )
+    assert_eq!(msg_location_enabled(&t), "Location streaming enabled.")
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -111,7 +105,7 @@ async fn test_stock_system_msg_add_member_by_other_with_displayname() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_quota_exceeding_stock_str() -> Result<()> {
     let t = TestContext::new().await;
-    let str = quota_exceeding(&t, 81).await;
+    let str = quota_exceeding(&t, 81);
     assert!(str.contains("81% "));
     assert!(str.contains("100% "));
     assert!(!str.contains("%%"));

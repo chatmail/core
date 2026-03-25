@@ -901,7 +901,7 @@ async fn maybe_add_mvbox_move_deprecation_message(context: &Context) -> Result<(
     if !context.get_config_bool(Config::OnlyFetchMvbox).await?
         && context.get_config_bool(Config::MvboxMove).await?
     {
-        let mut msg = Message::new_text(stock_str::mvbox_move_deprecation(context).await);
+        let mut msg = Message::new_text(stock_str::mvbox_move_deprecation(context));
         add_device_msg(context, Some("mvbox_move_deprecation"), Some(&mut msg)).await?;
     }
     Ok(())

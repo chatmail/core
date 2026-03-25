@@ -437,7 +437,7 @@ impl Imap {
 
                 Err(err) => {
                     let imap_user = lp.user.to_owned();
-                    let message = stock_str::cannot_login(context, &imap_user).await;
+                    let message = stock_str::cannot_login(context, &imap_user);
 
                     warn!(context, "IMAP failed to login: {err:#}.");
                     first_error.get_or_insert(format_err!("{message} ({err:#})"));

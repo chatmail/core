@@ -732,7 +732,7 @@ impl MimeFactory {
                     Some(name) => name,
                     None => context.get_config(Config::Addr).await?.unwrap_or_default(),
                 };
-                stock_str::subject_for_new_contact(context, self_name).await
+                stock_str::subject_for_new_contact(context, self_name)
             }
             Loaded::Mdn { .. } => "Receipt Notification".to_string(), // untranslated to no reveal sender's language
         };

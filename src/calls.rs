@@ -104,13 +104,11 @@ impl CallInfo {
         };
 
         if self.is_incoming() {
-            let incoming_call_str =
-                stock_str::incoming_call(context, self.has_video_initially()).await;
+            let incoming_call_str = stock_str::incoming_call(context, self.has_video_initially());
             self.update_text(context, &format!("{incoming_call_str}\n{duration}"))
                 .await?;
         } else {
-            let outgoing_call_str =
-                stock_str::outgoing_call(context, self.has_video_initially()).await;
+            let outgoing_call_str = stock_str::outgoing_call(context, self.has_video_initially());
             self.update_text(context, &format!("{outgoing_call_str}\n{duration}"))
                 .await?;
         }
@@ -207,7 +205,7 @@ impl Context {
         );
         ensure!(!chat.is_self_talk(), "Cannot call self");
 
-        let outgoing_call_str = stock_str::outgoing_call(self, has_video_initially).await;
+        let outgoing_call_str = stock_str::outgoing_call(self, has_video_initially);
         let mut call = Message {
             viewtype: Viewtype::Call,
             text: outgoing_call_str,
@@ -286,11 +284,11 @@ impl Context {
             if call.is_incoming() {
                 call.mark_as_ended(self).await?;
                 markseen_msgs(self, vec![call_id]).await?;
-                let declined_call_str = stock_str::declined_call(self).await;
+                let declined_call_str = stock_str::declined_call(self);
                 call.update_text(self, &declined_call_str).await?;
             } else {
                 call.mark_as_canceled(self).await?;
-                let canceled_call_str = stock_str::canceled_call(self).await;
+                let canceled_call_str = stock_str::canceled_call(self);
                 call.update_text(self, &canceled_call_str).await?;
             }
         } else {
@@ -333,11 +331,11 @@ impl Context {
         if !call.is_accepted() && !call.is_ended() {
             if call.is_incoming() {
                 call.mark_as_canceled(&context).await?;
-                let missed_call_str = stock_str::missed_call(&context).await;
+                let missed_call_str = stock_str::missed_call(&context);
                 call.update_text(&context, &missed_call_str).await?;
             } else {
                 call.mark_as_ended(&context).await?;
-                let canceled_call_str = stock_str::canceled_call(&context).await;
+                let canceled_call_str = stock_str::canceled_call(&context);
                 call.update_text(&context, &canceled_call_str).await?;
             }
             context.emit_msgs_changed(call.msg.chat_id, call_id);
@@ -363,12 +361,12 @@ impl Context {
 
             if call.is_incoming() {
                 if call.is_stale() {
-                    let missed_call_str = stock_str::missed_call(self).await;
+                    let missed_call_str = stock_str::missed_call(self);
                     call.update_text(self, &missed_call_str).await?;
                     self.emit_incoming_msg(call.msg.chat_id, call_id); // notify missed call
                 } else {
                     let incoming_call_str =
-                        stock_str::incoming_call(self, call.has_video_initially()).await;
+                        stock_str::incoming_call(self, call.has_video_initially());
                     call.update_text(self, &incoming_call_str).await?;
                     self.emit_msgs_changed(call.msg.chat_id, call_id); // ringing calls are not additionally notified
                     let can_call_me = match who_can_call_me(self).await? {
@@ -409,8 +407,7 @@ impl Context {
                     ));
                 }
             } else {
-                let outgoing_call_str =
-                    stock_str::outgoing_call(self, call.has_video_initially()).await;
+                let outgoing_call_str = stock_str::outgoing_call(self, call.has_video_initially());
                 call.update_text(self, &outgoing_call_str).await?;
                 self.emit_msgs_changed(call.msg.chat_id, call_id);
             }
@@ -462,22 +459,22 @@ impl Context {
                         if call.is_incoming() {
                             if from_id == ContactId::SELF {
                                 call.mark_as_ended(self).await?;
-                                let declined_call_str = stock_str::declined_call(self).await;
+                                let declined_call_str = stock_str::declined_call(self);
                                 call.update_text(self, &declined_call_str).await?;
                             } else {
                                 call.mark_as_canceled(self).await?;
-                                let missed_call_str = stock_str::missed_call(self).await;
+                                let missed_call_str = stock_str::missed_call(self);
                                 call.update_text(self, &missed_call_str).await?;
                             }
                         } else {
                             // outgoing
                             if from_id == ContactId::SELF {
                                 call.mark_as_canceled(self).await?;
-                                let canceled_call_str = stock_str::canceled_call(self).await;
+                                let canceled_call_str = stock_str::canceled_call(self);
                                 call.update_text(self, &canceled_call_str).await?;
                             } else {
                                 call.mark_as_ended(self).await?;
-                                let declined_call_str = stock_str::declined_call(self).await;
+                                let declined_call_str = stock_str::declined_call(self);
                                 call.update_text(self, &declined_call_str).await?;
                             }
                         }

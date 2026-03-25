@@ -282,7 +282,7 @@ async fn test_add_or_lookup() {
 
     // check SELF
     let contact = Contact::get_by_id(&t, ContactId::SELF).await.unwrap();
-    assert_eq!(contact.get_name(), stock_str::self_msg(&t).await);
+    assert_eq!(contact.get_name(), stock_str::self_msg(&t));
     assert_eq!(contact.get_addr(), "alice@example.org");
     assert!(!contact.is_blocked());
 }

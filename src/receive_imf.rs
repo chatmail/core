@@ -3357,7 +3357,7 @@ async fn apply_chat_name_avatar_and_description_changes(
             let old_name = &sanitize_single_line(old_name);
             better_msg.get_or_insert(
                 if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
-                    stock_str::msg_broadcast_name_changed(context, old_name, grpname).await
+                    stock_str::msg_broadcast_name_changed(context, old_name, grpname)
                 } else {
                     stock_str::msg_grp_name(context, old_name, grpname, from_id).await
                 },
@@ -3420,7 +3420,7 @@ async fn apply_chat_name_avatar_and_description_changes(
         // apart from that, the group-avatar is send along with various other messages
         better_msg.get_or_insert(
             if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
-                stock_str::msg_broadcast_img_changed(context).await
+                stock_str::msg_broadcast_img_changed(context)
             } else {
                 match avatar_action {
                     AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
@@ -3860,7 +3860,7 @@ async fn apply_in_broadcast_changes(
             info!(context, "No-op broadcast 'Member added' message (TRASH)");
             "".to_string()
         } else {
-            stock_str::msg_you_joined_broadcast(context).await
+            stock_str::msg_you_joined_broadcast(context)
         };
 
         better_msg.get_or_insert(msg);
@@ -3876,7 +3876,7 @@ async fn apply_in_broadcast_changes(
         chat::delete_broadcast_secret(context, chat.id).await?;
 
         if from_id == ContactId::SELF {
-            better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context).await);
+            better_msg.get_or_insert(stock_str::msg_you_left_broadcast(context));
         } else {
             better_msg.get_or_insert(
                 stock_str::msg_del_member_local(context, ContactId::SELF, from_id).await,
