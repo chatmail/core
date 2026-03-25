@@ -852,7 +852,13 @@ impl MimeFactory {
 
         let rfc724_mid = match &self.loaded {
             Loaded::Message { msg, .. } => match &self.pre_message_mode {
-                PreMessageMode::Pre { .. } => create_outgoing_rfc724_mid(),
+                PreMessageMode::Pre { .. } => {
+                    if msg.pre_rfc724_mid.is_empty() {
+                        create_outgoing_rfc724_mid()
+                    } else {
+                        msg.pre_rfc724_mid.clone()
+                    }
+                }
                 _ => msg.rfc724_mid.clone(),
             },
             Loaded::Mdn { .. } => create_outgoing_rfc724_mid(),

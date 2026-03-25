@@ -56,22 +56,26 @@ async fn test_sending_pre_message() -> Result<()> {
             .is_some()
     );
 
+    let post_rfc724_mid = post_message_parsed
+        .headers
+        .get_header_value(HeaderDef::MessageId);
     assert_eq!(
-        post_message_parsed
-            .headers
-            .get_header_value(HeaderDef::MessageId),
+        post_rfc724_mid,
         Some(format!("<{}>", msg.rfc724_mid)),
         "Post-Message should have the rfc message id of the database message"
     );
 
+    let pre_rfc724_mid = pre_message_parsed
+        .headers
+        .get_header_value(HeaderDef::MessageId);
     assert_ne!(
-        pre_message_parsed
-            .headers
-            .get_header_value(HeaderDef::MessageId),
-        post_message_parsed
-            .headers
-            .get_header_value(HeaderDef::MessageId),
+        pre_rfc724_mid, post_rfc724_mid,
         "message ids of Pre-Message and Post-Message should be different"
+    );
+    assert_eq!(
+        pre_rfc724_mid,
+        Some(format!("<{}>", msg.pre_rfc724_mid)),
+        "Unexpected pre-message RFC 724 ID"
     );
 
     let decrypted_post_message = bob.parse_msg(post_message).await;
@@ -86,9 +90,7 @@ async fn test_sending_pre_message() -> Result<()> {
         decrypted_pre_message
             .get_header(HeaderDef::ChatPostMessageId)
             .map(String::from),
-        post_message_parsed
-            .headers
-            .get_header_value(HeaderDef::MessageId)
+        post_rfc724_mid,
     );
     assert!(
         pre_message_parsed
@@ -96,6 +98,25 @@ async fn test_sending_pre_message() -> Result<()> {
             .get_header_value(HeaderDef::ChatPostMessageId)
             .is_none(),
         "no Chat-Post-Message-ID header in unprotected headers of Pre-Message"
+    );
+
+    chat::resend_msgs(alice, &[msg_id]).await?;
+    let smtp_rows = alice.get_smtp_rows_for_msg(msg_id).await;
+    assert_eq!(smtp_rows.len(), 2);
+
+    let pre_message_parsed = mailparse::parse_mail(smtp_rows[0].payload.as_bytes())?;
+    assert_eq!(
+        pre_message_parsed
+            .headers
+            .get_header_value(HeaderDef::MessageId),
+        pre_rfc724_mid
+    );
+    let post_message_parsed = mailparse::parse_mail(smtp_rows[1].payload.as_bytes())?;
+    assert_eq!(
+        post_message_parsed
+            .headers
+            .get_header_value(HeaderDef::MessageId),
+        post_rfc724_mid
     );
 
     Ok(())
