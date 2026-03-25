@@ -219,6 +219,10 @@ class Chat:
         """Mark all messages in this chat as noticed."""
         self._rpc.marknoticed_chat(self.account.id, self.id)
 
+    def mark_fresh(self) -> None:
+        """Mark the last incoming message in the chat as fresh."""
+        self._rpc.markfresh_chat(self.account.id, self.id)
+
     def add_contact(self, *contact: Union[int, str, Contact, "Account"]) -> None:
         """Add contacts to this group."""
         from .account import Account
