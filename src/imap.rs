@@ -546,10 +546,21 @@ impl Imap {
             bail!("IMAP operation attempted while it is torn down");
         }
 
+        let transport_id = session.transport_id();
+        info!(
+            context,
+            "Transport {transport_id}: fetch_move_delete start."
+        );
+
         let msgs_fetched = self
             .fetch_new_messages(context, session, watch_folder, folder_meaning)
             .await
             .context("fetch_new_messages")?;
+
+        info!(
+            context,
+            "Transport {transport_id}: fetch_move_delete finished fetch_new_messages."
+        );
         if msgs_fetched && context.get_config_delete_device_after().await?.is_some() {
             // New messages were fetched and shall be deleted later, restart ephemeral loop.
             // Note that the `Config::DeleteDeviceAfter` timer starts as soon as the messages are
@@ -588,10 +599,18 @@ impl Imap {
             return Ok(false);
         }
 
+        info!(
+            context,
+            "Transport {transport_id}: fetch_new_messages selects folder {folder:?}."
+        );
         let folder_exists = session
             .select_with_uidvalidity(context, folder)
             .await
             .with_context(|| format!("Failed to select folder {folder:?}"))?;
+        info!(
+            context,
+            "Transport {transport_id}: fetch_new_messages selected folder {folder:?}."
+        );
 
         if !session.new_mail {
             info!(
@@ -1125,6 +1144,7 @@ impl Session {
         }
 
         let transport_id = self.transport_id();
+        info!(context, "Transport {transport_id}: Storing seen flags.");
         let rows = context
             .sql
             .query_map_vec(
@@ -1182,6 +1202,10 @@ impl Session {
                 .await
                 .context("Cannot remove messages marked as seen from imap_markseen table")?;
         }
+        info!(
+            context,
+            "Transport {transport_id}: Finished storing seen flags."
+        );
 
         Ok(())
     }
