@@ -1835,6 +1835,16 @@ async fn add_parts(
         }
     }
 
+    // Sort message to the bottom if we are not in the chat
+    // so if we are added via QR code scan
+    // the message about our addition goes after all the info messages.
+    // Info messages are sorted by local smeared_timestamp()
+    // which advances quickly during SecureJoin,
+    // while "member added" message may have older timestamp
+    // corresponding to the sender clock.
+    // In practice inviter clock may even be slightly in the past.
+    let sort_to_bottom = !chat.is_self_in_chat(context).await?;
+
     let is_location_kml = mime_parser.location_kml.is_some();
     let mut group_changes = match chat.typ {
         _ if chat.id.is_special() => GroupChangesInfo::default(),
@@ -1885,16 +1895,8 @@ async fn add_parts(
     };
     let in_fresh = state == MessageState::InFresh;
 
-    let sort_to_bottom = false;
-    let received = true;
     let sort_timestamp = chat_id
-        .calc_sort_timestamp(
-            context,
-            mime_parser.timestamp_sent,
-            sort_to_bottom,
-            received,
-            mime_parser.incoming,
-        )
+        .calc_sort_timestamp(context, mime_parser.timestamp_sent, sort_to_bottom)
         .await?;
 
     // Apply ephemeral timer changes to the chat.
