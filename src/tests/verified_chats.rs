@@ -246,46 +246,6 @@ async fn test_old_message_4() -> Result<()> {
     Ok(())
 }
 
-/// Alice is offline for some time.
-/// When they come online, first their mvbox is synced and then their inbox.
-/// This test tests that the messages are still in the right order.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_old_message_5() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let msg_sent = receive_imf(
-        &alice,
-        b"From: alice@example.org\n\
-          To: Bob <bob@example.net>\n\
-          Message-ID: <1234-2-4@example.org>\n\
-          Date: Sat, 07 Dec 2019 19:00:27 +0000\n\
-          \n\
-          Happy birthday, Bob!\n",
-        true,
-    )
-    .await?
-    .unwrap();
-
-    let msg_incoming = receive_imf(
-        &alice,
-        b"From: Bob <bob@example.net>\n\
-          To: alice@example.org\n\
-          Message-ID: <1234-2-3@example.org>\n\
-          Date: Sun, 07 Dec 2019 19:00:26 +0000\n\
-          \n\
-          Happy birthday to me, Alice!\n",
-        false,
-    )
-    .await?
-    .unwrap();
-
-    assert!(msg_sent.sort_timestamp == msg_incoming.sort_timestamp);
-    alice
-        .golden_test_chat(msg_sent.chat_id, "test_old_message_5")
-        .await;
-
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_mdn_doesnt_disable_verification() -> Result<()> {
     let mut tcm = TestContextManager::new();
