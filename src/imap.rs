@@ -1104,14 +1104,13 @@ impl Session {
         }
 
         let transport_id = self.transport_id();
-        let rows = context
+        let mut rows = context
             .sql
             .query_map_vec(
                 "SELECT imap.id, uid, folder FROM imap, imap_markseen
                  WHERE imap.id = imap_markseen.id
                  AND imap.transport_id=?
-                 AND target = folder
-                 ORDER BY folder, uid",
+                 AND target = folder",
                 (transport_id,),
                 |row| {
                     let rowid: i64 = row.get(0)?;
@@ -1121,6 +1120,16 @@ impl Session {
                 },
             )
             .await?;
+
+        // Number of SQL results is expected to be low as
+        // we usually don't have many messages to mark on IMAP at once.
+        // We are sorting outside of SQL to avoid SQLite constructing a query plan
+        // that scans the whole `imap` table. Scanning `imap_markseen` is fine
+        // as it should not have many items.
+        // If you change the SQL query, test it with `EXPLAIN QUERY PLAN`.
+        rows.sort_unstable_by(|(_rowid1, uid1, folder1), (_rowid2, uid2, folder2)| {
+            (folder1, uid1).cmp(&(folder2, uid2))
+        });
 
         for (folder, rowid_set, uid_set) in UidGrouper::from(rows) {
             let folder_exists = match self.select_with_uidvalidity(context, &folder).await {
