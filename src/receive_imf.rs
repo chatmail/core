@@ -2352,7 +2352,7 @@ RETURNING id
 
     info!(
         context,
-        "Message has {icnt} parts and is assigned to chat #{chat_id}."
+        "Message has {icnt} parts and is assigned to chat #{chat_id}, timestamp={sort_timestamp}."
     );
 
     if !chat_id.is_trash() && !hidden {
