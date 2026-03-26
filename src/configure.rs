@@ -243,11 +243,6 @@ impl Context {
                         Ok((id, add_timestamp))
                     },
                 )?;
-                transaction.execute("DELETE FROM imap WHERE transport_id=?", (transport_id,))?;
-                transaction.execute(
-                    "DELETE FROM imap_sync WHERE transport_id=?",
-                    (transport_id,),
-                )?;
 
                 // Removal timestamp should not be lower than addition timestamp
                 // to be accepted by other devices when synced.
