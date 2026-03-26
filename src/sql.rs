@@ -883,6 +883,24 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .log_err(context)
         .ok();
 
+    // Cleanup `imap` and `imap_sync` entries for deleted transports.
+    //
+    // Transports may be deleted directly or via sync messages,
+    // so it is easier to cleanup orphaned entries in a single place.
+    context
+        .sql
+        .execute(
+            "DELETE FROM imap WHERE transport_id NOT IN (SELECT transports.id FROM transports)",
+            (),
+        )
+        .await
+        .log_err(context)
+        .ok();
+    context.sql.execute(
+        "DELETE FROM imap_sync WHERE transport_id NOT IN (SELECT transports.id FROM transports)",
+        (),
+    ).await.log_err(context).ok();
+
     // Delete POI locations
     // which don't have corresponding message.
     delete_orphaned_poi_locations(context)
