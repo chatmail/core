@@ -68,6 +68,12 @@ keyword doesn't help here.
 Consider adding context to `anyhow` errors for SQL statements using `.context()` so that it's
 possible to understand from logs which statement failed. See [Errors](#errors) for more info.
 
+When changing complex SQL queries, test them on a new database with `EXPLAIN QUERY PLAN`
+to make sure that indexes are used and large tables are not going to be scanned.
+Never run `ANALYZE` on the databases,
+this makes query planner unpredictable
+and may make performance significantly worse: <https://github.com/chatmail/core/issues/6585>
+
 ## Errors
 
 Delta Chat core mostly uses [`anyhow`](https://docs.rs/anyhow/) errors.
