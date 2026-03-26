@@ -1103,6 +1103,14 @@ impl Session {
             return Ok(());
         }
 
+        context
+            .sql
+            .execute(
+                "DELETE FROM imap_markseen WHERE id NOT IN (SELECT imap.id FROM imap)",
+                (),
+            )
+            .await?;
+
         let transport_id = self.transport_id();
         let mut rows = context
             .sql
