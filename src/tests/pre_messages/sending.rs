@@ -79,7 +79,7 @@ async fn test_sending_pre_message() -> Result<()> {
     );
 
     let decrypted_post_message = bob.parse_msg(post_message).await;
-    assert_eq!(decrypted_post_message.decrypting_failed, false);
+    assert!(decrypted_post_message.decryption_error.is_none());
     assert_eq!(
         decrypted_post_message.header_exists(HeaderDef::ChatPostMessageId),
         false

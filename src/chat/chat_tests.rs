@@ -2792,7 +2792,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&vc_pubkey).await;
-        assert!(parsed_by_bob.decrypting_failed);
+        assert!(parsed_by_bob.decryption_error.is_some());
 
         charlie.recv_msg_trash(&vc_pubkey).await;
     }
@@ -2821,7 +2821,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&member_added).await;
-        assert!(parsed_by_bob.decrypting_failed);
+        assert!(parsed_by_bob.decryption_error.is_some());
 
         let rcvd = charlie.recv_msg(&member_added).await;
         assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberAddedToGroup);
@@ -2836,7 +2836,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&hi_msg).await;
-        assert_eq!(parsed_by_bob.decrypting_failed, false);
+        assert!(parsed_by_bob.decryption_error.is_none());
     }
 
     tcm.section("Alice removes Charlie. Bob must not see it.");
@@ -2853,7 +2853,7 @@ async fn test_broadcast_members_cant_see_each_other() -> Result<()> {
         assert_eq!(parsed.decoded_data_contains("bob@example.net"), false);
 
         let parsed_by_bob = bob.parse_msg(&member_removed).await;
-        assert!(parsed_by_bob.decrypting_failed);
+        assert!(parsed_by_bob.decryption_error.is_some());
 
         let rcvd = charlie.recv_msg(&member_removed).await;
         assert_eq!(rcvd.param.get_cmd(), SystemMessage::MemberRemovedFromGroup);
