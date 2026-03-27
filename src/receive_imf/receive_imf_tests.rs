@@ -4473,6 +4473,7 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     Ok(())
 }
 
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_pre_msg_group_consistency() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -5556,6 +5557,43 @@ async fn test_calendar_alternative() -> Result<()> {
     assert!(calendar_msg.has_html());
     let html = calendar_msg.get_id().get_html(t).await.unwrap().unwrap();
     assert_eq!(html, "<b>Hello!</b>");
+
+    Ok(())
+}
+
+/// Test that self-sent encrypted messages are detected as outgoing
+/// via signature fingerprint even if the From: address is unknown.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_by_signature_unknown_self_addr() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let export_dir = tempfile::tempdir().unwrap();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let msg = tcm.send_recv_accept(alice, bob, "hi bob").await;
+    msg.chat_id.accept(bob).await?;
+    tcm.send_recv(bob, alice, "hi alice").await;
+
+    imex(alice, ImexMode::ExportSelfKeys, export_dir.path(), None).await?;
+
+    // alice_dev2: same key, different address.
+    let alice_dev2 = &TestContext::new().await;
+    alice_dev2.configure_addr("alice@other.example.org").await;
+    imex(
+        alice_dev2,
+        ImexMode::ImportSelfKeys,
+        export_dir.path(),
+        None,
+    )
+    .await?;
+
+    let msg = tcm.send_recv_accept(bob, alice_dev2, "hi alice_dev2").await;
+    let sent_msg = alice_dev2.send_text(msg.chat_id, "hello from new device").await;
+
+    assert!(!alice.is_self_addr("alice@other.example.org").await?);
+
+    let msg = alice.recv_msg(&sent_msg).await;
+    assert_eq!(msg.state, MessageState::OutDelivered);
 
     Ok(())
 }

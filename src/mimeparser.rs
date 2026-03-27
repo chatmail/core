@@ -371,7 +371,7 @@ impl MimeMessage {
         hop_info += "\n\n";
         hop_info += &dkim_results.to_string();
 
-        let incoming = !context.is_self_addr(&from.addr).await?;
+        let from_is_not_self_addr = !context.is_self_addr(&from.addr).await?;
 
         let mut aheader_values = mail.headers.get_all_values(HeaderDef::Autocrypt.into());
 
@@ -436,7 +436,7 @@ impl MimeMessage {
         };
 
         let mut autocrypt_header = None;
-        if incoming {
+        if from_is_not_self_addr {
             // See `get_all_addresses_from_header()` for why we take the last valid header.
             for val in aheader_values.iter().rev() {
                 autocrypt_header = match Aheader::from_str(val) {
@@ -467,7 +467,7 @@ impl MimeMessage {
             None
         };
 
-        let mut public_keyring = if incoming {
+        let mut public_keyring = if from_is_not_self_addr {
             if let Some(autocrypt_header) = autocrypt_header {
                 vec![autocrypt_header.public_key]
             } else {
@@ -652,6 +652,19 @@ impl MimeMessage {
             .into_iter()
             .last()
             .map(|(fp, recipient_fps)| (fp, recipient_fps.into_iter().collect::<HashSet<_>>()));
+
+        // Determine incoming vs outgoing:
+        // - For signed messages, compare the signature fingerprint to our own key.
+        // - For unsigned messages, fall back to comparing the From: address.
+        let incoming = if let Some((ref sig_fp, _)) = signature {
+            match key::self_fingerprint_opt(context).await? {
+                Some(self_fp) => sig_fp.hex() != self_fp,
+                None => from_is_not_self_addr,
+            }
+        } else {
+            from_is_not_self_addr
+        };
+
         let mut parser = MimeMessage {
             parts: Vec::new(),
             headers,
