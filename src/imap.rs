@@ -6,7 +6,7 @@
 use std::{
     cmp::max,
     cmp::min,
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     iter::Peekable,
     mem::take,
     sync::atomic::Ordering,
@@ -24,8 +24,7 @@ use url::Url;
 use crate::calls::{
     UnresolvedIceServer, create_fallback_ice_servers, create_ice_servers_from_metadata,
 };
-use crate::chat::{self, ChatId, ChatIdBlocked, add_device_msg};
-use crate::chatlist_events;
+use crate::chat::{self, ChatIdBlocked, add_device_msg};
 use crate::config::Config;
 use crate::constants::{self, Blocked, DC_VERSION_STR};
 use crate::contact::ContactId;
@@ -33,7 +32,7 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::log::{LogExt, warn};
-use crate::message::{self, Message, MessageState, MessengerMessage, MsgId};
+use crate::message::{self, Message, MessengerMessage};
 use crate::mimeparser;
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionStream;
@@ -1180,114 +1179,6 @@ impl Session {
         Ok(())
     }
 
-    /// Synchronizes `\Seen` flags using `CONDSTORE` extension.
-    pub(crate) async fn sync_seen_flags(&mut self, context: &Context, folder: &str) -> Result<()> {
-        if !self.can_condstore() {
-            info!(
-                context,
-                "Server does not support CONDSTORE, skipping flag synchronization."
-            );
-            return Ok(());
-        }
-
-        if context.get_config_bool(Config::TeamProfile).await? {
-            return Ok(());
-        }
-
-        let folder_exists = self
-            .select_with_uidvalidity(context, folder)
-            .await
-            .context("Failed to select folder")?;
-        if !folder_exists {
-            return Ok(());
-        }
-
-        let mailbox = self
-            .selected_mailbox
-            .as_ref()
-            .with_context(|| format!("No mailbox selected, folder: {folder}"))?;
-
-        // Check if the mailbox supports MODSEQ.
-        // We are not interested in actual value of HIGHESTMODSEQ.
-        if mailbox.highest_modseq.is_none() {
-            info!(
-                context,
-                "Mailbox {} does not support mod-sequences, skipping flag synchronization.", folder
-            );
-            return Ok(());
-        }
-
-        let transport_id = self.transport_id();
-        let mut updated_chat_ids = BTreeSet::new();
-        let uid_validity = get_uidvalidity(context, transport_id, folder)
-            .await
-            .with_context(|| format!("failed to get UID validity for folder {folder}"))?;
-        let mut highest_modseq = get_modseq(context, transport_id, folder)
-            .await
-            .with_context(|| format!("failed to get MODSEQ for folder {folder}"))?;
-        let mut list = self
-            .uid_fetch("1:*", format!("(FLAGS) (CHANGEDSINCE {highest_modseq})"))
-            .await
-            .context("failed to fetch flags")?;
-
-        let mut got_unsolicited_fetch = false;
-
-        while let Some(fetch) = list
-            .try_next()
-            .await
-            .context("failed to get FETCH result")?
-        {
-            let uid = if let Some(uid) = fetch.uid {
-                uid
-            } else {
-                info!(context, "FETCH result contains no UID, skipping");
-                got_unsolicited_fetch = true;
-                continue;
-            };
-            let is_seen = fetch.flags().any(|flag| flag == Flag::Seen);
-            if is_seen
-                && let Some(chat_id) = mark_seen_by_uid(context, transport_id, folder, uid_validity, uid)
-                    .await
-                    .with_context(|| {
-                        format!("Transport {transport_id}: Failed to update seen status for msg {folder}/{uid}")
-                    })?
-            {
-                updated_chat_ids.insert(chat_id);
-            }
-
-            if let Some(modseq) = fetch.modseq {
-                if modseq > highest_modseq {
-                    highest_modseq = modseq;
-                }
-            } else {
-                warn!(context, "FETCH result contains no MODSEQ");
-            }
-        }
-        drop(list);
-
-        if got_unsolicited_fetch {
-            // We got unsolicited FETCH, which means some flags
-            // have been modified while our request was in progress.
-            // We may or may not have these new flags as a part of the response,
-            // so better skip next IDLE and do another round of flag synchronization.
-            info!(context, "Got unsolicited fetch, will skip idle");
-            self.new_mail = true;
-        }
-
-        set_modseq(context, transport_id, folder, highest_modseq)
-            .await
-            .with_context(|| format!("failed to set MODSEQ for folder {folder}"))?;
-        if !updated_chat_ids.is_empty() {
-            context.on_archived_chats_maybe_noticed();
-        }
-        for updated_chat_id in updated_chat_ids {
-            context.emit_event(EventType::MsgsNoticed(updated_chat_id));
-            chatlist_events::emit_chatlist_item_changed(context, updated_chat_id);
-        }
-
-        Ok(())
-    }
-
     /// Fetches a list of messages by server UID.
     ///
     /// Sends pairs of UID and info about each downloaded message to the provided channel.
@@ -2184,71 +2075,6 @@ pub(crate) async fn prefetch_should_download(
     Ok(should_download)
 }
 
-/// Marks messages in `msgs` table as seen, searching for them by UID.
-///
-/// Returns updated chat ID if any message was marked as seen.
-async fn mark_seen_by_uid(
-    context: &Context,
-    transport_id: u32,
-    folder: &str,
-    uid_validity: u32,
-    uid: u32,
-) -> Result<Option<ChatId>> {
-    if let Some((msg_id, chat_id)) = context
-        .sql
-        .query_row_optional(
-            "SELECT id, chat_id FROM msgs
-                 WHERE id > 9 AND rfc724_mid IN (
-                   SELECT rfc724_mid FROM imap
-                   WHERE transport_id=?
-                   AND folder=?
-                   AND uidvalidity=?
-                   AND uid=?
-                   LIMIT 1
-                 )",
-            (transport_id, &folder, uid_validity, uid),
-            |row| {
-                let msg_id: MsgId = row.get(0)?;
-                let chat_id: ChatId = row.get(1)?;
-                Ok((msg_id, chat_id))
-            },
-        )
-        .await
-        .with_context(|| format!("failed to get msg and chat ID for IMAP message {folder}/{uid}"))?
-    {
-        let updated = context
-            .sql
-            .execute(
-                "UPDATE msgs SET state=?1
-                     WHERE (state=?2 OR state=?3)
-                     AND id=?4",
-                (
-                    MessageState::InSeen,
-                    MessageState::InFresh,
-                    MessageState::InNoticed,
-                    msg_id,
-                ),
-            )
-            .await
-            .with_context(|| format!("failed to update msg {msg_id} state"))?
-            > 0;
-
-        if updated {
-            msg_id
-                .start_ephemeral_timer(context)
-                .await
-                .with_context(|| format!("failed to start ephemeral timer for message {msg_id}"))?;
-            Ok(Some(chat_id))
-        } else {
-            // Message state has not changed.
-            Ok(None)
-        }
-    } else {
-        // There is no message is `msgs` table matching the given UID.
-        Ok(None)
-    }
-}
-
 /// Schedule marking the message as Seen on IMAP by adding all known IMAP messages corresponding to
 /// the given Message-ID to `imap_markseen` table.
 pub(crate) async fn markseen_on_imap_table(context: &Context, message_id: &str) -> Result<()> {
@@ -2344,17 +2170,6 @@ pub(crate) async fn set_modseq(
         )
         .await?;
     Ok(())
-}
-
-async fn get_modseq(context: &Context, transport_id: u32, folder: &str) -> Result<u64> {
-    Ok(context
-        .sql
-        .query_get_value(
-            "SELECT modseq FROM imap_sync WHERE transport_id=? AND folder=?",
-            (transport_id, folder),
-        )
-        .await?
-        .unwrap_or(0))
 }
 
 /// Whether to ignore fetching messages from a folder.

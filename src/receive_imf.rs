@@ -1871,14 +1871,11 @@ async fn add_parts(
 
     let state = if !mime_parser.incoming {
         MessageState::OutDelivered
-    } else if seen
-        || !mime_parser.mdn_reports.is_empty()
-        || chat_id_blocked == Blocked::Yes
-        || group_changes.silent
+    } else if seen || !mime_parser.mdn_reports.is_empty() || chat_id_blocked == Blocked::Yes
     // No check for `hidden` because only reactions are such and they should be `InFresh`.
     {
         MessageState::InSeen
-    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL {
+    } else if mime_parser.from.addr == STATISTICS_BOT_EMAIL || group_changes.silent {
         MessageState::InNoticed
     } else {
         MessageState::InFresh
@@ -2354,7 +2351,7 @@ RETURNING id
 
     info!(
         context,
-        "Message has {icnt} parts and is assigned to chat #{chat_id}."
+        "Message has {icnt} parts and is assigned to chat #{chat_id}, timestamp={sort_timestamp}."
     );
 
     if !chat_id.is_trash() && !hidden {
