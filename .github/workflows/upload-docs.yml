@@ -10,6 +10,9 @@ permissions: {}
 jobs:
   build-rs:
     runs-on: ubuntu-latest
+    environment:
+      name: rs.delta.chat
+      url: https://rs.delta.chat/
 
     steps:
       - uses: actions/checkout@v6
@@ -22,9 +25,9 @@ jobs:
       - name: Upload to rs.delta.chat
         run: |
           mkdir -p "$HOME/.ssh"
-          echo "${{ secrets.KEY }}" > "$HOME/.ssh/key"
+          echo "${{ secrets.RS_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc "${{ secrets.USERNAME }}@rs.delta.chat:/var/www/html/rs/"
+          rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc "${{ secrets.RS_DOCS_SSH_USER }}@rs.delta.chat:/var/www/html/rs.delta.chat/"
 
   build-python:
     runs-on: ubuntu-latest
