@@ -142,7 +142,7 @@ impl Chatlist {
                    AND c.blocked!=1
                    AND c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=?2 AND add_timestamp >= remove_timestamp)
                  GROUP BY c.id
-                 ORDER BY c.archived=?3 DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
+                 ORDER BY c.archived=?3 DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
                 (MessageState::OutDraft, query_contact_id, ChatVisibility::Pinned),
                 process_row,
             ).await?
@@ -168,7 +168,7 @@ impl Chatlist {
                    AND c.blocked!=1
                    AND c.archived=1
                  GROUP BY c.id
-                 ORDER BY IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
+                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft,),
                     process_row,
                 )
@@ -204,7 +204,7 @@ impl Chatlist {
                    AND IFNULL(c.name_normalized,c.name) LIKE ?3
                    AND (NOT ?4 OR EXISTS (SELECT 1 FROM msgs m WHERE m.chat_id = c.id AND m.state == ?5 AND hidden=0))
                  GROUP BY c.id
-                 ORDER BY IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
+                 ORDER BY IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft, skip_id, str_like_cmd, only_unread, MessageState::InFresh),
                     process_row,
                 )
@@ -253,7 +253,7 @@ impl Chatlist {
                        AND NOT c.archived=?
                        AND (c.type!=? OR c.id IN(SELECT chat_id FROM chats_contacts WHERE contact_id=? AND add_timestamp >= remove_timestamp))
                      GROUP BY c.id
-                     ORDER BY c.id=? DESC, c.archived=? DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
+                     ORDER BY c.id=? DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
                     (
                         MessageState::OutDraft, skip_id, ChatVisibility::Archived,
                         Chattype::Group, ContactId::SELF,
@@ -279,7 +279,7 @@ impl Chatlist {
                        AND (c.blocked=0 OR c.blocked=2)
                        AND NOT c.archived=?
                      GROUP BY c.id
-                     ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(m.timestamp,c.created_timestamp) DESC, m.id DESC;",
+                     ORDER BY c.id=0 DESC, c.archived=? DESC, IFNULL(NULLIF(m.timestamp,0),c.created_timestamp) DESC, m.id DESC;",
                     (MessageState::OutDraft, skip_id, ChatVisibility::Archived, ChatVisibility::Pinned),
                     process_row,
                 ).await?

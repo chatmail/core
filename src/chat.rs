@@ -477,12 +477,17 @@ impl ChatId {
     /// Adds message "Messages are end-to-end encrypted".
     pub(crate) async fn add_e2ee_notice(self, context: &Context, timestamp: i64) -> Result<()> {
         let text = stock_str::messages_e2ee_info_msg(context);
+
+        // Sort this notice to the very beginning of the chat.
+        // We don't want any message to appear before this notice
+        // which is normally added when encrypted chat is created.
+        let sort_timestamp = 0;
         add_info_msg_with_cmd(
             context,
             self,
             &text,
             SystemMessage::ChatE2ee,
-            Some(timestamp),
+            Some(sort_timestamp),
             timestamp,
             None,
             None,
