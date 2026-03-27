@@ -86,7 +86,9 @@ pub(crate) struct MimeMessage {
     /// messages to this address to post them to the list.
     pub list_post: Option<String>,
     pub chat_disposition_notification_to: Option<SingleInfo>,
-    pub decrypting_failed: bool,
+
+    /// Decryption error if decryption of the message has failed.
+    pub decryption_error: Option<String>,
 
     /// Valid signature fingerprint if a message is an
     /// Autocrypt encrypted and signed message and corresponding intended recipient fingerprints
@@ -664,7 +666,7 @@ impl MimeMessage {
             from,
             incoming,
             chat_disposition_notification_to,
-            decrypting_failed: mail.is_err(),
+            decryption_error: mail.err().map(|err| format!("{err:#}")),
 
             // only non-empty if it was a valid autocrypt message
             signature,
@@ -905,7 +907,7 @@ impl MimeMessage {
             && let Some(ref subject) = self.get_subject()
         {
             let mut prepend_subject = true;
-            if !self.decrypting_failed {
+            if self.decryption_error.is_none() {
                 let colon = subject.find(':');
                 if colon == Some(2)
                     || colon == Some(3)
@@ -946,7 +948,7 @@ impl MimeMessage {
         self.parse_attachments();
 
         // See if an MDN is requested from the other side
-        if !self.decrypting_failed
+        if self.decryption_error.is_none()
             && !self.parts.is_empty()
             && let Some(ref dn_to) = self.chat_disposition_notification_to
         {
@@ -1078,7 +1080,7 @@ impl MimeMessage {
     #[cfg(test)]
     /// Returns whether the decrypted data contains the given `&str`.
     pub(crate) fn decoded_data_contains(&self, s: &str) -> bool {
-        assert!(!self.decrypting_failed);
+        assert!(self.decryption_error.is_none());
         let decoded_str = str::from_utf8(&self.decoded_data).unwrap();
         decoded_str.contains(s)
     }

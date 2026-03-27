@@ -727,7 +727,7 @@ pub(crate) async fn receive_imf_inner(
         let show_emails = ShowEmails::from_i32(context.get_config_int(Config::ShowEmails).await?)
             .unwrap_or_default();
 
-        let allow_creation = if mime_parser.decrypting_failed {
+        let allow_creation = if mime_parser.decryption_error.is_some() {
             false
         } else if is_dc_message == MessengerMessage::No
             && !context.get_config_bool(Config::IsChatmail).await?
@@ -1211,14 +1211,18 @@ async fn decide_chat_assignment(
     {
         info!(context, "Call state changed (TRASH).");
         true
-    } else if mime_parser.decrypting_failed && !mime_parser.incoming {
+    } else if let Some(ref decryption_error) = mime_parser.decryption_error
+        && !mime_parser.incoming
+    {
         // Outgoing undecryptable message.
         let last_time = context
             .get_config_i64(Config::LastCantDecryptOutgoingMsgs)
             .await?;
         let now = tools::time();
         let update_config = if last_time.saturating_add(24 * 60 * 60) <= now {
-            let txt = "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions.";
+            let txt = format!(
+                "⚠️ It seems you are using Delta Chat on multiple devices that cannot decrypt each other's outgoing messages. To fix this, on the older device use \"Settings / Add Second Device\" and follow the instructions. (Error: {decryption_error}, {rfc724_mid})."
+            );
             let mut msg = Message::new_text(txt.to_string());
             chat::add_device_msg(context, None, Some(&mut msg))
                 .await
@@ -2290,7 +2294,7 @@ RETURNING id
                     if trash { 0 } else { ephemeral_timestamp },
                     if trash {
                         DownloadState::Done
-                    } else if mime_parser.decrypting_failed {
+                    } else if mime_parser.decryption_error.is_some() {
                         DownloadState::Undecipherable
                     } else if let PreMessageMode::Pre {..} = mime_parser.pre_message {
                         DownloadState::Available
@@ -2703,7 +2707,7 @@ async fn lookup_or_create_adhoc_group(
     allow_creation: bool,
     create_blocked: Blocked,
 ) -> Result<Option<(ChatId, Blocked, bool)>> {
-    if mime_parser.decrypting_failed {
+    if mime_parser.decryption_error.is_some() {
         warn!(
             context,
             "Not creating ad-hoc group for message that cannot be decrypted."
@@ -2925,7 +2929,7 @@ async fn create_group(
 
     if let Some(chat_id) = chat_id {
         Ok(Some((chat_id, chat_id_blocked)))
-    } else if mime_parser.decrypting_failed {
+    } else if mime_parser.decryption_error.is_some() {
         // It is possible that the message was sent to a valid,
         // yet unknown group, which was rejected because
         // Chat-Group-Name, which is in the encrypted part, was
