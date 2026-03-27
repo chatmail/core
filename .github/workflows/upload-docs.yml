@@ -75,6 +75,10 @@ jobs:
 
   build-ts:
     runs-on: ubuntu-latest
+    environment:
+      name: js.jsonrpc.delta.chat
+      url: https://js.jsonrpc.delta.chat/
+
     defaults:
       run:
         working-directory: ./deltachat-jsonrpc/typescript
@@ -98,9 +102,9 @@ jobs:
       - name: Upload to js.jsonrpc.delta.chat
         run: |
           mkdir -p "$HOME/.ssh"
-          echo "${{ secrets.KEY }}" > "$HOME/.ssh/key"
+          echo "${{ secrets.JS_JSONRPC_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
-          rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/deltachat-jsonrpc/typescript/docs/ "${{ secrets.USERNAME }}@js.jsonrpc.delta.chat:/var/www/html/js-jsonrpc/"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/deltachat-jsonrpc/typescript/docs/ "${{ secrets.JS_JSONRPC_DOCS_SSH_USER }}@js.jsonrpc.delta.chat:/var/www/html/js.jsonrpc.delta.chat/"
 
   build-cffi:
     runs-on: ubuntu-latest
