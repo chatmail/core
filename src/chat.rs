@@ -930,6 +930,17 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             .unwrap_or(0))
     }
 
+    /// Returns timestamp of us joining the chat if we are the member of the chat.
+    pub(crate) async fn join_timestamp(self, context: &Context) -> Result<Option<i64>> {
+        context
+            .sql
+            .query_get_value(
+                "SELECT add_timestamp FROM chats_contacts WHERE chat_id=? AND contact_id=?",
+                (self, ContactId::SELF),
+            )
+            .await
+    }
+
     /// Returns timestamp of the latest message in the chat,
     /// including hidden messages or a draft if there is one.
     pub(crate) async fn get_timestamp(self, context: &Context) -> Result<Option<i64>> {
@@ -1287,7 +1298,16 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             sort_timestamp = last_msg_time;
         }
 
-        Ok(sort_timestamp)
+        if let Some(join_timestamp) = self.join_timestamp(context).await? {
+            // If we are the member of the chat, don't add messages
+            // before the timestamp of us joining it.
+            // This is needed to avoid sorting "Member added"
+            // or automatically sent bot welcome messages
+            // above SecureJoin system messages.
+            Ok(std::cmp::max(sort_timestamp, join_timestamp))
+        } else {
+            Ok(sort_timestamp)
+        }
     }
 }
 
