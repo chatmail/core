@@ -13,9 +13,10 @@ use crate::constants::DC_GCL_FOR_FORWARDING;
 use crate::contact;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
+use crate::key;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{
-    E2EE_INFO_MSGS, TestContext, TestContextManager, get_chat_msg, mark_as_verified,
+    E2EE_INFO_MSGS, TestContext, TestContextManager, alice_keypair, get_chat_msg, mark_as_verified,
 };
 use crate::tools::{SystemTime, time};
 
@@ -5558,6 +5559,34 @@ async fn test_calendar_alternative() -> Result<()> {
     assert!(calendar_msg.has_html());
     let html = calendar_msg.get_id().get_html(t).await.unwrap().unwrap();
     assert_eq!(html, "<b>Hello!</b>");
+
+    Ok(())
+}
+
+/// Tests that outgoing encrypted messages are detected
+/// by verifying own signature, completely ignoring From address.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_determined_by_signature() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // alice_dev2: same key, different address.
+    let different_from = "very@different.from";
+    assert!(!alice.is_self_addr(different_from).await?);
+    let alice_dev2 = &tcm.unconfigured().await;
+    alice_dev2.configure_addr(different_from).await;
+    key::store_self_keypair(alice_dev2, &alice_keypair()).await?;
+    assert_ne!(
+        alice.get_config(Config::Addr).await?.unwrap(),
+        different_from
+    );
+
+    // Send message from alice_dev2 and check alice sees it as outgoing
+    let chat_id = alice_dev2.create_chat_id(bob).await;
+    let sent_msg = alice_dev2.send_text(chat_id, "hello from new device").await;
+    let msg = alice.recv_msg(&sent_msg).await;
+    assert_eq!(msg.state, MessageState::OutDelivered);
 
     Ok(())
 }
