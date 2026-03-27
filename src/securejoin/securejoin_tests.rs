@@ -4,7 +4,7 @@ use deltachat_contact_tools::EmailAddress;
 use regex::Regex;
 
 use super::*;
-use crate::chat::{CantSendReason, add_contact_to_chat, remove_contact_from_chat};
+use crate::chat::{CantSendReason, ChatItem, add_contact_to_chat, remove_contact_from_chat};
 use crate::chatlist::Chatlist;
 use crate::constants::Chattype;
 use crate::constants::DC_CHAT_ID_TRASH;
@@ -1581,6 +1581,74 @@ async fn test_auth_token_is_synchronized() -> Result<()> {
         .await?
         .unwrap();
     assert_eq!(auth_count, 2);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_channel_sync_message_reorder() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let alice2 = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    bob.set_config(Config::Displayname, Some("Bob"))
+        .await
+        .unwrap();
+
+    alice.set_config_bool(Config::SyncMsgs, true).await?;
+    alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+    let alice_chat_id = chat::create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    alice.send_sync_msg().await.unwrap();
+    let sync_msg = alice.pop_sent_msg().await;
+    alice2.recv_msg_trash(&sync_msg).await;
+
+    tcm.section("Bob scans the QR code");
+    join_securejoin(bob, &qr).await?;
+
+    // vc-request-pubkey
+    let sent = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&sent).await;
+
+    // vc-pubkey
+    let sent = alice.pop_sent_msg().await;
+    bob.recv_msg_trash(&sent).await;
+
+    // vc-request-with-auth
+    let sent = bob.pop_sent_msg().await;
+    alice.recv_msg_trash(&sent).await;
+
+    // Alice sends to self a sync message about member addition.
+    alice.send_sync_msg().await.unwrap();
+    let sync_msg = alice.pop_sent_msg().await;
+    alice2.recv_msg_trash(&sync_msg).await;
+
+    // Member added.
+    let sent = alice.pop_sent_msg().await;
+    assert_eq!(sent.recipients, "bob@example.net alice@example.org");
+    bob.recv_msg(&sent).await;
+
+    // Bob addition is already synced.
+    alice2.recv_msg_trash(&sent).await;
+
+    let alice2_chatlist = Chatlist::try_load(alice2, 0, None, None).await?;
+    assert_eq!(alice2_chatlist.len(), 1);
+
+    let alice2_chat_id = alice2_chatlist.get_chat_id(0)?;
+    let alice2_msgs = crate::chat::get_chat_msgs(alice2, alice2_chat_id).await?;
+
+    assert_eq!(alice2_msgs.len(), 2);
+    let ChatItem::Message { msg_id } = alice2_msgs[0] else {
+        panic!("Wrong item type");
+    };
+    let msg1 = Message::load_from_db(alice2, msg_id).await?;
+    assert_eq!(msg1.text, "Messages are end-to-end encrypted.");
+    let ChatItem::Message { msg_id } = alice2_msgs[1] else {
+        panic!("Wrong item type");
+    };
+    let msg2 = Message::load_from_db(alice2, msg_id).await?;
+    assert_eq!(msg2.text, "Member Bob added.");
 
     Ok(())
 }
