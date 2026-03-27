@@ -450,10 +450,8 @@ pub(crate) async fn handle_securejoin_handshake(
     ) {
         let mut self_found = false;
         let self_fingerprint = load_self_public_key(context).await?.dc_fingerprint();
-        for (addr, key) in &mime_message.gossiped_keys {
-            if key.public_key.dc_fingerprint() == self_fingerprint
-                && context.is_self_addr(addr).await?
-            {
+        for key in mime_message.gossiped_keys.values() {
+            if key.public_key.dc_fingerprint() == self_fingerprint {
                 self_found = true;
                 break;
             }
