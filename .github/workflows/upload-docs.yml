@@ -1,4 +1,4 @@
-name: Build & deploy documentation on rs.delta.chat, c.delta.chat, and py.delta.chat
+name: Build & deploy documentation on rs.delta.chat, c.delta.chat, py.delta.chat and cffi.delta.chat
 
 on:
   push:
@@ -101,3 +101,24 @@ jobs:
           echo "${{ secrets.KEY }}" > "$HOME/.ssh/key"
           chmod 600 "$HOME/.ssh/key"
           rsync -avzh -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/deltachat-jsonrpc/typescript/docs/ "${{ secrets.USERNAME }}@js.jsonrpc.delta.chat:/var/www/html/js-jsonrpc/"
+
+  build-cffi:
+    runs-on: ubuntu-latest
+    environment:
+      name: cffi.delta.chat
+      url: https://cffi.delta.chat/
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          show-progress: false
+          persist-credentials: false
+      - name: Build the documentation with cargo
+        run: |
+          cargo doc --package deltachat_ffi --no-deps
+      - name: Upload to cffi.delta.chat
+        run: |
+          mkdir -p "$HOME/.ssh"
+          echo "${{ secrets.CFFI_DOCS_SSH_KEY }}" > "$HOME/.ssh/key"
+          chmod 600 "$HOME/.ssh/key"
+          rsync -avzh --delete -e "ssh -i $HOME/.ssh/key -o StrictHostKeyChecking=no" $GITHUB_WORKSPACE/target/doc/ "${{ secrets.CFFI_DOCS_SSH_USER }}@delta.chat:/var/www/html/cffi.delta.chat/"
