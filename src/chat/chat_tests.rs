@@ -6112,3 +6112,54 @@ async fn test_leftgrps() -> Result<()> {
 
     Ok(())
 }
+
+/// Tests that if the message arrives late,
+/// it can still be sorted above the last seen message.
+///
+/// Versions 2.47 and below always sorted incoming messages
+/// after the last seen message, but with
+/// the introduction of multi-relay it is possible
+/// that some messages arrive only to some relays
+/// and are fetched after the already arrived seen message.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_late_message_above_seen() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    let alice_chat_id = alice
+        .create_group_with_members("Group", &[bob, charlie])
+        .await;
+    let alice_sent = alice.send_text(alice_chat_id, "Hello everyone!").await;
+    let bob_chat_id = bob.recv_msg(&alice_sent).await.chat_id;
+    bob_chat_id.accept(bob).await?;
+    let charlie_chat_id = charlie.recv_msg(&alice_sent).await.chat_id;
+    charlie_chat_id.accept(charlie).await?;
+
+    // Bob sends a message, but the message is delayed.
+    let bob_sent = bob.send_text(bob_chat_id, "Hello from Bob!").await;
+    SystemTime::shift(Duration::from_secs(1000));
+
+    let charlie_sent = charlie
+        .send_text(charlie_chat_id, "Hello from Charlie!")
+        .await;
+
+    // Alice immediately receives a message from Charlie and reads it.
+    let alice_received_from_charlie = alice.recv_msg(&charlie_sent).await;
+    assert_eq!(
+        alice_received_from_charlie.get_text(),
+        "Hello from Charlie!"
+    );
+    message::markseen_msgs(alice, vec![alice_received_from_charlie.id]).await?;
+
+    // Bob message arrives later, it should be above the message from Charlie.
+    let alice_received_from_bob = alice.recv_msg(&bob_sent).await;
+    assert_eq!(alice_received_from_bob.get_text(), "Hello from Bob!");
+
+    // The last message in the chat is still from Charlie.
+    let last_msg = alice.get_last_msg_in(alice_chat_id).await;
+    assert_eq!(last_msg.get_text(), "Hello from Charlie!");
+
+    Ok(())
+}
