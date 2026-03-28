@@ -17,6 +17,13 @@ import pytest
 from deltachat_rpc_client import EventType
 
 
+@pytest.fixture(autouse=True)
+def _xfail_underscore_domain():
+    domain = os.environ.get("CHATMAIL_DOMAIN", "")
+    if domain.startswith("_"):
+        pytest.xfail("Iroh tests are expected to fail on underscore domains (self-signed TLS certificates)")
+
+
 @pytest.fixture
 def path_to_webxdc(request):
     p = request.path.parent.parent.parent.joinpath("test-data/webxdc/chess.xdc")

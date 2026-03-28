@@ -109,7 +109,7 @@ def test_delivery_status_failed(acfactory: ACFactory) -> None:
     assert failing_message.get_snapshot().state == const.MessageState.OUT_FAILED
 
 
-def test_download_on_demand(acfactory: ACFactory) -> None:
+def test_download_on_demand(acfactory: ACFactory, data) -> None:
     """
     Test if download on demand emits chatlist update events.
     This is only needed for last message in chat, but finding that out is too expensive, so it's always emitted
@@ -127,7 +127,7 @@ def test_download_on_demand(acfactory: ACFactory) -> None:
     msg.get_snapshot().chat.accept()
     bob.get_chat_by_id(chat_id).send_message(
         "Hello World, this message is bigger than 5 bytes",
-        file="../test-data/image/screenshot.jpg",
+        file=data.get_path("image/screenshot.jpg"),
     )
 
     message = alice.wait_for_incoming_msg()

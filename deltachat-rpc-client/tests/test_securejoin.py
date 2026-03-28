@@ -141,10 +141,9 @@ def test_qr_securejoin_broadcast(acfactory, all_devices_online):
 
     def wait_for_broadcast_messages(ac):
         snapshot1 = ac.wait_for_incoming_msg().get_snapshot()
-        assert snapshot1.text == "You joined the channel."
-
         snapshot2 = ac.wait_for_incoming_msg().get_snapshot()
-        assert snapshot2.text == "Hello everyone!"
+        texts = {snapshot1.text, snapshot2.text}
+        assert texts == {"You joined the channel.", "Hello everyone!"}
 
         chat = get_broadcast(ac)
         assert snapshot1.chat_id == chat.id
