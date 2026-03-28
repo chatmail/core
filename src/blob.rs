@@ -435,6 +435,8 @@ impl<'a> BlobObject<'a> {
                         });
 
             if do_scale {
+                let (mut m, mut d) = (3, 4);
+                let wh = target_wh;
                 loop {
                     if mem::take(&mut add_white_bg) {
                         self::add_white_bg(&mut img);
@@ -467,8 +469,11 @@ impl<'a> BlobObject<'a> {
                                 "Failed to scale image to below {max_bytes}B.",
                             ));
                         }
-
-                        target_wh = target_wh * 2 / 3;
+                        target_wh = wh * m / d;
+                        (m, d) = match m > 3 {
+                            true => (m - 1, d),
+                            false => (5, d * 2),
+                        };
                     } else {
                         info!(
                             context,
