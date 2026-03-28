@@ -1010,11 +1010,11 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
                         && msg.chat_visibility == ChatVisibility::Archived;
                     updated_chats
                         .entry(msg.chat_id)
-                        .and_modify(|ts| *ts = cmp::max(*ts, msg.timestamp_sort))
-                        .or_insert(msg.timestamp_sort);
+                        .and_modify(|pos| *pos = cmp::max(*pos, (msg.timestamp_sort, msg.id)))
+                        .or_insert((msg.timestamp_sort, msg.id));
                 }
             }
-            for (chat_id, timestamp_sort) in updated_chats {
+            for (chat_id, (timestamp_sort, msg_id)) in updated_chats {
                 context
                     .sql
                     .execute(
@@ -1023,12 +1023,13 @@ UPDATE msgs SET state=? WHERE
     state=? AND
     hidden=0 AND
     chat_id=? AND
-    timestamp<?",
+    (timestamp,id)<(?,?)",
                         (
                             MessageState::InNoticed,
                             MessageState::InFresh,
                             chat_id,
                             timestamp_sort,
+                            msg_id,
                         ),
                     )
                     .await
@@ -2358,7 +2359,7 @@ RETURNING id
 
     info!(
         context,
-        "Message has {icnt} parts and is assigned to chat #{chat_id}."
+        "Message has {icnt} parts and is assigned to chat #{chat_id}, timestamp={sort_timestamp}."
     );
 
     if !chat_id.is_trash() && !hidden {
