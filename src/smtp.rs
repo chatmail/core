@@ -13,7 +13,7 @@ use crate::config::Config;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
-use crate::log::{LogExt, warn};
+use crate::log::warn;
 use crate::message::Message;
 use crate::message::{self, MsgId};
 use crate::mimefactory::MimeFactory;
@@ -584,44 +584,77 @@ async fn send_mdn_rfc724_mid(
     if context.get_config_bool(Config::BccSelf).await? {
         add_self_recipients(context, &mut recipients, encrypted).await?;
     }
-    let recipients: Vec<_> = recipients
-        .into_iter()
-        .filter_map(|addr| {
-            async_smtp::EmailAddress::new(addr.clone())
-                .with_context(|| format!("Invalid recipient: {addr}"))
-                .log_err(context)
-                .ok()
-        })
-        .collect();
+    #[cfg(not(test))]
+    {
+        use crate::log::LogExt;
 
-    match smtp_send(context, &recipients, &body, smtp, None).await {
-        SendResult::Success => {
-            if !recipients.is_empty() {
-                info!(context, "Successfully sent MDN for {rfc724_mid}.");
+        let recipients: Vec<_> = recipients
+            .into_iter()
+            .filter_map(|addr| {
+                async_smtp::EmailAddress::new(addr.clone())
+                    .with_context(|| format!("Invalid recipient: {addr}"))
+                    .log_err(context)
+                    .ok()
+            })
+            .collect();
+
+        match smtp_send(context, &recipients, &body, smtp, None).await {
+            SendResult::Success => {
+                if !recipients.is_empty() {
+                    info!(context, "Successfully sent MDN for {rfc724_mid}.");
+                }
+                context
+                    .sql
+                    .transaction(|transaction| {
+                        let mut stmt =
+                            transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
+                        stmt.execute((rfc724_mid,))?;
+                        for additional_rfc724_mid in additional_rfc724_mids {
+                            stmt.execute((additional_rfc724_mid,))?;
+                        }
+                        Ok(())
+                    })
+                    .await?;
+                Ok(true)
             }
-            context
-                .sql
-                .transaction(|transaction| {
-                    let mut stmt =
-                        transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
-                    stmt.execute((rfc724_mid,))?;
-                    for additional_rfc724_mid in additional_rfc724_mids {
-                        stmt.execute((additional_rfc724_mid,))?;
-                    }
-                    Ok(())
-                })
-                .await?;
-            Ok(true)
+            SendResult::Retry => {
+                info!(
+                    context,
+                    "Temporary SMTP failure while sending an MDN for {rfc724_mid}."
+                );
+                Ok(false)
+            }
+            SendResult::Failure(err) => Err(err),
         }
-        SendResult::Retry => {
-            info!(
-                context,
-                "Temporary SMTP failure while sending an MDN for {rfc724_mid}."
-            );
-            Ok(false)
-        }
-        SendResult::Failure(err) => Err(err),
     }
+    #[cfg(test)]
+    {
+        let _ = smtp;
+        context
+            .sql
+            .transaction(|t| {
+                t.execute(
+                    "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
+                    VALUES (?, ?, ?, ?)",
+                    (rfc724_mid, recipients.join(" "), body, u32::MAX),
+                )?;
+                let mut stmt = t.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
+                stmt.execute((rfc724_mid,))?;
+                for additional_rfc724_mid in additional_rfc724_mids {
+                    stmt.execute((additional_rfc724_mid,))?;
+                }
+                Ok(())
+            })
+            .await?;
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
+pub(crate) async fn queue_mdn(context: &Context) -> Result<()> {
+    let queued = send_mdn(context, &mut Smtp::new()).await?;
+    assert!(queued);
+    Ok(())
 }
 
 /// Tries to send a single MDN. Returns true if more MDNs should be sent.

@@ -623,16 +623,25 @@ impl TestContext {
     }
 
     pub async fn pop_sent_msg_opt(&self, timeout: Duration) -> Option<SentMessage<'_>> {
+        let from_head = self
+            .get_config_bool(Config::PopSentMsgFromHead)
+            .await
+            .unwrap();
+        let order_subst = match from_head {
+            true => "",
+            false => " DESC",
+        };
         let start = Instant::now();
         let (rowid, msg_id, payload, recipients) = loop {
             let row = self
                 .ctx
                 .sql
                 .query_row_optional(
-                    r#"
-                    SELECT id, msg_id, mime, recipients
-                    FROM smtp
-                    ORDER BY id DESC"#,
+                    &format!(
+                        "SELECT id, msg_id, mime, recipients
+FROM smtp
+ORDER BY id{order_subst}"
+                    ),
                     (),
                     |row| {
                         let rowid: i64 = row.get(0)?;
