@@ -441,6 +441,26 @@ async fn test_recode_image_balanced_png() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_image_balanced_png_huge() {
+    let bytes = include_bytes!("../../test-data/image/screenshot-huge.png");
+
+    SendImageCheckMediaquality {
+        viewtype: Viewtype::Image,
+        media_quality_config: "0",
+        bytes,
+        extension: "jpg",
+        original_width: 1618,
+        original_height: 949,
+        compressed_width: 1618,
+        compressed_height: 949,
+        ..Default::default()
+    }
+    .test()
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_sticker_with_exif() {
     let bytes = include_bytes!("../../test-data/image/logo-exif.png");
     SendImageCheckMediaquality {
