@@ -819,9 +819,12 @@ async fn load_imf_email(context: &Context, imf_raw: &[u8]) -> Message {
         .set_config(Config::ShowEmails, Some("2"))
         .await
         .unwrap();
-    receive_imf(context, imf_raw, false).await.unwrap();
-    let chats = Chatlist::try_load(context, 0, None, None).await.unwrap();
-    let msg_id = chats.get_msg_id(0).unwrap().unwrap();
+    let received_msg = receive_imf(context, imf_raw, false)
+        .await
+        .expect("receive_imf failure")
+        .expect("No message received");
+    assert_eq!(received_msg.msg_ids.len(), 1);
+    let msg_id = received_msg.msg_ids[0];
     Message::load_from_db(context, msg_id).await.unwrap()
 }
 
@@ -2872,9 +2875,8 @@ async fn test_rfc1847_encapsulation() -> Result<()> {
 
     // Alice sends a message to Bob using Thunderbird.
     let raw = include_bytes!("../../test-data/message/rfc1847_encapsulation.eml");
-    receive_imf(bob, raw, false).await?;
 
-    let msg = bob.get_last_msg().await;
+    let msg = load_imf_email(bob, raw).await;
     assert!(msg.get_showpadlock());
 
     Ok(())
@@ -3082,8 +3084,8 @@ async fn test_auto_accept_for_bots() -> Result<()> {
 async fn test_auto_accept_group_for_bots() -> Result<()> {
     let t = TestContext::new_alice().await;
     t.set_config(Config::Bot, Some("1")).await.unwrap();
-    receive_imf(&t, GRP_MAIL, false).await?;
-    let msg = t.get_last_msg().await;
+    let msg = load_imf_email(&t, GRP_MAIL).await;
+
     let chat = chat::Chat::load_from_db(&t, msg.chat_id).await?;
     assert!(!chat.is_contact_request());
     Ok(())
@@ -3556,9 +3558,9 @@ async fn test_messed_up_message_id() -> Result<()> {
     let t = TestContext::new_bob().await;
 
     let raw = include_bytes!("../../test-data/message/messed_up_message_id.eml");
-    receive_imf(&t, raw, false).await?;
+    let msg = load_imf_email(&t, raw).await;
     assert_eq!(
-        t.get_last_msg().await.rfc724_mid,
+        msg.rfc724_mid,
         "0bb9ffe1-2596-d997-95b4-1fef8cc4808e@example.org"
     );
 

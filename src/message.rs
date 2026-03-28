@@ -815,7 +815,11 @@ impl Message {
 
     /// Returns the timestamp of the message for sorting.
     pub fn get_sort_timestamp(&self) -> i64 {
-        self.timestamp_sort
+        if self.timestamp_sort != 0 {
+            self.timestamp_sort
+        } else {
+            self.timestamp_sent
+        }
     }
 
     /// Returns the text of the message.
