@@ -2360,6 +2360,22 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 151)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE tls_spki (
+               host TEXT NOT NULL UNIQUE,
+               spki_hash TEXT NOT NULL, -- base64 of SPKI SHA-256 hash
+               timestamp INTEGER NOT NULL -- timestamp of the last time we have seen this key
+             ) STRICT;
+             -- Index on host column is created implicitly because of UNIQUE constraint.
+             CREATE INDEX tls_spki_index_timestamp ON tls_spki (timestamp);
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

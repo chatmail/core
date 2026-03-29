@@ -220,6 +220,8 @@ impl Client {
             alpn(addr.port()),
             logging_stream,
             &context.tls_session_store,
+            &context.spki_hash_store,
+            &context.sql,
         )
         .await?;
         let buffered_stream = BufWriter::new(tls_stream);
@@ -282,6 +284,8 @@ impl Client {
             "",
             tcp_stream,
             &context.tls_session_store,
+            &context.spki_hash_store,
+            &context.sql,
         )
         .await
         .context("STARTTLS upgrade failed")?;
@@ -310,6 +314,8 @@ impl Client {
             alpn(port),
             proxy_stream,
             &context.tls_session_store,
+            &context.spki_hash_store,
+            &context.sql,
         )
         .await?;
         let buffered_stream = BufWriter::new(tls_stream);
@@ -373,6 +379,8 @@ impl Client {
             "",
             proxy_stream,
             &context.tls_session_store,
+            &context.spki_hash_store,
+            &context.sql,
         )
         .await
         .context("STARTTLS upgrade failed")?;
