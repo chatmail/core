@@ -874,6 +874,14 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
         .log_err(context)
         .ok();
 
+    context
+        .spki_hash_store
+        .cleanup(&context.sql)
+        .await
+        .context("Failed to prune SPKI store")
+        .log_err(context)
+        .ok();
+
     // Cleanup `imap` and `imap_sync` entries for deleted transports.
     //
     // Transports may be deleted directly or via sync messages,
