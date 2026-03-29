@@ -2316,6 +2316,18 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 150)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "CREATE TABLE tls_spki (
+               host TEXT NOT NULL UNIQUE,
+               spki_hash TEXT NOT NULL -- base64 of SPKI SHA-256 hash
+             ) STRICT",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

@@ -11,11 +11,12 @@ use crate::log::warn;
 use crate::net::dns::{lookup_host_with_cache, update_connect_timestamp};
 use crate::net::proxy::ProxyConfig;
 use crate::net::session::SessionBufStream;
-use crate::net::tls::{TlsSessionStore, wrap_tls};
+use crate::net::tls::{SpkiHashStore, TlsSessionStore, wrap_tls};
 use crate::net::{
     connect_tcp_inner, connect_tls_inner, run_connection_attempts, update_connection_history,
 };
 use crate::oauth2::get_oauth2_access_token;
+use crate::sql::Sql;
 use crate::tools::time;
 use crate::transport::ConnectionCandidate;
 use crate::transport::ConnectionSecurity;
@@ -111,10 +112,26 @@ async fn connection_attempt(
     );
     let res = match security {
         ConnectionSecurity::Tls => {
-            connect_secure(resolved_addr, host, strict_tls, &context.tls_session_store).await
+            connect_secure(
+                resolved_addr,
+                host,
+                strict_tls,
+                &context.tls_session_store,
+                &context.spki_hash_store,
+                &context.sql,
+            )
+            .await
         }
         ConnectionSecurity::Starttls => {
-            connect_starttls(resolved_addr, host, strict_tls, &context.tls_session_store).await
+            connect_starttls(
+                resolved_addr,
+                host,
+                strict_tls,
+                &context.tls_session_store,
+                &context.spki_hash_store,
+                &context.sql,
+            )
+            .await
         }
         ConnectionSecurity::Plain => connect_insecure(resolved_addr).await,
     };
@@ -240,6 +257,8 @@ async fn connect_secure_proxy(
         alpn(port),
         proxy_stream,
         &context.tls_session_store,
+        &context.spki_hash_store,
+        &context.sql,
     )
     .await?;
     let mut buffered_stream = BufStream::new(tls_stream);
@@ -273,6 +292,8 @@ async fn connect_starttls_proxy(
         "",
         tcp_stream,
         &context.tls_session_store,
+        &context.spki_hash_store,
+        &context.sql,
     )
     .await
     .context("STARTTLS upgrade failed")?;
@@ -299,6 +320,8 @@ async fn connect_secure(
     hostname: &str,
     strict_tls: bool,
     tls_session_store: &TlsSessionStore,
+    spki_hash_store: &SpkiHashStore,
+    sql: &Sql,
 ) -> Result<Box<dyn SessionBufStream>> {
     let tls_stream = connect_tls_inner(
         addr,
@@ -306,6 +329,8 @@ async fn connect_secure(
         strict_tls,
         alpn(addr.port()),
         tls_session_store,
+        spki_hash_store,
+        sql,
     )
     .await?;
     let mut buffered_stream = BufStream::new(tls_stream);
@@ -319,6 +344,8 @@ async fn connect_starttls(
     host: &str,
     strict_tls: bool,
     tls_session_store: &TlsSessionStore,
+    spki_hash_store: &SpkiHashStore,
+    sql: &Sql,
 ) -> Result<Box<dyn SessionBufStream>> {
     let use_sni = false;
     let tcp_stream = connect_tcp_inner(addr).await?;
@@ -336,6 +363,8 @@ async fn connect_starttls(
         "",
         tcp_stream,
         tls_session_store,
+        spki_hash_store,
+        sql,
     )
     .await
     .context("STARTTLS upgrade failed")?;

@@ -439,6 +439,8 @@ impl ProxyConfig {
                     "",
                     tcp_stream,
                     &context.tls_session_store,
+                    &context.spki_hash_store,
+                    &context.sql,
                 )
                 .await?;
                 let auth = if let Some((username, password)) = &https_config.user_password {

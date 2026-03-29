@@ -12,7 +12,7 @@ use tokio_io_timeout::TimeoutStream;
 
 use crate::context::Context;
 use crate::net::session::SessionStream;
-use crate::net::tls::TlsSessionStore;
+use crate::net::tls::{SpkiHashStore, TlsSessionStore};
 use crate::sql::Sql;
 use crate::tools::time;
 
@@ -130,6 +130,8 @@ pub(crate) async fn connect_tls_inner(
     strict_tls: bool,
     alpn: &str,
     tls_session_store: &TlsSessionStore,
+    spki_hash_store: &SpkiHashStore,
+    sql: &Sql,
 ) -> Result<impl SessionStream + 'static> {
     let use_sni = true;
     let tcp_stream = connect_tcp_inner(addr).await?;
@@ -141,6 +143,8 @@ pub(crate) async fn connect_tls_inner(
         alpn,
         tcp_stream,
         tls_session_store,
+        spki_hash_store,
+        sql,
     )
     .await?;
     Ok(tls_stream)

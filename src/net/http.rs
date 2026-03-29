@@ -87,6 +87,8 @@ where
                     "",
                     proxy_stream,
                     &context.tls_session_store,
+                    &context.spki_hash_store,
+                    &context.sql,
                 )
                 .await?;
                 Box::new(tls_stream)
@@ -99,6 +101,8 @@ where
                     "",
                     tcp_stream,
                     &context.tls_session_store,
+                    &context.spki_hash_store,
+                    &context.sql,
                 )
                 .await?;
                 Box::new(tls_stream)
