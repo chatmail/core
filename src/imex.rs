@@ -1137,4 +1137,16 @@ mod tests {
 
         Ok(())
     }
+
+    /// Tests importing a backup from Delta Chat 1.30.3 for Android (core v1.86.0).
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_import_ancient_backup() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let context = &tcm.unconfigured().await;
+
+        let backup_path = Path::new("test-data/core-1.86.0-backup.tar");
+        imex(context, ImexMode::ImportBackup, backup_path, None).await?;
+
+        Ok(())
+    }
 }

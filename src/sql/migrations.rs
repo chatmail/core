@@ -16,7 +16,6 @@ use crate::constants::ShowEmails;
 use crate::context::Context;
 use crate::key::DcKey;
 use crate::log::warn;
-use crate::message::MsgId;
 use crate::provider::get_provider_info;
 use crate::sql::Sql;
 use crate::tools::{Time, inc_and_check, time_elapsed};
@@ -731,12 +730,6 @@ impl Sql {
             "UPDATE config SET value=? WHERE keyname=?;",
             (format!("{version}"), VERSION_CFG),
         )?;
-        Ok(())
-    }
-
-    async fn set_db_version_in_cache(&self, version: i32) -> Result<()> {
-        let mut lock = self.config_cache.write().await;
-        lock.insert(VERSION_CFG.to_string(), Some(format!("{version}")));
         Ok(())
     }
 
@@ -1612,51 +1605,11 @@ CREATE INDEX msgs_status_updates_index2 ON msgs_status_updates (uid);
         .await?;
     }
 
-    if dbversion < 108 {
-        let version = 108;
-        let chunk_size = context.get_max_smtp_rcpt_to().await?;
-        sql.transaction(move |trans| {
-            Sql::set_db_version_trans(trans, version)?;
-            let id_max =
-                trans.query_row("SELECT IFNULL((SELECT MAX(id) FROM smtp), 0)", (), |row| {
-                    let id_max: i64 = row.get(0)?;
-                    Ok(id_max)
-                })?;
-            while let Some((id, rfc724_mid, mime, msg_id, recipients, retries)) = trans
-                .query_row(
-                    "SELECT id, rfc724_mid, mime, msg_id, recipients, retries FROM smtp \
-                    WHERE id<=? LIMIT 1",
-                    (id_max,),
-                    |row| {
-                        let id: i64 = row.get(0)?;
-                        let rfc724_mid: String = row.get(1)?;
-                        let mime: String = row.get(2)?;
-                        let msg_id: MsgId = row.get(3)?;
-                        let recipients: String = row.get(4)?;
-                        let retries: i64 = row.get(5)?;
-                        Ok((id, rfc724_mid, mime, msg_id, recipients, retries))
-                    },
-                )
-                .optional()?
-            {
-                trans.execute("DELETE FROM smtp WHERE id=?", (id,))?;
-                let recipients = recipients.split(' ').collect::<Vec<_>>();
-                for recipients in recipients.chunks(chunk_size) {
-                    let recipients = recipients.join(" ");
-                    trans.execute(
-                        "INSERT INTO smtp (rfc724_mid, mime, msg_id, recipients, retries) \
-                        VALUES (?, ?, ?, ?, ?)",
-                        (&rfc724_mid, &mime, msg_id, recipients, retries),
-                    )?;
-                }
-            }
-            Ok(())
-        })
-        .await
-        .with_context(|| format!("migration failed for version {version}"))?;
-
-        sql.set_db_version_in_cache(version).await?;
-    }
+    // Migration 108 is removed, it was using high level code
+    // to split SMTP queue messages into chunks with smaller number of recipients
+    // and started to fail later as high level code started
+    // expecting `transports` table that is only added in future migrations.
+    // Migration 108 was not changing the database schema.
 
     if dbversion < 109 {
         sql.execute_migration(
