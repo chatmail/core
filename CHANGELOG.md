@@ -1,5 +1,61 @@
 # Changelog
 
+## [2.48.0] - 2026-03-30
+
+### Fixes
+
+- Fix reordering problems in multi-relay setups by not sorting received messages below the last seen one.
+- Always sort "Messages are end-to-end encrypted" notice to the beginning.
+- Make Message-ID of pre-messages stable across resends ([#8007](https://github.com/chatmail/core/pull/8007)).
+- Delete `imap_markseen` entries not corresponding to any `imap` rows.
+- Cleanup `imap` and `imap_sync` records without transport in housekeeping.
+- When receiving MDN, mark all preceding messages as noticed, even having same timestamp ([#7928](https://github.com/chatmail/core/pull/7928)).
+- Remove migration 108 preventing upgrades from core 1.86.0 to the latest version.
+
+### Features / Changes
+
+- Improve IMAP loop logs.
+- Add decryption error to the device message about outgoing message decryption failure.
+- Log received message sort timestamp.
+
+### Performance
+
+- Move sorting outside of SQL query in `store_seen_flags_on_imap`.
+
+### API-Changes
+
+- Add JSON-RPC API `markfresh_chat()`.
+- ffi: Correctly declare `dc_event_channel_new()` as having no params ([#7831](https://github.com/chatmail/core/pull/7831)).
+
+### Refactor
+
+- Remove `wal_checkpoint_mutex`, lock `write_mutex` before getting sql connection instead.
+- Replace async `RwLock` with sync `RwLock` for stock strings.
+- Cleanup remaining Autocrypt Setup Message processing in `mimeparser`.
+- SecureJoin: do not check for self address in forwarding protection.
+- Fix clippy warnings.
+
+### CI
+
+- Update {c,py}.delta.chat website deployments.
+- Use environments for {rs,cffi,js.jsonrpc}.delta.chat deployments.
+- Fix https://docs.zizmor.sh/audits/#bot-conditions.
+
+### Documentation
+
+- Add SQL performance tips to STYLE.md.
+
+### Tests
+
+- Remove `test_old_message_5`.
+- Do not rely on loading newest chat in `load_imf_email()`.
+- Use `load_imf_email()` more.
+- The message is sorted correctly in the chat even if it arrives late.
+
+### Miscellaneous Tasks
+
+- cargo: update rustls-webpki to 0.103.10.
+
 ## [2.47.0] - 2026-03-24
 
 ### Fixes
@@ -7984,3 +8040,4 @@ https://github.com/chatmail/core/pulls?q=is%3Apr+is%3Aclosed
 [2.45.0]: https://github.com/chatmail/core/compare/v2.44.0..v2.45.0
 [2.46.0]: https://github.com/chatmail/core/compare/v2.45.0..v2.46.0
 [2.47.0]: https://github.com/chatmail/core/compare/v2.46.0..v2.47.0
+[2.48.0]: https://github.com/chatmail/core/compare/v2.47.0..v2.48.0
