@@ -893,6 +893,32 @@ async fn test_set_proxy_config_from_qr() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_dont_encode_hyphen_in_proxy_hostnames() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+
+    let qr_text = "socks5://my-proxy.example.org";
+
+    let qr = check_qr(t, qr_text).await?;
+    assert_eq!(
+        qr,
+        Qr::Proxy {
+            url: "socks5://my-proxy.example.org".to_string(),
+            host: "my-proxy.example.org".to_string(),
+            port: 1080,
+        }
+    );
+
+    set_config_from_qr(t, "socks5://my-proxy.example.org").await?;
+    assert_eq!(
+        t.get_config(Config::ProxyUrl).await?,
+        Some("socks5://my-proxy.example.org:1080".to_string())
+    );
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_decode_shadowsocks() -> Result<()> {
     let ctx = TestContext::new().await;
 
