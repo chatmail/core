@@ -1740,13 +1740,6 @@ pub async fn delete_msgs_ex(
 
         modified_chat_ids.insert(msg.chat_id);
         deleted_rfc724_mid.push(msg.rfc724_mid.clone());
-        {
-            let count = context
-                .sql
-                .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
-                .await?;
-            info!(context, "dbg count d: {count}, {msg_id}");
-        }
 
         let update_db = |trans: &mut rusqlite::Transaction| {
             let mut stmt = trans.prepare("UPDATE imap SET target='' WHERE rfc724_mid=?")?;
@@ -1765,13 +1758,6 @@ pub async fn delete_msgs_ex(
             )?;
             Ok(())
         };
-        {
-            let count = context
-                .sql
-                .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
-                .await?;
-            info!(context, "dbg count f: {count}, {msg_id}");
-        }
         if let Err(e) = context.sql.transaction(update_db).await {
             error!(context, "delete_msgs: failed to update db: {e:#}.");
             res = Err(e);
