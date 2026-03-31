@@ -45,6 +45,7 @@ use crate::securejoin::{
     self, get_secure_join_step, handle_securejoin_handshake, observe_securejoin_on_other_device,
 };
 use crate::simplify;
+use crate::smtp::msg_has_pending_smtp_job;
 use crate::stats::STATISTICS_BOT_EMAIL;
 use crate::stock_str;
 use crate::sync::Sync::*;
@@ -582,11 +583,7 @@ pub(crate) async fn receive_imf_inner(
                 (rfc724_mid_orig, &self_addr),
             )
             .await?;
-        if !context
-            .sql
-            .exists("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
-            .await?
-        {
+        if !msg_has_pending_smtp_job(context, msg_id).await? {
             msg_id.set_delivered(context).await?;
         }
         return Ok(None);
