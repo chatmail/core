@@ -571,6 +571,13 @@ pub(crate) async fn receive_imf_inner(
         if mime_parser.incoming {
             return Ok(None);
         }
+        {
+            let count = context
+                .sql
+                .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                .await?;
+            info!(context, "dbg count 0: {count}, {msg_id}");
+        }
         // For the case if we missed a successful SMTP response. Be optimistic that the message is
         // delivered also.
         let self_addr = context.get_primary_self_addr().await?;
@@ -582,14 +589,46 @@ pub(crate) async fn receive_imf_inner(
                 (rfc724_mid_orig, &self_addr),
             )
             .await?;
+        {
+            let row: Result<Option<(String, String)>> = context
+                .sql
+                .query_row_optional(
+                    "SELECT rfc724_mid, recipients FROM smtp WHERE msg_id=?",
+                    (msg_id,),
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .await;
+            info!(
+                context,
+                "dbg dbg 1: {row:?}, {msg_id}, rfc724_mid_orig: {rfc724_mid_orig}, rfc724_mid: {rfc724_mid}"
+            );
+        }
+        {
+            let count = context
+                .sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp WHERE rfc724_mid=?",
+                    (rfc724_mid_orig,),
+                )
+                .await?;
+            info!(context, "dbg dbg count 2: {count}, {msg_id}");
+        }
+        {
+            let count = context
+                .sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp WHERE rfc724_mid=?",
+                    (rfc724_mid,),
+                )
+                .await?;
+            info!(context, "dbg dbg count 3: {count}, {msg_id}");
+        }
         if !context
             .sql
-            .exists(
-                "SELECT COUNT(*) FROM smtp WHERE rfc724_mid=?",
-                (rfc724_mid_orig,),
-            )
+            .exists("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
             .await?
         {
+            info!(context, "dbg set_delivered {msg_id}");
             msg_id.set_delivered(context).await?;
         }
         return Ok(None);

@@ -377,11 +377,25 @@ pub(crate) async fn send_msg_to_smtp(
         return Ok(());
     };
     if retries > 6 {
+        {
+            let count = context
+                .sql
+                .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                .await?;
+            info!(context, "dbg count g: {count}, {msg_id}");
+        }
         context
             .sql
             .execute("DELETE FROM smtp WHERE id=?", (rowid,))
             .await
             .context("Failed to remove message with exceeded retry limit from smtp table")?;
+        {
+            let count = context
+                .sql
+                .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                .await?;
+            info!(context, "dbg count h: {count}, {msg_id}");
+        }
         if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
             message::set_msg_failed(context, &mut msg, "Number of retries exceeded the limit.")
                 .await?;
@@ -411,10 +425,24 @@ pub(crate) async fn send_msg_to_smtp(
     match status {
         SendResult::Retry => {}
         SendResult::Success => {
+            {
+                let count = context
+                    .sql
+                    .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                    .await?;
+                info!(context, "dbg count i: {count}, {msg_id}");
+            }
             context
                 .sql
                 .execute("DELETE FROM smtp WHERE id=?", (rowid,))
                 .await?;
+            {
+                let count = context
+                    .sql
+                    .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                    .await?;
+                info!(context, "dbg count j: {count}, {msg_id}");
+            }
         }
         SendResult::Failure(ref err) => {
             if err
@@ -455,21 +483,43 @@ pub(crate) async fn send_msg_to_smtp(
                     .await?;
                 };
             }
+            {
+                let count = context
+                    .sql
+                    .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                    .await?;
+                info!(context, "dbg count k: {count}, {msg_id}");
+            }
             context
                 .sql
                 .execute("DELETE FROM smtp WHERE id=?", (rowid,))
                 .await?;
+            {
+                let count = context
+                    .sql
+                    .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                    .await?;
+                info!(context, "dbg count l: {count}, {msg_id}");
+            }
         }
     };
 
     match status {
         SendResult::Retry => Err(format_err!("Retry")),
         SendResult::Success => {
+            {
+                let count = context
+                    .sql
+                    .count("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+                    .await?;
+                info!(context, "dbg count: {count}, {msg_id}");
+            }
             if !context
                 .sql
                 .exists("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
                 .await?
             {
+                info!(context, "dbg set_delivered a {msg_id}");
                 msg_id.set_delivered(context).await?;
             }
             Ok(())
