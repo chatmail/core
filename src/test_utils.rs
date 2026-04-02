@@ -40,6 +40,7 @@ use crate::message::{Message, MessageState, MsgId, update_msg_state};
 use crate::mimeparser::{MimeMessage, SystemMessage};
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
+use crate::smtp::msg_has_pending_smtp_job;
 use crate::stock_str::StockStrings;
 use crate::tools::time;
 
@@ -658,10 +659,7 @@ impl TestContext {
             .execute("DELETE FROM smtp WHERE id=?;", (rowid,))
             .await
             .expect("failed to remove job");
-        if !self
-            .ctx
-            .sql
-            .exists("SELECT COUNT(*) FROM smtp WHERE msg_id=?", (msg_id,))
+        if !msg_has_pending_smtp_job(self, msg_id)
             .await
             .expect("Failed to check for more jobs")
         {
