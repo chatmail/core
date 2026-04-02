@@ -1047,6 +1047,7 @@ def test_no_old_msg_is_fresh(acfactory):
     assert ac1.create_chat(ac2).get_fresh_message_count() == 1
     assert len(list(ac1.get_fresh_messages())) == 1
 
+    ac1_clone.wait_for_incoming_msg_event()
     ac1.wait_for_event(EventType.IMAP_INBOX_IDLE)
 
     logging.info("Send a message from ac1_clone to ac2 and check that ac1 marks the first message as 'noticed'")
