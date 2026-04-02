@@ -490,11 +490,13 @@ impl MimeMessage {
         let mail = mail.as_ref().map(|mail| {
             let (content, signatures_detached) = validate_detached_signature(mail, &public_keyring)
                 .unwrap_or((mail, Default::default()));
-            let signatures_detached = signatures_detached
-                .into_iter()
-                .map(|fp| (fp, Vec::new()))
-                .collect::<HashMap<_, _>>();
-            signatures.extend(signatures_detached);
+            if is_encrypted {
+                let signatures_detached = signatures_detached
+                    .into_iter()
+                    .map(|fp| (fp, Vec::new()))
+                    .collect::<HashMap<_, _>>();
+                signatures.extend(signatures_detached);
+            }
             content
         });
 
