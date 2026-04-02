@@ -24,6 +24,7 @@ use crate::context::Context;
 use crate::decrypt::{self, validate_detached_signature};
 use crate::dehtml::dehtml;
 use crate::download::PostMsgMetadata;
+use crate::ensure_and_debug_assert;
 use crate::events::EventType;
 use crate::headerdef::{HeaderDef, HeaderDefMap};
 use crate::key::{self, DcKey, Fingerprint, SignedPublicKey};
@@ -517,6 +518,7 @@ impl MimeMessage {
         }
 
         let mut signatures = if let Some(ref decrypted_msg) = decrypted_msg {
+            ensure_and_debug_assert!(is_encrypted,);
             crate::pgp::valid_signature_fingerprints(decrypted_msg, &public_keyring)
         } else {
             HashMap::new()
@@ -525,11 +527,13 @@ impl MimeMessage {
         let mail = mail.as_ref().map(|mail| {
             let (content, signatures_detached) = validate_detached_signature(mail, &public_keyring)
                 .unwrap_or((mail, Default::default()));
-            let signatures_detached = signatures_detached
-                .into_iter()
-                .map(|fp| (fp, Vec::new()))
-                .collect::<HashMap<_, _>>();
-            signatures.extend(signatures_detached);
+            if is_encrypted {
+                let signatures_detached = signatures_detached
+                    .into_iter()
+                    .map(|fp| (fp, Vec::new()))
+                    .collect::<HashMap<_, _>>();
+                signatures.extend(signatures_detached);
+            }
             content
         });
 
@@ -612,9 +616,6 @@ impl MimeMessage {
         }
         if signatures.is_empty() {
             Self::remove_secured_headers(&mut headers, &mut headers_removed, is_encrypted);
-        }
-        if !is_encrypted {
-            signatures.clear();
         }
 
         if let (Ok(mail), true) = (mail, is_encrypted)
