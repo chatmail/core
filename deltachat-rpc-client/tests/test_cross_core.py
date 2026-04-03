@@ -36,7 +36,7 @@ def test_qr_setup_contact(alice_and_remote_bob, version) -> None:
 
 def test_send_and_receive_message(alice_and_remote_bob) -> None:
     """Test other-core Bob profile can send a message to Alice on current core."""
-    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.20.0")
+    alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.24.0")
 
     remote_eval("bob_contact_alice.create_chat().send_text('hello')")
 
@@ -46,7 +46,7 @@ def test_send_and_receive_message(alice_and_remote_bob) -> None:
 
 def test_second_device(acfactory, alice_and_remote_bob) -> None:
     """Test setting up current version as a second device for old version."""
-    _alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.20.0")
+    _alice, alice_contact_bob, remote_eval = alice_and_remote_bob("2.24.0")
 
     remote_eval("locals().setdefault('future', bob._rpc.provide_backup.future(bob.id))")
     qr = remote_eval("bob._rpc.get_backup_qr(bob.id)")
