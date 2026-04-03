@@ -419,6 +419,17 @@ impl<'a> BlobObject<'a> {
             // also `Viewtype::Gif` (maybe renamed to `Animation`) should be used for animated
             // images.
             let do_scale = exceeds_max_bytes
+                // Don't recode huge JPEGs w/o resizing:
+                // - It may be huge because of high JPEG quality, but we don't know that.
+                // - We don't want extra CPU work for most photos.
+                && (fmt == ImageFormat::Jpeg
+                    || encoded_img_exceeds_bytes(
+                        context,
+                        &img,
+                        ofmt.clone(),
+                        max_bytes,
+                        &mut encoded,
+                    )?)
                 || is_avatar
                     && (exceeds_wh
                         || exif.is_some() && {
@@ -480,8 +491,7 @@ impl<'a> BlobObject<'a> {
                     }
                 }
             }
-
-            if do_scale || exif.is_some() {
+            if !encoded.is_empty() || exif.is_some() {
                 // The file format is JPEG/PNG now, we may have to change the file extension
                 if !matches!(fmt, ImageFormat::Jpeg)
                     && matches!(ofmt, ImageOutputFormat::Jpeg { .. })
