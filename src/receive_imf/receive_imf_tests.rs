@@ -5363,6 +5363,46 @@ async fn test_outgoing_unencrypted_chat_assignment() {
     assert_eq!(received.chat_id, chat.id);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_incoming_reply_with_date_in_past() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+
+    let msg0 = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+          To: alice@example.org\n\
+          Message-ID: <message@example.net>\n\
+          Date: Sun, 22 Mar 2020 22:22:22 +0000\n\
+          \n\
+          This device has an atomic clock\n",
+        false,
+    )
+    .await?
+    .unwrap();
+
+    let msg1 = receive_imf(
+        alice,
+        b"From: bob@example.net\n\
+          To: alice@example.org\n\
+          Message-ID: <message1@example.net>\n\
+          In-Reply-To: <message@example.net>\n\
+          Date: Sun, 22 Mar 2020 11:11:11 +0000\n\
+          \n\
+          And this one has a wind-up clock\n",
+        false,
+    )
+    .await?
+    .unwrap();
+    assert_eq!(msg1.chat_id, msg0.chat_id);
+    assert!(msg1.sort_timestamp >= msg0.sort_timestamp);
+    assert_eq!(
+        alice.get_last_msg_in(msg0.chat_id).await.id,
+        *msg1.msg_ids.last().unwrap()
+    );
+    Ok(())
+}
+
 /// Tests Bob receiving a message from Alice
 /// in a new group she just created
 /// with only Alice and Bob.
