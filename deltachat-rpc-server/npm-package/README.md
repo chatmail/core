@@ -5,6 +5,8 @@ it does not use NAPI bindings but instead uses stdio executables
 to let you talk to core over jsonrpc over stdio.
 This simplifies cross-compilation and even reduces binary size (no CFFI layer and no NAPI layer).
 
+📚 Docs: <https://js.jsonrpc.delta.chat/>
+
 ## Usage
 
 > The **minimum** nodejs version for this package is `16`
@@ -18,20 +20,47 @@ import { startDeltaChat } from "@deltachat/stdio-rpc-server";
 import { C } from "@deltachat/jsonrpc-client";
 
 async function main() {
-    const dc = await startDeltaChat("deltachat-data");
-    console.log(await dc.rpc.getSystemInfo());
-    dc.close()
+  const dc = await startDeltaChat("deltachat-data");
+  console.log(await dc.rpc.getSystemInfo());
+  dc.close();
 }
-main()
+main();
 ```
 
-For a more complete example refer to https://github.com/deltachat-bot/echo/pull/69/files (TODO change link when pr is merged).
+For a more complete example refer to <https://github.com/deltachat-bot/echo/tree/master/nodejs_stdio_jsonrpc>.
 
 ## How to use on an unsupported platform
 
-<!-- todo instructions, will uses an env var for pointing to `deltachat-rpc-server` binary -->
+You need to have rust installed to compile deltachat core for your platform and cpu architecture.
+<https://rustup.rs/> is the recommended way to install rust.
+Also your system probably needs more than 4GB RAM to compile core, alternatively your could try to build the debug build, which might take less RAM to build.
 
-<!-- todo copy parts from https://github.com/deltachat/deltachat-desktop/blob/7045c6f549e4b9d5caa0709d5bd314bbd9fd53db/docs/UPDATE_CORE.md -->
+1. clone the core repo, right next to your project folder: `git clone git@github.com:deltachat/deltachat-core-rust.git`
+2. go into your core checkout and run `git pull` and `git checkout <version>` to point it to the correct version (needs to be the same version the `@deltachat/jsonrpc-client` package has)
+3. run `cargo build --release --package deltachat-rpc-server --bin deltachat-rpc-server`
+
+Then you have 2 options:
+
+### point to deltachat-rpc-server via direct path:
+
+```sh
+# start your app with the DELTA_CHAT_RPC_SERVER env var
+DELTA_CHAT_RPC_SERVER="../deltachat-core-rust/target/release/deltachat-rpc-server" node myapp.js
+```
+
+### install deltachat-rpc-server in your $PATH:
+
+```sh
+# use this to install to ~/.cargo/bin
+cargo install --release --package deltachat-rpc-server --bin deltachat-rpc-server
+# or manually move deltachat-core-rust/target/release/deltachat-rpc-server
+# to a location that is included in your $PATH Environment variable.
+```
+
+And make sure to enable the `takeVersionFromPATH` option:
+```js
+startDeltaChat("data-dir", { takeVersionFromPATH: true });
+```
 
 ## How does it work when you install it
 
@@ -46,7 +75,7 @@ references:
 When you import this package it searches for the rpc server in the following locations and order:
 
 1. `DELTA_CHAT_RPC_SERVER` environment variable
-2. use the PATH when `{takeVersionFromPATH: true}` is supplied in the options. 
+2. use the PATH when `{takeVersionFromPATH: true}` is supplied in the options.
 3. prebuilds in npm packages
 
 so by default it uses the prebuilds.
