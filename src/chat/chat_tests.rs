@@ -5028,6 +5028,31 @@ async fn test_do_not_overwrite_draft() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_outgoing_msg_after_another_from_future() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let t = &tcm.alice().await;
+    let chat_id = t.get_self_chat().await.id;
+
+    // Simulate sending a message with clock set to the future.
+    SystemTime::shift(Duration::from_secs(3600));
+    let msg_id = send_text_msg(t, chat_id, "test".to_string()).await?;
+    SystemTime::shift_back(Duration::from_secs(3600));
+
+    let timestamp_sent: i64 = t
+        .sql
+        .query_get_value("SELECT timestamp_sent FROM msgs WHERE id=?", (msg_id,))
+        .await?
+        .unwrap();
+    // Let's have a check here that locally sent messages have zero `timestamp_sent`, it can be a
+    // useful invariant.
+    assert_eq!(timestamp_sent, 0);
+
+    let msg_id = send_text_msg(t, chat_id, "Fixed my clock".to_string()).await?;
+    assert_eq!(t.get_last_msg_in(chat_id).await.id, msg_id);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_info_contact_id() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;

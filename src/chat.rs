@@ -2931,11 +2931,24 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         msg.param.remove(Param::GuaranteeE2ee);
     }
     msg.subject.clone_from(&rendered_msg.subject);
+    // Sort the message to the bottom. Employ `msgs_index7` to compute `timestamp`.
     context
         .sql
         .execute(
-            "UPDATE msgs SET pre_rfc724_mid=?, subject=?, param=? WHERE id=?",
+            "
+UPDATE msgs SET
+    timestamp=(
+        SELECT MAX(timestamp) FROM msgs WHERE
+            -- From `InFresh` to `OutMdnRcvd` inclusive except `OutDraft`.
+            state IN(10,13,16,18,20,24,26,28) AND
+            hidden IN(0,1) AND
+            chat_id=?
+    ),
+    pre_rfc724_mid=?, subject=?, param=?
+WHERE id=?
+            ",
             (
+                msg.chat_id,
                 &msg.pre_rfc724_mid,
                 &msg.subject,
                 msg.param.to_string(),
