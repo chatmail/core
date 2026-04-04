@@ -305,7 +305,7 @@ async fn test_recode_image_2() {
         has_exif: true,
         original_width: 2000,
         original_height: 1800,
-        orientation: 270,
+        orientation: Some(Orientation::Rotate270),
         compressed_width: 1800,
         compressed_height: 2000,
         ..Default::default()
@@ -328,6 +328,28 @@ async fn test_recode_image_2() {
         original_height: 2000,
         compressed_width: 1800,
         compressed_height: 2000,
+        ..Default::default()
+    }
+    .test()
+    .await
+    .unwrap();
+    assert_correct_rotation(&img_rotated);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_recode_image_vflipped() {
+    let bytes = include_bytes!("../../test-data/image/rectangle200x180-vflipped.jpg");
+    let img_rotated = SendImageCheckMediaquality {
+        viewtype: Viewtype::Image,
+        media_quality_config: "0",
+        bytes,
+        extension: "jpg",
+        has_exif: true,
+        original_width: 200,
+        original_height: 180,
+        orientation: Some(Orientation::FlipVertical),
+        compressed_width: 200,
+        compressed_height: 180,
         ..Default::default()
     }
     .test()
@@ -530,7 +552,7 @@ struct SendImageCheckMediaquality<'a> {
     pub(crate) has_exif: bool,
     pub(crate) original_width: u32,
     pub(crate) original_height: u32,
-    pub(crate) orientation: i32,
+    pub(crate) orientation: Option<Orientation>,
     pub(crate) res_viewtype: Option<Viewtype>,
     pub(crate) compressed_width: u32,
     pub(crate) compressed_height: u32,
@@ -546,7 +568,7 @@ impl SendImageCheckMediaquality<'_> {
         let has_exif = self.has_exif;
         let original_width = self.original_width;
         let original_height = self.original_height;
-        let orientation = self.orientation;
+        let orientation = self.orientation.unwrap_or(Orientation::NoTransforms);
         let res_viewtype = self.res_viewtype.unwrap_or(Viewtype::Image);
         let compressed_width = self.compressed_width;
         let compressed_height = self.compressed_height;

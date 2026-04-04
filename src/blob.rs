@@ -10,8 +10,8 @@ use anyhow::{Context as _, Result, ensure, format_err};
 use base64::Engine as _;
 use futures::StreamExt;
 use image::ImageReader;
-use image::codecs::jpeg::JpegEncoder;
 use image::{DynamicImage, GenericImage, GenericImageView, ImageFormat, Pixel, Rgba};
+use image::{codecs::jpeg::JpegEncoder, metadata::Orientation};
 use num_traits::FromPrimitive;
 use tokio::{fs, task};
 use tokio_stream::wrappers::ReadDirStream;
@@ -362,7 +362,10 @@ impl<'a> BlobObject<'a> {
                 return Ok(name);
             }
             let mut img = imgreader.decode().context("image decode failure")?;
-            let orientation = exif.as_ref().map(|exif| exif_orientation(exif, context));
+            let orientation = exif
+                .as_ref()
+                .map(|exif| exif_orientation(exif, context))
+                .unwrap_or(Orientation::NoTransforms);
             let mut encoded = Vec::new();
 
             if *vt == Viewtype::Sticker {
@@ -381,13 +384,7 @@ impl<'a> BlobObject<'a> {
                     return Ok(name);
                 }
             }
-
-            img = match orientation {
-                Some(90) => img.rotate90(),
-                Some(180) => img.rotate180(),
-                Some(270) => img.rotate270(),
-                _ => img,
-            };
+            img.apply_orientation(orientation);
 
             // max_wh is the maximum image width and height, i.e. the resolution-limit.
             // target_wh target-resolution for resizing the image.
@@ -551,18 +548,17 @@ fn image_metadata(file: &std::fs::File) -> Result<(u64, Option<exif::Exif>)> {
     Ok((len, exif))
 }
 
-fn exif_orientation(exif: &exif::Exif, context: &Context) -> i32 {
-    if let Some(orientation) = exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY) {
-        // possible orientation values are described at http://sylvana.net/jpegcrop/exif_orientation.html
-        // we only use rotation, in practise, flipping is not used.
-        match orientation.value.get_uint(0) {
-            Some(3) => return 180,
-            Some(6) => return 90,
-            Some(8) => return 270,
-            other => warn!(context, "Exif orientation value ignored: {other:?}."),
-        }
+fn exif_orientation(exif: &exif::Exif, context: &Context) -> Orientation {
+    if let Some(orientation) = exif.get_field(exif::Tag::Orientation, exif::In::PRIMARY)
+        && let Some(val) = orientation.value.get_uint(0)
+        && let Ok(val) = TryInto::<u8>::try_into(val)
+    {
+        return Orientation::from_exif(val).unwrap_or({
+            warn!(context, "Exif orientation value ignored: {val:?}.");
+            Orientation::NoTransforms
+        });
     }
-    0
+    Orientation::NoTransforms
 }
 
 /// All files in the blobdir.
