@@ -839,13 +839,6 @@ pub(crate) async fn observe_securejoin_on_other_device(
         inviter_progress(context, contact_id, chat_id, chat_type)?;
     }
 
-    if matches!(step, SecureJoinStep::RequestWithAuth) {
-        // This actually reflects what happens on the first device (which does the secure
-        // join) and causes a subsequent "vg-member-added" message to create an unblocked
-        // verified group.
-        ChatId::create_for_contact_with_blocked(context, contact_id, Blocked::Not).await?;
-    }
-
     if matches!(step, SecureJoinStep::MemberAdded) {
         Ok(HandshakeMessage::Propagate)
     } else {

@@ -3562,7 +3562,14 @@ async fn create_or_lookup_mailinglist_or_broadcast(
             chattype,
             &listid,
             name,
-            create_blocked,
+            if chattype == Chattype::InBroadcast {
+                // If we joined the broadcast, we have scanned a QR code.
+                // Even if 1:1 chat does not exist or is in a contact request,
+                // create the channel as unblocked.
+                Blocked::Not
+            } else {
+                create_blocked
+            },
             param,
             mime_parser.timestamp_sent,
         )
