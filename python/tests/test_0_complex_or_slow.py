@@ -288,6 +288,7 @@ def test_use_new_verified_group_after_going_online(acfactory, data, tmp_path, lp
     assert open(contact.get_profile_image(), "rb").read() == open(avatar_path, "rb").read()
 
     lp.sec("ac2_offl: sending message")
+    chat2.accept()
     msg_out = chat2.send_text("hello")
 
     lp.sec("ac1: receiving message")
