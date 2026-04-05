@@ -5630,3 +5630,62 @@ async fn test_outgoing_determined_by_signature() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_mark_message_as_delivered_only_after_sent_out_fully() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    alice.set_config_bool(Config::BccSelf, true).await?;
+    let alice_chat_id = alice.create_chat_id(bob).await;
+
+    let file_bytes = include_bytes!("../../test-data/image/screenshot.gif");
+    let mut msg = Message::new(Viewtype::Image);
+    msg.set_file_from_bytes(alice, "a.jpg", file_bytes, None)?;
+    let msg_id = chat::send_msg(alice, alice_chat_id, &mut msg)
+        .await
+        .unwrap();
+
+    let (pre_msg_id, pre_msg_payload) = first_row_in_smtp_queue(alice).await;
+    assert_eq!(msg_id, pre_msg_id);
+    assert!(pre_msg_payload.len() < file_bytes.len());
+
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
+    // Alice receives her own pre-message because of bcc_self
+    // This should not yet mark the message as delivered,
+    // because not everything was sent,
+    // but it does remove the pre-message from the SMTP queue
+    receive_imf(alice, pre_msg_payload.as_bytes(), false).await?;
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
+
+    let (post_msg_id, post_msg_payload) = first_row_in_smtp_queue(alice).await;
+    assert_eq!(msg_id, post_msg_id);
+    assert!(post_msg_payload.len() > file_bytes.len());
+
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutPending);
+    // Alice receives her own post-message because of bcc_self
+    // This should now mark the message as delivered,
+    // because everything was sent by now.
+    receive_imf(alice, post_msg_payload.as_bytes(), false).await?;
+    assert_eq!(msg_id.get_state(alice).await?, MessageState::OutDelivered);
+
+    Ok(())
+}
+
+/// Queries the first sent message in the SMTP queue
+/// without removing it from the SMTP queue.
+/// This simulates the case that a message is successfully sent out,
+/// but the 'OK' answer from the server doesn't arrive,
+/// so that the SMTP row stays in the database.
+pub(crate) async fn first_row_in_smtp_queue(alice: &TestContext) -> (MsgId, String) {
+    alice
+        .sql
+        .query_row_optional("SELECT msg_id, mime FROM smtp ORDER BY id", (), |row| {
+            let msg_id: MsgId = row.get(0)?;
+            let mime: String = row.get(1)?;
+            Ok((msg_id, mime))
+        })
+        .await
+        .expect("query_row_optional failed")
+        .expect("No SMTP row found")
+}
