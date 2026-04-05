@@ -5640,18 +5640,11 @@ async fn test_mark_message_as_delivered_only_after_sent_out_fully() -> Result<()
 pub(crate) async fn first_row_in_smtp_queue(alice: &TestContext) -> (MsgId, String) {
     alice
         .sql
-        .query_row_optional(
-            r#"
-                SELECT id, msg_id, mime, recipients
-                FROM smtp
-                ORDER BY id"#,
-            (),
-            |row| {
-                let msg_id: MsgId = row.get(1)?;
-                let mime: String = row.get(2)?;
-                Ok((msg_id, mime))
-            },
-        )
+        .query_row_optional("SELECT msg_id, mime FROM smtp ORDER BY id", (), |row| {
+            let msg_id: MsgId = row.get(0)?;
+            let mime: String = row.get(1)?;
+            Ok((msg_id, mime))
+        })
         .await
         .expect("query_row_optional failed")
         .expect("No SMTP row found")
