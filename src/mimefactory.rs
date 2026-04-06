@@ -232,11 +232,7 @@ impl MimeFactory {
         if chat.is_self_talk() {
             to.push((from_displayname.to_string(), from_addr.to_string()));
 
-            encryption_pubkeys = if msg.param.get_bool(Param::ForcePlaintext).unwrap_or(false) {
-                None
-            } else {
-                Some(Vec::new())
-            };
+            encryption_pubkeys = Some(Vec::new());
         } else if chat.is_mailing_list() {
             let list_post = chat
                 .param
