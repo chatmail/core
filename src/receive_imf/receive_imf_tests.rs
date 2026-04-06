@@ -4378,39 +4378,40 @@ async fn test_recreate_member_list_on_missing_add_of_self() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
-    let alice_chat_id = create_group(&alice, "Group").await?;
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = create_group(alice, "Group").await?;
     add_contact_to_chat(
-        &alice,
+        alice,
         alice_chat_id,
-        alice.add_or_lookup_contact_id(&bob).await,
+        alice.add_or_lookup_contact_id(bob).await,
     )
     .await?;
-    send_text_msg(&alice, alice_chat_id, "populate".to_string()).await?;
+    send_text_msg(alice, alice_chat_id, "populate".to_string()).await?;
     let bob_chat_id = bob.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
 
-    let fiona = TestContext::new_fiona().await;
+    let fiona = &tcm.fiona().await;
     add_contact_to_chat(
-        &alice,
+        alice,
         alice_chat_id,
-        alice.add_or_lookup_contact_id(&fiona).await,
+        alice.add_or_lookup_contact_id(fiona).await,
     )
     .await?;
     let fiona_chat_id = fiona.recv_msg(&alice.pop_sent_msg().await).await.chat_id;
-    fiona_chat_id.accept(&fiona).await?;
+    fiona_chat_id.accept(fiona).await?;
 
     SystemTime::shift(Duration::from_secs(60));
-    chat::set_chat_name(&fiona, fiona_chat_id, "Renamed").await?;
+    chat::set_chat_name(fiona, fiona_chat_id, "Renamed").await?;
     bob.recv_msg(&fiona.pop_sent_msg().await).await;
 
     // Bob missed the message adding fiona, but mustn't recreate the member list or apply the group
     // name change.
-    assert_eq!(get_chat_contacts(&bob, bob_chat_id).await?.len(), 2);
-    assert!(is_contact_in_chat(&bob, bob_chat_id, ContactId::SELF).await?);
-    let bob_alice_contact = bob.add_or_lookup_contact_id(&alice).await;
-    assert!(is_contact_in_chat(&bob, bob_chat_id, bob_alice_contact).await?);
-    let chat = Chat::load_from_db(&bob, bob_chat_id).await?;
+    assert_eq!(get_chat_contacts(bob, bob_chat_id).await?.len(), 2);
+    assert!(is_contact_in_chat(bob, bob_chat_id, ContactId::SELF).await?);
+    let bob_alice_contact = bob.add_or_lookup_contact_id(alice).await;
+    assert!(is_contact_in_chat(bob, bob_chat_id, bob_alice_contact).await?);
+    let chat = Chat::load_from_db(bob, bob_chat_id).await?;
     assert_eq!(chat.get_name(), "Group");
     Ok(())
 }
