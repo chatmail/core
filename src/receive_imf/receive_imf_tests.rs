@@ -4403,7 +4403,9 @@ async fn test_keep_member_list_if_possibly_nomember() -> Result<()> {
 
     SystemTime::shift(Duration::from_secs(60));
     chat::set_chat_name(fiona, fiona_chat_id, "Renamed").await?;
-    bob.recv_msg(&fiona.pop_sent_msg().await).await;
+
+    // Message about chat name change from non-member is trashed.
+    bob.recv_msg_trash(&fiona.pop_sent_msg().await).await;
 
     // Bob missed the message adding fiona, but mustn't recreate the member list or apply the group
     // name change.

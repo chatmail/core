@@ -14,7 +14,9 @@ use mailparse::SingleInfo;
 use num_traits::FromPrimitive;
 use regex::Regex;
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, ChatVisibility, save_broadcast_secret};
+use crate::chat::{
+    self, Chat, ChatId, ChatIdBlocked, ChatVisibility, is_contact_in_chat, save_broadcast_secret,
+};
 use crate::config::Config;
 use crate::constants::{self, Blocked, Chattype, DC_CHAT_ID_TRASH, EDITED_PREFIX, ShowEmails};
 use crate::contact::{self, Contact, ContactId, Origin, mark_contact_id_as_verified};
@@ -3121,17 +3123,18 @@ async fn apply_group_changes(
         }
     }
 
-    if is_from_in_chat {
-        apply_chat_name_avatar_and_description_changes(
-            context,
-            mime_parser,
-            from_id,
-            chat,
-            &mut send_event_chat_modified,
-            &mut better_msg,
-        )
-        .await?;
+    apply_chat_name_avatar_and_description_changes(
+        context,
+        mime_parser,
+        from_id,
+        is_from_in_chat,
+        chat,
+        &mut send_event_chat_modified,
+        &mut better_msg,
+    )
+    .await?;
 
+    if is_from_in_chat {
         // Avoid insertion of `from_id` into a group with inappropriate encryption state.
         if from_is_key_contact != chat.grpid.is_empty()
             && chat.member_list_is_stale(context).await?
@@ -3305,6 +3308,7 @@ async fn apply_chat_name_avatar_and_description_changes(
     context: &Context,
     mime_parser: &MimeMessage,
     from_id: ContactId,
+    is_from_in_chat: bool,
     chat: &mut Chat,
     send_event_chat_modified: &mut bool,
     better_msg: &mut Option<String>,
@@ -3333,7 +3337,8 @@ async fn apply_chat_name_avatar_and_description_changes(
         let chat_group_name_timestamp = chat.param.get_i64(Param::GroupNameTimestamp).unwrap_or(0);
         let group_name_timestamp = group_name_timestamp.unwrap_or(mime_parser.timestamp_sent);
         // To provide group name consistency, compare names if timestamps are equal.
-        if (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
+        if is_from_in_chat
+            && (chat_group_name_timestamp, grpname) < (group_name_timestamp, &chat.name)
             && chat
                 .id
                 .update_timestamp(context, Param::GroupNameTimestamp, group_name_timestamp)
@@ -3354,14 +3359,19 @@ async fn apply_chat_name_avatar_and_description_changes(
             .get_header(HeaderDef::ChatGroupNameChanged)
             .is_some()
         {
-            let old_name = &sanitize_single_line(old_name);
-            better_msg.get_or_insert(
-                if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
-                    stock_str::msg_broadcast_name_changed(context, old_name, grpname)
-                } else {
-                    stock_str::msg_grp_name(context, old_name, grpname, from_id).await
-                },
-            );
+            if is_from_in_chat {
+                let old_name = &sanitize_single_line(old_name);
+                better_msg.get_or_insert(
+                    if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
+                        stock_str::msg_broadcast_name_changed(context, old_name, grpname)
+                    } else {
+                        stock_str::msg_grp_name(context, old_name, grpname, from_id).await
+                    },
+                );
+            } else {
+                // Attempt to change group name by non-member, trash it.
+                *better_msg = Some(String::new());
+            }
         }
     }
 
@@ -3384,7 +3394,8 @@ async fn apply_chat_name_avatar_and_description_changes(
 
         let new_timestamp = timestamp_in_header.unwrap_or(mime_parser.timestamp_sent);
         // To provide consistency, compare descriptions if timestamps are equal.
-        if (old_timestamp, &old_description) < (new_timestamp, &new_description)
+        if is_from_in_chat
+            && (old_timestamp, &old_description) < (new_timestamp, &new_description)
             && chat
                 .id
                 .update_timestamp(context, Param::GroupDescriptionTimestamp, new_timestamp)
@@ -3405,8 +3416,13 @@ async fn apply_chat_name_avatar_and_description_changes(
             .get_header(HeaderDef::ChatGroupDescriptionChanged)
             .is_some()
         {
-            better_msg
-                .get_or_insert(stock_str::msg_chat_description_changed(context, from_id).await);
+            if is_from_in_chat {
+                better_msg
+                    .get_or_insert(stock_str::msg_chat_description_changed(context, from_id).await);
+            } else {
+                // Attempt to change group description by non-member, trash it.
+                *better_msg = Some(String::new());
+            }
         }
     }
 
@@ -3416,39 +3432,46 @@ async fn apply_chat_name_avatar_and_description_changes(
         && value == "group-avatar-changed"
         && let Some(avatar_action) = &mime_parser.group_avatar
     {
-        // this is just an explicit message containing the group-avatar,
-        // apart from that, the group-avatar is send along with various other messages
-        better_msg.get_or_insert(
-            if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
-                stock_str::msg_broadcast_img_changed(context)
-            } else {
-                match avatar_action {
-                    AvatarAction::Delete => stock_str::msg_grp_img_deleted(context, from_id).await,
-                    AvatarAction::Change(_) => {
-                        stock_str::msg_grp_img_changed(context, from_id).await
+        if is_from_in_chat {
+            // this is just an explicit message containing the group-avatar,
+            // apart from that, the group-avatar is send along with various other messages
+            better_msg.get_or_insert(
+                if matches!(chat.typ, Chattype::InBroadcast | Chattype::OutBroadcast) {
+                    stock_str::msg_broadcast_img_changed(context)
+                } else {
+                    match avatar_action {
+                        AvatarAction::Delete => {
+                            stock_str::msg_grp_img_deleted(context, from_id).await
+                        }
+                        AvatarAction::Change(_) => {
+                            stock_str::msg_grp_img_changed(context, from_id).await
+                        }
                     }
-                }
-            },
-        );
+                },
+            );
+        } else {
+            // Attempt to change group avatar by non-member, trash it.
+            *better_msg = Some(String::new());
+        }
     }
 
-    if let Some(avatar_action) = &mime_parser.group_avatar {
-        info!(context, "Group-avatar change for {}.", chat.id);
-        if chat
+    if let Some(avatar_action) = &mime_parser.group_avatar
+        && is_from_in_chat
+        && chat
             .param
             .update_timestamp(Param::AvatarTimestamp, mime_parser.timestamp_sent)?
-        {
-            match avatar_action {
-                AvatarAction::Change(profile_image) => {
-                    chat.param.set(Param::ProfileImage, profile_image);
-                }
-                AvatarAction::Delete => {
-                    chat.param.remove(Param::ProfileImage);
-                }
-            };
-            chat.update_param(context).await?;
-            *send_event_chat_modified = true;
-        }
+    {
+        info!(context, "Group-avatar change for {}.", chat.id);
+        match avatar_action {
+            AvatarAction::Change(profile_image) => {
+                chat.param.set(Param::ProfileImage, profile_image);
+            }
+            AvatarAction::Delete => {
+                chat.param.remove(Param::ProfileImage);
+            }
+        };
+        chat.update_param(context).await?;
+        *send_event_chat_modified = true;
     }
 
     Ok(())
@@ -3755,10 +3778,12 @@ async fn apply_out_broadcast_changes(
     let mut added_removed_id: Option<ContactId> = None;
 
     if from_id == ContactId::SELF {
+        let is_from_in_chat = true;
         apply_chat_name_avatar_and_description_changes(
             context,
             mime_parser,
             from_id,
+            is_from_in_chat,
             chat,
             &mut send_event_chat_modified,
             &mut better_msg,
@@ -3847,10 +3872,12 @@ async fn apply_in_broadcast_changes(
     let mut send_event_chat_modified = false;
     let mut better_msg = None;
 
+    let is_from_in_chat = is_contact_in_chat(context, chat.id, from_id).await?;
     apply_chat_name_avatar_and_description_changes(
         context,
         mime_parser,
         from_id,
+        is_from_in_chat,
         chat,
         &mut send_event_chat_modified,
         &mut better_msg,
