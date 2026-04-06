@@ -4973,17 +4973,6 @@ uint32_t        dc_msg_get_original_msg_id    (const dc_msg_t* msg);
  */
 uint32_t        dc_msg_get_saved_msg_id     (const dc_msg_t* msg);
 
-
-/**
- * Force the message to be sent in plain text.
- *
- * This API is for bots, there is no need to expose it in the UI.
- *
- * @memberof dc_msg_t
- * @param msg The message object.
- */
-void            dc_msg_force_plaintext        (dc_msg_t* msg);
-
 /**
  * @class dc_contact_t
  *
