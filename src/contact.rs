@@ -1182,7 +1182,9 @@ VALUES (?, ?, ?, ?, ?, ?)
         let mut ret = Vec::new();
         let flag_add_self = (listflags & constants::DC_GCL_ADD_SELF) != 0;
         let flag_address = (listflags & constants::DC_GCL_ADDRESS) != 0;
-        let minimal_origin = if context.get_config_bool(Config::Bot).await? {
+        let minimal_origin = if context.get_config_bool(Config::Bot).await?
+            || query.is_some_and(may_be_valid_addr)
+        {
             Origin::Unknown
         } else {
             Origin::IncomingReplyTo
