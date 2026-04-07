@@ -4,6 +4,7 @@ use pretty_assertions::assert_eq;
 
 use crate::EventType;
 use crate::chat;
+use crate::chat::send_msg;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
 use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
@@ -13,7 +14,7 @@ use crate::reaction::{get_msg_reactions, send_reaction};
 use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
-    send_large_file_message, send_large_image_message, send_large_webxdc_message,
+    big_webxdc_app, send_large_file_message, send_large_image_message, send_large_webxdc_message,
 };
 use crate::webxdc::StatusUpdateSerial;
 
@@ -509,6 +510,99 @@ async fn test_webxdc_update_for_not_downloaded_instance() -> Result<()> {
     let info = bob_instance.get_webxdc_info(bob).await?;
     assert_eq!(info.document, "doc");
     assert_eq!(info.summary, "sum");
+
+    Ok(())
+}
+
+/// Tests receiving of a large webxdc with updates attached to the the .xdc message.
+///
+/// Updates are sent in a post message and should be assigned to xdc instance
+/// once post message is downloaded.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_updates_in_post_message_after_pre_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice.create_chat_id(bob).await;
+
+    let big_webxdc_app = big_webxdc_app().await?;
+
+    let mut alice_instance = Message::new(Viewtype::Webxdc);
+    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app, None)?;
+    alice_instance.set_text("Test".to_string());
+    alice_chat_id
+        .set_draft(alice, Some(&mut alice_instance))
+        .await?;
+    alice
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload":42, "info":"i"}"#)
+        .await?;
+
+    send_msg(alice, alice_chat_id, &mut alice_instance).await?;
+    let post_message = alice.pop_sent_msg().await;
+    let pre_message = alice.pop_sent_msg().await;
+
+    let bob_instance = bob.recv_msg(&pre_message).await;
+    assert_eq!(bob_instance.download_state, DownloadState::Available);
+    bob.recv_msg_trash(&post_message).await;
+    let bob_instance = Message::load_from_db(bob, bob_instance.id).await?;
+    assert_eq!(bob_instance.download_state, DownloadState::Done);
+
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial::new(0))
+            .await?,
+        r#"[{"payload":42,"info":"i","serial":1,"max_serial":1}]"#
+    );
+
+    Ok(())
+}
+
+/// Tests receiving of a large webxdc post-message with updates attached
+/// to the the .xdc post-message when pre-message arrives later.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_updates_in_post_message_without_pre_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    let alice_chat_id = alice.create_chat_id(bob).await;
+
+    let big_webxdc_app = big_webxdc_app().await?;
+
+    let mut alice_instance = Message::new(Viewtype::Webxdc);
+    alice_instance.set_file_from_bytes(alice, "test.xdc", &big_webxdc_app, None)?;
+    alice_instance.set_text("Test".to_string());
+    alice_chat_id
+        .set_draft(alice, Some(&mut alice_instance))
+        .await?;
+    alice
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload":42, "info":"i"}"#)
+        .await?;
+
+    send_msg(alice, alice_chat_id, &mut alice_instance).await?;
+    let post_message = alice.pop_sent_msg().await;
+    let pre_message = alice.pop_sent_msg().await;
+
+    // Bob receives post-message first.
+    let bob_instance = bob.recv_msg(&post_message).await;
+    assert_eq!(bob_instance.download_state, DownloadState::Done);
+
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial::new(0))
+            .await?,
+        r#"[{"payload":42,"info":"i","serial":1,"max_serial":1}]"#
+    );
+
+    // Bob may still receive pre-message later.
+    bob.recv_msg_trash(&pre_message).await;
+
+    let bob_instance = Message::load_from_db(bob, bob_instance.id).await?;
+    assert_eq!(bob_instance.download_state, DownloadState::Done);
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial::new(0))
+            .await?,
+        r#"[{"payload":42,"info":"i","serial":1,"max_serial":1}]"#
+    );
 
     Ok(())
 }
