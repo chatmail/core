@@ -5056,9 +5056,10 @@ async fn set_contacts_by_fingerprints(
     );
     let mut contacts = BTreeSet::new();
     for (fingerprint, addr) in fingerprint_addrs {
-        let contact = Contact::add_or_lookup_ex(context, "", addr, fingerprint, Origin::Hidden)
-            .await?
-            .0;
+        let contact =
+            Contact::add_or_lookup_ex(context, "", addr, fingerprint, Origin::IncomingReplyTo)
+                .await?
+                .0;
         contacts.insert(contact);
     }
     let contacts_old = BTreeSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);

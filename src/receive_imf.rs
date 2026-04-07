@@ -264,7 +264,7 @@ async fn get_to_and_past_contact_ids(
                 &mime_parser.recipients,
                 &mime_parser.gossiped_keys,
                 to_member_fingerprints,
-                Origin::Hidden,
+                Origin::IncomingReplyTo,
             )
             .await?;
 
@@ -282,7 +282,7 @@ async fn get_to_and_past_contact_ids(
                     &mime_parser.past_members,
                     &mime_parser.gossiped_keys,
                     past_member_fingerprints,
-                    Origin::Hidden,
+                    Origin::IncomingReplyTo,
                 )
                 .await?;
             }
@@ -299,7 +299,7 @@ async fn get_to_and_past_contact_ids(
                     &mime_parser.recipients,
                     &mime_parser.gossiped_keys,
                     to_member_fingerprints,
-                    Origin::Hidden,
+                    Origin::IncomingReplyTo,
                 )
                 .await?;
                 past_ids = lookup_key_contacts_fallback_to_chat(
@@ -361,7 +361,7 @@ async fn get_to_and_past_contact_ids(
                 &mime_parser.recipients,
                 &mime_parser.gossiped_keys,
                 to_member_fingerprints,
-                Origin::Hidden,
+                Origin::IncomingReplyTo,
             )
             .await?;
             if pgp_to_ids
@@ -392,7 +392,7 @@ async fn get_to_and_past_contact_ids(
                                 &mime_parser.recipients,
                                 &mime_parser.gossiped_keys,
                                 &recipient_fps,
-                                Origin::Hidden,
+                                Origin::IncomingReplyTo,
                             )
                             .await?
                         }
@@ -650,6 +650,16 @@ pub(crate) async fn receive_imf_inner(
         incoming_origin,
     )
     .await?;
+
+    // If an incoming message is authenticated and encrypted,
+    // mark the sender as discoverable.
+    if mime_parser.incoming
+        && mime_parser.signature.is_some()
+        && !from_id.is_special()
+        && get_secure_join_step(&mime_parser).is_none()
+    {
+        ContactId::scaleup_origin(context, &[from_id], Origin::IncomingReplyTo).await?;
+    }
 
     let received_msg;
     if let Some(_step) = get_secure_join_step(&mime_parser) {

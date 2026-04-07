@@ -3363,6 +3363,9 @@ async fn test_thunderbird_autocrypt() -> Result<()> {
 
     let from_contact = Contact::get_by_id(&t, from_id).await?;
     assert!(from_contact.is_key_contact());
+    let looked_up =
+        Contact::lookup_id_by_addr(&t, from_contact.get_addr(), Origin::IncomingReplyTo).await?;
+    assert_eq!(looked_up, Some(from_id));
 
     Ok(())
 }
@@ -3854,6 +3857,42 @@ async fn test_sync_member_list_on_rejoin() -> Result<()> {
     Ok(())
 }
 
+/// When a 3rd party adds someone to an encrypted group,
+/// the new member's key-contact should be discoverable
+/// in search results and the contact list.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_encrypted_group_members_are_discoverable() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+    alice.set_config(Config::Displayname, Some("Alice")).await?;
+
+    let alice_chat_id = alice.create_group_with_members("Grp", &[bob, fiona]).await;
+    let sent = alice.send_text(alice_chat_id, "hi").await;
+    bob.recv_msg(&sent).await;
+
+    let found_alice_by_name = Contact::get_all(bob, 0, Some("alice")).await?;
+    assert_eq!(found_alice_by_name.len(), 1);
+    let found_alice_by_addr = Contact::get_all(bob, 0, Some("alice@example.org")).await?;
+    assert_eq!(found_alice_by_addr.len(), 1);
+    assert_eq!(found_alice_by_name[0], found_alice_by_addr[0]);
+
+    // Gossip headers don't carry display names,
+    // so name search won't find Fiona.
+    let found = Contact::get_all(bob, 0, Some("fiona")).await?;
+    assert_eq!(found.len(), 0);
+
+    let found = Contact::get_all(bob, 0, Some("fiona@example.net")).await?;
+    assert_eq!(found.len(), 1);
+
+    let all = Contact::get_all(bob, 0, None).await?;
+    assert!(all.contains(&found[0]));
+    assert_eq!(all.len(), 2);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_group_contacts_goto_bottom() -> Result<()> {
     let mut tcm = TestContextManager::new();
@@ -3872,7 +3911,7 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     bob.recv_msg(&alice.pop_sent_msg().await).await;
     let bob_chat_id = bob.get_last_msg().await.chat_id;
     assert_eq!(get_chat_contacts(bob, bob_chat_id).await?.len(), 3);
-    assert_eq!(Contact::get_all(bob, 0, None).await?.len(), 0);
+    assert_eq!(Contact::get_all(bob, 0, None).await?.len(), 2);
     bob_chat_id.accept(bob).await?;
     let contacts = Contact::get_all(bob, 0, None).await?;
     assert_eq!(contacts.len(), 2);
