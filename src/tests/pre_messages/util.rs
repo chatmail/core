@@ -37,10 +37,7 @@ pub async fn send_large_file_message<'a>(
     Ok((pre_message.to_owned(), post_message.to_owned(), msg_id))
 }
 
-pub async fn send_large_webxdc_message<'a>(
-    sender: &'a TestContext,
-    target_chat: ChatId,
-) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
+pub async fn big_webxdc_app() -> Result<Vec<u8>> {
     let futures_cursor = FuturesCursor::new(Vec::new());
     let mut buffer = futures_cursor.compat_write();
     let mut writer = ZipFileWriter::with_tokio(&mut buffer);
@@ -51,7 +48,14 @@ pub async fn send_large_webxdc_message<'a>(
         )
         .await?;
     writer.close().await?;
-    let big_webxdc_app = buffer.into_inner().into_inner();
+    Ok(buffer.into_inner().into_inner())
+}
+
+pub async fn send_large_webxdc_message<'a>(
+    sender: &'a TestContext,
+    target_chat: ChatId,
+) -> Result<(SentMessage<'a>, SentMessage<'a>, MsgId)> {
+    let big_webxdc_app = big_webxdc_app().await?;
     send_large_file_message(sender, target_chat, Viewtype::Webxdc, &big_webxdc_app).await
 }
 

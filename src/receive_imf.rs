@@ -876,11 +876,23 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
             .is_some_and(|part| part.typ == Viewtype::Webxdc)
         {
             can_info_msg = false;
-            Some(
-                Message::load_from_db(context, insert_msg_id)
-                    .await
-                    .context("Failed to load just created webxdc instance")?,
-            )
+            if mime_parser.pre_message == PreMessageMode::Post
+                && let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid_orig).await?
+            {
+                // The messsage is a post-message and pre-message exists.
+                // Assign status update to existing message because just received post-message will be trashed.
+                Some(
+                    Message::load_from_db(context, msg_id)
+                        .await
+                        .context("Failed to load webxdc instance that we just checked exists")?,
+                )
+            } else {
+                Some(
+                    Message::load_from_db(context, insert_msg_id)
+                        .await
+                        .context("Failed to load just created webxdc instance")?,
+                )
+            }
         } else if let Some(field) = mime_parser.get_header(HeaderDef::InReplyTo) {
             if let Some(instance) =
                 message::get_by_rfc724_mids(context, &parse_message_ids(field)).await?
