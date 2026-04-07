@@ -420,12 +420,16 @@ async fn test_delete() -> Result<()> {
     Contact::delete(&alice, contact_id).await?;
     let contact = Contact::get_by_id(&alice, contact_id).await?;
     assert_eq!(contact.origin, Origin::Hidden);
+
+    // Hidden contacts are found when searching by email address
     assert_eq!(
         Contact::get_all(&alice, 0, Some("bob@example.net"))
             .await?
             .len(),
-        0
+        1
     );
+    // Hidden contacts are not found by a non-address query
+    assert_eq!(Contact::get_all(&alice, 0, Some("bob")).await?.len(), 0);
 
     // Delete chat.
     chat.get_id().delete(&alice).await?;
@@ -483,7 +487,7 @@ async fn test_delete_and_recreate_contact() -> Result<()> {
         Contact::get_all(&t, 0, Some("bob@example.net"))
             .await?
             .len(),
-        0
+        1
     );
 
     let contact_id3 = t.add_or_lookup_contact_id(&bob).await;

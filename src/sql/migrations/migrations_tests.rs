@@ -57,9 +57,9 @@ async fn test_key_contacts_migration_autocrypt() -> Result<()> {
     );
     assert_eq!(pgp_bob.get_verifier_id(&t).await?, None);
 
-    // Hidden address-contact can't be looked up.
+    // Hidden address-contact can't be looked up by name.
     assert!(
-        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
+        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob"))
             .await?
             .is_empty()
     );
@@ -113,12 +113,8 @@ async fn test_key_contacts_migration_email2() -> Result<()> {
     )?)).await?;
     t.sql.run_migrations(&t).await?;
 
-    // Hidden key-contact can't be looked up.
-    assert!(
-        Contact::get_all(&t, 0, Some("bob@example.net"))
-            .await?
-            .is_empty()
-    );
+    // Hidden key-contact can't be looked up by name.
+    assert!(Contact::get_all(&t, 0, Some("bob")).await?.is_empty());
     let pgp_bob = Contact::get_by_id(&t, ContactId::new(11001)).await?;
     assert_eq!(pgp_bob.is_key_contact(), true);
     assert_eq!(pgp_bob.origin, Origin::Hidden);
@@ -156,9 +152,9 @@ async fn test_key_contacts_migration_verified() -> Result<()> {
 
     t.sql.run_migrations(&t).await?;
 
-    // Hidden address-contact can't be looked up.
+    // Hidden address-contact can't be looked up by name.
     assert!(
-        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob@example.net"))
+        Contact::get_all(&t, constants::DC_GCL_ADDRESS, Some("bob"))
             .await?
             .is_empty()
     );
