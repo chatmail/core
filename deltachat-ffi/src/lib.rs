@@ -2826,7 +2826,7 @@ pub unsafe extern "C" fn dc_array_search_id(
 // Returns 1 if location belongs to the track of the user,
 // 0 if location was reported independently.
 #[no_mangle]
-pub unsafe fn dc_array_is_independent(
+pub unsafe extern "C" fn dc_array_is_independent(
     array: *const dc_array_t,
     index: libc::size_t,
 ) -> libc::c_int {
