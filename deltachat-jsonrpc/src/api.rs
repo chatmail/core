@@ -318,6 +318,15 @@ impl CommandApi {
         Ok(())
     }
 
+    /// Requests to clear storage on all chatmail relays.
+    ///
+    /// I/O must be started for this request to take effect.
+    async fn clear_all_relay_storage(&self, account_id: u32) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ctx.clear_all_relay_storage().await;
+        Ok(())
+    }
+
     /// Get top-level info for an account.
     async fn get_account_info(&self, account_id: u32) -> Result<Account> {
         let context_option = self.accounts.read().await.get_account(account_id);

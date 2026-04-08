@@ -560,6 +560,15 @@ impl Context {
         }
     }
 
+    /// Requests deletion of all messages from chatmail relays.
+    ///
+    /// Non-chatmail relays are excluded
+    /// to avoid accidentally deleting emails
+    /// from shared inboxes.
+    pub async fn clear_all_relay_storage(&self) {
+        self.scheduler.clear_all_relay_storage().await;
+    }
+
     /// Restarts the IO scheduler if it was running before
     /// when it is not running this is an no-op
     pub async fn restart_io_if_running(&self) {
