@@ -3875,21 +3875,17 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     assert_eq!(Contact::get_all(bob, 0, None).await?.len(), 0);
     bob_chat_id.accept(bob).await?;
     let contacts = Contact::get_all(bob, 0, None).await?;
-    assert_eq!(contacts.len(), 2);
     let bob_fiona_id = bob.add_or_lookup_contact_id(fiona).await;
+    // Fiona hasn't been online, so she goes after Alice.
+    assert_eq!(contacts.len(), 2);
     assert_eq!(contacts[1], bob_fiona_id);
 
-    ChatId::create_for_contact(bob, bob_fiona_id).await?;
+    let bob_fiona_chat_id = ChatId::create_for_contact(bob, bob_fiona_id).await?;
     let contacts = Contact::get_all(bob, 0, None).await?;
     assert_eq!(contacts.len(), 2);
     assert_eq!(contacts[0], bob_fiona_id);
 
-    send_text_msg(
-        bob,
-        bob_chat_id,
-        "Hi Alice, stay down in my contact list".to_string(),
-    )
-    .await?;
+    send_text_msg(bob, bob_chat_id, "Hi all".to_string()).await?;
     bob.pop_sent_msg().await;
     let contacts = Contact::get_all(bob, 0, None).await?;
     assert_eq!(contacts[0], bob_fiona_id);
@@ -3905,6 +3901,13 @@ async fn test_group_contacts_goto_bottom() -> Result<()> {
     bob.pop_sent_msg().await;
     let contacts = Contact::get_all(bob, 0, None).await?;
     let bob_alice_id = bob.add_or_lookup_contact_id(alice).await;
+    // As the group only contains Alice, the sent message promotes her in the contact list.
+    assert_eq!(contacts[0], bob_alice_id);
+
+    send_text_msg(bob, bob_fiona_chat_id, "Hi Fiona".to_string()).await?;
+    bob.pop_sent_msg().await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    // Alice is still the 0th contact because Fiona hasn't been online.
     assert_eq!(contacts[0], bob_alice_id);
     Ok(())
 }
