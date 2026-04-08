@@ -463,18 +463,21 @@ impl MimeFactory {
                 .into_iter()
                 .filter(|id| *id != ContactId::SELF)
                 .collect();
-            if recipient_ids.len() == 1
-                && !matches!(
-                    msg.param.get_cmd(),
-                    SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
-                )
-                && !matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
+            if !matches!(
+                msg.param.get_cmd(),
+                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+            ) && !matches!(chat.typ, Chattype::OutBroadcast | Chattype::InBroadcast)
             {
+                let origin = match recipient_ids.len() {
+                    1 => Origin::OutgoingTo,
+                    // Use the same origin as ChatId::accept_ex() does for groups.
+                    _ => Origin::IncomingTo,
+                };
                 info!(
                     context,
-                    "Scale up origin of {} recipients to OutgoingTo.", chat.id
+                    "Scale up origin of {} recipients to {origin:?}.", chat.id
                 );
-                ContactId::scaleup_origin(context, &recipient_ids, Origin::OutgoingTo).await?;
+                ContactId::scaleup_origin(context, &recipient_ids, origin).await?;
             }
 
             if !msg.is_system_message()
