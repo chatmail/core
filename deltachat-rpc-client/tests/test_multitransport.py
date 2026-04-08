@@ -349,12 +349,12 @@ def test_message_info_imap_urls(acfactory) -> None:
 
     bob_chat.send_text("Hello!")
 
-    msg = alice.wait_for_incoming_msg()
-    msg_info = msg.get_info()
-    assert new_alice_addr in msg_info
+    lines = alice.wait_for_incoming_msg().get_info().splitlines()
+    server_urls = "\n".join(line for line in lines if line.startswith("Server-URL"))
+    assert new_alice_addr in server_urls
     for removed_addr in removed_addrs:
-        assert removed_addr not in msg_info
-    assert f"{new_alice_addr}/INBOX" in msg_info
+        assert removed_addr not in server_urls
+    assert f"{new_alice_addr}/INBOX" in server_urls
 
 
 def test_remove_primary_transport(acfactory, log) -> None:
