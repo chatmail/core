@@ -394,9 +394,9 @@ async fn test_receive_pre_message_image() -> Result<()> {
     // test that metadata is correctly returned by methods
     assert_eq!(msg.get_post_message_viewtype(), Some(Viewtype::Image));
     // recoded image dimensions
-    assert_eq!(msg.get_filebytes(bob).await?, Some(149632));
-    assert_eq!(msg.get_height(), 1280);
-    assert_eq!(msg.get_width(), 720);
+    assert_eq!(msg.get_filebytes(bob).await?, Some(215424));
+    assert_eq!(msg.get_height(), 1704);
+    assert_eq!(msg.get_width(), 959);
 
     Ok(())
 }
