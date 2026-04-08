@@ -730,10 +730,19 @@ impl Imap {
                     info!(context, "{message_id:?} is a post-message.");
                     available_post_msgs.push(message_id.clone());
 
-                    if download_limit.is_none_or(|download_limit| size <= download_limit) {
-                        download_later.push(message_id.clone());
+                    let is_bot = context.get_config_bool(Config::Bot).await?;
+                    if is_bot && download_limit.is_none_or(|download_limit| size <= download_limit)
+                    {
+                        uids_fetch.push(uid);
+                        uid_message_ids.insert(uid, message_id);
+                    } else {
+                        if download_limit.is_none_or(|download_limit| size <= download_limit) {
+                            // Download later after all the small messages are downloaded,
+                            // so that large messages don't delay receiving small messages
+                            download_later.push(message_id.clone());
+                        }
+                        largest_uid_skipped = Some(uid);
                     }
-                    largest_uid_skipped = Some(uid);
                 } else {
                     info!(context, "{message_id:?} is not a post-message.");
                     if download_limit.is_none_or(|download_limit| size <= download_limit) {
