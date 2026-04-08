@@ -1305,7 +1305,6 @@ async fn decide_chat_assignment(
             }
         );
         pre_message_exists
-        // TODO send incoming msg event
     } else if let PreMessageMode::Pre {
         post_msg_rfc724_mid,
         ..

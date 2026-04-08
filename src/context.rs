@@ -1147,10 +1147,11 @@ ORDER BY m.timestamp DESC,m.id DESC",
     /// Blocked contacts and chats are excluded,
     /// but self-sent messages and contact requests are included in the results.
     ///
-    /// Note that this returns the pre-message's id as soon as it arrives.
-    /// The bot needs to wait for the post-message by itself if it wants to use this API
-    /// to get fully downloaded messages.
-    /// If the bot doesn't want this, then it should instead use the [`EventType::IncomingMsg`]
+    /// DEPRECATED 2026-04: This returns the message's id as soon as the first part arrives,
+    /// even if it is not fully downloaded yet.
+    /// The bot needs to wait for the message to be fully downloaded.
+    /// Since this is usually not the desired behavior,
+    /// bots should instead use the [`EventType::IncomingMsg`]
     /// event for getting notified about new messages.
     pub async fn get_next_msgs(&self) -> Result<Vec<MsgId>> {
         let last_msg_id = match self.get_config(Config::LastMsgId).await? {

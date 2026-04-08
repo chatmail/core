@@ -686,6 +686,13 @@ impl CommandApi {
     /// or manually updating the value to avoid getting already
     /// processed messages.
     ///
+    /// DEPRECATED 2026-04: This returns the message's id as soon as the first part arrives,
+    /// even if it is not fully downloaded yet.
+    /// The bot needs to wait for the message to be fully downloaded.
+    /// Since this is usually not the desired behavior,
+    /// bots should instead use the #DC_EVENT_INCOMING_MSG / [`types::events::EventType::IncomingMsg`]
+    /// event for getting notified about new messages.
+    ///
     /// [`markseen_msgs`]: Self::markseen_msgs
     async fn get_next_msgs(&self, account_id: u32) -> Result<Vec<u32>> {
         let ctx = self.get_context(account_id).await?;
