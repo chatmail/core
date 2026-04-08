@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deltachat-rpc-client"
-version = "2.48.0"
+version = "2.49.0-dev"
 license = "MPL-2.0"
 description = "Python client for Delta Chat core JSON-RPC interface"
 classifiers = [
