@@ -803,8 +803,6 @@ async fn test_bot_pre_message_notifications() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
     let bob = tcm.bob().await;
-
-    // Configure Bob as a bot
     bob.set_config_bool(Config::Bot, true).await?;
 
     let alice_group_id = alice.create_group_with_members("test group", &[&bob]).await;
@@ -813,7 +811,7 @@ async fn test_bot_pre_message_notifications() -> Result<()> {
         &alice,
         alice_group_id,
         Viewtype::File,
-        &vec![0u8; 1_000_000],
+        &vec![0u8; (PRE_MSG_ATTACHMENT_SIZE_THRESHOLD + 1) as usize],
     )
     .await?;
 
