@@ -4131,61 +4131,56 @@ pub async fn remove_contact_from_chat(
         delete_broadcast_secret(context, chat_id).await?;
     }
 
-    if matches!(
-        chat.typ,
-        Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast
-    ) {
-        if !chat.is_self_in_chat(context).await? {
-            let err_msg = format!(
-                "Cannot remove contact {contact_id} from chat {chat_id}: self not in group."
-            );
-            context.emit_event(EventType::ErrorSelfNotInGroup(err_msg.clone()));
-            bail!("{err_msg}");
-        } else {
-            let mut sync = Nosync;
+    ensure!(
+        matches!(
+            chat.typ,
+            Chattype::Group | Chattype::OutBroadcast | Chattype::InBroadcast
+        ),
+        "Cannot remove members from non-group chats."
+    );
 
-            if chat.is_promoted() && chat.typ != Chattype::OutBroadcast {
-                remove_from_chat_contacts_table(context, chat_id, contact_id).await?;
-            } else {
-                remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?;
-            }
+    if !chat.is_self_in_chat(context).await? {
+        let err_msg =
+            format!("Cannot remove contact {contact_id} from chat {chat_id}: self not in group.");
+        context.emit_event(EventType::ErrorSelfNotInGroup(err_msg.clone()));
+        bail!("{err_msg}");
+    }
 
-            // We do not return an error if the contact does not exist in the database.
-            // This allows to delete dangling references to deleted contacts
-            // in case of the database becoming inconsistent due to a bug.
-            if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
-                if chat.is_promoted() {
-                    let addr = contact.get_addr();
-                    let fingerprint = contact.fingerprint().map(|f| f.hex());
+    let mut sync = Nosync;
 
-                    let res = send_member_removal_msg(
-                        context,
-                        &chat,
-                        contact_id,
-                        addr,
-                        fingerprint.as_deref(),
-                    )
+    if chat.is_promoted() && chat.typ != Chattype::OutBroadcast {
+        remove_from_chat_contacts_table(context, chat_id, contact_id).await?;
+    } else {
+        remove_from_chat_contacts_table_without_trace(context, chat_id, contact_id).await?;
+    }
+
+    // We do not return an error if the contact does not exist in the database.
+    // This allows to delete dangling references to deleted contacts
+    // in case of the database becoming inconsistent due to a bug.
+    if let Some(contact) = Contact::get_by_id_optional(context, contact_id).await? {
+        if chat.is_promoted() {
+            let addr = contact.get_addr();
+            let fingerprint = contact.fingerprint().map(|f| f.hex());
+
+            let res =
+                send_member_removal_msg(context, &chat, contact_id, addr, fingerprint.as_deref())
                     .await;
 
-                    if contact_id == ContactId::SELF {
-                        res?;
-                    } else if let Err(e) = res {
-                        warn!(
-                            context,
-                            "remove_contact_from_chat({chat_id}, {contact_id}): send_msg() failed: {e:#}."
-                        );
-                    }
-                } else {
-                    sync = Sync;
-                }
+            if contact_id == ContactId::SELF {
+                res?;
+            } else if let Err(e) = res {
+                warn!(
+                    context,
+                    "remove_contact_from_chat({chat_id}, {contact_id}): send_msg() failed: {e:#}."
+                );
             }
-            context.emit_event(EventType::ChatModified(chat_id));
-            if sync.into() {
-                chat.sync_contacts(context).await.log_err(context).ok();
-            }
+        } else {
+            sync = Sync;
         }
-    } else {
-        bail!("Cannot remove members from non-group chats.");
+    }
+    context.emit_event(EventType::ChatModified(chat_id));
+    if sync.into() {
+        chat.sync_contacts(context).await.log_err(context).ok();
     }
 
     Ok(())
