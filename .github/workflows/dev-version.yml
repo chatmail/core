@@ -1,0 +1,23 @@
+# Check that PRs are made against the -dev version.
+# 
+# If this fails, push commit to update the version to -dev to main.
+
+name: Check for -dev version
+
+on:
+  pull_request:
+
+permissions: {}
+
+jobs:
+  check_dev_version:
+    name: Check that current version ends with -dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          show-progress: false
+          persist-credentials: false
+
+      - name: Run version-checking script
+        run: scripts/check-dev-version.py
