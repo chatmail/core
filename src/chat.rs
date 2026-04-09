@@ -497,6 +497,27 @@ impl ChatId {
         Ok(())
     }
 
+    /// Adds info message to the beginning of the chat.
+    ///
+    /// Used for messages such as
+    /// "Others will only see this group after you sent a first message."
+    pub(crate) async fn add_start_info_message(self, context: &Context, text: &str) -> Result<()> {
+        let sort_timestamp = 0;
+        add_info_msg_with_cmd(
+            context,
+            self,
+            text,
+            SystemMessage::Unknown,
+            Some(sort_timestamp),
+            time(),
+            None,
+            None,
+            None,
+        )
+        .await?;
+        Ok(())
+    }
+
     /// Archives or unarchives a chat.
     pub async fn set_visibility(self, context: &Context, visibility: ChatVisibility) -> Result<()> {
         self.set_visibility_ex(context, Sync, visibility).await
@@ -3611,7 +3632,7 @@ pub(crate) async fn create_group_ex(
             // Add "Messages in this chat use classic email and are not encrypted." message.
             stock_str::chat_unencrypted_explanation(context)
         };
-        add_info_msg(context, chat_id, &text).await?;
+        chat_id.add_start_info_message(context, &text).await?;
     }
     if let (true, true) = (sync.into(), !grpid.is_empty()) {
         let id = SyncId::Grpid(grpid);
