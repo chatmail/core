@@ -7,7 +7,7 @@ use crate::constants::{DC_GCL_ARCHIVED_ONLY, DC_GCL_NO_SPECIALS};
 use crate::ephemeral::Timer;
 use crate::headerdef::HeaderDef;
 use crate::imex::{ImexMode, has_backup, imex};
-use crate::message::{MessengerMessage, delete_msgs};
+use crate::message::{Message, MessengerMessage, delete_msgs};
 use crate::mimeparser::{self, MimeMessage};
 use crate::receive_imf::receive_imf;
 use crate::securejoin::{get_securejoin_qr, join_securejoin};
@@ -6153,6 +6153,70 @@ async fn test_late_message_above_seen() -> Result<()> {
     // The last message in the chat is still from Charlie.
     let last_msg = alice.get_last_msg_in(alice_chat_id).await;
     assert_eq!(last_msg.get_text(), "Hello from Charlie!");
+
+    Ok(())
+}
+
+/// Tests that start message for unpromoted groups sticks to the top of the chat.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_unpromoted_group_start_message() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Start messages are disabled for test context by default,
+    // but this test is specifically about start messages.
+    alice.set_config(Config::SkipStartMessages, None).await?;
+
+    // Shift the clock forward, so we can rewind it back later.
+    SystemTime::shift(Duration::from_secs(3600));
+
+    // Alice creates unpromoted group with Bob.
+    let chat_id = create_group(alice, "Group").await?;
+    let bob_id = alice.add_or_lookup_contact_id(bob).await;
+    add_contact_to_chat(alice, chat_id, bob_id).await?;
+
+    let [
+        ChatItem::Message {
+            msg_id: e2ee_msg_id,
+        },
+        ChatItem::Message {
+            msg_id: info_msg_id,
+        },
+    ] = get_chat_msgs(alice, chat_id).await?[..]
+    else {
+        panic!("Expected two messages in the chat");
+    };
+    let msg = Message::load_from_db(alice, e2ee_msg_id).await?;
+    assert_eq!(msg.text, "Messages are end-to-end encrypted.");
+    let msg = Message::load_from_db(alice, info_msg_id).await?;
+    assert_eq!(
+        msg.text,
+        "Others will only see this group after you sent a first message."
+    );
+
+    // Alice rewinds the clock.
+    SystemTime::shift_back(Duration::from_secs(3600));
+
+    let text_msg_id = send_text_msg(alice, chat_id, "Hello".to_string()).await?;
+
+    let [
+        ChatItem::Message {
+            msg_id: e2ee_msg_id2,
+        },
+        ChatItem::Message {
+            msg_id: info_msg_id2,
+        },
+        ChatItem::Message {
+            msg_id: text_msg_id2,
+        },
+    ] = get_chat_msgs(alice, chat_id).await?[..]
+    else {
+        panic!("Expected three messages in the chat");
+    };
+    assert_eq!(e2ee_msg_id2, e2ee_msg_id);
+    assert_eq!(info_msg_id2, info_msg_id);
+    assert_eq!(text_msg_id2, text_msg_id);
 
     Ok(())
 }
