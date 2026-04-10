@@ -679,11 +679,11 @@ pub unsafe extern "C" fn dc_event_get_data2_int(event: *mut dc_event_t) -> libc:
         | EventType::ChatModified(_)
         | EventType::ChatDeleted { .. }
         | EventType::WebxdcRealtimeAdvertisementReceived { .. }
-        | EventType::OutgoingCallAccepted { .. }
-        | EventType::CallEnded { .. }
         | EventType::EventChannelOverflow { .. }
         | EventType::TransportsModified => 0,
-        EventType::CallMissed { chat_id, .. } => chat_id.to_u32() as libc::c_int,
+        EventType::OutgoingCallAccepted { chat_id, .. }
+        | EventType::CallEnded { chat_id, .. }
+        | EventType::CallMissed { chat_id, .. } => chat_id.to_u32() as libc::c_int,
         EventType::MsgsChanged { msg_id, .. }
         | EventType::ReactionsChanged { msg_id, .. }
         | EventType::IncomingReaction { msg_id, .. }
