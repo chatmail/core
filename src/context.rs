@@ -1142,10 +1142,17 @@ ORDER BY m.timestamp DESC,m.id DESC",
         Ok(list)
     }
 
-    /// Returns a list of messages with database ID higher than requested.
+    /// (deprecated) Returns a list of messages with database ID higher than requested.
     ///
     /// Blocked contacts and chats are excluded,
     /// but self-sent messages and contact requests are included in the results.
+    ///
+    /// Deprecated 2026-04: This returns the message's id as soon as the first part arrives,
+    /// even if it is not fully downloaded yet.
+    /// The bot needs to wait for the message to be fully downloaded.
+    /// Since this is usually not the desired behavior,
+    /// bots should instead use the [`EventType::IncomingMsg`]
+    /// event for getting notified about new messages.
     pub async fn get_next_msgs(&self) -> Result<Vec<MsgId>> {
         let last_msg_id = match self.get_config(Config::LastMsgId).await? {
             Some(s) => MsgId::new(s.parse()?),
@@ -1194,7 +1201,7 @@ ORDER BY m.timestamp DESC,m.id DESC",
         Ok(list)
     }
 
-    /// Returns a list of messages with database ID higher than last marked as seen.
+    /// (deprecated) Returns a list of messages with database ID higher than last marked as seen.
     ///
     /// This function is supposed to be used by bot to request messages
     /// that are not processed yet.
@@ -1204,6 +1211,13 @@ ORDER BY m.timestamp DESC,m.id DESC",
     /// shortly after notification or notification is manually triggered
     /// to interrupt waiting.
     /// Notification may be manually triggered by calling [`Self::stop_io`].
+    ///
+    /// Deprecated 2026-04: This returns the message's id as soon as the first part arrives,
+    /// even if it is not fully downloaded yet.
+    /// The bot needs to wait for the message to be fully downloaded.
+    /// Since this is usually not the desired behavior,
+    /// bots should instead use the #DC_EVENT_INCOMING_MSG / [`EventType::IncomingMsg`]
+    /// event for getting notified about new messages.
     pub async fn wait_next_msgs(&self) -> Result<Vec<MsgId>> {
         self.new_msgs_notify.notified().await;
         let list = self.get_next_msgs().await?;

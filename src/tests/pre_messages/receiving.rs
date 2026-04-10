@@ -5,12 +5,14 @@ use pretty_assertions::assert_eq;
 use crate::EventType;
 use crate::chat;
 use crate::chat::send_msg;
+use crate::config::Config;
 use crate::contact;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD, PostMsgMetadata};
 use crate::message::{Message, MessageState, Viewtype, delete_msgs, markseen_msgs};
 use crate::mimeparser::MimeMessage;
 use crate::param::Param;
 use crate::reaction::{get_msg_reactions, send_reaction};
+use crate::receive_imf::receive_imf;
 use crate::summary::assert_summary_texts;
 use crate::test_utils::TestContextManager;
 use crate::tests::pre_messages::util::{
@@ -792,6 +794,49 @@ async fn test_chatlist_event_on_post_msg_download() -> Result<()> {
             }
         })
         .await;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_bot_pre_message_notifications() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = tcm.alice().await;
+    let bob = tcm.bob().await;
+    bob.set_config_bool(Config::Bot, true).await?;
+
+    let alice_group_id = alice.create_group_with_members("test group", &[&bob]).await;
+
+    let (pre_message, post_message, _alice_msg_id) = send_large_file_message(
+        &alice,
+        alice_group_id,
+        Viewtype::File,
+        &vec![0u8; (PRE_MSG_ATTACHMENT_SIZE_THRESHOLD + 1) as usize],
+    )
+    .await?;
+
+    // Bob receives pre-message
+    bob.evtracker.clear_events();
+    receive_imf(&bob, pre_message.payload().as_bytes(), false).await?;
+
+    // Verify Bob does NOT get an IncomingMsg event for the pre-message
+    assert!(
+        bob.evtracker
+            .get_matching_opt(&bob, |e| matches!(e, EventType::IncomingMsg { .. }))
+            .await
+            .is_none()
+    );
+
+    // Bob receives post-message
+    receive_imf(&bob, post_message.payload().as_bytes(), false).await?;
+
+    // Verify Bob DOES get an IncomingMsg event for the complete message
+    bob.evtracker
+        .get_matching(|e| matches!(e, EventType::IncomingMsg { .. }))
+        .await;
+
+    let msg = bob.get_last_msg().await;
+    assert_eq!(msg.download_state, DownloadState::Done);
 
     Ok(())
 }

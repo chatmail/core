@@ -1069,7 +1069,12 @@ UPDATE msgs SET state=? WHERE
         let fresh = received_msg.state == MessageState::InFresh
             && mime_parser.is_system_message != SystemMessage::CallAccepted
             && mime_parser.is_system_message != SystemMessage::CallEnded;
-        let important = mime_parser.incoming && fresh && !is_old_contact_request;
+        let is_bot = context.get_config_bool(Config::Bot).await?;
+        let is_pre_message = matches!(mime_parser.pre_message, PreMessageMode::Pre { .. });
+        let skip_bot_notify = is_bot && is_pre_message;
+        let important =
+            mime_parser.incoming && fresh && !is_old_contact_request && !skip_bot_notify;
+
         for msg_id in &received_msg.msg_ids {
             chat_id.emit_msg_event(context, *msg_id, important);
         }
@@ -2573,7 +2578,22 @@ WHERE id=?
             ),
         )
         .await?;
-    context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
+
+    if context.get_config_bool(Config::Bot).await? {
+        if original_msg.hidden {
+            // No need to emit an event about the changed message
+        } else if !original_msg.chat_id.is_trash() {
+            let fresh = original_msg.state == MessageState::InFresh;
+            let important = mime_parser.incoming && fresh;
+
+            original_msg
+                .chat_id
+                .emit_msg_event(context, original_msg.id, important);
+            context.new_msgs_notify.notify_one();
+        }
+    } else {
+        context.emit_msgs_changed(original_msg.chat_id, original_msg.id);
+    }
 
     Ok(())
 }
