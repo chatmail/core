@@ -25,7 +25,7 @@ use crate::key::self_fingerprint;
 use crate::log::warn;
 use crate::logged_debug_assert;
 use crate::message::{self, MessageState, MsgId};
-use crate::net::tls::TlsSessionStore;
+use crate::net::tls::{SpkiHashStore, TlsSessionStore};
 use crate::peer_channels::Iroh;
 use crate::push::PushSubscriber;
 use crate::quota::QuotaInfo;
@@ -308,6 +308,13 @@ pub struct InnerContext {
     /// TLS session resumption cache.
     pub(crate) tls_session_store: TlsSessionStore,
 
+    /// Store for TLS SPKI hashes.
+    ///
+    /// Used to remember public keys
+    /// of TLS certificates to accept them
+    /// even after they expire.
+    pub(crate) spki_hash_store: SpkiHashStore,
+
     /// Iroh for realtime peer channels.
     pub(crate) iroh: Arc<RwLock<Option<Iroh>>>,
 
@@ -511,6 +518,7 @@ impl Context {
             push_subscriber,
             push_subscribed: AtomicBool::new(false),
             tls_session_store: TlsSessionStore::new(),
+            spki_hash_store: SpkiHashStore::new(),
             iroh: Arc::new(RwLock::new(None)),
             self_fingerprint: OnceLock::new(),
             self_public_key: Mutex::new(None),

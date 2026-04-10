@@ -6,13 +6,19 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::net::session::SessionStream;
+use crate::sql::Sql;
 
 use tokio_rustls::rustls;
 use tokio_rustls::rustls::client::ClientSessionStore;
+use tokio_rustls::rustls::server::ParsedCertificate;
 
 mod danger;
-use danger::NoCertificateVerification;
+use danger::CustomCertificateVerifier;
 
+mod spki;
+pub use spki::SpkiHashStore;
+
+#[expect(clippy::too_many_arguments)]
 pub async fn wrap_tls<'a>(
     strict_tls: bool,
     hostname: &str,
@@ -21,10 +27,21 @@ pub async fn wrap_tls<'a>(
     alpn: &str,
     stream: impl SessionStream + 'static,
     tls_session_store: &TlsSessionStore,
+    spki_hash_store: &SpkiHashStore,
+    sql: &Sql,
 ) -> Result<impl SessionStream + 'a> {
     if strict_tls {
-        let tls_stream =
-            wrap_rustls(hostname, port, use_sni, alpn, stream, tls_session_store).await?;
+        let tls_stream = wrap_rustls(
+            hostname,
+            port,
+            use_sni,
+            alpn,
+            stream,
+            tls_session_store,
+            spki_hash_store,
+            sql,
+        )
+        .await?;
         let boxed_stream: Box<dyn SessionStream> = Box::new(tls_stream);
         Ok(boxed_stream)
     } else {
@@ -94,6 +111,7 @@ impl TlsSessionStore {
     }
 }
 
+#[expect(clippy::too_many_arguments)]
 pub async fn wrap_rustls<'a>(
     hostname: &str,
     port: u16,
@@ -101,6 +119,8 @@ pub async fn wrap_rustls<'a>(
     alpn: &str,
     stream: impl SessionStream + 'a,
     tls_session_store: &TlsSessionStore,
+    spki_hash_store: &SpkiHashStore,
+    sql: &Sql,
 ) -> Result<impl SessionStream + 'a> {
     let mut root_cert_store = rustls::RootCertStore::empty();
     root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
@@ -127,20 +147,27 @@ pub async fn wrap_rustls<'a>(
     config.resumption = resumption;
     config.enable_sni = use_sni;
 
-    // Do not verify certificates for hostnames starting with `_`.
-    // They are used for servers with self-signed certificates, e.g. for local testing.
-    // Hostnames starting with `_` can have only self-signed TLS certificates or wildcard certificates.
-    // It is not possible to get valid non-wildcard TLS certificates because CA/Browser Forum requirements
-    // explicitly state that domains should start with a letter, digit or hyphen:
-    // https://github.com/cabforum/servercert/blob/24f38fd4765e019db8bb1a8c56bf63c7115ce0b0/docs/BR.md
-    if hostname.starts_with("_") {
-        config
-            .dangerous()
-            .set_certificate_verifier(Arc::new(NoCertificateVerification::new()));
-    }
+    config
+        .dangerous()
+        .set_certificate_verifier(Arc::new(CustomCertificateVerifier::new(
+            spki_hash_store.get_spki_hash(hostname, sql).await?,
+        )));
 
     let tls = tokio_rustls::TlsConnector::from(Arc::new(config));
     let name = tokio_rustls::rustls::pki_types::ServerName::try_from(hostname)?.to_owned();
     let tls_stream = tls.connect(name, stream).await?;
+
+    // Successfully connected.
+    // Remember SPKI hash to accept it later if certificate expires.
+    let (_io, client_connection) = tls_stream.get_ref();
+    if let Some(end_entity) = client_connection
+        .peer_certificates()
+        .and_then(|certs| certs.first())
+    {
+        let parsed_certificate = ParsedCertificate::try_from(end_entity)?;
+        let spki = parsed_certificate.subject_public_key_info();
+        spki_hash_store.save_spki(hostname, &spki, sql).await?;
+    }
+
     Ok(tls_stream)
 }
