@@ -2300,14 +2300,11 @@ async fn test_forward_quote() -> Result<()> {
     let forwarded_msg = alice.pop_sent_msg().await;
     let alice_forwarded_msg = bob.recv_msg(&forwarded_msg).await;
     assert!(alice_forwarded_msg.quoted_message(&alice).await?.is_none());
-    assert_eq!(
-        alice_forwarded_msg.quoted_text(),
-        Some("Hi Bob".to_string())
-    );
+    assert!(alice_forwarded_msg.quoted_text().is_none());
 
     let bob_forwarded_msg = bob.get_last_msg().await;
     assert!(bob_forwarded_msg.quoted_message(&bob).await?.is_none());
-    assert_eq!(bob_forwarded_msg.quoted_text(), Some("Hi Bob".to_string()));
+    assert!(bob_forwarded_msg.quoted_text().is_none());
 
     Ok(())
 }

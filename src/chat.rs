@@ -4534,8 +4534,6 @@ pub async fn forward_msgs_2ctx(
         msg.param.steal(param, Param::Height);
         msg.param.steal(param, Param::Duration);
         msg.param.steal(param, Param::MimeType);
-        msg.param.steal(param, Param::ProtectQuote);
-        msg.param.steal(param, Param::Quote);
         msg.param.steal(param, Param::Summary1);
         if msg.has_html() {
             msg.set_html(src_msg_id.get_html(ctx_src).await?);
