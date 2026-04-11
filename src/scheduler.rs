@@ -256,10 +256,13 @@ impl SchedulerState {
         }
     }
 
-    pub(crate) async fn clear_all_relay_storage(&self) {
+    pub(crate) async fn clear_all_relay_storage(&self) -> Result<()> {
         let inner = self.inner.read().await;
         if let InnerSchedulerState::Started(ref scheduler) = *inner {
             scheduler.clear_all_relay_storage();
+            Ok(())
+        } else {
+            bail!("IO is not started");
         }
     }
 

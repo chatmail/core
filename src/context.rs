@@ -565,8 +565,8 @@ impl Context {
     /// Non-chatmail relays are excluded
     /// to avoid accidentally deleting emails
     /// from shared inboxes.
-    pub async fn clear_all_relay_storage(&self) {
-        self.scheduler.clear_all_relay_storage().await;
+    pub async fn clear_all_relay_storage(&self) -> Result<()> {
+        self.scheduler.clear_all_relay_storage().await
     }
 
     /// Restarts the IO scheduler if it was running before

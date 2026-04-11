@@ -323,7 +323,7 @@ impl CommandApi {
     /// I/O must be started for this request to take effect.
     async fn clear_all_relay_storage(&self, account_id: u32) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
-        ctx.clear_all_relay_storage().await;
+        ctx.clear_all_relay_storage().await?;
         Ok(())
     }
 
