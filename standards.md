@@ -16,7 +16,7 @@ Quota                            | IMAP QUOTA extension ([RFC 2087][])
 Seen status synchronization      | IMAP CONDSTORE extension ([RFC 7162][])
 Client/server identification     | IMAP ID extension ([RFC 2971][])
 Authorization                    | OAuth2 ([RFC 6749][])
-End-to-end encryption            | [Autocrypt Level 1][], OpenPGP ([RFC 4880][]), Security Multiparts for MIME ([RFC 1847][]) and [“Mixed Up” Encryption repairing](https://tools.ietf.org/id/draft-dkg-openpgp-pgpmime-message-mangling-00.html)
+End-to-end encryption            | [Autocrypt Level 1][], OpenPGP ([RFC 4880][]), Security Multiparts for MIME ([RFC 1847][]) and [“Mixed Up” Encryption repairing](https://datatracker.ietf.org/doc/html/draft-dkg-openpgp-pgpmime-message-mangling-00)
 Detect/prevent active attacks    | [securejoin][] protocols
 Compare public keys              | [openpgp4fpr][] URI Scheme
 Metadata minimization            | Header Protection for Cryptographically Protected Email ([RFC 9788][])
