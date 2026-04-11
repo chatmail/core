@@ -41,7 +41,7 @@ jobs:
           show-progress: false
           persist-credentials: false
           fetch-depth: 0 # Fetch history to calculate VCS version number.
-      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+      - uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31.10.3
       - name: Build Python documentation
         run: nix build .#python-docs
       - name: Upload to py.delta.chat
@@ -63,7 +63,7 @@ jobs:
           show-progress: false
           persist-credentials: false
           fetch-depth: 0 # Fetch history to calculate VCS version number.
-      - uses: cachix/install-nix-action@2126ae7fc54c9df00dd18f7f18754393182c73cd # v31.9.1
+      - uses: cachix/install-nix-action@96951a368ba55167b55f1c916f7d416bac6505fe # v31.10.3
       - name: Build C documentation
         run: nix build .#docs
       - name: Upload to c.delta.chat
