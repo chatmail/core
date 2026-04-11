@@ -984,6 +984,29 @@ impl Session {
         Ok(())
     }
 
+    /// Deletes all messages from IMAP folder.
+    pub(crate) async fn delete_all_messages(
+        &mut self,
+        context: &Context,
+        folder: &str,
+    ) -> Result<()> {
+        let transport_id = self.transport_id();
+
+        if self.select_with_uidvalidity(context, folder).await? {
+            self.add_flag_finalized_with_set("1:*", "\\Deleted").await?;
+            self.selected_folder_needs_expunge = true;
+            context
+                .sql
+                .execute(
+                    "DELETE FROM imap WHERE transport_id=? AND folder=?",
+                    (transport_id, folder),
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Moves batch of messages identified by their UID from the currently
     /// selected folder to the target folder.
     async fn move_message_batch(
