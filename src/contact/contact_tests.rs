@@ -4,6 +4,7 @@ use super::*;
 use crate::chat::{Chat, get_chat_contacts, send_text_msg};
 use crate::chatlist::Chatlist;
 use crate::receive_imf::receive_imf;
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{self, TestContext, TestContextManager, TimeShiftFalsePositiveNote, sync};
 
 #[test]
@@ -151,6 +152,49 @@ async fn test_get_contacts() -> Result<()> {
     assert_eq!(contacts.len(), 1);
     let contacts = Contact::get_all(&context, 0, Some("δ")).await?;
     assert_eq!(contacts.len(), 1);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_search_contacts_from_group() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+
+    let alice_chat_id = chat::create_group(alice, "").await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    let bob_chat_id = tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+
+    let gossip_period = alice.get_config_int(Config::GossipPeriod).await?;
+    SystemTime::shift(Duration::from_secs(gossip_period.try_into()?));
+    send_text_msg(alice, alice_chat_id, "hello".to_string()).await?;
+    let sent_msg = alice.pop_sent_msg().await;
+    bob.recv_msg(&sent_msg).await;
+    fiona.recv_msg(&sent_msg).await;
+
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    let bob_alice_id = bob.add_or_lookup_contact_id(alice).await;
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts[0], bob_alice_id);
+
+    let contacts = Contact::get_all(fiona, 0, None).await?;
+    let fiona_alice_id = fiona.add_or_lookup_contact_id(alice).await;
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts[0], fiona_alice_id);
+
+    // Sending to the group adds new members to the contact list.
+    send_text_msg(bob, bob_chat_id, "hello".to_string()).await?;
+    fiona.recv_msg(&bob.pop_sent_msg().await).await;
+    let contacts = Contact::get_all(bob, 0, None).await?;
+    let bob_fiona_id = bob.add_or_lookup_contact_id(fiona).await;
+    assert_eq!(contacts.len(), 2);
+    assert_eq!(contacts[0], bob_alice_id);
+    assert_eq!(contacts[1], bob_fiona_id);
+    let contacts = Contact::get_all(fiona, 0, None).await?;
+    assert_eq!(contacts.len(), 1);
+    assert_eq!(contacts[0], fiona_alice_id);
     Ok(())
 }
 
