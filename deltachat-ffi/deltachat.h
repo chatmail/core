@@ -6661,6 +6661,7 @@ void dc_event_unref(dc_event_t* event);
  * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
+ * @param data2 (int) chat_id ID of the chat which the message belongs to
  * @param data2 (char*) accept_call_info, text passed to dc_accept_incoming_call()
  */
 #define DC_EVENT_OUTGOING_CALL_ACCEPTED                   2570
@@ -6672,8 +6673,22 @@ void dc_event_unref(dc_event_t* event);
  * UI usually only takes action in case call UI was opened before, otherwise the event should be ignored.
  *
  * @param data1 (int) msg_id ID of the message referring to the call
+ * @param data2 (int) chat_id ID of the chat which the message belongs to
  */
 #define DC_EVENT_CALL_ENDED                               2580
+
+/**
+ * An incoming call was missed. Only emitted if the caller is allowed to call us. This happens when:
+ * - A call timed out (not accepted by us on time).
+ * - A call was canceled by the caller.
+ * - A stale call message was received, i.e. it is older than the timeout.
+ *
+ * This should trigger a UI notification.
+ *
+ * @param data1 (int) msg_id ID of the message referring to the call
+ * @param data2 (int) chat_id ID of the chat which the message belongs to
+ */
+#define DC_EVENT_CALL_MISSED                              2590
 
 /**
  * Transport relay added/deleted or default has changed.
