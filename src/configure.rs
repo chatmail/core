@@ -261,6 +261,7 @@ impl Context {
             .await?;
         send_sync_transports(self).await?;
         self.quota.write().await.remove(&removed_transport_id);
+        self.restart_io_if_running().await;
 
         Ok(())
     }
