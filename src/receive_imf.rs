@@ -773,6 +773,7 @@ pub(crate) async fn receive_imf_inner(
             chat_id,
             chat_id_blocked,
             is_dc_message,
+            is_created,
         )
         .await
         .context("add_parts error")?
@@ -1809,6 +1810,7 @@ async fn add_parts(
     mut chat_id: ChatId,
     mut chat_id_blocked: Blocked,
     is_dc_message: MessengerMessage,
+    is_chat_created: bool,
 ) -> Result<ReceivedMsg> {
     let to_id = if mime_parser.incoming {
         ContactId::SELF
@@ -1872,7 +1874,16 @@ async fn add_parts(
             apply_out_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
         }
         Chattype::Group => {
-            apply_group_changes(context, mime_parser, &mut chat, from_id, to_ids, past_ids).await?
+            apply_group_changes(
+                context,
+                mime_parser,
+                &mut chat,
+                from_id,
+                to_ids,
+                past_ids,
+                is_chat_created,
+            )
+            .await?
         }
         Chattype::InBroadcast => {
             apply_in_broadcast_changes(context, mime_parser, &mut chat, from_id).await?
@@ -2889,8 +2900,7 @@ async fn create_group(
     let mut chat_id = None;
     let mut chat_id_blocked = Default::default();
 
-    if chat_id.is_none()
-            && !mime_parser.is_mailinglist_message()
+    if !mime_parser.is_mailinglist_message()
             && !grpid.is_empty()
             && mime_parser.get_header(HeaderDef::ChatGroupName).is_some()
             // otherwise, a pending "quit" message may pop up
@@ -3082,6 +3092,7 @@ async fn apply_group_changes(
     from_id: ContactId,
     to_ids: &[Option<ContactId>],
     past_ids: &[Option<ContactId>],
+    is_chat_created: bool,
 ) -> Result<GroupChangesInfo> {
     let from_is_key_contact = Contact::get_by_id(context, from_id).await?.is_key_contact();
     ensure!(from_is_key_contact || chat.grpid.is_empty());
@@ -3295,19 +3306,15 @@ async fn apply_group_changes(
         .difference(&new_chat_contacts)
         .copied()
         .collect();
-
-    if let Some(added_id) = added_id
-        && !added_ids.remove(&added_id)
-        && added_id != ContactId::SELF
-    {
-        // No-op "Member added" message. An exception is self-addition messages because they at
-        // least must be shown when a chat is created on our side.
-        info!(context, "No-op 'Member added' message (TRASH)");
-        better_msg = Some(String::new());
-    }
+    let id_was_already_added = if let Some(added_id) = added_id {
+        !added_ids.remove(&added_id)
+    } else {
+        false
+    };
     if let Some(removed_id) = removed_id {
         removed_ids.remove(&removed_id);
     }
+
     let group_changes_msgs = if !chat_contacts.contains(&ContactId::SELF)
         && new_chat_contacts.contains(&ContactId::SELF)
     {
@@ -3315,6 +3322,11 @@ async fn apply_group_changes(
     } else {
         group_changes_msgs(context, &added_ids, &removed_ids, chat.id).await?
     };
+
+    if id_was_already_added && group_changes_msgs.is_empty() && !is_chat_created {
+        info!(context, "No-op 'Member added' message (TRASH)");
+        better_msg = Some(String::new());
+    }
 
     if send_event_chat_modified {
         context.emit_event(EventType::ChatModified(chat.id));

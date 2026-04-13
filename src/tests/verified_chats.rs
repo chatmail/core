@@ -507,9 +507,8 @@ async fn test_verified_member_added_reordering() -> Result<()> {
 
     assert_eq!(fiona_received_message.get_text(), "Hi");
 
-    // Fiona receives late "Member added" message
-    // and the chat becomes protected.
-    fiona.recv_msg(&alice_sent_member_added).await;
+    // Fiona receives late "Member added" message.
+    fiona.recv_msg_trash(&alice_sent_member_added).await;
 
     Ok(())
 }
