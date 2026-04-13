@@ -19,7 +19,7 @@ use crate::token::Namespace;
 use crate::tools::time;
 use crate::transport::{ConfiguredLoginParamJson, sync_transports};
 use crate::{message, stock_str, token};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 
 /// Whether to send device sync messages. Aimed for usage in the internal API.
 #[derive(Debug, PartialEq)]
@@ -383,7 +383,7 @@ impl Context {
     }
 
     async fn sync_message_deletion(&self, msgs: &Vec<String>) -> Result<()> {
-        let mut modified_chat_ids = HashSet::new();
+        let mut modified_chat_ids = BTreeSet::new();
         let mut msg_ids = Vec::new();
         for rfc724_mid in msgs {
             if let Some(msg_id) = message::rfc724_mid_exists(self, rfc724_mid).await? {

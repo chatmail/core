@@ -1,7 +1,7 @@
 //! # Chat module.
 
 use std::cmp;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt;
 use std::io::Cursor;
 use std::marker::Sync;
@@ -3774,7 +3774,7 @@ pub(crate) async fn update_chat_contacts_table(
     context: &Context,
     timestamp: i64,
     id: ChatId,
-    contacts: &HashSet<ContactId>,
+    contacts: &BTreeSet<ContactId>,
 ) -> Result<()> {
     context
         .sql
@@ -5033,7 +5033,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
         chat.typ == Chattype::OutBroadcast,
         "{id} is not a broadcast list",
     );
-    let mut contacts = HashSet::new();
+    let mut contacts = BTreeSet::new();
     for addr in addrs {
         let contact_addr = ContactAddress::new(addr)?;
         let contact = Contact::add_or_lookup(context, "", &contact_addr, Origin::Hidden)
@@ -5041,7 +5041,7 @@ async fn set_contacts_by_addrs(context: &Context, id: ChatId, addrs: &[String]) 
             .0;
         contacts.insert(contact);
     }
-    let contacts_old = HashSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
+    let contacts_old = BTreeSet::<ContactId>::from_iter(get_chat_contacts(context, id).await?);
     if contacts == contacts_old {
         return Ok(());
     }
