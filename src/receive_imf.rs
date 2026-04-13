@@ -1,7 +1,7 @@
 //! Internet Message Format reception pipeline.
 
 use std::cmp;
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
 use std::sync::LazyLock;
 
@@ -1927,7 +1927,7 @@ async fn add_parts(
         && chat_id.get_ephemeral_timer(context).await? != ephemeral_timer
     {
         let chat_contacts =
-            HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat_id).await?);
+            BTreeSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat_id).await?);
         let is_from_in_chat =
             !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
@@ -2462,7 +2462,7 @@ async fn handle_edit_delete(
         // See `message::delete_msgs_ex()`, unlike edit requests, DC doesn't send unencrypted
         // deletion requests, so there's no need to support them.
         if part.param.get_bool(Param::GuaranteeE2ee).unwrap_or(false) {
-            let mut modified_chat_ids = HashSet::new();
+            let mut modified_chat_ids = BTreeSet::new();
             let mut msg_ids = Vec::new();
 
             let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
@@ -3094,7 +3094,7 @@ async fn apply_group_changes(
     let mut better_msg = None;
     let mut silent = false;
     let chat_contacts =
-        HashSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
+        BTreeSet::<ContactId>::from_iter(chat::get_chat_contacts(context, chat.id).await?);
     let is_from_in_chat =
         !chat_contacts.contains(&ContactId::SELF) || chat_contacts.contains(&from_id);
 
@@ -3172,8 +3172,8 @@ async fn apply_group_changes(
             && chat.member_list_is_stale(context).await?
         {
             info!(context, "Member list is stale.");
-            let mut new_members: HashSet<ContactId> =
-                HashSet::from_iter(to_ids_flat.iter().copied());
+            let mut new_members: BTreeSet<ContactId> =
+                BTreeSet::from_iter(to_ids_flat.iter().copied());
             new_members.insert(ContactId::SELF);
             if !from_id.is_special() {
                 new_members.insert(from_id);
@@ -3217,7 +3217,7 @@ async fn apply_group_changes(
             )
             .await?;
         } else {
-            let mut new_members: HashSet<ContactId>;
+            let mut new_members: BTreeSet<ContactId>;
             // True if a Delta Chat client has explicitly and really added our primary address to an
             // already existing group.
             let self_added =
@@ -3228,7 +3228,7 @@ async fn apply_group_changes(
                     false
                 };
             if self_added {
-                new_members = HashSet::from_iter(to_ids_flat.iter().copied());
+                new_members = BTreeSet::from_iter(to_ids_flat.iter().copied());
                 new_members.insert(ContactId::SELF);
                 if !from_id.is_special() && from_is_key_contact != chat.grpid.is_empty() {
                     new_members.insert(from_id);
@@ -3279,7 +3279,7 @@ async fn apply_group_changes(
             .await?;
     }
 
-    let new_chat_contacts = HashSet::<ContactId>::from_iter(
+    let new_chat_contacts = BTreeSet::<ContactId>::from_iter(
         chat::get_chat_contacts(context, chat.id)
             .await?
             .iter()
@@ -3287,11 +3287,11 @@ async fn apply_group_changes(
     );
 
     // These are for adding info messages about implicit membership changes.
-    let mut added_ids: HashSet<ContactId> = new_chat_contacts
+    let mut added_ids: BTreeSet<ContactId> = new_chat_contacts
         .difference(&chat_contacts)
         .copied()
         .collect();
-    let mut removed_ids: HashSet<ContactId> = chat_contacts
+    let mut removed_ids: BTreeSet<ContactId> = chat_contacts
         .difference(&new_chat_contacts)
         .copied()
         .collect();
@@ -3513,8 +3513,8 @@ async fn apply_chat_name_avatar_and_description_changes(
 #[expect(clippy::arithmetic_side_effects)]
 async fn group_changes_msgs(
     context: &Context,
-    added_ids: &HashSet<ContactId>,
-    removed_ids: &HashSet<ContactId>,
+    added_ids: &BTreeSet<ContactId>,
+    removed_ids: &BTreeSet<ContactId>,
     chat_id: ChatId,
 ) -> Result<Vec<(String, SystemMessage, Option<ContactId>)>> {
     let mut group_changes_msgs: Vec<(String, SystemMessage, Option<ContactId>)> = Vec::new();
