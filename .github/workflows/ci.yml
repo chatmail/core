@@ -137,7 +137,7 @@ jobs:
         uses: swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5
 
       - name: Install nextest
-        uses: taiki-e/install-action@69e777b377e4ec209ddad9426ae3e0c1008b0ef3
+        uses: taiki-e/install-action@85b24a67ef0c632dfefad70b9d5ce8fddb040754
         with:
           tool: nextest
 
