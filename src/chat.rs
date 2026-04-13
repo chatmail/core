@@ -2628,7 +2628,7 @@ pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> 
     if msg.state != MessageState::Undefined && msg.state != MessageState::OutPreparing {
         msg.param.remove(Param::GuaranteeE2ee);
         msg.param.remove(Param::ForcePlaintext);
-        msg.update_param(context).await?;
+        // create_send_msg_jobs() will update `param` in the db.
     }
 
     // protect all system messages against RTLO attacks
@@ -2733,7 +2733,19 @@ async fn prepare_send_msg(
         None
     };
 
-    // ... then change the MessageState in the message object
+    if matches!(
+        msg.state,
+        MessageState::Undefined | MessageState::OutPreparing
+    )
+        // v2 SecureJoin "v*-request" messages are unencrypted.
+        && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
+        && chat.is_encrypted(context).await?
+    {
+        msg.param.set_int(Param::GuaranteeE2ee, 1);
+        if !msg.id.is_unset() {
+            msg.update_param(context).await?;
+        }
+    }
     msg.state = MessageState::OutPending;
 
     msg.timestamp_sort = create_smeared_timestamp(context);
