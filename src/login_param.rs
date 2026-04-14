@@ -178,7 +178,7 @@ impl EnteredLoginParam {
         // The setting is named `imap_certificate_checks`
         // for backwards compatibility,
         // but now it is a global setting applied to all protocols,
-        // while `smtp_certificate_checks` is ignored.
+        // while `smtp_certificate_checks` has been removed.
         let certificate_checks = if let Some(certificate_checks) = context
             .get_config_parsed::<i32>(Config::ImapCertificateChecks)
             .await?

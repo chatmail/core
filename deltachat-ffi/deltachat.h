@@ -409,8 +409,7 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  * - `server_flags` = IMAP-/SMTP-flags as a combination of @ref DC_LP flags, guessed if left out
  * - `proxy_enabled` = Proxy enabled. Disabled by default.
  * - `proxy_url` = Proxy URL. May contain multiple URLs separated by newline, but only the first one is used.
- * - `imap_certificate_checks` = how to check IMAP certificates, one of the @ref DC_CERTCK flags, defaults to #DC_CERTCK_AUTO (0)
- * - `smtp_certificate_checks` = deprecated option, should be set to the same value as `imap_certificate_checks` but ignored by the new core
+ * - `imap_certificate_checks` = how to check IMAP and SMTP certificates, one of the @ref DC_CERTCK flags, defaults to #DC_CERTCK_AUTO (0)
  * - `displayname`  = Own name to use when sending messages. MUAs are allowed to spread this way e.g. using CC, defaults to empty
  * - `selfstatus`   = Own status to display, e.g. in e-mail footers, defaults to empty
  * - `selfavatar`   = File containing avatar. Will immediately be copied to the 
@@ -5804,7 +5803,7 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  * These constants configure TLS certificate checks for IMAP and SMTP connections.
  *
  * These constants are set via dc_set_config()
- * using keys "imap_certificate_checks" and "smtp_certificate_checks".
+ * using key "imap_certificate_checks".
  *
  * @addtogroup DC_CERTCK
  * @{

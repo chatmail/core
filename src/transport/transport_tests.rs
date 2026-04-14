@@ -118,8 +118,6 @@ async fn test_posteo_alias() -> Result<()> {
     t.set_config(Config::ConfiguredSendUser, Some(user)).await?;
     t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
         .await?;
-    t.set_config(Config::ConfiguredSmtpCertificateChecks, Some("1"))
-        .await?; // Strict
     t.set_config(Config::ConfiguredServerFlags, Some("0"))
         .await?;
 
@@ -207,8 +205,6 @@ async fn test_empty_server_list_legacy() -> Result<()> {
         .await?; // Strict
     t.set_config(Config::ConfiguredSendPw, Some("foobarbaz"))
         .await?;
-    t.set_config(Config::ConfiguredSmtpCertificateChecks, Some("1"))
-        .await?; // Strict
     t.set_config(Config::ConfiguredServerFlags, Some("0"))
         .await?;
 
