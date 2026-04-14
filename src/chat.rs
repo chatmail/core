@@ -2779,15 +2779,13 @@ async fn render_mime_message_and_pre_message(
 
         let mut mimefactory_post_msg = mimefactory.clone();
         mimefactory_post_msg.set_as_post_message();
-        let rendered_msg = mimefactory_post_msg
-            .render(context)
+        let rendered_msg = Box::pin(mimefactory_post_msg.render(context))
             .await
             .context("Failed to render post-message")?;
 
         let mut mimefactory_pre_msg = mimefactory;
         mimefactory_pre_msg.set_as_pre_message_for(&rendered_msg);
-        let rendered_pre_msg = mimefactory_pre_msg
-            .render(context)
+        let rendered_pre_msg = Box::pin(mimefactory_pre_msg.render(context))
             .await
             .context("pre-message failed to render")?;
 
@@ -2802,7 +2800,7 @@ async fn render_mime_message_and_pre_message(
 
         Ok((Some(rendered_pre_msg), rendered_msg))
     } else {
-        Ok((None, mimefactory.render(context).await?))
+        Ok((None, Box::pin(mimefactory.render(context)).await?))
     }
 }
 
