@@ -589,9 +589,9 @@ impl Imap {
 
         let mut read_cnt = 0;
         loop {
-            let (n, fetch_more) = self
-                .fetch_new_msg_batch(context, session, folder, folder_meaning)
-                .await?;
+            let (n, fetch_more) =
+                Box::pin(self.fetch_new_msg_batch(context, session, folder, folder_meaning))
+                    .await?;
             read_cnt += n;
             if !fetch_more {
                 return Ok(read_cnt > 0);

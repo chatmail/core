@@ -173,9 +173,7 @@ pub(crate) async fn download_msg(
     if msg_transport_id != transport_id {
         return Ok(None);
     }
-    session
-        .fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)
-        .await?;
+    Box::pin(session.fetch_single_msg(context, &server_folder, server_uid, rfc724_mid)).await?;
     Ok(Some(()))
 }
 

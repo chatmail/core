@@ -580,7 +580,7 @@ async fn send_mdn_rfc724_mid(
     )
     .await?;
     let encrypted = mimefactory.will_be_encrypted();
-    let rendered_msg = mimefactory.render(context).await?;
+    let rendered_msg = Box::pin(mimefactory.render(context)).await?;
     let body = rendered_msg.message;
 
     let mut recipients = Vec::new();
