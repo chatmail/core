@@ -81,11 +81,6 @@ pub enum Config {
     /// SMTP server security (e.g. TLS, STARTTLS).
     SendSecurity,
 
-    /// Deprecated option for backwards compatibility.
-    ///
-    /// Certificate checks for SMTP are actually controlled by `imap_certificate_checks` config.
-    SmtpCertificateChecks,
-
     /// Whether to use OAuth 2.
     ///
     /// Historically contained other bitflags, which are now deprecated.
@@ -244,11 +239,6 @@ pub enum Config {
 
     /// Configured SMTP server password.
     ConfiguredSendPw,
-
-    /// Deprecated, stored for backwards compatibility.
-    ///
-    /// ConfiguredImapCertificateChecks is actually used.
-    ConfiguredSmtpCertificateChecks,
 
     /// Whether OAuth 2 is used with configured provider.
     ConfiguredServerFlags,

@@ -433,7 +433,6 @@ class ACFactory:
         if self.pytestconfig.getoption("--strict-tls"):
             # Enable strict certificate checks for online accounts
             configdict["imap_certificate_checks"] = str(const.DC_CERTCK_STRICT)
-            configdict["smtp_certificate_checks"] = str(const.DC_CERTCK_STRICT)
 
         assert "addr" in configdict and "mail_pw" in configdict
         return configdict
@@ -505,7 +504,6 @@ class ACFactory:
                 "addr": cloned_from.get_config("addr"),
                 "mail_pw": cloned_from.get_config("mail_pw"),
                 "imap_certificate_checks": cloned_from.get_config("imap_certificate_checks"),
-                "smtp_certificate_checks": cloned_from.get_config("smtp_certificate_checks"),
             }
         configdict.update(kwargs)
         ac = self._get_cached_account(addr=configdict["addr"]) if cache else None
