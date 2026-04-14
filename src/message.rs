@@ -1381,13 +1381,8 @@ pub enum MessageState {
     /// IMAP and MDN may be sent.
     InSeen = 16,
 
-    /// For files which need time to be prepared before they can be
-    /// sent, the message enters this state before
-    /// OutPending.
-    ///
-    /// Deprecated 2024-12-07.
-    OutPreparing = 18,
-
+    // Deprecated 2024-12-07. Removed 2026-04.
+    // OutPreparing = 18,
     /// Message saved as draft.
     OutDraft = 19,
 
@@ -1420,7 +1415,6 @@ impl std::fmt::Display for MessageState {
                 Self::InFresh => "Fresh",
                 Self::InNoticed => "Noticed",
                 Self::InSeen => "Seen",
-                Self::OutPreparing => "Preparing",
                 Self::OutDraft => "Draft",
                 Self::OutPending => "Pending",
                 Self::OutFailed => "Failed",
@@ -1437,7 +1431,7 @@ impl MessageState {
         use MessageState::*;
         matches!(
             self,
-            OutPreparing | OutPending | OutDelivered | OutMdnRcvd // OutMdnRcvd can still fail because it could be a group message and only some recipients failed.
+            OutPending | OutDelivered | OutMdnRcvd // OutMdnRcvd can still fail because it could be a group message and only some recipients failed.
         )
     }
 
@@ -1446,7 +1440,7 @@ impl MessageState {
         use MessageState::*;
         matches!(
             self,
-            OutPreparing | OutDraft | OutPending | OutFailed | OutDelivered | OutMdnRcvd
+            OutDraft | OutPending | OutFailed | OutDelivered | OutMdnRcvd
         )
     }
 

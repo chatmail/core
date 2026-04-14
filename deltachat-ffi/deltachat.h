@@ -4003,8 +4003,6 @@ int             dc_msg_get_viewtype           (const dc_msg_t* msg);
  *   Marked as read on IMAP and MDN may be sent. Use dc_markseen_msgs() to mark messages as being seen.
  *
  * Outgoing message states:
- * - @ref DC_STATE_OUT_PREPARING - For files which need time to be prepared before they can be sent,
- *   the message enters this state before @ref DC_STATE_OUT_PENDING. Deprecated.
  * - @ref DC_STATE_OUT_DRAFT - Message saved as draft using dc_set_draft()
  * - @ref DC_STATE_OUT_PENDING - The user has pressed the "send" button but the
  *   message is not yet sent and is pending in some way. Maybe we're offline (no checkmark).
@@ -5588,13 +5586,6 @@ int64_t         dc_lot_get_timestamp     (const dc_lot_t* lot);
  * Incoming seen message. See dc_msg_get_state() for details.
  */
 #define         DC_STATE_IN_SEEN             16
-
-/**
- * Outgoing message being prepared. See dc_msg_get_state() for details.
- *
- * @deprecated 2024-12-07
- */
-#define         DC_STATE_OUT_PREPARING       18
 
 /**
  * Outgoing message drafted. See dc_msg_get_state() for details.

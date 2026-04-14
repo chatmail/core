@@ -351,16 +351,11 @@ class Message:
     def is_outgoing(self):
         """Return True if Message is outgoing."""
         return lib.dc_msg_get_state(self._dc_msg) in (
-            const.DC_STATE_OUT_PREPARING,
             const.DC_STATE_OUT_PENDING,
             const.DC_STATE_OUT_FAILED,
             const.DC_STATE_OUT_MDN_RCVD,
             const.DC_STATE_OUT_DELIVERED,
         )
-
-    def is_out_preparing(self):
-        """Return True if Message is outgoing, but its file is being prepared."""
-        return self._msgstate == const.DC_STATE_OUT_PREPARING
 
     def is_out_pending(self):
         """Return True if Message is outgoing, but is pending (no single checkmark)."""

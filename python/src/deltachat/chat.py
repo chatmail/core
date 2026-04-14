@@ -271,15 +271,6 @@ class Chat:
            sent out.  This is the same object as was passed in, which
            has been modified with the new state of the core.
         """
-        if msg.is_out_preparing():
-            assert msg.id != 0
-            # get a fresh copy of dc_msg, the core needs it
-            maybe_msg = Message.from_db(self.account, msg.id)
-            if maybe_msg is not None:
-                msg = maybe_msg
-            else:
-                raise ValueError("message does not exist")
-
         sent_id = lib.dc_send_msg(self.account._dc_context, self.id, msg._dc_msg)
         if sent_id == 0:
             raise ValueError("message could not be sent")
@@ -332,26 +323,6 @@ class Chat:
         if sent_id == 0:
             raise ValueError("message could not be sent")
         return Message.from_db(self.account, sent_id)
-
-    def send_prepared(self, message):
-        """send a previously prepared message.
-
-        :param message: a :class:`Message` instance previously returned by
-                        :meth:`prepare_file`.
-        :raises ValueError: if message can not be sent.
-        :returns: a :class:`deltachat.message.Message` instance as sent out.
-        """
-        assert message.id != 0 and message.is_out_preparing()
-        # get a fresh copy of dc_msg, the core needs it
-        msg = Message.from_db(self.account, message.id)
-
-        # pass 0 as chat-id because core-docs say it's ok when out-preparing
-        sent_id = lib.dc_send_msg(self.account._dc_context, 0, msg._dc_msg)
-        if sent_id == 0:
-            raise ValueError("message could not be sent")
-        assert sent_id == msg.id
-        # modify message in place to avoid bad state for the caller
-        msg._dc_msg = Message.from_db(self.account, sent_id)._dc_msg
 
     def set_draft(self, message):
         """set message as draft.

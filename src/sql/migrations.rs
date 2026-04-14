@@ -2373,6 +2373,18 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 152)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "
+UPDATE msgs SET state=26 WHERE state=28; -- Change OutMdnRcvd to OutDelivered.
+UPDATE msgs SET state=19 WHERE state=24; -- Change OutPreparing to OutFailed.
+            ",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

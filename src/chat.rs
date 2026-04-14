@@ -2613,7 +2613,7 @@ pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> 
         "chat_id cannot be a special chat: {chat_id}"
     );
 
-    if msg.state != MessageState::Undefined && msg.state != MessageState::OutPreparing {
+    if msg.state != MessageState::Undefined {
         msg.param.remove(Param::GuaranteeE2ee);
         msg.param.remove(Param::ForcePlaintext);
         // create_send_msg_jobs() will update `param` in the db.
@@ -2721,10 +2721,7 @@ async fn prepare_send_msg(
         None
     };
 
-    if matches!(
-        msg.state,
-        MessageState::Undefined | MessageState::OutPreparing
-    )
+    if msg.state == MessageState::Undefined
         // Legacy SecureJoin "v*-request" messages are unencrypted.
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
         && chat.is_encrypted(context).await?
@@ -2937,8 +2934,8 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
 UPDATE msgs SET
     timestamp=(
         SELECT MAX(timestamp) FROM msgs INDEXED BY msgs_index7 WHERE
-            -- From `InFresh` to `OutMdnRcvd` inclusive except `OutDraft`.
-            state IN(10,13,16,18,20,24,26,28) AND
+            -- From `InFresh` to `OutDelivered` inclusive, except `OutDraft`.
+            state IN(10,13,16,18,20,24,26) AND
             hidden IN(0,1) AND
             chat_id=? AND
             id<=?
