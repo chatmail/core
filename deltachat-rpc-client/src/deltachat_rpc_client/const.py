@@ -190,7 +190,6 @@ class MessageState(IntEnum):
     IN_FRESH = 10
     IN_NOTICED = 13
     IN_SEEN = 16
-    OUT_PREPARING = 18
     OUT_DRAFT = 19
     OUT_PENDING = 20
     OUT_FAILED = 24

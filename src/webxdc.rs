@@ -550,7 +550,7 @@ impl Context {
 
         let send_now = !matches!(
             instance.state,
-            MessageState::Undefined | MessageState::OutPreparing | MessageState::OutDraft
+            MessageState::Undefined | MessageState::OutDraft
         );
 
         status_update.uid = Some(create_id());
