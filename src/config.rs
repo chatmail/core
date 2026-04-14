@@ -42,45 +42,85 @@ use crate::{constants, stats};
 )]
 #[strum(serialize_all = "snake_case")]
 pub enum Config {
+    /// Deprecated(2026-04).
+    /// Use ConfiguredAddr, [`crate::login_param::EnteredLoginParam`],
+    /// or add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Email address, used in the `From:` field.
     Addr,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// IMAP server hostname.
     MailServer,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// IMAP server username.
     MailUser,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// IMAP server password.
     MailPw,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// IMAP server port.
     MailPort,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// IMAP server security (e.g. TLS, STARTTLS).
     MailSecurity,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// How to check TLS certificates.
     ///
     /// "IMAP" in the name is for compatibility,
     /// this actually applies to both IMAP and SMTP connections.
     ImapCertificateChecks,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// SMTP server hostname.
     SendServer,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// SMTP server username.
     SendUser,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// SMTP server password.
     SendPw,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// SMTP server port.
     SendPort,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// SMTP server security (e.g. TLS, STARTTLS).
     SendSecurity,
 
+    /// Deprecated(2026-04).
+    /// Use EnteredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Whether to use OAuth 2.
     ///
     /// Historically contained other bitflags, which are now deprecated.
@@ -180,32 +220,47 @@ pub enum Config {
     /// The primary email address.
     ConfiguredAddr,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// List of configured IMAP servers as a JSON array.
     ConfiguredImapServers,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured IMAP server hostname.
     ///
     /// This is replaced by `configured_imap_servers` for new configurations.
     ConfiguredMailServer,
 
-    /// Configured IMAP server port.
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
     ///
-    /// This is replaced by `configured_imap_servers` for new configurations.
+    /// Configured IMAP server port.
     ConfiguredMailPort,
 
-    /// Configured IMAP server security (e.g. TLS, STARTTLS).
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
     ///
-    /// This is replaced by `configured_imap_servers` for new configurations.
+    /// Configured IMAP server security (e.g. TLS, STARTTLS).
     ConfiguredMailSecurity,
 
-    /// Configured IMAP server username.
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
     ///
-    /// This is set if user has configured username manually.
+    /// Configured IMAP server username.
     ConfiguredMailUser,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured IMAP server password.
     ConfiguredMailPw,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured TLS certificate checks.
     /// This option is saved on successful configuration
     /// and should not be modified manually.
@@ -214,32 +269,53 @@ pub enum Config {
     /// but has "IMAP" in the name for backwards compatibility.
     ConfiguredImapCertificateChecks,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// List of configured SMTP servers as a JSON array.
     ConfiguredSmtpServers,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured SMTP server hostname.
     ///
     /// This is replaced by `configured_smtp_servers` for new configurations.
     ConfiguredSendServer,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured SMTP server port.
     ///
     /// This is replaced by `configured_smtp_servers` for new configurations.
     ConfiguredSendPort,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured SMTP server security (e.g. TLS, STARTTLS).
     ///
     /// This is replaced by `configured_smtp_servers` for new configurations.
     ConfiguredSendSecurity,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured SMTP server username.
     ///
     /// This is set if user has configured username manually.
     ConfiguredSendUser,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Configured SMTP server password.
     ConfiguredSendPw,
 
+    /// Deprecated(2026-04).
+    /// Use ConfiguredLoginParam and add_transport{from_qr}()/list_transports() instead.
+    ///
     /// Whether OAuth 2 is used with configured provider.
     ConfiguredServerFlags,
 
@@ -252,6 +328,9 @@ pub enum Config {
     /// ID of the configured provider from the provider database.
     ConfiguredProvider,
 
+    /// Deprecated(2026-04).
+    /// Use [`Context::is_configured()`] instead.
+    ///
     /// True if account is configured.
     Configured,
 

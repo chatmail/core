@@ -390,26 +390,9 @@ char*           dc_get_blobdir               (const dc_context_t* context);
 /**
  * Configure the context. The configuration is handled by key=value pairs as:
  *
- * - `addr`         = Email address to use for configuration.
- *                    If dc_configure() fails this is not the email address actually in use.
- *                    Use `configured_addr` to find out the email address actually in use.
- * - `configured_addr` = Email address actually in use.
+ * - `configured_addr` = Email address in use.
  *                    Unless for testing, do not set this value using dc_set_config().
  *                    Instead, set `addr` and call dc_configure().
- * - `mail_server`  = IMAP-server, guessed if left out
- * - `mail_user`    = IMAP-username, guessed if left out
- * - `mail_pw`      = IMAP-password (always needed)
- * - `mail_port`    = IMAP-port, guessed if left out
- * - `mail_security`= IMAP-socket, one of @ref DC_SOCKET, defaults to #DC_SOCKET_AUTO
- * - `send_server`  = SMTP-server, guessed if left out
- * - `send_user`    = SMTP-user, guessed if left out
- * - `send_pw`      = SMTP-password, guessed if left out
- * - `send_port`    = SMTP-port, guessed if left out
- * - `send_security`= SMTP-socket, one of @ref DC_SOCKET, defaults to #DC_SOCKET_AUTO
- * - `server_flags` = IMAP-/SMTP-flags as a combination of @ref DC_LP flags, guessed if left out
- * - `proxy_enabled` = Proxy enabled. Disabled by default.
- * - `proxy_url` = Proxy URL. May contain multiple URLs separated by newline, but only the first one is used.
- * - `imap_certificate_checks` = how to check IMAP and SMTP certificates, one of the @ref DC_CERTCK flags, defaults to #DC_CERTCK_AUTO (0)
  * - `displayname`  = Own name to use when sending messages. MUAs are allowed to spread this way e.g. using CC, defaults to empty
  * - `selfstatus`   = Own status to display, e.g. in e-mail footers, defaults to empty
  * - `selfavatar`   = File containing avatar. Will immediately be copied to the 
@@ -512,6 +495,27 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                       1 = Contacts (default, does not include contact requests),
  *                       2 = Nobody (calls never result in a notification).
  *
+ * Also, there are configs that are only needed
+ * if you want to use the deprecated dc_configure() API, such as:
+ *
+ * - `addr`         = Email address to use for configuration.
+ *                    If dc_configure() fails this is not the email address actually in use.
+ *                    Use `configured_addr` to find out the email address actually in use.
+ * - `mail_server`  = IMAP-server, guessed if left out
+ * - `mail_user`    = IMAP-username, guessed if left out
+ * - `mail_pw`      = IMAP-password (always needed)
+ * - `mail_port`    = IMAP-port, guessed if left out
+ * - `mail_security`= IMAP-socket, one of @ref DC_SOCKET, defaults to #DC_SOCKET_AUTO
+ * - `send_server`  = SMTP-server, guessed if left out
+ * - `send_user`    = SMTP-user, guessed if left out
+ * - `send_pw`      = SMTP-password, guessed if left out
+ * - `send_port`    = SMTP-port, guessed if left out
+ * - `send_security`= SMTP-socket, one of @ref DC_SOCKET, defaults to #DC_SOCKET_AUTO
+ * - `server_flags` = IMAP-/SMTP-flags as a combination of @ref DC_LP flags, guessed if left out
+ * - `proxy_enabled` = Proxy enabled. Disabled by default.
+ * - `proxy_url` = Proxy URL. May contain multiple URLs separated by newline, but only the first one is used.
+ * - `imap_certificate_checks` = how to check IMAP and SMTP certificates, one of the @ref DC_CERTCK flags, defaults to #DC_CERTCK_AUTO (0)
+
  * If you want to retrieve a value, use dc_get_config().
  *
  * @memberof dc_context_t
@@ -698,6 +702,12 @@ int              dc_get_push_state           (dc_context_t* context);
 
 /**
  * Configure a context.
+ *
+ * This way of configuring a context is deprecated,
+ * and does not allow to configure multiple transports.
+ * If you can, use the JSON-RPC API (../deltachat-jsonrpc/src/api.rs)
+ * `add_or_update_transport()`/`addOrUpdateTransport()` instead.
+ *
  * During configuration IO must not be started,
  * if needed stop IO using dc_accounts_stop_io() or dc_stop_io() first.
  * If the context is already configured,
