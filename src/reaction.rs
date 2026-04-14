@@ -1105,4 +1105,37 @@ Content-Transfer-Encoding: 7bit\r
 
         Ok(())
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_markseen_referenced_msg() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let chat_id = alice.create_chat(bob).await.id;
+
+        let alice_msg_id = send_text_msg(alice, chat_id, "foo".to_string()).await?;
+        let sent_msg = alice.pop_sent_msg().await;
+        let bob_msg = bob.recv_msg(&sent_msg).await;
+        bob_msg.chat_id.accept(bob).await?;
+
+        send_reaction(bob, bob_msg.id, "👀").await?;
+        let sent_msg = bob.pop_sent_msg().await;
+        let alice_reaction = alice.recv_msg_hidden(&sent_msg).await;
+        assert_eq!(alice_reaction.state, MessageState::InFresh);
+
+        markseen_msgs(alice, vec![alice_msg_id]).await?;
+        let alice_reaction = Message::load_from_db(alice, alice_reaction.id).await?;
+        assert_eq!(alice_reaction.state, MessageState::InSeen);
+        assert_eq!(
+            alice
+                .sql
+                .count(
+                    "SELECT COUNT(*) FROM smtp_mdns WHERE from_id=?",
+                    (ContactId::SELF,)
+                )
+                .await?,
+            1
+        );
+        Ok(())
+    }
 }
