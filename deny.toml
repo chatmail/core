@@ -23,7 +23,11 @@ ignore = [
     # it is a transitive dependency of iroh 0.35.0
     # which depends on ^0.102.
     # <https://rustsec.org/advisories/RUSTSEC-2026-0049>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0098>
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0099>
     "RUSTSEC-2026-0049",
+    "RUSTSEC-2026-0098",
+    "RUSTSEC-2026-0099"
 ]
 
 [bans]
