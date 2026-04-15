@@ -1392,6 +1392,8 @@ pub enum MessageState {
     /// For files which need time to be prepared before they can be
     /// sent, the message enters this state before
     /// OutPending.
+    ///
+    /// Deprecated 2024-12-07.
     OutPreparing = 18,
 
     /// Message saved as draft.
