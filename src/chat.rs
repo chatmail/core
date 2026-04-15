@@ -2737,7 +2737,7 @@ async fn prepare_send_msg(
         msg.state,
         MessageState::Undefined | MessageState::OutPreparing
     )
-        // v2 SecureJoin "v*-request" messages are unencrypted.
+        // Legacy SecureJoin "v*-request" messages are unencrypted.
         && msg.param.get_cmd() != SystemMessage::SecurejoinMessage
         && chat.is_encrypted(context).await?
     {
