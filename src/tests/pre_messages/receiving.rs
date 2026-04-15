@@ -118,7 +118,13 @@ async fn test_receive_pre_message() -> Result<()> {
     let msg = bob.recv_msg(&pre_message).await;
     assert_eq!(msg.download_state, DownloadState::Available);
     assert_summary_texts(&msg, bob, "👤 test").await;
+    let chat_id = msg.chat_id;
 
+    assert!(bob.recv_msg_opt(&pre_message).await.is_none());
+    let msg = Message::load_from_db(bob, msg.id).await?;
+    assert_eq!(msg.download_state, DownloadState::Available);
+    assert_summary_texts(&msg, bob, "👤 test").await;
+    assert_eq!(msg.chat_id, chat_id);
     Ok(())
 }
 
