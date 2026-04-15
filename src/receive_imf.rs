@@ -1313,8 +1313,9 @@ async fn decide_chat_assignment(
         ..
     } = &mime_parser.pre_message
     {
-        let msg_id = rfc724_mid_exists(context, post_msg_rfc724_mid).await?;
-        if let Some(msg_id) = msg_id {
+        let post_msg_exists = if let Some((msg_id, not_downloaded)) =
+            message::rfc724_mid_exists_ex(context, post_msg_rfc724_mid, "download_state<>0").await?
+        {
             context
                 .sql
                 .execute(
@@ -1322,8 +1323,10 @@ async fn decide_chat_assignment(
                     (rfc724_mid, msg_id),
                 )
                 .await?;
-        }
-        let post_msg_exists = msg_id.is_some();
+            !not_downloaded
+        } else {
+            false
+        };
         info!(
             context,
             "Message {rfc724_mid} is a pre-message for {post_msg_rfc724_mid} (post_msg_exists:{post_msg_exists})."
