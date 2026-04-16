@@ -75,19 +75,9 @@ impl Reaction {
         self.reaction.split(' ').collect()
     }
 
-    /// Returns space-separated string of emojis
+    /// Returns space-separated string representing the emoji
     pub fn as_str(&self) -> &str {
         &self.reaction
-    }
-
-    /// Appends emojis from another reaction to this reaction.
-    pub fn add(&self, other: Self) -> Self {
-        let mut emojis: Vec<&str> = self.emojis();
-        emojis.append(&mut other.emojis());
-        emojis.sort_unstable();
-        emojis.dedup();
-        let reaction = emojis.join(" ");
-        Self { reaction }
     }
 }
 
@@ -147,6 +137,10 @@ impl Reactions {
             }
         });
         emoji_frequencies
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&ContactId, &Reaction)> {
+        self.reactions.iter()
     }
 }
 
@@ -247,18 +241,6 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
     Ok(reaction_msg_id)
 }
 
-/// Adds given reaction to message `msg_id` and sends an update.
-///
-/// This can be used to implement advanced clients that allow reacting
-/// with multiple emojis. For a simple messenger UI, you probably want
-/// to use [`send_reaction()`] instead so reacting with a new emoji
-/// removes previous emoji at the same time.
-pub async fn add_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> Result<MsgId> {
-    let self_reaction = get_self_reaction(context, msg_id).await?;
-    let reaction = self_reaction.add(Reaction::from(reaction));
-    send_reaction(context, msg_id, reaction.as_str()).await
-}
-
 /// Updates reaction of `contact_id` on the message with `in_reply_to`
 /// Message-ID. If no such message is found in the database, reaction
 /// is ignored.
@@ -295,23 +277,6 @@ pub(crate) async fn set_msg_reaction(
         );
     }
     Ok(())
-}
-
-/// Get our own reaction for a given message.
-async fn get_self_reaction(context: &Context, msg_id: MsgId) -> Result<Reaction> {
-    let reaction_str: Option<String> = context
-        .sql
-        .query_get_value(
-            "SELECT reaction
-             FROM reactions
-             WHERE msg_id=? AND contact_id=?",
-            (msg_id, ContactId::SELF),
-        )
-        .await?;
-    Ok(reaction_str
-        .as_deref()
-        .map(Reaction::from)
-        .unwrap_or_default())
 }
 
 /// Returns a structure containing all reactions to the message.
@@ -428,16 +393,6 @@ mod tests {
         assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), "👍");
 
         assert_eq!(Reaction::from("👍 👍").emojis(), vec!["👍"]);
-    }
-
-    #[test]
-    fn test_add_reaction() {
-        let reaction1 = Reaction::from("👍 😀");
-        let reaction2 = Reaction::from("❤");
-        let reaction_sum = reaction1.add(reaction2);
-
-        // It's not allowed to set multiple reactions at once
-        assert_eq!(reaction_sum.emojis(), vec!["❤", "👍"]);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
