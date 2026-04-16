@@ -25,7 +25,7 @@ pub struct JsonrpcReaction {
 pub struct JsonrpcReactions {
     /// Map from a contact to it's reaction to message.
     /// There is only a single reaction per contact,
-    /// but this returns is a list of reactions for historical reasons.
+    /// but this contains a list of reactions for historical reasons.
     reactions_by_contact: BTreeMap<u32, Vec<String>>,
     /// Unique reactions and their count, sorted in descending order.
     reactions: Vec<JsonrpcReaction>,
@@ -41,8 +41,8 @@ impl From<Reactions> for JsonrpcReactions {
 
         let mut reactions_v = Vec::new();
         for (emoji, count) in reactions.emoji_sorted_by_frequency() {
-            let is_from_self = if let Some(self_reactions) = self_reaction {
-                self_reactions.contains(&emoji)
+            let is_from_self = if let Some(self_reaction) = self_reaction {
+                self_reaction.contains(&emoji)
             } else {
                 false
             };
