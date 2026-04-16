@@ -1,6 +1,6 @@
 //! # Reactions.
 //!
-//! Reactions are short messages consisting of emojis sent in reply to
+//! Reactions are short messages representing an emoji sent in reply to
 //! messages. Unlike normal messages which are added to the end of the chat,
 //! reactions are supposed to be displayed near the original messages.
 //!
@@ -11,7 +11,7 @@
 //! [XEP-0444](https://xmpp.org/extensions/xep-0444.html) section
 //! "3.2 Updating reactions to a message". Received reactions override
 //! all previously received reactions from the same user and it is
-//! possible to remove all reactions by sending an empty string as a reaction,
+//! possible to remove the reaction by sending an empty string as a reaction,
 //! even though RFC 9078 requires at least one emoji to be sent.
 
 use std::cmp::Ordering;
@@ -69,7 +69,7 @@ impl Reaction {
         self.reaction.is_empty()
     }
 
-    /// Returns space-separated string representing the emoji
+    /// Returns a string representing the emoji.
     pub fn as_str(&self) -> &str {
         &self.reaction
     }
@@ -238,8 +238,8 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
 /// Message-ID. If no such message is found in the database, reaction
 /// is ignored.
 ///
-/// `reaction` is a space-separated string of emojis. It can be empty
-/// if contact wants to remove all reactions.
+/// `reaction` is string representing the emoji. It can be empty
+/// if contact wants to remove the reaction.
 pub(crate) async fn set_msg_reaction(
     context: &Context,
     in_reply_to: &str,

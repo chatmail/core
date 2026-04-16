@@ -2377,12 +2377,12 @@ impl CommandApi {
         Ok(message_id.to_u32())
     }
 
-    /// Send a reaction to message.
+    /// Sends a reaction to message.
     ///
-    /// Reaction is a string of a single emoji. Reaction to a
-    /// single message can be sent multiple times. The last reaction
-    /// received overrides all previously received reactions. It is
-    /// possible to remove all reactions by sending an empty string.
+    /// A reaction is a string that represents an emoji.
+    /// You can call this function again to change the emoji;
+    /// the last sent reaction overrides all previously sent reactions.
+    /// It is possible to remove the reaction by sending an empty string.
     async fn send_reaction(
         &self,
         account_id: u32,

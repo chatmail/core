@@ -26,11 +26,12 @@ class Message:
 
     def send_reaction(self, *reaction: str) -> "Message":
         """
-        Send a reaction to message.
-        Reaction is a string of a single emoji. Reaction to a
-        single message can be sent multiple times. The last reaction
-        received overrides all previously received reactions. It is
-        possible to remove all reactions by sending an empty string.
+        Sends a reaction to message.
+
+        A reaction is a string that represents an emoji.
+        You can call this function again to change the emoji;
+        the last sent reaction overrides all previously sent reactions.
+        It is possible to remove the reaction by sending an empty string.
         """
         msg_id = self._rpc.send_reaction(self.account.id, self.id, reaction)
         return Message(self.account, msg_id)

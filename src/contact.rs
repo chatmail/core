@@ -1472,7 +1472,7 @@ WHERE addr=?
                 )?;
                 if deleted_contacts == 0 {
                     transaction.execute(
-                        "UPDATE contacts SET origin=? WHERE id=?;", // here
+                        "UPDATE contacts SET origin=? WHERE id=?;",
                         (Origin::Hidden, contact_id),
                     )?;
                 }
