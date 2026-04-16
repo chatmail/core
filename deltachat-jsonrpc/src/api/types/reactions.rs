@@ -24,6 +24,8 @@ pub struct JsonrpcReaction {
 #[serde(rename = "Reactions", rename_all = "camelCase")]
 pub struct JsonrpcReactions {
     /// Map from a contact to it's reaction to message.
+    /// There is only a single reaction per contact,
+    /// but this contains a list of reactions for historical reasons.
     reactions_by_contact: BTreeMap<u32, Vec<String>>,
     /// Unique reactions and their count, sorted in descending order.
     reactions: Vec<JsonrpcReaction>,
@@ -31,27 +33,16 @@ pub struct JsonrpcReactions {
 
 impl From<Reactions> for JsonrpcReactions {
     fn from(reactions: Reactions) -> Self {
-        let mut reactions_by_contact: BTreeMap<u32, Vec<String>> = BTreeMap::new();
-
-        for contact_id in reactions.contacts() {
-            let reaction = reactions.get(contact_id);
-            if reaction.is_empty() {
-                continue;
-            }
-            let emojis: Vec<String> = reaction
-                .emojis()
-                .into_iter()
-                .map(|emoji| emoji.to_owned())
-                .collect();
-            reactions_by_contact.insert(contact_id.to_u32(), emojis.clone());
-        }
-
-        let self_reactions = reactions_by_contact.get(&ContactId::SELF.to_u32());
+        let reactions_by_contact: BTreeMap<u32, Vec<String>> = reactions
+            .iter()
+            .map(|(key, value)| (key.to_u32(), vec![value.as_str().to_string()]))
+            .collect();
+        let self_reaction = reactions_by_contact.get(&ContactId::SELF.to_u32());
 
         let mut reactions_v = Vec::new();
         for (emoji, count) in reactions.emoji_sorted_by_frequency() {
-            let is_from_self = if let Some(self_reactions) = self_reactions {
-                self_reactions.contains(&emoji)
+            let is_from_self = if let Some(self_reaction) = self_reaction {
+                self_reaction.contains(&emoji)
             } else {
                 false
             };

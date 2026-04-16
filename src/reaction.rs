@@ -1,6 +1,6 @@
 //! # Reactions.
 //!
-//! Reactions are short messages consisting of emojis sent in reply to
+//! Reactions are short messages representing an emoji sent in reply to
 //! messages. Unlike normal messages which are added to the end of the chat,
 //! reactions are supposed to be displayed near the original messages.
 //!
@@ -11,7 +11,7 @@
 //! [XEP-0444](https://xmpp.org/extensions/xep-0444.html) section
 //! "3.2 Updating reactions to a message". Received reactions override
 //! all previously received reactions from the same user and it is
-//! possible to remove all reactions by sending an empty string as a reaction,
+//! possible to remove the reaction by sending an empty string as a reaction,
 //! even though RFC 9078 requires at least one emoji to be sent.
 
 use std::cmp::Ordering;
@@ -29,9 +29,7 @@ use crate::events::EventType;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 
-/// A single reaction consisting of multiple emoji sequences.
-///
-/// It is guaranteed to have all emojis sorted and deduplicated inside.
+/// A single reaction.
 #[derive(Debug, Default, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Reaction {
     /// Canonical representation of reaction as a string of space-separated emojis.
@@ -42,11 +40,8 @@ pub struct Reaction {
 // FromStr requires error type and reaction parsing never returns an
 // error.
 impl From<&str> for Reaction {
-    /// Parses a string containing a reaction.
-    ///
-    /// Reaction string is separated by spaces or tabs (`WSP` in ABNF),
-    /// but this function accepts any ASCII whitespace, so even a CRLF at
-    /// the end of string is acceptable.
+    /// Convert a `&str` into a `Reaction`.
+    /// Everything after the first whitespace is ignored.
     ///
     /// Any short enough string is accepted as a reaction to avoid the
     /// complexity of validating emoji sequences as required by RFC
@@ -57,41 +52,26 @@ impl From<&str> for Reaction {
     /// such as sending large numbers of large messages, and should be
     /// dealt with the same way, e.g. by blocking the user.
     fn from(reaction: &str) -> Self {
-        let mut emojis: Vec<&str> = reaction
+        let reaction: &str = reaction
             .split_ascii_whitespace()
+            .next()
             .filter(|&emoji| emoji.len() < 30)
-            .collect();
-        emojis.sort_unstable();
-        emojis.dedup();
-        let reaction = emojis.join(" ");
-        Self { reaction }
+            .unwrap_or("");
+        Self {
+            reaction: reaction.to_string(),
+        }
     }
 }
 
 impl Reaction {
-    /// Returns true if reaction contains no emojis.
+    /// Returns true if reaction contains no emoji.
     pub fn is_empty(&self) -> bool {
         self.reaction.is_empty()
     }
 
-    /// Returns a vector of emojis composing a reaction.
-    pub fn emojis(&self) -> Vec<&str> {
-        self.reaction.split(' ').collect()
-    }
-
-    /// Returns space-separated string of emojis
+    /// Returns a string representing the emoji.
     pub fn as_str(&self) -> &str {
         &self.reaction
-    }
-
-    /// Appends emojis from another reaction to this reaction.
-    pub fn add(&self, other: Self) -> Self {
-        let mut emojis: Vec<&str> = self.emojis();
-        emojis.append(&mut other.emojis());
-        emojis.sort_unstable();
-        emojis.dedup();
-        let reaction = emojis.join(" ");
-        Self { reaction }
     }
 }
 
@@ -126,12 +106,10 @@ impl Reactions {
     pub fn emoji_frequencies(&self) -> BTreeMap<String, usize> {
         let mut emoji_frequencies: BTreeMap<String, usize> = BTreeMap::new();
         for reaction in self.reactions.values() {
-            for emoji in reaction.emojis() {
-                emoji_frequencies
-                    .entry(emoji.to_string())
-                    .and_modify(|x| *x += 1)
-                    .or_insert(1);
-            }
+            emoji_frequencies
+                .entry(reaction.as_str().to_string())
+                .and_modify(|x| *x += 1)
+                .or_insert(1);
         }
         emoji_frequencies
     }
@@ -151,6 +129,11 @@ impl Reactions {
             }
         });
         emoji_frequencies
+    }
+
+    /// Returns an iterator of the contacts that reacted and their corresponding reactions.
+    pub fn iter(&self) -> impl Iterator<Item = (&ContactId, &Reaction)> {
+        self.reactions.iter()
     }
 }
 
@@ -223,7 +206,7 @@ async fn set_msg_id_reaction(
 
 /// Sends a reaction to message `msg_id`, overriding previously sent reactions.
 ///
-/// `reaction` is a string consisting of space-separated emoji. Use
+/// `reaction` is a string consisting of a single emoji. Use
 /// empty string to retract a reaction.
 pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> Result<MsgId> {
     let msg = Message::load_from_db(context, msg_id).await?;
@@ -251,24 +234,12 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
     Ok(reaction_msg_id)
 }
 
-/// Adds given reaction to message `msg_id` and sends an update.
-///
-/// This can be used to implement advanced clients that allow reacting
-/// with multiple emojis. For a simple messenger UI, you probably want
-/// to use [`send_reaction()`] instead so reacting with a new emoji
-/// removes previous emoji at the same time.
-pub async fn add_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> Result<MsgId> {
-    let self_reaction = get_self_reaction(context, msg_id).await?;
-    let reaction = self_reaction.add(Reaction::from(reaction));
-    send_reaction(context, msg_id, reaction.as_str()).await
-}
-
 /// Updates reaction of `contact_id` on the message with `in_reply_to`
 /// Message-ID. If no such message is found in the database, reaction
 /// is ignored.
 ///
-/// `reaction` is a space-separated string of emojis. It can be empty
-/// if contact wants to remove all reactions.
+/// `reaction` is string representing the emoji. It can be empty
+/// if contact wants to remove the reaction.
 pub(crate) async fn set_msg_reaction(
     context: &Context,
     in_reply_to: &str,
@@ -301,26 +272,9 @@ pub(crate) async fn set_msg_reaction(
     Ok(())
 }
 
-/// Get our own reaction for a given message.
-async fn get_self_reaction(context: &Context, msg_id: MsgId) -> Result<Reaction> {
-    let reaction_str: Option<String> = context
-        .sql
-        .query_get_value(
-            "SELECT reaction
-             FROM reactions
-             WHERE msg_id=? AND contact_id=?",
-            (msg_id, ContactId::SELF),
-        )
-        .await?;
-    Ok(reaction_str
-        .as_deref()
-        .map(Reaction::from)
-        .unwrap_or_default())
-}
-
 /// Returns a structure containing all reactions to the message.
 pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<Reactions> {
-    let reactions: BTreeMap<ContactId, Reaction> = context
+    let mut reactions: BTreeMap<ContactId, Reaction> = context
         .sql
         .query_map_collect(
             "SELECT contact_id, reaction FROM reactions WHERE msg_id=?",
@@ -332,6 +286,7 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
             },
         )
         .await?;
+    reactions.retain(|_contact, reaction| !reaction.is_empty());
     Ok(Reactions { reactions })
 }
 
@@ -406,46 +361,32 @@ mod tests {
     #[test]
     fn test_parse_reaction() {
         // Check that basic set of emojis from RFC 9078 is supported.
-        assert_eq!(Reaction::from("👍").emojis(), vec!["👍"]);
-        assert_eq!(Reaction::from("👎").emojis(), vec!["👎"]);
-        assert_eq!(Reaction::from("😀").emojis(), vec!["😀"]);
-        assert_eq!(Reaction::from("☹").emojis(), vec!["☹"]);
-        assert_eq!(Reaction::from("😢").emojis(), vec!["😢"]);
+        assert_eq!(Reaction::from("👍").as_str(), "👍");
+        assert_eq!(Reaction::from("👎").as_str(), "👎");
+        assert_eq!(Reaction::from("😀").as_str(), "😀");
+        assert_eq!(Reaction::from("☹").as_str(), "☹");
+        assert_eq!(Reaction::from("😢").as_str(), "😢");
 
         // Empty string can be used to remove all reactions.
         assert!(Reaction::from("").is_empty());
 
         // Short strings can be used as emojis, could be used to add
         // support for custom emojis via emoji shortcodes.
-        assert_eq!(Reaction::from(":deltacat:").emojis(), vec![":deltacat:"]);
+        assert_eq!(Reaction::from(":deltacat:").as_str(), ":deltacat:");
 
         // Check that long strings are not valid emojis.
         assert!(
             Reaction::from(":foobarbazquuxaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:").is_empty()
         );
 
-        // Multiple reactions separated by spaces or tabs are supported.
-        assert_eq!(Reaction::from("👍 ❤").emojis(), vec!["❤", "👍"]);
-        assert_eq!(Reaction::from("👍\t❤").emojis(), vec!["❤", "👍"]);
+        // Multiple reactions separated by spaces or tabs are not supported.
+        assert_eq!(Reaction::from("👍 ❤").as_str(), "👍");
+        assert_eq!(Reaction::from("👍\t❤").as_str(), "👍");
 
-        // Invalid emojis are removed, but valid emojis are retained.
-        assert_eq!(
-            Reaction::from("👍\t:foo: ❤").emojis(),
-            vec![":foo:", "❤", "👍"]
-        );
-        assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), ":foo: ❤ 👍");
+        assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), "👍");
+        assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), "👍");
 
-        // Duplicates are removed.
-        assert_eq!(Reaction::from("👍 👍").emojis(), vec!["👍"]);
-    }
-
-    #[test]
-    fn test_add_reaction() {
-        let reaction1 = Reaction::from("👍 😀");
-        let reaction2 = Reaction::from("❤");
-        let reaction_sum = reaction1.add(reaction2);
-
-        assert_eq!(reaction_sum.emojis(), vec!["❤", "👍", "😀"]);
+        assert_eq!(Reaction::from("👍 👍").as_str(), "👍");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -511,7 +452,7 @@ Content-Disposition: reaction\n\
         assert_eq!(contacts.first(), Some(&bob_id));
         let bob_reaction = reactions.get(bob_id);
         assert_eq!(bob_reaction.is_empty(), false);
-        assert_eq!(bob_reaction.emojis(), vec!["👍"]);
+        assert_eq!(bob_reaction.as_str(), "👍");
         assert_eq!(bob_reaction.as_str(), "👍");
 
         // Alice receives reaction to her message from Bob with a footer.
@@ -730,7 +671,7 @@ Content-Disposition: reaction\n\
         let bob_id = contacts.first().unwrap();
         let bob_reaction = reactions.get(*bob_id);
         assert_eq!(bob_reaction.is_empty(), false);
-        assert_eq!(bob_reaction.emojis(), vec!["👍"]);
+        assert_eq!(bob_reaction.as_str(), "👍");
         assert_eq!(bob_reaction.as_str(), "👍");
         expect_reactions_changed_event(&alice, chat_alice.id, alice_msg.sender_msg_id, *bob_id)
             .await?;
@@ -769,15 +710,16 @@ Content-Disposition: reaction\n\
         );
 
         // Alice reacts to own message.
+        // Trying to set multiple reactions at once is not allowed.
         send_reaction(&alice, alice_msg.sender_msg_id, "👍 😀")
             .await
             .unwrap();
         let reactions = get_msg_reactions(&alice, alice_msg.sender_msg_id).await?;
-        assert_eq!(reactions.to_string(), "👍2 😀1");
+        assert_eq!(reactions.to_string(), "👍2");
 
         assert_eq!(
             reactions.emoji_sorted_by_frequency(),
-            vec![("👍".to_string(), 2), ("😀".to_string(), 1)]
+            vec![("👍".to_string(), 2)]
         );
 
         Ok(())
