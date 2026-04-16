@@ -89,13 +89,9 @@ mod test_chatlist_events {
             .get_matching(|evt| match evt {
                 EventType::ChatlistItemChanged {
                     chat_id: Some(ev_chat_id),
-                } => {
-                    if ev_chat_id == &chat_id {
-                        first_event_is_item.store(true, Ordering::Relaxed);
-                        true
-                    } else {
-                        false
-                    }
+                } if ev_chat_id == &chat_id => {
+                    first_event_is_item.store(true, Ordering::Relaxed);
+                    true
                 }
                 EventType::ChatlistChanged => true,
                 _ => false,

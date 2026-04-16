@@ -687,7 +687,6 @@ fn extract_address_from_receive_header<'a>(header: &'a str, start: &str) -> Opti
     })
 }
 
-#[expect(clippy::arithmetic_side_effects)]
 pub(crate) fn parse_receive_header(header: &str) -> String {
     let header = header.replace(&['\r', '\n'][..], "");
     let mut hop_info = String::from("Hop: ");

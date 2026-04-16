@@ -269,7 +269,6 @@ impl MimeMessage {
     ///
     /// This method has some side-effects,
     /// such as saving blobs and saving found public keys to the database.
-    #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 

@@ -2068,7 +2068,6 @@ pub(crate) async fn mark_contact_id_as_verified(
     Ok(())
 }
 
-#[expect(clippy::arithmetic_side_effects)]
 fn cat_fingerprint(ret: &mut String, name: &str, addr: &str, fingerprint: &str) {
     *ret += &format!("\n\n{name} ({addr}):\n{fingerprint}");
 }
