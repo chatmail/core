@@ -12,6 +12,7 @@ use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::ephemeral;
 use crate::receive_imf::receive_imf;
+use crate::securejoin::get_securejoin_qr;
 use crate::test_utils::{E2EE_INFO_MSGS, TestContext, TestContextManager};
 use crate::tools::{self, SystemTime};
 use crate::{message, sql};
@@ -2193,5 +2194,44 @@ async fn test_self_addr_consistency() -> Result<()> {
     let sent = alice.send_msg(alice_chat, &mut instance).await;
     let db_msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
     assert_eq!(db_msg.get_webxdc_self_addr(alice).await?, self_addr);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_info_app_sender() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+
+    // Alice sends webxdc in a group chat
+    let alice_chat_id = alice.create_group_with_members("Group", &[bob]).await;
+    let alice_instance = send_webxdc_instance(alice, alice_chat_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+    let alice_info = alice_instance.get_webxdc_info(alice).await?;
+    assert!(alice_info.is_app_sender);
+    assert!(!alice_info.is_broadcast);
+
+    // Bob receives group webxdc
+    let bob_instance = bob.recv_msg(&sent1).await;
+    let bob_info = bob_instance.get_webxdc_info(bob).await?;
+    assert!(!bob_info.is_app_sender);
+    assert!(!bob_info.is_broadcast);
+
+    // Alice sends webxdc to broadcast channel
+    let alice_chat_id = create_broadcast(alice, "Broadcast".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await.unwrap();
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    let alice_instance = send_webxdc_instance(alice, alice_chat_id).await?;
+    let sent2 = alice.pop_sent_msg().await;
+    let alice_info = alice_instance.get_webxdc_info(alice).await?;
+    assert!(alice_info.is_app_sender);
+    assert!(alice_info.is_broadcast);
+
+    // Bob receives broadcast webxdc
+    let bob_instance = bob.recv_msg(&sent2).await;
+    let bob_info = bob_instance.get_webxdc_info(bob).await?;
+    assert!(!bob_info.is_app_sender);
+    assert!(bob_info.is_broadcast);
+
     Ok(())
 }

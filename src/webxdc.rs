@@ -111,6 +111,12 @@ pub struct WebxdcInfo {
     /// Address to be used for `window.webxdc.selfAddr` in JS land.
     pub self_addr: String,
 
+    /// Define if the local user is the one who initially shared the webxdc application in the chat.
+    pub is_app_sender: bool,
+
+    /// Define if the app runs in a broadcasting context.
+    pub is_broadcast: bool,
+
     /// Milliseconds to wait before calling `sendUpdate()` again since the last call.
     /// Should be exposed to `window.sendUpdateInterval` in JS land.
     pub send_update_interval: usize,
@@ -923,6 +929,11 @@ impl Message {
         let internet_access = is_integrated;
 
         let self_addr = self.get_webxdc_self_addr(context).await?;
+        let is_app_sender = self.from_id == ContactId::SELF;
+        let chat = Chat::load_from_db(context, self.chat_id)
+            .await
+            .with_context(|| "Failed to load chat from the database")?;
+        let is_broadcast = chat.typ == Chattype::InBroadcast || chat.typ == Chattype::OutBroadcast;
 
         Ok(WebxdcInfo {
             name: if let Some(name) = manifest.name {
@@ -961,6 +972,8 @@ impl Message {
             request_integration,
             internet_access,
             self_addr,
+            is_app_sender,
+            is_broadcast,
             send_update_interval: context.ratelimit.read().await.update_interval(),
             send_update_max_size: RECOMMENDED_FILE_SIZE as usize,
         })
