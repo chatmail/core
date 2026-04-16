@@ -36,7 +36,7 @@ use tokio::{fs::File, io::BufReader};
 
 use crate::chat::{self, Chat};
 use crate::constants::Chattype;
-use crate::contact::ContactId;
+use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
 use crate::key::self_fingerprint;
@@ -110,6 +110,15 @@ pub struct WebxdcInfo {
 
     /// Address to be used for `window.webxdc.selfAddr` in JS land.
     pub self_addr: String,
+
+    /// Address of the peer who initially shared the webxdc in the chat.
+    /// Can be compared to `self_addr` to determine
+    /// whether the app runs for the sender or a receiver.
+    pub app_sender_addr: String,
+
+    /// `true` if updates sent by the local user
+    /// will only be seen by the app sender.
+    pub can_only_send_updates_to_app_sender: bool,
 
     /// Milliseconds to wait before calling `sendUpdate()` again since the last call.
     /// Should be exposed to `window.sendUpdateInterval` in JS land.
@@ -923,6 +932,12 @@ impl Message {
         let internet_access = is_integrated;
 
         let self_addr = self.get_webxdc_self_addr(context).await?;
+        let app_sender_addr = self.get_webxdc_app_sender_addr(context).await?;
+
+        let chat = Chat::load_from_db(context, self.chat_id)
+            .await
+            .with_context(|| "Failed to load chat from the database")?;
+        let can_only_send_updates_to_app_sender = chat.typ == Chattype::InBroadcast;
 
         Ok(WebxdcInfo {
             name: if let Some(name) = manifest.name {
@@ -961,6 +976,8 @@ impl Message {
             request_integration,
             internet_access,
             self_addr,
+            app_sender_addr,
+            can_only_send_updates_to_app_sender,
             send_update_interval: context.ratelimit.read().await.update_interval(),
             send_update_max_size: RECOMMENDED_FILE_SIZE as usize,
         })
@@ -968,6 +985,29 @@ impl Message {
 
     async fn get_webxdc_self_addr(&self, context: &Context) -> Result<String> {
         let fingerprint = self_fingerprint(context).await?;
+        let data = format!("{}-{}", fingerprint, self.rfc724_mid);
+        let hash = Sha256::digest(data.as_bytes());
+        Ok(format!("{hash:x}"))
+    }
+
+    /// Computes the webxdc address of the message sender.
+    async fn get_webxdc_app_sender_addr(&self, context: &Context) -> Result<String> {
+        // UNDEFINED may be preset during drafts or tests, will be SELF on sending
+        let fingerprint = if self.from_id == ContactId::SELF || self.from_id == ContactId::UNDEFINED
+        {
+            self_fingerprint(context).await?.to_string()
+        } else {
+            let contact = Contact::get_by_id(context, self.from_id).await?;
+            contact
+                .fingerprint()
+                .with_context(|| {
+                    format!(
+                        "No fingerprint for contact {} (webxdc sender)",
+                        self.from_id
+                    )
+                })?
+                .hex()
+        };
         let data = format!("{}-{}", fingerprint, self.rfc724_mid);
         let hash = Sha256::digest(data.as_bytes());
         Ok(format!("{hash:x}"))

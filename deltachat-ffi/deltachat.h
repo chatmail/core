@@ -4234,6 +4234,10 @@ char*             dc_msg_get_webxdc_blob      (const dc_msg_t* msg, const char* 
  *   true if the Webxdc should get internet access;
  *   this is the case i.e. for experimental maps integration.
  * - self_addr: address to be used for `window.webxdc.selfAddr` in JS land.
+ * - app_sender_addr: address of the peer who initially shared the webxdc in the chat.
+ *   Can be compared to self_addr to determine whether the app runs for the sender or a receiver.
+ * - can_only_send_updates_to_app_sender: true if updates sent by the local user
+ *   will only be seen by the app sender.
  * - send_update_interval: Milliseconds to wait before calling `sendUpdate()` again since the last call.
  *   Should be exposed to `webxdc.sendUpdateInterval` in JS land.
  * - send_update_max_size: Maximum number of bytes accepted for a serialized update object.

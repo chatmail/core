@@ -37,6 +37,11 @@ pub struct WebxdcMessageInfo {
     internet_access: bool,
     /// Address to be used for `window.webxdc.selfAddr` in JS land.
     self_addr: String,
+    /// Address of the peer who initially shared the webxdc in the chat.
+    app_sender_addr: String,
+    /// True if updates sent by the local user
+    /// will only be seen by the app sender.
+    can_only_send_updates_to_app_sender: bool,
     /// Milliseconds to wait before calling `sendUpdate()` again since the last call.
     /// Should be exposed to `window.sendUpdateInterval` in JS land.
     send_update_interval: usize,
@@ -60,6 +65,8 @@ impl WebxdcMessageInfo {
             request_integration: _,
             internet_access,
             self_addr,
+            app_sender_addr,
+            can_only_send_updates_to_app_sender,
             send_update_interval,
             send_update_max_size,
         } = message.get_webxdc_info(context).await?;
@@ -72,6 +79,8 @@ impl WebxdcMessageInfo {
             source_code_url: maybe_empty_string_to_option(source_code_url),
             internet_access,
             self_addr,
+            app_sender_addr,
+            can_only_send_updates_to_app_sender,
             send_update_interval,
             send_update_max_size,
         })
