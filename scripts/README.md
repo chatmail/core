@@ -48,19 +48,3 @@ the build machine (ask your friendly sysadmin on #deltachat Libera Chat) to type
 
 This will **rsync** your current checkout to the remote build machine 
 (no need to commit before) and then run either rust or python tests. 
-
-# coredeps Dockerfile
-
-`coredeps/Dockerfile` specifies an image that contains all 
-of Delta Chat's core dependencies. It is used to
-build python wheels (binary packages for Python).
-
-You can build the docker images yourself locally
-to avoid the relatively large download:
- 
-    cd scripts  # where all CI things are 
-    docker build -t deltachat/coredeps coredeps
-
-Additionally, you can install qemu and build arm64 docker image on x86\_64 machine:
-    apt-get install qemu binfmt-support qemu-user-static
-    docker build -t deltachat/coredeps-arm64 --build-arg BASEIMAGE=quay.io/pypa/manylinux2014_aarch64 coredeps
