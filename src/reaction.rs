@@ -29,9 +29,7 @@ use crate::events::EventType;
 use crate::message::{Message, MsgId, rfc724_mid_exists};
 use crate::param::Param;
 
-/// A single reaction consisting of multiple emoji sequences.
-///
-/// It is guaranteed to have all emojis sorted and deduplicated inside.
+/// A single reaction.
 #[derive(Debug, Default, Clone, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Reaction {
     /// Canonical representation of reaction as a string of space-separated emojis.
@@ -42,11 +40,8 @@ pub struct Reaction {
 // FromStr requires error type and reaction parsing never returns an
 // error.
 impl From<&str> for Reaction {
-    /// Parses a string containing a reaction.
-    ///
-    /// Reaction string is separated by spaces or tabs (`WSP` in ABNF),
-    /// but this function accepts any ASCII whitespace, so even a CRLF at
-    /// the end of string is acceptable.
+    /// Convert a `&str` into a `Reaction`.
+    /// Everything after the first whitespace is ignored.
     ///
     /// Any short enough string is accepted as a reaction to avoid the
     /// complexity of validating emoji sequences as required by RFC
@@ -57,24 +52,25 @@ impl From<&str> for Reaction {
     /// such as sending large numbers of large messages, and should be
     /// dealt with the same way, e.g. by blocking the user.
     fn from(reaction: &str) -> Self {
-        let mut emojis: Vec<&str> = reaction
+        let reaction: &str = reaction
             .split_ascii_whitespace()
+            .next()
             .filter(|&emoji| emoji.len() < 30)
-            .collect();
-        emojis.sort_unstable();
-        emojis.dedup();
-        let reaction = emojis.join(" ");
-        Self { reaction }
+            .unwrap_or("");
+        Self {
+            reaction: reaction.to_string(),
+        }
     }
 }
 
 impl Reaction {
-    /// Returns true if reaction contains no emojis.
+    /// Returns true if reaction contains no emoji.
     pub fn is_empty(&self) -> bool {
         self.reaction.is_empty()
     }
 
     /// Returns a vector of emojis composing a reaction.
+    /// TODO might remove this
     pub fn emojis(&self) -> Vec<&str> {
         self.reaction.split(' ').collect()
     }
@@ -223,7 +219,7 @@ async fn set_msg_id_reaction(
 
 /// Sends a reaction to message `msg_id`, overriding previously sent reactions.
 ///
-/// `reaction` is a string consisting of space-separated emoji. Use
+/// `reaction` is a string consisting of a single emoji. Use
 /// empty string to retract a reaction.
 pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> Result<MsgId> {
     let msg = Message::load_from_db(context, msg_id).await?;
@@ -424,18 +420,13 @@ mod tests {
             Reaction::from(":foobarbazquuxaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:").is_empty()
         );
 
-        // Multiple reactions separated by spaces or tabs are supported.
-        assert_eq!(Reaction::from("👍 ❤").emojis(), vec!["❤", "👍"]);
-        assert_eq!(Reaction::from("👍\t❤").emojis(), vec!["❤", "👍"]);
+        // Multiple reactions separated by spaces or tabs are not supported.
+        assert_eq!(Reaction::from("👍 ❤").emojis(), vec!["👍"]);
+        assert_eq!(Reaction::from("👍\t❤").emojis(), vec!["👍"]);
 
-        // Invalid emojis are removed, but valid emojis are retained.
-        assert_eq!(
-            Reaction::from("👍\t:foo: ❤").emojis(),
-            vec![":foo:", "❤", "👍"]
-        );
-        assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), ":foo: ❤ 👍");
+        assert_eq!(Reaction::from("👍\t:foo: ❤").emojis(), vec!["👍"]);
+        assert_eq!(Reaction::from("👍\t:foo: ❤").as_str(), "👍");
 
-        // Duplicates are removed.
         assert_eq!(Reaction::from("👍 👍").emojis(), vec!["👍"]);
     }
 
@@ -445,7 +436,8 @@ mod tests {
         let reaction2 = Reaction::from("❤");
         let reaction_sum = reaction1.add(reaction2);
 
-        assert_eq!(reaction_sum.emojis(), vec!["❤", "👍", "😀"]);
+        // It's not allowed to set multiple reactions at once
+        assert_eq!(reaction_sum.emojis(), vec!["❤", "👍"]);
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -769,15 +761,16 @@ Content-Disposition: reaction\n\
         );
 
         // Alice reacts to own message.
+        // Trying to set multiple reactions at once is not allowed.
         send_reaction(&alice, alice_msg.sender_msg_id, "👍 😀")
             .await
             .unwrap();
         let reactions = get_msg_reactions(&alice, alice_msg.sender_msg_id).await?;
-        assert_eq!(reactions.to_string(), "👍2 😀1");
+        assert_eq!(reactions.to_string(), "👍2");
 
         assert_eq!(
             reactions.emoji_sorted_by_frequency(),
-            vec![("👍".to_string(), 2), ("😀".to_string(), 1)]
+            vec![("👍".to_string(), 2)]
         );
 
         Ok(())

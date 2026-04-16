@@ -2379,7 +2379,7 @@ impl CommandApi {
 
     /// Send a reaction to message.
     ///
-    /// Reaction is a string of emojis separated by spaces. Reaction to a
+    /// Reaction is a string of a single emoji. Reaction to a
     /// single message can be sent multiple times. The last reaction
     /// received overrides all previously received reactions. It is
     /// possible to remove all reactions by sending an empty string.

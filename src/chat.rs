@@ -2628,7 +2628,7 @@ pub async fn send_msg(context: &Context, chat_id: ChatId, msg: &mut Message) -> 
     if msg.state != MessageState::Undefined && msg.state != MessageState::OutPreparing {
         msg.param.remove(Param::GuaranteeE2ee);
         msg.param.remove(Param::ForcePlaintext);
-        // create_send_msg_jobs() will update `param` in the db.
+        // create_send_msg_jobs() will update `param` in the db. <- b
     }
 
     // protect all system messages against RTLO attacks
@@ -2743,7 +2743,7 @@ async fn prepare_send_msg(
     {
         msg.param.set_int(Param::GuaranteeE2ee, 1);
         if !msg.id.is_unset() {
-            msg.update_param(context).await?;
+            msg.update_param(context).await?; // <- b
         }
     }
     msg.state = MessageState::OutPending;
