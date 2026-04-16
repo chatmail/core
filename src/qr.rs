@@ -714,7 +714,6 @@ fn decode_account(qr: &str) -> Result<Qr> {
 }
 
 /// scheme: `https://t.me/socks?server=foo&port=123` or `https://t.me/socks?server=1.2.3.4&port=123`
-#[expect(clippy::arithmetic_side_effects)]
 fn decode_tg_socks_proxy(_context: &Context, qr: &str) -> Result<Qr> {
     let url = url::Url::parse(qr).context("Invalid t.me/socks url")?;
 

@@ -1887,7 +1887,6 @@ impl MimeFactory {
     }
 
     /// Render an MDN
-    #[expect(clippy::arithmetic_side_effects)]
     fn render_mdn(&mut self) -> Result<MimePart<'static>> {
         // RFC 6522, this also requires the `report-type` parameter which is equal
         // to the MIME subtype of the second body part of the multipart/report

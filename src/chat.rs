@@ -1188,7 +1188,6 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
     /// prefer plaintext emails.
     ///
     /// To get more verbose summary for a contact, including its key fingerprint, use [`Contact::get_encrinfo`].
-    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_encryption_info(self, context: &Context) -> Result<String> {
         let chat = Chat::load_from_db(context, self).await?;
         if !chat.is_encrypted(context).await? {
@@ -1752,7 +1751,6 @@ impl Chat {
     ///
     /// If `update_msg_id` is set, that record is reused;
     /// if `update_msg_id` is None, a new record is created.
-    #[expect(clippy::arithmetic_side_effects)]
     async fn prepare_msg_raw(
         &mut self,
         context: &Context,
@@ -3023,7 +3021,6 @@ pub async fn send_text_msg(
 }
 
 /// Sends chat members a request to edit the given message's text.
-#[expect(clippy::arithmetic_side_effects)]
 pub async fn send_edit_request(context: &Context, msg_id: MsgId, new_text: String) -> Result<()> {
     let mut original_msg = Message::load_from_db(context, msg_id).await?;
     ensure!(
@@ -4612,7 +4609,6 @@ pub async fn save_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// the copy contains a reference to the original message
 /// as well as to the original chat in case the original message gets deleted.
 /// Returns data needed to add a `SaveMessage` sync item.
-#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn save_copy_in_self_talk(
     context: &Context,
     src_msg_id: MsgId,

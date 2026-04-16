@@ -199,7 +199,6 @@ SELECT ?1, rfc724_mid, pre_rfc724_mid, timestamp, ?, ? FROM msgs WHERE id=?1
     }
 
     /// Returns detailed message information in a multi-line text form.
-    #[expect(clippy::arithmetic_side_effects)]
     pub async fn get_info(self, context: &Context) -> Result<String> {
         let msg = Message::load_from_db(context, self).await?;
 
@@ -825,7 +824,6 @@ impl Message {
     ///
     /// Currently this includes `additional_text`, but this may change in future, when the UIs show
     /// the necessary info themselves.
-    #[expect(clippy::arithmetic_side_effects)]
     pub fn get_text(&self) -> String {
         self.text.clone() + &self.additional_text
     }

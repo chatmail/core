@@ -9,7 +9,6 @@ use crate::tools::IsNoneOrEmpty;
 /// This escapes a bit more than actually needed by delta (e.g. also lines as "-- footer"),
 /// but for non-delta-compatibility, that seems to be better.
 /// (to be only compatible with delta, only "[\r\n|\n]-- {0,2}[\r\n|\n]" needs to be replaced)
-#[expect(clippy::arithmetic_side_effects)]
 pub fn escape_message_footer_marks(text: &str) -> String {
     if let Some(text) = text.strip_prefix("--") {
         "-\u{200B}-".to_string() + &text.replace("\n--", "\n-\u{200B}-")
