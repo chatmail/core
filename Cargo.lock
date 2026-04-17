@@ -1360,7 +1360,7 @@ dependencies = [
  "proptest",
  "qrcodegen",
  "quick-xml",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rand 0.9.4",
  "ratelimit",
  "regex",
@@ -2981,7 +2981,7 @@ dependencies = [
  "pin-project",
  "pkarr",
  "portmapper",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rcgen",
  "reqwest",
  "ring",
@@ -3056,7 +3056,7 @@ dependencies = [
  "iroh-metrics",
  "n0-future",
  "postcard",
- "rand 0.8.5",
+ "rand 0.8.6",
  "rand_core 0.6.4",
  "serde",
  "serde-error",
@@ -3119,7 +3119,7 @@ checksum = "929d5d8fa77d5c304d3ee7cae9aede31f13908bd049f9de8c7c0094ad6f7c535"
 dependencies = [
  "bytes",
  "getrandom 0.2.16",
- "rand 0.8.5",
+ "rand 0.8.6",
  "ring",
  "rustc-hash",
  "rustls",
@@ -3172,7 +3172,7 @@ dependencies = [
  "pin-project",
  "pkarr",
  "postcard",
- "rand 0.8.5",
+ "rand 0.8.6",
  "reqwest",
  "rustls",
  "rustls-webpki 0.102.8",
@@ -3776,7 +3776,7 @@ dependencies = [
  "num-integer",
  "num-iter",
  "num-traits",
- "rand 0.8.5",
+ "rand 0.8.6",
  "serde",
  "smallvec",
  "zeroize",
@@ -4206,7 +4206,7 @@ dependencies = [
  "p256",
  "p384",
  "p521",
- "rand 0.8.5",
+ "rand 0.8.6",
  "regex",
  "replace_with",
  "ripemd",
@@ -4453,7 +4453,7 @@ dependencies = [
  "nested_enum_utils",
  "netwatch",
  "num_enum",
- "rand 0.8.5",
+ "rand 0.8.6",
  "serde",
  "smallvec",
  "snafu",
@@ -4776,9 +4776,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.8.5"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404"
+checksum = "5ca0ecfa931c29007047d1bc58e623ab12e5590e8c7cc53200d5202b69266d8a"
 dependencies = [
  "libc",
  "rand_chacha 0.3.1",
@@ -5870,7 +5870,7 @@ dependencies = [
  "hex",
  "parking_lot",
  "pnet_packet",
- "rand 0.8.5",
+ "rand 0.8.6",
  "socket2 0.5.9",
  "thiserror 1.0.69",
  "tokio",
