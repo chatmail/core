@@ -27,15 +27,7 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2026-0099>
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099",
-
-    # rand 0.8.x
-    # <https://rustsec.org/advisories/RUSTSEC-2026-0097>
-    # We already use rand 0.9,
-    # version 0.8 that cannot be upgraded
-    # is a dependency of iroh 0.35.0 and rPGP.
-    # rPGP upgrade is waiting for <https://github.com/rpgp/rpgp/pull/573>
-    "RUSTSEC-2026-0097"
+    "RUSTSEC-2026-0099"
 ]
 
 [bans]
