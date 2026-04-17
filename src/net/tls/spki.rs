@@ -6,7 +6,6 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::Context as _;
 use anyhow::Result;
 use base64::Engine as _;
 use parking_lot::RwLock;
@@ -97,25 +96,28 @@ impl SpkiHashStore {
     pub async fn cleanup(&self, sql: &Sql) -> Result<()> {
         let now = time();
         let removed_hosts = sql
-            .query_map_vec(
-                "DELETE FROM tls_spki WHERE ? > timestamp + ? RETURNING host",
-                (now, 30 * 24 * 60 * 60),
-                |row| {
+            .transaction(|transaction| {
+                let mut stmt = transaction
+                    .prepare("DELETE FROM tls_spki WHERE ? > timestamp + ? RETURNING host")?;
+                let mut res = Vec::new();
+                for row in stmt.query_map((now, 30 * 24 * 60 * 60), |row| {
                     let host: String = row.get(0)?;
                     Ok(host)
-                },
-            )
-            .await
-            .context("DELETE FROM tls_spki")?;
+                })? {
+                    res.push(row?);
+                }
 
-        // Fix timestamps that happen to be in the future
-        // if we had clock set incorrectly when the timestamp was stored.
-        // Otherwise entry may take more than 30 days to expire.
-        sql.execute(
-            "UPDATE tls_spki SET timestamp = ?1 WHERE timestamp > ?1",
-            (now,),
-        )
-        .await?;
+                // Fix timestamps that happen to be in the future
+                // if we had clock set incorrectly when the timestamp was stored.
+                // Otherwise entry may take more than 30 days to expire.
+                transaction.execute(
+                    "UPDATE tls_spki SET timestamp = ?1 WHERE timestamp > ?1",
+                    (now,),
+                )?;
+
+                Ok(res)
+            })
+            .await?;
 
         let mut lock = self.hash_store.write();
         for host in removed_hosts {
