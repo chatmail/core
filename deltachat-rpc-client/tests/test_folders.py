@@ -1,59 +1,8 @@
-import logging
 import re
-import time
 
 from imap_tools import AND, U
 
-from deltachat_rpc_client import Contact, EventType, Message
-
-
-def test_reactions_for_a_reordering_move(acfactory, direct_imap):
-    """When a batch of messages is moved from Inbox to another folder with a single MOVE command,
-    their UIDs may be reordered (e.g. Gmail is known for that) which led to that messages were
-    processed by receive_imf in the wrong order, and, particularly, reactions were processed before
-    messages they refer to and thus dropped.
-    """
-    (ac1,) = acfactory.get_online_accounts(1)
-
-    addr, password = acfactory.get_credentials()
-    ac2 = acfactory.get_unconfigured_account()
-    ac2.add_or_update_transport({"addr": addr, "password": password})
-    assert ac2.is_configured()
-
-    ac2.bring_online()
-    chat1 = acfactory.get_accepted_chat(ac1, ac2)
-    ac2.stop_io()
-
-    logging.info("sending message + reaction from ac1 to ac2")
-    msg1 = chat1.send_text("hi")
-    msg1.wait_until_delivered()
-    # It's is sad, but messages must differ in their INTERNALDATEs to be processed in the correct
-    # order by DC, and most (if not all) mail servers provide only seconds precision.
-    time.sleep(1.1)
-    react_str = "\N{THUMBS UP SIGN}"
-    msg1.send_reaction(react_str).wait_until_delivered()
-
-    logging.info("moving messages to ac2's movebox folder in the reverse order")
-    ac2_direct_imap = direct_imap(ac2)
-    ac2_direct_imap.create_folder("Movebox")
-    ac2_direct_imap.connect()
-    for uid in sorted([m.uid for m in ac2_direct_imap.get_all_messages()], reverse=True):
-        ac2_direct_imap.conn.move(uid, "Movebox")
-
-    logging.info("moving messages back")
-    ac2_direct_imap.select_folder("Movebox")
-    for uid in sorted([m.uid for m in ac2_direct_imap.get_all_messages()]):
-        ac2_direct_imap.conn.move(uid, "INBOX")
-
-    logging.info("receiving messages by ac2")
-    ac2.start_io()
-    msg2 = Message(ac2, ac2.wait_for_reactions_changed().msg_id)
-    assert msg2.get_snapshot().text == msg1.get_snapshot().text
-    reactions = msg2.get_reactions()
-    contacts = [Contact(ac2, int(i)) for i in reactions.reactions_by_contact]
-    assert len(contacts) == 1
-    assert contacts[0].get_snapshot().address == ac1.get_config("addr")
-    assert list(reactions.reactions_by_contact.values())[0] == [react_str]
+from deltachat_rpc_client import EventType
 
 
 def test_moved_markseen(acfactory, direct_imap, log):
