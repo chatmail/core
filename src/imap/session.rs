@@ -16,7 +16,7 @@ use crate::net::session::SessionStream;
 /// - Autocrypt-Setup-Message to check if a message is an autocrypt setup message,
 ///   not necessarily sent by Delta Chat.
 /// - Chat-Is-Post-Message to skip it in background fetch or when it is > `DownloadLimit`.
-const PREFETCH_FLAGS: &str = "(UID INTERNALDATE RFC822.SIZE BODY.PEEK[HEADER.FIELDS (\
+const PREFETCH_FLAGS: &str = "(UID RFC822.SIZE BODY.PEEK[HEADER.FIELDS (\
                               MESSAGE-ID \
                               DATE \
                               X-MICROSOFT-ORIGINAL-MESSAGE-ID \
@@ -124,7 +124,7 @@ impl Session {
     }
 
     /// Prefetch `n_uids` messages starting from `uid_next`. Returns a list of fetch results in the
-    /// order of ascending delivery time to the server (INTERNALDATE).
+    /// order of ascending UIDs.
     #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn prefetch(
         &mut self,
@@ -142,10 +142,10 @@ impl Session {
         let mut msgs = BTreeMap::new();
         while let Some(msg) = list.try_next().await? {
             if let Some(msg_uid) = msg.uid {
-                msgs.insert((msg.internal_date(), msg_uid), msg);
+                msgs.insert(msg_uid, msg);
             }
         }
 
-        Ok(msgs.into_iter().map(|((_, uid), msg)| (uid, msg)).collect())
+        Ok(Vec::from_iter(msgs))
     }
 }
