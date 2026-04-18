@@ -2235,3 +2235,91 @@ async fn test_webxdc_info_app_sender() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_webxdc_broadcast_channel_updates() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let charlie = &tcm.charlie().await;
+
+    // Alice creates a broadcast channel, Bob and Charlie join via securejoin QR
+    let alice_chat_id = create_broadcast(alice, "Channel".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_chat_id)).await?;
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    tcm.exec_securejoin_qr(charlie, alice, &qr).await;
+
+    // Alice sends a webxdc app to the channel, Bob and Charlie both receive it
+    let alice_instance = send_webxdc_instance(alice, alice_chat_id).await?;
+    let sent1 = alice.pop_sent_msg().await;
+
+    let bob_instance = bob.recv_msg(&sent1).await;
+    assert_eq!(bob_instance.viewtype, Viewtype::Webxdc);
+
+    let charlie_instance = charlie.recv_msg(&sent1).await;
+    assert_eq!(charlie_instance.viewtype, Viewtype::Webxdc);
+
+    // Verify broadcast context flags
+    let alice_info = alice_instance.get_webxdc_info(alice).await?;
+    let bob_info = bob_instance.get_webxdc_info(bob).await?;
+    let charlie_info = charlie_instance.get_webxdc_info(charlie).await?;
+    assert!(alice_info.is_app_sender);
+    assert!(alice_info.is_broadcast);
+    assert!(!bob_info.is_app_sender);
+    assert!(bob_info.is_broadcast);
+    assert!(!charlie_info.is_app_sender);
+    assert!(charlie_info.is_broadcast);
+
+    // Alice sends a webxdc update, Bob and Charlie both receive it
+    alice
+        .send_webxdc_status_update(alice_instance.id, r#"{"payload": "hello from alice"}"#)
+        .await?;
+    alice.flush_status_updates().await?;
+    let sent2 = alice.pop_sent_msg().await;
+
+    bob.recv_msg_trash(&sent2).await;
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":"hello from alice","serial":1,"max_serial":1}]"#
+    );
+
+    charlie.recv_msg_trash(&sent2).await;
+    assert_eq!(
+        charlie
+            .get_webxdc_status_updates(charlie_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":"hello from alice","serial":1,"max_serial":1}]"#
+    );
+
+    // Bob sends a webxdc update, Bob sees ones own update, Alice receives it, but Charlie does not
+    bob.send_webxdc_status_update(bob_instance.id, r#"{"payload": "hello from bob"}"#)
+        .await?;
+    bob.flush_status_updates().await?;
+    let sent3 = bob.pop_sent_msg().await;
+    assert_eq!(
+        bob.get_webxdc_status_updates(bob_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":"hello from alice","serial":1,"max_serial":2},
+{"payload":"hello from bob","serial":2,"max_serial":2}]"#
+    );
+
+    alice.recv_msg_trash(&sent3).await;
+    assert_eq!(
+        alice
+            .get_webxdc_status_updates(alice_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":"hello from alice","serial":1,"max_serial":2},
+{"payload":"hello from bob","serial":2,"max_serial":2}]"#
+    );
+
+    charlie.recv_msg_trash(&sent3).await;
+    assert_eq!(
+        charlie
+            .get_webxdc_status_updates(charlie_instance.id, StatusUpdateSerial(0))
+            .await?,
+        r#"[{"payload":"hello from alice","serial":1,"max_serial":1}]"#
+    );
+
+    Ok(())
+}

@@ -2691,7 +2691,9 @@ async fn prepare_send_msg(
         CantSendReason::InBroadcast => {
             matches!(
                 msg.param.get_cmd(),
-                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
+                SystemMessage::MemberRemovedFromGroup
+                    | SystemMessage::SecurejoinMessage
+                    | SystemMessage::WebxdcStatusUpdate
             )
         }
         CantSendReason::MissingKey => msg
@@ -2701,7 +2703,7 @@ async fn prepare_send_msg(
         _ => false,
     };
     if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
-        bail!("Cannot send to {chat_id}: {reason}");
+        bail!("Cannot prepare sending to {chat_id}: {reason}");
     }
 
     // Check a quote reply is not leaking data from other chats.
