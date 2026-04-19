@@ -791,7 +791,18 @@ pub(crate) async fn sync_transports(
     context
         .sql
         .transaction(|transaction| {
+            let configured_addr = transaction.query_row(
+                "SELECT value FROM config WHERE keyname='configured_addr'",
+                (),
+                |row| {
+                    let addr: String = row.get(0)?;
+                    Ok(addr)
+                },
+            )?;
             for RemovedTransportData { addr, timestamp } in removed_transports {
+                if *addr == configured_addr {
+                    continue;
+                }
                 modified |= transaction.execute(
                     "DELETE FROM transports
                      WHERE addr=? AND add_timestamp<=?",
