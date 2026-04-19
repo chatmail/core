@@ -2691,7 +2691,6 @@ async fn prepare_send_msg(
                     SystemMessage::MemberRemovedFromGroup
                         | SystemMessage::SecurejoinMessage
                         | SystemMessage::IrohNodeAddr
-                        | SystemMessage::WebxdcStatusUpdate
                 )
         }
         CantSendReason::MissingKey => msg
@@ -2700,8 +2699,9 @@ async fn prepare_send_msg(
             .unwrap_or_default(),
         _ => false,
     };
-
-    if let Some(reason) = chat.why_cant_send_ext(context, &skip_fn).await? {
+    if msg.param.get_cmd() == SystemMessage::WebxdcStatusUpdate {
+        // Already checked in `send_webxdc_status_update_struct()`.
+    } else if let Some(reason) = chat.why_cant_send_ext(context, &skip_fn).await? {
         bail!("Cannot send to {chat_id}: {reason}");
     }
 
