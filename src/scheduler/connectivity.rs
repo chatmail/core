@@ -157,8 +157,8 @@ impl ConnectivityStore {
         context.emit_event(EventType::ConnectivityChanged);
     }
 
-    pub(crate) fn set_err(&self, context: &Context, e: impl ToString) {
-        self.set(context, DetailedConnectivity::Error(e.to_string()));
+    pub(crate) fn set_err(&self, context: &Context, e: String) {
+        self.set(context, DetailedConnectivity::Error(e));
     }
     pub(crate) fn set_connecting(&self, context: &Context) {
         self.set(context, DetailedConnectivity::Connecting);

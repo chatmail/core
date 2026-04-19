@@ -631,7 +631,7 @@ async fn smtp_loop(
             info!(ctx, "SMTP fake idle started.");
             match &connection.last_send_error {
                 None => connection.connectivity.set_idle(&ctx),
-                Some(err) => connection.connectivity.set_err(&ctx, err),
+                Some(err) => connection.connectivity.set_err(&ctx, err.clone()),
             }
 
             // If send_smtp_messages() failed, we set a timeout for the fake-idle so that
