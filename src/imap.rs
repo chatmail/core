@@ -489,7 +489,7 @@ impl Imap {
         let session = match self.connect(context, configuring).await {
             Ok(session) => session,
             Err(err) => {
-                self.connectivity.set_err(context, &err);
+                self.connectivity.set_err(context, format!("{err:#}"));
                 return Err(err);
             }
         };
