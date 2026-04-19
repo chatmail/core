@@ -2691,9 +2691,7 @@ async fn prepare_send_msg(
         CantSendReason::InBroadcast => {
             matches!(
                 msg.param.get_cmd(),
-                SystemMessage::MemberRemovedFromGroup
-                    | SystemMessage::SecurejoinMessage
-                    | SystemMessage::WebxdcStatusUpdate
+                SystemMessage::MemberRemovedFromGroup | SystemMessage::SecurejoinMessage
             )
         }
         CantSendReason::MissingKey => msg
@@ -2702,7 +2700,9 @@ async fn prepare_send_msg(
             .unwrap_or_default(),
         _ => false,
     };
-    if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
+    if msg.param.get_cmd() == SystemMessage::WebxdcStatusUpdate {
+        // Already checked in `send_webxdc_status_update_struct()`.
+    } else if let Some(reason) = chat.why_cant_send_ex(context, &skip_fn).await? {
         bail!("Cannot prepare sending to {chat_id}: {reason}");
     }
 
