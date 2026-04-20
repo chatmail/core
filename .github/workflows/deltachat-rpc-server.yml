@@ -513,7 +513,7 @@ jobs:
             deltachat-rpc-server/npm-package/*.tgz
 
       # Configure Node.js for publishing.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v6.3.0
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
