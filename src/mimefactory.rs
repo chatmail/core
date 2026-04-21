@@ -194,6 +194,7 @@ fn new_address_with_name(name: &str, address: String) -> Address<'static> {
 }
 
 impl MimeFactory {
+    /// Returns `MimeFactory` for rendering `msg`.
     #[expect(clippy::arithmetic_side_effects)]
     pub async fn from_msg(context: &Context, msg: Message) -> Result<MimeFactory> {
         let now = time();
@@ -2226,18 +2227,18 @@ fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
 /// rather than all recipients.
 /// This function returns the fingerprint of the recipient the message should be sent to.
 fn must_have_only_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
-    if chat.typ == Chattype::OutBroadcast
-        && matches!(
-            msg.param.get_cmd(),
-            SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
-        )
-    {
-        let Some(fp) = msg.param.get(Param::Arg4) else {
-            return Some(Err(format_err!("Missing removed/added member")));
-        };
-        return Some(Ok(fp));
+    if chat.typ != Chattype::OutBroadcast {
+        None
+    } else if let Some(fp) = msg.param.get(Param::Arg4) {
+        Some(Ok(fp))
+    } else if matches!(
+        msg.param.get_cmd(),
+        SystemMessage::MemberRemovedFromGroup | SystemMessage::MemberAddedToGroup
+    ) {
+        Some(Err(format_err!("Missing removed/added member")))
+    } else {
+        None
     }
-    None
 }
 
 async fn build_body_file(context: &Context, msg: &Message) -> Result<MimePart<'static>> {

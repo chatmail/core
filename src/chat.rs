@@ -23,8 +23,9 @@ use crate::chatlist_events;
 use crate::color::str_to_color;
 use crate::config::Config;
 use crate::constants::{
-    Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK, DC_CHAT_ID_LAST_SPECIAL,
-    DC_CHAT_ID_TRASH, DC_RESEND_USER_AVATAR_DAYS, EDITED_PREFIX, TIMESTAMP_SENT_TOLERANCE,
+    self, Blocked, Chattype, DC_CHAT_ID_ALLDONE_HINT, DC_CHAT_ID_ARCHIVED_LINK,
+    DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH, DC_RESEND_USER_AVATAR_DAYS, EDITED_PREFIX,
+    TIMESTAMP_SENT_TOLERANCE,
 };
 use crate::contact::{self, Contact, ContactId, Origin};
 use crate::context::Context;
@@ -34,7 +35,7 @@ use crate::download::{
 };
 use crate::ephemeral::{Timer as EphemeralTimer, start_chat_ephemeral_timers};
 use crate::events::EventType;
-use crate::key::self_fingerprint;
+use crate::key::{Fingerprint, self_fingerprint};
 use crate::location;
 use crate::log::{LogExt, warn};
 use crate::logged_debug_assert;
@@ -3125,7 +3126,8 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
     .await
 }
 
-/// Returns messages belonging to the chat according to the given options.
+/// Returns messages belonging to the chat according to the given options,
+/// sorted by oldest message first.
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn get_chat_msgs_ex(
     context: &Context,
@@ -3136,6 +3138,7 @@ pub async fn get_chat_msgs_ex(
         info_only,
         add_daymarker,
     } = options;
+    // TODO: Remove `info_only` parameter; it's not used by anything
     let process_row = if info_only {
         |row: &rusqlite::Row| {
             // is_info logic taken from Message.is_info()
@@ -4009,7 +4012,45 @@ pub(crate) async fn add_contact_to_chat_ex(
     if sync.into() {
         chat.sync_contacts(context).await.log_err(context).ok();
     }
+    if chat.typ == Chattype::OutBroadcast {
+        resend_last_msgs(context, chat.id, &contact)
+            .await
+            .log_err(context)
+            .ok();
+    }
     Ok(true)
+}
+
+async fn resend_last_msgs(context: &Context, chat_id: ChatId, to_contact: &Contact) -> Result<()> {
+    let msgs: Vec<MsgId> = context
+        .sql
+        .query_map_vec(
+            "
+SELECT id
+FROM msgs
+WHERE chat_id=?
+    AND hidden=0
+    AND NOT ( -- Exclude info and system messages
+        param GLOB '*\nS=*' OR param GLOB 'S=*'
+        OR from_id=?
+        OR to_id=?
+    )
+    AND type!=?
+ORDER BY timestamp DESC, id DESC LIMIT ?",
+            (
+                chat_id,
+                ContactId::INFO,
+                ContactId::INFO,
+                Viewtype::Webxdc,
+                constants::N_MSGS_TO_NEW_BROADCAST_MEMBER,
+            ),
+            |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
+        )
+        .await?
+        .into_iter()
+        .rev()
+        .collect();
+    resend_msgs_ex(context, &msgs, to_contact.fingerprint()).await
 }
 
 /// Returns true if an avatar should be attached in the given chat.
@@ -4675,10 +4716,26 @@ pub(crate) async fn save_copy_in_self_talk(
     Ok(msg.rfc724_mid)
 }
 
-/// Resends given messages with the same Message-ID.
+/// Resends given messages to members of the corresponding chats.
 ///
 /// This is primarily intended to make existing webxdcs available to new chat members.
 pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
+    resend_msgs_ex(context, msg_ids, None).await
+}
+
+/// Resends given messages to a contact with fingerprint `to_fingerprint` or, if it's `None`, to
+/// members of the corresponding chats.
+///
+/// NB: Actually `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is
+/// added. Regarding webxdcs: It is not trivial to resend only the own status updates,
+/// and it is not trivial to resend them only to the newly-joined member,
+/// so that for now, [`resend_last_msgs`] does not automatically resend webxdcs at all.
+pub(crate) async fn resend_msgs_ex(
+    context: &Context,
+    msg_ids: &[MsgId],
+    to_fingerprint: Option<Fingerprint>,
+) -> Result<()> {
+    let to_fingerprint = to_fingerprint.map(|f| f.hex());
     let mut msgs: Vec<Message> = Vec::new();
     for msg_id in msg_ids {
         let msg = Message::load_from_db(context, *msg_id).await?;
@@ -4697,9 +4754,16 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
             | MessageState::OutFailed
             | MessageState::OutDelivered
             | MessageState::OutMdnRcvd => {
-                message::update_msg_state(context, msg.id, MessageState::OutPending).await?
+                // Broadcast owners shouldn't see spinners on messages being auto-re-sent to new
+                // subscribers (otherwise big channel owners will see spinners most of the time).
+                if to_fingerprint.is_none() {
+                    message::update_msg_state(context, msg.id, MessageState::OutPending).await?;
+                }
             }
             msg_state => bail!("Unexpected message state {msg_state}"),
+        }
+        if let Some(to_fingerprint) = &to_fingerprint {
+            msg.param.set(Param::Arg4, to_fingerprint.clone());
         }
         if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             continue;
@@ -4712,7 +4776,8 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
             chat_id: msg.chat_id,
             msg_id: msg.id,
         });
-        // note(treefit): only matters if it is the last message in chat (but probably to expensive to check, debounce also solves it)
+        // The event only matters if the message is last in the chat.
+        // But it's probably too expensive check, and UIs anyways need to debounce.
         chatlist_events::emit_chatlist_item_changed(context, msg.chat_id);
 
         if msg.viewtype == Viewtype::Webxdc {

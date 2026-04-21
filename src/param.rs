@@ -136,6 +136,10 @@ pub enum Param {
     /// For "MemberAddedToGroup" and "MemberRemovedFromGroup",
     /// this is the fingerprint added to / removed from the group.
     ///
+    /// For messages resent when adding a new member to a broadcast channel,
+    /// this is the fingerprint of the added member;
+    /// the message must only be sent to this one member then.
+    ///
     /// For call messages, this is the end timsetamp.
     Arg4 = b'H',
 
