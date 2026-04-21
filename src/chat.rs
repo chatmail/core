@@ -3298,9 +3298,16 @@ WHERE chat_id=?
         OR from_id=?
         OR to_id=?
     )
+    AND viewtype!=?
 ORDER BY timestamp DESC, id DESC LIMIT ?"
             ),
-            (chat_id, ContactId::INFO, ContactId::INFO, n_msgs),
+            (
+                chat_id,
+                ContactId::INFO,
+                ContactId::INFO,
+                Viewtype::Webxdc,
+                n_msgs,
+            ),
             |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
         )
         .await?
@@ -4741,11 +4748,9 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// members of the corresponding chats.
 ///
 /// NB: Actually `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is
-/// added. Currently webxdc status updates are re-sent to all broadcast members instead of the
-/// requested contact, but this will be changed soon: webxdc status updates won't be re-sent at all
-/// as they may contain confidential data sent by subscribers to the owner. Of course this may also
-/// happen without resending subscribers' status updates if a webxdc app is "unsafe" for use in
-/// broadcasts on its own, but this is a separate problem.
+/// added. Regarding webxdc's: It is not trivial to resend only the own status updates,
+/// and it is not trivial to resend them only to the newly-joined member,
+/// so that for now, webxdc's are not resent at all.
 pub(crate) async fn resend_msgs_ex(
     context: &Context,
     msg_ids: &[MsgId],
