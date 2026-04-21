@@ -2693,6 +2693,49 @@ async fn test_resend_own_message() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_resend_doesnt_resort_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_grp = create_group(alice, "").await?;
+    let sent1 = alice.send_text(alice_grp, "hi").await;
+    let sent1_ts = Message::load_from_db(alice, sent1.sender_msg_id)
+        .await?
+        .timestamp_sort;
+
+    SystemTime::shift(Duration::from_secs(60));
+    add_contact_to_chat(alice, alice_grp, alice.add_or_lookup_contact_id(bob).await).await?;
+    let sent2 = alice
+        .send_text(
+            alice_grp,
+            "Let's test resending, there are very few tests on it",
+        )
+        .await;
+    let resent_msg_id = sent1.sender_msg_id;
+    resend_msgs(alice, &[resent_msg_id]).await?;
+    assert_eq!(
+        resent_msg_id.get_state(alice).await?,
+        MessageState::OutPending
+    );
+    alice.pop_sent_msg().await;
+    assert_eq!(
+        resent_msg_id.get_state(alice).await?,
+        MessageState::OutDelivered
+    );
+    assert_eq!(
+        Message::load_from_db(alice, sent1.sender_msg_id)
+            .await?
+            .timestamp_sort,
+        sent1_ts
+    );
+    assert_eq!(
+        alice.get_last_msg_id_in(alice_grp).await,
+        sent2.sender_msg_id
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_resend_foreign_message_fails() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;

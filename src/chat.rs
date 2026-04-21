@@ -2947,17 +2947,19 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             "
 UPDATE msgs SET
     timestamp=(
-        SELECT MAX(timestamp) FROM msgs WHERE
+        SELECT MAX(timestamp) FROM msgs INDEXED BY msgs_index7 WHERE
             -- From `InFresh` to `OutMdnRcvd` inclusive except `OutDraft`.
             state IN(10,13,16,18,20,24,26,28) AND
             hidden IN(0,1) AND
-            chat_id=?
+            chat_id=? AND
+            id<=?
     ),
     pre_rfc724_mid=?, subject=?, param=?
 WHERE id=?
             ",
             (
                 msg.chat_id,
+                msg.id,
                 &msg.pre_rfc724_mid,
                 &msg.subject,
                 msg.param.to_string(),
