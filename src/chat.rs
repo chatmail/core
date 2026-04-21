@@ -3282,74 +3282,32 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
 pub(crate) async fn get_msgs_for_resending(
     context: &Context,
     chat_id: ChatId,
-    n_last: usize,
+    n_msgs: usize,
 ) -> Result<Vec<MsgId>> {
-    let process_row = |row: &rusqlite::Row| {
-        // is_info logic taken from Message::is_info()
-        let params = row.get::<_, String>("param")?;
-        let (from_id, to_id) = (
-            row.get::<_, ContactId>("from_id")?,
-            row.get::<_, ContactId>("to_id")?,
-        );
-        // TODO probably we don't actually need to check `is_info_msg` here,
-        // because the SQL statement does it for us?
-        let is_info_msg: bool = from_id == ContactId::INFO
-            || to_id == ContactId::INFO
-            || match Params::from_str(&params) {
-                Ok(p) => {
-                    let cmd = p.get_cmd();
-                    cmd != SystemMessage::Unknown && cmd != SystemMessage::AutocryptSetupMessage
-                }
-                _ => false,
-            };
-
-        Ok((
-            row.get::<_, i64>("timestamp")?,
-            row.get::<_, MsgId>("id")?,
-            !is_info_msg,
-        ))
-    };
-    let process_rows = |rows: rusqlite::AndThenRows<_>| {
-        let mut filtered_rows = Vec::new();
-        for row in rows {
-            let (ts, curr_id, include): (i64, MsgId, bool) = row?;
-            if include {
-                filtered_rows.push((ts, curr_id));
-            }
-        }
-
-        let mut ret = Vec::new();
-        let mut last_day = 0;
-        let cnv_to_local = gm2local_offset();
-
-        for (ts, curr_id) in filtered_rows.into_iter().rev() {
-            ret.push(curr_id);
-        }
-        Ok(ret)
-    };
-
-    let items =
-        context
-            .sql
-            .query_map(
-                &format!("
-SELECT m.id AS id, m.timestamp AS timestamp, m.param AS param, m.from_id AS from_id, m.to_id AS to_id
-FROM msgs m
-WHERE m.chat_id=?
-    AND m.hidden=0
+    let items = context
+        .sql
+        .query_map_vec(
+            &format!(
+                "
+SELECT id
+FROM msgs
+WHERE chat_id=?
+    AND hidden=0
     AND NOT ( -- Exclude info and system messages
-        m.param GLOB '*\nS=*' OR param GLOB 'S=*'
-        OR m.from_id=?
-        OR m.to_id=?
+        param GLOB '*\nS=*' OR param GLOB 'S=*'
+        OR from_id=?
+        OR to_id=?
     )
 ORDER BY timestamp DESC, id DESC LIMIT ?"
-                ),
-                (chat_id, ContactId::INFO, ContactId::INFO, n_last),
-                process_row,
-                process_rows,
-            )
-            .await?
-        ;
+            ),
+            (chat_id, ContactId::INFO, ContactId::INFO, n_msgs),
+            |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
+        )
+        .await?
+        .into_iter()
+        .rev()
+        .collect();
+
     Ok(items)
 }
 
