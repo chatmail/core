@@ -3110,44 +3110,27 @@ async fn donation_request_maybe(context: &Context) -> Result<()> {
         .await
 }
 
-/// Controls which messages [`get_chat_msgs_ex`] returns.
-#[derive(Debug, Default, PartialEq)]
-pub enum ChatMsgsFilter {
-    /// All messages.
-    #[default]
-    All,
-    /// Info messages.
-    Info,
-    /// Non-info non-system messages.
-    NonInfoNonSystem,
-}
-
-impl ChatMsgsFilter {
-    /// Returns filter capturing only info messages or all messages.
-    pub fn info_only(arg: bool) -> Self {
-        match arg {
-            true => Self::Info,
-            false => Self::All,
-        }
-    }
-}
-
-/// [`get_chat_msgs_ex`] options.
-#[derive(Debug, Default)]
-pub struct GetChatMsgsOptions {
-    /// Which messages to return.
-    pub filter: ChatMsgsFilter,
+/// Chat message list request options.
+#[derive(Debug)]
+pub struct MessageListOptions {
+    /// Return only info messages.
+    pub info_only: bool,
 
     /// Add day markers before each date regarding the local timezone.
     pub add_daymarker: bool,
-
-    /// If `Some(n)`, return up to `n` last (by timestamp) messages.
-    pub n_last: Option<usize>,
 }
 
 /// Returns all messages belonging to the chat.
 pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<ChatItem>> {
-    get_chat_msgs_ex(context, chat_id, Default::default()).await
+    get_chat_msgs_ex(
+        context,
+        chat_id,
+        MessageListOptions {
+            info_only: false,
+            add_daymarker: false,
+        },
+    )
+    .await
 }
 
 /// Returns messages belonging to the chat according to the given options.
@@ -3156,15 +3139,15 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
 pub async fn get_chat_msgs_ex(
     context: &Context,
     chat_id: ChatId,
-    options: GetChatMsgsOptions,
+    options: MessageListOptions,
 ) -> Result<Vec<ChatItem>> {
-    let GetChatMsgsOptions {
-        filter,
+    let MessageListOptions {
+        info_only,
         add_daymarker,
-        n_last,
     } = options;
-    let process_row = |row: &rusqlite::Row| {
-        if filter != ChatMsgsFilter::All {
+    // TODO: Remove `info_only` parameter; it's not used by anything
+    let process_row = if info_only {
+        |row: &rusqlite::Row| {
             // is_info logic taken from Message.is_info()
             let params = row.get::<_, String>("param")?;
             let (from_id, to_id) = (
@@ -3184,13 +3167,15 @@ pub async fn get_chat_msgs_ex(
             Ok((
                 row.get::<_, i64>("timestamp")?,
                 row.get::<_, MsgId>("id")?,
-                is_info_msg == (filter == ChatMsgsFilter::Info),
+                !is_info_msg,
             ))
-        } else {
+        }
+    } else {
+        |row: &rusqlite::Row| {
             Ok((
                 row.get::<_, i64>("timestamp")?,
                 row.get::<_, MsgId>("id")?,
-                true,
+                false,
             ))
         }
     };
@@ -3199,8 +3184,8 @@ pub async fn get_chat_msgs_ex(
         // let sqlite execute an ORDER BY clause.
         let mut sorted_rows = Vec::new();
         for row in rows {
-            let (ts, curr_id, include): (i64, MsgId, bool) = row?;
-            if include {
+            let (ts, curr_id, exclude_message): (i64, MsgId, bool) = row?;
+            if !exclude_message {
                 sorted_rows.push((ts, curr_id));
             }
         }
@@ -3227,27 +3212,21 @@ pub async fn get_chat_msgs_ex(
         Ok(ret)
     };
 
-    let n_last_subst = match n_last {
-        Some(n) => format!("ORDER BY timestamp DESC, id DESC LIMIT {n}"),
-        None => "".to_string(),
-    };
-    let items = if filter != ChatMsgsFilter::All {
+    let items = if info_only {
         context
             .sql
             .query_map(
-                &format!("
-SELECT m.id AS id, m.timestamp AS timestamp, m.param AS param, m.from_id AS from_id, m.to_id AS to_id
-FROM msgs m
-WHERE m.chat_id=?
-    AND m.hidden=0
-    AND ?=(
-        m.param GLOB '*\nS=*' OR param GLOB 'S=*'
-        OR m.from_id == ?
-        OR m.to_id == ?
-    )
-{n_last_subst}"
-                ),
-                (chat_id, filter == ChatMsgsFilter::Info, ContactId::INFO, ContactId::INFO),
+        // GLOB is used here instead of LIKE because it is case-sensitive
+                "SELECT m.id AS id, m.timestamp AS timestamp, m.param AS param, m.from_id AS from_id, m.to_id AS to_id
+               FROM msgs m
+              WHERE m.chat_id=?
+                AND m.hidden=0
+                AND (
+                    m.param GLOB '*\nS=*' OR param GLOB 'S=*'
+                    OR m.from_id == ?
+                    OR m.to_id == ?
+                );",
+                (chat_id, ContactId::INFO, ContactId::INFO),
                 process_row,
                 process_rows,
             )
@@ -3256,14 +3235,10 @@ WHERE m.chat_id=?
         context
             .sql
             .query_map(
-                &format!(
-                    "
-SELECT m.id AS id, m.timestamp AS timestamp
-FROM msgs m
-WHERE m.chat_id=?
-    AND m.hidden=0
-{n_last_subst}"
-                ),
+                "SELECT m.id AS id, m.timestamp AS timestamp
+               FROM msgs m
+              WHERE m.chat_id=?
+                AND m.hidden=0;",
                 (chat_id,),
                 process_row,
                 process_rows,
@@ -3301,6 +3276,81 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// TODO
+pub(crate) async fn get_msgs_for_resending(
+    context: &Context,
+    chat_id: ChatId,
+    n_last: usize,
+) -> Result<Vec<MsgId>> {
+    let process_row = |row: &rusqlite::Row| {
+        // is_info logic taken from Message::is_info()
+        let params = row.get::<_, String>("param")?;
+        let (from_id, to_id) = (
+            row.get::<_, ContactId>("from_id")?,
+            row.get::<_, ContactId>("to_id")?,
+        );
+        // TODO probably we don't actually need to check `is_info_msg` here,
+        // because the SQL statement does it for us?
+        let is_info_msg: bool = from_id == ContactId::INFO
+            || to_id == ContactId::INFO
+            || match Params::from_str(&params) {
+                Ok(p) => {
+                    let cmd = p.get_cmd();
+                    cmd != SystemMessage::Unknown && cmd != SystemMessage::AutocryptSetupMessage
+                }
+                _ => false,
+            };
+
+        Ok((
+            row.get::<_, i64>("timestamp")?,
+            row.get::<_, MsgId>("id")?,
+            !is_info_msg,
+        ))
+    };
+    let process_rows = |rows: rusqlite::AndThenRows<_>| {
+        let mut filtered_rows = Vec::new();
+        for row in rows {
+            let (ts, curr_id, include): (i64, MsgId, bool) = row?;
+            if include {
+                filtered_rows.push((ts, curr_id));
+            }
+        }
+
+        let mut ret = Vec::new();
+        let mut last_day = 0;
+        let cnv_to_local = gm2local_offset();
+
+        for (ts, curr_id) in filtered_rows.into_iter().rev() {
+            ret.push(curr_id);
+        }
+        Ok(ret)
+    };
+
+    let items =
+        context
+            .sql
+            .query_map(
+                &format!("
+SELECT m.id AS id, m.timestamp AS timestamp, m.param AS param, m.from_id AS from_id, m.to_id AS to_id
+FROM msgs m
+WHERE m.chat_id=?
+    AND m.hidden=0
+    AND NOT ( -- Exclude info and system messages
+        m.param GLOB '*\nS=*' OR param GLOB 'S=*'
+        OR m.from_id=?
+        OR m.to_id=?
+    )
+ORDER BY timestamp DESC, id DESC LIMIT ?"
+                ),
+                (chat_id, ContactId::INFO, ContactId::INFO, n_last),
+                process_row,
+                process_rows,
+            )
+            .await?
+        ;
+    Ok(items)
 }
 
 /// Marks all messages in the chat as noticed.
@@ -4045,23 +4095,9 @@ pub(crate) async fn add_contact_to_chat_ex(
         chat.sync_contacts(context).await.log_err(context).ok();
     }
     let resend_last_msgs = || async {
-        let items = get_chat_msgs_ex(
-            context,
-            chat.id,
-            GetChatMsgsOptions {
-                filter: ChatMsgsFilter::NonInfoNonSystem,
-                n_last: Some(constants::N_MSGS_TO_NEW_BROADCAST_MEMBER),
-                ..Default::default()
-            },
-        )
-        .await?;
-        let msgs: Vec<_> = items
-            .into_iter()
-            .filter_map(|i| match i {
-                ChatItem::Message { msg_id } => Some(msg_id),
-                _ => None,
-            })
-            .collect();
+        let msgs =
+            get_msgs_for_resending(context, chat.id, constants::N_MSGS_TO_NEW_BROADCAST_MEMBER)
+                .await?;
         resend_msgs_ex(context, &msgs, contact.fingerprint()).await
     };
     if chat.typ == Chattype::OutBroadcast {

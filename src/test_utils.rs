@@ -21,7 +21,9 @@ use tempfile::{TempDir, tempdir};
 use tokio::runtime::Handle;
 use tokio::{fs, task};
 
-use crate::chat::{self, Chat, ChatId, ChatIdBlocked, add_to_chat_contacts_table, create_group};
+use crate::chat::{
+    self, Chat, ChatId, ChatIdBlocked, MessageListOptions, add_to_chat_contacts_table, create_group,
+};
 use crate::chatlist::Chatlist;
 use crate::config::Config;
 use crate::constants::{Blocked, Chattype};
@@ -1092,9 +1094,16 @@ ORDER BY id"
     async fn display_chat(&self, chat_id: ChatId) -> String {
         let mut res = String::new();
 
-        let msglist = chat::get_chat_msgs_ex(self, chat_id, Default::default())
-            .await
-            .unwrap();
+        let msglist = chat::get_chat_msgs_ex(
+            self,
+            chat_id,
+            MessageListOptions {
+                info_only: false,
+                add_daymarker: false,
+            },
+        )
+        .await
+        .unwrap();
         let msglist: Vec<MsgId> = msglist
             .into_iter()
             .filter_map(|x| match x {
