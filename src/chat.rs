@@ -4019,25 +4019,22 @@ pub(crate) async fn add_contact_to_chat_ex(
     if sync.into() {
         chat.sync_contacts(context).await.log_err(context).ok();
     }
-    let resend_last_msgs = || async {
-        let msgs =
-            get_msgs_for_resending(context, chat.id, constants::N_MSGS_TO_NEW_BROADCAST_MEMBER)
-                .await?;
-        resend_msgs_ex(context, &msgs, contact.fingerprint()).await
-    };
     if chat.typ == Chattype::OutBroadcast {
-        resend_last_msgs().await.log_err(context).ok();
+        resend_last_msgs(context, &chat, &contact)
+            .await
+            .log_err(context)
+            .ok();
     }
     Ok(true)
 }
 
-/// TODO
-async fn get_msgs_for_resending(
+async fn resend_last_msgs(
     context: &Context,
-    chat_id: ChatId,
-    n_msgs: usize,
-) -> Result<Vec<MsgId>> {
-    let items = context
+    chat: &Chat,
+    to_contact: &Contact,
+) -> std::result::Result<(), anyhow::Error> {
+    let chat_id = chat.id;
+    let msgs: Vec<MsgId> = context
         .sql
         .query_map_vec(
             &format!(
@@ -4059,7 +4056,7 @@ ORDER BY timestamp DESC, id DESC LIMIT ?"
                 ContactId::INFO,
                 ContactId::INFO,
                 Viewtype::Webxdc,
-                n_msgs,
+                constants::N_MSGS_TO_NEW_BROADCAST_MEMBER,
             ),
             |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
         )
@@ -4067,8 +4064,7 @@ ORDER BY timestamp DESC, id DESC LIMIT ?"
         .into_iter()
         .rev()
         .collect();
-
-    Ok(items)
+    resend_msgs_ex(context, &msgs, to_contact.fingerprint()).await
 }
 
 /// Returns true if an avatar should be attached in the given chat.
@@ -4750,7 +4746,7 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// NB: Actually `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is
 /// added. Regarding webxdc's: It is not trivial to resend only the own status updates,
 /// and it is not trivial to resend them only to the newly-joined member,
-/// so that for now, webxdc's are not resent at all.
+/// so that for now, [`resend_last_msgs`] does not automatically resend webxdc's at all.
 pub(crate) async fn resend_msgs_ex(
     context: &Context,
     msg_ids: &[MsgId],
