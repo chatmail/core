@@ -4035,7 +4035,7 @@ WHERE chat_id=?
         OR from_id=?
         OR to_id=?
     )
-    AND viewtype!=?
+    AND type!=?
 ORDER BY timestamp DESC, id DESC LIMIT ?",
             (
                 chat_id,
