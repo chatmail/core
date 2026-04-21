@@ -834,17 +834,24 @@ ORDER BY id"
         assert_eq!(received.chat_id, DC_CHAT_ID_TRASH);
     }
 
+    /// Gets the most recent message ID of a chat.
+    ///
+    /// Panics on errors or if the most recent message is a marker.
+    pub async fn get_last_msg_id_in(&self, chat_id: ChatId) -> MsgId {
+        let msgs = chat::get_chat_msgs(&self.ctx, chat_id).await.unwrap();
+        if let ChatItem::Message { msg_id } = msgs.last().unwrap() {
+            *msg_id
+        } else {
+            panic!("Wrong item type");
+        }
+    }
+
     /// Gets the most recent message of a chat.
     ///
     /// Panics on errors or if the most recent message is a marker.
     pub async fn get_last_msg_in(&self, chat_id: ChatId) -> Message {
-        let msgs = chat::get_chat_msgs(&self.ctx, chat_id).await.unwrap();
-        let msg_id = if let ChatItem::Message { msg_id } = msgs.last().unwrap() {
-            msg_id
-        } else {
-            panic!("Wrong item type");
-        };
-        Message::load_from_db(&self.ctx, *msg_id).await.unwrap()
+        let msg_id = self.get_last_msg_id_in(chat_id).await;
+        Message::load_from_db(&self.ctx, msg_id).await.unwrap()
     }
 
     /// Gets the most recent message over all chats.
