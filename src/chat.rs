@@ -4026,8 +4026,7 @@ async fn resend_last_msgs(context: &Context, chat: &Chat, to_contact: &Contact) 
     let msgs: Vec<MsgId> = context
         .sql
         .query_map_vec(
-            &format!(
-                "
+            "
 SELECT id
 FROM msgs
 WHERE chat_id=?
@@ -4038,8 +4037,7 @@ WHERE chat_id=?
         OR to_id=?
     )
     AND viewtype!=?
-ORDER BY timestamp DESC, id DESC LIMIT ?"
-            ),
+ORDER BY timestamp DESC, id DESC LIMIT ?",
             (
                 chat_id,
                 ContactId::INFO,
