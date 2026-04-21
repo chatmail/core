@@ -3278,46 +3278,6 @@ pub async fn marknoticed_all_chats(context: &Context) -> Result<()> {
     Ok(())
 }
 
-/// TODO
-pub(crate) async fn get_msgs_for_resending(
-    context: &Context,
-    chat_id: ChatId,
-    n_msgs: usize,
-) -> Result<Vec<MsgId>> {
-    let items = context
-        .sql
-        .query_map_vec(
-            &format!(
-                "
-SELECT id
-FROM msgs
-WHERE chat_id=?
-    AND hidden=0
-    AND NOT ( -- Exclude info and system messages
-        param GLOB '*\nS=*' OR param GLOB 'S=*'
-        OR from_id=?
-        OR to_id=?
-    )
-    AND viewtype!=?
-ORDER BY timestamp DESC, id DESC LIMIT ?"
-            ),
-            (
-                chat_id,
-                ContactId::INFO,
-                ContactId::INFO,
-                Viewtype::Webxdc,
-                n_msgs,
-            ),
-            |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
-        )
-        .await?
-        .into_iter()
-        .rev()
-        .collect();
-
-    Ok(items)
-}
-
 /// Marks all messages in the chat as noticed.
 /// If the given chat-id is the archive-link, marks all messages in all archived chats as noticed.
 pub async fn marknoticed_chat(context: &Context, chat_id: ChatId) -> Result<()> {
@@ -4069,6 +4029,46 @@ pub(crate) async fn add_contact_to_chat_ex(
         resend_last_msgs().await.log_err(context).ok();
     }
     Ok(true)
+}
+
+/// TODO
+async fn get_msgs_for_resending(
+    context: &Context,
+    chat_id: ChatId,
+    n_msgs: usize,
+) -> Result<Vec<MsgId>> {
+    let items = context
+        .sql
+        .query_map_vec(
+            &format!(
+                "
+SELECT id
+FROM msgs
+WHERE chat_id=?
+    AND hidden=0
+    AND NOT ( -- Exclude info and system messages
+        param GLOB '*\nS=*' OR param GLOB 'S=*'
+        OR from_id=?
+        OR to_id=?
+    )
+    AND viewtype!=?
+ORDER BY timestamp DESC, id DESC LIMIT ?"
+            ),
+            (
+                chat_id,
+                ContactId::INFO,
+                ContactId::INFO,
+                Viewtype::Webxdc,
+                n_msgs,
+            ),
+            |row: &rusqlite::Row| Ok(row.get::<_, MsgId>(0)?),
+        )
+        .await?
+        .into_iter()
+        .rev()
+        .collect();
+
+    Ok(items)
 }
 
 /// Returns true if an avatar should be attached in the given chat.
