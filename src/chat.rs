@@ -3126,8 +3126,8 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
     .await
 }
 
-/// Returns messages belonging to the chat according to the given options.
-/// Older messages go first.
+/// Returns messages belonging to the chat according to the given options,
+/// sorted by oldest message first.
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn get_chat_msgs_ex(
     context: &Context,
@@ -4013,7 +4013,7 @@ pub(crate) async fn add_contact_to_chat_ex(
         chat.sync_contacts(context).await.log_err(context).ok();
     }
     if chat.typ == Chattype::OutBroadcast {
-        resend_last_msgs(context, &chat, &contact)
+        resend_last_msgs(context, chat.id, &contact)
             .await
             .log_err(context)
             .ok();
@@ -4021,8 +4021,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     Ok(true)
 }
 
-async fn resend_last_msgs(context: &Context, chat: &Chat, to_contact: &Contact) -> Result<()> {
-    let chat_id = chat.id;
+async fn resend_last_msgs(context: &Context, chat_id: ChatId, to_contact: &Contact) -> Result<()> {
     let msgs: Vec<MsgId> = context
         .sql
         .query_map_vec(
@@ -4728,9 +4727,9 @@ pub async fn resend_msgs(context: &Context, msg_ids: &[MsgId]) -> Result<()> {
 /// members of the corresponding chats.
 ///
 /// NB: Actually `to_fingerprint` is only passed for `OutBroadcast` chats when a new member is
-/// added. Regarding webxdc's: It is not trivial to resend only the own status updates,
+/// added. Regarding webxdcs: It is not trivial to resend only the own status updates,
 /// and it is not trivial to resend them only to the newly-joined member,
-/// so that for now, [`resend_last_msgs`] does not automatically resend webxdc's at all.
+/// so that for now, [`resend_last_msgs`] does not automatically resend webxdcs at all.
 pub(crate) async fn resend_msgs_ex(
     context: &Context,
     msg_ids: &[MsgId],

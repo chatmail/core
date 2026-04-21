@@ -2228,7 +2228,6 @@ fn should_encrypt_symmetrically(msg: &Message, chat: &Chat) -> bool {
 fn must_have_only_one_recipient<'a>(msg: &'a Message, chat: &Chat) -> Option<Result<&'a str>> {
     if chat.typ != Chattype::OutBroadcast {
         None
-        // TODO problem here is that Param::Arg4 may be the end timestamp of a call
     } else if let Some(fp) = msg.param.get(Param::Arg4) {
         Some(Ok(fp))
     } else if matches!(
