@@ -195,15 +195,8 @@ fn new_address_with_name(name: &str, address: String) -> Address<'static> {
 
 impl MimeFactory {
     /// Returns `MimeFactory` for rendering `msg`.
-    ///
-    /// * `row_id` - Actual Message ID, if `Some`. This is to avoid updating the `msgs` row, in
-    ///   which case `msg.id` is fake (`u32::MAX`);
     #[expect(clippy::arithmetic_side_effects)]
-    pub async fn from_msg(
-        context: &Context,
-        msg: Message,
-        row_id: Option<MsgId>,
-    ) -> Result<MimeFactory> {
+    pub async fn from_msg(context: &Context, msg: Message) -> Result<MimeFactory> {
         let now = time();
         let chat = Chat::load_from_db(context, msg.chat_id).await?;
         let attach_profile_data = Self::should_attach_profile_data(&msg);
@@ -513,13 +506,12 @@ impl MimeFactory {
             };
         }
 
-        let msg_id = row_id.unwrap_or(msg.id);
         let (in_reply_to, references) = context
             .sql
             .query_row(
                 "SELECT mime_in_reply_to, IFNULL(mime_references, '')
                  FROM msgs WHERE id=?",
-                (msg_id,),
+                (msg.id,),
                 |row| {
                     let in_reply_to: String = row.get(0)?;
                     let references: String = row.get(1)?;

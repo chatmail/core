@@ -6,9 +6,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{bail, ensure, Result};
-use deltachat::chat::{
-    self, Chat, ChatId, ChatItem, ChatVisibility, MessageListOptions, MuteDuration,
-};
+use deltachat::chat::{self, Chat, ChatId, ChatItem, ChatVisibility, MuteDuration};
 use deltachat::chatlist::*;
 use deltachat::constants::*;
 use deltachat::contact::*;
@@ -624,7 +622,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             let msglist = chat::get_chat_msgs_ex(
                 &context,
                 sel_chat.get_id(),
-                MessageListOptions {
+                chat::MessageListOptions {
                     info_only: false,
                     add_daymarker: true,
                 },

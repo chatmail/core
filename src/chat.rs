@@ -2754,7 +2754,7 @@ async fn prepare_send_msg(
     }
     chat.prepare_msg_raw(context, msg, update_msg_id).await?;
 
-    let row_ids = create_send_msg_jobs(context, msg, None)
+    let row_ids = create_send_msg_jobs(context, msg)
         .await
         .context("Failed to create send jobs")?;
     if !row_ids.is_empty() {
@@ -2824,14 +2824,7 @@ async fn render_mime_message_and_pre_message(
 /// Returns row ids if `smtp` table jobs were created or an empty `Vec` otherwise.
 ///
 /// The caller has to interrupt SMTP loop or otherwise process new rows.
-///
-/// * `row_id` - Actual Message ID, if `Some`. This is to avoid updating the `msgs` row, in which
-///   case `msg.id` is fake (`u32::MAX`);
-pub(crate) async fn create_send_msg_jobs(
-    context: &Context,
-    msg: &mut Message,
-    row_id: Option<MsgId>,
-) -> Result<Vec<i64>> {
+pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -> Result<Vec<i64>> {
     let cmd = msg.param.get_cmd();
     if cmd == SystemMessage::GroupNameChanged || cmd == SystemMessage::GroupDescriptionChanged {
         msg.chat_id
@@ -2848,7 +2841,7 @@ pub(crate) async fn create_send_msg_jobs(
     }
 
     let needs_encryption = msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default();
-    let mimefactory = match MimeFactory::from_msg(context, msg.clone(), row_id).await {
+    let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
         Ok(mf) => mf,
         Err(err) => {
             // Mark message as failed
@@ -4028,11 +4021,7 @@ pub(crate) async fn add_contact_to_chat_ex(
     Ok(true)
 }
 
-async fn resend_last_msgs(
-    context: &Context,
-    chat: &Chat,
-    to_contact: &Contact,
-) -> std::result::Result<(), anyhow::Error> {
+async fn resend_last_msgs(context: &Context, chat: &Chat, to_contact: &Contact) -> Result<()> {
     let chat_id = chat.id;
     let msgs: Vec<MsgId> = context
         .sql
@@ -4621,10 +4610,7 @@ pub async fn forward_msgs_2ctx(
         chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
 
         curr_timestamp += 1;
-        if !create_send_msg_jobs(ctx_dst, &mut msg, None)
-            .await?
-            .is_empty()
-        {
+        if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
             ctx_dst.scheduler.interrupt_smtp().await;
         }
         created_msgs.push(msg.id);
@@ -4779,17 +4765,10 @@ pub(crate) async fn resend_msgs_ex(
             }
             msg_state => bail!("Unexpected message state {msg_state}"),
         }
-        let mut row_id = None;
         if let Some(to_fingerprint) = &to_fingerprint {
             msg.param.set(Param::Arg4, to_fingerprint.clone());
-            // Avoid updating the `msgs` row.
-            row_id = Some(msg.id);
-            msg.id = MsgId::new(u32::MAX);
         }
-        if create_send_msg_jobs(context, &mut msg, row_id)
-            .await?
-            .is_empty()
-        {
+        if create_send_msg_jobs(context, &mut msg).await?.is_empty() {
             continue;
         }
 
