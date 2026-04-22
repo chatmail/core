@@ -234,34 +234,6 @@ static P_BLUEWIN_CH: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-// buzon.uy.md: buzon.uy
-static P_BUZON_UY: Provider = Provider {
-    id: "buzon.uy",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "",
-    overview_page: "https://providers.delta.chat/buzon-uy",
-    server: &[
-        Server {
-            protocol: Imap,
-            socket: Starttls,
-            hostname: "mail.buzon.uy",
-            port: 143,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Starttls,
-            hostname: "mail.buzon.uy",
-            port: 587,
-            username_pattern: Email,
-        },
-    ],
-    opt: ProviderOptions::new(),
-    config_defaults: None,
-    oauth2_authorizer: None,
-};
-
 // chello.at.md: chello.at
 static P_CHELLO_AT: Provider = Provider {
     id: "chello.at",
@@ -298,48 +270,6 @@ static P_COMCAST: Provider = Provider {
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/comcast",
     server: &[],
-    opt: ProviderOptions::new(),
-    config_defaults: None,
-    oauth2_authorizer: None,
-};
-
-// daleth.cafe.md: daleth.cafe
-static P_DALETH_CAFE: Provider = Provider {
-    id: "daleth.cafe",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "",
-    overview_page: "https://providers.delta.chat/daleth-cafe",
-    server: &[
-        Server {
-            protocol: Imap,
-            socket: Ssl,
-            hostname: "daleth.cafe",
-            port: 993,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Ssl,
-            hostname: "daleth.cafe",
-            port: 465,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Imap,
-            socket: Starttls,
-            hostname: "daleth.cafe",
-            port: 143,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Starttls,
-            hostname: "daleth.cafe",
-            port: 587,
-            username_pattern: Email,
-        },
-    ],
     opt: ProviderOptions::new(),
     config_defaults: None,
     oauth2_authorizer: None,
@@ -496,22 +426,6 @@ static P_FIREMAIL_DE: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-// five.chat.md: five.chat
-static P_FIVE_CHAT: Provider = Provider {
-    id: "five.chat",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "",
-    overview_page: "https://providers.delta.chat/five-chat",
-    server: &[],
-    opt: ProviderOptions::new(),
-    config_defaults: Some(&[ConfigDefault {
-        key: Config::BccSelf,
-        value: "1",
-    }]),
-    oauth2_authorizer: None,
-};
-
 // freenet.de.md: freenet.de
 static P_FREENET_DE: Provider = Provider {
     id: "freenet.de",
@@ -629,16 +543,10 @@ static P_HERMES_RADIO: Provider = Provider {
         strict_tls: false,
         ..ProviderOptions::new()
     },
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::MdnsEnabled,
-            value: "0",
-        },
-        ConfigDefault {
-            key: Config::ShowEmails,
-            value: "2",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::MdnsEnabled,
+        value: "0",
+    }]),
     oauth2_authorizer: None,
 };
 
@@ -919,90 +827,6 @@ static P_MAILO_COM: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-// mehl.cloud.md: mehl.cloud
-static P_MEHL_CLOUD: Provider = Provider {
-    id: "mehl.cloud",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "",
-    overview_page: "https://providers.delta.chat/mehl-cloud",
-    server: &[
-        Server {
-            protocol: Imap,
-            socket: Ssl,
-            hostname: "mehl.cloud",
-            port: 443,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Ssl,
-            hostname: "mehl.cloud",
-            port: 443,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Imap,
-            socket: Ssl,
-            hostname: "mehl.cloud",
-            port: 993,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Ssl,
-            hostname: "mehl.cloud",
-            port: 465,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Imap,
-            socket: Starttls,
-            hostname: "mehl.cloud",
-            port: 143,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Starttls,
-            hostname: "mehl.cloud",
-            port: 587,
-            username_pattern: Email,
-        },
-    ],
-    opt: ProviderOptions::new(),
-    config_defaults: None,
-    oauth2_authorizer: None,
-};
-
-// mehl.store.md: mehl.store, ende.in.net, l2i.top, szh.homes, sls.post.in, ente.quest, ente.cfd, nein.jetzt
-static P_MEHL_STORE: Provider = Provider {
-    id: "mehl.store",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "This account provides 3GB storage for eMails and the possibility to access a NEXTCLOUD-instance by using the email-credits!",
-    overview_page: "https://providers.delta.chat/mehl-store",
-    server: &[
-        Server {
-            protocol: Imap,
-            socket: Ssl,
-            hostname: "mail.ende.in.net",
-            port: 993,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Starttls,
-            hostname: "mail.ende.in.net",
-            port: 587,
-            username_pattern: Email,
-        },
-    ],
-    opt: ProviderOptions::new(),
-    config_defaults: None,
-    oauth2_authorizer: None,
-};
-
 // migadu.md: migadu.com
 static P_MIGADU: Provider = Provider {
     id: "migadu",
@@ -1250,8 +1074,8 @@ static P_OUVATON_COOP: Provider = Provider {
 // posteo.md: posteo.de, posteo.af, posteo.at, posteo.be, posteo.ca, posteo.ch, posteo.cl, posteo.co, posteo.co.uk, posteo.com, posteo.com.br, posteo.cr, posteo.cz, posteo.dk, posteo.ee, posteo.es, posteo.eu, posteo.fi, posteo.gl, posteo.gr, posteo.hn, posteo.hr, posteo.hu, posteo.ie, posteo.in, posteo.is, posteo.it, posteo.jp, posteo.la, posteo.li, posteo.lt, posteo.lu, posteo.me, posteo.mx, posteo.my, posteo.net, posteo.nl, posteo.no, posteo.nz, posteo.org, posteo.pe, posteo.pl, posteo.pm, posteo.pt, posteo.ro, posteo.ru, posteo.se, posteo.sg, posteo.si, posteo.tn, posteo.uk, posteo.us
 static P_POSTEO: Provider = Provider {
     id: "posteo",
-    status: Status::Ok,
-    before_login_hint: "",
+    status: Status::Preparation,
+    before_login_hint: "You must create an app-specific password before you can log in.",
     after_login_hint: "",
     overview_page: "https://providers.delta.chat/posteo",
     server: &[
@@ -1559,51 +1383,6 @@ static P_T_ONLINE: Provider = Provider {
     ],
     opt: ProviderOptions::new(),
     config_defaults: None,
-    oauth2_authorizer: None,
-};
-
-// testrun.md: testrun.org
-static P_TESTRUN: Provider = Provider {
-    id: "testrun",
-    status: Status::Ok,
-    before_login_hint: "",
-    after_login_hint: "",
-    overview_page: "https://providers.delta.chat/testrun",
-    server: &[
-        Server {
-            protocol: Imap,
-            socket: Ssl,
-            hostname: "testrun.org",
-            port: 993,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Ssl,
-            hostname: "testrun.org",
-            port: 465,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Imap,
-            socket: Starttls,
-            hostname: "testrun.org",
-            port: 143,
-            username_pattern: Email,
-        },
-        Server {
-            protocol: Smtp,
-            socket: Starttls,
-            hostname: "testrun.org",
-            port: 587,
-            username_pattern: Email,
-        },
-    ],
-    opt: ProviderOptions::new(),
-    config_defaults: Some(&[ConfigDefault {
-        key: Config::BccSelf,
-        value: "1",
-    }]),
     oauth2_authorizer: None,
 };
 
@@ -2004,7 +1783,7 @@ static P_ZOHO: Provider = Provider {
     oauth2_authorizer: None,
 };
 
-pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
+pub(crate) static PROVIDER_DATA: [(&str, &Provider); 521] = [
     ("163.com", &P_163),
     ("aktivix.org", &P_AKTIVIX_ORG),
     ("aliyun.com", &P_ALIYUN),
@@ -2014,11 +1793,9 @@ pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
     ("delta.blinzeln.de", &P_BLINDZELN_ORG),
     ("delta.blindzeln.org", &P_BLINDZELN_ORG),
     ("bluewin.ch", &P_BLUEWIN_CH),
-    ("buzon.uy", &P_BUZON_UY),
     ("chello.at", &P_CHELLO_AT),
     ("xfinity.com", &P_COMCAST),
     ("comcast.net", &P_COMCAST),
-    ("daleth.cafe", &P_DALETH_CAFE),
     ("dismail.de", &P_DISMAIL_DE),
     ("disroot.org", &P_DISROOT),
     ("e.email", &P_E_EMAIL),
@@ -2145,7 +1922,6 @@ pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
     ("your-mail.com", &P_FASTMAIL),
     ("firemail.at", &P_FIREMAIL_DE),
     ("firemail.de", &P_FIREMAIL_DE),
-    ("five.chat", &P_FIVE_CHAT),
     ("freenet.de", &P_FREENET_DE),
     ("gmail.com", &P_GMAIL),
     ("googlemail.com", &P_GMAIL),
@@ -2368,15 +2144,6 @@ pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
     ("mailbox.org", &P_MAILBOX_ORG),
     ("secure.mailbox.org", &P_MAILBOX_ORG),
     ("mailo.com", &P_MAILO_COM),
-    ("mehl.cloud", &P_MEHL_CLOUD),
-    ("mehl.store", &P_MEHL_STORE),
-    ("ende.in.net", &P_MEHL_STORE),
-    ("l2i.top", &P_MEHL_STORE),
-    ("szh.homes", &P_MEHL_STORE),
-    ("sls.post.in", &P_MEHL_STORE),
-    ("ente.quest", &P_MEHL_STORE),
-    ("ente.cfd", &P_MEHL_STORE),
-    ("nein.jetzt", &P_MEHL_STORE),
     ("migadu.com", &P_MIGADU),
     ("nauta.cu", &P_NAUTA_CU),
     ("naver.com", &P_NAVER),
@@ -2469,7 +2236,6 @@ pub(crate) static PROVIDER_DATA: [(&str, &Provider); 534] = [
     ("systemli.org", &P_SYSTEMLI_ORG),
     ("t-online.de", &P_T_ONLINE),
     ("magenta.de", &P_T_ONLINE),
-    ("testrun.org", &P_TESTRUN),
     ("tiscali.it", &P_TISCALI_IT),
     ("tutanota.com", &P_TUTANOTA),
     ("tutanota.de", &P_TUTANOTA),
@@ -2552,10 +2318,8 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
             ("autistici.org", &P_AUTISTICI_ORG),
             ("blindzeln.org", &P_BLINDZELN_ORG),
             ("bluewin.ch", &P_BLUEWIN_CH),
-            ("buzon.uy", &P_BUZON_UY),
             ("chello.at", &P_CHELLO_AT),
             ("comcast", &P_COMCAST),
-            ("daleth.cafe", &P_DALETH_CAFE),
             ("dismail.de", &P_DISMAIL_DE),
             ("disroot", &P_DISROOT),
             ("e.email", &P_E_EMAIL),
@@ -2563,7 +2327,6 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
             ("example.com", &P_EXAMPLE_COM),
             ("fastmail", &P_FASTMAIL),
             ("firemail.de", &P_FIREMAIL_DE),
-            ("five.chat", &P_FIVE_CHAT),
             ("freenet.de", &P_FREENET_DE),
             ("gmail", &P_GMAIL),
             ("gmx.net", &P_GMX_NET),
@@ -2581,8 +2344,6 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
             ("mail2tor", &P_MAIL2TOR),
             ("mailbox.org", &P_MAILBOX_ORG),
             ("mailo.com", &P_MAILO_COM),
-            ("mehl.cloud", &P_MEHL_CLOUD),
-            ("mehl.store", &P_MEHL_STORE),
             ("migadu", &P_MIGADU),
             ("nauta.cu", &P_NAUTA_CU),
             ("naver", &P_NAVER),
@@ -2602,7 +2363,6 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
             ("systemausfall.org", &P_SYSTEMAUSFALL_ORG),
             ("systemli.org", &P_SYSTEMLI_ORG),
             ("t-online", &P_T_ONLINE),
-            ("testrun", &P_TESTRUN),
             ("tiscali.it", &P_TISCALI_IT),
             ("tutanota", &P_TUTANOTA),
             ("ukr.net", &P_UKR_NET),
@@ -2622,4 +2382,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 1, 28).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 4, 21).unwrap());
