@@ -3049,6 +3049,31 @@ async fn test_broadcast_resend_to_new_member() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_broadcast_resend_failed_msg_to_new_member() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let fiona = &tcm.fiona().await;
+    let alice_bc_id = create_broadcast(alice, "bc".to_string()).await?;
+    let qr = get_securejoin_qr(alice, Some(alice_bc_id)).await.unwrap();
+
+    tcm.exec_securejoin_qr(bob, alice, &qr).await;
+    let alice_msg_id = alice.send_text(alice_bc_id, "text").await.sender_msg_id;
+    let mut msg = Message::load_from_db(alice, alice_msg_id).await?;
+    message::set_msg_failed(alice, &mut msg, "error").await?;
+    let fiona_bc_id = tcm.exec_securejoin_qr(fiona, alice, &qr).await;
+    let resent_msg = alice.pop_sent_msg().await;
+    let fiona_msg = fiona.recv_msg(&resent_msg).await;
+    assert_eq!(fiona_msg.chat_id, fiona_bc_id);
+    assert_eq!(fiona_msg.text, "text");
+    assert_eq!(
+        alice_msg_id.get_state(alice).await?,
+        MessageState::OutFailed
+    );
+    Ok(())
+}
+
 /// - Alice has multiple devices
 /// - Alice creates a broadcast and sends a message into it
 /// - Alice's second device sees the broadcast
