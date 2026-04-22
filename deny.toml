@@ -27,7 +27,13 @@ ignore = [
     # <https://rustsec.org/advisories/RUSTSEC-2026-0099>
     "RUSTSEC-2026-0049",
     "RUSTSEC-2026-0098",
-    "RUSTSEC-2026-0099"
+    "RUSTSEC-2026-0099",
+
+    # Panic in CRL signature checks.
+    # We do not check CRL and cannot update rustls-webpki 0.102.8 
+    # which is a dependency of iroh 0.35.0.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0104>
+    "RUSTSEC-2026-0104"
 ]
 
 [bans]
