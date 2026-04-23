@@ -5822,13 +5822,18 @@ async fn test_send_delete_request() -> Result<()> {
     let sent2 = alice.pop_sent_msg().await;
     assert_eq!(alice_chat.id.get_msg_cnt(alice).await?, E2EE_INFO_MSGS + 1);
 
-    // Bob receives both messages and has nothing the end
+    // Bob receives both messages and has nothing at the end
     let bob_msg = bob.recv_msg(&sent1).await;
     assert_eq!(bob_msg.text, "wtf");
     assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 2);
 
     bob.recv_msg_opt(&sent2).await;
     assert_eq!(bob_msg.chat_id.get_msg_cnt(bob).await?, E2EE_INFO_MSGS + 1);
+
+    // ... even if he receives messages in reverse order.
+    let bob2 = &tcm.bob().await;
+    bob2.recv_msg_opt(&sent2).await;
+    assert!(bob2.recv_msg_opt(&sent1).await.is_none());
 
     // Alice has another device, and there is also nothing at the end
     let alice2 = &tcm.alice().await;

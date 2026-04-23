@@ -534,15 +534,14 @@ pub(crate) async fn receive_imf_inner(
         replace_msg_id = None;
         replace_chat_id = None;
     } else if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        // This code handles the download of old partial download stub messages
-        // It will be removed after a transitioning period,
-        // after we have released a few versions with pre-messages
         replace_msg_id = Some(old_msg_id);
         replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
             .await?
             .filter(|msg| msg.download_state() != DownloadState::Done)
         {
-            // The message was partially downloaded before.
+            // This code handles the download of old partial download stub messages
+            // It will be removed after a transitioning period,
+            // after we have released a few versions with pre-messages
             match mime_parser.pre_message {
                 PreMessageMode::Post | PreMessageMode::None => {
                     info!(context, "Message already partly in DB, replacing.");
@@ -554,8 +553,10 @@ pub(crate) async fn receive_imf_inner(
                 }
             }
         } else {
-            // The message was already fully downloaded
-            // or cannot be loaded because it is deleted.
+            info!(
+                context,
+                "Message {rfc724_mid} is fully downloaded or deleted."
+            );
             None
         };
     } else {
@@ -2481,6 +2482,7 @@ async fn handle_edit_delete(
 
             let rfc724_mid_vec: Vec<&str> = rfc724_mid_list.split_whitespace().collect();
             for rfc724_mid in rfc724_mid_vec {
+                let rfc724_mid = rfc724_mid.trim_start_matches('<').trim_end_matches('>');
                 if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
                     if let Some(msg) = Message::load_from_db_optional(context, msg_id).await? {
                         if msg.from_id == from_id {
@@ -2495,6 +2497,7 @@ async fn handle_edit_delete(
                     }
                 } else {
                     warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                    insert_tombstone(context, rfc724_mid).await?;
                 }
             }
             message::delete_msgs_locally_done(context, &msg_ids, modified_chat_ids).await?;
