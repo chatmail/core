@@ -1882,20 +1882,6 @@ impl CommandApi {
         deltachat::contact::make_vcard(&ctx, &contacts).await
     }
 
-    /// Sets vCard containing the given contacts to the message draft.
-    async fn set_draft_vcard(
-        &self,
-        account_id: u32,
-        msg_id: u32,
-        contacts: Vec<u32>,
-    ) -> Result<()> {
-        let ctx = self.get_context(account_id).await?;
-        let contacts: Vec<_> = contacts.iter().map(|&c| ContactId::new(c)).collect();
-        let mut msg = Message::load_from_db(&ctx, MsgId::new(msg_id)).await?;
-        msg.make_vcard(&ctx, &contacts).await?;
-        msg.get_chat_id().set_draft(&ctx, Some(&mut msg)).await
-    }
-
     // ---------------------------------------------
     //                   chat
     // ---------------------------------------------
