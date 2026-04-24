@@ -1467,7 +1467,7 @@ impl EventTracker {
         .expect("timeout waiting for event match")
     }
 
-    /// Consumes emitted events returning the first matching one if any.
+    /// Consumes all emitted events returning the first matching one if any.
     pub async fn get_matching_opt<F: Fn(&EventType) -> bool>(
         &self,
         ctx: &Context,
@@ -1481,7 +1481,7 @@ impl EventTracker {
                 return found_event;
             }
             if event_matcher(&event.typ) {
-                found_event = Some(event.typ);
+                found_event.get_or_insert(event.typ);
             }
         }
     }
