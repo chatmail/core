@@ -4961,8 +4961,6 @@ pub async fn was_device_msg_ever_added(context: &Context, label: &str) -> Result
 //   no wrong information are shown in the device chat
 // - deletion in `devmsglabels` makes sure,
 //   deleted messages are reset and useful messages can be added again
-// - we reset the config-option `QuotaExceeding`
-//   that is used as a helper to drive the corresponding device message.
 pub(crate) async fn delete_and_reset_all_device_msgs(context: &Context) -> Result<()> {
     context
         .sql
@@ -4977,9 +4975,6 @@ pub(crate) async fn delete_and_reset_all_device_msgs(context: &Context) -> Resul
             r#"INSERT INTO devmsglabels (label) VALUES ("core-welcome-image"), ("core-welcome")"#,
             (),
         )
-        .await?;
-    context
-        .set_config_internal(Config::QuotaExceeding, None)
         .await?;
     Ok(())
 }

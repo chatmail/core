@@ -153,15 +153,6 @@ pub enum StockMessage {
     #[strum(props(fallback = "Forwarded"))]
     Forwarded = 97,
 
-    #[strum(props(
-        fallback = "⚠️ Your provider's storage is about to exceed, already %1$s%% are used.\n\n\
-                    You may not be able to receive message when the storage is 100%% used.\n\n\
-                    👉 Please check if you can delete old data in the provider's webinterface \
-                    and consider to enable \"Settings / Delete Old Messages\". \
-                    You can check your current storage usage anytime at \"Settings / Connectivity\"."
-    ))]
-    QuotaExceedingMsgBody = 98,
-
     #[strum(props(fallback = "Multi Device Synchronization"))]
     SyncMsgSubject = 101,
 
@@ -1098,13 +1089,6 @@ pub(crate) async fn msg_ephemeral_timer_weeks(
 /// Stock string: `Forwarded`.
 pub(crate) fn forwarded(context: &Context) -> String {
     translated(context, StockMessage::Forwarded)
-}
-
-/// Stock string: `⚠️ Your provider's storage is about to exceed...`.
-pub(crate) fn quota_exceeding(context: &Context, highest_usage: u64) -> String {
-    translated(context, StockMessage::QuotaExceedingMsgBody)
-        .replace1(&format!("{highest_usage}"))
-        .replace("%%", "%")
 }
 
 /// Stock string: `Incoming Messages`.
