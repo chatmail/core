@@ -1431,6 +1431,12 @@ pub fn fiona_keypair() -> SignedSecretKey {
 #[derive(Debug)]
 pub struct EventTracker(EventEmitter);
 
+/// See [`super::EventTracker::get_matching_ex`].
+pub struct ExpectedEvents<E: Fn(&EventType) -> bool, U: Fn(&EventType) -> bool> {
+    pub expected: E,
+    pub unexpected: U,
+}
+
 impl Deref for EventTracker {
     type Target = EventEmitter;
 
@@ -1473,14 +1479,32 @@ impl EventTracker {
         ctx: &Context,
         event_matcher: F,
     ) -> Option<EventType> {
+        self.get_matching_ex(
+            ctx,
+            ExpectedEvents {
+                expected: event_matcher,
+                unexpected: |_| false,
+            },
+        )
+        .await
+    }
+
+    /// Consumes all emitted events returning the first matching one if any. Panics on unexpected
+    /// events.
+    pub async fn get_matching_ex<E: Fn(&EventType) -> bool, U: Fn(&EventType) -> bool>(
+        &self,
+        ctx: &Context,
+        args: ExpectedEvents<E, U>,
+    ) -> Option<EventType> {
         ctx.emit_event(EventType::Test);
         let mut found_event = None;
         loop {
             let event = self.recv().await.unwrap();
+            assert!(!(args.unexpected)(&event.typ));
             if let EventType::Test = event.typ {
                 return found_event;
             }
-            if event_matcher(&event.typ) {
+            if (args.expected)(&event.typ) {
                 found_event.get_or_insert(event.typ);
             }
         }
