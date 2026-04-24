@@ -2561,14 +2561,16 @@ pub unsafe extern "C" fn dc_is_sending_locations_to_chat(
         return 0;
     }
     let ctx = &*context;
-    let chat_id = if chat_id == 0 {
-        None
+    if chat_id == 0 {
+        block_on(location::is_sending_locations(ctx))
+            .unwrap_or_log_default(ctx, "Failed is_sending_locations()") as libc::c_int
     } else {
-        Some(ChatId::new(chat_id))
-    };
-
-    block_on(location::is_sending_locations_to_chat(ctx, chat_id))
-        .unwrap_or_log_default(ctx, "Failed dc_is_sending_locations_to_chat()") as libc::c_int
+        block_on(location::is_sending_locations_to_chat(
+            ctx,
+            ChatId::new(chat_id),
+        ))
+        .unwrap_or_log_default(ctx, "Failed is_sending_locations_to_chat()") as libc::c_int
+    }
 }
 
 #[no_mangle]

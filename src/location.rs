@@ -272,7 +272,7 @@ pub async fn send_locations_to_chat(
     ensure!(seconds >= 0);
     ensure!(!chat_id.is_special());
     let now = time();
-    let is_sending_locations_before = is_sending_locations_to_chat(context, Some(chat_id)).await?;
+    let is_sending_locations_before = is_sending_locations_to_chat(context, chat_id).await?;
     context
         .sql
         .execute(
@@ -305,35 +305,26 @@ pub async fn send_locations_to_chat(
     Ok(())
 }
 
-/// Returns whether `chat_id` or any chat is sending locations.
-///
-/// If `chat_id` is `Some` only that chat is checked, otherwise returns `true` if any chat
-/// is sending locations.
-pub async fn is_sending_locations_to_chat(
-    context: &Context,
-    chat_id: Option<ChatId>,
-) -> Result<bool> {
-    let exists = match chat_id {
-        Some(chat_id) => {
-            context
-                .sql
-                .exists(
-                    "SELECT COUNT(id) FROM chats  WHERE id=?  AND locations_send_until>?;",
-                    (chat_id, time()),
-                )
-                .await?
-        }
-        None => {
-            context
-                .sql
-                .exists(
-                    "SELECT COUNT(id) FROM chats  WHERE locations_send_until>?;",
-                    (time(),),
-                )
-                .await?
-        }
-    };
-    Ok(exists)
+/// Returns whether any chat is sending locations.
+pub async fn is_sending_locations(context: &Context) -> Result<bool> {
+    context
+        .sql
+        .exists(
+            "SELECT COUNT(id) FROM chats WHERE locations_send_until>?",
+            (time(),),
+        )
+        .await
+}
+
+/// Returns whether `chat_id` is sending locations.
+pub async fn is_sending_locations_to_chat(context: &Context, chat_id: ChatId) -> Result<bool> {
+    context
+        .sql
+        .exists(
+            "SELECT COUNT(id) FROM chats WHERE id=? AND locations_send_until>?",
+            (chat_id, time()),
+        )
+        .await
 }
 
 /// Sets current location of the user device.
