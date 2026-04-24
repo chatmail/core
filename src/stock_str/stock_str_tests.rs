@@ -103,16 +103,6 @@ async fn test_stock_system_msg_add_member_by_other_with_displayname() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_quota_exceeding_stock_str() -> Result<()> {
-    let t = TestContext::new().await;
-    let str = quota_exceeding(&t, 81);
-    assert!(str.contains("81% "));
-    assert!(str.contains("100% "));
-    assert!(!str.contains("%%"));
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_update_device_chats() {
     let t = TestContext::new_alice().await;
     t.update_device_chats().await.ok();

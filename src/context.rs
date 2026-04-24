@@ -1005,12 +1005,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "quota_exceeding",
-            self.get_config_int(Config::QuotaExceeding)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "authserv_id_candidates",
             self.get_config(Config::AuthservIdCandidates)
                 .await?

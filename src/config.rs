@@ -371,11 +371,6 @@ pub enum Config {
     #[strum(props(default = "0"))]
     NotifyAboutWrongPw,
 
-    /// If a warning about exceeding quota was shown recently,
-    /// this is the percentage of quota at the time the warning was given.
-    /// Unset, when quota falls below minimal warning threshold again.
-    QuotaExceeding,
-
     /// Timestamp of the last time housekeeping was run
     LastHousekeeping,
 
