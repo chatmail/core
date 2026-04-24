@@ -421,6 +421,7 @@ async fn test_recode_image_balanced_png() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
+        res_viewtype: Some(Viewtype::File),
         compressed_width: 1920,
         compressed_height: 1080,
         ..Default::default()
@@ -436,6 +437,7 @@ async fn test_recode_image_balanced_png() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
+        res_viewtype: Some(Viewtype::File),
         compressed_width: 1920,
         compressed_height: 1080,
         set_draft: true,
@@ -605,8 +607,10 @@ impl SendImageCheckMediaquality<'_> {
         }
         let sent = alice.send_msg(chat.id, &mut msg).await;
         let alice_msg = alice.get_last_msg().await;
-        assert_eq!(alice_msg.get_width() as u32, compressed_width);
-        assert_eq!(alice_msg.get_height() as u32, compressed_height);
+        if viewtype != Viewtype::File {
+            assert_eq!(alice_msg.get_width() as u32, compressed_width);
+            assert_eq!(alice_msg.get_height() as u32, compressed_height);
+        }
         let file_saved = alice
             .get_blobdir()
             .join("saved-".to_string() + &alice_msg.get_filename().unwrap());
@@ -621,8 +625,10 @@ impl SendImageCheckMediaquality<'_> {
 
         let bob_msg = bob.recv_msg(&sent).await;
         assert_eq!(bob_msg.get_viewtype(), res_viewtype);
-        assert_eq!(bob_msg.get_width() as u32, compressed_width);
-        assert_eq!(bob_msg.get_height() as u32, compressed_height);
+        if viewtype != Viewtype::File {
+            assert_eq!(bob_msg.get_width() as u32, compressed_width);
+            assert_eq!(bob_msg.get_height() as u32, compressed_height);
+        }
         let file_saved = bob
             .get_blobdir()
             .join("saved-".to_string() + &bob_msg.get_filename().unwrap());

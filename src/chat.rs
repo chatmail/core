@@ -2465,18 +2465,10 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
             .param
             .get_file_blob(context)?
             .with_context(|| format!("attachment missing for message of type #{}", msg.viewtype))?;
-        let mut maybe_image = false;
 
         if msg.viewtype == Viewtype::File || msg.viewtype == Viewtype::Image {
-            // Correct the type, take care not to correct already very special
-            // formats as GIF or VOICE.
-            //
-            // Typical conversions:
-            // - from FILE to AUDIO/VIDEO/IMAGE
-            // - from FILE/IMAGE to GIF */
             if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg) {
                 if better_type == Viewtype::Image {
-                    maybe_image = true;
                 } else if better_type != Viewtype::Webxdc
                     || context
                         .ensure_sendable_webxdc_file(&blob.to_abs_path())
@@ -2495,7 +2487,7 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
         if msg.viewtype == Viewtype::Vcard {
             msg.try_set_vcard(context, &blob.to_abs_path()).await?;
         }
-        if msg.viewtype == Viewtype::File && maybe_image || msg.viewtype == Viewtype::Image {
+        if msg.viewtype == Viewtype::Image {
             let new_name = blob
                 .check_or_recode_image(context, msg.get_filename(), &mut msg.viewtype)
                 .await?;

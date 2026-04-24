@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from deltachat_rpc_client import EventType, events
-from deltachat_rpc_client.const import DownloadState, MessageState
+from deltachat_rpc_client.const import DownloadState, MessageState, ViewType
 from deltachat_rpc_client.pytestplugin import E2EE_INFO_MSGS
 from deltachat_rpc_client.rpc import JsonRpcError, Rpc
 
@@ -550,7 +550,7 @@ def test_import_export_online_all(acfactory, tmp_path, data, log) -> None:
     assert len(ac1.get_contacts()) == 1
 
     original_image_path = data.get_path("image/avatar64x64.png")
-    chat1.send_file(str(original_image_path))
+    chat1.send_message(file=str(original_image_path), viewtype=ViewType.IMAGE)
 
     # Add another 100KB file that ensures that the progress is smooth enough
     path = tmp_path / "attachment.txt"
