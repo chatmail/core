@@ -871,7 +871,7 @@ mod tests {
     use crate::config::Config;
     use crate::message::MessageState;
     use crate::receive_imf::receive_imf;
-    use crate::test_utils::{TestContext, TestContextManager};
+    use crate::test_utils::{ExpectedEvents, TestContext, TestContextManager};
     use crate::tools::SystemTime;
 
     #[test]
@@ -1103,6 +1103,9 @@ Content-Disposition: attachment; filename="location.kml"
             .await?;
 
         let alice_chat = alice.create_chat(bob).await;
+        // Bob needs the chat accepted so that "normal" messages from Alice trigger `IncomingMsg`.
+        // Location-only messages still must trigger `MsgsChanged`.
+        bob.create_chat(alice).await;
 
         // Alice enables location streaming.
         // Bob receives a message saying that Alice enabled location streaming.
@@ -1117,7 +1120,18 @@ Content-Disposition: attachment; filename="location.kml"
         SystemTime::shift(Duration::from_secs(10));
         delete_expired(alice, time()).await?;
         maybe_send(alice).await?;
+        bob.evtracker.clear_events();
         bob.recv_msg_opt(&alice.pop_sent_msg().await).await;
+        bob.evtracker
+            .get_matching_ex(
+                bob,
+                ExpectedEvents {
+                    expected: |e| matches!(e, EventType::MsgsChanged { .. }),
+                    unexpected: |e| matches!(e, EventType::IncomingMsg { .. }),
+                },
+            )
+            .await
+            .unwrap();
         assert_eq!(get_range(alice, None, None, 0, 0).await?.len(), 1);
         assert_eq!(get_range(bob, None, None, 0, 0).await?.len(), 1);
 
