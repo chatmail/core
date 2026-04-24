@@ -445,7 +445,6 @@ async fn test_recode_image_balanced_png() {
     .await
     .unwrap();
 
-    // This will be sent as Image, see [`BlobObject::check_or_recode_image()`] for explanation.
     SendImageCheckMediaquality {
         viewtype: Viewtype::Sticker,
         media_quality_config: "0",
@@ -453,6 +452,7 @@ async fn test_recode_image_balanced_png() {
         extension: "png",
         original_width: 1920,
         original_height: 1080,
+        res_viewtype: Some(Viewtype::Sticker),
         compressed_width: 1920,
         compressed_height: 1080,
         ..Default::default()
@@ -734,8 +734,6 @@ async fn test_send_gif_as_sticker() -> Result<()> {
     let chat = alice.get_self_chat().await;
     let sent = alice.send_msg(chat.id, &mut msg).await;
     let msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
-    // Message::force_sticker() wasn't used, still Viewtype::Sticker is preserved because of the
-    // extension.
     assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
     Ok(())
 }

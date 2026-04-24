@@ -2075,13 +2075,7 @@ async fn test_chat_get_color_encrypted() -> Result<()> {
     Ok(())
 }
 
-async fn test_sticker(
-    filename: &str,
-    bytes: &[u8],
-    res_viewtype: Viewtype,
-    w: i32,
-    h: i32,
-) -> Result<()> {
+async fn test_sticker(filename: &str, bytes: &[u8], w: i32, h: i32) -> Result<()> {
     let alice = TestContext::new_alice().await;
     let bob = TestContext::new_bob().await;
     let alice_chat = alice.create_chat(&bob).await;
@@ -2097,7 +2091,7 @@ async fn test_sticker(
 
     let msg = bob.recv_msg(&sent_msg).await;
     assert_eq!(msg.chat_id, bob_chat.id);
-    assert_eq!(msg.get_viewtype(), res_viewtype);
+    assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
     assert_eq!(msg.get_filename().unwrap(), filename);
     assert_eq!(msg.get_width(), w);
     assert_eq!(msg.get_height(), h);
@@ -2111,7 +2105,6 @@ async fn test_sticker_png() -> Result<()> {
     test_sticker(
         "sticker.png",
         include_bytes!("../../test-data/image/logo.png"),
-        Viewtype::Sticker,
         135,
         135,
     )
@@ -2123,7 +2116,6 @@ async fn test_sticker_jpeg() -> Result<()> {
     test_sticker(
         "sticker.jpg",
         include_bytes!("../../test-data/image/avatar1000x1000.jpg"),
-        Viewtype::Image,
         1000,
         1000,
     )
@@ -2131,10 +2123,33 @@ async fn test_sticker_jpeg() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sticker_jpeg_force() {
-    let alice = TestContext::new_alice().await;
-    let bob = TestContext::new_bob().await;
-    let alice_chat = alice.create_chat(&bob).await;
+async fn test_sticker_gif() -> Result<()> {
+    test_sticker(
+        "sticker.gif",
+        include_bytes!("../../test-data/image/logo.gif"),
+        135,
+        135,
+    )
+    .await
+}
+
+/// Tests that stickers are sent as stickers.
+///
+/// Previously there was heuristic that stickers
+/// were sometimes turned into non-stickers,
+/// e.g. when it looked like UI sent
+/// a screenshot dragged from the gallery into chat
+/// as a sticker.
+///
+/// We have no such heuristic anymore,
+/// if such heuristic is needed on some platform,
+/// UI code should implement it.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_sticker_no_heuristics() {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat = alice.create_chat(bob).await;
 
     let file = alice.get_blobdir().join("sticker.jpg");
     tokio::fs::write(
@@ -2144,51 +2159,36 @@ async fn test_sticker_jpeg_force() {
     .await
     .unwrap();
 
-    // Images without force_sticker should be turned into [Viewtype::Image]
+    // Send a sticker.
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(&alice, &file, Some("sticker.jpg"), None)
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
         .unwrap();
-    let file = msg.get_file(&alice).unwrap();
-    let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
-    let msg = bob.recv_msg(&sent_msg).await;
-    assert_eq!(msg.get_viewtype(), Viewtype::Image);
-
-    // Images with `force_sticker = true` should keep [Viewtype::Sticker]
-    let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(&alice, &file, Some("sticker.jpg"), None)
-        .unwrap();
-    msg.force_sticker();
+    let file = msg.get_file(alice).unwrap();
     let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
     let msg = bob.recv_msg(&sent_msg).await;
     assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
 
-    // Images with `force_sticker = true` should keep [Viewtype::Sticker]
-    // even on drafted messages
+    // Send a sticker reusing the file.
     let mut msg = Message::new(Viewtype::Sticker);
-    msg.set_file_and_deduplicate(&alice, &file, Some("sticker.jpg"), None)
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
         .unwrap();
-    msg.force_sticker();
+    let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
+    let msg = bob.recv_msg(&sent_msg).await;
+    assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
+
+    // Set sticker as a draft, then send it.
+    let mut msg = Message::new(Viewtype::Sticker);
+    msg.set_file_and_deduplicate(alice, &file, Some("sticker.jpg"), None)
+        .unwrap();
     alice_chat
         .id
-        .set_draft(&alice, Some(&mut msg))
+        .set_draft(alice, Some(&mut msg))
         .await
         .unwrap();
-    let mut msg = alice_chat.id.get_draft(&alice).await.unwrap().unwrap();
+    let mut msg = alice_chat.id.get_draft(alice).await.unwrap().unwrap();
     let sent_msg = alice.send_msg(alice_chat.id, &mut msg).await;
     let msg = bob.recv_msg(&sent_msg).await;
     assert_eq!(msg.get_viewtype(), Viewtype::Sticker);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_sticker_gif() -> Result<()> {
-    test_sticker(
-        "sticker.gif",
-        include_bytes!("../../test-data/image/logo.gif"),
-        Viewtype::Sticker,
-        135,
-        135,
-    )
-    .await
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

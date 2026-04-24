@@ -247,9 +247,6 @@ pub enum Param {
     /// For Webxdc Message Instances: Chat to integrate the Webxdc for.
     WebxdcIntegrateFor = b'2',
 
-    /// For messages: Whether [crate::message::Viewtype::Sticker] should be forced.
-    ForceSticker = b'X',
-
     /// For messages: Message is a deletion request. The value is a list of rfc724_mid of the messages to delete.
     DeleteRequestFor = b'M',
 
