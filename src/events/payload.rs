@@ -234,8 +234,7 @@ pub enum EventType {
     /// Location of one or more contact has changed.
     ///
     /// @param data1 (u32) contact_id of the contact for which the location has changed.
-    ///     If the locations of several contacts have been changed,
-    ///     eg. after calling dc_delete_all_locations(), this parameter is set to `None`.
+    ///     If the locations of several contacts have been changed, this parameter is set to `None`.
     LocationChanged(Option<ContactId>),
 
     /// Inform about the configuration progress started by configure().
