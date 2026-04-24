@@ -495,3 +495,7 @@ class Account:
         """Return ICE servers for WebRTC configuration."""
         ice_servers_json = self._rpc.ice_servers(self.id)
         return json.loads(ice_servers_json)
+
+    def is_sending_locations(self) -> bool:
+        """Return True if sending locations to any chat."""
+        return self._rpc.is_sending_locations(self.id)

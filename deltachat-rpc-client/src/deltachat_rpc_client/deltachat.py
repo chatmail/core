@@ -59,3 +59,11 @@ class DeltaChat:
     def set_translations(self, translations: dict[str, str]) -> None:
         """Set stock translation strings."""
         self.rpc.set_stock_strings(translations)
+
+    def set_location(self, latitude, longitude, accuracy) -> bool:
+        """Set location, return True if location streaming should continue."""
+        return self.rpc.set_location(latitude, longitude, accuracy)
+
+    def stop_sending_locations(self) -> None:
+        """Stop sending locations to all chats."""
+        return self.rpc.stop_sending_locations()

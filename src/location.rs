@@ -327,6 +327,29 @@ pub async fn is_sending_locations_to_chat(context: &Context, chat_id: ChatId) ->
         .await
 }
 
+/// Returns a list of chats in which location streaming is enabled.
+async fn get_chats_with_location_streaming(context: &Context) -> Result<Vec<ChatId>> {
+    context
+        .sql
+        .query_map_vec(
+            "SELECT id FROM chats WHERE locations_send_until>?",
+            (time(),),
+            |row| {
+                let chat_id: ChatId = row.get(0)?;
+                Ok(chat_id)
+            },
+        )
+        .await
+}
+
+/// Stop sending locations in all chats.
+pub async fn stop_sending_locations(context: &Context) -> Result<()> {
+    for chat_id in get_chats_with_location_streaming(context).await? {
+        send_locations_to_chat(context, chat_id, 0).await?;
+    }
+    Ok(())
+}
+
 /// Sets current location of the user device.
 pub async fn set(context: &Context, latitude: f64, longitude: f64, accuracy: f64) -> Result<bool> {
     if latitude == 0.0 && longitude == 0.0 {
