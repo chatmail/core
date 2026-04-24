@@ -287,8 +287,6 @@ pub enum MessageViewtype {
     Gif,
 
     /// Message containing a sticker, similar to image.
-    /// NB: When sending, the message viewtype may be changed to `Image` by some heuristics like
-    /// checking for transparent pixels. Use `Message::force_sticker()` to disable them.
     ///
     /// If possible, the ui should display the image without borders in a transparent way.
     /// A click on a sticker will offer to install the sticker set in some future.

@@ -284,10 +284,6 @@ impl<'a> BlobObject<'a> {
     ///
     /// Recoding is only done for [`Viewtype::Image`]. For [`Viewtype::File`], if it's a correct
     /// image, `*viewtype` is set to [`Viewtype::Image`].
-    ///
-    /// On some platforms images are passed to Core as [`Viewtype::Sticker`]. We recheck if the
-    /// image is a true sticker assuming that it must have at least one fully transparent corner,
-    /// otherwise `*viewtype` is set to [`Viewtype::Image`].
     pub async fn check_or_recode_image(
         &mut self,
         context: &Context,
