@@ -2466,17 +2466,24 @@ async fn prepare_msg_blob(context: &Context, msg: &mut Message) -> Result<()> {
             .get_file_blob(context)?
             .with_context(|| format!("attachment missing for message of type #{}", msg.viewtype))?;
 
-        if msg.viewtype == Viewtype::File || msg.viewtype == Viewtype::Image {
-            if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg) {
-                if better_type == Viewtype::Image {
-                } else if better_type != Viewtype::Webxdc
-                    || context
-                        .ensure_sendable_webxdc_file(&blob.to_abs_path())
-                        .await
-                        .is_ok()
-                {
-                    msg.viewtype = better_type;
-                }
+        if msg.viewtype == Viewtype::Image {
+            if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg)
+                && (better_type == Viewtype::Video
+                    || better_type == Viewtype::Audio
+                    || better_type == Viewtype::Gif)
+            {
+                msg.viewtype = better_type;
+            }
+        } else if msg.viewtype == Viewtype::File {
+            if let Some((better_type, _)) = message::guess_msgtype_from_suffix(msg)
+                && (better_type == Viewtype::Vcard
+                    || better_type == Viewtype::Webxdc
+                        && context
+                            .ensure_sendable_webxdc_file(&blob.to_abs_path())
+                            .await
+                            .is_ok())
+            {
+                msg.viewtype = better_type;
             }
         } else if msg.viewtype == Viewtype::Webxdc {
             context
