@@ -277,6 +277,16 @@ class Chat:
         """Remove profile image of this chat."""
         self._rpc.set_chat_profile_image(self.account.id, self.id, None)
 
+    def send_locations(self, seconds) -> None:
+        """Enable location streaming in the chat for the given number of seconds.
+
+        Pass 0 to disable location streaming."""
+        self._rpc.send_locations_to_chat(self.account.id, self.id, seconds)
+
+    def is_sending_locations(self) -> bool:
+        """Return True if sending locations to this chat."""
+        return self._rpc.is_sending_locations_to_chat(self.account.id, self.id)
+
     def get_locations(
         self,
         contact: Optional[Contact] = None,

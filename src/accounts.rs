@@ -22,6 +22,8 @@ use tokio::time::{Duration, sleep};
 
 use crate::context::{Context, ContextBuilder};
 use crate::events::{Event, EventEmitter, EventType, Events};
+use crate::location;
+use crate::location::stop_sending_locations;
 use crate::log::warn;
 use crate::push::PushSubscriber;
 use crate::stock_str::StockStrings;
@@ -534,6 +536,27 @@ impl Accounts {
     /// Sets notification token for Apple Push Notification service.
     pub async fn set_push_device_token(&self, token: &str) -> Result<()> {
         self.push_subscriber.set_device_token(token).await;
+        Ok(())
+    }
+
+    /// Sets location for all accounts.
+    ///
+    /// Returns true if location should still be streamed.
+    pub async fn set_location(&self, latitude: f64, longitude: f64, accuracy: f64) -> Result<bool> {
+        let mut continue_streaming = false;
+        for account in self.accounts.values() {
+            if location::set(account, latitude, longitude, accuracy).await? {
+                continue_streaming = true;
+            }
+        }
+        Ok(continue_streaming)
+    }
+
+    /// Stops sending locations to all chats.
+    pub async fn stop_sending_locations(&self) -> Result<()> {
+        for account in self.accounts.values() {
+            stop_sending_locations(account).await?;
+        }
         Ok(())
     }
 }

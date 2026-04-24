@@ -22,6 +22,9 @@ use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
+use deltachat::location::is_sending_locations;
+use deltachat::location::is_sending_locations_to_chat;
+use deltachat::location::send_locations_to_chat;
 use deltachat::message::{
     self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipt_count, get_msg_read_receipts,
     markseen_msgs, Message, MessageState, MsgId, Viewtype,
@@ -2120,6 +2123,21 @@ impl CommandApi {
     //                  locations
     // ---------------------------------------------
 
+    /// Sets current location.
+    ///
+    /// Returns true if location streaming is currently
+    /// enabled and locations should be updated.
+    ///
+    /// Location is represented as latitude and longitude in degrees
+    /// and horizontal accuracy in meters.
+    async fn set_location(&self, latitude: f64, longitude: f64, accuracy: f64) -> Result<bool> {
+        self.accounts
+            .read()
+            .await
+            .set_location(latitude, longitude, accuracy)
+            .await
+    }
+
     async fn get_locations(
         &self,
         account_id: u32,
@@ -2140,6 +2158,39 @@ impl CommandApi {
         .await?;
 
         Ok(locations.into_iter().map(|l| l.into()).collect())
+    }
+
+    /// Enables location streaming in chat identified by `chat_id` for `seconds` seconds.
+    ///
+    /// Pass 0 as the number of seconds to disable location streaming in the chat.
+    async fn send_locations_to_chat(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        seconds: i64,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        let chat_id = ChatId::new(chat_id);
+        send_locations_to_chat(&ctx, chat_id, seconds).await?;
+        Ok(())
+    }
+
+    /// Returns whether any chat is sending locations.
+    async fn is_sending_locations(&self, account_id: u32) -> Result<bool> {
+        let ctx = self.get_context(account_id).await?;
+        is_sending_locations(&ctx).await
+    }
+
+    /// Returns whether `chat_id` is sending locations.
+    async fn is_sending_locations_to_chat(&self, account_id: u32, chat_id: u32) -> Result<bool> {
+        let ctx = self.get_context(account_id).await?;
+        let chat_id = ChatId::new(chat_id);
+        is_sending_locations_to_chat(&ctx, chat_id).await
+    }
+
+    /// Stops sending locations to all chats.
+    async fn stop_sending_locations(&self) -> Result<()> {
+        self.accounts.read().await.stop_sending_locations().await
     }
 
     // ---------------------------------------------
