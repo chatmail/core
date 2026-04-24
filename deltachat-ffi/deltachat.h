@@ -2828,19 +2828,6 @@ int         dc_set_location                 (dc_context_t* context, double latit
 dc_array_t* dc_get_locations                (dc_context_t* context, uint32_t chat_id, uint32_t contact_id, int64_t timestamp_begin, int64_t timestamp_end);
 
 
-/**
- * Delete all locations on the current device.
- * Locations already sent cannot be deleted.
- *
- * Typically results in the event #DC_EVENT_LOCATION_CHANGED
- * with contact_id set to 0.
- *
- * @memberof dc_context_t
- * @param context The context object.
- */
-void        dc_delete_all_locations         (dc_context_t* context);
-
-
 // misc
 
 /**
@@ -6426,8 +6413,7 @@ void dc_event_unref(dc_event_t* event);
  * Location of one or more contact has changed.
  *
  * @param data1 (int) contact_id of the contact for which the location has changed.
- *     If the locations of several contacts have been changed,
- *     e.g. after calling dc_delete_all_locations(), this parameter is set to 0.
+ *     If the locations of several contacts have been changed, this parameter is set to 0.
  * @param data2 0
  */
 #define DC_EVENT_LOCATION_CHANGED         2035

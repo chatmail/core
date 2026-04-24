@@ -2627,23 +2627,6 @@ pub unsafe extern "C" fn dc_get_locations(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn dc_delete_all_locations(context: *mut dc_context_t) {
-    if context.is_null() {
-        eprintln!("ignoring careless call to dc_delete_all_locations()");
-        return;
-    }
-    let ctx = &*context;
-
-    block_on(async move {
-        location::delete_all(ctx)
-            .await
-            .context("Failed to delete locations")
-            .log_err(ctx)
-            .ok()
-    });
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn dc_create_qr_svg(payload: *const libc::c_char) -> *mut libc::c_char {
     if payload.is_null() {
         eprintln!("ignoring careless call to dc_create_qr_svg()");

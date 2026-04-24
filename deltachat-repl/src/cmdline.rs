@@ -345,7 +345,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                  chatinfo\n\
                  sendlocations <seconds>\n\
                  setlocation <lat> <lng>\n\
-                 dellocations\n\
                  getlocations [<contact-id>]\n\
                  send <text>\n\
                  send-sync <text>\n\
@@ -852,9 +851,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             } else {
                 println!("Success, streaming can be stopped.");
             }
-        }
-        "dellocations" => {
-            location::delete_all(&context).await?;
         }
         "send" => {
             ensure!(sel_chat.is_some(), "No chat selected.");
