@@ -843,7 +843,7 @@ impl Context {
 
     /// Returns information about the context as key-value pairs.
     pub async fn get_info(&self) -> Result<BTreeMap<&'static str, String>> {
-        let secondary_addrs = self.get_secondary_self_addrs().await?.join(", ");
+        let all_self_addrs = self.get_all_self_addrs().await?.join(", ");
         let all_transports: Vec<String> = ConfiguredLoginParam::load_all(self)
             .await?
             .into_iter()
@@ -945,7 +945,7 @@ impl Context {
             }
         }
 
-        res.insert("secondary_addrs", secondary_addrs);
+        res.insert("all_self_addrs", all_self_addrs);
         res.insert(
             "who_can_call_me",
             self.get_config_int(Config::WhoCanCallMe).await?.to_string(),
