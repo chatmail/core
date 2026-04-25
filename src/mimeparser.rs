@@ -16,7 +16,7 @@ use mime::Mime;
 use crate::aheader::Aheader;
 use crate::authres::handle_authres;
 use crate::blob::BlobObject;
-use crate::chat::ChatId;
+use crate::chat::{Chat, ChatId};
 use crate::config::Config;
 use crate::constants;
 use crate::contact::{ContactId, import_public_key};
@@ -2582,6 +2582,10 @@ async fn handle_ndn(
 
     for msg_id in msg_ids {
         let mut message = Message::load_from_db(context, msg_id).await?;
+        let chat = Chat::load_from_db(context, message.chat_id).await?;
+        if chat.typ == constants::Chattype::OutBroadcast {
+            continue;
+        }
         let aggregated_error = message
             .error
             .as_ref()
