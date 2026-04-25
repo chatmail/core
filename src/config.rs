@@ -945,15 +945,10 @@ impl Context {
     /// Returns `false` if no addresses are configured.
     pub(crate) async fn is_self_addr(&self, addr: &str) -> Result<bool> {
         Ok(self
-            .get_config(Config::ConfiguredAddr)
+            .get_all_self_addrs()
             .await?
             .iter()
-            .any(|a| addr_cmp(addr, a))
-            || self
-                .get_secondary_self_addrs()
-                .await?
-                .iter()
-                .any(|a| addr_cmp(addr, a)))
+            .any(|a| addr_cmp(addr, a)))
     }
 
     /// Sets `primary_new` as the new primary self address and saves the old
@@ -998,14 +993,6 @@ impl Context {
                 },
             )
             .await
-    }
-
-    /// Returns all secondary self addresses.
-    pub(crate) async fn get_secondary_self_addrs(&self) -> Result<Vec<String>> {
-        self.sql.query_map_vec("SELECT addr FROM transports WHERE addr NOT IN (SELECT value FROM config WHERE keyname='configured_addr')", (), |row| {
-            let addr: String = row.get(0)?;
-            Ok(addr)
-        }).await
     }
 
     /// Returns all published secondary self addresses.

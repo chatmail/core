@@ -423,13 +423,6 @@ async fn check_addrs(
             published_self_addrs.clone(),
         );
         assert_eq(
-            a.get_secondary_self_addrs().await.unwrap(),
-            concat(&[
-                addresses.secondary_published,
-                addresses.secondary_unpublished,
-            ]),
-        );
-        assert_eq(
             a.get_published_secondary_self_addrs().await.unwrap(),
             concat(&[addresses.secondary_published]),
         );
