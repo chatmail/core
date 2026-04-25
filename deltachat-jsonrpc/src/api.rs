@@ -1366,8 +1366,22 @@ impl CommandApi {
         markseen_msgs(&ctx, msg_ids.into_iter().map(MsgId::new).collect()).await
     }
 
-    /// Returns all messages of a particular chat.
+    /// Get all message IDs belonging to a chat.
     ///
+    /// The list is already sorted and starts with the oldest message.
+    /// Clients should not try to re-sort the list as this would be an expensive action
+    /// and would result in inconsistencies between clients.
+    /// Note that the messages are not necessarily sorted by their ID or by their displayed timestamp;
+    /// UIs need to handle both the case of descending message IDs
+    /// and of decreasing timestamps.
+    ///
+    /// Optionally, 'daymarkers' added to the ID array may help to
+    /// implement virtual lists.
+    ///
+    /// Parameters:
+    ///
+    /// * chat_id The chat ID of which the messages IDs should be queried.
+    /// * _info_only: Deprecated, pass `false` here.
     /// * `add_daymarker` - If `true`, add day markers as `DC_MSG_ID_DAYMARKER` to the result,
     ///   e.g. [1234, 1237, 9, 1239]. The day marker timestamp is the midnight one for the
     ///   corresponding (following) day in the local timezone.
@@ -1414,6 +1428,12 @@ impl CommandApi {
         }
     }
 
+    /// Get all messages belonging to a chat.
+    ///
+    /// Similar to `get_message_ids` / `getMessageIds`,
+    /// see that function for details.
+    /// The difference is that this function here returns a list of `MessageListItem`,
+    /// which is an enum of a message or a daymarker.
     async fn get_message_list_items(
         &self,
         account_id: u32,
