@@ -992,12 +992,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "authserv_id_candidates",
-            self.get_config(Config::AuthservIdCandidates)
-                .await?
-                .unwrap_or_default(),
-        );
-        res.insert(
             "sign_unencrypted",
             self.get_config_int(Config::SignUnencrypted)
                 .await?

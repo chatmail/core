@@ -44,9 +44,7 @@ async fn test_parse_receive_headers_integration() {
 Message-ID: 2dfdbde7@example.org
 
 Hop: From: localhost; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:22 +0000
-Hop: From: hq5.merlinux.eu; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:25 +0000
-
-DKIM Results: Passed=true";
+Hop: From: hq5.merlinux.eu; By: hq5.merlinux.eu; Date: Sat, 14 Sep 2019 17:00:25 +0000";
     check_parse_receive_headers_integration(raw, expected).await;
 
     let raw = include_bytes!("../../test-data/message/encrypted_with_received_headers.eml");
@@ -56,9 +54,7 @@ Message-ID: Mr.adQpEwndXLH.LPDdlFVJ7wG@example.net
 
 Hop: From: [127.0.0.1]; By: mail.example.org; Date: Mon, 27 Dec 2021 11:21:21 +0000
 Hop: From: mout.example.org; By: hq5.example.org; Date: Mon, 27 Dec 2021 11:21:22 +0000
-Hop: From: hq5.example.org; By: hq5.example.org; Date: Mon, 27 Dec 2021 11:21:22 +0000
-
-DKIM Results: Passed=true";
+Hop: From: hq5.example.org; By: hq5.example.org; Date: Mon, 27 Dec 2021 11:21:22 +0000";
     check_parse_receive_headers_integration(raw, expected).await;
 }
 
