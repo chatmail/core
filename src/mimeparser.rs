@@ -14,7 +14,6 @@ use mailparse::{DispositionType, MailHeader, MailHeaderMap, SingleInfo, addrpars
 use mime::Mime;
 
 use crate::aheader::Aheader;
-use crate::authres::handle_authres;
 use crate::blob::BlobObject;
 use crate::chat::{Chat, ChatId};
 use crate::config::Config;
@@ -275,7 +274,7 @@ impl MimeMessage {
         let timestamp_rcvd = smeared_time(context);
         let mut timestamp_sent =
             Self::get_timestamp_sent(&mail.headers, timestamp_rcvd, timestamp_rcvd);
-        let mut hop_info = parse_receive_headers(&mail.get_headers());
+        let hop_info = parse_receive_headers(&mail.get_headers());
 
         let mut headers = Default::default();
         let mut headers_removed = HashSet::<String>::new();
@@ -366,11 +365,7 @@ impl MimeMessage {
 
         let mut from = from.context("No from in message")?;
 
-        let dkim_results = handle_authres(context, &mail, &from.addr).await?;
-
         let mut gossiped_keys = Default::default();
-        hop_info += "\n\n";
-        hop_info += &dkim_results.to_string();
 
         let from_is_not_self_addr = !context.is_self_addr(&from.addr).await?;
 

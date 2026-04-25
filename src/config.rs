@@ -407,12 +407,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     SyncMsgs,
 
-    /// Space-separated list of all the authserv-ids which we believe
-    /// may be the one of our email server.
-    ///
-    /// See `crate::authres::update_authservid_candidates`.
-    AuthservIdCandidates,
-
     /// Make all outgoing messages with Autocrypt header "multipart/signed".
     SignUnencrypted,
 
