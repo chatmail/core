@@ -206,9 +206,9 @@ class Chat:
         snapshot["message"] = Message(self.account, snapshot.id)
         return snapshot
 
-    def get_messages(self, info_only: bool = False, add_daymarker: bool = False) -> list[Message]:
+    def get_messages(self, add_daymarker: bool = False) -> list[Message]:
         """Get the list of messages in this chat."""
-        msgs = self._rpc.get_message_ids(self.account.id, self.id, info_only, add_daymarker)
+        msgs = self._rpc.get_message_ids(self.account.id, self.id, False, add_daymarker)
         return [Message(self.account, msg_id) for msg_id in msgs]
 
     def get_fresh_message_count(self) -> int:

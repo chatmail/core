@@ -622,7 +622,6 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                 &context,
                 sel_chat.get_id(),
                 chat::MessageListOptions {
-                    info_only: false,
                     add_daymarker: true,
                 },
             )

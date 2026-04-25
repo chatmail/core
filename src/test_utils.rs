@@ -1104,7 +1104,6 @@ ORDER BY id"
             self,
             chat_id,
             MessageListOptions {
-                info_only: false,
                 add_daymarker: false,
             },
         )
