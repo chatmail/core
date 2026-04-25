@@ -6,7 +6,6 @@ use std::fmt;
 use std::io::Cursor;
 use std::marker::Sync;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{Context as _, Result, anyhow, bail, ensure};
@@ -3097,9 +3096,6 @@ async fn donation_request_maybe(context: &Context) -> Result<()> {
 /// Chat message list request options.
 #[derive(Debug)]
 pub struct MessageListOptions {
-    /// Return only info messages.
-    pub info_only: bool,
-
     /// Add day markers before each date regarding the local timezone.
     pub add_daymarker: bool,
 }
@@ -3110,7 +3106,6 @@ pub async fn get_chat_msgs(context: &Context, chat_id: ChatId) -> Result<Vec<Cha
         context,
         chat_id,
         MessageListOptions {
-            info_only: false,
             add_daymarker: false,
         },
     )
@@ -3125,43 +3120,13 @@ pub async fn get_chat_msgs_ex(
     chat_id: ChatId,
     options: MessageListOptions,
 ) -> Result<Vec<ChatItem>> {
-    let MessageListOptions {
-        info_only,
-        add_daymarker,
-    } = options;
-    // TODO: Remove `info_only` parameter; it's not used by anything
-    let process_row = if info_only {
-        |row: &rusqlite::Row| {
-            // is_info logic taken from Message.is_info()
-            let params = row.get::<_, String>("param")?;
-            let (from_id, to_id) = (
-                row.get::<_, ContactId>("from_id")?,
-                row.get::<_, ContactId>("to_id")?,
-            );
-            let is_info_msg: bool = from_id == ContactId::INFO
-                || to_id == ContactId::INFO
-                || match Params::from_str(&params) {
-                    Ok(p) => {
-                        let cmd = p.get_cmd();
-                        cmd != SystemMessage::Unknown && cmd != SystemMessage::AutocryptSetupMessage
-                    }
-                    _ => false,
-                };
-
-            Ok((
-                row.get::<_, i64>("timestamp")?,
-                row.get::<_, MsgId>("id")?,
-                !is_info_msg,
-            ))
-        }
-    } else {
-        |row: &rusqlite::Row| {
-            Ok((
-                row.get::<_, i64>("timestamp")?,
-                row.get::<_, MsgId>("id")?,
-                false,
-            ))
-        }
+    let MessageListOptions { add_daymarker } = options;
+    let process_row = |row: &rusqlite::Row| {
+        Ok((
+            row.get::<_, i64>("timestamp")?,
+            row.get::<_, MsgId>("id")?,
+            false,
+        ))
     };
     let process_rows = |rows: rusqlite::AndThenRows<_>| {
         // It is faster to sort here rather than
@@ -3196,39 +3161,18 @@ pub async fn get_chat_msgs_ex(
         Ok(ret)
     };
 
-    let items = if info_only {
-        context
-            .sql
-            .query_map(
-        // GLOB is used here instead of LIKE because it is case-sensitive
-                "SELECT m.id AS id, m.timestamp AS timestamp, m.param AS param, m.from_id AS from_id, m.to_id AS to_id
-               FROM msgs m
-              WHERE m.chat_id=?
-                AND m.hidden=0
-                AND (
-                    m.param GLOB '*\nS=*' OR param GLOB 'S=*'
-                    OR m.from_id == ?
-                    OR m.to_id == ?
-                );",
-                (chat_id, ContactId::INFO, ContactId::INFO),
-                process_row,
-                process_rows,
-            )
-            .await?
-    } else {
-        context
-            .sql
-            .query_map(
-                "SELECT m.id AS id, m.timestamp AS timestamp
+    let items = context
+        .sql
+        .query_map(
+            "SELECT m.id AS id, m.timestamp AS timestamp
                FROM msgs m
               WHERE m.chat_id=?
                 AND m.hidden=0;",
-                (chat_id,),
-                process_row,
-                process_rows,
-            )
-            .await?
-    };
+            (chat_id,),
+            process_row,
+            process_rows,
+        )
+        .await?;
     Ok(items)
 }
 

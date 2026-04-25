@@ -1375,17 +1375,14 @@ impl CommandApi {
         &self,
         account_id: u32,
         chat_id: u32,
-        info_only: bool,
+        _info_only: bool,
         add_daymarker: bool,
     ) -> Result<Vec<u32>> {
         let ctx = self.get_context(account_id).await?;
         let msg = get_chat_msgs_ex(
             &ctx,
             ChatId::new(chat_id),
-            MessageListOptions {
-                info_only,
-                add_daymarker,
-            },
+            MessageListOptions { add_daymarker },
         )
         .await?;
         Ok(msg
@@ -1421,17 +1418,14 @@ impl CommandApi {
         &self,
         account_id: u32,
         chat_id: u32,
-        info_only: bool,
+        _info_only: bool,
         add_daymarker: bool,
     ) -> Result<Vec<JsonrpcMessageListItem>> {
         let ctx = self.get_context(account_id).await?;
         let msg = get_chat_msgs_ex(
             &ctx,
             ChatId::new(chat_id),
-            MessageListOptions {
-                info_only,
-                add_daymarker,
-            },
+            MessageListOptions { add_daymarker },
         )
         .await?;
         Ok(msg
