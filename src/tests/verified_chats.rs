@@ -152,11 +152,7 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     bob.sql
         .execute(
             "DELETE FROM public_keys WHERE fingerprint=?",
-            (&load_self_public_key(alice)
-                .await
-                .unwrap()
-                .dc_fingerprint()
-                .hex(),),
+            (&self_fingerprint(alice).await.unwrap(),),
         )
         .await?;
     let chat = Chat::load_from_db(bob, chat_id).await?;

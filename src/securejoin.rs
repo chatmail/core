@@ -142,7 +142,7 @@ pub async fn get_securejoin_qr(context: &Context, chat: Option<ChatId>) -> Resul
     let auth = create_id();
     token::save(context, Namespace::Auth, grpid, &auth, time()).await?;
 
-    let fingerprint = get_self_fingerprint(context).await?.hex();
+    let fingerprint = self_fingerprint(context).await?;
 
     let self_addr = context.get_primary_self_addr().await?;
     let self_addr_urlencoded = utf8_percent_encode(&self_addr, DISALLOWED_CHARACTERS).to_string();
