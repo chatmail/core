@@ -1,3 +1,0 @@
-Authentication-Results: vla3-66f60228e45a.qloud-c.yandex.net; spf=pass (vla3-66f60228e45a.qloud-c.yandex.net: domain of buzon.uy designates 185.101.93.79 as permitted sender, rule=[mx]) smtp.mail=alice@buzon.uy; dkim=pass header.i=@buzon.uy
-From: <alice@buzon.uy>
-To: <alice@yandex.ru>

@@ -1,6 +1,0 @@
-Authentication-Results: atlas324.free.mail.ne1.yahoo.com;
- dkim=unknown;
- spf=none smtp.mailfrom=delta.blinzeln.de;
- dmarc=unknown header.from=delta.blinzeln.de;
-From: <alice@delta.blinzeln.de>
-To: <alice@yahoo.com>

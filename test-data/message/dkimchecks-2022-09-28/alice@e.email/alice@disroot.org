@@ -1,6 +1,0 @@
-From: <alice@disroot.org>
-To: <alice@e.email>
-Authentication-Results: mail2.ecloud.global;
-	dkim=pass header.d=disroot.org header.s=mail header.b=Vf7JxMcu;
-	dmarc=pass (policy=quarantine) header.from=disroot.org;
-	spf=pass (mail2.ecloud.global: domain of alice@disroot.org designates 178.21.23.139 as permitted sender) smtp.mailfrom=alice@disroot.org

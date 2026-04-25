@@ -1,7 +1,0 @@
-Authentication-Results: bimi.icloud.com; bimi=none
-Authentication-Results: dmarc.icloud.com; dmarc=pass header.from=buzon.uy
-Authentication-Results: dkim-verifier.icloud.com;
-	dkim=pass (2048-bit key) header.d=buzon.uy header.i=@buzon.uy header.b=RIQdNWNe
-Authentication-Results: spf.icloud.com; spf=pass (spf.icloud.com: domain of alice@buzon.uy designates 185.101.93.79 as permitted sender) smtp.mailfrom=alice@buzon.uy
-From: <alice@buzon.uy>
-To: <alice@icloud.com>

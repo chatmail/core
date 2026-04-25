@@ -1,7 +1,0 @@
-Authentication-Results: posteo.de; dmarc=pass (p=none dis=none) header.from=riseup.net
-Authentication-Results: posteo.de; spf=pass smtp.mailfrom=riseup.net
-Authentication-Results: posteo.de;
-	dkim=pass (1024-bit key) header.d=riseup.net header.i=@riseup.net header.b=hAaxuWvc;
-	dkim-atps=neutral
-From: <alice@riseup.net>
-To: <alice@posteo.de>

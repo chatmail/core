@@ -1,6 +1,0 @@
-Authentication-Results: spf=pass (sender IP is 178.21.23.139)
- smtp.mailfrom=disroot.org; dkim=pass (signature was verified)
- header.d=disroot.org;dmarc=pass action=none
- header.from=disroot.org;compauth=pass reason=100
-From: <alice@disroot.org>
-To: <alice@hotmail.com>

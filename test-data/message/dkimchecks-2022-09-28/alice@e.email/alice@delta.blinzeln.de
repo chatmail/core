@@ -1,6 +1,0 @@
-From: <alice@delta.blinzeln.de>
-To: <alice@e.email>
-Authentication-Results: mail2.ecloud.global;
-	dkim=none;
-	dmarc=none;
-	spf=none (mail2.ecloud.global: domain of alice@delta.blinzeln.de has no SPF policy when checking 192.162.87.117) smtp.mailfrom=alice@delta.blinzeln.de

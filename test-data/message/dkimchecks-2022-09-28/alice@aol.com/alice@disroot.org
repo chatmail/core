@@ -1,6 +1,0 @@
-Authentication-Results: atlas210.aol.mail.bf1.yahoo.com;
- dkim=pass header.i=@disroot.org header.s=mail;
- spf=pass smtp.mailfrom=disroot.org;
- dmarc=pass(p=QUARANTINE) header.from=disroot.org;
-From: <alice@disroot.org>
-To: <alice@aol.com>

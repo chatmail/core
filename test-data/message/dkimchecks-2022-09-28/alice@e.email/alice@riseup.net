@@ -1,6 +1,0 @@
-From: <alice@riseup.net>
-To: <alice@e.email>
-Authentication-Results: mail2.ecloud.global;
-	dkim=pass header.d=riseup.net header.s=squak header.b="GUmo/IlI";
-	dmarc=pass (policy=none) header.from=riseup.net;
-	spf=pass (mail2.ecloud.global: domain of alice@riseup.net designates 198.252.153.129 as permitted sender) smtp.mailfrom=alice@riseup.net

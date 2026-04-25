@@ -1,3 +1,0 @@
-Authentication-Results: sas1-9c1a55d84a51.qloud-c.yandex.net; spf=pass (sas1-9c1a55d84a51.qloud-c.yandex.net: domain of disroot.org designates 178.21.23.139 as permitted sender, rule=[a]) smtp.mail=alice@disroot.org; dkim=pass header.i=@disroot.org
-From: <alice@disroot.org>
-To: <alice@yandex.ru>

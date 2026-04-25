@@ -1,7 +1,0 @@
-Authentication-Results: mx.infomaniak.com; dmarc=pass (p=quarantine dis=none) header.from=disroot.org
-Authentication-Results: mx.infomaniak.com;
-	dkim=pass (2048-bit key; secure) header.d=disroot.org header.i=@disroot.org header.b="HlBDJq/t";
-	dkim-atps=neutral
-From: <alice@disroot.org>
-To: <alice@ik.me>
-Authentication-Results: mx.infomaniak.com; spf=pass smtp.mailfrom=disroot.org

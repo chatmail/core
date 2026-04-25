@@ -1,4 +1,0 @@
-From: <alice@disroot.org>
-To: <alice@mail.ru>
-Authentication-Results: mxs.mail.ru; spf=pass (mx227.i.mail.ru: domain of disroot.org designates 178.21.23.139 as permitted sender) smtp.mailfrom=alice@disroot.org smtp.helo=knopi.disroot.org;
-	 dkim=pass header.d=disroot.org; dmarc=pass header.from=alice@disroot.org

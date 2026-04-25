@@ -1,4 +1,0 @@
-From: <alice@riseup.net>
-To: <alice@mail.ru>
-Authentication-Results: mxs.mail.ru; spf=pass (mx282.i.mail.ru: domain of riseup.net designates 198.252.153.6 as permitted sender) smtp.mailfrom=alice@riseup.net smtp.helo=mx0.riseup.net;
-	 dkim=pass header.d=riseup.net; dmarc=pass header.from=alice@riseup.net

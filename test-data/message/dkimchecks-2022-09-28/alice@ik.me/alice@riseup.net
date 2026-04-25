@@ -1,7 +1,0 @@
-Authentication-Results: mx.infomaniak.com; dmarc=pass (p=none dis=none) header.from=riseup.net
-Authentication-Results: mx.infomaniak.com;
-	dkim=pass (1024-bit key; secure) header.d=riseup.net header.i=@riseup.net header.b="dGbBF9qT";
-	dkim-atps=neutral
-From: <alice@riseup.net>
-To: <alice@ik.me>
-Authentication-Results: mx.infomaniak.com; spf=pass smtp.mailfrom=riseup.net

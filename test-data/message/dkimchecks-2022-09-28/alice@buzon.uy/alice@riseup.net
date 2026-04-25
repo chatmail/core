@@ -1,5 +1,0 @@
-Authentication-Results: mail.buzon.uy;
-	dkim=pass (1024-bit key; secure) header.d=riseup.net header.i=@riseup.net header.b="eQhRD1BM";
-	dkim-atps=neutral
-From: <alice@riseup.net>
-To: <alice@buzon.uy>

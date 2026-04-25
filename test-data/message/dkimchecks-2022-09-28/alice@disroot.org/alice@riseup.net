@@ -1,5 +1,0 @@
-Authentication-Results: disroot.org;
-	dkim=pass (1024-bit key; unprotected) header.d=riseup.net header.i=@riseup.net header.b="fFYxwl1W";
-	dkim-atps=neutral
-From: <alice@riseup.net>
-To: <alice@disroot.org>

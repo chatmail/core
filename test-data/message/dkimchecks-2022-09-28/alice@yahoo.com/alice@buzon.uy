@@ -1,6 +1,0 @@
-Authentication-Results: atlas-production.v2-mail-prod1-gq1.omega.yahoo.com;
- dkim=pass header.i=@buzon.uy header.s=2019;
- spf=pass smtp.mailfrom=buzon.uy;
- dmarc=pass(p=REJECT) header.from=buzon.uy;
-From: <alice@buzon.uy>
-To: <alice@yahoo.com>

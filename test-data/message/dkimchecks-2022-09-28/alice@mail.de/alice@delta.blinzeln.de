@@ -1,4 +1,0 @@
-Authentication-Results: mxpostfix01.mail.de; dkim=none; dkim-atps=neutral
-From: <alice@delta.blinzeln.de>
-To: bot <alice@mail.de>
-Authentication-Results: secure-mailgate.com; auth=pass smtp.auth=91.203.111.88@webbox222.server-home.org

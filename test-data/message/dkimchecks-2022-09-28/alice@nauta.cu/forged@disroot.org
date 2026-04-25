@@ -1,8 +1,0 @@
-Authentication-Results: box.hispanilandia.net;
-	dkim=fail reason="signature verification failed" (2048-bit key; secure) header.d=disroot.org header.i=@disroot.org header.b="kqh3WUKq";
-	dkim-atps=neutral
-Authentication-Results: box.hispanilandia.net; dmarc=pass (p=quarantine dis=none) header.from=disroot.org
-Authentication-Results: box.hispanilandia.net; spf=pass smtp.mailfrom=adbenitez@disroot.org
-From: forged@disroot.org
-
-This is an email from adb's mailing list that pretends being sent by forged@disroot.org.

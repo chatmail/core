@@ -1,6 +1,0 @@
-Authentication-Results: spf=pass (sender IP is 62.201.172.25)
- smtp.mailfrom=mail.de; dkim=pass (signature was verified)
- header.d=mail.de;dmarc=pass action=none header.from=mail.de;compauth=pass
- reason=100
-From: <alice@mail.de>
-To: <alice@outlook.com>

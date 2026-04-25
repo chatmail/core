@@ -1,6 +1,0 @@
-From: <alice@mail.de>
-To: <alice@e.email>
-Authentication-Results: mail3.ecloud.global;
-	dkim=pass header.d=mail.de header.s=mailde202009 header.b=vVqLo0H5;
-	dmarc=pass (policy=none) header.from=mail.de;
-	spf=pass (mail3.ecloud.global: domain of alice@mail.de designates 2001:868:100:600::216 as permitted sender) smtp.mailfrom=alice@mail.de

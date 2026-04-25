@@ -1,6 +1,0 @@
-From: <alice@posteo.de>
-To: <alice@e.email>
-Authentication-Results: mail2.ecloud.global;
-	dkim=pass header.d=posteo.de header.s=2017 header.b=bMopHaXo;
-	dmarc=pass (policy=none) header.from=posteo.de;
-	spf=pass (mail2.ecloud.global: domain of alice@posteo.de designates 185.67.36.66 as permitted sender) smtp.mailfrom=alice@posteo.de
