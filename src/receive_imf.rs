@@ -2180,12 +2180,20 @@ INSERT INTO msgs
   )",
                 )?;
                 let params = params![
-                    if let PreMessageMode::Pre {post_msg_rfc724_mid, ..} = &mime_parser.pre_message {
+                    if let PreMessageMode::Pre {
+                        post_msg_rfc724_mid,
+                        ..
+                    } = &mime_parser.pre_message
+                    {
                         post_msg_rfc724_mid
-                    } else { rfc724_mid_orig },
-                    if let PreMessageMode::Pre {..} = &mime_parser.pre_message {
+                    } else {
                         rfc724_mid_orig
-                    } else { "" },
+                    },
+                    if let PreMessageMode::Pre { .. } = &mime_parser.pre_message {
+                        rfc724_mid_orig
+                    } else {
+                        ""
+                    },
                     if trash { DC_CHAT_ID_TRASH } else { chat_id },
                     if trash { ContactId::UNDEFINED } else { from_id },
                     if trash { ContactId::UNDEFINED } else { to_id },
@@ -2194,13 +2202,27 @@ INSERT INTO msgs
                     if trash { 0 } else { mime_parser.timestamp_rcvd },
                     if trash {
                         Viewtype::Unknown
-                    } else if let PreMessageMode::Pre {..} = mime_parser.pre_message {
+                    } else if let PreMessageMode::Pre { .. } = mime_parser.pre_message {
                         Viewtype::Text
-                    } else { typ },
-                    if trash { MessageState::Undefined } else { state },
-                    if trash { MessengerMessage::No } else { is_dc_message },
+                    } else {
+                        typ
+                    },
+                    if trash {
+                        MessageState::Undefined
+                    } else {
+                        state
+                    },
+                    if trash {
+                        MessengerMessage::No
+                    } else {
+                        is_dc_message
+                    },
                     if trash || hidden { "" } else { msg },
-                    if trash || hidden { None } else { normalize_text(msg) },
+                    if trash || hidden {
+                        None
+                    } else {
+                        normalize_text(msg)
+                    },
                     if trash || hidden { "" } else { &subject },
                     if trash {
                         "".to_string()
@@ -2217,14 +2239,18 @@ INSERT INTO msgs
                     if trash { "" } else { mime_in_reply_to },
                     if trash { "" } else { mime_references },
                     !trash && save_mime_modified,
-                    if trash { "" } else { part.error.as_deref().unwrap_or_default() },
+                    if trash {
+                        ""
+                    } else {
+                        part.error.as_deref().unwrap_or_default()
+                    },
                     if trash { 0 } else { ephemeral_timer.to_u32() },
                     if trash { 0 } else { ephemeral_timestamp },
                     if trash {
                         DownloadState::Done
                     } else if mime_parser.decryption_error.is_some() {
                         DownloadState::Undecipherable
-                    } else if let PreMessageMode::Pre {..} = mime_parser.pre_message {
+                    } else if let PreMessageMode::Pre { .. } = mime_parser.pre_message {
                         DownloadState::Available
                     } else {
                         DownloadState::Done
