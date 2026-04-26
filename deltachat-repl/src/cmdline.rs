@@ -573,7 +573,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
                     );
                 }
             }
-            if location::is_sending_locations(&context).await? {
+            if location::is_sending(&context).await? {
                 println!("Location streaming enabled.");
             }
             println!("{cnt} chats");
@@ -780,11 +780,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
 
             println!(
                 "Location streaming: {}",
-                location::is_sending_locations_to_chat(
-                    &context,
-                    sel_chat.as_ref().unwrap().get_id()
-                )
-                .await?,
+                location::is_sending_to_chat(&context, sel_chat.as_ref().unwrap().get_id()).await?,
             );
         }
         "getlocations" => {
@@ -824,12 +820,7 @@ pub async fn cmdline(context: Context, line: &str, chat_id: &mut ChatId) -> Resu
             ensure!(!arg1.is_empty(), "No timeout given.");
 
             let seconds = arg1.parse()?;
-            location::send_locations_to_chat(
-                &context,
-                sel_chat.as_ref().unwrap().get_id(),
-                seconds,
-            )
-            .await?;
+            location::send_to_chat(&context, sel_chat.as_ref().unwrap().get_id(), seconds).await?;
             println!(
                 "Locations will be sent to Chat#{} for {} seconds. Use 'setlocation <lat> <lng>' to play around.",
                 sel_chat.as_ref().unwrap().get_id(),

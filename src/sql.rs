@@ -15,7 +15,7 @@ use crate::context::Context;
 use crate::debug_logging::set_debug_logging_xdc;
 use crate::ephemeral::start_ephemeral_timers;
 use crate::imex::BLOBS_BACKUP_NAME;
-use crate::location::delete_orphaned_poi_locations;
+use crate::location;
 use crate::log::{LogExt, warn};
 use crate::message::MsgId;
 use crate::net::dns::prune_dns_cache;
@@ -902,7 +902,7 @@ pub async fn housekeeping(context: &Context) -> Result<()> {
 
     // Delete POI locations
     // which don't have corresponding message.
-    delete_orphaned_poi_locations(context)
+    location::delete_orphaned_poi(context)
         .await
         .context("Failed to delete orphaned POI locations")
         .log_err(context)

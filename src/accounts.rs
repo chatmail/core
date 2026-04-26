@@ -23,7 +23,6 @@ use tokio::time::{Duration, sleep};
 use crate::context::{Context, ContextBuilder};
 use crate::events::{Event, EventEmitter, EventType, Events};
 use crate::location;
-use crate::location::stop_sending_locations;
 use crate::log::warn;
 use crate::push::PushSubscriber;
 use crate::stock_str::StockStrings;
@@ -555,7 +554,7 @@ impl Accounts {
     /// Stops sending locations to all chats.
     pub async fn stop_sending_locations(&self) -> Result<()> {
         for account in self.accounts.values() {
-            stop_sending_locations(account).await?;
+            location::stop_sending(account).await?;
         }
         Ok(())
     }

@@ -264,15 +264,11 @@ impl Kml {
 
 /// Enables location streaming in chat identified by `chat_id` for `seconds` seconds.
 #[expect(clippy::arithmetic_side_effects)]
-pub async fn send_locations_to_chat(
-    context: &Context,
-    chat_id: ChatId,
-    seconds: i64,
-) -> Result<()> {
+pub async fn send_to_chat(context: &Context, chat_id: ChatId, seconds: i64) -> Result<()> {
     ensure!(seconds >= 0);
     ensure!(!chat_id.is_special());
     let now = time();
-    let is_sending_locations_before = is_sending_locations_to_chat(context, chat_id).await?;
+    let is_sending_locations_before = is_sending_to_chat(context, chat_id).await?;
     context
         .sql
         .execute(
@@ -306,7 +302,7 @@ pub async fn send_locations_to_chat(
 }
 
 /// Returns whether any chat is sending locations.
-pub async fn is_sending_locations(context: &Context) -> Result<bool> {
+pub async fn is_sending(context: &Context) -> Result<bool> {
     context
         .sql
         .exists(
@@ -317,7 +313,7 @@ pub async fn is_sending_locations(context: &Context) -> Result<bool> {
 }
 
 /// Returns whether `chat_id` is sending locations.
-pub async fn is_sending_locations_to_chat(context: &Context, chat_id: ChatId) -> Result<bool> {
+pub async fn is_sending_to_chat(context: &Context, chat_id: ChatId) -> Result<bool> {
     context
         .sql
         .exists(
@@ -343,9 +339,9 @@ async fn get_chats_with_location_streaming(context: &Context) -> Result<Vec<Chat
 }
 
 /// Stop sending locations in all chats.
-pub async fn stop_sending_locations(context: &Context) -> Result<()> {
+pub async fn stop_sending(context: &Context) -> Result<()> {
     for chat_id in get_chats_with_location_streaming(context).await? {
-        send_locations_to_chat(context, chat_id, 0).await?;
+        send_to_chat(context, chat_id, 0).await?;
     }
     Ok(())
 }
@@ -502,7 +498,7 @@ pub(crate) async fn delete_expired(context: &Context, now: i64) -> Result<()> {
 ///
 /// This function is used when a message is deleted
 /// that has a corresponding `location_id`.
-pub(crate) async fn delete_poi_location(context: &Context, location_id: u32) -> Result<()> {
+pub(crate) async fn delete_poi(context: &Context, location_id: u32) -> Result<()> {
     context
         .sql
         .execute(
@@ -514,7 +510,7 @@ pub(crate) async fn delete_poi_location(context: &Context, location_id: u32) -> 
 }
 
 /// Deletes POI locations that don't have corresponding message anymore.
-pub(crate) async fn delete_orphaned_poi_locations(context: &Context) -> Result<()> {
+pub(crate) async fn delete_orphaned_poi(context: &Context) -> Result<()> {
     context.sql.execute("
     DELETE FROM locations
     WHERE independent=1 AND id NOT IN
@@ -723,9 +719,9 @@ pub(crate) async fn save(
 
 pub(crate) async fn location_loop(context: &Context, interrupt_receiver: Receiver<()>) {
     loop {
-        let next_event = match maybe_send_locations(context).await {
+        let next_event = match maybe_send(context).await {
             Err(err) => {
-                warn!(context, "maybe_send_locations failed: {:#}", err);
+                warn!(context, "location::maybe_send failed: {:#}", err);
                 Some(60) // Retry one minute later.
             }
             Ok(next_event) => next_event,
@@ -763,7 +759,7 @@ pub(crate) async fn location_loop(context: &Context, interrupt_receiver: Receive
 /// Returns number of seconds until the next time location streaming for some chat ends
 /// automatically.
 #[expect(clippy::arithmetic_side_effects)]
-async fn maybe_send_locations(context: &Context) -> Result<Option<u64>> {
+async fn maybe_send(context: &Context) -> Result<Option<u64>> {
     let mut next_event: Option<u64> = None;
 
     let now = time();
@@ -1058,7 +1054,7 @@ Content-Disposition: attachment; filename="location.kml"
         let bob = TestContext::new_bob().await;
 
         let alice_chat = alice.create_chat(&bob).await;
-        send_locations_to_chat(&alice, alice_chat.id, 1000).await?;
+        send_to_chat(&alice, alice_chat.id, 1000).await?;
         let sent = alice.pop_sent_msg().await;
         let msg = bob.recv_msg(&sent).await;
         assert_eq!(msg.text, "Location streaming enabled by alice@example.org.");
@@ -1110,7 +1106,7 @@ Content-Disposition: attachment; filename="location.kml"
 
         // Alice enables location streaming.
         // Bob receives a message saying that Alice enabled location streaming.
-        send_locations_to_chat(alice, alice_chat.id, 60).await?;
+        send_to_chat(alice, alice_chat.id, 60).await?;
         bob.recv_msg(&alice.pop_sent_msg().await).await;
 
         // Alice gets new location from GPS.
@@ -1120,7 +1116,7 @@ Content-Disposition: attachment; filename="location.kml"
         // 10 seconds later location sending stream manages to send location.
         SystemTime::shift(Duration::from_secs(10));
         delete_expired(alice, time()).await?;
-        maybe_send_locations(alice).await?;
+        maybe_send(alice).await?;
         bob.recv_msg_opt(&alice.pop_sent_msg().await).await;
         assert_eq!(get_range(alice, None, None, 0, 0).await?.len(), 1);
         assert_eq!(get_range(bob, None, None, 0, 0).await?.len(), 1);

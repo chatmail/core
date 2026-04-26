@@ -2541,7 +2541,7 @@ pub unsafe extern "C" fn dc_send_locations_to_chat(
     }
     let ctx = &*context;
 
-    block_on(location::send_locations_to_chat(
+    block_on(location::send_to_chat(
         ctx,
         ChatId::new(chat_id),
         seconds as i64,
@@ -2562,14 +2562,12 @@ pub unsafe extern "C" fn dc_is_sending_locations_to_chat(
     }
     let ctx = &*context;
     if chat_id == 0 {
-        block_on(location::is_sending_locations(ctx))
+        block_on(location::is_sending(ctx))
             .unwrap_or_log_default(ctx, "Failed is_sending_locations()") as libc::c_int
     } else {
-        block_on(location::is_sending_locations_to_chat(
-            ctx,
-            ChatId::new(chat_id),
-        ))
-        .unwrap_or_log_default(ctx, "Failed is_sending_locations_to_chat()") as libc::c_int
+        block_on(location::is_sending_to_chat(ctx, ChatId::new(chat_id)))
+            .unwrap_or_log_default(ctx, "Failed is_sending_locations_to_chat()")
+            as libc::c_int
     }
 }
 
