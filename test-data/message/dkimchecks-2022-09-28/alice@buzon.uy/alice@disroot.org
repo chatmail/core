@@ -1,5 +1,0 @@
-Authentication-Results: mail.buzon.uy;
-	dkim=pass (2048-bit key; secure) header.d=disroot.org header.i=@disroot.org header.b="L9SmOHOj";
-	dkim-atps=neutral
-From: <alice@disroot.org>
-To: <alice@buzon.uy>

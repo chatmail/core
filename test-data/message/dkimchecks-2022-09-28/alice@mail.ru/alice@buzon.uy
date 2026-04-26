@@ -1,4 +1,0 @@
-From: <alice@buzon.uy>
-To: <alice@mail.ru>
-Authentication-Results: mxs.mail.ru; spf=pass (mx311.i.mail.ru: domain of buzon.uy designates 185.101.93.79 as permitted sender) smtp.mailfrom=alice@buzon.uy smtp.helo=mail.buzon.uy;
-	 dkim=pass header.d=buzon.uy; dmarc=pass header.from=alice@buzon.uy

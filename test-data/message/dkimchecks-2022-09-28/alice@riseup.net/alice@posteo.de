@@ -1,5 +1,0 @@
-Authentication-Results: mx1.riseup.net;
-	dkim=pass (2048-bit key; secure) header.d=posteo.de header.i=@posteo.de header.a=rsa-sha256 header.s=2017 header.b=jSdje1Vp;
-	dkim-atps=neutral
-From: <alice@posteo.de>
-To: bot <alice@riseup.net>

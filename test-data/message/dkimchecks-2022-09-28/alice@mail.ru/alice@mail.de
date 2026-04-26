@@ -1,4 +1,0 @@
-From: <alice@mail.de>
-To: <alice@mail.ru>
-Authentication-Results: mxs.mail.ru; spf=pass (mx285.i.mail.ru: domain of mail.de designates 62.201.172.25 as permitted sender) smtp.mailfrom=alice@mail.de smtp.helo=shout02.mail.de;
-	 dkim=pass header.d=mail.de; dmarc=pass header.from=alice@mail.de

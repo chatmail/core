@@ -1,5 +1,0 @@
-Authentication-Results: mxpostfix02.mail.de;
-	dkim=pass (1024-bit key; secure) header.d=riseup.net header.i=@riseup.net header.b="kACrHe55";
-	dkim-atps=neutral
-From: <alice@riseup.net>
-To: bot <alice@mail.de>

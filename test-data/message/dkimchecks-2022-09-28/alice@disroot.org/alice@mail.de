@@ -1,5 +1,0 @@
-Authentication-Results: disroot.org;
-	dkim=pass (2048-bit key; unprotected) header.d=mail.de header.i=@mail.de header.b="3ha9obSK";
-	dkim-atps=neutral
-From: <alice@mail.de>
-To: <alice@disroot.org>

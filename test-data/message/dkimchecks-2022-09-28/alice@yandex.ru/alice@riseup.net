@@ -1,3 +1,0 @@
-Authentication-Results: iva4-be43fd783926.qloud-c.yandex.net; spf=pass (iva4-be43fd783926.qloud-c.yandex.net: domain of riseup.net designates 198.252.153.6 as permitted sender, rule=[a:mx0.riseup.net]) smtp.mail=alice@riseup.net; dkim=pass header.i=@riseup.net
-From: <alice@riseup.net>
-To: <alice@yandex.ru>

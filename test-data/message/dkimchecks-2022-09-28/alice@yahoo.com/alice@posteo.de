@@ -1,6 +1,0 @@
-Authentication-Results: atlas106.free.mail.bf1.yahoo.com;
- dkim=pass header.i=@posteo.de header.s=2017;
- spf=pass smtp.mailfrom=posteo.de;
- dmarc=pass(p=NONE) header.from=posteo.de;
-From: <alice@posteo.de>
-To: <alice@yahoo.com>

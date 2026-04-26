@@ -1,6 +1,0 @@
-Authentication-Results: spf=none (sender IP is 192.162.87.121)
- smtp.mailfrom=delta.blinzeln.de; dkim=none (message not signed)
- header.d=none;dmarc=none action=none
- header.from=delta.blinzeln.de;compauth=fail reason=001
-From: <alice@delta.blinzeln.de>
-To: <alice@hotmail.com>

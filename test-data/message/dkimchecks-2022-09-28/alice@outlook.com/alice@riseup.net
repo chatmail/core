@@ -1,6 +1,0 @@
-Authentication-Results: spf=pass (sender IP is 198.252.153.129)
- smtp.mailfrom=riseup.net; dkim=pass (signature was verified)
- header.d=riseup.net;dmarc=pass action=none
- header.from=riseup.net;compauth=pass reason=100
-From: <alice@riseup.net>
-To: <alice@outlook.com>

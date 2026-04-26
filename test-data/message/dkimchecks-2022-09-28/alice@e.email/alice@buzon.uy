@@ -1,6 +1,0 @@
-From: <alice@buzon.uy>
-To: <alice@e.email>
-Authentication-Results: mail3.ecloud.global;
-	dkim=pass header.d=buzon.uy header.s=2019 header.b=XfN4sE6M;
-	dmarc=pass (policy=reject) header.from=buzon.uy;
-	spf=pass (mail3.ecloud.global: domain of alice@buzon.uy designates 185.101.93.79 as permitted sender) smtp.mailfrom=alice@buzon.uy

@@ -1,5 +1,0 @@
-Authentication-Results: mxpostfix03.mail.de;
-	dkim=pass (2048-bit key; secure) header.d=posteo.de header.i=@posteo.de header.b="q9Kd4g/Y";
-	dkim-atps=neutral
-From: <alice@posteo.de>
-To: bot <alice@mail.de>

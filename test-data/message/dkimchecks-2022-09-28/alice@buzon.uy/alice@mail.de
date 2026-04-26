@@ -1,5 +1,0 @@
-Authentication-Results: mail.buzon.uy;
-	dkim=pass (2048-bit key; secure) header.d=mail.de header.i=@mail.de header.b="18cRkjHf";
-	dkim-atps=neutral
-From: <alice@mail.de>
-To: <alice@buzon.uy>

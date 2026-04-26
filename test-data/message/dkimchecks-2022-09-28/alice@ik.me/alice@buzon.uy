@@ -1,7 +1,0 @@
-Authentication-Results: mx.infomaniak.com; dmarc=pass (p=reject dis=none) header.from=buzon.uy
-Authentication-Results: mx.infomaniak.com;
-	dkim=pass (2048-bit key; unprotected) header.d=buzon.uy header.i=@buzon.uy header.b="myjYUi37";
-	dkim-atps=neutral
-From: <alice@buzon.uy>
-To: <alice@ik.me>
-Authentication-Results: mx.infomaniak.com; spf=pass smtp.mailfrom=buzon.uy

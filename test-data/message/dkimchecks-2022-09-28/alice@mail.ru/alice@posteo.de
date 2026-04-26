@@ -1,4 +1,0 @@
-From: <alice@posteo.de>
-To: <alice@mail.ru>
-Authentication-Results: mxs.mail.ru; spf=pass (mx288.i.mail.ru: domain of posteo.de designates 185.67.36.66 as permitted sender) smtp.mailfrom=alice@posteo.de smtp.helo=mout02.posteo.de;
-	 dkim=pass header.d=posteo.de; dmarc=pass header.from=alice@posteo.de

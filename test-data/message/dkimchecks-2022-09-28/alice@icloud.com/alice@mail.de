@@ -1,7 +1,0 @@
-Authentication-Results: bimi.icloud.com; bimi=skipped reason="insufficient dmarc"
-Authentication-Results: dmarc.icloud.com; dmarc=pass header.from=mail.de
-Authentication-Results: dkim-verifier.icloud.com;
-	dkim=pass (2048-bit key) header.d=mail.de header.i=@mail.de header.b=dLA2UUO1
-Authentication-Results: spf.icloud.com; spf=pass (spf.icloud.com: domain of alice@mail.de designates 62.201.172.25 as permitted sender) smtp.mailfrom=alice@mail.de
-From: <alice@mail.de>
-To: <alice@icloud.com>

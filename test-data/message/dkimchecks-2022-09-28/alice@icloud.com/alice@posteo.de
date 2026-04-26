@@ -1,7 +1,0 @@
-Authentication-Results: bimi.icloud.com; bimi=skipped reason="insufficient dmarc"
-Authentication-Results: dmarc.icloud.com; dmarc=pass header.from=posteo.de
-Authentication-Results: dkim-verifier.icloud.com;
-	dkim=pass (2048-bit key) header.d=posteo.de header.i=@posteo.de header.b=XcYh4i4k
-Authentication-Results: spf.icloud.com; spf=pass (spf.icloud.com: domain of alice@posteo.de designates 185.67.36.66 as permitted sender) smtp.mailfrom=alice@posteo.de
-From: <alice@posteo.de>
-To: <alice@icloud.com>

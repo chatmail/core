@@ -1,5 +1,0 @@
-Authentication-Results: mail.buzon.uy;
-	dkim=pass (2048-bit key; secure) header.d=posteo.de header.i=@posteo.de header.b="AyOucyBM";
-	dkim-atps=neutral
-From: <alice@posteo.de>
-To: <alice@buzon.uy>

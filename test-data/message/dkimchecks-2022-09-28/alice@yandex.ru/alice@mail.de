@@ -1,3 +1,0 @@
-Authentication-Results: sas1-5ea632933308.qloud-c.yandex.net; spf=pass (sas1-5ea632933308.qloud-c.yandex.net: domain of mail.de designates 2001:868:100:600::217 as permitted sender, rule=[ip6:2001:868:100:600::/64]) smtp.mail=alice@mail.de; dkim=pass header.i=@mail.de
-From: <alice@mail.de>
-To: <alice@yandex.ru>

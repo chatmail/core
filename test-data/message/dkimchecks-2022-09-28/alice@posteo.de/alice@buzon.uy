@@ -1,7 +1,0 @@
-Authentication-Results: posteo.de; dmarc=pass (p=reject dis=none) header.from=buzon.uy
-Authentication-Results: posteo.de; spf=pass smtp.mailfrom=buzon.uy
-Authentication-Results: posteo.de;
-	dkim=pass (2048-bit key) header.d=buzon.uy header.i=@buzon.uy header.b=BvEzK1ZM;
-	dkim-atps=neutral
-From: <alice@buzon.uy>
-To: <alice@posteo.de>
