@@ -524,53 +524,15 @@ pub(crate) async fn receive_imf_inner(
         "Receiving message {rfc724_mid_orig:?}, seen={seen}...",
     );
 
-    // check, if the mail is already in our database.
-    // make sure, this check is done eg. before securejoin-processing.
-    let (replace_msg_id, replace_chat_id);
+    // These checks must be done before processing of SecureJoin and other special messages.
     if mime_parser.pre_message == mimeparser::PreMessageMode::Post {
         // Post-Message just replaces the attachment and modifies Params, not the whole message.
         // This is done in the `handle_post_message` method.
-        replace_msg_id = None;
-        replace_chat_id = None;
-    } else if let Some(old_msg_id) = message::rfc724_mid_exists(context, rfc724_mid).await? {
-        replace_msg_id = Some(old_msg_id);
-        replace_chat_id = if let Some(msg) = Message::load_from_db_optional(context, old_msg_id)
-            .await?
-            .filter(|msg| msg.download_state() != DownloadState::Done)
-        {
-            // This code handles the download of old partial download stub messages
-            // It will be removed after a transitioning period,
-            // after we have released a few versions with pre-messages
-            match mime_parser.pre_message {
-                PreMessageMode::Post | PreMessageMode::None => {
-                    info!(context, "Message already partly in DB, replacing.");
-                    Some(msg.chat_id)
-                }
-                PreMessageMode::Pre { .. } => {
-                    info!(context, "Cannot replace pre-message with a pre-message");
-                    None
-                }
-            }
-        } else {
-            info!(
-                context,
-                "Message {rfc724_mid} is fully downloaded or deleted."
-            );
-            None
-        };
-    } else {
-        replace_msg_id = if rfc724_mid_orig == rfc724_mid {
-            None
-        } else {
-            message::rfc724_mid_exists(context, rfc724_mid_orig).await?
-        };
-        replace_chat_id = None;
-    }
-
-    if replace_chat_id.is_some() {
-        // Need to update chat id in the db.
-    } else if let Some(msg_id) = replace_msg_id {
-        info!(context, "Message is already downloaded.");
+    } else if let Some(msg_id) = message::rfc724_mid_exists(context, rfc724_mid_orig).await? {
+        info!(
+            context,
+            "Message {rfc724_mid} is already in some chat or deleted."
+        );
         if mime_parser.incoming {
             return Ok(None);
         }
@@ -589,7 +551,7 @@ pub(crate) async fn receive_imf_inner(
             msg_id.set_delivered(context).await?;
         }
         return Ok(None);
-    };
+    }
 
     let prevent_rename = should_prevent_rename(&mime_parser);
 
@@ -639,8 +601,7 @@ pub(crate) async fn receive_imf_inner(
         mime_parser.get_header(HeaderDef::References),
         mime_parser.get_header(HeaderDef::InReplyTo),
     )
-    .await?
-    .filter(|p| Some(p.id) != replace_msg_id);
+    .await?;
 
     let mut chat_assignment =
         decide_chat_assignment(context, &mime_parser, &parent_message, rfc724_mid, from_id).await?;
@@ -756,7 +717,6 @@ pub(crate) async fn receive_imf_inner(
             rfc724_mid_orig,
             from_id,
             seen,
-            replace_msg_id,
             prevent_rename,
             chat_id,
             chat_id_blocked,
@@ -1051,11 +1011,6 @@ UPDATE msgs SET state=? WHERE
             .await?;
     } else if received_msg.hidden {
         // No need to emit an event about the changed message
-    } else if let Some(replace_chat_id) = replace_chat_id {
-        match replace_chat_id == chat_id {
-            false => context.emit_msgs_changed_without_msg_id(replace_chat_id),
-            true => context.emit_msgs_changed(chat_id, replace_msg_id.unwrap_or_default()),
-        }
     } else if !chat_id.is_trash() {
         let fresh = received_msg.state == MessageState::InFresh
             && mime_parser.is_system_message != SystemMessage::CallAccepted
@@ -1782,7 +1737,6 @@ async fn add_parts(
     rfc724_mid: &str,
     from_id: ContactId,
     seen: bool,
-    mut replace_msg_id: Option<MsgId>,
     prevent_rename: bool,
     mut chat_id: ChatId,
     mut chat_id_blocked: Blocked,
@@ -2163,22 +2117,6 @@ async fn add_parts(
             param.set_int(Param::Cmd, is_system_message as i32);
         }
 
-        if let Some(replace_msg_id) = replace_msg_id {
-            let placeholder = Message::load_from_db(context, replace_msg_id)
-                .await
-                .context("Failed to load placeholder message")?;
-            for key in [
-                Param::WebxdcSummary,
-                Param::WebxdcSummaryTimestamp,
-                Param::WebxdcDocument,
-                Param::WebxdcDocumentTimestamp,
-            ] {
-                if let Some(value) = placeholder.param.get(key) {
-                    param.set(key, value);
-                }
-            }
-        }
-
         let (msg, typ): (&str, Viewtype) = if let Some(better_msg) = &better_msg {
             (better_msg, Viewtype::Text)
         } else {
@@ -2221,10 +2159,9 @@ async fn add_parts(
             .sql
             .call_write(|conn| {
                 let mut stmt = conn.prepare_cached(
-            r#"
+                    "
 INSERT INTO msgs
   (
-    id,
     rfc724_mid, pre_rfc724_mid, chat_id,
     from_id, to_id, timestamp, timestamp_sent, 
     timestamp_rcvd, type, state, msgrmsg, 
@@ -2234,28 +2171,15 @@ INSERT INTO msgs
     ephemeral_timestamp, download_state, hop_info
   )
   VALUES (
-    ?,
     ?, ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?,
     ?, ?, ?, ?, ?, 1,
     ?, ?, ?, ?,
     ?, ?, ?, ?
-  )
-ON CONFLICT (id) DO UPDATE
-SET rfc724_mid=excluded.rfc724_mid, chat_id=excluded.chat_id,
-    from_id=excluded.from_id, to_id=excluded.to_id, timestamp_sent=excluded.timestamp_sent,
-    type=excluded.type, state=max(state,excluded.state), msgrmsg=excluded.msgrmsg,
-    txt=excluded.txt, txt_normalized=excluded.txt_normalized, subject=excluded.subject,
-    param=excluded.param,
-    hidden=excluded.hidden,bytes=excluded.bytes, mime_headers=excluded.mime_headers,
-    mime_compressed=excluded.mime_compressed, mime_in_reply_to=excluded.mime_in_reply_to,
-    mime_references=excluded.mime_references, mime_modified=excluded.mime_modified, error=excluded.error, ephemeral_timer=excluded.ephemeral_timer,
-    ephemeral_timestamp=excluded.ephemeral_timestamp, download_state=excluded.download_state, hop_info=excluded.hop_info
-RETURNING id
-"#)?;
-                let row_id: MsgId = stmt.query_row(params![
-                    replace_msg_id,
+  )",
+                )?;
+                let params = params![
                     if let PreMessageMode::Pre {post_msg_rfc724_mid, ..} = &mime_parser.pre_message {
                         post_msg_rfc724_mid
                     } else { rfc724_mid_orig },
@@ -2306,20 +2230,11 @@ RETURNING id
                         DownloadState::Done
                     },
                     if trash { "" } else { &mime_parser.hop_info },
-                ],
-                |row| {
-                    let msg_id: MsgId = row.get(0)?;
-                    Ok(msg_id)
-                }
-                )?;
+                ];
+                let row_id = MsgId::new(stmt.insert(params)?.try_into()?);
                 Ok(row_id)
             })
             .await?;
-
-        // We only replace placeholder with a first part,
-        // afterwards insert additional parts.
-        replace_msg_id = None;
-
         ensure_and_debug_assert!(!row_id.is_special(), "Rowid {row_id} is special");
         created_db_entries.push(row_id);
     }
@@ -2342,14 +2257,6 @@ RETURNING id
             *msg_id,
         )
         .await?;
-    }
-
-    if let Some(replace_msg_id) = replace_msg_id {
-        // Trash the "replace" placeholder with a message that has no parts. If it has the original
-        // "Message-ID", mark the placeholder for server-side deletion so as if the user deletes the
-        // fully downloaded message later, the server-side deletion is issued.
-        let on_server = rfc724_mid == rfc724_mid_orig;
-        replace_msg_id.trash(context, on_server).await?;
     }
 
     let unarchive = match mime_parser.get_header(HeaderDef::ChatGroupMemberRemoved) {

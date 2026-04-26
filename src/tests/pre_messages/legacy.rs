@@ -5,13 +5,9 @@ use crate::download::DownloadState;
 use crate::receive_imf::receive_imf_from_inbox;
 use crate::test_utils::TestContext;
 
-// The code for downloading stub messages stays
-// during the transition perios to pre-messages
-// so people can still download their files shortly after they updated.
-// After there are a few release with pre-message rolled out,
-// we will remove the ability to download stub messages and replace the following test
-// so it checks that it doesn't crash or that the messages are replaced by sth.
-// like "download failed/expired, please ask sender to send it again"
+// The code for replacing partial download stubs is already removed, so check that nothing happens
+// if after that a full message is passed to receive_imf. Users should ask the sender to send the
+// message again.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_download_stub_message() -> Result<()> {
     let t = TestContext::new_alice().await;
@@ -53,9 +49,9 @@ async fn test_download_stub_message() -> Result<()> {
     )
     .await?;
     let msg = t.get_last_msg().await;
-    assert_eq!(msg.download_state(), DownloadState::Done);
+    assert_eq!(msg.download_state(), DownloadState::Available);
     assert_eq!(msg.get_subject(), "foo");
-    assert_eq!(msg.get_text(), "100k text...");
+    assert!(msg.get_text().contains("[97.66 KiB message]"));
 
     Ok(())
 }
