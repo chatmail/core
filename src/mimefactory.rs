@@ -1829,7 +1829,7 @@ impl MimeFactory {
             parts.push(msg_kml_part);
         }
 
-        if location::is_sending_locations_to_chat(context, msg.chat_id).await?
+        if location::is_sending_to_chat(context, msg.chat_id).await?
             && let Some(part) = self.get_location_kml_part(context).await?
         {
             parts.push(part);

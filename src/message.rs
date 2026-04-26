@@ -25,7 +25,7 @@ use crate::download::DownloadState;
 use crate::ephemeral::{Timer as EphemeralTimer, start_ephemeral_timers_msgids};
 use crate::events::EventType;
 use crate::imap::markseen_on_imap_table;
-use crate::location::delete_poi_location;
+use crate::location;
 use crate::log::warn;
 use crate::mimeparser::{SystemMessage, parse_message_id};
 use crate::param::{Param, Params};
@@ -739,7 +739,7 @@ impl Message {
     /// at a position different from the self-location.
     /// You should not call this function
     /// if you want to bind the current self-location to a message;
-    /// this is done by [`location::set()`] and [`send_locations_to_chat()`].
+    /// this is done by [`location::set()`] and [`location::send_to_chat()`].
     ///
     /// Typically results in the event [`LocationChanged`] with
     /// `contact_id` set to [`ContactId::SELF`].
@@ -748,7 +748,7 @@ impl Message {
     /// `longitude` is the East-west position of the location.
     ///
     /// [`location::set()`]: crate::location::set
-    /// [`send_locations_to_chat()`]: crate::location::send_locations_to_chat
+    /// [`location::send_to_chat()`]: crate::location::send_to_chat
     /// [`LocationChanged`]: crate::events::EventType::LocationChanged
     pub fn set_location(&mut self, latitude: f64, longitude: f64) {
         if latitude == 0.0 && longitude == 0.0 {
@@ -1649,7 +1649,7 @@ pub(crate) async fn get_mime_headers(context: &Context, msg_id: MsgId) -> Result
 /// This may be called in batches; the final events are emitted in delete_msgs_locally_done() then.
 pub(crate) async fn delete_msg_locally(context: &Context, msg: &Message) -> Result<()> {
     if msg.location_id > 0 {
-        delete_poi_location(context, msg.location_id).await?;
+        location::delete_poi(context, msg.location_id).await?;
     }
     let on_server = true;
     msg.id

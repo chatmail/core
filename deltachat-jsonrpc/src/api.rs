@@ -22,9 +22,6 @@ use deltachat::context::get_info;
 use deltachat::ephemeral::Timer;
 use deltachat::imex;
 use deltachat::location;
-use deltachat::location::is_sending_locations;
-use deltachat::location::is_sending_locations_to_chat;
-use deltachat::location::send_locations_to_chat;
 use deltachat::message::{
     self, delete_msgs_ex, get_existing_msg_ids, get_msg_read_receipt_count, get_msg_read_receipts,
     markseen_msgs, Message, MessageState, MsgId, Viewtype,
@@ -2171,21 +2168,21 @@ impl CommandApi {
     ) -> Result<()> {
         let ctx = self.get_context(account_id).await?;
         let chat_id = ChatId::new(chat_id);
-        send_locations_to_chat(&ctx, chat_id, seconds).await?;
+        location::send_to_chat(&ctx, chat_id, seconds).await?;
         Ok(())
     }
 
     /// Returns whether any chat is sending locations.
     async fn is_sending_locations(&self, account_id: u32) -> Result<bool> {
         let ctx = self.get_context(account_id).await?;
-        is_sending_locations(&ctx).await
+        location::is_sending(&ctx).await
     }
 
     /// Returns whether `chat_id` is sending locations.
     async fn is_sending_locations_to_chat(&self, account_id: u32, chat_id: u32) -> Result<bool> {
         let ctx = self.get_context(account_id).await?;
         let chat_id = ChatId::new(chat_id);
-        is_sending_locations_to_chat(&ctx, chat_id).await
+        location::is_sending_to_chat(&ctx, chat_id).await
     }
 
     /// Stops sending locations to all chats.
