@@ -992,12 +992,6 @@ impl Context {
                 .to_string(),
         );
         res.insert(
-            "sign_unencrypted",
-            self.get_config_int(Config::SignUnencrypted)
-                .await?
-                .to_string(),
-        );
-        res.insert(
             "debug_logging",
             self.get_config_int(Config::DebugLogging).await?.to_string(),
         );

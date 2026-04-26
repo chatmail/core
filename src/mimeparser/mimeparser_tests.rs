@@ -2041,35 +2041,6 @@ async fn test_multiple_autocrypt_hdrs() -> Result<()> {
     Ok(())
 }
 
-/// Tests that timestamp of signed but not encrypted message is protected.
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_protected_date() -> Result<()> {
-    let mut tcm = TestContextManager::new();
-    let alice = &tcm.alice().await;
-    let bob = &tcm.bob().await;
-
-    alice.set_config(Config::SignUnencrypted, Some("1")).await?;
-
-    let alice_chat = alice.create_email_chat(bob).await;
-    let alice_msg_id = chat::send_text_msg(alice, alice_chat.id, "Hello!".to_string()).await?;
-    let alice_msg = Message::load_from_db(alice, alice_msg_id).await?;
-    assert_eq!(alice_msg.get_showpadlock(), false);
-
-    let mut sent_msg = alice.pop_sent_msg().await;
-    sent_msg.payload = sent_msg.payload.replacen(
-        "Date:",
-        "Date: Wed, 17 Mar 2021 14:30:53 +0100 (CET)\r\nX-Not-Date:",
-        1,
-    );
-    let bob_msg = bob.recv_msg(&sent_msg).await;
-    assert_eq!(alice_msg.get_text(), bob_msg.get_text());
-
-    // Timestamp that the sender has put into the message
-    // should always be displayed as is on the receiver.
-    assert_eq!(alice_msg.get_timestamp(), bob_msg.get_timestamp());
-    Ok(())
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_huge_image_becomes_file() -> Result<()> {
     let t = TestContext::new_alice().await;

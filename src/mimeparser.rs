@@ -305,6 +305,7 @@ impl MimeMessage {
         // Parse hidden headers.
         let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
         let (part, mimetype) =
+            // We do not sign unencrypted messages ourselves, but are able to receive them.
             if mimetype.type_() == mime::MULTIPART && mimetype.subtype().as_str() == "signed" {
                 if let Some(part) = mail.subparts.first() {
                     // We don't remove "subject" from `headers` because currently just signed
@@ -329,7 +330,6 @@ impl MimeMessage {
                     (&mail, mimetype)
                 }
             } else {
-                // Currently we do not sign unencrypted messages by default.
                 (&mail, mimetype)
             };
         if mimetype.type_() == mime::MULTIPART
