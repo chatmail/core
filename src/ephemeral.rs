@@ -66,7 +66,6 @@ use std::cmp::max;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::num::ParseIntError;
-use std::str::FromStr;
 use std::time::{Duration, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result, ensure};
@@ -124,19 +123,17 @@ impl Timer {
             Self::Enabled { duration }
         }
     }
+
+    /// Tries to parse a string as an integer,
+    /// and converts it to an ephemeral timer value.
+    pub fn from_str(input: &str) -> Result<Timer, ParseIntError> {
+        input.parse::<u32>().map(Self::from_u32)
+    }
 }
 
 impl fmt::Display for Timer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_u32())
-    }
-}
-
-impl FromStr for Timer {
-    type Err = ParseIntError;
-
-    fn from_str(input: &str) -> Result<Timer, ParseIntError> {
-        input.parse::<u32>().map(Self::from_u32)
     }
 }
 

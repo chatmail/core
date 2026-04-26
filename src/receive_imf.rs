@@ -1873,7 +1873,7 @@ async fn add_parts(
     // Extract ephemeral timer from the message
     let mut ephemeral_timer = if let Some(value) = mime_parser.get_header(HeaderDef::EphemeralTimer)
     {
-        match value.parse::<EphemeralTimer>() {
+        match EphemeralTimer::from_str(value) {
             Ok(timer) => timer,
             Err(err) => {
                 warn!(context, "Can't parse ephemeral timer \"{value}\": {err:#}.");

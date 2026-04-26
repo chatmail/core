@@ -4,9 +4,8 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::str::FromStr;
 
-use anyhow::{Context as _, Error, Result, bail};
+use anyhow::{Context as _, Result, bail};
 
 use crate::key::{DcKey, SignedPublicKey};
 
@@ -28,10 +27,8 @@ impl fmt::Display for EncryptPreference {
     }
 }
 
-impl FromStr for EncryptPreference {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
+impl EncryptPreference {
+    fn new(s: &str) -> Result<Self> {
         match s {
             "mutual" => Ok(EncryptPreference::Mutual),
             "nopreference" => Ok(EncryptPreference::NoPreference),
@@ -85,10 +82,8 @@ impl fmt::Display for Aheader {
     }
 }
 
-impl FromStr for Aheader {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self> {
+impl Aheader {
+    pub(crate) fn from_str(s: &str) -> Result<Self> {
         let mut attributes: BTreeMap<String, String> = s
             .split(';')
             .filter_map(|a| {
@@ -116,7 +111,7 @@ impl FromStr for Aheader {
 
         let prefer_encrypt = attributes
             .remove("prefer-encrypt")
-            .and_then(|raw| raw.parse().ok())
+            .and_then(|raw| EncryptPreference::new(&raw).ok())
             .unwrap_or_default();
 
         let verified = attributes.remove("_verified").is_some();
@@ -144,8 +139,9 @@ mod tests {
 
     #[test]
     fn test_from_str() -> Result<()> {
-        let h: Aheader =
-            format!("addr=me@mail.com; prefer-encrypt=mutual; keydata={RAWKEY}").parse()?;
+        let h = Aheader::from_str(&format!(
+            "addr=me@mail.com; prefer-encrypt=mutual; keydata={RAWKEY}"
+        ))?;
 
         assert_eq!(h.addr, "me@mail.com");
         assert_eq!(h.prefer_encrypt, EncryptPreference::Mutual);
@@ -157,7 +153,7 @@ mod tests {
     #[test]
     fn test_from_str_reset() -> Result<()> {
         let raw = format!("addr=reset@example.com; prefer-encrypt=reset; keydata={RAWKEY}");
-        let h: Aheader = raw.parse()?;
+        let h = Aheader::from_str(&raw)?;
 
         assert_eq!(h.addr, "reset@example.com");
         assert_eq!(h.prefer_encrypt, EncryptPreference::NoPreference);
@@ -167,7 +163,7 @@ mod tests {
     #[test]
     fn test_from_str_non_critical() -> Result<()> {
         let raw = format!("addr=me@mail.com; _foo=one; _bar=two; keydata={RAWKEY}");
-        let h: Aheader = raw.parse()?;
+        let h = Aheader::from_str(&raw)?;
 
         assert_eq!(h.addr, "me@mail.com");
         assert_eq!(h.prefer_encrypt, EncryptPreference::NoPreference);
@@ -177,7 +173,7 @@ mod tests {
     #[test]
     fn test_from_str_superflous_critical() {
         let raw = format!("addr=me@mail.com; _foo=one; _bar=two; other=me; keydata={RAWKEY}");
-        assert!(raw.parse::<Aheader>().is_err());
+        assert!(Aheader::from_str(&raw).is_err());
     }
 
     #[test]
