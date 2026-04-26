@@ -6,7 +6,7 @@ use crate::chat::{self, Chat, add_contact_to_chat, remove_contact_from_chat, sen
 use crate::config::Config;
 use crate::constants::Chattype;
 use crate::contact::{Contact, ContactId};
-use crate::key::{DcKey, load_self_public_key};
+use crate::key::self_fingerprint;
 use crate::message::{Message, Viewtype};
 use crate::mimefactory::MimeFactory;
 use crate::mimeparser::SystemMessage;
@@ -152,11 +152,7 @@ async fn test_missing_key_reexecute_securejoin() -> Result<()> {
     bob.sql
         .execute(
             "DELETE FROM public_keys WHERE fingerprint=?",
-            (&load_self_public_key(alice)
-                .await
-                .unwrap()
-                .dc_fingerprint()
-                .hex(),),
+            (&self_fingerprint(alice).await.unwrap(),),
         )
         .await?;
     let chat = Chat::load_from_db(bob, chat_id).await?;
