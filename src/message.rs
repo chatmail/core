@@ -529,7 +529,7 @@ impl Message {
                  FROM msgs m
                  LEFT JOIN chats c ON c.id=m.chat_id
                  LEFT JOIN msgs_mdns mdns ON mdns.msg_id=m.id
-                 WHERE m.id=? AND chat_id!=3
+                 WHERE m.id=? AND chat_id!=3 -- DC_CHAT_ID_TRASH
                  LIMIT 1",
                 (id,),
                 |row| {
