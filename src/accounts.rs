@@ -543,12 +543,16 @@ impl Accounts {
     ///
     /// Returns true if location should still be streamed.
     pub async fn set_location(&self, latitude: f64, longitude: f64, accuracy: f64) -> Result<bool> {
-        let mut continue_streaming = false;
-        for account in self.accounts.values() {
-            if location::set(account, latitude, longitude, accuracy).await? {
-                continue_streaming = true;
-            }
-        }
+        let continue_streaming = future::try_join_all(self.accounts.iter().map(
+            |(account_id, account)| async move {
+                location::set(account, latitude, longitude, accuracy)
+                    .await
+                    .with_context(|| format!("Failed to set location for account {account_id}"))
+            },
+        ))
+        .await?
+        .into_iter()
+        .any(|continue_streaming| continue_streaming);
         Ok(continue_streaming)
     }
 
