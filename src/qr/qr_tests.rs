@@ -388,7 +388,7 @@ async fn test_decode_openpgp_fingerprint() -> Result<()> {
         bob,
         &format!(
             "OPENPGP4FPR:{}#a=alice@example.org",
-            alice_contact.fingerprint().unwrap()
+            alice_contact.fingerprint().unwrap().hex()
         ),
     )
     .await?;

@@ -238,7 +238,7 @@ impl From<Qr> for QrObject {
                 is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::AskVerifyContact {
                     contact_id,
                     fingerprint,
@@ -257,7 +257,7 @@ impl From<Qr> for QrObject {
                 is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::AskVerifyGroup {
                     grpname,
                     grpid,
@@ -278,7 +278,7 @@ impl From<Qr> for QrObject {
                 is_v3,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::AskJoinBroadcast {
                     name,
                     grpid,
@@ -321,7 +321,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::WithdrawVerifyContact {
                     contact_id,
                     fingerprint,
@@ -338,7 +338,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::WithdrawVerifyGroup {
                     grpname,
                     grpid,
@@ -357,7 +357,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::WithdrawJoinBroadcast {
                     name,
                     grpid,
@@ -374,7 +374,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::ReviveVerifyContact {
                     contact_id,
                     fingerprint,
@@ -391,7 +391,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::ReviveVerifyGroup {
                     grpname,
                     grpid,
@@ -410,7 +410,7 @@ impl From<Qr> for QrObject {
                 authcode,
             } => {
                 let contact_id = contact_id.to_u32();
-                let fingerprint = fingerprint.to_string();
+                let fingerprint = fingerprint.human_readable();
                 QrObject::ReviveJoinBroadcast {
                     name,
                     grpid,
