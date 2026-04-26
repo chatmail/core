@@ -3,6 +3,7 @@
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
+use std::str::FromStr as _;
 use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, ensure};
