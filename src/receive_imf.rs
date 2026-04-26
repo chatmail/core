@@ -2497,6 +2497,7 @@ async fn handle_edit_delete(
                     }
                 } else {
                     warn!(context, "Delete message: {rfc724_mid:?} not found.");
+                    // Insert a tombstone so that the message will be ignored if it arrives later within a period specified in prune_tombstones().
                     insert_tombstone(context, rfc724_mid).await?;
                 }
             }
