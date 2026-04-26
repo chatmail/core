@@ -8,6 +8,7 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result, bail, ensure};
 use async_channel::{self, Receiver, Sender};
 use futures::FutureExt as _;
+use futures::future;
 use futures_lite::FutureExt as _;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -553,9 +554,16 @@ impl Accounts {
 
     /// Stops sending locations to all chats.
     pub async fn stop_sending_locations(&self) -> Result<()> {
-        for account in self.accounts.values() {
-            location::stop_sending(account).await?;
-        }
+        future::try_join_all(
+            self.accounts
+                .iter()
+                .map(|(account_id, account)| async move {
+                    location::stop_sending(account).await.with_context(|| {
+                        format!("Failed to stop sending locations for account {account_id}")
+                    })
+                }),
+        )
+        .await?;
         Ok(())
     }
 }
