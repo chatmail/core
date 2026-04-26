@@ -48,7 +48,7 @@ impl Reaction {
     /// reactions is not different from other kinds of spam attacks
     /// such as sending large numbers of large messages, and should be
     /// dealt with the same way, e.g. by blocking the user.
-    pub fn from_str(reaction: &str) -> Self {
+    pub fn new(reaction: &str) -> Self {
         let reaction: &str = reaction
             .split_ascii_whitespace()
             .next()
@@ -207,7 +207,7 @@ pub async fn send_reaction(context: &Context, msg_id: MsgId, reaction: &str) -> 
     let msg = Message::load_from_db(context, msg_id).await?;
     let chat_id = msg.chat_id;
 
-    let reaction = Reaction::from_str(reaction);
+    let reaction = Reaction::new(reaction);
     let mut reaction_msg = Message::new_text(reaction.as_str().to_string());
     reaction_msg.set_reaction();
     reaction_msg.in_reply_to = Some(msg.rfc724_mid);
@@ -277,7 +277,7 @@ pub async fn get_msg_reactions(context: &Context, msg_id: MsgId) -> Result<React
             |row| {
                 let contact_id: ContactId = row.get(0)?;
                 let reaction: String = row.get(1)?;
-                Ok((contact_id, Reaction::from_str(reaction.as_str())))
+                Ok((contact_id, Reaction::new(reaction.as_str())))
             },
         )
         .await?;
@@ -356,33 +356,32 @@ mod tests {
     #[test]
     fn test_parse_reaction() {
         // Check that basic set of emojis from RFC 9078 is supported.
-        assert_eq!(Reaction::from_str("👍").as_str(), "👍");
-        assert_eq!(Reaction::from_str("👎").as_str(), "👎");
-        assert_eq!(Reaction::from_str("😀").as_str(), "😀");
-        assert_eq!(Reaction::from_str("☹").as_str(), "☹");
-        assert_eq!(Reaction::from_str("😢").as_str(), "😢");
+        assert_eq!(Reaction::new("👍").as_str(), "👍");
+        assert_eq!(Reaction::new("👎").as_str(), "👎");
+        assert_eq!(Reaction::new("😀").as_str(), "😀");
+        assert_eq!(Reaction::new("☹").as_str(), "☹");
+        assert_eq!(Reaction::new("😢").as_str(), "😢");
 
         // Empty string can be used to remove all reactions.
-        assert!(Reaction::from_str("").is_empty());
+        assert!(Reaction::new("").is_empty());
 
         // Short strings can be used as emojis, could be used to add
         // support for custom emojis via emoji shortcodes.
-        assert_eq!(Reaction::from_str(":deltacat:").as_str(), ":deltacat:");
+        assert_eq!(Reaction::new(":deltacat:").as_str(), ":deltacat:");
 
         // Check that long strings are not valid emojis.
         assert!(
-            Reaction::from_str(":foobarbazquuxaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:")
-                .is_empty()
+            Reaction::new(":foobarbazquuxaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:").is_empty()
         );
 
         // Multiple reactions separated by spaces or tabs are not supported.
-        assert_eq!(Reaction::from_str("👍 ❤").as_str(), "👍");
-        assert_eq!(Reaction::from_str("👍\t❤").as_str(), "👍");
+        assert_eq!(Reaction::new("👍 ❤").as_str(), "👍");
+        assert_eq!(Reaction::new("👍\t❤").as_str(), "👍");
 
-        assert_eq!(Reaction::from_str("👍\t:foo: ❤").as_str(), "👍");
-        assert_eq!(Reaction::from_str("👍\t:foo: ❤").as_str(), "👍");
+        assert_eq!(Reaction::new("👍\t:foo: ❤").as_str(), "👍");
+        assert_eq!(Reaction::new("👍\t:foo: ❤").as_str(), "👍");
 
-        assert_eq!(Reaction::from_str("👍 👍").as_str(), "👍");
+        assert_eq!(Reaction::new("👍 👍").as_str(), "👍");
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -578,7 +577,7 @@ Content-Disposition: reaction\n\
                 assert_eq!(chat_id, expected_chat_id);
                 assert_eq!(msg_id, expected_msg_id);
                 assert_eq!(contact_id, expected_contact_id);
-                assert_eq!(reaction, Reaction::from_str(expected_reaction));
+                assert_eq!(reaction, Reaction::new(expected_reaction));
             }
             _ => panic!("Unexpected event {event:?}."),
         }

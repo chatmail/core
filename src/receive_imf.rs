@@ -2151,7 +2151,7 @@ async fn add_parts(
                 chat_id,
                 from_id,
                 sort_timestamp,
-                Reaction::from_str(reaction_str.as_str()),
+                Reaction::new(reaction_str.as_str()),
                 is_incoming_fresh,
             )
             .await?;
