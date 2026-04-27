@@ -161,3 +161,16 @@ are documented.
 
 Follow Rust guidelines for the documentation comments:
 <https://rust-lang.github.io/rfcs/1574-more-api-documentation-conventions.html#summary-sentence>
+
+## Do not use `into()`, `try_into()` or `parse()`
+
+For internal types, implementing `From`, `TryFrom` or `FromStr` is discouraged.
+Instead, a `new()` function is recommended.
+
+For external types, use `Type::from()`, `Type::try_from()` or `Type::from_str()` directly
+rather than `into()`, `try_into()` or `parse()`.
+
+Calling `into()`, `try_into()` or `parse()`
+creates an indirection,
+which is hard to follow for people who are not familiar with Rust,
+or who are not using rust-analyzer.
