@@ -26,7 +26,7 @@
 use anyhow::{Context as _, Result, anyhow, bail};
 use data_encoding::BASE32_NOPAD;
 use futures_lite::StreamExt;
-use iroh::discovery::static_provider::StaticProvider;
+use iroh::address_lookup::MemoryLookup;
 use iroh::{
     Endpoint, EndpointAddr, EndpointId, PublicKey, RelayMode, RelayUrl, SecretKey, TransportAddr,
 };
@@ -58,8 +58,8 @@ pub struct Iroh {
     /// Iroh router  needed for Iroh peer channels.
     pub(crate) router: iroh::protocol::Router,
 
-    /// Discovery service.
-    pub(crate) discovery: StaticProvider,
+    /// Address lookup, called "Discovery service" before Iroh 0.96.0.
+    pub(crate) address_lookup: MemoryLookup,
 
     /// [Gossip] needed for Iroh peer channels.
     pub(crate) gossip: Gossip,
@@ -122,7 +122,7 @@ impl Iroh {
         // Inform iroh of potentially new node addresses
         for node_addr in &peers {
             if !node_addr.is_empty() {
-                self.discovery.add_endpoint_info(node_addr.clone());
+                self.address_lookup.add_endpoint_info(node_addr.clone());
             }
         }
 
@@ -149,7 +149,7 @@ impl Iroh {
     /// Add gossip peer to realtime channel if it is already active.
     pub async fn maybe_add_gossip_peer(&self, topic: TopicId, peer: EndpointAddr) -> Result<()> {
         if self.iroh_channels.read().await.get(&topic).is_some() {
-            self.discovery.add_endpoint_info(peer.clone());
+            self.address_lookup.add_endpoint_info(peer.clone());
             self.gossip.subscribe(topic, vec![peer.id]).await?;
         }
         Ok(())
@@ -247,7 +247,7 @@ impl Context {
     /// Create iroh endpoint and gossip.
     async fn init_peer_channels(&self) -> Result<Iroh> {
         info!(self, "Initializing peer channels.");
-        let secret_key = SecretKey::generate(&mut rand::rng());
+        let secret_key = SecretKey::generate();
         let public_key = secret_key.public();
 
         let relay_mode = if let Some(relay_url) = self
@@ -264,9 +264,9 @@ impl Context {
             RelayMode::Default
         };
 
-        let discovery = StaticProvider::new();
-        let endpoint = Endpoint::builder()
-            .discovery(discovery.clone())
+        let address_lookup = MemoryLookup::new();
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::Minimal)
+            .address_lookup(address_lookup.clone())
             .secret_key(secret_key)
             .alpns(vec![GOSSIP_ALPN.to_vec()])
             .relay_mode(relay_mode)
@@ -288,7 +288,7 @@ impl Context {
 
         Ok(Iroh {
             router,
-            discovery,
+            address_lookup,
             gossip,
             sequence_numbers: Mutex::new(HashMap::new()),
             iroh_channels: RwLock::new(HashMap::new()),

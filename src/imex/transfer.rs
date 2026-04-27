@@ -95,7 +95,7 @@ impl BackupProvider {
     /// [`Accounts::stop_io`]: crate::accounts::Accounts::stop_io
     pub async fn prepare(context: &Context) -> Result<Self> {
         let relay_mode = RelayMode::Disabled;
-        let endpoint = Endpoint::builder()
+        let endpoint = Endpoint::builder(iroh::endpoint::presets::Minimal)
             .alpns(vec![BACKUP_ALPN.to_vec()])
             .relay_mode(relay_mode)
             .bind()
@@ -167,7 +167,7 @@ impl BackupProvider {
 
     async fn handle_connection(
         context: Context,
-        conn: iroh::endpoint::Connecting,
+        conn: iroh::endpoint::Accepting,
         auth_token: String,
         dbfile: Arc<TempPathGuard>,
     ) -> Result<()> {
@@ -303,7 +303,10 @@ pub async fn get_backup2(
 ) -> Result<()> {
     let relay_mode = RelayMode::Disabled;
 
-    let endpoint = Endpoint::builder().relay_mode(relay_mode).bind().await?;
+    let endpoint = Endpoint::builder(iroh::endpoint::presets::Minimal)
+        .relay_mode(relay_mode)
+        .bind()
+        .await?;
 
     let conn = endpoint.connect(node_addr, BACKUP_ALPN).await?;
     let (mut send_stream, mut recv_stream) = conn.open_bi().await?;
