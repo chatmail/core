@@ -744,6 +744,31 @@ async fn test_send_gif_as_sticker() -> Result<()> {
     Ok(())
 }
 
+/// Tests that image sent with "File" viewtype keeps the viewtype
+/// and is not converted into Image viewtype because of .png extension.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_send_image_as_file() -> Result<()> {
+    let alice = &TestContext::new_alice().await;
+
+    let bytes = include_bytes!("../../test-data/image/logo.png");
+    let path = alice.get_blobdir().join("logo").with_extension("png");
+    fs::write(&path, bytes)
+        .await
+        .context("Failed to write file")?;
+
+    // Set image as file.
+    let mut msg = Message::new(Viewtype::File);
+    msg.set_file_and_deduplicate(alice, &path, None, None)?;
+    let chat = alice.get_self_chat().await;
+    let sent = alice.send_msg(chat.id, &mut msg).await;
+    let msg = Message::load_from_db(alice, sent.sender_msg_id).await?;
+
+    // Viewtype is still File, not converted to Image.
+    assert_eq!(msg.get_viewtype(), Viewtype::File);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_create_and_deduplicate() -> Result<()> {
     let t = TestContext::new().await;
