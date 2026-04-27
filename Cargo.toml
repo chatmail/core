@@ -101,7 +101,7 @@ tagger = "4.3.4"
 textwrap = "0.16.2"
 thiserror = { workspace = true }
 tokio-io-timeout = "1.2.1"
-tokio-rustls = { version = "0.26.2", default-features = false }
+tokio-rustls = { version = "0.26.2", default-features = false, features = ["ring"] }
 tokio-stream = { version = "0.1.17", features = ["fs"] }
 astral-tokio-tar = { version = "0.6.1", default-features = false }
 tokio-util = { workspace = true }
