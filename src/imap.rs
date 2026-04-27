@@ -1383,13 +1383,15 @@ impl Session {
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
                 let received_msg = match res {
                     Err(err) => {
-                        warn!(context, "receive_imf error: {err:#}.");
-
-                        let text = format!(
-                            "❌ Failed to receive a message: {err:#}. Core version v{DC_VERSION_STR}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/.",
-                        );
-                        let mut msg = Message::new_text(text);
-                        add_device_msg(context, None, Some(&mut msg)).await?;
+                        let err = format!("{err:#}");
+                        warn!(context, "receive_imf error: {err}.");
+                        if !err.contains("(SKIP_DEVICE_MSG)") {
+                            let text = format!(
+                                "❌ Failed to receive a message: {err}. Core version v{DC_VERSION_STR}. Please report this bug to delta@merlinux.eu or https://support.delta.chat/",
+                            );
+                            let mut msg = Message::new_text(text);
+                            add_device_msg(context, None, Some(&mut msg)).await?;
+                        }
                         None
                     }
                     Ok(msg) => msg,
