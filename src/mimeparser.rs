@@ -2127,7 +2127,7 @@ async fn parse_gossip_headers(
     let mut gossiped_keys: BTreeMap<String, GossipedKey> = Default::default();
 
     for value in &gossip_headers {
-        let header = match value.parse::<Aheader>() {
+        let header = match Aheader::from_str(value) {
             Ok(header) => header,
             Err(err) => {
                 warn!(context, "Failed parsing Autocrypt-Gossip header: {}", err);

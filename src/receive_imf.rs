@@ -3,6 +3,7 @@
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::iter;
+use std::str::FromStr as _;
 use std::sync::LazyLock;
 
 use anyhow::{Context as _, Result, ensure};
@@ -1828,7 +1829,7 @@ async fn add_parts(
     // Extract ephemeral timer from the message
     let mut ephemeral_timer = if let Some(value) = mime_parser.get_header(HeaderDef::EphemeralTimer)
     {
-        match value.parse::<EphemeralTimer>() {
+        match EphemeralTimer::from_str(value) {
             Ok(timer) => timer,
             Err(err) => {
                 warn!(context, "Can't parse ephemeral timer \"{value}\": {err:#}.");
@@ -2106,7 +2107,7 @@ async fn add_parts(
                 chat_id,
                 from_id,
                 sort_timestamp,
-                Reaction::from(reaction_str.as_str()),
+                Reaction::new(reaction_str.as_str()),
                 is_incoming_fresh,
             )
             .await?;
