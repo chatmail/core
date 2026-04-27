@@ -1210,7 +1210,8 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
             );
             let fingerprint = contact
                 .fingerprint()
-                .context("Contact does not have a fingerprint in encrypted chat")?;
+                .context("Contact does not have a fingerprint in encrypted chat")?
+                .human_readable();
             if let Some(public_key) = contact.public_key(context).await? {
                 if let Some(relay_addrs) = addresses_from_public_key(&public_key) {
                     let relays = relay_addrs.join(",");

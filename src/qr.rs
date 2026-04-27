@@ -645,7 +645,7 @@ async fn decode_openpgp(context: &Context, qr: &str) -> Result<Qr> {
         }
     } else {
         Ok(Qr::FprWithoutAddr {
-            fingerprint: fingerprint.to_string(),
+            fingerprint: fingerprint.human_readable(),
         })
     }
 }

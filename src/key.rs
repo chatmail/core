@@ -1,7 +1,7 @@
 //! Cryptographic key module.
 
 use std::collections::BTreeMap;
-use std::fmt;
+use std::fmt::{self, Write as _};
 use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail, ensure};
@@ -583,6 +583,21 @@ impl Fingerprint {
     pub fn hex(&self) -> String {
         hex::encode_upper(&self.0)
     }
+
+    /// Make a human-readable fingerprint.
+    pub fn human_readable(&self) -> String {
+        let mut f = String::new();
+        // Split key into chunks of 4 with space and newline at 20 chars
+        for (i, c) in self.hex().chars().enumerate() {
+            if i > 0 && i % 20 == 0 {
+                writeln!(&mut f).ok();
+            } else if i > 0 && i % 4 == 0 {
+                write!(&mut f, " ").ok();
+            }
+            write!(&mut f, "{c}").ok();
+        }
+        f
+    }
 }
 
 impl From<pgp::types::Fingerprint> for Fingerprint {
@@ -596,22 +611,6 @@ impl fmt::Debug for Fingerprint {
         f.debug_struct("Fingerprint")
             .field("hex", &self.hex())
             .finish()
-    }
-}
-
-/// Make a human-readable fingerprint.
-impl fmt::Display for Fingerprint {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // Split key into chunks of 4 with space and newline at 20 chars
-        for (i, c) in self.hex().chars().enumerate() {
-            if i > 0 && i % 20 == 0 {
-                writeln!(f)?;
-            } else if i > 0 && i % 4 == 0 {
-                write!(f, " ")?;
-            }
-            write!(f, "{c}")?;
-        }
-        Ok(())
     }
 }
 
@@ -890,7 +889,7 @@ i8pcjGO+IZffvyZJVRWfVooBJmWWbPB1pueo3tx8w3+fcuzpxz+RLFKaPyqXO+dD
             1, 2, 4, 8, 16, 32, 64, 128, 255, 1, 2, 4, 8, 16, 32, 64, 128, 255, 19, 20,
         ]);
         assert_eq!(
-            fp.to_string(),
+            fp.human_readable(),
             "0102 0408 1020 4080 FF01\n0204 0810 2040 80FF 1314"
         );
     }

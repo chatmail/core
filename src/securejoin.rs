@@ -861,7 +861,8 @@ fn encrypted_and_signed(
         } else {
             warn!(
                 context,
-                "Message does not match expected fingerprint {expected_fingerprint}.",
+                "Message does not match expected fingerprint {}.",
+                expected_fingerprint.human_readable()
             );
             false
         }
