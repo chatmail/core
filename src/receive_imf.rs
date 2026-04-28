@@ -6,7 +6,7 @@ use std::iter;
 use std::str::FromStr as _;
 use std::sync::LazyLock;
 
-use anyhow::{Context as _, Result, ensure};
+use anyhow::{Context as _, Result, bail, ensure};
 use deltachat_contact_tools::{
     ContactAddress, addr_cmp, addr_normalize, may_be_valid_addr, sanitize_bidi_characters,
     sanitize_single_line,
@@ -2065,9 +2065,8 @@ async fn add_parts(
                     }
                 }
                 None => {
-                    warn!(
-                        context,
-                        "Cannot add iroh peer because WebXDC instance does not exist."
+                    bail!(
+                        "Cannot add iroh peer because WebXDC instance {in_reply_to} does not exist (SKIP_DEVICE_MSG)"
                     );
                 }
             },
