@@ -2379,10 +2379,7 @@ async fn handle_edit_delete(
                 warn!(context, "Edit message: Database entry does not exist.");
             }
         } else {
-            warn!(
-                context,
-                "Edit message: rfc724_mid {rfc724_mid:?} not found."
-            );
+            bail!("Edit message: rfc724_mid {rfc724_mid:?} not found (SKIP_DEVICE_MSG)");
         }
     } else if let Some(rfc724_mid_list) = mime_parser.get_header(HeaderDef::ChatDelete)
         && let Some(part) = mime_parser.parts.first()
