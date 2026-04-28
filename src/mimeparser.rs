@@ -2188,9 +2188,6 @@ pub(crate) fn parse_message_id(ids: &str) -> Result<String> {
 /// Returns whether the outer header value must be ignored if the message contains a signed (and
 /// optionally encrypted) part. This is independent from the modern Header Protection defined in
 /// <https://www.rfc-editor.org/rfc/rfc9788.html>.
-///
-/// NB: There are known cases when Subject and List-ID only appear in the outer headers of
-/// signed-only messages. Such messages are shown as unencrypted anyway.
 fn is_protected(key: &str) -> bool {
     key.starts_with("chat-")
         || matches!(

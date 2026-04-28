@@ -2157,10 +2157,6 @@ fn group_headers_by_confidentiality(
                 }
             }
         } else {
-            // Copy the header to the protected headers
-            // in case of signed-only message.
-            // If the message is not signed, this value will not be used.
-            protected_headers.push(header.clone());
             unprotected_headers.push(header.clone())
         }
     }
