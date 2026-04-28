@@ -164,7 +164,7 @@ class Chat:
         return Message(self.account, msg_id)
 
     def send_sticker(self, path: str) -> Message:
-        """Send an sticker and return the resulting Message instance."""
+        """Deprecated as of 2026-04; use `send_message` with `Viewtype.STICKER` instead."""
         msg_id = self._rpc.send_sticker(self.account.id, self.id, path)
         return Message(self.account, msg_id)
 
