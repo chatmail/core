@@ -2353,11 +2353,7 @@ async fn handle_edit_delete(
 ) -> Result<()> {
     if let Some(rfc724_mid) = mime_parser.get_header(HeaderDef::ChatEdit) {
         let Some(original_msg_id) = rfc724_mid_exists(context, rfc724_mid).await? else {
-            warn!(
-                context,
-                "Edit message: rfc724_mid {rfc724_mid:?} not found."
-            );
-            return Ok(());
+            bail!("Edit message: rfc724_mid {rfc724_mid:?} not found (SKIP_DEVICE_MSG)");
         };
         let Some(mut original_msg) =
             Message::load_from_db_optional(context, original_msg_id).await?
