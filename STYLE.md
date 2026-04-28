@@ -174,7 +174,3 @@ Calling `into()`, `try_into()` or `parse()`
 creates an indirection,
 which is hard to follow for people who are not familiar with Rust,
 or who are not using rust-analyzer.
-
-A notable exception is the Json-RPC API bindings,
-where the API types have `From` implementatons to and from the core types.
-Here, it is assumed to be clear enough which code is called.
