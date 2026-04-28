@@ -2421,6 +2421,7 @@ impl CommandApi {
         chat::resend_msgs(&ctx, &message_ids).await
     }
 
+    /// @deprecated as of 2026-04; use `send_msg` with `Viewtype::Sticker` instead.
     async fn send_sticker(
         &self,
         account_id: u32,
