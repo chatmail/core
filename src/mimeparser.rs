@@ -304,37 +304,9 @@ impl MimeMessage {
 
         // Parse hidden headers.
         let mimetype = mail.ctype.mimetype.parse::<Mime>()?;
-        let (part, mimetype) =
-            // We do not sign unencrypted messages ourselves, but are able to receive them.
-            if mimetype.type_() == mime::MULTIPART && mimetype.subtype().as_str() == "signed" {
-                if let Some(part) = mail.subparts.first() {
-                    // We don't remove "subject" from `headers` because currently just signed
-                    // messages are shown as unencrypted anyway.
-
-                    timestamp_sent =
-                        Self::get_timestamp_sent(&part.headers, timestamp_sent, timestamp_rcvd);
-                    MimeMessage::merge_headers(
-                        context,
-                        &mut headers,
-                        &mut headers_removed,
-                        &mut recipients,
-                        &mut past_members,
-                        &mut from,
-                        &mut list_post,
-                        &mut chat_disposition_notification_to,
-                        part,
-                    );
-                    (part, part.ctype.mimetype.parse::<Mime>()?)
-                } else {
-                    // Not a valid signed message, handle it as plaintext.
-                    (&mail, mimetype)
-                }
-            } else {
-                (&mail, mimetype)
-            };
         if mimetype.type_() == mime::MULTIPART
             && mimetype.subtype().as_str() == "mixed"
-            && let Some(part) = part.subparts.first()
+            && let Some(part) = mail.subparts.first()
         {
             for field in &part.headers {
                 let key = field.get_key().to_lowercase();
@@ -358,8 +330,7 @@ impl MimeMessage {
             );
         }
 
-        // Remove headers that are allowed _only_ in the encrypted+signed part. It's ok to leave
-        // them in signed-only emails, but has no value currently.
+        // Remove headers that are allowed _only_ in the encrypted+signed part
         let encrypted = false;
         Self::remove_secured_headers(&mut headers, &mut headers_removed, encrypted);
 
