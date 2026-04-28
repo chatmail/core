@@ -944,6 +944,18 @@ impl Context {
     /// Determine whether the specified addr maps to the/a self addr.
     /// Returns `false` if no addresses are configured.
     pub(crate) async fn is_self_addr(&self, addr: &str) -> Result<bool> {
+        // Employ the config cache to optimize for `ConfiguredAddr` passed.
+        if !addr.is_empty()
+            && addr_cmp(
+                addr,
+                &self
+                    .get_config(Config::ConfiguredAddr)
+                    .await?
+                    .unwrap_or_default(),
+            )
+        {
+            return Ok(true);
+        }
         Ok(self
             .get_all_self_addrs()
             .await?
