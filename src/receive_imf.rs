@@ -936,75 +936,6 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
             // This is a Delta Chat MDN. Mark as read.
             markseen_on_imap_table(context, rfc724_mid_orig).await?;
         }
-        if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
-            let mut updated_chats = BTreeMap::new();
-            let mut archived_chats_maybe_noticed = false;
-            for report in &mime_parser.mdn_reports {
-                for msg_rfc724_mid in report
-                    .original_message_id
-                    .iter()
-                    .chain(&report.additional_message_ids)
-                {
-                    let Some(msg_id) = rfc724_mid_exists(context, msg_rfc724_mid).await? else {
-                        continue;
-                    };
-                    let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
-                        continue;
-                    };
-                    if msg.state < MessageState::InFresh || msg.state >= MessageState::InSeen {
-                        continue;
-                    }
-                    if !mime_parser.was_encrypted() && msg.get_showpadlock() {
-                        warn!(context, "MDN: Not encrypted. Ignoring.");
-                        continue;
-                    }
-                    message::update_msg_state(context, msg_id, MessageState::InSeen).await?;
-                    if let Err(e) = msg_id.start_ephemeral_timer(context).await {
-                        error!(context, "start_ephemeral_timer for {msg_id}: {e:#}.");
-                    }
-                    if !mime_parser.has_chat_version() {
-                        continue;
-                    }
-                    archived_chats_maybe_noticed |= msg.state < MessageState::InNoticed
-                        && msg.chat_visibility == ChatVisibility::Archived;
-                    updated_chats
-                        .entry(msg.chat_id)
-                        .and_modify(|pos| *pos = cmp::max(*pos, (msg.timestamp_sort, msg.id)))
-                        .or_insert((msg.timestamp_sort, msg.id));
-                }
-            }
-            for (chat_id, (timestamp_sort, msg_id)) in updated_chats {
-                context
-                    .sql
-                    .execute(
-                        "
-UPDATE msgs SET state=? WHERE
-    state=? AND
-    hidden=0 AND
-    chat_id=? AND
-    (timestamp,id)<(?,?)",
-                        (
-                            MessageState::InNoticed,
-                            MessageState::InFresh,
-                            chat_id,
-                            timestamp_sort,
-                            msg_id,
-                        ),
-                    )
-                    .await
-                    .context("UPDATE msgs.state")?;
-                if chat_id.get_fresh_msg_cnt(context).await? == 0 {
-                    // Removes all notifications for the chat in UIs.
-                    context.emit_event(EventType::MsgsNoticed(chat_id));
-                } else {
-                    context.emit_msgs_changed_without_msg_id(chat_id);
-                }
-                chatlist_events::emit_chatlist_item_changed(context, chat_id);
-            }
-            if archived_chats_maybe_noticed {
-                context.on_archived_chats_maybe_noticed();
-            }
-        }
     }
 
     if mime_parser.is_call() {
@@ -2097,6 +2028,75 @@ async fn add_parts(
             }
         } else {
             warn!(context, "Call: Not a reply.")
+        }
+    }
+    if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
+        let mut updated_chats = BTreeMap::new();
+        let mut archived_chats_maybe_noticed = false;
+        for report in &mime_parser.mdn_reports {
+            for msg_rfc724_mid in report
+                .original_message_id
+                .iter()
+                .chain(&report.additional_message_ids)
+            {
+                let Some(msg_id) = rfc724_mid_exists(context, msg_rfc724_mid).await? else {
+                    continue;
+                };
+                let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
+                    continue;
+                };
+                if msg.state < MessageState::InFresh || msg.state >= MessageState::InSeen {
+                    continue;
+                }
+                if !mime_parser.was_encrypted() && msg.get_showpadlock() {
+                    warn!(context, "MDN: Not encrypted. Ignoring.");
+                    continue;
+                }
+                message::update_msg_state(context, msg_id, MessageState::InSeen).await?;
+                if let Err(e) = msg_id.start_ephemeral_timer(context).await {
+                    error!(context, "start_ephemeral_timer for {msg_id}: {e:#}.");
+                }
+                if !mime_parser.has_chat_version() {
+                    continue;
+                }
+                archived_chats_maybe_noticed |= msg.state < MessageState::InNoticed
+                    && msg.chat_visibility == ChatVisibility::Archived;
+                updated_chats
+                    .entry(msg.chat_id)
+                    .and_modify(|pos| *pos = cmp::max(*pos, (msg.timestamp_sort, msg.id)))
+                    .or_insert((msg.timestamp_sort, msg.id));
+            }
+        }
+        for (chat_id, (timestamp_sort, msg_id)) in updated_chats {
+            context
+                .sql
+                .execute(
+                    "
+UPDATE msgs SET state=? WHERE
+state=? AND
+hidden=0 AND
+chat_id=? AND
+(timestamp,id)<(?,?)",
+                    (
+                        MessageState::InNoticed,
+                        MessageState::InFresh,
+                        chat_id,
+                        timestamp_sort,
+                        msg_id,
+                    ),
+                )
+                .await
+                .context("UPDATE msgs.state")?;
+            if chat_id.get_fresh_msg_cnt(context).await? == 0 {
+                // Removes all notifications for the chat in UIs.
+                context.emit_event(EventType::MsgsNoticed(chat_id));
+            } else {
+                context.emit_msgs_changed_without_msg_id(chat_id);
+            }
+            chatlist_events::emit_chatlist_item_changed(context, chat_id);
+        }
+        if archived_chats_maybe_noticed {
+            context.on_archived_chats_maybe_noticed();
         }
     }
 
