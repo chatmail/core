@@ -1,7 +1,6 @@
 //! Helper functions for decryption.
 //! The actual decryption is done in the [`crate::pgp`] module.
 
-use std::collections::HashSet;
 use std::io::Cursor;
 
 use anyhow::{Context as _, Result, bail};
@@ -19,8 +18,8 @@ use crate::chat::ChatId;
 use crate::constants::Chattype;
 use crate::contact::ContactId;
 use crate::context::Context;
+use crate::key::load_self_secret_keyring;
 use crate::key::self_fingerprint;
-use crate::key::{Fingerprint, SignedPublicKey, load_self_secret_keyring};
 use crate::token::Namespace;
 
 /// Tries to decrypt the message,
@@ -330,36 +329,6 @@ fn get_autocrypt_mime<'a, 'b>(mail: &'a ParsedMail<'b>) -> Option<&'a ParsedMail
         } else {
             None
         }
-    } else {
-        None
-    }
-}
-
-/// Validates signatures of Multipart/Signed message part, as defined in RFC 1847.
-///
-/// Returns the signed part and the set of key
-/// fingerprints for which there is a valid signature.
-///
-/// Returns None if the message is not Multipart/Signed or doesn't contain necessary parts.
-pub(crate) fn validate_detached_signature<'a, 'b>(
-    mail: &'a ParsedMail<'b>,
-    public_keyring_for_validate: &[SignedPublicKey],
-) -> Option<(&'a ParsedMail<'b>, HashSet<Fingerprint>)> {
-    if mail.ctype.mimetype != "multipart/signed" {
-        return None;
-    }
-
-    if let [first_part, second_part] = &mail.subparts[..] {
-        // First part is the content, second part is the signature.
-        let content = first_part.raw_bytes;
-        let ret_valid_signatures = match second_part.get_body_raw() {
-            Ok(signature) => {
-                crate::pgp::pk_validate(content, &signature, public_keyring_for_validate)
-                    .unwrap_or_default()
-            }
-            Err(_) => Default::default(),
-        };
-        Some((first_part, ret_valid_signatures))
     } else {
         None
     }

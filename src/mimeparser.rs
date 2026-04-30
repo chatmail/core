@@ -20,7 +20,7 @@ use crate::config::Config;
 use crate::constants;
 use crate::contact::{ContactId, import_public_key};
 use crate::context::Context;
-use crate::decrypt::{self, validate_detached_signature};
+use crate::decrypt::{self};
 use crate::dehtml::dehtml;
 use crate::download::PostMsgMetadata;
 use crate::events::EventType;
@@ -487,17 +487,6 @@ impl MimeMessage {
             HashMap::new()
         };
 
-        let mail = mail.as_ref().map(|mail| {
-            let (content, signatures_detached) = validate_detached_signature(mail, &public_keyring)
-                .unwrap_or((mail, Default::default()));
-            let signatures_detached = signatures_detached
-                .into_iter()
-                .map(|fp| (fp, Vec::new()))
-                .collect::<HashMap<_, _>>();
-            signatures.extend(signatures_detached);
-            content
-        });
-
         if let Some(expected_sender_fingerprint) = expected_sender_fingerprint {
             ensure!(
                 !signatures.is_empty(),
@@ -513,7 +502,7 @@ impl MimeMessage {
             );
         }
 
-        if let (Ok(mail), true) = (mail, is_encrypted) {
+        if let (Ok(mail), true) = (&mail, is_encrypted) {
             if !signatures.is_empty() {
                 // Unsigned "Subject" mustn't be prepended to messages shown as encrypted
                 // (<https://github.com/deltachat/deltachat-core-rust/issues/1790>).
@@ -538,7 +527,7 @@ impl MimeMessage {
                 &mut inner_from,
                 &mut list_post,
                 &mut chat_disposition_notification_to,
-                mail,
+                &mail,
             );
 
             if !signatures.is_empty() {
@@ -582,7 +571,7 @@ impl MimeMessage {
             signatures.clear();
         }
 
-        if let (Ok(mail), true) = (mail, is_encrypted)
+        if let (Ok(mail), true) = (&mail, is_encrypted)
             && let Some(post_msg_rfc724_mid) =
                 mail.headers.get_header_value(HeaderDef::ChatPostMessageId)
         {
@@ -640,7 +629,7 @@ impl MimeMessage {
             from,
             incoming,
             chat_disposition_notification_to,
-            decryption_error: mail.err().map(|err| format!("{err:#}")),
+            decryption_error: mail.as_ref().err().map(|err| format!("{err:#}")),
 
             // only non-empty if it was a valid autocrypt message
             signature,
@@ -666,9 +655,9 @@ impl MimeMessage {
             pre_message,
         };
 
-        match mail {
+        match &mail {
             Ok(mail) => {
-                parser.parse_mime_recursive(context, mail, false).await?;
+                parser.parse_mime_recursive(context, &mail, false).await?;
             }
             Err(err) => {
                 let txt = "[This message cannot be decrypted.\n\n• It might already help to simply reply to this message and ask the sender to send the message again.\n\n• If you just re-installed Delta Chat then it is best if you re-setup Delta Chat now and choose \"Add as second device\" or import a backup.]";
