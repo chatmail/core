@@ -492,7 +492,39 @@ async fn send_mdns(context: &Context, connection: &mut Smtp) -> Result<()> {
             return Ok(());
         }
 
-        let more_mdns = send_mdn(context, connection).await?;
+        let more_mdns = send_mdn(
+            context,
+            connection,
+            async |context, rfc724_mid, body, recipients, connection| {
+                let recipients: Vec<_> = recipients
+                    .into_iter()
+                    .filter_map(|addr| {
+                        async_smtp::EmailAddress::new(addr.clone())
+                            .with_context(|| format!("Invalid recipient: {addr}"))
+                            .log_err(context)
+                            .ok()
+                    })
+                    .collect();
+
+                match smtp_send(context, &recipients, &body, connection, None).await {
+                    SendResult::Success => {
+                        if !recipients.is_empty() {
+                            info!(context, "Successfully sent MDN for {rfc724_mid}.");
+                        }
+                        Ok(true)
+                    }
+                    SendResult::Retry => {
+                        info!(
+                            context,
+                            "Temporary SMTP failure while sending an MDN for {rfc724_mid}."
+                        );
+                        Ok(false)
+                    }
+                    SendResult::Failure(err) => Err(err),
+                }
+            },
+        )
+        .await?;
         if !more_mdns {
             // No more MDNs to send or one of them failed.
             return Ok(());
@@ -551,6 +583,7 @@ async fn send_mdn_rfc724_mid(
     rfc724_mid: &str,
     contact_id: ContactId,
     smtp: &mut Smtp,
+    send_fn: impl AsyncFn(&Context, &str, String, Vec<String>, &mut Smtp) -> Result<bool>,
 ) -> Result<bool> {
     let contact = Contact::get_by_id(context, contact_id).await?;
     if contact.is_blocked() {
@@ -590,48 +623,51 @@ async fn send_mdn_rfc724_mid(
     if context.get_config_bool(Config::BccSelf).await? {
         add_self_recipients(context, &mut recipients, encrypted).await?;
     }
-    let recipients: Vec<_> = recipients
-        .into_iter()
-        .filter_map(|addr| {
-            async_smtp::EmailAddress::new(addr.clone())
-                .with_context(|| format!("Invalid recipient: {addr}"))
-                .log_err(context)
-                .ok()
-        })
-        .collect();
+    let sent = send_fn(context, rfc724_mid, body, recipients, smtp).await?;
+    if sent {
+        context
+            .sql
+            .transaction(|transaction| {
+                let mut stmt = transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
+                stmt.execute((rfc724_mid,))?;
+                for additional_rfc724_mid in additional_rfc724_mids {
+                    stmt.execute((additional_rfc724_mid,))?;
+                }
+                Ok(())
+            })
+            .await?;
+    }
+    Ok(sent)
+}
 
-    match smtp_send(context, &recipients, &body, smtp, None).await {
-        SendResult::Success => {
-            if !recipients.is_empty() {
-                info!(context, "Successfully sent MDN for {rfc724_mid}.");
-            }
+#[cfg(test)]
+pub(crate) async fn queue_mdn(context: &Context) -> Result<()> {
+    let queued = send_mdn(
+        context,
+        &mut Smtp::new(),
+        async |context, rfc724_mid, body, recipients, _smtp| {
             context
                 .sql
-                .transaction(|transaction| {
-                    let mut stmt =
-                        transaction.prepare("DELETE FROM smtp_mdns WHERE rfc724_mid = ?")?;
-                    stmt.execute((rfc724_mid,))?;
-                    for additional_rfc724_mid in additional_rfc724_mids {
-                        stmt.execute((additional_rfc724_mid,))?;
-                    }
-                    Ok(())
-                })
+                .execute(
+                    "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
+                    VALUES (?, ?, ?, ?)",
+                    (rfc724_mid, recipients.join(" "), body, u32::MAX),
+                )
                 .await?;
             Ok(true)
-        }
-        SendResult::Retry => {
-            info!(
-                context,
-                "Temporary SMTP failure while sending an MDN for {rfc724_mid}."
-            );
-            Ok(false)
-        }
-        SendResult::Failure(err) => Err(err),
-    }
+        },
+    )
+    .await?;
+    assert!(queued);
+    Ok(())
 }
 
 /// Tries to send a single MDN. Returns true if more MDNs should be sent.
-async fn send_mdn(context: &Context, smtp: &mut Smtp) -> Result<bool> {
+async fn send_mdn(
+    context: &Context,
+    smtp: &mut Smtp,
+    send_fn: impl AsyncFn(&Context, &str, String, Vec<String>, &mut Smtp) -> Result<bool>,
+) -> Result<bool> {
     if !context.should_send_mdns().await? {
         context.sql.execute("DELETE FROM smtp_mdns", []).await?;
         return Ok(false);
@@ -668,7 +704,7 @@ async fn send_mdn(context: &Context, smtp: &mut Smtp) -> Result<bool> {
         .await
         .context("Failed to update MDN retries count")?;
 
-    match send_mdn_rfc724_mid(context, &rfc724_mid, contact_id, smtp).await {
+    match send_mdn_rfc724_mid(context, &rfc724_mid, contact_id, smtp, send_fn).await {
         Err(err) => {
             // If there is an error, for example there is no message corresponding to the msg_id in the
             // database, do not try to send this MDN again.
