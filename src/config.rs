@@ -407,9 +407,6 @@ pub enum Config {
     #[strum(props(default = "1"))]
     SyncMsgs,
 
-    /// Make all outgoing messages with Autocrypt header "multipart/signed".
-    SignUnencrypted,
-
     /// Let the core save all events to the database.
     /// This value is used internally to remember the MsgId of the logging xdc
     #[strum(props(default = "0"))]
@@ -710,7 +707,6 @@ impl Context {
             | Config::Bot
             | Config::NotifyAboutWrongPw
             | Config::SyncMsgs
-            | Config::SignUnencrypted
             | Config::DisableIdle => {
                 ensure!(
                     matches!(value, None | Some("0") | Some("1")),

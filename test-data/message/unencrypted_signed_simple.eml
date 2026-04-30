@@ -1,0 +1,70 @@
+Content-Type: multipart/signed; protocol="application/pgp-signature"; protected; 
+	boundary="18aa9ed356ff9321_81d052095421b935_6b26de88a99ef0a0"
+MIME-Version: 1.0
+From: <alice@example.org>
+To: <bob@example.net>
+Subject: Message from alice@example.org
+Date: Wed, 17 Mar 2021 14:30:53 +0100 (CET)
+X-Not-Date: Tue, 28 Apr 2026 20:20:34 +0000
+Message-ID: <13140637-3c00-4553-8b76-fdbbbe3cc117@localhost>
+References: <13140637-3c00-4553-8b76-fdbbbe3cc117@localhost>
+Chat-Version: 1.0
+Chat-Disposition-Notification-To: alice@example.org
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+	 DCtAQfFggAZgUCAAAAABYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAA57ABAL
+	 DeNEB8l86SrqNKbUhDl5e7Q46VN+k/jxPEbIAs506MAQDXxgFEO2xAE19ykJI4JqU8+Zj+dwld9rXM
+	 Bh98UTnEBs0TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQIAAAAAFiEELm+iyyO1MtcoY0tYZL
+	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD4e8BAKrOvjAu/Zd+
+	 +XeYCfN00mA7Vb6FtLlvVb0gT0hzv/rBAP0dYE736fa81MseX1PdUeN2Lf9SyNOVw3eW8W0nKXEbDr
+	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+	 3jsMAg==
+
+
+--18aa9ed356ff9321_81d052095421b935_6b26de88a99ef0a0
+Content-Type: multipart/mixed; protected-headers="v1"; hp="clear"; 
+	boundary="18aa9ed357004185_2007cbc2d36c354a_6b26de88a99ef0a0"
+From: <alice@example.org>
+To: <bob@example.net>
+Subject: Message from alice@example.org
+Date: Tue, 28 Apr 2026 20:20:34 +0000
+References: <13140637-3c00-4553-8b76-fdbbbe3cc117@localhost>
+Chat-Version: 1.0
+Chat-Disposition-Notification-To: alice@example.org
+Autocrypt: addr=alice@example.org; prefer-encrypt=mutual; keydata=mDMEXlh13RYJKwYBBAHaRw8BAQdAzfVIAleCXMJrq8VeLlEVof6ITCviMktKjmcBKAu4m5
+	 DCtAQfFggAZgUCAAAAABYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDAhsDAh4JBAsJCAcFFQgJCgsDFgIB
+	 AycJAgIZASwUgAAAAAASABFyZWxheXNAY2hhdG1haWwuYXRhbGljZUBleGFtcGxlLm9yZwAA57ABAL
+	 DeNEB8l86SrqNKbUhDl5e7Q46VN+k/jxPEbIAs506MAQDXxgFEO2xAE19ykJI4JqU8+Zj+dwld9rXM
+	 Bh98UTnEBs0TPGFsaWNlQGV4YW1wbGUub3JnPsKRBBMWCAA5BQIAAAAAFiEELm+iyyO1MtcoY0tYZL
+	 CPYantlEMCGwMCHgkECwkIBwUVCAkKCwMWAgEDJwkCAhkBAAoJEGSwj2Gp7ZRD4e8BAKrOvjAu/Zd+
+	 +XeYCfN00mA7Vb6FtLlvVb0gT0hzv/rBAP0dYE736fa81MseX1PdUeN2Lf9SyNOVw3eW8W0nKXEbDr
+	 g4BF5Ydd0SCisGAQQBl1UBBQEBB0AG7cjWy2SFAU8KnltlubVW67rFiyfp01JrRe6Xqy22HQMBCAeI
+	 eAQYFggAIBYhBC5vossjtTLXKGNLWGSwj2Gp7ZRDBQJeWHXdAhsMAAoJEGSwj2Gp7ZRDLo8BAObE8G
+	 nsGVwKzNqCvHeWgJsqhjS3C6gvSlV3tEm9XmF6AQDXucIyVfoBwoyMh2h6cSn/ATn5QJb35pgo+ivp
+	 3jsMAg==
+
+
+--18aa9ed357004185_2007cbc2d36c354a_6b26de88a99ef0a0
+Content-Type: text/plain; charset="utf-8"
+Message-ID: <13140637-3c00-4553-8b76-fdbbbe3cc117@localhost>
+Content-Transfer-Encoding: 7bit
+
+Hello!
+--18aa9ed357004185_2007cbc2d36c354a_6b26de88a99ef0a0--
+
+--18aa9ed356ff9321_81d052095421b935_6b26de88a99ef0a0
+Content-Type: application/pgp-signature; name="signature.asc"; 
+	charset="utf-8"
+Content-Description: OpenPGP digital signature
+Content-Disposition: attachment; filename="signature"
+Content-Transfer-Encoding: quoted-printable
+
+-----BEGIN PGP SIGNATURE-----=0A=0AwnUEABYIAB0WIQQub6LLI7Uy1yhjS1hksI9hqe2UQ=
+wWCafEWkQAKCRBksI9hqe2U=0AQ4qaAQCFSLVDANIjaXswP8V5zIwUSvGnUwsMD+ruozO0mG2AqA=
+D9EqpWeD6cc+is=0Av9/nvp6uHi35pUmDX0s1XKu3xbSTWg8=3D=0A=3Dr9hO=0A-----END PGP=
+ SIGNATURE-----=0A
+--18aa9ed356ff9321_81d052095421b935_6b26de88a99ef0a0--
+
+

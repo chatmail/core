@@ -6,15 +6,15 @@ use std::io::Cursor;
 use anyhow::{Context as _, Result, ensure};
 use deltachat_contact_tools::{EmailAddress, may_be_valid_addr};
 use pgp::composed::{
-    ArmorOptions, Deserializable, DetachedSignature, EncryptionCaps, KeyType as PgpKeyType,
-    MessageBuilder, SecretKeyParamsBuilder, SignedKeyDetails, SignedPublicKey, SignedPublicSubKey,
-    SignedSecretKey, SubkeyParamsBuilder, SubpacketConfig,
+    Deserializable, DetachedSignature, EncryptionCaps, KeyType as PgpKeyType, MessageBuilder,
+    SecretKeyParamsBuilder, SignedKeyDetails, SignedPublicKey, SignedPublicSubKey, SignedSecretKey,
+    SubkeyParamsBuilder, SubpacketConfig,
 };
 use pgp::crypto::aead::{AeadAlgorithm, ChunkSize};
 use pgp::crypto::ecc_curve::ECCCurve;
 use pgp::crypto::hash::HashAlgorithm;
 use pgp::crypto::sym::SymmetricKeyAlgorithm;
-use pgp::packet::{Signature, SignatureConfig, SignatureType, Subpacket, SubpacketData};
+use pgp::packet::{Signature, Subpacket, SubpacketData};
 use pgp::types::{
     CompressionAlgorithm, Imprint, KeyDetails, KeyVersion, Password, SignedUser, SigningKey as _,
     StringToKey,
@@ -200,47 +200,6 @@ pub async fn pk_encrypt(
             Ok(encoded_msg)
         })
         .await?
-}
-
-/// Produces a detached signature for `plain` text using `private_key_for_signing`.
-pub fn pk_calc_signature(
-    plain: Vec<u8>,
-    private_key_for_signing: &SignedSecretKey,
-) -> Result<String> {
-    let rng = thread_rng();
-
-    let mut config = SignatureConfig::from_key(
-        rng,
-        &private_key_for_signing.primary_key,
-        SignatureType::Binary,
-    )?;
-
-    config.hashed_subpackets = vec![
-        Subpacket::regular(SubpacketData::IssuerFingerprint(
-            private_key_for_signing.fingerprint(),
-        ))?,
-        Subpacket::critical(SubpacketData::SignatureCreationTime(
-            pgp::types::Timestamp::now(),
-        ))?,
-    ];
-    config.unhashed_subpackets = vec![];
-    if private_key_for_signing.version() <= KeyVersion::V4 {
-        config
-            .unhashed_subpackets
-            .push(Subpacket::regular(SubpacketData::IssuerKeyId(
-                private_key_for_signing.legacy_key_id(),
-            ))?);
-    }
-
-    let signature = config.sign(
-        &private_key_for_signing.primary_key,
-        &Password::empty(),
-        plain.as_slice(),
-    )?;
-
-    let sig = DetachedSignature::new(signature);
-
-    Ok(sig.to_armored_string(ArmorOptions::default())?)
 }
 
 /// Returns fingerprints

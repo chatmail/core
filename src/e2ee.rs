@@ -79,16 +79,6 @@ impl EncryptHelper {
 
         Ok(ctext)
     }
-
-    /// Signs the passed-in `mail` using the private key from `context`.
-    /// Returns the payload and the signature.
-    pub async fn sign(self, context: &Context, mail: &MimePart<'static>) -> Result<String> {
-        let sign_key = load_self_secret_key(context).await?;
-        let mut buffer = Vec::new();
-        mail.clone().write_part(&mut buffer)?;
-        let signature = pgp::pk_calc_signature(buffer, &sign_key)?;
-        Ok(signature)
-    }
 }
 
 /// Ensures a private key exists for the configured user.
