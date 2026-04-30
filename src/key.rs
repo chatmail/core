@@ -570,9 +570,11 @@ pub async fn preconfigure_keypair(context: &Context, secret_data: &str) -> Resul
 pub struct Fingerprint(Vec<u8>);
 
 impl Fingerprint {
-    /// Creates new 160-bit (20 bytes) fingerprint.
+    /// Creates new fingerprint.
+    ///
+    /// It is 160-bit (20 bytes) for v4 keys and 32 bytes for v6 keys.
     pub fn new(v: Vec<u8>) -> Fingerprint {
-        debug_assert_eq!(v.len(), 20);
+        debug_assert!(v.len() == 20 || v.len() == 32);
         Fingerprint(v)
     }
 
@@ -625,7 +627,10 @@ impl std::str::FromStr for Fingerprint {
             .filter(|&c| c.is_ascii_hexdigit())
             .collect();
         let v: Vec<u8> = hex::decode(&hex_repr)?;
-        ensure!(v.len() == 20, "wrong fingerprint length: {hex_repr}");
+        ensure!(
+            v.len() == 20 || v.len() == 32,
+            "wrong fingerprint length: {hex_repr}"
+        );
         let fp = Fingerprint::new(v);
         Ok(fp)
     }

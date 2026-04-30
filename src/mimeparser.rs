@@ -356,7 +356,7 @@ impl MimeMessage {
         let decrypted_msg; // Decrypted signed OpenPGP message.
         let expected_sender_fingerprint: Option<String>;
 
-        let (mail, is_encrypted) = match decrypt::decrypt(context, &mail).await {
+        let (mail, is_encrypted) = match Box::pin(decrypt::decrypt(context, &mail)).await {
             Ok(Some((mut msg, expected_sender_fp))) => {
                 mail_raw = msg.as_data_vec().unwrap_or_default();
 

@@ -43,7 +43,12 @@ ignore = [
     # hickory-proto 0.25.2 quadratic complexity issue.
     # Dependency of iroh 0.35.0, cannot be updated as of 2026-05-02.
     # <https://rustsec.org/advisories/RUSTSEC-2026-0119>
-    "RUSTSEC-2026-0119"
+    "RUSTSEC-2026-0119",
+
+    # Timing side channel in ml-dsa dependency of rPGP.
+    # We enable PQC for encryption rather than signatures.
+    # <https://rustsec.org/advisories/RUSTSEC-2025-0144>
+    "RUSTSEC-2025-0144",
 ]
 
 [bans]
@@ -62,6 +67,7 @@ skip = [
      { name = "getrandom", version = "0.2.12" },
      { name = "heck", version = "0.4.1" },
      { name = "http", version = "0.2.12" },
+     { name = "hybrid-array", version = "0.2.3" },
      { name = "linux-raw-sys", version = "0.4.14" },
      { name = "lru", version = "0.12.5" },
      { name = "netlink-packet-route", version = "0.17.1" },

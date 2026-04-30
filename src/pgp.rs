@@ -847,4 +847,41 @@ mod tests {
         assert!(merge_openpgp_certificates(alice.clone(), bob.clone()).is_err());
         assert!(merge_openpgp_certificates(bob.clone(), alice.clone()).is_err());
     }
+
+    /// Test PQC support.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_pqc() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let pqc = &tcm.pqc().await;
+
+        let pqc_received_message = tcm.send_recv_accept(alice, pqc, "Hi!").await;
+        let pqc_chat_id = pqc_received_message.chat_id;
+        let pqc_sent = pqc.send_text(pqc_chat_id, "Hello back!").await;
+
+        let alice_rcvd = alice.recv_msg(&pqc_sent).await;
+        assert_eq!(alice_rcvd.text, "Hello back!");
+
+        Ok(())
+    }
+
+    /// Tests securejoin with inviter using PQC key.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_securejoin_pqc_inviter() {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let pqc = &tcm.pqc().await;
+
+        tcm.execute_securejoin(pqc, alice).await;
+    }
+
+    /// Tests securejoin with joiner using PQC key.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_securejoin_pqc_joiner() {
+        let mut tcm = TestContextManager::new();
+        let pqc = &tcm.pqc().await;
+        let bob = &tcm.bob().await;
+
+        tcm.execute_securejoin(bob, pqc).await;
+    }
 }

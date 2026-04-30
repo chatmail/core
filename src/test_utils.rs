@@ -137,6 +137,17 @@ impl TestContextManager {
             .await
     }
 
+    /// Returns a new "device" with a preconfigured v6 PQC key.
+    pub async fn pqc(&mut self) -> TestContext {
+        TestContext::builder()
+            .with_key_pair(pqc_keypair())
+            .with_address("pqc@example.org".to_string())
+            .with_id_offset(7000)
+            .with_log_sink(self.log_sink.clone())
+            .build(Some(&mut self.used_names))
+            .await
+    }
+
     /// Creates a new unconfigured test account.
     pub async fn unconfigured(&mut self) -> TestContext {
         TestContext::builder()
@@ -1424,6 +1435,13 @@ pub fn elena_keypair() -> SignedSecretKey {
 /// Like [alice_keypair] but a different key and identity.
 pub fn fiona_keypair() -> SignedSecretKey {
     key::SignedSecretKey::from_asc(include_str!("../test-data/key/fiona-secret.asc")).unwrap()
+}
+
+/// Loads a pre-generated v6 PQC keypair from disk.
+///
+/// Like [alice_keypair] but a different key and identity.
+pub fn pqc_keypair() -> SignedSecretKey {
+    key::SignedSecretKey::from_asc(include_str!("../test-data/key/pqc-secret.asc")).unwrap()
 }
 
 /// Utility to help wait for and retrieve events.
