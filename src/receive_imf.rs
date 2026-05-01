@@ -2031,6 +2031,7 @@ async fn add_parts(
         }
     }
     if !mime_parser.incoming && !context.get_config_bool(Config::TeamProfile).await? {
+        let mut missing_rfc724_mid = None;
         let mut updated_chats = BTreeMap::new();
         let mut archived_chats_maybe_noticed = false;
         for report in &mime_parser.mdn_reports {
@@ -2040,6 +2041,7 @@ async fn add_parts(
                 .chain(&report.additional_message_ids)
             {
                 let Some(msg_id) = rfc724_mid_exists(context, msg_rfc724_mid).await? else {
+                    missing_rfc724_mid.get_or_insert(msg_rfc724_mid.as_str());
                     continue;
                 };
                 let Some(msg) = Message::load_from_db_optional(context, msg_id).await? else {
@@ -2098,6 +2100,11 @@ chat_id=? AND
         if archived_chats_maybe_noticed {
             context.on_archived_chats_maybe_noticed();
         }
+        ensure!(
+            missing_rfc724_mid.is_none(),
+            "Self-MDN: {} not found (SKIP_DEVICE_MSG)",
+            missing_rfc724_mid.unwrap_or(""),
+        );
     }
 
     let hidden = mime_parser.parts.iter().all(|part| part.is_reaction);
