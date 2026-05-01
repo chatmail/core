@@ -14,6 +14,7 @@ use crate::contact;
 use crate::imap::prefetch_should_download;
 use crate::imex::{ImexMode, imex};
 use crate::key;
+use crate::message::markseen_msgs;
 use crate::securejoin::get_securejoin_qr;
 use crate::test_utils;
 use crate::test_utils::{
@@ -2716,6 +2717,31 @@ async fn test_read_receipts_dont_unmark_bots() -> Result<()> {
     let ab_contact = alice.add_or_lookup_contact(bob).await;
     assert!(ab_contact.is_bot());
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_self_mdn_before_msg() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let bob2 = &tcm.bob().await;
+    let alice_chat = alice.create_chat(bob).await;
+
+    let sent = alice.send_text(alice_chat.id, "hi").await;
+    let msg = bob.recv_msg(&sent).await;
+    msg.chat_id.accept(bob).await?;
+    markseen_msgs(bob, vec![msg.id]).await?;
+    let sent_mdn = bob.get_sent_mdn().await;
+
+    let Err(err) = receive_imf(bob2, sent_mdn.payload().as_bytes(), false).await else {
+        unreachable!();
+    };
+    assert!(format!("{err:#}").contains("(SKIP_DEVICE_MSG)"));
+    let msg = bob2.recv_msg(&sent).await;
+    assert_eq!(msg.get_state(), MessageState::InFresh);
+    bob2.recv_msg_trash(&sent_mdn).await;
+    assert_eq!(msg.id.get_state(bob2).await?, MessageState::InSeen);
     Ok(())
 }
 
