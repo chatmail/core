@@ -33,7 +33,17 @@ ignore = [
     # We do not check CRL and cannot update rustls-webpki 0.102.8 
     # which is a dependency of iroh 0.35.0.
     # <https://rustsec.org/advisories/RUSTSEC-2026-0104>
-    "RUSTSEC-2026-0104"
+    "RUSTSEC-2026-0104",
+
+    # hickory-proto 0.25.2 unbounded loop in DNSSEC code.
+    # Dependency of iroh 0.35.0, cannot be updated as of 2026-05-02.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0118>
+    "RUSTSEC-2026-0118",
+
+    # hickory-proto 0.25.2 quadratic complexity issue.
+    # Dependency of iroh 0.35.0, cannot be updated as of 2026-05-02.
+    # <https://rustsec.org/advisories/RUSTSEC-2026-0119>
+    "RUSTSEC-2026-0119"
 ]
 
 [bans]
