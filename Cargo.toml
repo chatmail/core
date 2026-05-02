@@ -111,7 +111,7 @@ tracing = "0.1.41"
 url = "2"
 uuid = { version = "1", features = ["serde", "v4"] }
 walkdir = "2.5.0"
-webpki-roots = "0.26.8"
+webpki-roots = "1.0"
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] } # Enable `backtrace` feature in tests.
