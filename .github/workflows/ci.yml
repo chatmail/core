@@ -41,6 +41,9 @@ jobs:
         shell: bash
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          save-if: false
+          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
       - name: Run rustfmt
         run: cargo fmt --all -- --check
       - name: Run clippy
@@ -90,8 +93,15 @@ jobs:
         with:
           show-progress: false
           persist-credentials: false
+
+      - run: rustup override set $RUST_VERSION
+        shell: bash
+
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          save-if: false
+          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
       - name: Rustdoc
         run: cargo doc --document-private-items --no-deps
 
@@ -135,6 +145,11 @@ jobs:
 
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          # Only save the cache from the main branch runs.
+          # No need for PRs to write to the cache.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: ${{ matrix.os }}-${{ matrix.rust }}
 
       - name: Install nextest
         uses: taiki-e/install-action@5f57d6cb7cd20b14a8a27f522884c4bc8a187458
@@ -167,8 +182,14 @@ jobs:
           show-progress: false
           persist-credentials: false
 
+      - run: rustup override set $RUST_VERSION
+        shell: bash
+
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          save-if: false
+          shared-key: ${{ matrix.os }}-${{ env.RUST_VERSION }}
 
       - name: Build C library
         run: cargo build -p deltachat_ffi
@@ -193,8 +214,14 @@ jobs:
           show-progress: false
           persist-credentials: false
 
+      - run: rustup override set $RUST_VERSION
+        shell: bash
+
       - name: Cache rust cargo artifacts
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
+        with:
+          save-if: false
+          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
 
       - name: Build deltachat-rpc-server
         run: cargo build -p deltachat-rpc-server
