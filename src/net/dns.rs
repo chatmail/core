@@ -231,7 +231,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
     HashMap::from([
         (
             "imap.163.com",
-            vec![IpAddr::V4(Ipv4Addr::new(111, 124, 203, 45))],
+            vec![
+                IpAddr::V4(Ipv4Addr::new(111, 124, 203, 45)),
+                IpAddr::V4(Ipv4Addr::new(111, 124, 203, 50)),
+            ],
         ),
         (
             "smtp.163.com",
@@ -422,12 +425,12 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             "nine.testrun.org",
             vec![
                 IpAddr::V4(Ipv4Addr::new(128, 140, 126, 197)),
-                IpAddr::V4(Ipv4Addr::new(116, 202, 233, 236)),
                 IpAddr::V4(Ipv4Addr::new(216, 144, 228, 100)),
-                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f8, 0x241, 0x4ce8, 0, 0, 0, 2)),
+                IpAddr::V4(Ipv4Addr::new(77, 42, 49, 41)),
                 IpAddr::V6(Ipv6Addr::new(
                     0x2001, 0x41d0, 0x701, 0x1100, 0, 0, 0, 0x8ab1,
                 )),
+                IpAddr::V6(Ipv6Addr::new(0x2a01, 0x4f9, 0xfff1, 0x59, 0, 0, 0, 1)),
             ],
         ),
         (
@@ -698,6 +701,10 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
             vec![IpAddr::V4(Ipv4Addr::new(82, 165, 11, 85))],
         ),
         (
+            "chat.adminforge.de",
+            vec![IpAddr::V4(Ipv4Addr::new(94, 130, 17, 142))],
+        ),
+        (
             "chika.aangat.lahat.computer",
             vec![IpAddr::V4(Ipv4Addr::new(71, 19, 150, 113))],
         ),
@@ -737,6 +744,46 @@ static DNS_PRELOAD: LazyLock<HashMap<&'static str, Vec<IpAddr>>> = LazyLock::new
         (
             "danneskjold.de",
             vec![IpAddr::V4(Ipv4Addr::new(46, 62, 216, 132))],
+        ),
+        (
+            "chat.in-the.eu",
+            vec![IpAddr::V4(Ipv4Addr::new(78, 46, 190, 129))],
+        ),
+        (
+            "chat.nuvon.app",
+            vec![IpAddr::V4(Ipv4Addr::new(178, 238, 38, 165))],
+        ),
+        (
+            "nibblehole.com",
+            vec![IpAddr::V4(Ipv4Addr::new(94, 247, 42, 209))],
+        ),
+        (
+            "chat.zashm.org",
+            vec![IpAddr::V4(Ipv4Addr::new(91, 245, 76, 39))],
+        ),
+        (
+            "chat.sus.fr",
+            vec![IpAddr::V4(Ipv4Addr::new(152, 67, 76, 190))],
+        ),
+        (
+            "delta.thelab.uno",
+            vec![IpAddr::V4(Ipv4Addr::new(146, 59, 228, 39))],
+        ),
+        (
+            "chat.vim.wtf",
+            vec![IpAddr::V4(Ipv4Addr::new(116, 203, 206, 170))],
+        ),
+        (
+            "uninterest.ing",
+            vec![IpAddr::V4(Ipv4Addr::new(172, 245, 70, 237))],
+        ),
+        (
+            "sweetfern.net",
+            vec![IpAddr::V4(Ipv4Addr::new(178, 156, 228, 133))],
+        ),
+        (
+            "delta.disobey.net",
+            vec![IpAddr::V4(Ipv4Addr::new(37, 74, 102, 44))],
         ),
         (
             "darkrun.dev",
