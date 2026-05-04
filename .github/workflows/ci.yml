@@ -44,6 +44,7 @@ jobs:
         with:
           save-if: false
           shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
+          add-rust-environment-hash-key: false
       - name: Run rustfmt
         run: cargo fmt --all -- --check
       - name: Run clippy
@@ -102,6 +103,7 @@ jobs:
         with:
           save-if: false
           shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
+          add-rust-environment-hash-key: false
       - name: Rustdoc
         run: cargo doc --document-private-items --no-deps
 
@@ -151,6 +153,11 @@ jobs:
           ##save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ${{ matrix.os }}-${{ matrix.rust }}
 
+          # Do not hash Cargo.lock.
+          # We want the cache to be used later in PRs
+          # even if it updates some dependency.
+          add-rust-environment-hash-key: false
+
       - name: Install nextest
         uses: taiki-e/install-action@5f57d6cb7cd20b14a8a27f522884c4bc8a187458
         with:
@@ -190,6 +197,7 @@ jobs:
         with:
           save-if: false
           shared-key: ${{ matrix.os }}-${{ env.RUST_VERSION }}
+          add-rust-environment-hash-key: false
 
       - name: Build C library
         run: cargo build -p deltachat_ffi
@@ -222,6 +230,7 @@ jobs:
         with:
           save-if: false
           shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
+          add-rust-environment-hash-key: false
 
       - name: Build deltachat-rpc-server
         run: cargo build -p deltachat-rpc-server
