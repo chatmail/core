@@ -43,7 +43,6 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: false
-          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
           add-rust-environment-hash-key: false
       - name: Run rustfmt
         run: cargo fmt --all -- --check
@@ -102,7 +101,6 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: false
-          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
           add-rust-environment-hash-key: false
       - name: Rustdoc
         run: cargo doc --document-private-items --no-deps
@@ -151,7 +149,6 @@ jobs:
           # Only save the cache from the main branch runs.
           # No need for PRs to write to the cache.
           ##save-if: ${{ github.ref == 'refs/heads/main' }}
-          shared-key: ${{ matrix.os }}-${{ matrix.rust }}
 
           # Do not hash Cargo.lock.
           # We want the cache to be used later in PRs
@@ -196,7 +193,6 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: false
-          shared-key: ${{ matrix.os }}-${{ env.RUST_VERSION }}
           add-rust-environment-hash-key: false
 
       - name: Build C library
@@ -229,7 +225,6 @@ jobs:
         uses: swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
         with:
           save-if: false
-          shared-key: ${{ runner.os }}-${{ env.RUST_VERSION }}
           add-rust-environment-hash-key: false
 
       - name: Build deltachat-rpc-server
