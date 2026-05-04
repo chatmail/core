@@ -148,7 +148,7 @@ jobs:
         with:
           # Only save the cache from the main branch runs.
           # No need for PRs to write to the cache.
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          ##save-if: ${{ github.ref == 'refs/heads/main' }}
           shared-key: ${{ matrix.os }}-${{ matrix.rust }}
 
       - name: Install nextest
