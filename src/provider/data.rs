@@ -890,16 +890,10 @@ static P_NAUTA_CU: Provider = Provider {
         strict_tls: false,
         ..ProviderOptions::new()
     },
-    config_defaults: Some(&[
-        ConfigDefault {
-            key: Config::DeleteServerAfter,
-            value: "1",
-        },
-        ConfigDefault {
-            key: Config::MediaQuality,
-            value: "1",
-        },
-    ]),
+    config_defaults: Some(&[ConfigDefault {
+        key: Config::MediaQuality,
+        value: "1",
+    }]),
     oauth2_authorizer: None,
 };
 

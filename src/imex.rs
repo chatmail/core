@@ -980,20 +980,18 @@ mod tests {
 
         // Check that the settings are displayed correctly.
         assert_eq!(
-            context1.get_config(Config::DeleteServerAfter).await?,
-            Some("0".to_string())
-        );
-        context1.set_config_bool(Config::IsChatmail, true).await?;
-        assert_eq!(
             context1.get_config(Config::BccSelf).await?,
             Some("0".to_string())
         );
+        context1.set_config_bool(Config::IsChatmail, true).await?;
+
+        assert_eq!(context1.get_config(Config::IsMuted).await?, None);
+        context1.set_config_bool(Config::IsMuted, true).await?;
         assert_eq!(
-            context1.get_config(Config::DeleteServerAfter).await?,
+            context1.get_config(Config::IsMuted).await?,
             Some("1".to_string())
         );
 
-        assert_eq!(context1.get_config_delete_server_after().await?, Some(0));
         imex(context1, ImexMode::ExportBackup, backup_dir.path(), None).await?;
         let _event = context1
             .evtracker
@@ -1010,15 +1008,15 @@ mod tests {
         assert!(context2.is_configured().await?);
         assert!(context2.is_chatmail().await?);
         for ctx in [context1, context2] {
+            // BccSelf should be enabled automatically when exporting a backup
             assert_eq!(
                 ctx.get_config(Config::BccSelf).await?,
                 Some("1".to_string())
             );
             assert_eq!(
-                ctx.get_config(Config::DeleteServerAfter).await?,
-                Some("0".to_string())
+                ctx.get_config(Config::IsMuted).await?,
+                Some("1".to_string())
             );
-            assert_eq!(ctx.get_config_delete_server_after().await?, None);
         }
         Ok(())
     }

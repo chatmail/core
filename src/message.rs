@@ -2099,63 +2099,52 @@ pub async fn get_request_msg_cnt(context: &Context) -> usize {
 }
 
 /// Estimates the number of messages that will be deleted
-/// by the options `delete_device_after` or `delete_server_after`.
+/// by the `set_config()`-option `delete_device_after`.
 ///
 /// This is typically used to show the estimated impact to the user
 /// before actually enabling deletion of old messages.
 ///
-/// If `from_server` is true,
-/// estimate deletion count for server,
-/// otherwise estimate deletion count for device.
+/// Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
 ///
-/// Count messages older than the given number of `seconds`.
+/// Parameters:
+/// - `from_server`: Deprecated, pass `false` here
+/// - `seconds`: Count messages older than the given number of seconds.
 ///
 /// Returns the number of messages that are older than the given number of seconds.
-/// Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
 #[expect(clippy::arithmetic_side_effects)]
 pub async fn estimate_deletion_cnt(
     context: &Context,
     from_server: bool,
     seconds: i64,
 ) -> Result<usize> {
+    ensure!(
+        !from_server,
+        "The `delete_server_after` config option was removed."
+    );
+
     let self_chat_id = ChatIdBlocked::lookup_by_contact(context, ContactId::SELF)
         .await?
         .map(|c| c.id)
         .unwrap_or_default();
     let threshold_timestamp = time() - seconds;
 
-    let cnt = if from_server {
-        context
-            .sql
-            .count(
-                "SELECT COUNT(*)
-             FROM msgs m
-             WHERE m.id > ?
-               AND timestamp < ?
-               AND chat_id != ?
-               AND EXISTS (SELECT * FROM imap WHERE rfc724_mid=m.rfc724_mid);",
-                (DC_MSG_ID_LAST_SPECIAL, threshold_timestamp, self_chat_id),
-            )
-            .await?
-    } else {
-        context
-            .sql
-            .count(
-                "SELECT COUNT(*)
+    let cnt = context
+        .sql
+        .count(
+            "SELECT COUNT(*)
              FROM msgs m
              WHERE m.id > ?
                AND timestamp < ?
                AND chat_id != ?
                AND chat_id != ? AND hidden = 0;",
-                (
-                    DC_MSG_ID_LAST_SPECIAL,
-                    threshold_timestamp,
-                    self_chat_id,
-                    DC_CHAT_ID_TRASH,
-                ),
-            )
-            .await?
-    };
+            (
+                DC_MSG_ID_LAST_SPECIAL,
+                threshold_timestamp,
+                self_chat_id,
+                DC_CHAT_ID_TRASH,
+            ),
+        )
+        .await?;
     Ok(cnt)
 }
 

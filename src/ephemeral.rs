@@ -23,16 +23,15 @@
 //! ## Device settings
 //!
 //! In addition to per-chat ephemeral message setting, each device has
-//! two global user-configured settings that complement per-chat
-//! settings: `delete_device_after` and `delete_server_after`. These
-//! settings are not synchronized among devices and apply to all
+//! a global user-configured setting that complements per-chat
+//! settings, `delete_device_after`.
+//! This setting is not synchronized among devices and applies to all
 //! messages known to the device, including messages sent or received
 //! before configuring the setting.
+//! It deletes messages only from the device, not from the server.
 //!
 //! `delete_device_after` configures the maximum time device is
-//! storing the messages locally. `delete_server_after` configures the
-//! time after which device will delete the messages it knows about
-//! from the server.
+//! storing the messages locally.
 //!
 //! ## How messages are deleted
 //!
@@ -60,7 +59,7 @@
 //!
 //! Server deletion happens by updating the `imap` table based on
 //! the database entries which are expired either according to their
-//! ephemeral message timers or global `delete_server_after` setting.
+//! ephemeral message timers.
 
 use std::cmp::max;
 use std::collections::BTreeSet;
@@ -78,7 +77,6 @@ use crate::chat::{ChatId, ChatIdBlocked, send_msg};
 use crate::constants::{DC_CHAT_ID_LAST_SPECIAL, DC_CHAT_ID_TRASH};
 use crate::contact::ContactId;
 use crate::context::Context;
-use crate::download::MIN_DELETE_SERVER_AFTER;
 use crate::events::EventType;
 use crate::log::{LogExt, warn};
 use crate::message::{Message, MessageState, MsgId, Viewtype};
@@ -654,6 +652,8 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 #[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()> {
     let now = time();
+    // TODO if is_chatmail, but not bcc_self, then delete after downloading
+    // apart from this, we may be able to remove the delete_server_after part
 
     let (threshold_timestamp, threshold_timestamp_extended) =
         match context.get_config_delete_server_after().await? {
@@ -664,7 +664,7 @@ pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()
                     0 => i64::MAX,
                     _ => now - delete_server_after,
                 },
-                now - max(delete_server_after, MIN_DELETE_SERVER_AFTER),
+                now - max(delete_server_after, 48 * 60 * 60),
             ),
         };
 

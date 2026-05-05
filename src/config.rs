@@ -195,17 +195,6 @@ pub enum Config {
     MediaQuality,
 
     /// Timer in seconds after which the message is deleted from the
-    /// server.
-    ///
-    /// 0 means messages are never deleted by Delta Chat.
-    ///
-    /// Value 1 is treated as "delete at once": messages are deleted
-    /// immediately, without moving to DeltaChat folder.
-    ///
-    /// Default is 1 for chatmail accounts without `BccSelf`, 0 otherwise.
-    DeleteServerAfter,
-
-    /// Timer in seconds after which the message is deleted from the
     /// device.
     ///
     /// Equals to 0 by default, which means the message is never
@@ -554,14 +543,6 @@ impl Context {
         // Default values
         let val = match key {
             Config::ConfiguredInboxFolder => Some("INBOX".to_string()),
-            Config::DeleteServerAfter => {
-                match !Box::pin(self.get_config_bool(Config::BccSelf)).await?
-                    && Box::pin(self.is_chatmail()).await?
-                {
-                    true => Some("1".to_string()),
-                    false => Some("0".to_string()),
-                }
-            }
             Config::Addr => self.get_config_opt(Config::ConfiguredAddr).await?,
             _ => key.get_str("default").map(|s| s.to_string()),
         };
@@ -642,19 +623,15 @@ impl Context {
         self.get_config_bool(Config::MdnsEnabled).await
     }
 
-    /// Gets configured "delete_server_after" value.
+    /// Gets configured "delete_server_after"
     ///
     /// `None` means never delete the message, `Some(0)` means delete
-    /// at once, `Some(x)` means delete after `x` seconds.
+    /// at once, `Some(x)` is never returned
+    // TODO rename and refactor
     pub async fn get_config_delete_server_after(&self) -> Result<Option<i64>> {
-        let val = match self
-            .get_config_parsed::<i64>(Config::DeleteServerAfter)
-            .await?
-            .unwrap_or(0)
-        {
-            0 => None,
-            1 => Some(0),
-            x => Some(x),
+        let val = match !self.get_config_bool(Config::BccSelf).await? && self.is_chatmail().await? {
+            true => Some(0),
+            false => None,
         };
         Ok(val)
     }

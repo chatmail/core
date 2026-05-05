@@ -973,12 +973,7 @@ impl Context {
                 .await?
                 .to_string(),
         );
-        res.insert(
-            "delete_server_after",
-            self.get_config_int(Config::DeleteServerAfter)
-                .await?
-                .to_string(),
-        );
+
         res.insert(
             "last_housekeeping",
             self.get_config_int(Config::LastHousekeeping)

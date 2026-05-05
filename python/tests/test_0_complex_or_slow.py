@@ -314,7 +314,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ac2_offl = acfactory.new_online_configuring_account(cloned_from=ac2)
     for ac in [ac2, ac2_offl]:
         ac.set_config("bcc_self", "1")
-    ac2.set_config("delete_server_after", "1")
+    # TODO check if this causes a test failure: ac2.set_config("delete_server_after", "1")
     ac2.set_config("gossip_period", "0")  # Re-gossip in every message
     acfactory.bring_accounts_online()
     dir = tmp_path / "exportdir"
@@ -337,7 +337,7 @@ def test_verified_group_vs_delete_server_after(acfactory, tmp_path, lp):
     ac2._evtracker.get_matching("DC_EVENT_IMAP_MESSAGE_DELETED")
 
     lp.sec("ac1: sending 'hi' to the group")
-    ac2.set_config("delete_server_after", "0")
+    # TODO check if this causes a test failure: ac2.set_config("delete_server_after", "0")
     chat1.send_text("hi")
 
     lp.sec("ac2_offl: going online, checking the 'hi' message")

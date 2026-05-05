@@ -455,7 +455,6 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
     let uidvalidity = 12345;
     for (id, timestamp, ephemeral_timestamp) in &[
         (900, now - 2 * HOUR, 0),
-        (1000, now - 23 * HOUR - MIN_DELETE_SERVER_AFTER, 0),
         (1010, now - 23 * HOUR, 0),
         (1020, now - 21 * HOUR, 0),
         (1030, now - 19 * HOUR, 0),
@@ -512,28 +511,29 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         0
     );
 
-    t.set_config(Config::DeleteServerAfter, Some(&*(25 * HOUR).to_string()))
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1000).await?;
+    // t.set_config(Config::DeleteServerAfter, Some(&*(25 * HOUR).to_string()))
+    //     .await?;
+    // delete_expired_imap_messages(&t).await?;
+    // test_marked_for_deletion(&t, 1000).await?;
 
-    MsgId::new(1000)
-        .update_download_state(&t, DownloadState::Available)
-        .await?;
-    t.sql
-        .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1000'", ())
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1000).await?; // Delete downloadable anyway.
-    remove_uid(&t, 1000).await?;
+    // MsgId::new(1000)
+    //     .update_download_state(&t, DownloadState::Available)
+    //     .await?;
+    // t.sql
+    //     .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1000'", ())
+    //     .await?;
+    // delete_expired_imap_messages(&t).await?;
+    // test_marked_for_deletion(&t, 1000).await?; // Delete downloadable anyway.
+    // remove_uid(&t, 1000).await?;
 
-    t.set_config(Config::DeleteServerAfter, Some(&*(22 * HOUR).to_string()))
-        .await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 1010).await?;
-    t.sql
-        .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1010'", ())
-        .await?;
+    // t.set_config(Config::DeleteServerAfter, Some(&*(22 * HOUR).to_string()))
+    //     .await?;
+    // delete_expired_imap_messages(&t).await?;
+    // test_marked_for_deletion(&t, 1010).await?;
+    // t.sql
+    //     .execute("UPDATE imap SET target=folder WHERE rfc724_mid='1010'", ())
+    //     .await?;
+    // TODO check if removing this code makes the test fail
 
     MsgId::new(1010)
         .update_download_state(&t, DownloadState::Available)
@@ -547,9 +547,10 @@ async fn test_delete_expired_imap_messages() -> Result<()> {
         0
     );
 
-    t.set_config(Config::DeleteServerAfter, Some("1")).await?;
-    delete_expired_imap_messages(&t).await?;
-    test_marked_for_deletion(&t, 3000).await?;
+    // TODO instead, test that setting bcc_self to 0 removes messages
+    // t.set_config(Config::DeleteServerAfter, Some("1")).await?;
+    // delete_expired_imap_messages(&t).await?;
+    // test_marked_for_deletion(&t, 3000).await?;
 
     Ok(())
 }

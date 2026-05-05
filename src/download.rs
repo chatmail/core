@@ -15,12 +15,6 @@ use crate::{EventType, chatlist_events};
 pub(crate) mod post_msg_metadata;
 pub(crate) use post_msg_metadata::PostMsgMetadata;
 
-/// If a message is downloaded only partially
-/// and `delete_server_after` is set to small timeouts (eg. "at once"),
-/// the user might have no chance to actually download that message.
-/// `MIN_DELETE_SERVER_AFTER` increases the timeout in this case.
-pub(crate) const MIN_DELETE_SERVER_AFTER: i64 = 48 * 60 * 60;
-
 /// From this point onward outgoing messages are considered large
 /// and get a Pre-Message, which announces the Post-Message.
 /// This is only about sending so we can modify it any time.
