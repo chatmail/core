@@ -143,7 +143,7 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install nextest
-        uses: taiki-e/install-action@5f57d6cb7cd20b14a8a27f522884c4bc8a187458
+        uses: taiki-e/install-action@1329c298aa20c3257846c9b2e0e55967df3e3c37
         with:
           tool: nextest
 
