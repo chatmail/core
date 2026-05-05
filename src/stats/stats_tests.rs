@@ -486,6 +486,15 @@ async fn test_stats_key_creation_timestamp() -> Result<()> {
     // Alice uses a pregenerated key. It was created at this timestamp:
     const ALICE_KEY_CREATION_TIME: u128 = 1582855645;
 
+    // The key creation time's resolution is reduced in order to prevent deanonymization:
+    const CENSORED_KEY_CREATION_TIME: u128 = 1584576000;
+    assert!(CENSORED_KEY_CREATION_TIME.is_multiple_of(KEY_CREATE_TIMESTAMP_RESOLUTION as u128));
+    assert!(CENSORED_KEY_CREATION_TIME > ALICE_KEY_CREATION_TIME);
+    assert!(
+        CENSORED_KEY_CREATION_TIME - ALICE_KEY_CREATION_TIME
+            < KEY_CREATE_TIMESTAMP_RESOLUTION as u128
+    );
+
     let alice = &TestContext::new_alice().await;
     alice.set_config_bool(Config::StatsSending, true).await?;
 
@@ -495,7 +504,7 @@ async fn test_stats_key_creation_timestamp() -> Result<()> {
     assert_eq!(
         key_create_timestamps,
         &vec![Value::Number(
-            Number::from_u128(ALICE_KEY_CREATION_TIME).unwrap()
+            Number::from_u128(CENSORED_KEY_CREATION_TIME).unwrap()
         )]
     );
 
