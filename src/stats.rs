@@ -29,6 +29,7 @@ const STATISTICS_BOT_VCARD: &str = include_str!("../assets/statistics-bot.vcf");
 const SENDING_INTERVAL_SECONDS: i64 = 3600 * 24 * 7; // 1 week
 // const SENDING_INTERVAL_SECONDS: i64 = 60; // 1 minute (for testing)
 const MESSAGE_STATS_UPDATE_INTERVAL_SECONDS: i64 = 4 * 60; // 4 minutes (less than the lowest ephemeral messages timeout)
+const KEY_CREATE_TIMESTAMP_RESOLUTION: u32 = 3600 * 24 * 7 * 4; // 4 weeks
 
 #[derive(Serialize)]
 struct Statistics {
@@ -348,7 +349,13 @@ async fn get_stats(context: &Context) -> Result<String> {
     let key_create_timestamps: Vec<u32> = load_self_public_keyring(context)
         .await?
         .iter()
-        .map(|k| k.created_at().as_secs())
+        .map(|k| {
+            k.created_at()
+                .as_secs()
+                .div_ceil(KEY_CREATE_TIMESTAMP_RESOLUTION)
+                .checked_mul(KEY_CREATE_TIMESTAMP_RESOLUTION)
+                .unwrap_or(0)
+        })
         .collect();
 
     let sending_enabled_timestamps =
