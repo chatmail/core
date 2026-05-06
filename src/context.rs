@@ -973,7 +973,6 @@ impl Context {
                 .await?
                 .to_string(),
         );
-
         res.insert(
             "last_housekeeping",
             self.get_config_int(Config::LastHousekeeping)

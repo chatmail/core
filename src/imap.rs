@@ -1382,14 +1382,7 @@ impl Session {
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
 
                 // If the message is not needed anymore on the server, mark it for deletion:
-                info!(
-                    context,
-                    "dbg Marking for deletion?: bcc_self={}, is_chatmail={}",
-                    context.get_config_bool(Config::BccSelf).await?,
-                    is_chatmail
-                );
                 if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
-                    info!(context, "dbg Marking {rfc724_mid} for deletion");
                     context
                         .sql
                         .execute(
@@ -1398,8 +1391,6 @@ impl Session {
                         )
                         .await?;
                     context.scheduler.interrupt_inbox().await;
-                } else {
-                    info!(context, "dbg NOT marking {rfc724_mid} for deletion");
                 }
 
                 // If there was an error receiving the message, show a device message:

@@ -903,10 +903,6 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
 
     // Get user-configured server deletion
     if !received_msg.msg_ids.is_empty() {
-        info!(
-            context,
-            "dbg Would mark for deletion previously: rfc724_mid={rfc724_mid}, rfc724_mid_orig={rfc724_mid_orig}"
-        );
         let target = if received_msg.needs_delete_job {
             Some("".to_string())
         } else {

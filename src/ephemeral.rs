@@ -28,10 +28,10 @@
 //! This setting is not synchronized among devices and applies to all
 //! messages known to the device, including messages sent or received
 //! before configuring the setting.
-//! It deletes messages only from the device, not from the server.
 //!
 //! `delete_device_after` configures the maximum time device is
-//! storing the messages locally.
+//! storing the messages locally,
+//! but does not delete messages from the server.
 //!
 //! ## How messages are deleted
 //!
