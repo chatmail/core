@@ -91,7 +91,9 @@ def test_trash_multiple_messages(acfactory, direct_imap, log):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac2.stop_io()
 
-    ac2.set_config("bcc_self", "1")  # Make sure that messages are not immediately auto-deleted
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     ac2.set_config("sync_msgs", "0")
 
     ac2.start_io()
