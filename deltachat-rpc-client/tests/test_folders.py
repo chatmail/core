@@ -87,7 +87,7 @@ def test_trash_multiple_messages(acfactory, direct_imap, log):
     ac1, ac2 = acfactory.get_online_accounts(2)
     ac2.stop_io()
 
-    # TODO check if this causes a test failure: ac2.set_config("delete_server_after", "0")
+    ac2.set_config("bcc_self", "1")  # Make sure that messages are not immediately auto-deleted
     ac2.set_config("sync_msgs", "0")
 
     ac2.start_io()
