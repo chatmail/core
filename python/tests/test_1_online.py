@@ -15,6 +15,9 @@ def test_basic_imap_api(acfactory, tmp_path):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     imap2 = ac2.direct_imap
 
     with imap2.idle() as idle2:
