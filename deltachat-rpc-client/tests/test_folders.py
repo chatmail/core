@@ -17,7 +17,6 @@ def test_moved_markseen(acfactory, direct_imap, log):
     log.section("ac2: creating DeltaChat folder")
     ac2_direct_imap = direct_imap(ac2)
     ac2_direct_imap.create_folder("DeltaChat")
-    # ac2.set_config("delete_server_after", "0")  # TODO check if this causes a test failure
     ac2.set_config("sync_msgs", "0")  # Do not send a sync message when accepting a contact request.
 
     ac2.add_or_update_transport({"addr": addr, "password": password, "imapFolder": "DeltaChat"})
@@ -56,11 +55,6 @@ def test_moved_markseen(acfactory, direct_imap, log):
 
 def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
-
-    for ac in ac1, ac2:
-        # TODO check if this causes a test failure
-        # ac.set_config("delete_server_after", "0")
-        pass
 
     # Do not send BCC to self, we only want to test MDN on ac1.
     ac1.set_config("bcc_self", "0")

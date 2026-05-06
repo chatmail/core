@@ -1393,7 +1393,7 @@ impl Session {
                     context
                         .sql
                         .execute(
-                            &format!("UPDATE imap SET target='' WHERE rfc724_mid=?"),
+                            "UPDATE imap SET target='' WHERE rfc724_mid=?",
                             (rfc724_mid,),
                         )
                         .await?;

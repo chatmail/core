@@ -648,7 +648,6 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 }
 
 /// Schedules expired IMAP messages for deletion.
-#[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()> {
     let now = time();
     context
