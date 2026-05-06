@@ -699,31 +699,6 @@ pub(crate) async fn add_self_recipients(
     recipients: &mut Vec<String>,
     encrypted: bool,
 ) -> Result<()> {
-    // Previous versions of Delta Chat did not send BCC self
-    // if DeleteServerAfter was set to immediately delete messages
-    // from the server. This is not the case anymore
-    // because BCC-self messages are also used to detect
-    // that message was sent if SMTP server is slow to respond
-    // and connection is frequently lost
-    // before receiving status line. NB: This is not a problem for chatmail servers, so `BccSelf`
-    // disabled by default is fine.
-
-    // Seems like the correct replacement is `if true`.
-
-    // Before my change, we're adding the self-recipient iff:
-    // - Messages are NOT deleted at once
-    // - OR there are recipients
-    //
-    // i.e. we skip adding the self-recipient iff:
-    // - Messages are deleted at once
-    // - AND there are no recipients
-    // probably because in this case, it's not necesary to send anything.
-    //
-    // Messages are deleted at once iff BccSelf is off in a chatmail profile now.
-    // But BccSelf is always on when this function is called.
-    // So, we can just remove the condition.
-    // TODO remove commented-out code
-    // if context.get_config_delete_server_after().await? != Some(0) || !recipients.is_empty() {
     // Avoid sending unencrypted messages to all transports, chatmail relays won't accept
     // them. Normally the user should have a non-chatmail primary transport to send unencrypted
     // messages.
@@ -732,9 +707,14 @@ pub(crate) async fn add_self_recipients(
             recipients.push(addr);
         }
     }
-    // `from` must be the last addr, see `receive_imf_inner()` why.
+    // `from` must be the last addr
+    // because `receive_imf_inner()` marks the message as 'delivered'
+    // if it arrives to the self-server via `bcc_self`.
+    // This helps with marking messages as delivered
+    // if the server is slow and we never get an `OK` response
+    // before the connection times out.
     let from = context.get_primary_self_addr().await?;
     recipients.push(from);
-    // }
+
     Ok(())
 }

@@ -1073,6 +1073,8 @@ def test_send_receive_locations(acfactory, lp):
 
 def test_delete_multiple_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
+    # Make sure that messages are not immediately auto-deleted:
+    ac2.set_config("bcc_self", "1")
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
 
     lp.sec("ac1: sending seven messages")
