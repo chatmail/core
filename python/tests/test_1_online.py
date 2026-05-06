@@ -369,6 +369,7 @@ def test_send_and_receive_message_markseen(acfactory, lp):
     ac1.set_config("displayname", "ä name")
 
     # Make sure that messages are not immediately auto-deleted on the server:
+    ac1.set_config("bcc_self", "1")
     ac2.set_config("bcc_self", "1")
 
     # clear any fresh device messages
@@ -515,11 +516,14 @@ def test_mdn_asymmetric(acfactory, lp):
     ac1.set_config("mdns_enabled", "1")
     ac2.set_config("mdns_enabled", "1")
 
-    # Make sure that the mdn is not immediately auto-deleted on the server::
+    # Make sure that the mdn is not immediately auto-deleted on the server:
     ac1.set_config("bcc_self", "1")
 
     lp.sec("sending text message from ac1 to ac2")
     msg_out = chat.send_text("message1")
+
+    # Wait for the message to be marked as seen on IMAP.
+    ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
@@ -537,7 +541,7 @@ def test_mdn_asymmetric(acfactory, lp):
     lp.sec("ac1: waiting for incoming activity")
     assert len(chat.get_messages()) == 1 + E2EE_INFO_MSGS
 
-    # Wait for the message to be marked as seen on IMAP.
+    # Wait for the mdn to be marked as seen on IMAP.
     ac1._evtracker.get_info_contains("Marked messages [0-9]+ in folder INBOX as seen.")
 
     # MDN is received even though MDNs are already disabled
