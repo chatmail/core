@@ -2376,4 +2376,4 @@ pub(crate) static PROVIDER_IDS: LazyLock<HashMap<&'static str, &'static Provider
     });
 
 pub static _PROVIDER_UPDATED: LazyLock<chrono::NaiveDate> =
-    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 4, 21).unwrap());
+    LazyLock::new(|| chrono::NaiveDate::from_ymd_opt(2026, 5, 6).unwrap());

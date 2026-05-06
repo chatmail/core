@@ -6,7 +6,7 @@ set -euo pipefail
 export TZ=UTC
 
 # Provider database revision.
-REV=ad097ee40579c884e7757de2d3bb0a51f481a32a
+REV=2cba4b72f4c6e6417b83ba549aff7781be5f166c
 
 CORE_ROOT="$PWD"
 TMP="$(mktemp -d)"
