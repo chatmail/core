@@ -14,7 +14,7 @@ def test_moved_markseen(acfactory, direct_imap, log):
     ac2.add_or_update_transport({"addr": addr, "password": password})
     ac2.bring_online()
 
-    # Make sure that messages are not immediately auto-deleted:
+    # Make sure that messages are not immediately auto-deleted on the server:
     ac1.set_config("bcc_self", "1")
     ac2.set_config("bcc_self", "1")
 
@@ -60,7 +60,7 @@ def test_moved_markseen(acfactory, direct_imap, log):
 def test_markseen_message_and_mdn(acfactory, direct_imap):
     ac1, ac2 = acfactory.get_online_accounts(2)
 
-    # Make sure that messages are not immediately auto-deleted:
+    # Make sure that messages are not immediately auto-deleted on the server:
     ac1.set_config("bcc_self", "1")
     ac2.set_config("bcc_self", "1")
 

@@ -162,6 +162,9 @@ def test_webxdc_message(acfactory, data, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
     chat = acfactory.get_accepted_chat(ac1, ac2)
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     lp.sec("ac1: prepare and send text message to ac2")
     msg1 = chat.send_text("message0")
     assert not msg1.is_webxdc()
@@ -362,6 +365,9 @@ def test_send_and_receive_message_markseen(acfactory, lp):
     # make DC's life harder wrt to encodings
     ac1.set_config("displayname", "ä name")
 
+    # Make sure that messages are not immediately auto-deleted on the server:
+    ac2.set_config("bcc_self", "1")
+
     # clear any fresh device messages
     ac1.get_device_chat().mark_noticed()
     ac2.get_device_chat().mark_noticed()
@@ -505,6 +511,9 @@ def test_mdn_asymmetric(acfactory, lp):
     # make sure mdns are enabled (usually enabled by default already)
     ac1.set_config("mdns_enabled", "1")
     ac2.set_config("mdns_enabled", "1")
+
+    # Make sure that the mdn is not immediately auto-deleted on the server::
+    ac1.set_config("bcc_self", "1")
 
     lp.sec("sending text message from ac1 to ac2")
     msg_out = chat.send_text("message1")
@@ -1073,7 +1082,7 @@ def test_send_receive_locations(acfactory, lp):
 
 def test_delete_multiple_messages(acfactory, lp):
     ac1, ac2 = acfactory.get_online_accounts(2)
-    # Make sure that messages are not immediately auto-deleted:
+    # Make sure that messages are not immediately auto-deleted on the server:
     ac2.set_config("bcc_self", "1")
     chat12 = acfactory.get_accepted_chat(ac1, ac2)
 
