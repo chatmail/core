@@ -623,19 +623,6 @@ impl Context {
         self.get_config_bool(Config::MdnsEnabled).await
     }
 
-    /// Gets configured "delete_server_after"
-    ///
-    /// `None` means never delete the message, `Some(0)` means delete
-    /// at once, `Some(x)` is never returned
-    // TODO rename and refactor
-    pub async fn get_config_delete_server_after(&self) -> Result<Option<i64>> {
-        let val = match !self.get_config_bool(Config::BccSelf).await? && self.is_chatmail().await? {
-            true => Some(0),
-            false => None,
-        };
-        Ok(val)
-    }
-
     /// Gets the configured provider.
     ///
     /// The provider is determined by the current primary transport.

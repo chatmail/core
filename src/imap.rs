@@ -1281,6 +1281,7 @@ impl Session {
         if request_uids.is_empty() {
             return Ok(());
         }
+        let is_chatmail = self.is_chatmail();
 
         for (request_uids, set) in build_sequence_sets(&request_uids)? {
             info!(context, "Starting UID FETCH of message set \"{}\".", set);
@@ -1379,6 +1380,29 @@ impl Session {
                     "Passing message UID {} to receive_imf().", request_uid
                 );
                 let res = receive_imf_inner(context, rfc724_mid, body, is_seen).await;
+
+                // If the message is not needed anymore on the server, mark it for deletion:
+                info!(
+                    context,
+                    "dbg Marking for deletion?: bcc_self={}, is_chatmail={}",
+                    context.get_config_bool(Config::BccSelf).await?,
+                    is_chatmail
+                );
+                if !context.get_config_bool(Config::BccSelf).await? && is_chatmail {
+                    info!(context, "dbg Marking {rfc724_mid} for deletion");
+                    context
+                        .sql
+                        .execute(
+                            &format!("UPDATE imap SET target='' WHERE rfc724_mid=?"),
+                            (rfc724_mid,),
+                        )
+                        .await?;
+                    context.scheduler.interrupt_inbox().await;
+                } else {
+                    info!(context, "dbg NOT marking {rfc724_mid} for deletion");
+                }
+
+                // If there was an error receiving the message, show a device message:
                 let received_msg = match res {
                     Err(err) => {
                         warn!(context, "receive_imf error: {err:#}.");

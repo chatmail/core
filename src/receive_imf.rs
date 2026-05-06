@@ -902,10 +902,12 @@ UPDATE config SET value=? WHERE keyname='configured_addr' AND value!=?1
     }
 
     // Get user-configured server deletion
-    let delete_server_after = context.get_config_delete_server_after().await?;
-
     if !received_msg.msg_ids.is_empty() {
-        let target = if received_msg.needs_delete_job || delete_server_after == Some(0) {
+        info!(
+            context,
+            "dbg Would mark for deletion previously: rfc724_mid={rfc724_mid}, rfc724_mid_orig={rfc724_mid_orig}"
+        );
+        let target = if received_msg.needs_delete_job {
             Some("".to_string())
         } else {
             None

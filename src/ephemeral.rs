@@ -61,7 +61,6 @@
 //! the database entries which are expired either according to their
 //! ephemeral message timers.
 
-use std::cmp::max;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::num::ParseIntError;
@@ -652,22 +651,6 @@ pub(crate) async fn ephemeral_loop(context: &Context, interrupt_receiver: Receiv
 #[expect(clippy::arithmetic_side_effects)]
 pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()> {
     let now = time();
-    // TODO if is_chatmail, but not bcc_self, then delete after downloading
-    // apart from this, we may be able to remove the delete_server_after part
-
-    let (threshold_timestamp, threshold_timestamp_extended) =
-        match context.get_config_delete_server_after().await? {
-            None => (0, 0),
-            Some(delete_server_after) => (
-                match delete_server_after {
-                    // Guarantee immediate deletion.
-                    0 => i64::MAX,
-                    _ => now - delete_server_after,
-                },
-                now - max(delete_server_after, 48 * 60 * 60),
-            ),
-        };
-
     context
         .sql
         .execute(
@@ -675,11 +658,9 @@ pub(crate) async fn delete_expired_imap_messages(context: &Context) -> Result<()
              SET target=''
              WHERE rfc724_mid IN (
                SELECT rfc724_mid FROM msgs
-               WHERE ((download_state = 0 AND timestamp < ?) OR
-                      (download_state != 0 AND timestamp < ?) OR
-                      (ephemeral_timestamp != 0 AND ephemeral_timestamp <= ?))
+               WHERE ephemeral_timestamp != 0 AND ephemeral_timestamp <= ?
              )",
-            (threshold_timestamp, threshold_timestamp_extended, now),
+            (now,),
         )
         .await?;
 
