@@ -14,6 +14,10 @@ def test_moved_markseen(acfactory, direct_imap, log):
     ac2.add_or_update_transport({"addr": addr, "password": password})
     ac2.bring_online()
 
+    # Make sure that messages are not immediately auto-deleted:
+    ac1.set_config("bcc_self", "1")
+    ac2.set_config("bcc_self", "1")
+
     log.section("ac2: creating DeltaChat folder")
     ac2_direct_imap = direct_imap(ac2)
     ac2_direct_imap.create_folder("DeltaChat")
