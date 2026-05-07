@@ -66,12 +66,6 @@ impl Context {
 
     /// Updates `quota.recent`, sets `quota.modified` to the current time
     /// and emits an event to let the UIs update connectivity view.
-    ///
-    /// Moreover, once each time quota gets larger than `QUOTA_WARN_THRESHOLD_PERCENTAGE`,
-    /// a device message is added.
-    /// As the message is added only once, the user is not spammed
-    /// in case for some providers the quota is always at ~100%
-    /// and new space is allocated as needed.
     pub(crate) async fn update_recent_quota(
         &self,
         session: &mut ImapSession,
