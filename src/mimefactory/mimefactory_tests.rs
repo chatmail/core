@@ -115,6 +115,7 @@ fn test_header_encoding() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_manually_set_subject() -> Result<()> {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
     let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
 
     let mut msg = Message::new(Viewtype::Text);
@@ -183,10 +184,12 @@ async fn test_subject_from_dc() {
 async fn test_subject_outgoing() {
     // 3. Send the first message to a new contact
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
 
     assert_eq!(first_subject_str(t).await, "Message from alice@example.org");
 
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
     t.set_config(Config::Displayname, Some("Alice"))
         .await
         .unwrap();
@@ -229,6 +232,7 @@ async fn test_subject_mdn() {
     let mut tcm = TestContextManager::new();
     let t = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    t.allow_unencrypted().await.unwrap();
     receive_imf(
         t,
         b"From: alice@example.org\r\n\
@@ -280,10 +284,12 @@ async fn test_subject_mdn() {
 async fn test_mdn_create_encrypted() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = tcm.alice().await;
+    alice.allow_unencrypted().await?;
     alice
         .set_config(Config::Displayname, Some("Alice Exampleorg"))
         .await?;
     let bob = tcm.bob().await;
+    bob.allow_unencrypted().await?;
     bob.set_config(Config::Displayname, Some("Bob Examplenet"))
         .await?;
     bob.set_config(Config::Selfstatus, Some("Bob Examplenet"))
@@ -577,6 +583,7 @@ async fn test_render_reply() {
 async fn test_selfavatar_unencrypted() -> anyhow::Result<()> {
     // create chat with bob, set selfavatar
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
     let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
 
     let file = t.dir.path().join("avatar.png");
@@ -622,6 +629,7 @@ async fn test_remove_member_bcc() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
+    alice.allow_unencrypted().await?;
 
     let alice_addr = alice.get_config(Config::Addr).await?.unwrap();
     let bob_addr = bob.get_config(Config::Addr).await?.unwrap();
@@ -665,6 +673,7 @@ async fn test_remove_member_bcc() -> Result<()> {
 async fn test_from_before_autocrypt() -> Result<()> {
     // create chat with bob
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
     let chat = t.create_chat_with_contact("bob", "bob@example.org").await;
 
     // send message to bob: that should get multipart/mixed because of the avatar moved to inner header;
@@ -808,6 +817,7 @@ async fn test_new_member_is_first_recipient() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_no_empty_to_header() -> Result<()> {
     let alice = &TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
     let mut self_chat = alice.get_self_chat().await;
     self_chat.param.remove(Param::Selftalk);
     self_chat.update_param(alice).await?;

@@ -451,6 +451,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         // alice receives a non-delta html-message
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
+        alice.allow_unencrypted().await?;
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
@@ -484,6 +485,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
 
         // bob: check that bob also got the html-part of the forwarded message
         let bob = &tcm.bob().await;
+        bob.allow_unencrypted().await?;
         let chat_bob = bob.create_chat_with_contact("", "alice@example.org").await;
         async fn check_receiver(ctx: &TestContext, chat: &Chat, sender: &TestContext) {
             let msg = ctx.recv_msg(&sender.pop_sent_msg().await).await;
@@ -523,6 +525,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_html_save_msg() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
+        alice.allow_unencrypted().await?;
         // Alice receives a non-delta html-message
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
@@ -554,6 +557,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
         let mut tcm = TestContextManager::new();
         // Alice receives a non-delta html-message
         let alice = &tcm.alice().await;
+        alice.allow_unencrypted().await.unwrap();
         let chat = alice
             .create_chat_with_contact("", "sender@testrun.org")
             .await;
@@ -619,6 +623,7 @@ test some special html-characters as &lt; &gt; and &amp; but also &quot; and &#x
     async fn test_cp1252_html() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = &tcm.alice().await;
+        alice.allow_unencrypted().await?;
         receive_imf(
             alice,
             include_bytes!("../test-data/message/cp1252-html.eml"),

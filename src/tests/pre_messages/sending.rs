@@ -180,9 +180,10 @@ async fn test_selfavatar_and_autocrypt_gossip_goto_pre_message() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_unecrypted_gets_no_pre_message() -> Result<()> {
+async fn test_unencrypted_gets_no_pre_message() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
+    alice.allow_unencrypted().await?;
 
     let chat = alice
         .create_chat_with_contact("example", "email@example.org")

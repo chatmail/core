@@ -521,6 +521,7 @@ mod test_chatlist_events {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_adhoc_group() -> Result<()> {
         let alice = TestContext::new_alice().await;
+        alice.allow_unencrypted().await?;
         let mime = br#"Subject: First thread
 Message-ID: first@example.org
 To: Alice <alice@example.org>, Bob <bob@example.net>

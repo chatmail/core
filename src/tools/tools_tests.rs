@@ -60,6 +60,7 @@ Hop: From: hq5.example.org; By: hq5.example.org; Date: Mon, 27 Dec 2021 11:21:22
 
 async fn check_parse_receive_headers_integration(raw: &[u8], expected: &str) {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
     let received = receive_imf(&t, raw, false).await.unwrap().unwrap();
 
     assert_eq!(received.msg_ids.len(), 1);

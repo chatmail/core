@@ -160,6 +160,7 @@ Sent with my Delta Chat Messenger: https://delta.chat";
         let mut tcm = TestContextManager::new();
         let bob = &tcm.bob().await;
         bob.set_config_bool(Config::IsChatmail, true).await?;
+        bob.allow_unencrypted().await?;
         let bob_chat_id = receive_imf(
             bob,
             b"From: alice@example.org\n\

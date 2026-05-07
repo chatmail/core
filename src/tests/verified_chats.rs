@@ -175,6 +175,7 @@ async fn test_degrade_verified_oneonone_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.allow_unencrypted().await?;
 
     mark_as_verified(alice, bob).await;
 
@@ -272,6 +273,7 @@ async fn test_outgoing_mua_msg() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.allow_unencrypted().await?;
 
     mark_as_verified(alice, bob).await;
     mark_as_verified(bob, alice).await;
@@ -333,6 +335,7 @@ async fn test_reply() -> Result<()> {
         let mut tcm = TestContextManager::new();
         let alice = tcm.alice().await;
         let bob = tcm.bob().await;
+        alice.allow_unencrypted().await?;
 
         if verified {
             mark_as_verified(&alice, &bob).await;

@@ -108,6 +108,8 @@ async fn test_unencrypted_quote_encrypted_message() -> Result<()> {
 
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.allow_unencrypted().await?;
+    bob.allow_unencrypted().await?;
 
     tcm.section("Bob sends encrypted message to Alice");
     let alice_chat = alice.create_chat(bob).await;
@@ -455,6 +457,7 @@ async fn test_get_state() -> Result<()> {
 async fn test_is_bot() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
+    alice.allow_unencrypted().await?;
 
     // Alice receives an auto-generated non-chat message.
     //
