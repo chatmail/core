@@ -4539,6 +4539,7 @@ pub async fn forward_msgs_2ctx(
 
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
+        msg.pre_rfc724_mid.clear();
         msg.timestamp_sort = curr_timestamp;
         chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
 

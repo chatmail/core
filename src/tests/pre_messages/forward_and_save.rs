@@ -1,4 +1,6 @@
 //! Tests about forwarding and saving Pre-Messages
+use std::time::Duration;
+
 use anyhow::Result;
 use pretty_assertions::assert_eq;
 
@@ -8,6 +10,7 @@ use crate::chatlist::get_last_message_for_chat;
 use crate::download::{DownloadState, PRE_MSG_ATTACHMENT_SIZE_THRESHOLD};
 use crate::message::{Message, Viewtype};
 use crate::test_utils::TestContextManager;
+use crate::tests::pre_messages::util::send_large_file_message;
 
 /// Test that forwarding Pre-Message should forward additional text to not be empty
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -83,6 +86,44 @@ async fn test_forwarding_pre_message_empty_text() -> Result<()> {
         " [test.bin – 976.56 KiB]".to_owned()
     );
 
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_receive_both() -> Result<()> {
+    let mut tcm = TestContextManager::new();
+    let alice = &tcm.alice().await;
+    let bob = &tcm.bob().await;
+    let alice_chat_id = alice.create_group_with_members("", &[bob]).await;
+
+    let (pre_message, post_message, alice_msg_id) =
+        send_large_file_message(alice, alice_chat_id, Viewtype::File, &vec![0u8; 200_000])
+            .await?;
+
+    let msg = bob.recv_msg(&pre_message).await;
+    let _ = bob.recv_msg_trash(&post_message).await;
+    let msg = Message::load_from_db(bob, msg.id).await?;
+    assert_eq!(msg.download_state(), DownloadState::Done);
+    assert_eq!(msg.text, "test".to_owned());
+
+    forward_msgs(alice, &[alice_msg_id], alice_chat_id).await?;
+    let rev_order = false;
+    let msg = bob
+        .recv_msg(
+            &alice
+                .pop_sent_msg_ex(rev_order, Duration::ZERO)
+                .await
+                .unwrap(),
+        )
+        .await;
+    assert_eq!(msg.download_state(), DownloadState::Available);
+    assert_eq!(msg.is_forwarded(), true);
+    assert_eq!(msg.text, "test".to_owned());
+    let _ = bob.recv_msg_trash(&alice.pop_sent_msg().await).await;
+    let msg = Message::load_from_db(bob, msg.id).await?;
+    assert_eq!(msg.download_state(), DownloadState::Done);
+    assert_eq!(msg.is_forwarded(), true);
+    assert_eq!(msg.text, "test".to_owned());
     Ok(())
 }
 
