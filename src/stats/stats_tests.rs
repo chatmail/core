@@ -488,11 +488,13 @@ async fn test_stats_key_creation_timestamp() -> Result<()> {
 
     // The key creation time's resolution is reduced in order to prevent deanonymization:
     const CENSORED_KEY_CREATION_TIME: u128 = 1584576000;
-    assert!(CENSORED_KEY_CREATION_TIME.is_multiple_of(KEY_CREATE_TIMESTAMP_RESOLUTION as u128));
-    assert!(CENSORED_KEY_CREATION_TIME > ALICE_KEY_CREATION_TIME);
+    assert!(CENSORED_KEY_CREATION_TIME.is_multiple_of(u128::from(KEY_CREATE_TIMESTAMP_RESOLUTION)));
+    const {
+        assert!(CENSORED_KEY_CREATION_TIME > ALICE_KEY_CREATION_TIME);
+    }
     assert!(
         CENSORED_KEY_CREATION_TIME - ALICE_KEY_CREATION_TIME
-            < KEY_CREATE_TIMESTAMP_RESOLUTION as u128
+            < u128::from(KEY_CREATE_TIMESTAMP_RESOLUTION)
     );
 
     let alice = &TestContext::new_alice().await;
