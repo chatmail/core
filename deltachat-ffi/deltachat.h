@@ -1465,7 +1465,7 @@ dc_chatlist_t*     dc_get_similar_chatlist   (dc_context_t* context, uint32_t ch
  * @param from_server Deprecated, pass 0 here
  * @param seconds Count messages older than the given number of seconds.
  * @return Number of messages that are older than the given number of seconds.
- *     Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
+ *     Messages in the "Saved Messages" chat are not counted as they will not be deleted automatically.
  */
 int             dc_estimate_deletion_cnt    (dc_context_t* context, int from_server, int64_t seconds);
 
