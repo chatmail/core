@@ -665,6 +665,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_search_single_chat() -> anyhow::Result<()> {
         let t = TestContext::new_alice().await;
+        t.allow_unencrypted().await?;
 
         // receive a one-to-one-message
         receive_imf(
@@ -725,6 +726,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_search_single_chat_without_authname() -> anyhow::Result<()> {
         let t = TestContext::new_alice().await;
+        t.allow_unencrypted().await?;
 
         // receive a one-to-one-message without authname set
         receive_imf(

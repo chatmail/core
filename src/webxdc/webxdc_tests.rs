@@ -687,7 +687,9 @@ async fn test_send_webxdc_status_update() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     alice.set_config_bool(Config::BccSelf, true).await?;
+    alice.allow_unencrypted().await?;
     let bob = &tcm.bob().await;
+    bob.allow_unencrypted().await?;
 
     // Alice sends an webxdc instance and a status update
     let alice_chat = alice.create_email_chat(bob).await;
@@ -753,6 +755,7 @@ async fn test_send_webxdc_status_update() -> Result<()> {
 
     // Alice has a second device and also receives messages there
     let alice2 = &tcm.alice().await;
+    alice2.allow_unencrypted().await?;
     alice2.recv_msg(sent1).await;
     alice2.recv_msg_trash(sent2).await;
     let alice2_instance = alice2.get_last_msg().await;

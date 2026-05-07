@@ -335,6 +335,7 @@ async fn test_add_or_lookup() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_contact_name_changes() -> Result<()> {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
 
     // first message creates contact and one-to-one-chat without name set
     receive_imf(
@@ -927,9 +928,12 @@ async fn test_synchronize_status() -> Result<()> {
     // Alice has two devices.
     let alice1 = &tcm.alice().await;
     let alice2 = &tcm.alice().await;
+    alice1.allow_unencrypted().await?;
+    alice2.allow_unencrypted().await?;
 
     // Bob has one device.
     let bob = &tcm.bob().await;
+    bob.allow_unencrypted().await?;
 
     let default_status = alice1.get_config(Config::Selfstatus).await?;
 
@@ -1083,6 +1087,7 @@ async fn test_was_seen_recently_event() -> Result<()> {
 async fn test_lookup_id_by_addr_recent_ex(accept_unencrypted_chat: bool) -> Result<()> {
     let mut tcm = TestContextManager::new();
     let bob = &tcm.bob().await;
+    bob.allow_unencrypted().await?;
 
     let raw = include_bytes!("../../test-data/message/thunderbird_with_autocrypt.eml");
     assert!(std::str::from_utf8(raw)?.contains("Date: Thu, 24 Nov 2022 20:05:57 +0100"));

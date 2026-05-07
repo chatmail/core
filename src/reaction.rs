@@ -811,6 +811,7 @@ Content-Disposition: reaction\n\
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_reaction_forwarded_summary() -> Result<()> {
         let alice = TestContext::new_alice().await;
+        alice.allow_unencrypted().await?;
 
         // Alice adds a message to "Saved Messages"
         let self_chat = alice.get_self_chat().await;

@@ -772,6 +772,7 @@ fn manipulate_qr(v3: bool, remove_invite: bool, qr: &mut String) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_adhoc_group_no_qr() -> Result<()> {
     let alice = TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
 
     let mime = br#"Subject: First thread
 Message-ID: first@example.org
@@ -1415,6 +1416,7 @@ async fn test_vc_request_encrypted_at_rest() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.allow_unencrypted().await?;
 
     let qr = get_securejoin_qr(alice, None).await?;
 

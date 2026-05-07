@@ -54,6 +54,7 @@ async fn receive_msg(t: &TestContext, chat: &Chat) {
 async fn test_get_fresh_msgs_and_muted_chats() {
     // receive various mails in 3 chats
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
     let bob = t.create_chat_with_contact("", "bob@g.it").await;
     let claire = t.create_chat_with_contact("", "claire@g.it").await;
     let dave = t.create_chat_with_contact("", "dave@g.it").await;
@@ -103,6 +104,7 @@ async fn test_get_fresh_msgs_and_muted_chats() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_get_fresh_msgs_and_muted_until() {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
     let bob = t.create_chat_with_contact("", "bob@g.it").await;
     receive_msg(&t, &bob).await;
     assert_eq!(get_chat_msgs(&t, bob.id).await.unwrap().len(), 1);
@@ -158,6 +160,7 @@ async fn test_get_fresh_msgs_and_muted_until() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_muted_context() -> Result<()> {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
     assert_eq!(t.get_fresh_msgs().await.unwrap().len(), 0);
     t.set_config(Config::IsMuted, Some("1")).await?;
     let chat = t.create_chat_with_contact("", "bob@g.it").await;
@@ -324,6 +327,7 @@ async fn test_get_info_completeness() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_search_msgs() -> Result<()> {
     let alice = TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
     let self_talk = ChatId::create_for_contact(&alice, ContactId::SELF).await?;
     let chat = alice
         .create_chat_with_contact("Bob", "bob@example.org")
@@ -430,6 +434,7 @@ async fn test_search_unaccepted_requests() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_limit_search_msgs() -> Result<()> {
     let alice = TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
     let chat = alice
         .create_chat_with_contact("Bob", "bob@example.org")
         .await;

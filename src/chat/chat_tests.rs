@@ -1386,6 +1386,7 @@ async fn test_markfresh_chat() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_archive_fresh_msgs() -> Result<()> {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
 
     async fn msg_from(t: &TestContext, name: &str, num: u32) -> Result<()> {
         receive_imf(
@@ -1918,6 +1919,7 @@ async fn test_marknoticed_chat() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_contact_request_fresh_messages() -> Result<()> {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await?;
 
     let chats = Chatlist::try_load(&t, 0, None, None).await?;
     assert_eq!(chats.len(), 0);
@@ -2013,6 +2015,7 @@ async fn test_contact_request_archive() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_classic_email_chat() -> Result<()> {
     let alice = TestContext::new_alice().await;
+    alice.allow_unencrypted().await?;
 
     // Alice receives a classic (non-chat) message from Bob.
     receive_imf(
@@ -2566,6 +2569,7 @@ async fn test_forward_encrypted_to_unencrypted() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
+    bob.allow_unencrypted().await?;
 
     let txt = "This should be encrypted";
     let sent = alice.send_text(alice.create_chat(bob).await.id, txt).await;
@@ -4702,6 +4706,7 @@ async fn test_sync_adhoc_grp() -> Result<()> {
     let alice1 = &tcm.alice().await;
     for a in [alice0, alice1] {
         a.set_config_bool(Config::SyncMsgs, true).await?;
+        a.allow_unencrypted().await?;
     }
 
     let mut chat_ids = Vec::new();
@@ -5642,6 +5647,7 @@ async fn test_restore_backup_after_60_days() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_one_to_one_chat_no_group_member_timestamps() {
     let t = TestContext::new_alice().await;
+    t.allow_unencrypted().await.unwrap();
     let chat = t.create_chat_with_contact("bob", "bob@example.com").await;
     let sent = t.send_text(chat.id, "Hi!").await;
     let payload = sent.payload;
@@ -5855,6 +5861,7 @@ async fn test_send_delete_request_no_encryption() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
+    alice.allow_unencrypted().await?;
     let alice_chat = alice.create_email_chat(bob).await;
 
     // Alice sends a message, then tries to send a deletion request which fails.
@@ -6073,6 +6080,7 @@ async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
     let alice = &tcm.alice().await;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
+    alice.allow_unencrypted().await?;
 
     let chat_id = receive_imf(
         alice,
@@ -6108,6 +6116,7 @@ async fn test_no_key_contacts_in_adhoc_chats() -> Result<()> {
 async fn test_create_unencrypted_group_chat() -> Result<()> {
     let mut tcm = TestContextManager::new();
     let alice = &tcm.alice().await;
+    alice.allow_unencrypted().await?;
     let bob = &tcm.bob().await;
     let charlie = &tcm.charlie().await;
 

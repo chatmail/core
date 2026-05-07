@@ -1229,6 +1229,13 @@ ORDER BY id"
             .await
             .unwrap();
     }
+
+    /// Allow reception of unencrypted messages.
+    #[expect(clippy::unused_async)]
+    pub async fn allow_unencrypted(&self) -> Result<()> {
+        // Does nothing for now.
+        Ok(())
+    }
 }
 
 pub async fn encrypt_raw_message(

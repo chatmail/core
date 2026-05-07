@@ -402,6 +402,7 @@ mod tests {
         assert!(get_attachment_mime(&mail).is_some());
 
         let bob = TestContext::new_bob().await;
+        bob.allow_unencrypted().await?;
         receive_imf(&bob, attachment_mime, false).await?;
         let msg = bob.get_last_msg().await;
         // Subject should be prepended because the attachment doesn't have "Chat-Version".
@@ -416,6 +417,7 @@ mod tests {
         // Desktop via MS Exchange (actually made with TB though).
         let mixed_up_mime = include_bytes!("../test-data/message/mixed-up-long.eml");
         let bob = TestContext::new_bob().await;
+        bob.allow_unencrypted().await?;
         receive_imf(&bob, mixed_up_mime, false).await?;
         let msg = bob.get_last_msg().await;
         assert!(!msg.get_text().is_empty());

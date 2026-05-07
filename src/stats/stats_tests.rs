@@ -151,6 +151,7 @@ async fn test_message_stats() -> Result<()> {
     alice
         .set_config_internal(Config::StatsSending, Some("1"))
         .await?;
+    alice.allow_unencrypted().await?;
     let email_chat = alice.create_email_chat(bob).await;
     let encrypted_chat = alice.create_chat(bob).await;
 
