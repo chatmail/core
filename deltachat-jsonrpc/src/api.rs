@@ -741,7 +741,7 @@ impl CommandApi {
     /// This is typically used to show the estimated impact to the user
     /// before actually enabling deletion of old messages.
     ///
-    /// Messages in the "saved messages" folder are not counted as they will not be deleted automatically.
+    /// Messages in the "Saved Messages" chat are not counted as they will not be deleted automatically.
     ///
     /// Parameters:
     /// - `from_server`: Deprecated, pass `false` here
