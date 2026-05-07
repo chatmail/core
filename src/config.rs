@@ -486,6 +486,13 @@ pub enum Config {
     /// Experimental option denoting that the current profile is shared between multiple team members.
     /// For now, the only effect of this option is that seen flags are not synchronized.
     TeamProfile,
+
+    /// Force encryption.
+    ///
+    /// When enabled, unencrypted messages cannot be sent
+    /// and incoming unencrypted messages are not fetched and not processed.
+    #[strum(props(default = "1"))]
+    ForceEncryption,
 }
 
 impl Config {
@@ -501,7 +508,11 @@ impl Config {
     pub(crate) fn is_synced(&self) -> bool {
         matches!(
             self,
-            Self::Displayname | Self::MdnsEnabled | Self::Selfavatar | Self::Selfstatus,
+            Self::Displayname
+                | Self::MdnsEnabled
+                | Self::Selfavatar
+                | Self::Selfstatus
+                | Self::ForceEncryption,
         )
     }
 

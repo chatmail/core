@@ -109,9 +109,11 @@ pub async fn ensure_secret_key_exists(context: &Context) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chat;
     use crate::chat::send_text_msg;
     use crate::config::Config;
     use crate::message::Message;
+    use crate::mimeparser::SystemMessage;
     use crate::receive_imf::receive_imf;
     use crate::test_utils::{TestContext, TestContextManager};
 
@@ -153,6 +155,28 @@ Sent with my Delta Chat Messenger: https://delta.chat";
             mail.get_body().unwrap().starts_with(
                 "sidenote for all: things are trick atm recommend not to try to run with desktop or ios unless you are ready to hunt bugs")
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_cannot_send_unencrypted_by_default() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let bob = &tcm.bob().await;
+        let chat = alice.create_email_chat(bob).await;
+
+        let mut msg = Message::new_text("Hello!".to_string());
+        assert!(chat::send_msg(alice, chat.id, &mut msg).await.is_err());
+        assert_eq!(
+            msg.error().unwrap(),
+            "\u{26a0}\u{fe0f} Your email provider example.org requires end-to-end encryption which is not setup yet."
+        );
+        let info_msg = alice.get_last_msg().await;
+        assert_eq!(
+            info_msg.get_info_type(),
+            SystemMessage::InvalidUnencryptedMail
+        );
+
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

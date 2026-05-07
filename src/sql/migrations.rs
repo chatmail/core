@@ -17,7 +17,7 @@ use crate::key::DcKey;
 use crate::log::warn;
 use crate::provider::get_provider_info;
 use crate::sql::Sql;
-use crate::tools::{Time, inc_and_check, time_elapsed};
+use crate::tools::{self, Time, inc_and_check, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 
 const DBVERSION: i32 = 68;
@@ -2380,6 +2380,55 @@ ALTER TABLE contacts ADD COLUMN name_normalized TEXT;
 UPDATE msgs SET state=26 WHERE state=28; -- Change OutMdnRcvd to OutDelivered.
 UPDATE msgs SET state=24 WHERE state=18; -- Change OutPreparing to OutFailed.
             ",
+            migration_version,
+        )
+        .await?;
+    }
+
+    inc_and_check(&mut migration_version, 153)?;
+    if dbversion < migration_version {
+        sql.execute_migration_transaction(
+            |transaction| {
+                // Newest timestamp of message sent to unencrypted chat with contacts.
+                // This is for 1:1 chats and ad hoc groups.
+                //
+                // Corner case of ad hoc groups with only self as a member is ignored.
+                let max_unencrypted_timestamp: i64 = transaction.query_row(
+                    "SELECT IFNULL(MAX(msgs.timestamp), 0)
+                     FROM msgs
+                     INNER JOIN chats_contacts
+                             ON chats_contacts.chat_id = msgs.chat_id
+                     INNER JOIN contacts
+                             ON chats_contacts.contact_id = contacts.id
+                     WHERE contacts.id > 9
+                       AND contacts.fingerprint = ''
+                    ", (),
+                    |row| row.get(0)
+                 ).context("Failed to select largest unencrypted message timestamp")?;
+
+                // Find the newest unencrypted mailing list message.
+                // Mailing lists have only self-contact as a member,
+                // so we look for them separately.
+                let max_mailing_list_timestamp: i64 =
+                transaction.query_row(
+                    "SELECT IFNULL(MAX(msgs.timestamp), 0)
+                     FROM msgs
+                     INNER JOIN chats ON chats.id = msgs.chat_id
+                     WHERE chats.type = 140",
+                     (), |row| row.get(0)).context("Failed to select largest mailing list timestamp")?;
+
+                let now = tools::time();
+                let max_unencrypted_timestamp = std::cmp::max(max_unencrypted_timestamp, max_mailing_list_timestamp);
+                if max_unencrypted_timestamp.saturating_add(3600 * 24 * 90) > now {
+                    // There are recent active unencrypted chats, don't enforce encryption.
+                    // Otherwise `force_encryption` is enabled by default.
+                    transaction
+                        .execute(
+                            "INSERT OR REPLACE INTO config (keyname, value) VALUES ('force_encryption', '0')", ()
+                        )?;
+                }
+                Ok(())
+            },
             migration_version,
         )
         .await?;

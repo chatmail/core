@@ -487,6 +487,7 @@ char*           dc_get_blobdir               (const dc_context_t* context);
  *                       0 = Everybody (except explicitly blocked contacts),
  *                       1 = Contacts (default, does not include contact requests),
  *                       2 = Nobody (calls never result in a notification).
+ * - `force_encryption` = 1 (default) to force encryption, 0 to allow unencrypted messages.
  *
  * Also, there are configs that are only needed
  * if you want to use the deprecated dc_configure() API, such as:
