@@ -810,4 +810,23 @@ mod tests {
         assert_eq!(msg.text, "Member Me added by alice@example.org.");
         Ok(())
     }
+
+    /// Tests that "force encryption" setting is synced.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_sync_force_encryption() -> Result<()> {
+        let mut tcm = TestContextManager::new();
+        let alice = &tcm.alice().await;
+        let alice2 = &tcm.alice().await;
+        alice.set_config_bool(Config::SyncMsgs, true).await?;
+        alice2.set_config_bool(Config::SyncMsgs, true).await?;
+
+        assert_eq!(alice.get_config_bool(Config::ForceEncryption).await?, true);
+        alice2
+            .set_config_bool(Config::ForceEncryption, false)
+            .await?;
+        test_utils::sync(alice2, alice).await;
+        assert_eq!(alice.get_config_bool(Config::ForceEncryption).await?, false);
+
+        Ok(())
+    }
 }

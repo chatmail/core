@@ -87,6 +87,7 @@ def test_delivery_status_failed(acfactory: ACFactory) -> None:
     Test change status on chatlistitem when status changes failed
     """
     (alice,) = acfactory.get_online_accounts(1)
+    alice.set_config("force_encryption", "0")
 
     invalid_contact = alice.create_contact("example@example.com", "invalid address")
     invalid_chat = alice.get_chat_by_id(alice._rpc.create_chat_by_contact_id(alice.id, invalid_contact.id))

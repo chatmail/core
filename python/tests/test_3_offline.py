@@ -153,7 +153,8 @@ class TestOfflineContact:
 
     def test_delete_referenced_contact_hides_contact(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
-        contact1 = ac1.create_contact("some1@example.com", name="some1")
+        ac2 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
         msg = contact1.create_chat().send_text("one message")
         assert ac1.delete_contact(contact1)
         assert not msg.filemime
@@ -185,8 +186,9 @@ class TestOfflineChat:
         return acfactory.get_pseudo_configured_account()
 
     @pytest.fixture()
-    def chat1(self, ac1):
-        return ac1.create_contact("some1@example.org", name="some1").create_chat()
+    def chat1(self, ac1, acfactory):
+        ac2 = acfactory.get_pseudo_configured_account()
+        return ac1.create_contact(ac2).create_chat()
 
     def test_display(self, chat1):
         str(chat1)
@@ -404,7 +406,7 @@ class TestOfflineChat:
         contact2 = ac1.create_contact("display1 <x@example.org>", "real")
         assert contact2.name == "real"
 
-    def test_send_lots_of_offline_msgs(self, acfactory):
+    def test_send_lots_of_offline_msgs(self, acfactory, chat1):
         ac1 = acfactory.get_pseudo_configured_account()
         ac1.set_config("configured_mail_server", "example.org")
         ac1.set_config("configured_mail_user", "example.org")
@@ -413,13 +415,13 @@ class TestOfflineChat:
         ac1.set_config("configured_send_user", "example.org")
         ac1.set_config("configured_send_pw", "example.org")
         ac1.start_io()
-        chat = ac1.create_contact("some1@example.org", name="some1").create_chat()
         for i in range(50):
-            chat.send_text("hello")
+            chat1.send_text("hello")
 
     def test_create_chat_simple(self, acfactory):
         ac1 = acfactory.get_pseudo_configured_account()
-        contact1 = ac1.create_contact("some1@example.org", name="some1")
+        ac2 = acfactory.get_pseudo_configured_account()
+        contact1 = ac1.create_contact(ac2)
         contact1.create_chat().send_text("hello")
 
     def test_chat_message_distinctions(self, ac1, chat1):

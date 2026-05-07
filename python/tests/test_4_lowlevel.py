@@ -152,7 +152,8 @@ def test_sig():
 
 def test_markseen_invalid_message_ids(acfactory):
     ac1 = acfactory.get_pseudo_configured_account()
-    contact1 = ac1.create_contact("some1@example.com", name="some1")
+    ac2 = acfactory.get_pseudo_configured_account()
+    contact1 = ac1.create_contact(ac2)
     chat = contact1.create_chat()
     chat.send_text("one message")
     ac1._evtracker.get_matching("DC_EVENT_MSGS_CHANGED")

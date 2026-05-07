@@ -2823,7 +2823,12 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
             .await?;
     }
 
-    let needs_encryption = msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default();
+    let needs_encryption = msg.param.get_bool(Param::GuaranteeE2ee).unwrap_or_default()
+        || (!msg
+            .param
+            .get_bool(Param::ForcePlaintext)
+            .unwrap_or_default()
+            && context.get_config_bool(Config::ForceEncryption).await?);
     let mimefactory = match MimeFactory::from_msg(context, msg.clone()).await {
         Ok(mf) => mf,
         Err(err) => {
@@ -2890,11 +2895,26 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
     }
 
     if needs_encryption && !rendered_msg.is_encrypted {
-        /* unrecoverable */
-        message::set_msg_failed(
+        let addr = context.get_config(Config::ConfiguredAddr).await?;
+        let text = stock_str::unencrypted_email(
             context,
-            msg,
-            "End-to-end-encryption unavailable unexpectedly.",
+            addr.unwrap_or_default()
+                .split('@')
+                .nth(1)
+                .unwrap_or_default(),
+        )
+        .await;
+        message::set_msg_failed(context, msg, &text).await?;
+        add_info_msg_with_cmd(
+            context,
+            msg.chat_id,
+            &text,
+            SystemMessage::InvalidUnencryptedMail,
+            Some(msg.timestamp_sort),
+            msg.timestamp_sort,
+            None,
+            None,
+            None,
         )
         .await?;
         bail!(

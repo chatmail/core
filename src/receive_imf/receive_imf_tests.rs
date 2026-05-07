@@ -4494,12 +4494,12 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     imex(alice, ImexMode::ExportSelfKeys, export_dir.path(), None).await?;
     // We need Bob only to encrypt the forged message to Alice's key, actually Bob doesn't
     // participate in the scenario.
-    let bob = &TestContext::new().await;
+    let bob = &tcm.unconfigured().await;
     assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 0);
     bob.configure_addr("bob@example.net").await;
     imex(bob, ImexMode::ImportSelfKeys, export_dir.path(), None).await?;
     assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
-    let malice = &TestContext::new().await;
+    let malice = &tcm.unconfigured().await;
     malice.configure_addr(alice_addr).await;
 
     let malice_chat_id = tcm
@@ -4509,9 +4509,8 @@ async fn test_outgoing_msg_forgery() -> Result<()> {
     assert_eq!(crate::key::load_self_secret_keyring(bob).await?.len(), 1);
 
     let sent_msg = malice.send_text(malice_chat_id, "hi from malice").await;
-    let msg = alice.recv_msg(&sent_msg).await;
-    assert_eq!(msg.state, MessageState::OutDelivered);
-    assert!(!msg.get_showpadlock());
+    let msg = alice.recv_msg_opt(&sent_msg).await;
+    assert!(msg.is_none());
 
     Ok(())
 }

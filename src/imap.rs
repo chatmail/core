@@ -1994,12 +1994,26 @@ pub(crate) async fn prefetch_should_download(
     // prevent_rename=true as this might be a mailing list message and in this case it would be bad if we rename the contact.
     // (prevent_rename is the last argument of from_field_to_contact_id())
 
+    // New SecureJoin is fully encrypted,
+    // but for compatibility we still download legacy `Secure-Join: vc-request` messages.
+    let is_legacy_securejoin = headers.get_header_value(HeaderDef::SecureJoin).is_some();
+
+    let is_encrypted = headers
+        .get_header_value(HeaderDef::ContentType)
+        .is_some_and(|content_type| {
+            mailparse::parse_content_type(&content_type).mimetype == "multipart/encrypted"
+        });
+
     if flags.any(|f| f == Flag::Draft) {
         info!(context, "Ignoring draft message");
         return Ok(false);
     }
 
-    let should_download = !blocked_contact || maybe_ndn;
+    let should_download = maybe_ndn
+        || (!blocked_contact
+            && (is_legacy_securejoin
+                || is_encrypted
+                || !context.get_config_bool(Config::ForceEncryption).await?));
     Ok(should_download)
 }
 

@@ -1231,9 +1231,8 @@ ORDER BY id"
     }
 
     /// Allow reception of unencrypted messages.
-    #[expect(clippy::unused_async)]
     pub async fn allow_unencrypted(&self) -> Result<()> {
-        // Does nothing for now.
+        self.set_config_bool(Config::ForceEncryption, false).await?;
         Ok(())
     }
 }

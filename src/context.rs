@@ -1056,6 +1056,12 @@ impl Context {
             "team_profile",
             self.get_config_bool(Config::TeamProfile).await?.to_string(),
         );
+        res.insert(
+            "force_encryption",
+            self.get_config_bool(Config::ForceEncryption)
+                .await?
+                .to_string(),
+        );
 
         let elapsed = time_elapsed(&self.creation_time);
         res.insert("uptime", duration_to_str(elapsed));
