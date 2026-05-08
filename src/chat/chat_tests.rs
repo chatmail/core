@@ -3444,7 +3444,7 @@ async fn test_chat_description(
         "ä ẟ 😂",
     ] {
         tcm.section(&format!(
-            "Alice sets the chat description to '{description}'"
+            "Alice sets the chat description to {description:?}"
         ));
         set_chat_description(alice, alice_chat_id, description).await?;
         let sent = alice.pop_sent_msg().await;
