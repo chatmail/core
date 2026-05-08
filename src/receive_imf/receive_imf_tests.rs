@@ -4059,6 +4059,8 @@ async fn test_delayed_removal_is_ignored() -> Result<()> {
     remove_contact_from_chat(bob, bob_chat_id, bob_contact_fiona).await?;
     let remove_msg = bob.pop_sent_msg().await;
 
+    SystemTime::shift(Duration::from_secs(1));
+
     // Bob adds new members Dom and Elena, but first addition message is lost.
     let dom = &tcm.dom().await;
     let elena = &tcm.elena().await;
@@ -4074,6 +4076,8 @@ async fn test_delayed_removal_is_ignored() -> Result<()> {
     // and removal of Fiona.
     alice.recv_msg(&add_msg).await;
     assert_eq!(get_chat_contacts(alice, chat_id).await?.len(), 4);
+
+    SystemTime::shift(Duration::from_secs(1));
 
     // Alice re-adds Fiona.
     add_contact_to_chat(alice, chat_id, alice_fiona).await?;

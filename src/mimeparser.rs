@@ -31,9 +31,7 @@ use crate::message::{self, Message, MsgId, Viewtype, get_vcard_summary, set_msg_
 use crate::param::{Param, Params};
 use crate::simplify::{SimplifiedText, simplify};
 use crate::sync::SyncItems;
-use crate::tools::{
-    get_filemeta, parse_receive_headers, smeared_time, time, truncate_msg_text, validate_id,
-};
+use crate::tools::{get_filemeta, parse_receive_headers, time, truncate_msg_text, validate_id};
 use crate::{chatlist_events, location, tools};
 
 /// Public key extracted from `Autocrypt-Gossip`
@@ -271,7 +269,7 @@ impl MimeMessage {
     pub(crate) async fn from_bytes(context: &Context, body: &[u8]) -> Result<Self> {
         let mail = mailparse::parse_mail(body)?;
 
-        let timestamp_rcvd = smeared_time(context);
+        let timestamp_rcvd = time();
         let mut timestamp_sent =
             Self::get_timestamp_sent(&mail.headers, timestamp_rcvd, timestamp_rcvd);
         let hop_info = parse_receive_headers(&mail.get_headers());

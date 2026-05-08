@@ -50,8 +50,8 @@ use crate::stock_str;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{
     IsNoneOrEmpty, SystemTime, buf_compress, create_broadcast_secret, create_id,
-    create_outgoing_rfc724_mid, create_smeared_timestamp, create_smeared_timestamps, get_abs_path,
-    gm2local_offset, normalize_text, smeared_time, time, truncate_msg_text,
+    create_outgoing_rfc724_mid, get_abs_path, gm2local_offset, normalize_text, time,
+    truncate_msg_text,
 };
 use crate::webxdc::StatusUpdateSerial;
 
@@ -292,7 +292,7 @@ impl ChatId {
         timestamp: i64,
     ) -> Result<Self> {
         let grpname = sanitize_single_line(grpname);
-        let timestamp = cmp::min(timestamp, smeared_time(context));
+        let timestamp = cmp::min(timestamp, time());
         let row_id =
             context.sql.insert(
                 "INSERT INTO chats (type, name, name_normalized, grpid, blocked, created_timestamp, protected, param) VALUES(?, ?, ?, ?, ?, ?, 0, ?)",
@@ -1256,7 +1256,7 @@ SELECT id, rfc724_mid, pre_rfc724_mid, timestamp, ?, 1 FROM msgs WHERE chat_id=?
         message_timestamp: i64,
         always_sort_to_bottom: bool,
     ) -> Result<i64> {
-        let mut sort_timestamp = cmp::min(message_timestamp, smeared_time(context));
+        let mut sort_timestamp = cmp::min(message_timestamp, time());
 
         let last_msg_time: Option<i64> = if always_sort_to_bottom {
             // get newest message for this chat
@@ -2405,7 +2405,7 @@ impl ChatIdBlocked {
             _ => (),
         }
 
-        let smeared_time = create_smeared_timestamp(context);
+        let now = time();
 
         let chat_id = context
             .sql
@@ -2420,7 +2420,7 @@ impl ChatIdBlocked {
                         normalize_text(&chat_name),
                         params.to_string(),
                         create_blocked as u8,
-                        smeared_time,
+                        now,
                     ),
                 )?;
                 let chat_id = ChatId::new(
@@ -2446,7 +2446,7 @@ impl ChatIdBlocked {
             && !chat.param.exists(Param::Devicetalk)
             && !chat.param.exists(Param::Selftalk)
         {
-            chat_id.add_e2ee_notice(context, smeared_time).await?;
+            chat_id.add_e2ee_notice(context, now).await?;
         }
 
         Ok(Self {
@@ -2730,7 +2730,7 @@ async fn prepare_send_msg(
     }
     msg.state = MessageState::OutPending;
 
-    msg.timestamp_sort = create_smeared_timestamp(context);
+    msg.timestamp_sort = time();
     prepare_msg_blob(context, msg).await?;
     if !msg.hidden {
         chat_id.unarchive_if_not_muted(context, msg.state).await?;
@@ -2924,7 +2924,7 @@ pub(crate) async fn create_send_msg_jobs(context: &Context, msg: &mut Message) -
         );
     }
 
-    let now = smeared_time(context);
+    let now = time();
 
     if rendered_msg.last_added_location_id.is_some()
         && let Err(err) = location::set_kml_sent_timestamp(context, msg.chat_id, now).await
@@ -3566,7 +3566,7 @@ pub(crate) async fn create_group_ex(
         chat_name = "…".to_string();
     }
 
-    let timestamp = create_smeared_timestamp(context);
+    let timestamp = time();
     let row_id = context
         .sql
         .insert(
@@ -3649,7 +3649,7 @@ pub(crate) async fn create_out_broadcast_ex(
         bail!("Invalid broadcast channel name: {chat_name}.");
     }
 
-    let timestamp = create_smeared_timestamp(context);
+    let timestamp = time();
     let trans_fn = |t: &mut rusqlite::Transaction| -> Result<ChatId> {
         let cnt: u32 = t.query_row(
             "SELECT COUNT(*) FROM chats WHERE grpid=?",
@@ -3907,11 +3907,11 @@ pub(crate) async fn add_contact_to_chat_ex(
         return Ok(false);
     }
     if from_handshake && chat.param.get_int(Param::Unpromoted).unwrap_or_default() == 1 {
-        let smeared_time = smeared_time(context);
+        let now = time();
         chat.param
             .remove(Param::Unpromoted)
-            .set_i64(Param::GroupNameTimestamp, smeared_time)
-            .set_i64(Param::GroupDescriptionTimestamp, smeared_time);
+            .set_i64(Param::GroupNameTimestamp, now)
+            .set_i64(Param::GroupDescriptionTimestamp, now);
         chat.update_param(context).await?;
     }
     if context.is_self_addr(contact.get_addr()).await? {
@@ -4477,7 +4477,6 @@ pub async fn forward_msgs(context: &Context, msg_ids: &[MsgId], chat_id: ChatId)
 }
 
 /// Forwards multiple messages to a chat in another context.
-#[expect(clippy::arithmetic_side_effects)]
 pub async fn forward_msgs_2ctx(
     ctx_src: &Context,
     msg_ids: &[MsgId],
@@ -4488,7 +4487,6 @@ pub async fn forward_msgs_2ctx(
     ensure!(!chat_id.is_special(), "can not forward to special chat");
 
     let mut created_msgs: Vec<MsgId> = Vec::new();
-    let mut curr_timestamp: i64;
 
     chat_id
         .unarchive_if_not_muted(ctx_dst, MessageState::Undefined)
@@ -4497,7 +4495,7 @@ pub async fn forward_msgs_2ctx(
     if let Some(reason) = chat.why_cant_send(ctx_dst).await? {
         bail!("cannot send to {chat_id}: {reason}");
     }
-    curr_timestamp = create_smeared_timestamps(ctx_dst, msg_ids.len());
+    let now = time();
     let mut msgs = Vec::with_capacity(msg_ids.len());
     for id in msg_ids {
         let ts: i64 = ctx_src
@@ -4562,10 +4560,9 @@ pub async fn forward_msgs_2ctx(
         msg.state = MessageState::OutPending;
         msg.rfc724_mid = create_outgoing_rfc724_mid();
         msg.pre_rfc724_mid.clear();
-        msg.timestamp_sort = curr_timestamp;
+        msg.timestamp_sort = now;
         chat.prepare_msg_raw(ctx_dst, &mut msg, None).await?;
 
-        curr_timestamp += 1;
         if !create_send_msg_jobs(ctx_dst, &mut msg).await?.is_empty() {
             ctx_dst.scheduler.interrupt_smtp().await;
         }
@@ -4658,7 +4655,7 @@ pub(crate) async fn save_copy_in_self_talk(
                 } else {
                     MessageState::InSeen
                 },
-                create_smeared_timestamp(context),
+                time(),
                 msg.param.to_string(),
                 src_msg_id,
                 src_msg_id,
@@ -4835,7 +4832,7 @@ pub async fn add_device_msg_with_importance(
         chat_id = ChatId::get_for_contact(context, ContactId::DEVICE).await?;
 
         let rfc724_mid = create_outgoing_rfc724_mid();
-        let timestamp_sent = create_smeared_timestamp(context);
+        let timestamp_sent = time();
 
         // makes sure, the added message is the last one,
         // even if the date is wrong (useful esp. when warning about bad dates)
@@ -4982,7 +4979,7 @@ pub(crate) async fn add_info_msg_with_cmd(
     } else {
         let sort_to_bottom = true;
         chat_id
-            .calc_sort_timestamp(context, smeared_time(context), sort_to_bottom)
+            .calc_sort_timestamp(context, time(), sort_to_bottom)
             .await?
     };
 
@@ -5145,7 +5142,7 @@ async fn set_contacts_by_fingerprints(
             Ok(broadcast_contacts_added)
         })
         .await?;
-    let timestamp = smeared_time(context);
+    let timestamp = time();
     for added_id in broadcast_contacts_added {
         let msg = stock_str::msg_add_member_local(context, added_id, ContactId::UNDEFINED).await;
         add_info_msg_with_cmd(

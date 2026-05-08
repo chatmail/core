@@ -180,29 +180,6 @@ pub(crate) fn gm2local_offset() -> i64 {
     i64::from(lt.offset().local_minus_utc())
 }
 
-/// Returns the current smeared timestamp,
-///
-/// The returned timestamp MAY NOT be unique and MUST NOT go to "Date" header.
-pub(crate) fn smeared_time(context: &Context) -> i64 {
-    let now = time();
-    let ts = context.smeared_timestamp.current();
-    std::cmp::max(ts, now)
-}
-
-/// Returns a timestamp that is guaranteed to be unique.
-pub(crate) fn create_smeared_timestamp(context: &Context) -> i64 {
-    let now = time();
-    context.smeared_timestamp.create(now)
-}
-
-// creates `count` timestamps that are guaranteed to be unique.
-// the first created timestamps is returned directly,
-// get the other timestamps just by adding 1..count-1
-pub(crate) fn create_smeared_timestamps(context: &Context, count: usize) -> i64 {
-    let now = time();
-    context.smeared_timestamp.create_n(now, count as i64)
-}
-
 /// Returns the last release timestamp as a unix timestamp compatible for comparison with time() and
 /// database times.
 pub fn get_release_timestamp() -> i64 {

@@ -19,7 +19,7 @@ use crate::securejoin::{
 };
 use crate::stock_str;
 use crate::sync::Sync::*;
-use crate::tools::{create_outgoing_rfc724_mid, smeared_time, time};
+use crate::tools::{create_outgoing_rfc724_mid, time};
 use crate::{chatlist_events, mimefactory};
 
 /// Starts the securejoin protocol with the QR `invite`.
@@ -465,7 +465,7 @@ async fn joining_chat_id(
                         name,
                         Blocked::Not,
                         None,
-                        smeared_time(context),
+                        time(),
                     )
                     .await?
                 }

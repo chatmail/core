@@ -46,7 +46,7 @@ use crate::mimefactory::RECOMMENDED_FILE_SIZE;
 use crate::mimeparser::SystemMessage;
 use crate::param::Param;
 use crate::param::Params;
-use crate::tools::{create_id, create_smeared_timestamp, get_abs_path};
+use crate::tools::{create_id, get_abs_path, time};
 
 /// The current API version.
 /// If `min_api` in manifest.toml is set to a larger value,
@@ -558,7 +558,7 @@ impl Context {
             .create_status_update_record(
                 &instance,
                 status_update,
-                create_smeared_timestamp(self),
+                time(),
                 send_now,
                 ContactId::SELF,
             )
