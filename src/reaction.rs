@@ -243,7 +243,7 @@ pub(crate) async fn set_msg_reaction(
     timestamp: i64,
     reaction: Reaction,
     is_incoming_fresh: bool,
-) -> Result<()> {
+) -> Result<bool> {
     if let Some(msg_id) = rfc724_mid_exists(context, in_reply_to).await? {
         set_msg_id_reaction(context, msg_id, chat_id, contact_id, timestamp, &reaction).await?;
 
@@ -258,12 +258,14 @@ pub(crate) async fn set_msg_reaction(
                 reaction,
             });
         }
+        Ok(true)
     } else {
-        bail!(
-            "Can't assign reaction to unknown message with Message-ID {in_reply_to} (SKIP_DEVICE_MSG)"
+        info!(
+            context,
+            "Can't assign reaction to unknown message with Message-ID {}", in_reply_to
         );
+        Ok(false)
     }
-    Ok(())
 }
 
 /// Returns a structure containing all reactions to the message.
@@ -537,7 +539,7 @@ Content-Disposition: reaction\n\
             .as_bytes();
         // Alice receives a reaction to Claire's message from Bob earler than the message itself
         // because Bob knows about Alice's new transport.
-        assert!(receive_imf(alice, reaction_bytes, false).await.is_err());
+        receive_imf(alice, reaction_bytes, false).await?;
 
         let msg_id = receive_imf(
             alice,

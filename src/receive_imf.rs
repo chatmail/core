@@ -2114,7 +2114,7 @@ chat_id=? AND
         if part.is_reaction {
             let reaction_str = simplify::remove_footers(part.msg.as_str());
             let is_incoming_fresh = mime_parser.incoming && !seen;
-            set_msg_reaction(
+            if !set_msg_reaction(
                 context,
                 mime_in_reply_to,
                 chat_id,
@@ -2123,7 +2123,17 @@ chat_id=? AND
                 Reaction::new(reaction_str.as_str()),
                 is_incoming_fresh,
             )
-            .await?;
+            .await?
+            {
+                return Ok(ReceivedMsg {
+                    chat_id,
+                    state,
+                    hidden,
+                    sort_timestamp,
+                    msg_ids: vec![],
+                    needs_delete_job: false,
+                });
+            }
         }
 
         let mut param = part.param.clone();
