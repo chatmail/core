@@ -2986,19 +2986,20 @@ WHERE id=?
         )?;
         for recipients_chunk in recipients.chunks(chunk_size) {
             let recipients_chunk = recipients_chunk.join(" ");
-            if let Some(pre_msg) = &rendered_pre_msg {
-                let row_id = stmt.execute((
-                    &pre_msg.rfc724_mid,
-                    &recipients_chunk,
-                    &pre_msg.message,
-                    msg.id,
-                ))?;
-                row_ids.push(row_id.try_into()?);
-            }
             let row_id = stmt.execute((
                 &rendered_msg.rfc724_mid,
                 &recipients_chunk,
                 &rendered_msg.message,
+                msg.id,
+            ))?;
+            row_ids.push(row_id.try_into()?);
+            let Some(pre_msg) = &rendered_pre_msg else {
+                continue;
+            };
+            let row_id = stmt.execute((
+                &pre_msg.rfc724_mid,
+                &recipients_chunk,
+                &pre_msg.message,
                 msg.id,
             ))?;
             row_ids.push(row_id.try_into()?);
