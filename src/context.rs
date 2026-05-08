@@ -264,8 +264,8 @@ pub struct InnerContext {
     /// <https://datatracker.ietf.org/doc/html/rfc2971>
     pub(crate) server_id: RwLock<Option<HashMap<String, String>>>,
 
-    /// IMAP METADATA.
-    pub(crate) metadata: RwLock<Option<ServerMetadata>>,
+    /// IMAP METADATA, per transport id.
+    pub(crate) metadata: RwLock<BTreeMap<u32, ServerMetadata>>,
 
     /// ID for this `Context` in the current process.
     ///
@@ -492,7 +492,7 @@ impl Context {
             quota: RwLock::new(BTreeMap::new()),
             new_msgs_notify,
             server_id: RwLock::new(None),
-            metadata: RwLock::new(None),
+            metadata: RwLock::new(BTreeMap::new()),
             creation_time: tools::Time::now(),
             last_error: parking_lot::RwLock::new("".to_string()),
             migration_error: parking_lot::RwLock::new(None),
@@ -572,20 +572,24 @@ impl Context {
         self.get_config_bool(Config::IsChatmail).await
     }
 
-    /// Returns maximum number of recipients the provider allows to send a single email to.
-    pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<usize> {
-        let is_chatmail = self.is_chatmail().await?;
-        let val = self
-            .get_configured_provider()
-            .await?
+    /// Returns maximum number of recipients a single email can be sent to.
+    pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<u32> {
+        let Some((transport_id, param)) = ConfiguredLoginParam::load(self).await? else {
+            bail!("Not configured");
+        };
+        let metadata_limit = self
+            .metadata
+            .read()
+            .await
+            .get(&transport_id)
+            .and_then(|metadata| metadata.max_smtp_rcpt_to);
+        if let Some(limit) = metadata_limit {
+            return Ok(limit);
+        }
+        let val = param
+            .provider
             .and_then(|provider| provider.opt.max_smtp_rcpt_to)
-            .map_or_else(
-                || match is_chatmail {
-                    true => constants::DEFAULT_CHATMAIL_MAX_SMTP_RCPT_TO,
-                    false => constants::DEFAULT_MAX_SMTP_RCPT_TO,
-                },
-                usize::from,
-            );
+            .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, u32::from);
         Ok(val)
     }
 
@@ -915,7 +919,7 @@ impl Context {
                 .unwrap_or_else(|| "<unset>".to_string()),
         );
 
-        if let Some(metadata) = &*self.metadata.read().await {
+        if let Some(metadata) = self.metadata.read().await.values().next() {
             if let Some(comment) = &metadata.comment {
                 res.insert("imap_server_comment", format!("{comment:?}"));
             }

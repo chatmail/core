@@ -17,10 +17,9 @@ use crate::context::Context;
 use crate::events::EventType;
 use crate::log::LogExt;
 use crate::mimefactory::RECOMMENDED_FILE_SIZE;
-use crate::provider::Provider;
 use crate::sync::{self, Sync::*, SyncData};
 use crate::tools::{get_abs_path, time};
-use crate::transport::{ConfiguredLoginParam, add_pseudo_transport, send_sync_transports};
+use crate::transport::{add_pseudo_transport, send_sync_transports};
 use crate::{constants, stats};
 
 /// The available configuration keys.
@@ -612,16 +611,6 @@ impl Context {
     /// Returns whether MDNs should be sent.
     pub(crate) async fn should_send_mdns(&self) -> Result<bool> {
         self.get_config_bool(Config::MdnsEnabled).await
-    }
-
-    /// Gets the configured provider.
-    ///
-    /// The provider is determined by the current primary transport.
-    pub async fn get_configured_provider(&self) -> Result<Option<&'static Provider>> {
-        let provider = ConfiguredLoginParam::load(self)
-            .await?
-            .and_then(|(_transport_id, param)| param.provider);
-        Ok(provider)
     }
 
     /// Gets configured "delete_device_after" value.

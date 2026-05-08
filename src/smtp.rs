@@ -401,7 +401,28 @@ pub(crate) async fn send_msg_to_smtp(
         )
         .collect::<Vec<_>>();
 
-    let status = smtp_send(context, &recipients_list, body.as_str(), smtp, Some(msg_id)).await;
+    let chunk_size = context.get_max_smtp_rcpt_to().await?.max(1);
+    let mut unsent = recipients_list.as_slice();
+    let status = loop {
+        let unsent_len = u32::try_from(unsent.len()).context("Too many SMTP recipients")?;
+        let split_index = usize::try_from(chunk_size.min(unsent_len))
+            .context("Failed to convert SMTP chunk size")?;
+        let (chunk, rest) = unsent.split_at(split_index);
+        let status = smtp_send(context, chunk, body.as_str(), smtp, Some(msg_id)).await;
+        if !matches!(status, SendResult::Success) || rest.is_empty() {
+            break status;
+        }
+        let rest_str = rest
+            .iter()
+            .map(|a| a.as_ref())
+            .collect::<Vec<_>>()
+            .join(" ");
+        context
+            .sql
+            .execute("UPDATE smtp SET recipients=? WHERE id=?", (rest_str, rowid))
+            .await?;
+        unsent = rest;
+    };
 
     match status {
         SendResult::Retry => {}

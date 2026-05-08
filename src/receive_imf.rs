@@ -549,11 +549,13 @@ pub(crate) async fn receive_imf_inner(
         // It sometimes happens that a slow server (usually a classical email server)
         // receives a message via SMTP,
         // but then the connection to the server dies before it sends the OK response.
-        // In order to handle this case, we delete the SMTP send jobs if we receive our own message via IMAP.
+        // In order to handle this case, we delete the SMTP send job
+        // if we receive our own message via IMAP.
         //
-        // Now, messages with long recipient lists are split into multiple SMTP jobs.
-        // In this case, we only want to delete the SMTP job that was sent to self
-        // because this is the only chunk we can be sure was sent out.
+        // Note that messages with long recipient lists are sent out in chunks,
+        // removing already sent recipients from the job after each chunk.
+        // Self recipients are added at the end so removing the job
+        // removes the last chunk which apparently went out fine.
         let self_addr = context.get_primary_self_addr().await?;
         context
             .sql
