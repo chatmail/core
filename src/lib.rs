@@ -94,7 +94,6 @@ mod smtp;
 pub mod stock_str;
 pub mod storage_usage;
 mod sync;
-mod timesmearing;
 mod token;
 mod transport;
 mod update_helper;

@@ -11,7 +11,6 @@ use crate::message::markseen_msgs;
 use crate::receive_imf::receive_imf;
 use crate::test_utils;
 use crate::test_utils::{TestContext, TestContextManager};
-use crate::timesmearing::MAX_SECONDS_TO_LEND_FROM_FUTURE;
 use crate::{
     chat::{self, Chat, ChatItem, create_group, send_text_msg},
     tools::IsNoneOrEmpty,
@@ -355,17 +354,9 @@ async fn test_ephemeral_delete_msgs() -> Result<()> {
     let now = time();
     let msg = t.send_text(bob_chat.id, "Message text").await;
 
-    check_msg_will_be_deleted(
-        t,
-        msg.sender_msg_id,
-        &bob_chat,
-        now + 1799,
-        // The message may appear to be sent MAX_SECONDS_TO_LEND_FROM_FUTURE later and
-        // therefore be deleted MAX_SECONDS_TO_LEND_FROM_FUTURE later.
-        time() + 1801 + MAX_SECONDS_TO_LEND_FROM_FUTURE,
-    )
-    .await
-    .unwrap();
+    check_msg_will_be_deleted(t, msg.sender_msg_id, &bob_chat, now + 1799, time() + 1801)
+        .await
+        .unwrap();
 
     // Enable ephemeral messages with Bob -> message will be deleted after 60s.
     // This tests that the message is deleted at min(ephemeral deletion time, DeleteDeviceAfter deletion time).

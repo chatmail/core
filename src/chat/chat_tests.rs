@@ -1632,6 +1632,7 @@ async fn test_set_chat_name() {
         "another name",
         "something different",
     ] {
+        SystemTime::shift(Duration::from_secs(1));
         set_chat_name(alice, chat_id, new_name).await.unwrap();
         let sent_msg = alice.pop_sent_msg().await;
         let received_msg = bob.recv_msg(&sent_msg).await;
@@ -3443,6 +3444,7 @@ async fn test_chat_description(
         "",
         "ä ẟ 😂",
     ] {
+        SystemTime::shift(Duration::from_secs(1));
         tcm.section(&format!(
             "Alice sets the chat description to {description:?}"
         ));
@@ -4465,7 +4467,9 @@ async fn test_get_chat_media_webxdc_order() -> Result<()> {
     assert_eq!(media.first().unwrap(), &instance1_id);
     assert_eq!(media.get(1).unwrap(), &instance2_id);
 
-    // add a status update for the oder instance; that resorts the list
+    SystemTime::shift(Duration::from_secs(1));
+
+    // add a status update for the other instance; that resorts the list
     alice
         .send_webxdc_status_update(instance1_id, r#"{"payload": {"foo": "bar"}}"#)
         .await?;
@@ -4881,10 +4885,6 @@ async fn test_sync_broadcast_and_send_message() -> Result<()> {
         vec![a2b_contact_id]
     );
 
-    // alice2's smeared clock may be behind alice1's one, so we need to work around "hi" appearing
-    // before "You joined the channel." for bob. alice1 makes 3 more calls of
-    // create_smeared_timestamp() than alice2 does as of 2026-03-10.
-    SystemTime::shift(Duration::from_secs(3));
     tcm.section("Alice's second device sends a message to the channel");
     let sent_msg = alice2.send_text(a2_broadcast_id, "hi").await;
     let msg = bob.recv_msg(&sent_msg).await;

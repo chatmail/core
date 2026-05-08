@@ -35,10 +35,7 @@ use crate::peer_channels::{create_iroh_header, get_iroh_topic_for_msg};
 use crate::pgp::{SeipdVersion, addresses_from_public_key, pubkey_supports_seipdv2};
 use crate::simplify::escape_message_footer_marks;
 use crate::stock_str;
-use crate::tools::{
-    IsNoneOrEmpty, create_outgoing_rfc724_mid, create_smeared_timestamp, remove_subject_prefix,
-    time,
-};
+use crate::tools::{IsNoneOrEmpty, create_outgoing_rfc724_mid, remove_subject_prefix, time};
 use crate::webxdc::StatusUpdateSerial;
 
 // attachments of 25 mb brutto should work on the majority of providers
@@ -580,7 +577,7 @@ impl MimeFactory {
     ) -> Result<MimeFactory> {
         let contact = Contact::get_by_id(context, from_id).await?;
         let from_addr = context.get_primary_self_addr().await?;
-        let timestamp = create_smeared_timestamp(context);
+        let timestamp = time();
 
         let addr = contact.get_addr().to_string();
         let encryption_pubkeys = if from_id == ContactId::SELF {
@@ -2282,7 +2279,7 @@ pub(crate) async fn render_symm_encrypted_securejoin_message(
         mail_builder::headers::text::Text::new("Secure-Join".to_string()).into(),
     ));
 
-    let timestamp = create_smeared_timestamp(context);
+    let timestamp = time();
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp, 0)
         .unwrap()
         .to_rfc2822();

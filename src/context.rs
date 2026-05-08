@@ -32,7 +32,6 @@ use crate::quota::QuotaInfo;
 use crate::scheduler::{ConnectivityStore, SchedulerState};
 use crate::sql::Sql;
 use crate::stock_str::StockStrings;
-use crate::timesmearing::SmearedTimestamp;
 use crate::tools::{self, duration_to_str, time, time_elapsed};
 use crate::transport::ConfiguredLoginParam;
 use crate::{chatlist_events, stats};
@@ -228,7 +227,6 @@ pub struct InnerContext {
     /// Blob directory path
     pub(crate) blobdir: PathBuf,
     pub(crate) sql: Sql,
-    pub(crate) smeared_timestamp: SmearedTimestamp,
     /// The global "ongoing" process state.
     ///
     /// This is a global mutex-like state for operations which should be modal in the
@@ -498,7 +496,6 @@ impl Context {
             blobdir,
             running_state: RwLock::new(Default::default()),
             sql: Sql::new(dbfile),
-            smeared_timestamp: SmearedTimestamp::new(),
             oauth2_mutex: Mutex::new(()),
             wrong_pw_warning_mutex: Mutex::new(()),
             housekeeping_mutex: Mutex::new(()),

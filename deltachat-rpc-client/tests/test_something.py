@@ -1091,6 +1091,7 @@ def test_rename_group(acfactory):
     bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
 
     for name in ["Baz", "Foo bar", "Xyzzy"]:
+        time.sleep(1)
         alice_group.set_name(name)
         bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
         bob.wait_for_event(EventType.CHATLIST_ITEM_CHANGED)
