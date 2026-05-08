@@ -1503,7 +1503,7 @@ impl Session {
             .get_metadata(
                 mailbox,
                 options,
-                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn)",
+                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients)",
             )
             .await?;
         for m in metadata {
@@ -1537,6 +1537,21 @@ impl Session {
                                 warn!(context, "Failed to parse TURN server metadata: {err:#}.");
                             }
                         }
+                    }
+                }
+                "/shared/vendor/deltachat/maxsmtprecipients" => {
+                    if let Some(value) = m.value.and_then(|v| v.parse::<u32>().ok()) {
+                        let transport_id = self.transport_id();
+                        context
+                            .sql
+                            .execute(
+                                "UPDATE transports \
+                                 SET max_smtp_rcpt_to=? WHERE id=?",
+                                (value, transport_id),
+                            )
+                            .await
+                            .log_err(context)
+                            .ok();
                     }
                 }
                 _ => {}

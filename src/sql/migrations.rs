@@ -2385,6 +2385,15 @@ UPDATE msgs SET state=19 WHERE state=24; -- Change OutPreparing to OutFailed.
         .await?;
     }
 
+    inc_and_check(&mut migration_version, 153)?;
+    if dbversion < migration_version {
+        sql.execute_migration(
+            "ALTER TABLE transports ADD COLUMN max_smtp_rcpt_to INTEGER DEFAULT NULL",
+            migration_version,
+        )
+        .await?;
+    }
+
     let new_version = sql
         .get_raw_config_int(VERSION_CFG)
         .await?

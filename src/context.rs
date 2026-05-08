@@ -589,18 +589,26 @@ impl Context {
 
     /// Returns maximum number of recipients the provider allows to send a single email to.
     pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<usize> {
-        let is_chatmail = self.is_chatmail().await?;
+        if let Some(limit) = self
+            .sql
+            .query_row_optional(
+                "SELECT t.max_smtp_rcpt_to
+                 FROM transports t
+                 JOIN config c ON c.keyname='configured_addr' AND c.value=t.addr",
+                (),
+                |row| row.get::<_, Option<u32>>(0),
+            )
+            .await?
+            .flatten()
+        {
+            return Ok(limit as usize);
+        }
+
         let val = self
             .get_configured_provider()
             .await?
             .and_then(|provider| provider.opt.max_smtp_rcpt_to)
-            .map_or_else(
-                || match is_chatmail {
-                    true => constants::DEFAULT_CHATMAIL_MAX_SMTP_RCPT_TO,
-                    false => constants::DEFAULT_MAX_SMTP_RCPT_TO,
-                },
-                usize::from,
-            );
+            .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, usize::from);
         Ok(val)
     }
 
