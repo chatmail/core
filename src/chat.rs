@@ -2954,7 +2954,6 @@ WHERE id=?
         )
         .await?;
 
-    let chunk_size = context.get_max_smtp_rcpt_to().await?;
     let trans_fn = |t: &mut rusqlite::Transaction| {
         let mut row_ids = Vec::<i64>::new();
 
@@ -2968,12 +2967,12 @@ WHERE id=?
             "INSERT INTO smtp (rfc724_mid, recipients, mime, msg_id)
             VALUES            (?1,         ?2,         ?3,   ?4)",
         )?;
-        for recipients_chunk in recipients.chunks(chunk_size) {
-            let recipients_chunk = recipients_chunk.join(" ");
+        if !recipients.is_empty() {
+            let all_recipients = recipients.join(" ");
             if let Some(pre_msg) = &rendered_pre_msg {
                 let row_id = stmt.execute((
                     &pre_msg.rfc724_mid,
-                    &recipients_chunk,
+                    &all_recipients,
                     &pre_msg.message,
                     msg.id,
                 ))?;
@@ -2981,7 +2980,7 @@ WHERE id=?
             }
             let row_id = stmt.execute((
                 &rendered_msg.rfc724_mid,
-                &recipients_chunk,
+                &all_recipients,
                 &rendered_msg.message,
                 msg.id,
             ))?;

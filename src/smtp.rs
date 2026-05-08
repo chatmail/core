@@ -2,6 +2,8 @@
 
 mod connect;
 pub mod send;
+#[cfg(test)]
+mod chunking_tests;
 
 use anyhow::{Context as _, Error, Result, bail, format_err};
 use async_smtp::response::{Category, Code, Detail};
@@ -10,6 +12,7 @@ use tokio::task;
 
 use crate::chat::{ChatId, add_info_msg_with_cmd};
 use crate::config::Config;
+use crate::constants;
 use crate::contact::{Contact, ContactId};
 use crate::context::Context;
 use crate::events::EventType;
@@ -33,6 +36,9 @@ pub(crate) struct Smtp {
 
     /// Email address we are sending from.
     from: Option<EmailAddress>,
+
+    /// Transport used for the current connection.
+    transport_id: Option<u32>,
 
     /// Timestamp of last successful send/receive network interaction
     /// (eg connect or send succeeded). On initialization and disconnect
@@ -60,6 +66,7 @@ impl Smtp {
             task::spawn(async move { transport.quit().await });
         }
         self.last_success = None;
+        self.transport_id = None;
     }
 
     /// Return true if smtp was connected but is not known to
@@ -89,9 +96,10 @@ impl Smtp {
         }
 
         self.connectivity.set_connecting(context);
-        let (_transport_id, lp) = ConfiguredLoginParam::load(context)
+        let (transport_id, lp) = ConfiguredLoginParam::load(context)
             .await?
             .context("Not configured")?;
+        self.transport_id = Some(transport_id);
         let proxy_config = ProxyConfig::load(context).await?;
         self.connect(
             context,
@@ -165,6 +173,7 @@ impl Smtp {
     }
 }
 
+#[derive(Debug)]
 pub(crate) enum SendResult {
     /// Message was sent successfully.
     Success,
@@ -176,13 +185,36 @@ pub(crate) enum SendResult {
     Retry,
 }
 
+pub(crate) trait SmtpSender: Send {
+    fn send_chunk<'a>(
+        &'a mut self,
+        context: &'a Context,
+        recipients: &'a [async_smtp::EmailAddress],
+        body: &'a str,
+    ) -> futures::future::BoxFuture<'a, SendResult>;
+}
+
+struct RealSmtpSender<'a> {
+    smtp: &'a mut Smtp,
+}
+
+impl SmtpSender for RealSmtpSender<'_> {
+    fn send_chunk<'a>(
+        &'a mut self,
+        context: &'a Context,
+        recipients: &'a [async_smtp::EmailAddress],
+        body: &'a str,
+    ) -> futures::future::BoxFuture<'a, SendResult> {
+        Box::pin(smtp_send(context, recipients, body, self.smtp))
+    }
+}
+
 /// Tries to send a message.
 pub(crate) async fn smtp_send(
     context: &Context,
     recipients: &[async_smtp::EmailAddress],
     message: &str,
     smtp: &mut Smtp,
-    msg_id: Option<MsgId>,
 ) -> SendResult {
     if recipients.is_empty() {
         return SendResult::Success;
@@ -310,25 +342,6 @@ pub(crate) async fn smtp_send(
         Ok(()) => SendResult::Success,
     };
 
-    if let SendResult::Failure(err) = &status
-        && let Some(msg_id) = msg_id
-    {
-        // We couldn't send the message, so mark it as failed
-        match Message::load_from_db(context, msg_id).await {
-            Ok(mut msg) => {
-                if let Err(err) = message::set_msg_failed(context, &mut msg, &err.to_string()).await
-                {
-                    error!(context, "Failed to mark {msg_id} as failed: {err:#}.");
-                }
-            }
-            Err(err) => {
-                error!(
-                    context,
-                    "Failed to load {msg_id} to mark it as failed: {err:#}."
-                );
-            }
-        }
-    }
     status
 }
 
@@ -406,7 +419,40 @@ pub(crate) async fn send_msg_to_smtp(
         )
         .collect::<Vec<_>>();
 
-    let status = smtp_send(context, &recipients_list, body.as_str(), smtp, Some(msg_id)).await;
+    let transport_id = smtp
+        .transport_id
+        .context("SMTP not connected to a transport")?;
+    let chunk_size = max_smtp_rcpt_to(context, transport_id).await?;
+
+    let mut sender = RealSmtpSender { smtp };
+    let (status, start_idx) = send_smtp_chunks(
+        context,
+        &recipients_list,
+        body.as_str(),
+        chunk_size,
+        &mut sender,
+    )
+    .await;
+
+    let unsent_saved = start_idx < recipients_list.len();
+    if let Some(unsent) = recipients_list.get(start_idx..)
+        && !unsent.is_empty()
+    {
+        let unsent_str: String = unsent
+            .iter()
+            .map(|a| a.as_ref())
+            .collect::<Vec<&str>>()
+            .join(" ");
+        context
+            .sql
+            .execute(
+                "UPDATE smtp SET recipients=? WHERE id=?",
+                (unsent_str, rowid),
+            )
+            .await
+            .log_err(context)
+            .ok();
+    }
 
     match status {
         SendResult::Retry => {}
@@ -455,10 +501,15 @@ pub(crate) async fn send_msg_to_smtp(
                     .await?;
                 };
             }
-            context
-                .sql
-                .execute("DELETE FROM smtp WHERE id=?", (rowid,))
-                .await?;
+            if let Some(mut msg) = Message::load_from_db_optional(context, msg_id).await? {
+                message::set_msg_failed(context, &mut msg, &err.to_string()).await?;
+            }
+            if !unsent_saved {
+                context
+                    .sql
+                    .execute("DELETE FROM smtp WHERE id=?", (rowid,))
+                    .await?;
+            }
         }
     };
 
@@ -470,8 +521,37 @@ pub(crate) async fn send_msg_to_smtp(
             }
             Ok(())
         }
-        SendResult::Failure(err) => Err(format_err!("{err}")),
+        SendResult::Failure(err) => {
+            if unsent_saved {
+                Err(format_err!("Retry"))
+            } else {
+                Err(format_err!("{err}"))
+            }
+        }
     }
+}
+
+async fn max_smtp_rcpt_to(context: &Context, transport_id: u32) -> Result<usize> {
+    let limit = context
+        .sql
+        .query_row_optional(
+            "SELECT max_smtp_rcpt_to FROM transports WHERE id=?",
+            (transport_id,),
+            |row| row.get::<_, u32>(0),
+        )
+        .await?
+        .unwrap_or(0);
+
+    if limit > 0 {
+        return Ok(limit as usize);
+    }
+
+    let val = context
+        .get_configured_provider()
+        .await?
+        .and_then(|provider| provider.opt.max_smtp_rcpt_to)
+        .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, usize::from);
+    Ok(val)
 }
 
 pub(crate) async fn msg_has_pending_smtp_job(
@@ -600,7 +680,7 @@ async fn send_mdn_rfc724_mid(
         })
         .collect();
 
-    match smtp_send(context, &recipients, &body, smtp, None).await {
+    match smtp_send(context, &recipients, &body, smtp).await {
         SendResult::Success => {
             if !recipients.is_empty() {
                 info!(context, "Successfully sent MDN for {rfc724_mid}.");
@@ -721,4 +801,23 @@ pub(crate) async fn add_self_recipients(
         recipients.push(from);
     }
     Ok(())
+}
+
+#[allow(clippy::arithmetic_side_effects)]
+pub(crate) async fn send_smtp_chunks(
+    context: &Context,
+    recipients: &[async_smtp::EmailAddress],
+    body: &str,
+    chunk_size: usize,
+    sender: &mut (dyn SmtpSender + Send),
+) -> (SendResult, usize) {
+    for (i, chunk) in recipients.chunks(chunk_size).enumerate() {
+        let status = sender.send_chunk(context, chunk, body).await;
+        match status {
+            SendResult::Success => continue,
+            SendResult::Failure(_) => return (status, (i + 1) * chunk_size),
+            SendResult::Retry => return (status, i * chunk_size),
+        }
+    }
+    (SendResult::Success, recipients.len())
 }

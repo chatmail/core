@@ -16,7 +16,7 @@ use tokio::sync::{Mutex, Notify, RwLock};
 
 use crate::chat::{ChatId, get_chat_cnt};
 use crate::config::Config;
-use crate::constants::{self, DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR};
+use crate::constants::{DC_BACKGROUND_FETCH_QUOTA_CHECK_RATELIMIT, DC_VERSION_STR};
 use crate::contact::{Contact, ContactId};
 use crate::debug_logging::DebugLogging;
 use crate::events::{Event, EventEmitter, EventType, Events};
@@ -585,31 +585,6 @@ impl Context {
     /// Returns true if an account is on a chatmail server.
     pub async fn is_chatmail(&self) -> Result<bool> {
         self.get_config_bool(Config::IsChatmail).await
-    }
-
-    /// Returns maximum number of recipients the provider allows to send a single email to.
-    pub(crate) async fn get_max_smtp_rcpt_to(&self) -> Result<usize> {
-        if let Some(limit) = self
-            .sql
-            .query_row_optional(
-                "SELECT t.max_smtp_rcpt_to
-                 FROM transports t
-                 JOIN config c ON c.keyname='configured_addr' AND c.value=t.addr",
-                (),
-                |row| row.get::<_, Option<u32>>(0),
-            )
-            .await?
-            .flatten()
-        {
-            return Ok(limit as usize);
-        }
-
-        let val = self
-            .get_configured_provider()
-            .await?
-            .and_then(|provider| provider.opt.max_smtp_rcpt_to)
-            .map_or(constants::DEFAULT_MAX_SMTP_RCPT_TO, usize::from);
-        Ok(val)
     }
 
     /// Does a single round of fetching from IMAP and returns.
