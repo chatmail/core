@@ -251,12 +251,7 @@ def test_realtime_large_webxdc(acfactory, path_to_large_webxdc):
     ac1_ac2_chat = ac1.create_chat(ac2)
     ac1_webxdc_msg = ac1_ac2_chat.send_message(text="realtime check", file=path_to_large_webxdc)
 
-    # Receive pre-message.
     ac2_webxdc_msg = ac2.wait_for_incoming_msg()
-
-    # Receive post-message.
-    ac2_webxdc_msg = ac2.wait_for_msg(EventType.MSGS_CHANGED)
-
     ac2_webxdc_msg.send_webxdc_realtime_advertisement()
     event = ac1.wait_for_event(EventType.WEBXDC_REALTIME_ADVERTISEMENT_RECEIVED)
     assert event.msg_id == ac1_webxdc_msg.id

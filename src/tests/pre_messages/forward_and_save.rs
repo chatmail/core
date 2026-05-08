@@ -106,7 +106,7 @@ async fn test_receive_both() -> Result<()> {
     assert_eq!(msg.text, "test".to_owned());
 
     forward_msgs(alice, &[alice_msg_id], alice_chat_id).await?;
-    let rev_order = false;
+    let rev_order = true;
     let msg = bob
         .recv_msg(
             &alice
