@@ -9,6 +9,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     iter::Peekable,
     mem::take,
+    str::FromStr,
     sync::atomic::Ordering,
     time::{Duration, UNIX_EPOCH},
 };
@@ -123,6 +124,9 @@ pub(crate) struct ServerMetadata {
     pub admin: Option<String>,
 
     pub iroh_relay: Option<Url>,
+
+    /// Maximum number of recipients for SMTP `RCPT TO:`.
+    pub max_smtp_rcpt_to: Option<u32>,
 
     /// ICE servers for WebRTC calls.
     pub ice_servers: Vec<UnresolvedIceServer>,
@@ -1324,11 +1328,12 @@ impl Session {
     #[expect(clippy::arithmetic_side_effects)]
     pub(crate) async fn update_metadata(&mut self, context: &Context) -> Result<()> {
         let mut lock = context.metadata.write().await;
+        let transport_id = self.transport_id();
 
         if !self.can_metadata() {
-            *lock = Some(Default::default());
+            lock.entry(transport_id).or_default();
         }
-        if let Some(ref mut old_metadata) = *lock {
+        if let Some(old_metadata) = lock.get_mut(&transport_id) {
             let now = time();
 
             // Refresh TURN server credentials if they expire in 12 hours.
@@ -1378,6 +1383,7 @@ impl Session {
         let mut comment = None;
         let mut admin = None;
         let mut iroh_relay = None;
+        let mut max_smtp_rcpt_to = None;
         let mut ice_servers = None;
         let mut ice_servers_expiration_timestamp = 0;
 
@@ -1387,7 +1393,7 @@ impl Session {
             .get_metadata(
                 mailbox,
                 options,
-                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn)",
+                "(/shared/comment /shared/admin /shared/vendor/deltachat/irohrelay /shared/vendor/deltachat/turn /shared/vendor/deltachat/maxsmtprecipients)",
             )
             .await?;
         for m in metadata {
@@ -1423,6 +1429,18 @@ impl Session {
                         }
                     }
                 }
+                "/shared/vendor/deltachat/maxsmtprecipients" => {
+                    if let Some(value) = m.value {
+                        if let Ok(limit) = u32::from_str(&value) {
+                            max_smtp_rcpt_to = Some(limit);
+                        } else {
+                            warn!(
+                                context,
+                                "Got invalid maxsmtprecipients metadata: {:?}.", value
+                            );
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -1434,13 +1452,17 @@ impl Session {
             create_fallback_ice_servers()
         };
 
-        *lock = Some(ServerMetadata {
-            comment,
-            admin,
-            iroh_relay,
-            ice_servers,
-            ice_servers_expiration_timestamp,
-        });
+        lock.insert(
+            transport_id,
+            ServerMetadata {
+                comment,
+                admin,
+                iroh_relay,
+                max_smtp_rcpt_to,
+                ice_servers,
+                ice_servers_expiration_timestamp,
+            },
+        );
         Ok(())
     }
 

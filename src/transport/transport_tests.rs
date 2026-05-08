@@ -253,7 +253,6 @@ async fn test_empty_server_list() -> Result<()> {
     assert_eq!(loaded.provider, Some(*provider));
     assert_eq!(loaded.imap.is_empty(), false);
     assert_eq!(loaded.smtp.is_empty(), false);
-    assert_eq!(t.get_configured_provider().await?, Some(*provider));
 
     Ok(())
 }

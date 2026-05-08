@@ -770,7 +770,7 @@ pub(crate) fn create_fallback_ice_servers() -> Vec<UnresolvedIceServer> {
 /// because it itself cannot utilize DNS. See
 /// <https://github.com/deltachat/deltachat-desktop/issues/5447>.
 pub async fn ice_servers(context: &Context) -> Result<String> {
-    if let Some(ref metadata) = *context.metadata.read().await {
+    if let Some(metadata) = context.metadata.read().await.values().next() {
         let ice_servers = resolve_ice_servers(context, metadata.ice_servers.clone()).await?;
         Ok(ice_servers)
     } else {
