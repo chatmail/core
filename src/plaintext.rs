@@ -39,7 +39,7 @@ impl PlainText {
 <html><head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="color-scheme" content="light dark" />
-</head><body dir="auto">
+</head><body>
 "#
         .to_string();
 
